@@ -17,40 +17,40 @@ const formatPrice = (value) =>
     <Head title="Pedido confirmado" />
 
     <AppLayout>
-        <div class="mx-auto max-w-xl text-center">
-            <h1 class="text-2xl font-bold">Pedido #{{ order.id }} confirmado!</h1>
-            <p class="mt-2 text-gray-500">
-                Enviamos os detalhes para o seu e-mail. Acompanhe abaixo.
-            </p>
-        </div>
+        <div class="container-fluid py-5">
+            <div class="container py-5">
+                <div class="text-center mb-5">
+                    <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                    <h1 class="display-5">Pedido #{{ order.id }} confirmado!</h1>
+                    <p class="text-muted">Enviamos os detalhes para o seu e-mail. Acompanhe abaixo.</p>
+                </div>
 
-        <div class="mx-auto mt-8 max-w-xl rounded-lg border border-gray-200 bg-white p-6">
-            <ul class="space-y-2 text-sm">
-                <li
-                    v-for="item in order.items"
-                    :key="item.id"
-                    class="flex justify-between"
-                >
-                    <span>{{ item.product_name }} × {{ item.quantity }}</span>
-                    <span>{{ formatPrice(item.subtotal) }}</span>
-                </li>
-            </ul>
+                <div class="row justify-content-center">
+                    <div class="col-lg-6">
+                        <div class="bg-light rounded p-4">
+                            <div v-for="item in order.items" :key="item.id"
+                                class="d-flex justify-content-between mb-3">
+                                <span>{{ item.product_name }} × {{ item.quantity }}</span>
+                                <span>{{ formatPrice(item.subtotal) }}</span>
+                            </div>
+                            <div class="py-3 border-top d-flex justify-content-between">
+                                <h5 class="mb-0">Total</h5>
+                                <p class="mb-0 fs-5 text-primary fw-bold">{{ formatPrice(order.total) }}</p>
+                            </div>
+                            <p class="text-muted small mt-3 mb-0">
+                                Entrega para: {{ order.shipping_street }}, {{ order.shipping_number }}
+                                <span v-if="order.shipping_complement">- {{ order.shipping_complement }}</span><br>
+                                {{ order.shipping_neighborhood }} - {{ order.shipping_city }}/{{ order.shipping_state }}<br>
+                                CEP {{ order.shipping_zip }}
+                            </p>
+                        </div>
 
-            <div class="mt-4 flex justify-between border-t border-gray-200 pt-4 font-bold">
-                <span>Total</span>
-                <span>{{ formatPrice(order.total) }}</span>
+                        <div class="text-center mt-4">
+                            <Link href="/" class="btn btn-primary rounded-pill px-5 py-3">Voltar ao catálogo</Link>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-            <p class="mt-6 text-sm text-gray-500">
-                Entrega para: {{ order.shipping_street }}, {{ order.shipping_number }}
-                <span v-if="order.shipping_complement">- {{ order.shipping_complement }}</span><br>
-                {{ order.shipping_neighborhood }} - {{ order.shipping_city }}/{{ order.shipping_state }}<br>
-                CEP {{ order.shipping_zip }}
-            </p>
-        </div>
-
-        <div class="mt-8 text-center">
-            <Link href="/" class="underline">Voltar ao catálogo</Link>
         </div>
     </AppLayout>
 </template>

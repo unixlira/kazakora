@@ -2,10 +2,14 @@
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 
-defineProps({
+const props = defineProps({
     products: {
         type: Object,
         required: true,
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
     },
 });
 
@@ -22,62 +26,75 @@ const addToCart = (productId) => {
 </script>
 
 <template>
-    <Head title="Catálogo" />
+    <Head title="Loja de Decoração" />
 
     <AppLayout>
-        <h1 class="text-2xl font-bold">Catálogo</h1>
+        <!-- Page Header -->
+        <div class="container-fluid page-header py-5 mb-5" style="background:#f8f9fa;">
+            <div class="container py-5">
+                <h1 class="display-3 text-capitalize mb-3">
+                    {{ filters.search ? `Resultados para "${filters.search}"` : 'Nosso Catálogo' }}
+                </h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><Link href="/" class="text-decoration-none">Início</Link></li>
+                        <li class="breadcrumb-item active text-primary">Catálogo</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
 
-        <p v-if="products.data.length === 0" class="mt-4 text-gray-500">
-            Nenhum produto cadastrado ainda.
-        </p>
-
-        <ul v-else class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <li
-                v-for="product in products.data"
-                :key="product.id"
-                class="rounded-lg border border-gray-200 bg-white p-4"
-            >
-                <span
-                    v-if="product.category"
-                    class="text-xs font-medium uppercase tracking-wide text-gray-400"
-                >
-                    {{ product.category.name }}
-                </span>
-
-                <h2 class="mt-1 font-semibold">{{ product.name }}</h2>
-
-                <p class="mt-2 text-lg font-bold">{{ formatPrice(product.price) }}</p>
-
-                <p class="mt-1 text-sm" :class="product.stock > 0 ? 'text-green-600' : 'text-red-500'">
-                    {{ product.stock > 0 ? `${product.stock} em estoque` : 'Esgotado' }}
+        <!-- Products -->
+        <div class="container-fluid py-5">
+            <div class="container">
+                <p v-if="products.data.length === 0" class="text-center text-muted py-5">
+                    Nenhum produto encontrado.
                 </p>
 
-                <button
-                    type="button"
-                    :disabled="product.stock < 1"
-                    class="mt-3 w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    @click="addToCart(product.id)"
-                >
-                    Adicionar ao carrinho
-                </button>
-            </li>
-        </ul>
+                <div v-else class="row g-4 product">
+                    <div v-for="product in products.data" :key="product.id" class="col-md-6 col-lg-4">
+                        <div class="product-item rounded">
+                            <div class="product-item-inner border rounded">
+                                <div class="product-item-inner-item">
+                                    <div class="d-flex align-items-center justify-content-center bg-light rounded-top"
+                                        style="height: 220px;">
+                                        <i class="fas fa-couch fa-3x text-secondary opacity-50"></i>
+                                    </div>
+                                </div>
+                                <div class="text-center rounded-bottom p-4">
+                                    <span v-if="product.category" class="d-block mb-2 text-muted small">
+                                        {{ product.category.name }}
+                                    </span>
+                                    <span class="d-block h4">{{ product.name }}</span>
+                                    <span class="text-primary fs-5">{{ formatPrice(product.price) }}</span>
+                                    <p class="mt-2 mb-0 small" :class="product.stock > 0 ? 'text-success' : 'text-danger'">
+                                        {{ product.stock > 0 ? `${product.stock} em estoque` : 'Esgotado' }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="product-item-add border border-top-0 rounded-bottom text-center p-4 pt-0">
+                                <button type="button"
+                                    class="btn btn-primary border-secondary rounded-pill py-2 px-4 mb-0 w-100"
+                                    :disabled="product.stock < 1"
+                                    @click="addToCart(product.id)">
+                                    <i class="fas fa-shopping-cart me-2"></i> Adicionar ao Carrinho
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-        <nav v-if="products.last_page > 1" class="mt-8 flex flex-wrap gap-2">
-            <template v-for="link in products.links" :key="link.label">
-                <Link
-                    v-if="link.url"
-                    :href="link.url"
-                    class="rounded px-3 py-1 text-sm"
-                    :class="link.active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-                    v-html="link.label"
-                />
-                <span
-                    v-else
-                    class="rounded px-3 py-1 text-sm text-gray-300"
-                    v-html="link.label"
-                />
-            </template>
-        </nav>
+                <nav v-if="products.last_page > 1" class="mt-5">
+                    <ul class="pagination justify-content-center">
+                        <template v-for="link in products.links" :key="link.label">
+                            <li class="page-item" :class="{ active: link.active, disabled: !link.url }">
+                                <Link v-if="link.url" class="page-link" :href="link.url" v-html="link.label" />
+                                <span v-else class="page-link" v-html="link.label" />
+                            </li>
+                        </template>
+                    </ul>
+                </nav>
+            </div>
+        </div>
     </AppLayout>
 </template>

@@ -7,6 +7,8 @@ use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,8 +19,10 @@ use RuntimeException;
 
 class CheckoutController extends Controller
 {
-    public function __construct(private readonly CartManager $cart)
-    {
+    public function __construct(
+        private readonly CartManager $cart,
+        private readonly StockManager $stock,
+    ) {
     }
 
     public function index(Request $request): Response
@@ -85,7 +89,13 @@ class CheckoutController extends Controller
                         'subtotal' => $subtotal,
                     ]);
 
-                    $product->decrement('stock', $quantity);
+                    $this->stock->adjust(
+                        $product,
+                        -$quantity,
+                        StockMovement::TYPE_SALE,
+                        reason: "Pedido #{$order->id}",
+                        reference: $order,
+                    );
                 }
 
                 if ($total === 0) {

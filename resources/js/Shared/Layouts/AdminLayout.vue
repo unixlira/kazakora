@@ -14,6 +14,7 @@ const navItems = [
     { href: '/admin/products', label: 'Produtos', icon: 'fas fa-couch' },
     { href: '/admin/categories', label: 'Categorias', icon: 'fas fa-tags' },
     { href: '/admin/orders', label: 'Pedidos', icon: 'fas fa-receipt' },
+    { href: '/admin/empresa', label: 'Empresa', icon: 'fas fa-building' },
 ];
 
 const isActive = (href) => (href === '/admin' ? page.url === '/admin' : page.url.startsWith(href));

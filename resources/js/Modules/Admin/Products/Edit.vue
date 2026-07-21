@@ -1,7 +1,12 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ProductForm from '@/Modules/Admin/Products/ProductForm.vue';
+import FiscalForm from '@/Modules/Admin/Products/FiscalForm.vue';
+import ImagesManager from '@/Modules/Admin/Products/ImagesManager.vue';
+import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
+import StockHistory from '@/Modules/Admin/Products/StockHistory.vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     product: {
@@ -9,6 +14,26 @@ const props = defineProps({
         required: true,
     },
     categories: {
+        type: Array,
+        default: () => [],
+    },
+    fiscalData: {
+        type: Object,
+        default: null,
+    },
+    images: {
+        type: Array,
+        default: () => [],
+    },
+    channels: {
+        type: Array,
+        default: () => [],
+    },
+    channelListings: {
+        type: Array,
+        default: () => [],
+    },
+    stockMovements: {
         type: Array,
         default: () => [],
     },
@@ -27,16 +52,48 @@ const form = useForm({
 const submit = () => {
     form.put(`/admin/products/${props.product.id}`);
 };
+
+const tabs = [
+    { key: 'geral', label: 'Geral' },
+    { key: 'fiscal', label: 'Dados fiscais' },
+    { key: 'fotos', label: 'Fotos' },
+    { key: 'canais', label: 'Canais de venda' },
+    { key: 'estoque', label: 'Histórico de estoque' },
+];
+
+const activeTab = ref('geral');
 </script>
 
 <template>
     <Head title="Editar produto" />
 
     <AdminLayout>
-        <h1 class="text-2xl font-bold">Editar produto</h1>
+        <h1 class="text-2xl font-bold text-slate-700">Editar produto</h1>
+        <p class="mt-1 text-sm text-slate-500">{{ product.name }} · SKU {{ product.sku }}</p>
 
-        <div class="mt-6">
-            <ProductForm :form="form" :categories="categories" submit-label="Salvar alterações" @submit="submit" />
+        <div class="mt-6 rounded bg-white p-6 shadow-lg">
+            <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-4">
+                <button v-for="tab in tabs" :key="tab.key" type="button"
+                    class="rounded px-3 py-1.5 text-sm font-medium"
+                    :class="activeTab === tab.key ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-100'"
+                    @click="activeTab = tab.key">
+                    {{ tab.label }}
+                </button>
+            </div>
+
+            <div class="mt-6">
+                <ProductForm v-if="activeTab === 'geral'" :form="form" :categories="categories"
+                    submit-label="Salvar alterações" @submit="submit" />
+
+                <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />
+
+                <ImagesManager v-else-if="activeTab === 'fotos'" :product="product" :images="images" />
+
+                <ChannelsManager v-else-if="activeTab === 'canais'" :product="product" :channels="channels"
+                    :channel-listings="channelListings" />
+
+                <StockHistory v-else-if="activeTab === 'estoque'" :stock-movements="stockMovements" />
+            </div>
         </div>
     </AdminLayout>
 </template>

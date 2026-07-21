@@ -2,10 +2,15 @@
 
 namespace App\Modules\Catalog\Models;
 
+use App\Modules\Fiscal\Models\ProductFiscalData;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Marketplace\Models\ProductChannelListing;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
@@ -35,6 +40,26 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('position');
+    }
+
+    public function fiscalData(): HasOne
+    {
+        return $this->hasOne(ProductFiscalData::class);
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function channelListings(): HasMany
+    {
+        return $this->hasMany(ProductChannelListing::class);
     }
 
     protected static function newFactory(): ProductFactory

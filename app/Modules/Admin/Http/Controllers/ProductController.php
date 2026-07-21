@@ -5,6 +5,9 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockManager;
+use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -14,6 +17,12 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
+    public function __construct(
+        private readonly StockManager $stock,
+        private readonly MarketplaceDriverManager $drivers,
+    ) {
+    }
+
     public function index(Request $request): Response
     {
         $products = Product::query()
@@ -56,18 +65,31 @@ class ProductController extends Controller
         return Inertia::render('Admin/Products/Edit', [
             'product' => $product,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
+            'fiscalData' => $product->fiscalData,
+            'images' => $product->images,
+            'channels' => $this->drivers->channels(),
+            'channelListings' => $product->channelListings,
+            'stockMovements' => $product->stockMovements()->latest()->limit(10)->get(),
         ]);
     }
 
     public function update(Request $request, Product $product): RedirectResponse
     {
         $validated = $this->validated($request, $product->id);
+        $newStock = $validated['stock'];
+        unset($validated['stock']);
 
         if ($validated['name'] !== $product->name) {
             $validated['slug'] = $this->uniqueSlug($validated['name'], $product->id);
         }
 
         $product->update($validated);
+
+        $delta = $newStock - $product->stock;
+
+        if ($delta !== 0) {
+            $this->stock->adjust($product, $delta, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
+        }
 
         return redirect()->route('admin.products.index')->with('success', 'Produto atualizado com sucesso.');
     }

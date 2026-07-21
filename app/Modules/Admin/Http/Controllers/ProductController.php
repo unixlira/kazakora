@@ -8,18 +8,22 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Services\SkuGeneratorService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ProductController extends Controller
 {
+    private const MAX_SKU_ATTEMPTS = 5;
+
     public function __construct(
         private readonly StockManager $stock,
         private readonly MarketplaceDriverManager $drivers,
+        private readonly SkuGeneratorService $skuGenerator,
     ) {
     }
 
@@ -55,7 +59,11 @@ class ProductController extends Controller
 
         $validated['slug'] = $this->uniqueSlug($validated['name']);
 
-        $product = Product::create($validated);
+        $category = $validated['category_id']
+            ? Category::query()->find($validated['category_id'])
+            : null;
+
+        $product = $this->createWithGeneratedSku($validated, $category?->name);
 
         return redirect()
             ->route('admin.products.edit', $product)
@@ -85,6 +93,17 @@ class ProductController extends Controller
             $validated['slug'] = $this->uniqueSlug($validated['name'], $product->id);
         }
 
+        // The SKU is generated once at creation and never touched again by a
+        // regular update — only backfilled here if a legacy row somehow has
+        // none, per the "never recreate an existing SKU" rule.
+        if (blank($product->sku)) {
+            $category = $validated['category_id']
+                ? Category::query()->find($validated['category_id'])
+                : null;
+
+            $validated['sku'] = $this->skuGenerator->generate($this->skuPayload($validated, $category?->name));
+        }
+
         $product->update($validated);
 
         $delta = $newStock - $product->stock;
@@ -103,16 +122,50 @@ class ProductController extends Controller
         return back()->with('success', 'Produto removido com sucesso.');
     }
 
+    /**
+     * Creates the product with a freshly generated SKU, retrying with a new
+     * SKU if a race with another request causes a unique constraint hit.
+     */
+    private function createWithGeneratedSku(array $validated, ?string $categoryName): Product
+    {
+        $attempts = 0;
+
+        do {
+            $attempts++;
+            $validated['sku'] = $this->skuGenerator->generate($this->skuPayload($validated, $categoryName));
+
+            try {
+                return Product::create($validated);
+            } catch (UniqueConstraintViolationException $exception) {
+                if ($attempts >= self::MAX_SKU_ATTEMPTS) {
+                    throw $exception;
+                }
+            }
+        } while (true);
+    }
+
+    private function skuPayload(array $validated, ?string $categoryName): array
+    {
+        return [
+            'categoria' => $categoryName,
+            'produto' => $validated['name'] ?? null,
+            'marca' => $validated['brand'] ?? null,
+            'modelo' => $validated['model'] ?? null,
+            'cor' => $validated['color'] ?? null,
+            'variacao' => $validated['variation'] ?? null,
+        ];
+    }
+
     private function validated(Request $request, ?int $ignoreId = null): array
     {
         return $request->validate([
             'category_id' => ['nullable', 'exists:categories,id'],
-            'sku' => [
-                'required', 'string', 'max:64',
-                Rule::unique('products', 'sku')->ignore($ignoreId),
-            ],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'brand' => ['nullable', 'string', 'max:100'],
+            'model' => ['nullable', 'string', 'max:100'],
+            'color' => ['nullable', 'string', 'max:100'],
+            'variation' => ['nullable', 'string', 'max:100'],
             'price' => ['required', 'numeric', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
             'is_active' => ['boolean'],

@@ -33,16 +33,19 @@ const emit = defineEmits(['submit']);
             <InputError :message="form.errors.name" />
         </div>
 
-        <div>
+        <div v-if="form.sku !== undefined">
             <label for="sku" class="block text-sm font-medium">SKU</label>
             <input
                 id="sku"
-                v-model="form.sku"
+                name="sku"
                 type="text"
-                required
-                class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                :value="form.sku || 'Gerado automaticamente ao salvar'"
+                readonly
+                class="mt-1 w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500"
             >
-            <InputError :message="form.errors.sku" />
+            <p class="mt-1 text-xs text-gray-400">
+                Gerado automaticamente a partir de categoria, nome, marca, modelo, cor e variação. Não pode ser editado.
+            </p>
         </div>
 
         <div>
@@ -58,6 +61,51 @@ const emit = defineEmits(['submit']);
                 </option>
             </select>
             <InputError :message="form.errors.category_id" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="brand" class="block text-sm font-medium">Marca</label>
+                <input
+                    id="brand"
+                    v-model="form.brand"
+                    type="text"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <InputError :message="form.errors.brand" />
+            </div>
+            <div>
+                <label for="model" class="block text-sm font-medium">Modelo</label>
+                <input
+                    id="model"
+                    v-model="form.model"
+                    type="text"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <InputError :message="form.errors.model" />
+            </div>
+            <div>
+                <label for="color" class="block text-sm font-medium">Cor</label>
+                <input
+                    id="color"
+                    v-model="form.color"
+                    type="text"
+                    placeholder="Ex: Preta, Inox"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <InputError :message="form.errors.color" />
+            </div>
+            <div>
+                <label for="variation" class="block text-sm font-medium">Variação (tamanho, voltagem, capacidade...)</label>
+                <input
+                    id="variation"
+                    v-model="form.variation"
+                    type="text"
+                    placeholder="Ex: P, 20W, 12L"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <InputError :message="form.errors.variation" />
+            </div>
         </div>
 
         <div>

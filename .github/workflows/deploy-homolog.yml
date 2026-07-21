@@ -59,6 +59,7 @@ jobs:
             PHP=/opt/alt/php83/usr/bin/php
             $PHP artisan config:clear
             $PHP artisan migrate --force
+            $PHP artisan storage:link || true
             $PHP artisan config:cache
             $PHP artisan route:cache
             $PHP artisan view:cache

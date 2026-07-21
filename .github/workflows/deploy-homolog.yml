@@ -32,31 +32,29 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
-      - name: Deploy over SSH (rsync)
-        uses: burnett01/rsync-deployments@7.0.2
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          switches: -avzr --delete
-            --exclude='.git'
-            --exclude='.github'
-            --exclude='.env'
-            --exclude='/storage'
-            --exclude='node_modules'
-            --exclude='tests'
-          path: ./
-          remote_path: ${{ secrets.HOMOLOG_DEPLOY_PATH }}
-          remote_host: ${{ secrets.HOMOLOG_SSH_HOST }}
-          remote_port: ${{ secrets.HOMOLOG_SSH_PORT }}
-          remote_user: ${{ secrets.HOMOLOG_SSH_USER }}
-          remote_key: ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: ssh-keyscan -p ${{ secrets.HOMOLOG_SSH_PORT }} ${{ secrets.HOMOLOG_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        run: |
+          rsync -avz --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='/storage' \
+            --exclude='node_modules' \
+            --exclude='tests' \
+            -e "ssh -p ${{ secrets.HOMOLOG_SSH_PORT }}" \
+            ./ ${{ secrets.HOMOLOG_SSH_USER }}@${{ secrets.HOMOLOG_SSH_HOST }}:${{ secrets.HOMOLOG_DEPLOY_PATH }}/
 
       - name: Run post-deploy commands
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOMOLOG_SSH_HOST }}
-          port: ${{ secrets.HOMOLOG_SSH_PORT }}
-          username: ${{ secrets.HOMOLOG_SSH_USER }}
-          key: ${{ secrets.HOMOLOG_SSH_PRIVATE_KEY }}
-          script: |
+        run: |
+          ssh -p ${{ secrets.HOMOLOG_SSH_PORT }} ${{ secrets.HOMOLOG_SSH_USER }}@${{ secrets.HOMOLOG_SSH_HOST }} '
             cd ${{ secrets.HOMOLOG_DEPLOY_PATH }}
             PHP=/opt/alt/php83/usr/bin/php
             $PHP artisan config:clear
@@ -64,3 +62,4 @@ jobs:
             $PHP artisan config:cache
             $PHP artisan route:cache
             $PHP artisan view:cache
+          '

@@ -3,6 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { confirmDelete } from '@/Shared/notify';
 
 defineProps({
     categories: {
@@ -14,8 +15,8 @@ defineProps({
 const page = usePage();
 const categoryError = computed(() => page.props.errors?.category);
 
-const destroy = (category) => {
-    if (confirm(`Remover a categoria "${category.name}"?`)) {
+const destroy = async (category) => {
+    if (await confirmDelete({ title: `Remover a categoria "${category.name}"?` })) {
         router.delete(`/admin/categories/${category.id}`);
     }
 };

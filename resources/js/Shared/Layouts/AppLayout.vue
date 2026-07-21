@@ -1,15 +1,25 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onUnmounted, ref } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { useStorefrontAssets } from '@/Shared/useStorefrontAssets';
+import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 
 useStorefrontAssets();
 onUnmounted(useStorefrontAssets());
 
 const page = usePage();
 const cartCount = computed(() => page.props.cart?.count ?? 0);
-const flashSuccess = computed(() => page.props.flash?.success);
 const user = computed(() => page.props.auth?.user);
+
+watch(
+    () => page.props.flash,
+    (flash) => {
+        if (flash?.success) notifySuccess(flash.success);
+        if (flash?.error) notifyError(flash.error);
+        if (flash?.warning) notifyWarning(flash.warning);
+    },
+    { immediate: true, deep: true },
+);
 
 const search = ref('');
 
@@ -123,10 +133,6 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                     </nav>
                 </div>
             </div>
-        </div>
-
-        <div v-if="flashSuccess" class="bg-success text-white text-center py-2 small">
-            {{ flashSuccess }}
         </div>
 
         <!-- Conteúdo da página -->

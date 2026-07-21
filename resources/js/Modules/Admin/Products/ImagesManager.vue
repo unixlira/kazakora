@@ -1,5 +1,7 @@
 <script setup>
 import { router, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { confirmDelete, notifyError } from '@/Shared/notify';
 
 const props = defineProps({
     product: {
@@ -12,25 +14,51 @@ const props = defineProps({
     },
 });
 
-const form = useForm({
-    image: null,
-});
+const form = useForm({ image: null });
+const isDragging = ref(false);
+const uploadingCount = ref(0);
+const fileInput = ref(null);
 
-const upload = (event) => {
-    form.image = event.target.files[0];
-    if (!form.image) return;
+const uploadFiles = (files) => {
+    const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
 
-    form.post(`/admin/products/${props.product.id}/images`, {
-        preserveScroll: true,
-        onSuccess: () => {
-            form.reset();
-            event.target.value = '';
-        },
-    });
+    if (list.length === 0) {
+        notifyError('Selecione apenas arquivos de imagem.');
+        return;
+    }
+
+    uploadNext(list, 0);
 };
 
-const remove = (image) => {
-    if (confirm('Remover essa foto?')) {
+const uploadNext = (files, index) => {
+    if (index >= files.length) return;
+
+    uploadingCount.value += 1;
+
+    form.transform((data) => ({ ...data, image: files[index] })).post(
+        `/admin/products/${props.product.id}/images`,
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                uploadingCount.value -= 1;
+                uploadNext(files, index + 1);
+            },
+        },
+    );
+};
+
+const onDrop = (event) => {
+    isDragging.value = false;
+    uploadFiles(event.dataTransfer.files);
+};
+
+const onFileSelect = (event) => {
+    uploadFiles(event.target.files);
+    event.target.value = '';
+};
+
+const remove = async (image) => {
+    if (await confirmDelete({ text: 'Essa foto será removida permanentemente.' })) {
         router.delete(`/admin/products/${props.product.id}/images/${image.id}`, { preserveScroll: true });
     }
 };
@@ -51,10 +79,18 @@ const remove = (image) => {
             </div>
         </div>
 
-        <label class="inline-flex cursor-pointer items-center gap-2 rounded border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 hover:border-emerald-500 hover:text-emerald-600">
-            <i class="fas fa-upload"></i>
-            {{ form.processing ? 'Enviando...' : 'Adicionar foto' }}
-            <input type="file" accept="image/*" class="hidden" :disabled="form.processing" @change="upload">
-        </label>
+        <div class="flex cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed px-6 py-10 text-center transition-colors"
+            :class="isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'"
+            @click="fileInput.click()"
+            @dragover.prevent="isDragging = true"
+            @dragleave.prevent="isDragging = false"
+            @drop.prevent="onDrop">
+            <i class="fas fa-cloud-upload-alt mb-2 text-2xl text-slate-400"></i>
+            <p class="text-sm text-slate-500">
+                <span v-if="uploadingCount > 0">Enviando {{ uploadingCount }} foto(s)...</span>
+                <span v-else>Arraste fotos aqui ou clique para selecionar (múltiplas ao mesmo tempo)</span>
+            </p>
+            <input ref="fileInput" type="file" accept="image/*" multiple class="hidden" @change="onFileSelect">
+        </div>
     </div>
 </template>

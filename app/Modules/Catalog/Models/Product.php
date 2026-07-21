@@ -23,10 +23,14 @@ class Product extends Model
         'name',
         'slug',
         'description',
+        'video_path',
+        'video_duration_seconds',
         'price',
         'stock',
         'is_active',
     ];
+
+    protected $appends = ['video_url'];
 
     protected function casts(): array
     {
@@ -34,7 +38,13 @@ class Product extends Model
             'price' => 'decimal:2',
             'stock' => 'integer',
             'is_active' => 'boolean',
+            'video_duration_seconds' => 'integer',
         ];
+    }
+
+    public function getVideoUrlAttribute(): ?string
+    {
+        return $this->video_path ? asset('storage/'.$this->video_path) : null;
     }
 
     public function category(): BelongsTo

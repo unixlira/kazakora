@@ -38,9 +38,9 @@ class ProductChannelController extends Controller
 
         if ($listing->is_enabled) {
             if (! $this->drivers->driver($channel)->isConfigured()) {
-                return back()->withErrors([
-                    'channel' => "A conta do canal \"{$channel}\" ainda não foi conectada. Peça pro time configurar as credenciais de API antes de publicar.",
-                ]);
+                $listing->update(['is_enabled' => false]);
+
+                return back()->with('warning', "A conta do canal \"{$channel}\" ainda não foi conectada. Peça pro time configurar as credenciais de API antes de publicar.");
             }
 
             $listing->update(['status' => ProductChannelListing::STATUS_PENDING]);

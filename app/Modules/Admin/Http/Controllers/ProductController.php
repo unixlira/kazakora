@@ -55,9 +55,11 @@ class ProductController extends Controller
 
         $validated['slug'] = $this->uniqueSlug($validated['name']);
 
-        Product::create($validated);
+        $product = Product::create($validated);
 
-        return redirect()->route('admin.products.index')->with('success', 'Produto criado com sucesso.');
+        return redirect()
+            ->route('admin.products.edit', $product)
+            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.');
     }
 
     public function edit(Product $product): Response

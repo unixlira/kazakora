@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { confirmDelete } from '@/Shared/notify';
 
 defineProps({
     products: {
@@ -24,8 +25,8 @@ const search = () => {
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const destroy = (product) => {
-    if (confirm(`Remover o produto "${product.name}"?`)) {
+const destroy = async (product) => {
+    if (await confirmDelete({ title: `Remover o produto "${product.name}"?` })) {
         router.delete(`/admin/products/${product.id}`);
     }
 };

@@ -7,6 +7,7 @@ use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
+use App\Modules\Admin\Http\Controllers\ProductVideoController;
 use App\Modules\Cart\Http\Controllers\CartController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
@@ -37,6 +38,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
     Route::put('products/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('products.fiscal.update');
     Route::post('products/{product}/images', [ProductImageController::class, 'store'])->name('products.images.store');
     Route::delete('products/{product}/images/{image}', [ProductImageController::class, 'destroy'])->name('products.images.destroy');
+    Route::post('products/{product}/video', [ProductVideoController::class, 'store'])->name('products.video.store');
+    Route::delete('products/{product}/video', [ProductVideoController::class, 'destroy'])->name('products.video.destroy');
     Route::put('products/{product}/channels/{channel}', [ProductChannelController::class, 'update'])->name('products.channels.update');
 
     Route::get('orders', [AdminOrderController::class, 'index'])->name('orders.index');

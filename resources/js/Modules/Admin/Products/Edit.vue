@@ -3,6 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ProductForm from '@/Modules/Admin/Products/ProductForm.vue';
 import FiscalForm from '@/Modules/Admin/Products/FiscalForm.vue';
 import ImagesManager from '@/Modules/Admin/Products/ImagesManager.vue';
+import VideoManager from '@/Modules/Admin/Products/VideoManager.vue';
 import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
 import StockHistory from '@/Modules/Admin/Products/StockHistory.vue';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -56,7 +57,7 @@ const submit = () => {
 const tabs = [
     { key: 'geral', label: 'Geral' },
     { key: 'fiscal', label: 'Dados fiscais' },
-    { key: 'fotos', label: 'Fotos' },
+    { key: 'midia', label: 'Fotos e vídeo' },
     { key: 'canais', label: 'Canais de venda' },
     { key: 'estoque', label: 'Histórico de estoque' },
 ];
@@ -87,7 +88,16 @@ const activeTab = ref('geral');
 
                 <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />
 
-                <ImagesManager v-else-if="activeTab === 'fotos'" :product="product" :images="images" />
+                <div v-else-if="activeTab === 'midia'" class="space-y-8">
+                    <div>
+                        <h3 class="mb-3 text-sm font-semibold uppercase text-slate-500">Fotos</h3>
+                        <ImagesManager :product="product" :images="images" />
+                    </div>
+                    <div>
+                        <h3 class="mb-3 text-sm font-semibold uppercase text-slate-500">Vídeo</h3>
+                        <VideoManager :product="product" />
+                    </div>
+                </div>
 
                 <ChannelsManager v-else-if="activeTab === 'canais'" :product="product" :channels="channels"
                     :channel-listings="channelListings" />

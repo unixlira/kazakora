@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     items: {
@@ -23,8 +24,10 @@ const updateQuantity = (productId, quantity) => {
 const increment = (item) => updateQuantity(item.product.id, item.quantity + 1);
 const decrement = (item) => updateQuantity(item.product.id, item.quantity - 1);
 
-const removeItem = (productId) => {
-    router.delete(`/cart/${productId}`, { preserveScroll: true });
+const removeItem = async (productId) => {
+    if (await confirmDelete({ title: 'Remover item do carrinho?' })) {
+        router.delete(`/cart/${productId}`, { preserveScroll: true });
+    }
 };
 </script>
 

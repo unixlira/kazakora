@@ -1,13 +1,23 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
-const flashSuccess = computed(() => page.props.flash?.success);
 
 const collapseShow = ref('hidden');
 const userMenuOpen = ref(false);
+const sidebarCollapsed = ref(false);
+
+onMounted(() => {
+    sidebarCollapsed.value = localStorage.getItem('admin_sidebar_collapsed') === '1';
+});
+
+const toggleSidebar = () => {
+    sidebarCollapsed.value = !sidebarCollapsed.value;
+    localStorage.setItem('admin_sidebar_collapsed', sidebarCollapsed.value ? '1' : '0');
+};
 
 const navItems = [
     { href: '/admin', label: 'Dashboard', icon: 'fas fa-tv' },
@@ -20,12 +30,23 @@ const navItems = [
 const isActive = (href) => (href === '/admin' ? page.url === '/admin' : page.url.startsWith(href));
 
 const logout = () => router.post('/logout');
+
+watch(
+    () => page.props.flash,
+    (flash) => {
+        if (flash?.success) notifySuccess(flash.success);
+        if (flash?.error) notifyError(flash.error);
+        if (flash?.warning) notifyWarning(flash.warning);
+    },
+    { immediate: true, deep: true },
+);
 </script>
 
 <template>
     <div class="min-h-screen bg-slate-100">
         <!-- Sidebar -->
-        <nav class="relative z-10 flex flex-wrap items-center justify-between bg-white px-6 py-4 shadow-xl md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:w-64 md:flex-row md:flex-nowrap md:overflow-y-auto">
+        <nav class="relative z-10 flex flex-wrap items-center justify-between bg-white px-6 py-4 shadow-xl transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
+            :class="sidebarCollapsed ? 'md:w-20' : 'md:w-64'">
             <div class="mx-auto flex w-full flex-wrap items-center justify-between px-0 md:min-h-full md:flex-col md:flex-nowrap md:items-stretch">
                 <button
                     class="cursor-pointer rounded border border-solid border-transparent bg-transparent px-3 py-1 text-xl leading-none text-black opacity-50 md:hidden"
@@ -33,22 +54,32 @@ const logout = () => router.post('/logout');
                     <i class="fas fa-bars"></i>
                 </button>
 
-                <Link href="/admin" class="mr-0 inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-slate-600 md:block md:pb-2">
+                <div class="hidden w-full items-center justify-between md:flex">
+                    <Link href="/admin" class="inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-slate-600">
+                        <i class="fas fa-leaf text-secondary"></i>
+                        <span v-if="!sidebarCollapsed" class="ml-2">KazaKora Admin</span>
+                    </Link>
+                    <button type="button" class="text-slate-400 hover:text-slate-600" @click="toggleSidebar">
+                        <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
+                    </button>
+                </div>
+
+                <Link href="/admin" class="mr-0 inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-slate-600 md:hidden">
                     <i class="fas fa-leaf text-secondary me-2"></i> KazaKora Admin
                 </Link>
 
                 <div class="h-auto flex-1 items-center overflow-x-hidden overflow-y-auto rounded shadow md:relative md:mt-4 md:flex md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
                     :class="collapseShow">
-                    <h6 class="block pb-4 pt-1 text-xs font-bold uppercase text-slate-400 no-underline md:min-w-full">
+                    <h6 v-if="!sidebarCollapsed" class="block pb-4 pt-1 text-xs font-bold uppercase text-slate-400 no-underline md:min-w-full">
                         Gestão da loja
                     </h6>
 
                     <ul class="flex list-none flex-col md:min-w-full md:flex-col">
                         <li v-for="item in navItems" :key="item.href" class="items-center">
-                            <Link :href="item.href" class="block py-3 text-xs font-bold uppercase"
+                            <Link :href="item.href" class="block py-3 text-xs font-bold uppercase" :title="item.label"
                                 :class="isActive(item.href) ? 'text-emerald-500' : 'text-slate-700 hover:text-slate-500'">
-                                <i :class="[item.icon, isActive(item.href) ? 'opacity-75' : 'text-slate-300']" class="mr-2 text-sm"></i>
-                                {{ item.label }}
+                                <i class="text-sm" :class="[item.icon, isActive(item.href) ? 'opacity-75' : 'text-slate-300', { 'mr-2': !sidebarCollapsed }]"></i>
+                                <span v-if="!sidebarCollapsed">{{ item.label }}</span>
                             </Link>
                         </li>
                     </ul>
@@ -57,13 +88,15 @@ const logout = () => router.post('/logout');
 
                     <ul class="mb-4 flex list-none flex-col md:min-w-full md:flex-col">
                         <li class="items-center">
-                            <Link href="/" class="block py-3 text-xs font-bold uppercase text-slate-700 hover:text-slate-500">
-                                <i class="fas fa-store mr-2 text-sm text-slate-300"></i> Ver loja
+                            <Link href="/" class="block py-3 text-xs font-bold uppercase text-slate-700 hover:text-slate-500" title="Ver loja">
+                                <i class="fas fa-store text-sm text-slate-300" :class="{ 'mr-2': !sidebarCollapsed }"></i>
+                                <span v-if="!sidebarCollapsed">Ver loja</span>
                             </Link>
                         </li>
                         <li class="items-center">
-                            <button type="button" class="block w-full py-3 text-left text-xs font-bold uppercase text-slate-700 hover:text-slate-500" @click="logout">
-                                <i class="fas fa-sign-out-alt mr-2 text-sm text-slate-300"></i> Sair
+                            <button type="button" class="block w-full py-3 text-left text-xs font-bold uppercase text-slate-700 hover:text-slate-500" title="Sair" @click="logout">
+                                <i class="fas fa-sign-out-alt text-sm text-slate-300" :class="{ 'mr-2': !sidebarCollapsed }"></i>
+                                <span v-if="!sidebarCollapsed">Sair</span>
                             </button>
                         </li>
                     </ul>
@@ -71,7 +104,7 @@ const logout = () => router.post('/logout');
             </div>
         </nav>
 
-        <div class="relative md:ml-64">
+        <div class="relative transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Navbar -->
             <nav class="flex items-center bg-white p-4 shadow md:flex-row md:flex-nowrap md:justify-start">
                 <div class="mx-auto flex w-full flex-wrap items-center justify-between md:flex-nowrap md:px-4">
@@ -92,10 +125,6 @@ const logout = () => router.post('/logout');
                     </div>
                 </div>
             </nav>
-
-            <div v-if="flashSuccess" class="bg-emerald-50 px-6 py-2 text-center text-sm text-emerald-700">
-                {{ flashSuccess }}
-            </div>
 
             <div class="mx-auto mt-4 w-full px-4 md:px-10">
                 <slot />

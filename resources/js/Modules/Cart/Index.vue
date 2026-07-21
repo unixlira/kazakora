@@ -20,6 +20,9 @@ const updateQuantity = (productId, quantity) => {
     router.patch(`/cart/${productId}`, { quantity }, { preserveScroll: true });
 };
 
+const increment = (item) => updateQuantity(item.product.id, item.quantity + 1);
+const decrement = (item) => updateQuantity(item.product.id, item.quantity - 1);
+
 const removeItem = (productId) => {
     router.delete(`/cart/${productId}`, { preserveScroll: true });
 };
@@ -29,57 +32,84 @@ const removeItem = (productId) => {
     <Head title="Carrinho" />
 
     <AppLayout>
-        <h1 class="text-2xl font-bold">Carrinho</h1>
-
-        <p v-if="items.length === 0" class="mt-4 text-gray-500">
-            Seu carrinho está vazio.
-            <Link href="/" class="underline">Ver catálogo</Link>
-        </p>
-
-        <div v-else class="mt-6 space-y-4">
-            <div
-                v-for="item in items"
-                :key="item.product.id"
-                class="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4"
-            >
-                <div>
-                    <h2 class="font-semibold">{{ item.product.name }}</h2>
-                    <p class="text-sm text-gray-500">{{ formatPrice(item.product.price) }} / un.</p>
-                </div>
-
-                <div class="flex items-center gap-4">
-                    <input
-                        type="number"
-                        min="1"
-                        :max="item.product.stock"
-                        :value="item.quantity"
-                        class="w-16 rounded border border-gray-300 px-2 py-1 text-center"
-                        @change="updateQuantity(item.product.id, Number($event.target.value))"
-                    >
-
-                    <span class="w-24 text-right font-medium">{{ formatPrice(item.subtotal) }}</span>
-
-                    <button
-                        type="button"
-                        class="text-sm text-red-500 hover:underline"
-                        @click="removeItem(item.product.id)"
-                    >
-                        Remover
-                    </button>
-                </div>
+        <div class="container-fluid page-header py-5 mb-5" style="background:#f8f9fa;">
+            <div class="container py-5">
+                <h1 class="display-3 text-capitalize mb-3">Carrinho</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><Link href="/" class="text-decoration-none">Início</Link></li>
+                        <li class="breadcrumb-item active text-primary">Carrinho</li>
+                    </ol>
+                </nav>
             </div>
+        </div>
 
-            <div class="flex items-center justify-between border-t border-gray-200 pt-4">
-                <span class="text-lg font-bold">Total</span>
-                <span class="text-lg font-bold">{{ formatPrice(total) }}</span>
+        <div class="container-fluid py-5">
+            <div class="container">
+                <p v-if="items.length === 0" class="text-center text-muted py-5">
+                    Seu carrinho está vazio.
+                    <Link href="/" class="d-block mt-3">Ver catálogo</Link>
+                </p>
+
+                <template v-else>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Produto</th>
+                                    <th scope="col">Preço</th>
+                                    <th scope="col">Quantidade</th>
+                                    <th scope="col">Subtotal</th>
+                                    <th scope="col"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="item in items" :key="item.product.id">
+                                    <th scope="row"><p class="mb-0 py-4">{{ item.product.name }}</p></th>
+                                    <td><p class="mb-0 py-4">{{ formatPrice(item.product.price) }}</p></td>
+                                    <td>
+                                        <div class="input-group quantity py-4" style="width: 120px;">
+                                            <button type="button" class="btn btn-sm btn-minus rounded-circle bg-light border"
+                                                @click="decrement(item)">
+                                                <i class="fa fa-minus"></i>
+                                            </button>
+                                            <input type="text" class="form-control form-control-sm text-center border-0"
+                                                :value="item.quantity" readonly>
+                                            <button type="button" class="btn btn-sm btn-plus rounded-circle bg-light border"
+                                                :disabled="item.quantity >= item.product.stock"
+                                                @click="increment(item)">
+                                                <i class="fa fa-plus"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td><p class="mb-0 py-4">{{ formatPrice(item.subtotal) }}</p></td>
+                                    <td class="py-4">
+                                        <button type="button" class="btn btn-md rounded-circle bg-light border"
+                                            @click="removeItem(item.product.id)">
+                                            <i class="fa fa-times text-danger"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-4 justify-content-end">
+                        <div class="col-sm-8 col-md-7 col-lg-6 col-xl-4">
+                            <div class="bg-light rounded">
+                                <div class="py-4 mb-4 border-bottom d-flex justify-content-between">
+                                    <h5 class="mb-0 ps-4 me-4">Total</h5>
+                                    <p class="mb-0 pe-4 fs-5 text-primary fw-bold">{{ formatPrice(total) }}</p>
+                                </div>
+                                <Link href="/checkout"
+                                    class="btn btn-primary rounded-pill px-4 py-3 text-uppercase mb-4 ms-4">
+                                    Finalizar Compra
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </template>
             </div>
-
-            <Link
-                href="/checkout"
-                class="block w-full rounded bg-gray-900 py-3 text-center font-medium text-white hover:bg-gray-700"
-            >
-                Finalizar compra
-            </Link>
         </div>
     </AppLayout>
 </template>

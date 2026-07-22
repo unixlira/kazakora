@@ -32,6 +32,24 @@ class Permissions
 
     public const CONFIGURACOES_AUDITORIA = 'configuracoes.auditoria';
 
+    public const RELATORIOS_VIEW = 'relatorios.view';
+
+    public const FINANCEIRO_VIEW = 'financeiro.view';
+
+    public const FINANCEIRO_CREATE = 'financeiro.create';
+
+    public const FINANCEIRO_EDIT = 'financeiro.edit';
+
+    public const FINANCEIRO_DELETE = 'financeiro.delete';
+
+    public const OPERACIONAL_VIEW = 'operacional.view';
+
+    public const OPERACIONAL_CREATE = 'operacional.create';
+
+    public const OPERACIONAL_EDIT = 'operacional.edit';
+
+    public const OPERACIONAL_DELETE = 'operacional.delete';
+
     public const ALL = [
         self::CADASTROS_VIEW,
         self::CADASTROS_CREATE,
@@ -42,6 +60,15 @@ class Permissions
         self::ESTOQUE_ADJUST,
         self::CONFIGURACOES_USUARIOS,
         self::CONFIGURACOES_AUDITORIA,
+        self::RELATORIOS_VIEW,
+        self::FINANCEIRO_VIEW,
+        self::FINANCEIRO_CREATE,
+        self::FINANCEIRO_EDIT,
+        self::FINANCEIRO_DELETE,
+        self::OPERACIONAL_VIEW,
+        self::OPERACIONAL_CREATE,
+        self::OPERACIONAL_EDIT,
+        self::OPERACIONAL_DELETE,
     ];
 
     /**
@@ -57,6 +84,15 @@ class Permissions
         self::PEDIDOS_VIEW,
         self::PEDIDOS_EDIT,
         self::ESTOQUE_ADJUST,
+        self::RELATORIOS_VIEW,
+        self::FINANCEIRO_VIEW,
+        self::FINANCEIRO_CREATE,
+        self::FINANCEIRO_EDIT,
+        self::FINANCEIRO_DELETE,
+        self::OPERACIONAL_VIEW,
+        self::OPERACIONAL_CREATE,
+        self::OPERACIONAL_EDIT,
+        self::OPERACIONAL_DELETE,
     ];
 
     /** Seed defaults — also the fallback used if a role/permission row is missing. */
@@ -68,10 +104,20 @@ class Permissions
             self::PEDIDOS_VIEW,
             self::PEDIDOS_EDIT,
             self::ESTOQUE_ADJUST,
+            self::RELATORIOS_VIEW,
+            self::FINANCEIRO_VIEW,
+            self::FINANCEIRO_CREATE,
+            self::FINANCEIRO_EDIT,
+            self::OPERACIONAL_VIEW,
+            self::OPERACIONAL_CREATE,
+            self::OPERACIONAL_EDIT,
         ],
         User::ROLE_SUBSCRIBER => [
             self::CADASTROS_VIEW,
             self::PEDIDOS_VIEW,
+            self::RELATORIOS_VIEW,
+            self::FINANCEIRO_VIEW,
+            self::OPERACIONAL_VIEW,
         ],
     ];
 

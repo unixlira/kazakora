@@ -1,16 +1,24 @@
 <?php
 
 use App\Modules\Admin\Http\Controllers\AuditLogController;
+use App\Modules\Admin\Http\Controllers\CashFlowController;
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\CompanyController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
+use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
+use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
 use App\Modules\Admin\Http\Controllers\ProductLogisticsController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
+use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
+use App\Modules\Admin\Http\Controllers\ReportController;
+use App\Modules\Admin\Http\Controllers\ServiceOrderController;
+use App\Modules\Admin\Http\Controllers\ShippingMethodController;
+use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
@@ -125,6 +133,62 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');
+
+    // Gestão
+    Route::middleware('permission:relatorios.view')->group(function () {
+        Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
+        Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
+    });
+
+    Route::middleware('permission:financeiro.view')->group(function () {
+        Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
+        Route::get('fluxo-de-caixa', [CashFlowController::class, 'index'])->name('fluxo-de-caixa.listar');
+    });
+    Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
+    Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');
+    Route::delete('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'destroy'])->name('fluxo-de-caixa.excluir')->middleware('permission:financeiro.delete');
+
+    // Operacional
+    Route::get('estoque', [StockMovementController::class, 'index'])->name('estoque.listar')->middleware('permission:operacional.view');
+
+    Route::resource('pedidos-de-compra', PurchaseOrderController::class)->except(['edit', 'update'])
+        ->parameters(['pedidos-de-compra' => 'purchase_order'])
+        ->names([
+            'index' => 'pedidos-de-compra.listar',
+            'create' => 'pedidos-de-compra.criar',
+            'store' => 'pedidos-de-compra.armazenar',
+            'show' => 'pedidos-de-compra.exibir',
+            'destroy' => 'pedidos-de-compra.excluir',
+        ])
+        ->middlewareFor(['index', 'show'], 'permission:operacional.view')
+        ->middlewareFor(['create', 'store'], 'permission:operacional.create')
+        ->middlewareFor('destroy', 'permission:operacional.delete');
+    Route::patch('pedidos-de-compra/{purchase_order}/status', [PurchaseOrderController::class, 'updateStatus'])
+        ->name('pedidos-de-compra.status.atualizar')->middleware('permission:operacional.edit');
+    Route::post('pedidos-de-compra/{purchase_order}/receber', [PurchaseOrderController::class, 'receive'])
+        ->name('pedidos-de-compra.receber')->middleware('permission:operacional.edit');
+
+    Route::resource('ordens-de-servico', ServiceOrderController::class)->except('show')
+        ->parameters(['ordens-de-servico' => 'service_order'])
+        ->names([
+            'index' => 'ordens-de-servico.listar',
+            'create' => 'ordens-de-servico.criar',
+            'store' => 'ordens-de-servico.armazenar',
+            'edit' => 'ordens-de-servico.editar',
+            'update' => 'ordens-de-servico.atualizar',
+            'destroy' => 'ordens-de-servico.excluir',
+        ])
+        ->middlewareFor('index', 'permission:operacional.view')
+        ->middlewareFor(['create', 'store'], 'permission:operacional.create')
+        ->middlewareFor(['edit', 'update'], 'permission:operacional.edit')
+        ->middlewareFor('destroy', 'permission:operacional.delete');
+
+    Route::middleware('permission:operacional.view')->group(function () {
+        Route::get('logistica', [ShippingMethodController::class, 'index'])->name('logistica.listar');
+    });
+    Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
+    Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');
+    Route::delete('logistica/{shipping_method}', [ShippingMethodController::class, 'destroy'])->name('logistica.excluir')->middleware('permission:operacional.delete');
 
     Route::middleware('admin')->group(function () {
         Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');

@@ -10,6 +10,15 @@ export const sidebarSections = [
         items: [{ label: 'Dashboard', href: '/admin', icon: 'fas fa-gauge-high', color: 'text-primary', permission: null }],
     },
     {
+        heading: 'Gestão',
+        items: [
+            { label: 'Dashboard Financeiro', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', color: 'text-primary', permission: 'financeiro.view' },
+            { label: 'Fluxo de Caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', color: 'text-success', permission: 'financeiro.view' },
+            { label: 'Relatórios', href: '/admin/relatorios', icon: 'fas fa-file-lines', color: 'text-info', permission: 'relatorios.view' },
+            { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-gauge', color: 'text-warning', permission: 'relatorios.view' },
+        ],
+    },
+    {
         heading: 'Cadastros',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', color: 'text-info', permission: 'cadastros.view' },
@@ -20,7 +29,13 @@ export const sidebarSections = [
     },
     {
         heading: 'Operacional',
-        items: [{ label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', color: 'text-warning', permission: 'pedidos.view' }],
+        items: [
+            { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', color: 'text-warning', permission: 'pedidos.view' },
+            { label: 'Pedidos de Compra', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', color: 'text-info', permission: 'operacional.view' },
+            { label: 'Ordens de Serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', color: 'text-secondary', permission: 'operacional.view' },
+            { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', color: 'text-success', permission: 'operacional.view' },
+            { label: 'Logística', href: '/admin/logistica', icon: 'fas fa-truck', color: 'text-primary', permission: 'operacional.view' },
+        ],
     },
     {
         heading: 'Configurações',

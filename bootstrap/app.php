@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsureHasPermission;
+use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\EnsureUserIsStaff;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\TrackSiteVisit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,12 +23,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn () => route('entrar'));
 
         $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
-            \App\Http\Middleware\TrackSiteVisit::class,
+            HandleInertiaRequests::class,
+            TrackSiteVisit::class,
         ]);
 
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'admin' => EnsureUserIsAdmin::class,
+            'staff' => EnsureUserIsStaff::class,
+            'permission' => EnsureHasPermission::class,
         ]);
 
         // The 'api' group has no session/CSRF middleware to begin with, but the

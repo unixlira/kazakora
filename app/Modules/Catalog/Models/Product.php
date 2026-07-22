@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Models;
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Support\Rbac\Auditable;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory, SoftDeletes;
+    use Auditable, HasFactory, SoftDeletes;
 
     protected $fillable = [
         'category_id',

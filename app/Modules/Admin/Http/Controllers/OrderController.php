@@ -20,19 +20,10 @@ class OrderController extends Controller
         Order::STATUS_CANCELLED,
     ];
 
-    public function index(Request $request): Response
+    public function index(): Response
     {
-        $orders = Order::query()
-            ->with('user:id,name,email')
-            ->withCount('items')
-            ->when($request->string('status')->isNotEmpty(), fn ($query) => $query->where('status', $request->string('status')))
-            ->latest()
-            ->paginate(15)
-            ->withQueryString();
-
         return Inertia::render('Admin/Orders/Index', [
-            'orders' => $orders,
-            'filters' => $request->only('status'),
+            'orders' => Order::query()->with('user:id,name,email')->withCount('items')->latest()->get(),
             'statuses' => self::STATUSES,
         ]);
     }

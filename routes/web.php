@@ -1,7 +1,9 @@
 <?php
 
+use App\Modules\Admin\Http\Controllers\AuditLogController;
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\CompanyController;
+use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
@@ -9,6 +11,8 @@ use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
 use App\Modules\Admin\Http\Controllers\ProductLogisticsController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
+use App\Modules\Admin\Http\Controllers\SupplierController;
+use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
@@ -46,7 +50,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/configuracoes', [SettingsController::class, 'edit'])->name('configuracoes.editar');
 });
 
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
 
     Route::resource('produtos', ProductController::class)->except('show')
@@ -58,7 +62,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
             'edit' => 'produtos.editar',
             'update' => 'produtos.atualizar',
             'destroy' => 'produtos.excluir',
-        ]);
+        ])
+        ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
+        ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
+        ->middlewareFor('destroy', 'permission:cadastros.delete');
 
     Route::resource('categorias', CategoryController::class)->except('show')
         ->parameters(['categorias' => 'category'])
@@ -69,7 +76,38 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
             'edit' => 'categorias.editar',
             'update' => 'categorias.atualizar',
             'destroy' => 'categorias.excluir',
-        ]);
+        ])
+        ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
+        ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
+        ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    Route::resource('fornecedores', SupplierController::class)->except('show')
+        ->parameters(['fornecedores' => 'supplier'])
+        ->names([
+            'index' => 'fornecedores.listar',
+            'create' => 'fornecedores.criar',
+            'store' => 'fornecedores.armazenar',
+            'edit' => 'fornecedores.editar',
+            'update' => 'fornecedores.atualizar',
+            'destroy' => 'fornecedores.excluir',
+        ])
+        ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
+        ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
+        ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    Route::resource('centros-de-custo', CostCenterController::class)->except('show')
+        ->parameters(['centros-de-custo' => 'cost_center'])
+        ->names([
+            'index' => 'centros-de-custo.listar',
+            'create' => 'centros-de-custo.criar',
+            'store' => 'centros-de-custo.armazenar',
+            'edit' => 'centros-de-custo.editar',
+            'update' => 'centros-de-custo.atualizar',
+            'destroy' => 'centros-de-custo.excluir',
+        ])
+        ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
+        ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
+        ->middlewareFor('destroy', 'permission:cadastros.delete');
 
     Route::put('produtos/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('produtos.fiscal.atualizar');
     Route::put('produtos/{product}/logistica', [ProductLogisticsController::class, 'update'])->name('produtos.logistica.atualizar');
@@ -81,10 +119,20 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
 
     Route::get('pedidos', [AdminOrderController::class, 'index'])->name('pedidos.listar');
     Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');
-    Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])->name('pedidos.atualizar');
+    Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
+        ->name('pedidos.atualizar')
+        ->middleware('permission:pedidos.edit');
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');
+
+    Route::middleware('admin')->group(function () {
+        Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');
+        Route::patch('usuarios-permissoes/usuarios/{user}', [UserPermissionController::class, 'updateRole'])->name('usuarios-permissoes.papel.atualizar');
+        Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');
+
+        Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
+    });
 });
 
 require __DIR__.'/auth.php';

@@ -135,9 +135,9 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
 
         <div class="mt-8 flex flex-wrap">
             <div :class="chartCardClass">
-                <div class="rounded bg-white shadow-lg">
-                    <div class="border-b border-slate-200 px-4 py-4">
-                        <h3 class="text-base font-semibold text-slate-700">Pedidos por status</h3>
+                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                        <h3 class="text-base font-semibold">Pedidos por status</h3>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="pie" :data="orderStatusChartData" />
@@ -146,9 +146,9 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             </div>
 
             <div :class="chartCardClass">
-                <div class="rounded bg-white shadow-lg">
-                    <div class="border-b border-slate-200 px-4 py-4">
-                        <h3 class="text-base font-semibold text-slate-700">Visitas (últimos 14 dias)</h3>
+                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                        <h3 class="text-base font-semibold">Visitas (últimos 14 dias)</h3>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="line" :data="visitsChartData" />
@@ -157,9 +157,9 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             </div>
 
             <div :class="chartCardClass">
-                <div class="rounded bg-white shadow-lg">
-                    <div class="border-b border-slate-200 px-4 py-4">
-                        <h3 class="text-base font-semibold text-slate-700">Faturamento diário (últimos 14 dias)</h3>
+                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                        <h3 class="text-base font-semibold">Faturamento diário (últimos 14 dias)</h3>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="bar" :data="revenueChartData" />
@@ -170,16 +170,16 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
 
         <div class="mt-8 flex flex-wrap">
             <div class="w-full px-4 lg:w-6/12">
-                <div class="rounded bg-white shadow-lg">
-                    <div class="border-b border-slate-200 px-4 py-4">
-                        <h3 class="text-base font-semibold text-slate-700">Pedidos recentes</h3>
+                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                        <h3 class="text-base font-semibold">Pedidos recentes</h3>
                     </div>
                     <div class="p-4">
                         <p v-if="recentOrders.length === 0" class="text-sm text-slate-500">Nenhum pedido ainda.</p>
                         <ul v-else class="space-y-2 text-sm">
                             <li v-for="order in recentOrders" :key="order.id"
-                                class="flex justify-between border-b border-slate-100 pb-2">
-                                <Link :href="`/admin/pedidos/${order.id}`" class="text-slate-600 hover:underline">
+                                class="flex justify-between border-b border-[var(--surface-border)] pb-2">
+                                <Link :href="`/admin/pedidos/${order.id}`" class="hover:text-primary hover:underline">
                                     #{{ order.id }} — {{ order.user?.name }}
                                 </Link>
                                 <span class="font-medium">{{ formatPrice(order.total) }}</span>
@@ -190,19 +190,19 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             </div>
 
             <div class="w-full px-4 lg:w-6/12">
-                <div class="rounded bg-white shadow-lg">
-                    <div class="border-b border-slate-200 px-4 py-4">
-                        <h3 class="text-base font-semibold text-slate-700">Estoque baixo</h3>
+                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                        <h3 class="text-base font-semibold">Estoque baixo</h3>
                     </div>
                     <div class="p-4">
                         <p v-if="lowStockProducts.length === 0" class="text-sm text-slate-500">Nenhum produto com estoque baixo.</p>
                         <ul v-else class="space-y-2 text-sm">
                             <li v-for="product in lowStockProducts" :key="product.id"
-                                class="flex justify-between border-b border-slate-100 pb-2">
-                                <Link :href="`/admin/produtos/${product.id}/editar`" class="text-slate-600 hover:underline">
+                                class="flex justify-between border-b border-[var(--surface-border)] pb-2">
+                                <Link :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">
                                     {{ product.name }}
                                 </Link>
-                                <span class="font-medium text-rose-600">{{ product.stock }} un.</span>
+                                <span class="font-medium text-error">{{ product.stock }} un.</span>
                             </li>
                         </ul>
                     </div>

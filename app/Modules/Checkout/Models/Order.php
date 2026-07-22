@@ -3,12 +3,15 @@
 namespace App\Modules\Checkout\Models;
 
 use App\Models\User;
+use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
+    use Auditable;
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_PAID = 'paid';

@@ -19,7 +19,14 @@ class User extends Authenticatable
 
     public const ROLE_ADMIN = 'admin';
 
+    public const ROLE_MANAGER = 'manager';
+
+    public const ROLE_SUBSCRIBER = 'subscriber';
+
     public const ROLE_CUSTOMER = 'customer';
+
+    /** Roles that can sign in to the admin panel (with varying permissions). */
+    public const STAFF_ROLES = [self::ROLE_ADMIN, self::ROLE_MANAGER, self::ROLE_SUBSCRIBER];
 
     protected $appends = ['avatar_url', 'initials'];
 
@@ -40,6 +47,11 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === self::ROLE_ADMIN;
+    }
+
+    public function isStaff(): bool
+    {
+        return in_array($this->role, self::STAFF_ROLES, true);
     }
 
     public function getAvatarUrlAttribute(): ?string

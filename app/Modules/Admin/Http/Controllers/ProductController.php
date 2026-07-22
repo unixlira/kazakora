@@ -24,25 +24,12 @@ class ProductController extends Controller
         private readonly StockManager $stock,
         private readonly MarketplaceDriverManager $drivers,
         private readonly SkuGeneratorService $skuGenerator,
-    ) {
-    }
+    ) {}
 
-    public function index(Request $request): Response
+    public function index(): Response
     {
-        $products = Product::query()
-            ->with('category:id,name')
-            ->when($request->string('search')->trim()->isNotEmpty(), fn ($query) => $query->where(
-                fn ($query) => $query
-                    ->where('name', 'like', '%'.$request->string('search').'%')
-                    ->orWhere('sku', 'like', '%'.$request->string('search').'%')
-            ))
-            ->latest()
-            ->paginate(15)
-            ->withQueryString();
-
         return Inertia::render('Admin/Products/Index', [
-            'products' => $products,
-            'filters' => $request->only('search'),
+            'products' => Product::query()->with('category:id,name')->latest()->get(),
         ]);
     }
 

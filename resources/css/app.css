@@ -4,7 +4,47 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+@custom-variant dark (&:is(.dark *));
+
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-primary: #5d87ff;
+    --color-primary-emphasis: #4570ea;
+    --color-secondary: #49beff;
+    --color-success: #13deb9;
+    --color-warning: #ffae1f;
+    --color-error: #fa896b;
+    --color-info: #539bff;
+
+    --color-lightprimary: #ecf2ff;
+    --color-lightsecondary: #e8f7ff;
+    --color-lightsuccess: #e6fffa;
+    --color-lightwarning: #fef5e5;
+    --color-lighterror: #fdede8;
+    --color-lightinfo: #eaf2ff;
+
+    --radius-tw: 12px;
+}
+
+/*
+ * Admin-only design tokens (sidebar/card/badge surfaces). Scoped to the
+ * admin shell so the Bootstrap-based storefront (see useStorefrontAssets.js)
+ * never sees a `.dark` ancestor class or these CSS variables.
+ */
+.admin-shell {
+    --surface: #ffffff;
+    --surface-muted: #f6f8fb;
+    --surface-foreground: #2a3547;
+    --surface-border: #e5eaf2;
+    --sidebar-foreground: #2a3547;
+}
+
+.dark .admin-shell {
+    --surface: #1e293b;
+    --surface-muted: #0f172a;
+    --surface-foreground: #e2e8f0;
+    --surface-border: #334155;
+    --sidebar-foreground: #cbd5e1;
 }

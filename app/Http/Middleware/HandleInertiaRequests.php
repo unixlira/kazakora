@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Cart\Support\CartManager;
+use App\Support\Rbac\Permissions;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +42,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user()?->only('id', 'name', 'email', 'role', 'avatar_url', 'initials'),
             ],
+            'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),
             ],

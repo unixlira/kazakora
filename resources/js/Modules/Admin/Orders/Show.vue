@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import Can from '@/Shared/Components/Can.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -33,7 +34,7 @@ const updateStatus = () => {
 
         <div class="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">
-                <div class="rounded-lg border border-gray-200 bg-white p-4">
+                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                     <h2 class="font-semibold">Itens</h2>
 
                     <ul class="mt-4 space-y-2 text-sm">
@@ -43,15 +44,15 @@ const updateStatus = () => {
                         </li>
                     </ul>
 
-                    <div class="mt-4 flex justify-between border-t border-gray-200 pt-4 font-bold">
+                    <div class="mt-4 flex justify-between border-t border-[var(--surface-border)] pt-4 font-bold">
                         <span>Total</span>
                         <span>{{ formatPrice(order.total) }}</span>
                     </div>
                 </div>
 
-                <div class="mt-6 rounded-lg border border-gray-200 bg-white p-4">
+                <div class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                     <h2 class="font-semibold">Entrega</h2>
-                    <p class="mt-2 text-sm text-gray-600">
+                    <p class="mt-2 text-sm text-slate-500">
                         {{ order.shipping_name }} — {{ order.shipping_phone }}<br>
                         {{ order.shipping_street }}, {{ order.shipping_number }}
                         <span v-if="order.shipping_complement">- {{ order.shipping_complement }}</span><br>
@@ -61,31 +62,33 @@ const updateStatus = () => {
                 </div>
             </div>
 
-            <div class="h-fit rounded-lg border border-gray-200 bg-white p-4">
+            <div class="h-fit rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <h2 class="font-semibold">Cliente</h2>
-                <p class="mt-2 text-sm text-gray-600">
+                <p class="mt-2 text-sm text-slate-500">
                     {{ order.user?.name }}<br>
                     {{ order.user?.email }}
                 </p>
 
-                <form class="mt-6 space-y-2" @submit.prevent="updateStatus">
-                    <label for="status" class="block text-sm font-medium">Status</label>
-                    <select
-                        id="status"
-                        v-model="form.status"
-                        class="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    >
-                        <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
-                    </select>
+                <Can permission="pedidos.edit">
+                    <form class="mt-6 space-y-2" @submit.prevent="updateStatus">
+                        <label for="status" class="block text-sm font-medium">Status</label>
+                        <select
+                            id="status"
+                            v-model="form.status"
+                            class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
+                        >
+                            <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
+                        </select>
 
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="w-full rounded bg-gray-900 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                        Atualizar status
-                    </button>
-                </form>
+                        <button
+                            type="submit"
+                            :disabled="form.processing"
+                            class="w-full rounded-lg bg-primary py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Atualizar status
+                        </button>
+                    </form>
+                </Can>
             </div>
         </div>
     </AdminLayout>

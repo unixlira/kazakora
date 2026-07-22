@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'mercadolivre' => [
+        'app_id' => env('ML_APP_ID'),
+        'client_secret' => env('ML_CLIENT_SECRET'),
+        'redirect_uri' => env('ML_REDIRECT_URI'),
+        'webhook_url' => env('ML_WEBHOOK_URL'),
+        'api_base_url' => env('ML_API_BASE_URL', 'https://api.mercadolibre.com'),
+        'auth_url' => env('ML_AUTH_URL', 'https://auth.mercadolivre.com.br/authorization'),
+        'token_url' => env('ML_TOKEN_URL', 'https://api.mercadolibre.com/oauth/token'),
+    ],
+
 ];

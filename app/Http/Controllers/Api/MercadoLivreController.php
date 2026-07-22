@@ -1,0 +1,54 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Jobs\ProcessMercadoLivreWebhook;
+use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
+use App\Services\MercadoLivre\MercadoLivreAuthService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
+class MercadoLivreController extends Controller
+{
+    public function __construct(private readonly MercadoLivreAuthService $auth) {}
+
+    public function redirectToAuth(): RedirectResponse
+    {
+        return redirect()->away($this->auth->getAuthorizationUrl());
+    }
+
+    public function callback(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string'],
+            'state' => ['required', 'string'],
+        ]);
+
+        try {
+            $token = $this->auth->handleCallback($validated['code'], $validated['state']);
+        } catch (MercadoLivreException $exception) {
+            return redirect('/admin/empresa')->with('error', $exception->getMessage());
+        }
+
+        return redirect('/admin/empresa')->with(
+            'success',
+            "Conta do Mercado Livre \"{$token->ml_nickname}\" conectada com sucesso.",
+        );
+    }
+
+    public function webhook(Request $request): JsonResponse
+    {
+        $payload = $request->all();
+
+        Log::channel(config('mercadolivre.log_channel'))->info('mercadolivre.webhook.raw', $payload);
+
+        // Acknowledge immediately — Mercado Livre expects a fast 200 and
+        // retries/blocks the app's webhook URL if it doesn't get one.
+        ProcessMercadoLivreWebhook::dispatch($payload);
+
+        return response()->json(['status' => 'received']);
+    }
+}

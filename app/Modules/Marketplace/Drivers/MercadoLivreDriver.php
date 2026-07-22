@@ -5,16 +5,22 @@ namespace App\Modules\Marketplace\Drivers;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Services\MercadoLivre\DTOs\ProductDTO;
+use App\Services\MercadoLivre\Services\ProductService;
 
 /**
  * Mercado Livre — API docs: https://developers.mercadolivre.com.br
  *
- * OAuth2 authorization code flow. Product publishing goes through
- * POST /items, images through POST /pictures, stock through
- * PUT /items/{id} (available_quantity).
+ * Delegates the actual HTTP calls to App\Services\MercadoLivre\Services\ProductService,
+ * which uses the OAuth token managed by MercadoLivreAuthService (see
+ * app/Services/MercadoLivre). The channel-specific `category_id` (required by
+ * the ML API, but meaningless to the other channels) comes from the JSON
+ * attributes editor on the product's "Canais de venda" tab.
  */
 class MercadoLivreDriver extends AbstractMarketplaceDriver
 {
+    public function __construct(private readonly ProductService $products) {}
+
     public function channel(): string
     {
         return MarketplaceAccount::CHANNEL_MERCADO_LIVRE;
@@ -24,18 +30,24 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
     {
         $this->ensureConfigured();
 
-        // TODO: POST https://api.mercadolibre.com/items with the mapped
-        // category, price, available_quantity, pictures (from $product->images)
-        // and the channel-specific attributes stored in $listing->attributes.
-        throw new \RuntimeException('Integração com Mercado Livre ainda não implementada.');
+        $dto = new ProductDTO(
+            title: $product->name,
+            category_id: $listing->attributes['category_id'] ?? '',
+            price: (float) $product->price,
+            available_quantity: $product->stock,
+            description: $product->description,
+            pictures: $product->images->map(fn ($image) => ['source' => $image->url])->all(),
+        );
+
+        $response = $this->products->createItem($dto);
+
+        return (string) $response['id'];
     }
 
     public function updateStock(Product $product, ProductChannelListing $listing): void
     {
         $this->ensureConfigured();
 
-        // TODO: PUT https://api.mercadolibre.com/items/{$listing->external_id}
-        // with ['available_quantity' => $product->stock].
-        throw new \RuntimeException('Integração com Mercado Livre ainda não implementada.');
+        $this->products->updateStock($listing->external_id, $product->stock);
     }
 }

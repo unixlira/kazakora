@@ -18,7 +18,7 @@ const formatPrice = (value) =>
 
 const addToCart = (productId) => {
     router.post(
-        '/cart',
+        '/carrinho',
         { product_id: productId, quantity: 1 },
         { preserveScroll: true },
     );

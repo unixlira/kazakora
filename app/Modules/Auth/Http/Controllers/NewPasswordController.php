@@ -51,6 +51,6 @@ class NewPasswordController extends Controller
             ]);
         }
 
-        return redirect()->route('login')->with('success', trans($status));
+        return redirect()->route('entrar')->with('success', trans($status));
     }
 }

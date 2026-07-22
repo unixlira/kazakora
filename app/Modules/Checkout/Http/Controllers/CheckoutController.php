@@ -115,7 +115,7 @@ class CheckoutController extends Controller
         Mail::to($request->user())->send(new OrderConfirmation($order));
 
         return redirect()
-            ->route('checkout.confirmation', $order)
+            ->route('finalizacao.confirmacao', $order)
             ->with('success', 'Pedido realizado com sucesso!');
     }
 

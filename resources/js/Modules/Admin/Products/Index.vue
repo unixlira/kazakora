@@ -19,7 +19,7 @@ const searchForm = useForm({
 });
 
 const search = () => {
-    router.get('/admin/products', { search: searchForm.search }, { preserveState: true });
+    router.get('/admin/produtos', { search: searchForm.search }, { preserveState: true });
 };
 
 const formatPrice = (value) =>
@@ -27,7 +27,7 @@ const formatPrice = (value) =>
 
 const destroy = async (product) => {
     if (await confirmDelete({ title: `Remover o produto "${product.name}"?` })) {
-        router.delete(`/admin/products/${product.id}`);
+        router.delete(`/admin/produtos/${product.id}`);
     }
 };
 </script>
@@ -39,7 +39,7 @@ const destroy = async (product) => {
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold">Produtos</h1>
             <Link
-                href="/admin/products/create"
+                href="/admin/produtos/criar"
                 class="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
             >
                 Novo produto
@@ -87,7 +87,7 @@ const destroy = async (product) => {
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right">
-                            <Link :href="`/admin/products/${product.id}/edit`" class="mr-3 hover:underline">
+                            <Link :href="`/admin/produtos/${product.id}/editar`" class="mr-3 hover:underline">
                                 Editar
                             </Link>
                             <button type="button" class="text-red-500 hover:underline" @click="destroy(product)">

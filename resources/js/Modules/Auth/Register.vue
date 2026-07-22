@@ -11,7 +11,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/register', {
+    form.post('/cadastro', {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
 };
@@ -88,7 +88,7 @@ const submit = () => {
 
         <p class="mt-6 text-center text-sm text-gray-500">
             Já tem uma conta?
-            <Link href="/login" class="underline">Entrar</Link>
+            <Link href="/entrar" class="underline">Entrar</Link>
         </p>
     </GuestLayout>
 </template>

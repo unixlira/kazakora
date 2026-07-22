@@ -36,7 +36,7 @@ const uploadNext = (files, index) => {
     uploadingCount.value += 1;
 
     form.transform((data) => ({ ...data, image: files[index] })).post(
-        `/admin/products/${props.product.id}/images`,
+        `/admin/produtos/${props.product.id}/imagens`,
         {
             preserveScroll: true,
             onFinish: () => {
@@ -59,7 +59,7 @@ const onFileSelect = (event) => {
 
 const remove = async (image) => {
     if (await confirmDelete({ text: 'Essa foto será removida permanentemente.' })) {
-        router.delete(`/admin/products/${props.product.id}/images/${image.id}`, { preserveScroll: true });
+        router.delete(`/admin/produtos/${props.product.id}/imagens/${image.id}`, { preserveScroll: true });
     }
 };
 </script>

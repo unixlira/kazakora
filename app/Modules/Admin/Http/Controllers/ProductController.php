@@ -66,7 +66,7 @@ class ProductController extends Controller
         $product = $this->createWithGeneratedSku($validated, $category?->name);
 
         return redirect()
-            ->route('admin.products.edit', $product)
+            ->route('admin.produtos.editar', $product)
             ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.');
     }
 
@@ -112,7 +112,7 @@ class ProductController extends Controller
             $this->stock->adjust($product, $delta, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
         }
 
-        return redirect()->route('admin.products.index')->with('success', 'Produto atualizado com sucesso.');
+        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.');
     }
 
     public function destroy(Product $product): RedirectResponse

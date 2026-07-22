@@ -28,7 +28,7 @@ const submitSearch = () => {
 };
 
 const logout = () => {
-    router.post('/logout');
+    router.post('/sair');
 };
 
 const WHATSAPP_NUMBER = '5511965723990';
@@ -79,8 +79,8 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                             </ul>
                         </div>
                         <template v-else>
-                            <Link href="/login" class="text-muted me-2">Entrar</Link><small> / </small>
-                            <Link href="/register" class="text-muted ms-2">Cadastrar</Link>
+                            <Link href="/entrar" class="text-muted me-2">Entrar</Link><small> / </small>
+                            <Link href="/cadastro" class="text-muted ms-2">Cadastrar</Link>
                         </template>
                     </div>
                 </div>
@@ -108,7 +108,7 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                 </div>
                 <div class="col-md-4 col-lg-3 text-center text-lg-end">
                     <div class="d-inline-flex align-items-center">
-                        <Link href="/cart" class="text-muted d-flex align-items-center justify-content-center">
+                        <Link href="/carrinho" class="text-muted d-flex align-items-center justify-content-center">
                             <span class="rounded-circle btn-md-square border position-relative">
                                 <i class="fas fa-shopping-cart"></i>
                                 <span v-if="cartCount > 0"
@@ -137,8 +137,8 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                         <div class="collapse navbar-collapse" id="navbarCollapse">
                             <div class="navbar-nav ms-auto py-0">
                                 <Link href="/" class="nav-item nav-link">Catálogo</Link>
-                                <Link href="/cart" class="nav-item nav-link">Carrinho</Link>
-                                <Link href="/checkout" class="nav-item nav-link">Checkout</Link>
+                                <Link href="/carrinho" class="nav-item nav-link">Carrinho</Link>
+                                <Link href="/finalizacao" class="nav-item nav-link">Checkout</Link>
                                 <Link href="/admin" class="nav-item nav-link me-2">Admin</Link>
                             </div>
                             <a class="btn btn-secondary rounded-pill py-2 px-4 px-lg-3 mb-3 mb-md-3 mb-lg-0"
@@ -208,15 +208,15 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                             <h4 class="text-primary mb-4">Atendimento</h4>
                             <a href="mailto:contato@kazakora.com"><i class="fas fa-angle-right me-2"></i> Fale Conosco</a>
                             <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank"><i class="fas fa-angle-right me-2"></i> WhatsApp</a>
-                            <Link href="/cart"><i class="fas fa-angle-right me-2"></i> Meu Carrinho</Link>
+                            <Link href="/carrinho"><i class="fas fa-angle-right me-2"></i> Meu Carrinho</Link>
                         </div>
                     </div>
                     <div class="col-md-6 col-lg-6 col-xl-4">
                         <div class="footer-item d-flex flex-column">
                             <h4 class="text-primary mb-4">Minha Conta</h4>
-                            <Link v-if="!user" href="/login"><i class="fas fa-angle-right me-2"></i> Entrar</Link>
-                            <Link v-if="!user" href="/register"><i class="fas fa-angle-right me-2"></i> Cadastrar</Link>
-                            <Link v-if="user" href="/checkout"><i class="fas fa-angle-right me-2"></i> Meus Pedidos</Link>
+                            <Link v-if="!user" href="/entrar"><i class="fas fa-angle-right me-2"></i> Entrar</Link>
+                            <Link v-if="!user" href="/cadastro"><i class="fas fa-angle-right me-2"></i> Cadastrar</Link>
+                            <Link v-if="user" href="/finalizacao"><i class="fas fa-angle-right me-2"></i> Meus Pedidos</Link>
                         </div>
                     </div>
                 </div>

@@ -17,7 +17,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/login', {
+    form.post('/entrar', {
         onFinish: () => form.reset('password'),
     });
 };
@@ -63,7 +63,7 @@ const submit = () => {
                     Lembrar-me
                 </label>
 
-                <Link v-if="canResetPassword" href="/forgot-password" class="underline">
+                <Link v-if="canResetPassword" href="/esqueci-senha" class="underline">
                     Esqueceu a senha?
                 </Link>
             </div>
@@ -79,7 +79,7 @@ const submit = () => {
 
         <p class="mt-6 text-center text-sm text-gray-500">
             Não tem uma conta?
-            <Link href="/register" class="underline">Cadastre-se</Link>
+            <Link href="/cadastro" class="underline">Cadastre-se</Link>
         </p>
     </GuestLayout>
 </template>

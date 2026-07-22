@@ -22,7 +22,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/reset-password', {
+    form.post('/redefinir-senha', {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
 };

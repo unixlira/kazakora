@@ -56,7 +56,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(`/admin/products/${props.product.id}`);
+    form.put(`/admin/produtos/${props.product.id}`);
 };
 
 const tabs = [

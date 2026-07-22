@@ -25,7 +25,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/admin/products');
+    form.post('/admin/produtos');
 };
 </script>
 

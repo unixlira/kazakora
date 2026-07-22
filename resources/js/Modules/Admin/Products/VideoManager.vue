@@ -55,7 +55,7 @@ const handleFile = async (file) => {
     }
 
     form.transform((data) => ({ ...data, video: file, duration_seconds: duration })).post(
-        `/admin/products/${props.product.id}/video`,
+        `/admin/produtos/${props.product.id}/video`,
         { preserveScroll: true },
     );
 };
@@ -72,7 +72,7 @@ const onFileSelect = (event) => {
 
 const remove = async () => {
     if (await confirmDelete({ text: 'O vídeo do produto será removido permanentemente.' })) {
-        router.delete(`/admin/products/${props.product.id}/video`, { preserveScroll: true });
+        router.delete(`/admin/produtos/${props.product.id}/video`, { preserveScroll: true });
     }
 };
 </script>

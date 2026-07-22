@@ -25,15 +25,15 @@ const toggleSidebar = () => {
 
 const navItems = [
     { href: '/admin', label: 'Dashboard', icon: 'fas fa-tv' },
-    { href: '/admin/products', label: 'Produtos', icon: 'fas fa-boxes-stacked' },
-    { href: '/admin/categories', label: 'Categorias', icon: 'fas fa-tags' },
-    { href: '/admin/orders', label: 'Pedidos', icon: 'fas fa-receipt' },
+    { href: '/admin/produtos', label: 'Produtos', icon: 'fas fa-boxes-stacked' },
+    { href: '/admin/categorias', label: 'Categorias', icon: 'fas fa-tags' },
+    { href: '/admin/pedidos', label: 'Pedidos', icon: 'fas fa-receipt' },
     { href: '/admin/empresa', label: 'Empresa', icon: 'fas fa-building' },
 ];
 
 const isActive = (href) => (href === '/admin' ? page.url === '/admin' : page.url.startsWith(href));
 
-const logout = () => router.post('/logout');
+const logout = () => router.post('/sair');
 
 watch(
     () => page.props.flash,
@@ -139,16 +139,16 @@ watch(
                 </div>
             </nav>
 
-            <div class="mx-auto mt-4 w-full px-4 md:px-10">
+            <div class="mx-auto mt-4 w-full px-4 pb-16 md:px-10">
                 <slot />
-
-                <footer class="mt-8 pb-8">
-                    <hr class="mb-4 border-slate-200">
-                    <div class="text-center text-sm text-slate-500">
-                        © 2026 KazaKora · CNPJ: 65.604.590/0001-07
-                    </div>
-                </footer>
             </div>
+
+            <footer class="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white transition-all"
+                :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
+                <div class="px-4 py-3 text-center text-sm text-slate-500 md:px-10">
+                    © 2026 KazaKora · CNPJ: 65.604.590/0001-07
+                </div>
+            </footer>
         </div>
     </div>
 </template>

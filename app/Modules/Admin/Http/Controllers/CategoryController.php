@@ -35,7 +35,7 @@ class CategoryController extends Controller
 
         Category::create($validated);
 
-        return redirect()->route('admin.categories.index')->with('success', 'Categoria criada com sucesso.');
+        return redirect()->route('admin.categorias.listar')->with('success', 'Categoria criada com sucesso.');
     }
 
     public function edit(Category $category): Response
@@ -55,7 +55,7 @@ class CategoryController extends Controller
 
         $category->update($validated);
 
-        return redirect()->route('admin.categories.index')->with('success', 'Categoria atualizada com sucesso.');
+        return redirect()->route('admin.categorias.listar')->with('success', 'Categoria atualizada com sucesso.');
     }
 
     public function destroy(Category $category): RedirectResponse

@@ -31,7 +31,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(`/admin/products/${props.product.id}/fiscal`, { preserveScroll: true });
+    form.put(`/admin/produtos/${props.product.id}/fiscal`, { preserveScroll: true });
 };
 </script>
 

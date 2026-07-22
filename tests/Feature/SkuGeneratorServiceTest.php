@@ -147,7 +147,7 @@ class SkuGeneratorServiceTest extends TestCase
             'name' => 'Camiseta Básica',
         ]);
 
-        $response = $this->actingAs($admin)->put("/admin/products/{$product->id}", [
+        $response = $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
             'name' => 'Camiseta Básica Renovada',
             'category_id' => $category->id,
             'brand' => '',

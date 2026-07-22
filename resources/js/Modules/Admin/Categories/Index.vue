@@ -17,7 +17,7 @@ const categoryError = computed(() => page.props.errors?.category);
 
 const destroy = async (category) => {
     if (await confirmDelete({ title: `Remover a categoria "${category.name}"?` })) {
-        router.delete(`/admin/categories/${category.id}`);
+        router.delete(`/admin/categorias/${category.id}`);
     }
 };
 </script>
@@ -29,7 +29,7 @@ const destroy = async (category) => {
         <div class="flex items-center justify-between">
             <h1 class="text-2xl font-bold">Categorias</h1>
             <Link
-                href="/admin/categories/create"
+                href="/admin/categorias/criar"
                 class="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
             >
                 Nova categoria
@@ -52,7 +52,7 @@ const destroy = async (category) => {
                         <td class="px-4 py-3">{{ category.name }}</td>
                         <td class="px-4 py-3">{{ category.products_count }}</td>
                         <td class="px-4 py-3 text-right">
-                            <Link :href="`/admin/categories/${category.id}/edit`" class="mr-3 hover:underline">
+                            <Link :href="`/admin/categorias/${category.id}/editar`" class="mr-3 hover:underline">
                                 Editar
                             </Link>
                             <button type="button" class="text-red-500 hover:underline" @click="destroy(category)">

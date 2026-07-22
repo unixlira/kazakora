@@ -18,7 +18,7 @@ const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const updateQuantity = (productId, quantity) => {
-    router.patch(`/cart/${productId}`, { quantity }, { preserveScroll: true });
+    router.patch(`/carrinho/${productId}`, { quantity }, { preserveScroll: true });
 };
 
 const increment = (item) => updateQuantity(item.product.id, item.quantity + 1);
@@ -26,7 +26,7 @@ const decrement = (item) => updateQuantity(item.product.id, item.quantity - 1);
 
 const removeItem = async (productId) => {
     if (await confirmDelete({ title: 'Remover item do carrinho?' })) {
-        router.delete(`/cart/${productId}`, { preserveScroll: true });
+        router.delete(`/carrinho/${productId}`, { preserveScroll: true });
     }
 };
 </script>
@@ -104,7 +104,7 @@ const removeItem = async (productId) => {
                                     <h5 class="mb-0 ps-4 me-4">Total</h5>
                                     <p class="mb-0 pe-4 fs-5 text-primary fw-bold">{{ formatPrice(total) }}</p>
                                 </div>
-                                <Link href="/checkout"
+                                <Link href="/finalizacao"
                                     class="btn btn-primary rounded-pill px-4 py-3 text-uppercase mb-4 ms-4">
                                     Finalizar Compra
                                 </Link>

@@ -19,53 +19,72 @@ use App\Modules\Profile\Http\Controllers\ProfilePasswordController;
 use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [CatalogController::class, 'index'])->name('catalog.index');
+Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
 
-Route::prefix('cart')->name('cart.')->group(function () {
-    Route::get('/', [CartController::class, 'index'])->name('index');
-    Route::post('/', [CartController::class, 'store'])->name('store');
-    Route::patch('/{product}', [CartController::class, 'update'])->name('update');
-    Route::delete('/{product}', [CartController::class, 'destroy'])->name('destroy');
+Route::prefix('carrinho')->name('carrinho.')->group(function () {
+    Route::get('/', [CartController::class, 'index'])->name('ver');
+    Route::post('/', [CartController::class, 'store'])->name('adicionar');
+    Route::patch('/{product}', [CartController::class, 'update'])->name('atualizar');
+    Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
 });
 
-Route::prefix('checkout')->name('checkout.')->middleware('auth')->group(function () {
-    Route::get('/', [CheckoutController::class, 'index'])->name('index');
-    Route::post('/', [CheckoutController::class, 'store'])->name('store');
-    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->name('confirmation');
+Route::prefix('finalizacao')->name('finalizacao.')->middleware('auth')->group(function () {
+    Route::get('/', [CheckoutController::class, 'index'])->name('ver');
+    Route::post('/', [CheckoutController::class, 'store'])->name('finalizar');
+    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->name('confirmacao');
 });
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto
 // pelo painel admin, sempre operando sobre o próprio usuário logado.
 Route::middleware('auth')->group(function () {
-    Route::get('/perfil', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::put('/perfil', [ProfileController::class, 'update'])->name('profile.update');
-    Route::put('/perfil/senha', [ProfilePasswordController::class, 'update'])->name('profile.password.update');
-    Route::post('/perfil/avatar', [ProfileAvatarController::class, 'store'])->name('profile.avatar.store');
-    Route::delete('/perfil/avatar', [ProfileAvatarController::class, 'destroy'])->name('profile.avatar.destroy');
+    Route::get('/perfil', [ProfileController::class, 'edit'])->name('perfil.editar');
+    Route::put('/perfil', [ProfileController::class, 'update'])->name('perfil.atualizar');
+    Route::put('/perfil/senha', [ProfilePasswordController::class, 'update'])->name('perfil.senha.atualizar');
+    Route::post('/perfil/avatar', [ProfileAvatarController::class, 'store'])->name('perfil.avatar.adicionar');
+    Route::delete('/perfil/avatar', [ProfileAvatarController::class, 'destroy'])->name('perfil.avatar.remover');
 
-    Route::get('/configuracoes', [SettingsController::class, 'edit'])->name('settings.edit');
+    Route::get('/configuracoes', [SettingsController::class, 'edit'])->name('configuracoes.editar');
 });
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/', [DashboardController::class, 'index'])->name('painel');
 
-    Route::resource('products', ProductController::class)->except('show');
-    Route::resource('categories', CategoryController::class)->except('show');
+    Route::resource('produtos', ProductController::class)->except('show')
+        ->parameters(['produtos' => 'product'])
+        ->names([
+            'index' => 'produtos.listar',
+            'create' => 'produtos.criar',
+            'store' => 'produtos.armazenar',
+            'edit' => 'produtos.editar',
+            'update' => 'produtos.atualizar',
+            'destroy' => 'produtos.excluir',
+        ]);
 
-    Route::put('products/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('products.fiscal.update');
-    Route::put('products/{product}/logistics', [ProductLogisticsController::class, 'update'])->name('products.logistics.update');
-    Route::post('products/{product}/images', [ProductImageController::class, 'store'])->name('products.images.store');
-    Route::delete('products/{product}/images/{image}', [ProductImageController::class, 'destroy'])->name('products.images.destroy');
-    Route::post('products/{product}/video', [ProductVideoController::class, 'store'])->name('products.video.store');
-    Route::delete('products/{product}/video', [ProductVideoController::class, 'destroy'])->name('products.video.destroy');
-    Route::put('products/{product}/channels/{channel}', [ProductChannelController::class, 'update'])->name('products.channels.update');
+    Route::resource('categorias', CategoryController::class)->except('show')
+        ->parameters(['categorias' => 'category'])
+        ->names([
+            'index' => 'categorias.listar',
+            'create' => 'categorias.criar',
+            'store' => 'categorias.armazenar',
+            'edit' => 'categorias.editar',
+            'update' => 'categorias.atualizar',
+            'destroy' => 'categorias.excluir',
+        ]);
 
-    Route::get('orders', [AdminOrderController::class, 'index'])->name('orders.index');
-    Route::get('orders/{order}', [AdminOrderController::class, 'show'])->name('orders.show');
-    Route::patch('orders/{order}', [AdminOrderController::class, 'update'])->name('orders.update');
+    Route::put('produtos/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('produtos.fiscal.atualizar');
+    Route::put('produtos/{product}/logistica', [ProductLogisticsController::class, 'update'])->name('produtos.logistica.atualizar');
+    Route::post('produtos/{product}/imagens', [ProductImageController::class, 'store'])->name('produtos.imagens.adicionar');
+    Route::delete('produtos/{product}/imagens/{image}', [ProductImageController::class, 'destroy'])->name('produtos.imagens.remover');
+    Route::post('produtos/{product}/video', [ProductVideoController::class, 'store'])->name('produtos.video.adicionar');
+    Route::delete('produtos/{product}/video', [ProductVideoController::class, 'destroy'])->name('produtos.video.remover');
+    Route::put('produtos/{product}/canais/{channel}', [ProductChannelController::class, 'update'])->name('produtos.canais.atualizar');
 
-    Route::get('empresa', [CompanyController::class, 'edit'])->name('company.edit');
-    Route::put('empresa', [CompanyController::class, 'update'])->name('company.update');
+    Route::get('pedidos', [AdminOrderController::class, 'index'])->name('pedidos.listar');
+    Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');
+    Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])->name('pedidos.atualizar');
+
+    Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
+    Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');
 });
 
 require __DIR__.'/auth.php';

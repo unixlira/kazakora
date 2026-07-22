@@ -12,7 +12,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/forgot-password');
+    form.post('/esqueci-senha');
 };
 </script>
 
@@ -55,7 +55,7 @@ const submit = () => {
         </form>
 
         <p class="mt-6 text-center text-sm text-gray-500">
-            <Link href="/login" class="underline">Voltar ao login</Link>
+            <Link href="/entrar" class="underline">Voltar ao login</Link>
         </p>
     </GuestLayout>
 </template>

@@ -33,7 +33,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/checkout');
+    form.post('/finalizacao');
 };
 </script>
 

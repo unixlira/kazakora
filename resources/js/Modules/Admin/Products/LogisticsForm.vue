@@ -22,7 +22,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(`/admin/products/${props.product.id}/logistics`, { preserveScroll: true });
+    form.put(`/admin/produtos/${props.product.id}/logistica`, { preserveScroll: true });
 };
 </script>
 

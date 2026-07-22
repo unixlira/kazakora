@@ -60,7 +60,7 @@ const submit = (channel) => {
     }
 
     form.transform((data) => ({ ...data, attributes })).put(
-        `/admin/products/${props.product.id}/channels/${channel}`,
+        `/admin/produtos/${props.product.id}/canais/${channel}`,
         { preserveScroll: true },
     );
 };

@@ -21,7 +21,7 @@ const form = useForm({
 });
 
 const updateStatus = () => {
-    form.patch(`/admin/orders/${props.order.id}`);
+    form.patch(`/admin/pedidos/${props.order.id}`);
 };
 </script>
 

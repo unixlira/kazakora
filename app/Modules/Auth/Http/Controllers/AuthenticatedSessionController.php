@@ -25,7 +25,7 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('catalog.index'));
+        return redirect()->intended(route('catalogo.inicio'));
     }
 
     public function destroy(Request $request): RedirectResponse
@@ -35,6 +35,6 @@ class AuthenticatedSessionController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('catalog.index');
+        return redirect()->route('catalogo.inicio');
     }
 }

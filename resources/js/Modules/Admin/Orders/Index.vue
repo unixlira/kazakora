@@ -21,7 +21,7 @@ const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const filterByStatus = (event) => {
-    router.get('/admin/orders', { status: event.target.value }, { preserveState: true });
+    router.get('/admin/pedidos', { status: event.target.value }, { preserveState: true });
 };
 </script>
 
@@ -55,7 +55,7 @@ const filterByStatus = (event) => {
                 <tbody>
                     <tr v-for="order in orders.data" :key="order.id" class="border-b border-gray-100">
                         <td class="px-4 py-3">
-                            <Link :href="`/admin/orders/${order.id}`" class="hover:underline">#{{ order.id }}</Link>
+                            <Link :href="`/admin/pedidos/${order.id}`" class="hover:underline">#{{ order.id }}</Link>
                         </td>
                         <td class="px-4 py-3">{{ order.user?.name }}</td>
                         <td class="px-4 py-3">{{ order.items_count }}</td>

@@ -9,7 +9,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.post('/admin/categories');
+    form.post('/admin/categorias');
 };
 </script>
 

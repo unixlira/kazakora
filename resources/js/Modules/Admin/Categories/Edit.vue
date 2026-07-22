@@ -16,7 +16,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(`/admin/categories/${props.category.id}`);
+    form.put(`/admin/categorias/${props.category.id}`);
 };
 </script>
 

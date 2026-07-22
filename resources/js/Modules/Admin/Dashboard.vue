@@ -38,7 +38,8 @@ const formatPrice = (value) =>
 const formatShortDate = (date) =>
     new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`));
 
-const chartPalette = ['#0ea5e9', '#f97316', '#10b981', '#a855f7', '#f43f5e', '#64748b'];
+// Same hues as the CSS design tokens (--color-primary/secondary/success/warning/error/info).
+const chartPalette = ['#5d87ff', '#49beff', '#13deb9', '#f6b51e', '#ef4444', '#8754ec'];
 
 const orderStatusChartData = computed(() => ({
     labels: props.orderStatusBreakdown.map((item) => item.label),
@@ -46,9 +47,33 @@ const orderStatusChartData = computed(() => ({
         {
             data: props.orderStatusBreakdown.map((item) => item.total),
             backgroundColor: chartPalette,
+            borderWidth: 0,
         },
     ],
 }));
+
+const orderStatusChartOptions = computed(() => {
+    const total = props.orderStatusBreakdown.reduce((sum, item) => sum + item.total, 0);
+
+    return {
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: {
+                    generateLabels: (chart) => chart.data.labels.map((label, i) => {
+                        const value = chart.data.datasets[0].data[i];
+                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                        return {
+                            text: `${label} — ${value} (${percentage}%)`,
+                            fillStyle: chart.data.datasets[0].backgroundColor[i],
+                            index: i,
+                        };
+                    }),
+                },
+            },
+        },
+    };
+});
 
 const visitsChartData = computed(() => ({
     labels: props.visitsSeries.map((item) => formatShortDate(item.date)),
@@ -56,16 +81,18 @@ const visitsChartData = computed(() => ({
         {
             label: 'Visualizações',
             data: props.visitsSeries.map((item) => item.views),
-            borderColor: '#0ea5e9',
-            backgroundColor: '#0ea5e9',
-            tension: 0.3,
+            borderColor: '#5d87ff',
+            backgroundColor: '#5d87ff33',
+            fill: true,
+            tension: 0.4,
         },
         {
             label: 'Visitantes únicos',
             data: props.visitsSeries.map((item) => item.visitors),
-            borderColor: '#a855f7',
-            backgroundColor: '#a855f7',
-            tension: 0.3,
+            borderColor: '#8754ec',
+            backgroundColor: '#8754ec33',
+            fill: true,
+            tension: 0.4,
         },
     ],
 }));
@@ -76,7 +103,8 @@ const revenueChartData = computed(() => ({
         {
             label: 'Faturamento',
             data: props.revenueSeries.map((item) => item.revenue),
-            backgroundColor: '#10b981',
+            backgroundColor: '#13deb9',
+            borderRadius: 6,
         },
     ],
 }));
@@ -88,59 +116,42 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
     <Head title="Dashboard" />
 
     <AdminLayout>
-        <div class="flex flex-wrap">
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
-                    stat-icon-name="fas fa-receipt" stat-icon-color="bg-red-500" />
-            </div>
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="FATURAMENTO" :stat-title="formatPrice(stats.revenue)"
-                    stat-icon-name="fas fa-sack-dollar" stat-icon-color="bg-orange-500" />
-            </div>
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="PRODUTOS" :stat-title="String(stats.productsCount)"
-                    stat-icon-name="fas fa-couch" stat-icon-color="bg-emerald-500" />
-            </div>
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="ESTOQUE BAIXO" :stat-title="String(stats.lowStockCount)"
-                    stat-icon-name="fas fa-triangle-exclamation" stat-icon-color="bg-rose-600" />
-            </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
+                stat-icon-name="fas fa-receipt" variant="primary" />
+            <CardStats stat-subtitle="FATURAMENTO" :stat-title="formatPrice(stats.revenue)"
+                stat-icon-name="fas fa-sack-dollar" variant="success" />
+            <CardStats stat-subtitle="PRODUTOS" :stat-title="String(stats.productsCount)"
+                stat-icon-name="fas fa-couch" variant="secondary" />
+            <CardStats stat-subtitle="ESTOQUE BAIXO" :stat-title="String(stats.lowStockCount)"
+                stat-icon-name="fas fa-triangle-exclamation" variant="error" />
         </div>
 
-        <div class="mt-4 flex flex-wrap">
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="VISITAS HOJE" :stat-title="String(stats.visitsToday)"
-                    stat-icon-name="fas fa-eye" stat-icon-color="bg-sky-500" />
-            </div>
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
-                    stat-icon-name="fas fa-cart-shopping" stat-icon-color="bg-indigo-500" />
-            </div>
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
-                    stat-icon-name="fas fa-calendar-check" stat-icon-color="bg-purple-500" />
-            </div>
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="FATURADO HOJE" :stat-title="formatPrice(stats.revenueToday)"
-                    stat-icon-name="fas fa-money-bill-wave" stat-icon-color="bg-teal-500" />
-            </div>
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <CardStats stat-subtitle="VISITAS HOJE" :stat-title="String(stats.visitsToday)"
+                stat-icon-name="fas fa-eye" variant="info" />
+            <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
+                stat-icon-name="fas fa-cart-shopping" variant="primary" />
+            <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
+                stat-icon-name="fas fa-calendar-check" variant="secondary" />
+            <CardStats stat-subtitle="FATURADO HOJE" :stat-title="formatPrice(stats.revenueToday)"
+                stat-icon-name="fas fa-money-bill-wave" variant="success" />
         </div>
 
-        <div class="mt-4 flex flex-wrap">
-            <div class="w-full px-4 lg:w-6/12 xl:w-3/12">
-                <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
-                    stat-icon-name="fas fa-rotate-left" stat-icon-color="bg-amber-600" />
-            </div>
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
+                stat-icon-name="fas fa-rotate-left" variant="warning" />
         </div>
 
         <div class="mt-8 flex flex-wrap">
             <div :class="chartCardClass">
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
                     <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-base font-semibold">Pedidos por status</h3>
+                        <h3 class="text-lg font-semibold">Pedidos por status</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Distribuição de todos os pedidos</p>
                     </div>
                     <div class="p-4">
-                        <ChartCanvas type="pie" :data="orderStatusChartData" />
+                        <ChartCanvas type="pie" :data="orderStatusChartData" :options="orderStatusChartOptions" />
                     </div>
                 </div>
             </div>
@@ -148,7 +159,8 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             <div :class="chartCardClass">
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
                     <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-base font-semibold">Visitas (últimos 14 dias)</h3>
+                        <h3 class="text-lg font-semibold">Visitas</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 14 dias</p>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="line" :data="visitsChartData" />
@@ -159,7 +171,8 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             <div :class="chartCardClass">
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
                     <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-base font-semibold">Faturamento diário (últimos 14 dias)</h3>
+                        <h3 class="text-lg font-semibold">Faturamento diário</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 14 dias</p>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="bar" :data="revenueChartData" />

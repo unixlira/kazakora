@@ -17,7 +17,7 @@ const chartData = computed(() => ({
     labels: props.cashFlowSeries.map((item) => formatShortDate(item.date)),
     datasets: [
         { label: 'Entradas', data: props.cashFlowSeries.map((item) => item.income), backgroundColor: '#13deb9' },
-        { label: 'Saídas', data: props.cashFlowSeries.map((item) => item.expense), backgroundColor: '#fa896b' },
+        { label: 'Saídas', data: props.cashFlowSeries.map((item) => item.expense), backgroundColor: '#ef4444' },
     ],
 }));
 </script>
@@ -29,11 +29,11 @@ const chartData = computed(() => ({
         <h1 class="mb-4 text-2xl font-bold">Dashboard Financeiro</h1>
 
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <CardStats stat-subtitle="SALDO ATUAL" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" stat-icon-color="bg-primary" />
-            <CardStats stat-subtitle="ENTRADAS NO MÊS" :stat-title="formatPrice(summary.incomeMonth)" stat-icon-name="fas fa-arrow-trend-up" stat-icon-color="bg-success" />
-            <CardStats stat-subtitle="SAÍDAS NO MÊS" :stat-title="formatPrice(summary.expenseMonth)" stat-icon-name="fas fa-arrow-trend-down" stat-icon-color="bg-error" />
-            <CardStats stat-subtitle="LUCRO NO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" stat-icon-color="bg-warning" />
-            <CardStats stat-subtitle="FATURAMENTO EM VENDAS" :stat-title="formatPrice(summary.salesRevenue)" stat-icon-name="fas fa-bag-shopping" stat-icon-color="bg-info" />
+            <CardStats stat-subtitle="SALDO ATUAL" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
+            <CardStats stat-subtitle="ENTRADAS NO MÊS" :stat-title="formatPrice(summary.incomeMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
+            <CardStats stat-subtitle="SAÍDAS NO MÊS" :stat-title="formatPrice(summary.expenseMonth)" stat-icon-name="fas fa-arrow-trend-down" variant="error" />
+            <CardStats stat-subtitle="LUCRO NO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" variant="warning" />
+            <CardStats stat-subtitle="FATURAMENTO EM VENDAS" :stat-title="formatPrice(summary.salesRevenue)" stat-icon-name="fas fa-bag-shopping" variant="info" />
         </div>
 
         <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">

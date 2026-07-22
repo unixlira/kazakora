@@ -54,8 +54,8 @@ const productColumns = [
         </div>
 
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <CardStats stat-subtitle="PEDIDOS NO PERÍODO" :stat-title="String(summary.ordersCount)" stat-icon-name="fas fa-receipt" stat-icon-color="bg-primary" />
-            <CardStats stat-subtitle="FATURAMENTO NO PERÍODO" :stat-title="formatPrice(summary.revenue)" stat-icon-name="fas fa-sack-dollar" stat-icon-color="bg-success" />
+            <CardStats stat-subtitle="PEDIDOS NO PERÍODO" :stat-title="String(summary.ordersCount)" stat-icon-name="fas fa-receipt" variant="primary" />
+            <CardStats stat-subtitle="FATURAMENTO NO PERÍODO" :stat-title="formatPrice(summary.revenue)" stat-icon-name="fas fa-sack-dollar" variant="success" />
         </div>
 
         <h2 class="mb-2 text-lg font-semibold">Vendas por dia</h2>

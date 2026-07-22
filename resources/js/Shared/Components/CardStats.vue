@@ -1,26 +1,35 @@
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
     statSubtitle: { type: String, default: '' },
     statTitle: { type: String, default: '' },
     statIconName: { type: String, default: 'fas fa-chart-bar' },
-    statIconColor: { type: String, default: 'bg-primary' },
+    // primary | secondary | success | warning | error | info
+    variant: { type: String, default: 'primary' },
 });
+
+const VARIANTS = {
+    primary: { bg: 'bg-lightprimary', text: 'text-primary' },
+    secondary: { bg: 'bg-lightsecondary', text: 'text-secondary' },
+    success: { bg: 'bg-lightsuccess', text: 'text-success' },
+    warning: { bg: 'bg-lightwarning', text: 'text-warning' },
+    error: { bg: 'bg-lighterror', text: 'text-error' },
+    info: { bg: 'bg-lightinfo', text: 'text-info' },
+};
+
+const style = computed(() => VARIANTS[props.variant] ?? VARIANTS.primary);
 </script>
 
 <template>
-    <div class="relative flex min-w-0 flex-col break-words rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
-        <div class="flex-auto p-4">
-            <div class="flex flex-wrap items-center">
-                <div class="relative w-full max-w-full flex-1 flex-grow pr-4">
-                    <h5 class="text-xs font-bold uppercase text-slate-400">{{ statSubtitle }}</h5>
-                    <span class="text-xl font-semibold">{{ statTitle }}</span>
-                </div>
-                <div class="relative w-auto flex-initial pl-4">
-                    <div class="inline-flex h-12 w-12 items-center justify-center rounded-full p-3 text-center text-white shadow-sm"
-                        :class="statIconColor">
-                        <i :class="statIconName"></i>
-                    </div>
-                </div>
+    <div class="relative flex min-w-0 flex-col break-words rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm transition-shadow hover:shadow-md">
+        <div class="flex items-center gap-4">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" :class="[style.bg, style.text]">
+                <i :class="statIconName" class="text-xl"></i>
+            </div>
+            <div class="min-w-0">
+                <p class="truncate text-2xl font-bold">{{ statTitle }}</p>
+                <p class="truncate text-sm text-slate-500 dark:text-slate-400">{{ statSubtitle }}</p>
             </div>
         </div>
     </div>

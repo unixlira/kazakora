@@ -197,7 +197,7 @@ watch(
                 </div>
             </nav>
 
-            <div class="mx-auto mt-4 w-full px-4 pb-16 md:px-10">
+            <div class="mx-auto mt-4 w-full max-w-[1600px] p-4 pb-16 md:p-6">
                 <slot />
             </div>
 

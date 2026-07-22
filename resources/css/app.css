@@ -11,19 +11,27 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 
     --color-primary: #5d87ff;
-    --color-primary-emphasis: #4570ea;
     --color-secondary: #49beff;
     --color-success: #13deb9;
-    --color-warning: #ffae1f;
-    --color-error: #fa896b;
-    --color-info: #539bff;
+    --color-warning: #f6b51e;
+    --color-error: #ef4444;
+    --color-info: #8754ec;
 
-    --color-lightprimary: #ecf2ff;
-    --color-lightsecondary: #e8f7ff;
-    --color-lightsuccess: #e6fffa;
-    --color-lightwarning: #fef5e5;
-    --color-lighterror: #fdede8;
-    --color-lightinfo: #eaf2ff;
+    --color-primary-emphasis: color-mix(in oklab, var(--color-primary) 80%, black);
+    --color-secondary-emphasis: color-mix(in oklab, var(--color-secondary) 80%, black);
+    --color-success-emphasis: color-mix(in oklab, var(--color-success) 80%, black);
+    --color-warning-emphasis: color-mix(in oklab, var(--color-warning) 80%, black);
+    --color-error-emphasis: color-mix(in oklab, var(--color-error) 80%, black);
+    --color-info-emphasis: color-mix(in oklab, var(--color-info) 80%, black);
+
+    /* Pastel tints for KPI card backgrounds — 12%/20% mix mirrors the
+       reference template's light/dark ratios, see .dark override below. */
+    --color-lightprimary: color-mix(in oklab, var(--color-primary) 12%, transparent);
+    --color-lightsecondary: color-mix(in oklab, var(--color-secondary) 12%, transparent);
+    --color-lightsuccess: color-mix(in oklab, var(--color-success) 12%, transparent);
+    --color-lightwarning: color-mix(in oklab, var(--color-warning) 12%, transparent);
+    --color-lighterror: color-mix(in oklab, var(--color-error) 12%, transparent);
+    --color-lightinfo: color-mix(in oklab, var(--color-info) 12%, transparent);
 
     --radius-tw: 12px;
 }
@@ -47,4 +55,12 @@
     --surface-foreground: #e2e8f0;
     --surface-border: #334155;
     --sidebar-foreground: #cbd5e1;
+
+    /* Pastel tints need more opacity to stay legible on dark surfaces. */
+    --color-lightprimary: color-mix(in oklab, var(--color-primary) 20%, transparent);
+    --color-lightsecondary: color-mix(in oklab, var(--color-secondary) 20%, transparent);
+    --color-lightsuccess: color-mix(in oklab, var(--color-success) 20%, transparent);
+    --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
+    --color-lighterror: color-mix(in oklab, var(--color-error) 20%, transparent);
+    --color-lightinfo: color-mix(in oklab, var(--color-info) 20%, transparent);
 }

@@ -13,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Laravel defaults this to route('login'); the route was renamed to
+        // 'entrar' as part of translating every route name to pt-BR.
+        $middleware->redirectGuestsTo(fn () => route('entrar'));
+
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \App\Http\Middleware\TrackSiteVisit::class,

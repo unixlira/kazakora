@@ -7,6 +7,7 @@ use App\Modules\Admin\Http\Controllers\CompanyController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
+use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
@@ -196,6 +197,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
+
+        Route::get('integracoes', [IntegrationController::class, 'index'])->name('integracoes.listar');
+        Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');
     });
 });
 

@@ -42,6 +42,7 @@ export const sidebarSections = [
         items: [
             { label: 'Empresa', href: '/admin/empresa', icon: 'fas fa-building', color: 'text-success', permission: null },
             { label: 'Usuários e Permissões', href: '/admin/usuarios-permissoes', icon: 'fas fa-user-shield', color: 'text-error', permission: 'configuracoes.usuarios' },
+            { label: 'Integrações', href: '/admin/integracoes', icon: 'fas fa-plug', color: 'text-secondary', permission: 'configuracoes.integracoes' },
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', color: 'text-primary', permission: 'configuracoes.auditoria' },
         ],
     },

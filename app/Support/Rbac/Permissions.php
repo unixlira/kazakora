@@ -32,6 +32,8 @@ class Permissions
 
     public const CONFIGURACOES_AUDITORIA = 'configuracoes.auditoria';
 
+    public const CONFIGURACOES_INTEGRACOES = 'configuracoes.integracoes';
+
     public const RELATORIOS_VIEW = 'relatorios.view';
 
     public const FINANCEIRO_VIEW = 'financeiro.view';
@@ -60,6 +62,7 @@ class Permissions
         self::ESTOQUE_ADJUST,
         self::CONFIGURACOES_USUARIOS,
         self::CONFIGURACOES_AUDITORIA,
+        self::CONFIGURACOES_INTEGRACOES,
         self::RELATORIOS_VIEW,
         self::FINANCEIRO_VIEW,
         self::FINANCEIRO_CREATE,

@@ -28,11 +28,6 @@ const form = useForm({
     pis_aliquota: props.fiscalData?.pis_aliquota ?? '',
     cofins_situacao_tributaria: props.fiscalData?.cofins_situacao_tributaria ?? '',
     cofins_aliquota: props.fiscalData?.cofins_aliquota ?? '',
-    peso_bruto: props.fiscalData?.peso_bruto ?? '',
-    peso_liquido: props.fiscalData?.peso_liquido ?? '',
-    altura_cm: props.fiscalData?.altura_cm ?? '',
-    largura_cm: props.fiscalData?.largura_cm ?? '',
-    profundidade_cm: props.fiscalData?.profundidade_cm ?? '',
 });
 
 const submit = () => {
@@ -110,30 +105,6 @@ const submit = () => {
             <div>
                 <label class="block text-sm font-medium text-slate-600">Alíquota COFINS (%)</label>
                 <input v-model="form.cofins_aliquota" type="number" step="0.01" min="0" max="100" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
-            </div>
-        </div>
-
-        <h3 class="pt-2 text-sm font-semibold uppercase text-slate-500">Peso e dimensões (nota fiscal e frete)</h3>
-        <div class="grid grid-cols-2 gap-4 md:grid-cols-5">
-            <div>
-                <label class="block text-sm font-medium text-slate-600">Peso bruto (kg)</label>
-                <input v-model="form.peso_bruto" type="number" step="0.001" min="0" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-600">Peso líquido (kg)</label>
-                <input v-model="form.peso_liquido" type="number" step="0.001" min="0" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-600">Altura (cm)</label>
-                <input v-model="form.altura_cm" type="number" step="0.01" min="0" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-600">Largura (cm)</label>
-                <input v-model="form.largura_cm" type="number" step="0.01" min="0" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-600">Profundidade (cm)</label>
-                <input v-model="form.profundidade_cm" type="number" step="0.01" min="0" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
             </div>
         </div>
 

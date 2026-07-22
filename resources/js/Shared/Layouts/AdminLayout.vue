@@ -2,13 +2,17 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
+import { useClickOutside } from '@/Shared/useClickOutside';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
 
 const collapseShow = ref('hidden');
 const userMenuOpen = ref(false);
+const userMenuRef = ref(null);
 const sidebarCollapsed = ref(false);
+
+useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
 
 onMounted(() => {
     sidebarCollapsed.value = localStorage.getItem('admin_sidebar_collapsed') === '1';
@@ -21,7 +25,7 @@ const toggleSidebar = () => {
 
 const navItems = [
     { href: '/admin', label: 'Dashboard', icon: 'fas fa-tv' },
-    { href: '/admin/products', label: 'Produtos', icon: 'fas fa-couch' },
+    { href: '/admin/products', label: 'Produtos', icon: 'fas fa-boxes-stacked' },
     { href: '/admin/categories', label: 'Categorias', icon: 'fas fa-tags' },
     { href: '/admin/orders', label: 'Pedidos', icon: 'fas fa-receipt' },
     { href: '/admin/empresa', label: 'Empresa', icon: 'fas fa-building' },
@@ -110,16 +114,25 @@ watch(
                 <div class="mx-auto flex w-full flex-wrap items-center justify-between md:flex-nowrap md:px-4">
                     <span class="hidden text-sm font-semibold uppercase text-slate-700 lg:inline-block">Painel administrativo</span>
 
-                    <div class="relative ml-auto">
+                    <div ref="userMenuRef" class="relative ml-auto">
                         <button type="button" class="flex items-center text-sm text-slate-600" @click="userMenuOpen = !userMenuOpen">
-                            <span class="mr-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
-                                {{ user?.name?.charAt(0)?.toUpperCase() }}
+                            <img v-if="user?.avatar_url" :src="user.avatar_url" class="mr-2 h-9 w-9 rounded-full object-cover" alt="">
+                            <span v-else class="mr-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+                                {{ user?.initials }}
                             </span>
                             {{ user?.name }}
+                            <i class="fas fa-chevron-down ml-2 text-xs text-slate-400"></i>
                         </button>
                         <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded bg-white py-2 text-left shadow-lg">
-                            <button type="button" class="block w-full whitespace-nowrap bg-transparent px-4 py-2 text-left text-sm text-slate-700" @click="logout">
-                                Sair
+                            <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                <i class="fas fa-user mr-2 text-slate-400"></i> Meu Perfil
+                            </Link>
+                            <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                <i class="fas fa-gear mr-2 text-slate-400"></i> Configurações
+                            </Link>
+                            <hr class="my-1 border-slate-100">
+                            <button type="button" class="block w-full whitespace-nowrap bg-transparent px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" @click="logout">
+                                <i class="fas fa-arrow-right-from-bracket mr-2 text-slate-400"></i> Sair
                             </button>
                         </div>
                     </div>

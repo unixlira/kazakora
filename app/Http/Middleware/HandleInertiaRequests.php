@@ -39,7 +39,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user()?->only('id', 'name', 'email'),
+                'user' => $request->user()?->only('id', 'name', 'email', 'role', 'avatar_url', 'initials'),
             ],
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),

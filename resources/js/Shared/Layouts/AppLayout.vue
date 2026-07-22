@@ -58,10 +58,26 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                 </div>
                 <div class="col-lg-4 text-center text-lg-end">
                     <div class="d-inline-flex align-items-center" style="height: 45px;">
-                        <template v-if="user">
-                            <span class="text-muted me-3">Olá, {{ user.name }}</span>
-                            <button type="button" class="text-muted border-0 bg-transparent" @click="logout">Sair</button>
-                        </template>
+                        <div v-if="user" class="dropdown">
+                            <button type="button" class="btn btn-link p-0 border-0 text-muted text-decoration-none dropdown-toggle d-inline-flex align-items-center"
+                                data-bs-toggle="dropdown">
+                                <img v-if="user.avatar_url" :src="user.avatar_url" class="rounded-circle me-2" style="width:28px;height:28px;object-fit:cover;" alt="">
+                                <span v-else class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center me-2"
+                                    style="width:28px;height:28px;font-size:.7rem;">{{ user.initials }}</span>
+                                {{ user.name }}
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                <li><Link class="dropdown-item" href="/perfil"><i class="fas fa-user me-2 text-muted"></i>Meu Perfil</Link></li>
+                                <li><Link class="dropdown-item" href="/configuracoes"><i class="fas fa-gear me-2 text-muted"></i>Configurações</Link></li>
+                                <li v-if="user.role === 'admin'"><Link class="dropdown-item" href="/admin"><i class="fas fa-gauge me-2 text-muted"></i>Painel Admin</Link></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <button type="button" class="dropdown-item" @click="logout">
+                                        <i class="fas fa-arrow-right-from-bracket me-2 text-muted"></i>Sair
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                         <template v-else>
                             <Link href="/login" class="text-muted me-2">Entrar</Link><small> / </small>
                             <Link href="/register" class="text-muted ms-2">Cadastrar</Link>

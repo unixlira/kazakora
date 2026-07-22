@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ProductForm from '@/Modules/Admin/Products/ProductForm.vue';
 import FiscalForm from '@/Modules/Admin/Products/FiscalForm.vue';
+import LogisticsForm from '@/Modules/Admin/Products/LogisticsForm.vue';
 import ImagesManager from '@/Modules/Admin/Products/ImagesManager.vue';
 import VideoManager from '@/Modules/Admin/Products/VideoManager.vue';
 import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
@@ -61,6 +62,7 @@ const submit = () => {
 const tabs = [
     { key: 'geral', label: 'Geral' },
     { key: 'fiscal', label: 'Dados fiscais' },
+    { key: 'logistica', label: 'Logística' },
     { key: 'midia', label: 'Fotos e vídeo' },
     { key: 'canais', label: 'Canais de venda' },
     { key: 'estoque', label: 'Histórico de estoque' },
@@ -91,6 +93,8 @@ const activeTab = ref('geral');
                     submit-label="Salvar alterações" @submit="submit" />
 
                 <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />
+
+                <LogisticsForm v-else-if="activeTab === 'logistica'" :product="product" :fiscal-data="fiscalData" />
 
                 <div v-else-if="activeTab === 'midia'" class="space-y-8">
                     <div>

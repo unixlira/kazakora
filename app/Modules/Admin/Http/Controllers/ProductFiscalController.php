@@ -26,11 +26,6 @@ class ProductFiscalController extends Controller
             'pis_aliquota' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'cofins_situacao_tributaria' => ['nullable', 'string', 'max:3'],
             'cofins_aliquota' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'peso_bruto' => ['nullable', 'numeric', 'min:0'],
-            'peso_liquido' => ['nullable', 'numeric', 'min:0'],
-            'altura_cm' => ['nullable', 'numeric', 'min:0'],
-            'largura_cm' => ['nullable', 'numeric', 'min:0'],
-            'profundidade_cm' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $product->fiscalData()->updateOrCreate(['product_id' => $product->id], $validated);

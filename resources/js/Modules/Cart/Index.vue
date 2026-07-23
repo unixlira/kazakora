@@ -35,84 +35,54 @@ const removeItem = async (productId) => {
     <Head title="Carrinho" />
 
     <AppLayout>
-        <div class="container-fluid page-header py-5 mb-5" style="background:#f8f9fa;">
-            <div class="container py-5">
-                <h1 class="display-3 text-capitalize mb-3">Carrinho</h1>
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb mb-0">
-                        <li class="breadcrumb-item"><Link href="/" class="text-decoration-none">Início</Link></li>
-                        <li class="breadcrumb-item active text-primary">Carrinho</li>
-                    </ol>
-                </nav>
-            </div>
-        </div>
+        <div class="mx-auto max-w-[1000px] px-4 py-12 md:px-6">
+            <h1 class="font-display text-3xl font-semibold">Carrinho</h1>
 
-        <div class="container-fluid py-5">
-            <div class="container">
-                <p v-if="items.length === 0" class="text-center text-muted py-5">
-                    Seu carrinho está vazio.
-                    <Link href="/" class="d-block mt-3">Ver catálogo</Link>
-                </p>
+            <p v-if="items.length === 0" class="mt-12 text-center text-store-fg-muted">
+                Seu carrinho está vazio.
+                <Link href="/" class="mt-3 block font-medium text-store-accent hover:underline">Ver catálogo</Link>
+            </p>
 
-                <template v-else>
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Produto</th>
-                                    <th scope="col">Preço</th>
-                                    <th scope="col">Quantidade</th>
-                                    <th scope="col">Subtotal</th>
-                                    <th scope="col"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="item in items" :key="item.product.id">
-                                    <th scope="row"><p class="mb-0 py-4">{{ item.product.name }}</p></th>
-                                    <td><p class="mb-0 py-4">{{ formatPrice(item.product.price) }}</p></td>
-                                    <td>
-                                        <div class="input-group quantity py-4" style="width: 120px;">
-                                            <button type="button" class="btn btn-sm btn-minus rounded-circle bg-light border"
-                                                @click="decrement(item)">
-                                                <i class="fa fa-minus"></i>
-                                            </button>
-                                            <input type="text" class="form-control form-control-sm text-center border-0"
-                                                :value="item.quantity" readonly>
-                                            <button type="button" class="btn btn-sm btn-plus rounded-circle bg-light border"
-                                                :disabled="item.quantity >= item.product.stock"
-                                                @click="increment(item)">
-                                                <i class="fa fa-plus"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td><p class="mb-0 py-4">{{ formatPrice(item.subtotal) }}</p></td>
-                                    <td class="py-4">
-                                        <button type="button" class="btn btn-md rounded-circle bg-light border"
-                                            @click="removeItem(item.product.id)">
-                                            <i class="fa fa-times text-danger"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="row g-4 justify-content-end">
-                        <div class="col-sm-8 col-md-7 col-lg-6 col-xl-4">
-                            <div class="bg-light rounded">
-                                <div class="py-4 mb-4 border-bottom d-flex justify-content-between">
-                                    <h5 class="mb-0 ps-4 me-4">Total</h5>
-                                    <p class="mb-0 pe-4 fs-5 text-primary fw-bold">{{ formatPrice(total) }}</p>
-                                </div>
-                                <Link href="/finalizacao"
-                                    class="btn btn-primary rounded-pill px-4 py-3 text-uppercase mb-4 ms-4">
-                                    Finalizar Compra
-                                </Link>
-                            </div>
+            <template v-else>
+                <div class="mt-8 divide-y divide-store-border rounded-2xl border border-store-border bg-store-bg-raised">
+                    <div v-for="item in items" :key="item.product.id" class="flex flex-wrap items-center gap-4 p-5">
+                        <div class="min-w-[180px] flex-1">
+                            <p class="font-medium">{{ item.product.name }}</p>
+                            <p class="font-store-mono text-sm text-store-fg-muted">{{ formatPrice(item.product.price) }}</p>
                         </div>
+
+                        <div class="flex items-center gap-2 rounded-full border border-store-border-strong px-1 py-1">
+                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded-full hover:bg-store-bg-sunken" @click="decrement(item)">
+                                <i class="fas fa-minus text-xs"></i>
+                            </button>
+                            <span class="font-store-mono w-6 text-center text-sm">{{ item.quantity }}</span>
+                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded-full hover:bg-store-bg-sunken disabled:cursor-not-allowed disabled:opacity-40"
+                                :disabled="item.quantity >= item.product.stock" @click="increment(item)">
+                                <i class="fas fa-plus text-xs"></i>
+                            </button>
+                        </div>
+
+                        <span class="font-store-mono w-28 text-right font-medium">{{ formatPrice(item.subtotal) }}</span>
+
+                        <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-store-fg-muted hover:bg-red-50 hover:text-red-600" aria-label="Remover" @click="removeItem(item.product.id)">
+                            <i class="fas fa-xmark"></i>
+                        </button>
                     </div>
-                </template>
-            </div>
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <div class="w-full max-w-sm rounded-2xl border border-store-border bg-store-bg-raised p-6">
+                        <div class="flex items-baseline justify-between border-b border-store-border pb-4">
+                            <span class="font-display text-lg font-semibold">Total</span>
+                            <span class="text-xl font-semibold text-store-accent">{{ formatPrice(total) }}</span>
+                        </div>
+                        <Link href="/finalizacao"
+                            class="mt-5 block rounded-lg bg-store-accent py-3 text-center text-sm font-semibold text-store-accent-contrast hover:opacity-90">
+                            Finalizar compra
+                        </Link>
+                    </div>
+                </div>
+            </template>
         </div>
     </AppLayout>
 </template>

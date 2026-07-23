@@ -1,14 +1,12 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onUnmounted, ref, watch } from 'vue';
-import { useStorefrontAssets } from '@/Shared/useStorefrontAssets';
+import { computed, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
-
-const releaseStorefrontAssets = useStorefrontAssets();
-onUnmounted(releaseStorefrontAssets);
+import { useClickOutside } from '@/Shared/useClickOutside';
 
 const page = usePage();
 const cartCount = computed(() => page.props.cart?.count ?? 0);
+const favoritesCount = computed(() => page.props.favorites?.count ?? 0);
 const user = computed(() => page.props.auth?.user);
 
 watch(
@@ -22,223 +20,168 @@ watch(
 );
 
 const search = ref('');
-
 const submitSearch = () => {
     router.get('/', { search: search.value || undefined }, { preserveState: true });
 };
 
-const logout = () => {
-    router.post('/sair');
-};
+const logout = () => router.post('/sair');
+
+const userMenuOpen = ref(false);
+const userMenuRef = ref(null);
+useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
+
+const mobileMenuOpen = ref(false);
 
 const WHATSAPP_NUMBER = '5511965723990';
 const WHATSAPP_DISPLAY = '(11) 96572-3990';
 </script>
 
 <template>
-    <div>
-        <!-- Faixa de frete grátis -->
-        <div class="w-100 text-center py-2" style="background:#28a745;color:#fff;font-size:.9rem;">
-            🚚 Frete grátis para compras acima de R$ 299,00 · Pague no PIX e economize!
-        </div>
-
-        <!-- Topbar -->
-        <div class="container-fluid px-5 d-none border-bottom d-lg-block">
-            <div class="row gx-0 align-items-center">
-                <div class="col-lg-4 text-center text-lg-start mb-lg-0">
-                    <div class="d-inline-flex align-items-center" style="height: 45px;">
-                        <Link href="/" class="text-muted me-2">Início</Link><small> / </small>
-                        <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-muted mx-2">Suporte</a><small> / </small>
-                        <a href="mailto:contato@kazakora.com" class="text-muted ms-2">Contato</a>
-                    </div>
-                </div>
-                <div class="col-lg-4 text-center d-flex align-items-center justify-content-center">
-                    <small class="text-dark">Ligue:</small>
-                    <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-muted">{{ WHATSAPP_DISPLAY }}</a>
-                </div>
-                <div class="col-lg-4 text-center text-lg-end">
-                    <div class="d-inline-flex align-items-center" style="height: 45px;">
-                        <div v-if="user" class="dropdown">
-                            <button type="button" class="btn btn-link p-0 border-0 text-muted text-decoration-none dropdown-toggle d-inline-flex align-items-center"
-                                data-bs-toggle="dropdown">
-                                <img v-if="user.avatar_url" :src="user.avatar_url" class="rounded-circle me-2" style="width:28px;height:28px;object-fit:cover;" alt="">
-                                <span v-else class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center me-2"
-                                    style="width:28px;height:28px;font-size:.7rem;">{{ user.initials }}</span>
-                                {{ user.name }}
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                <li><Link class="dropdown-item" href="/perfil"><i class="fas fa-user me-2 text-muted"></i>Meu Perfil</Link></li>
-                                <li><Link class="dropdown-item" href="/configuracoes"><i class="fas fa-gear me-2 text-muted"></i>Configurações</Link></li>
-                                <li v-if="user.role === 'admin'"><Link class="dropdown-item" href="/admin"><i class="fas fa-gauge me-2 text-muted"></i>Painel Admin</Link></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <button type="button" class="dropdown-item" @click="logout">
-                                        <i class="fas fa-arrow-right-from-bracket me-2 text-muted"></i>Sair
-                                    </button>
-                                </li>
-                            </ul>
-                        </div>
-                        <template v-else>
-                            <Link href="/entrar" class="text-muted me-2">Entrar</Link><small> / </small>
-                            <Link href="/cadastro" class="text-muted ms-2">Cadastrar</Link>
-                        </template>
-                    </div>
-                </div>
+    <div class="storefront-shell min-h-screen bg-store-bg font-store text-store-fg">
+        <!-- Marquee -->
+        <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
+            <div class="inline-flex animate-[scroll-left_28s_linear_infinite] items-center py-2 motion-reduce:animate-none">
+                <span v-for="n in 2" :key="n" class="contents">
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Frete grátis para compras acima de R$ 299</span>
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Pague no PIX e economize</span>
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Suporte via WhatsApp</span>
+                </span>
             </div>
         </div>
 
-        <!-- Header principal -->
-        <div class="container-fluid px-5 py-4 d-none d-lg-block">
-            <div class="row gx-0 align-items-center text-center">
-                <div class="col-md-4 col-lg-3 text-center text-lg-start">
-                    <Link href="/" class="navbar-brand p-0">
-                        <h1 class="display-5 text-primary m-0"><i class="fas fa-leaf text-secondary me-2"></i>KazaKora</h1>
+        <!-- Header -->
+        <header class="sticky top-0 z-40 border-b border-store-border bg-store-bg/90 backdrop-blur">
+            <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
+                <Link href="/" class="whitespace-nowrap font-display text-2xl font-semibold text-store-fg no-underline">
+                    Kaza<span class="text-store-accent">Kora</span>
+                </Link>
+
+                <nav class="ml-auto hidden items-center gap-7 lg:flex">
+                    <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Categorias</a>
+                    <a href="/#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
+                    <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
+                </nav>
+
+                <form class="relative hidden max-w-xs flex-1 lg:block" @submit.prevent="submitSearch">
+                    <input v-model="search" type="text" placeholder="O que você procura?"
+                        class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
+                    <button type="submit" class="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-store-fg-muted hover:text-store-accent" aria-label="Buscar">
+                        <i class="fas fa-magnifying-glass text-xs"></i>
+                    </button>
+                </form>
+
+                <div class="ml-auto flex items-center gap-1 lg:ml-0">
+                    <Link href="/perfil" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos">
+                        <i class="far fa-heart text-base"></i>
+                        <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ favoritesCount }}</span>
                     </Link>
-                </div>
-                <div class="col-md-4 col-lg-6 text-center">
-                    <form class="position-relative ps-4" @submit.prevent="submitSearch">
-                        <div class="d-flex border rounded-pill">
-                            <input v-model="search" class="form-control border-0 rounded-pill w-100 py-3" type="text"
-                                placeholder="O que você procura?">
-                            <button type="submit" class="btn btn-primary rounded-pill py-3 px-5" style="border: 0;">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-                <div class="col-md-4 col-lg-3 text-center text-lg-end">
-                    <div class="d-inline-flex align-items-center">
-                        <Link href="/carrinho" class="text-muted d-flex align-items-center justify-content-center">
-                            <span class="rounded-circle btn-md-square border position-relative">
-                                <i class="fas fa-shopping-cart"></i>
-                                <span v-if="cartCount > 0"
-                                    class="position-absolute badge rounded-pill bg-secondary"
-                                    style="top:-6px;right:-6px;font-size:.65rem;">{{ cartCount }}</span>
-                            </span>
-                            <span class="text-dark ms-2">Carrinho</span>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </div>
+                    <Link href="/carrinho" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
+                        <i class="fas fa-bag-shopping text-base"></i>
+                        <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ cartCount }}</span>
+                    </Link>
 
-        <!-- Navbar -->
-        <div class="container-fluid nav-bar p-0">
-            <div class="row gx-0 bg-primary px-5 align-items-center">
-                <div class="col-12">
-                    <nav class="navbar navbar-expand-lg navbar-light bg-primary">
-                        <Link href="/" class="navbar-brand d-block d-lg-none">
-                            <h1 class="display-5 text-secondary m-0"><i class="fas fa-leaf text-white me-2"></i>KazaKora</h1>
-                        </Link>
-                        <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#navbarCollapse">
-                            <span class="fa fa-bars fa-1x"></span>
+                    <div ref="userMenuRef" class="relative">
+                        <button v-if="user" type="button" class="flex h-10 w-10 items-center justify-center rounded-full hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
+                            <img v-if="user.avatar_url" :src="user.avatar_url" class="h-8 w-8 rounded-full object-cover" alt="">
+                            <span v-else class="flex h-8 w-8 items-center justify-center rounded-full bg-store-accent-soft text-xs font-semibold text-store-accent-strong">{{ user.initials }}</span>
                         </button>
-                        <div class="collapse navbar-collapse" id="navbarCollapse">
-                            <div class="navbar-nav ms-auto py-0">
-                                <Link href="/" class="nav-item nav-link">Catálogo</Link>
-                                <Link href="/carrinho" class="nav-item nav-link">Carrinho</Link>
-                                <Link href="/finalizacao" class="nav-item nav-link">Checkout</Link>
-                                <Link href="/admin" class="nav-item nav-link me-2">Admin</Link>
-                            </div>
-                            <a class="btn btn-secondary rounded-pill py-2 px-4 px-lg-3 mb-3 mb-md-3 mb-lg-0"
-                                :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank">
-                                <i class="fab fa-whatsapp me-2"></i> {{ WHATSAPP_DISPLAY }}
-                            </a>
+                        <Link v-else href="/entrar" class="flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
+                            <i class="far fa-user text-base"></i>
+                        </Link>
+
+                        <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
+                            <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">Meu perfil</Link>
+                            <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">Configurações</Link>
+                            <Link v-if="user?.role === 'admin'" href="/admin" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">Painel admin</Link>
+                            <hr class="my-1 border-store-border">
+                            <button type="button" class="block w-full whitespace-nowrap px-4 py-2 text-left text-sm hover:bg-store-bg-sunken" @click="logout">Sair</button>
                         </div>
-                    </nav>
+                    </div>
+
+                    <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" @click="mobileMenuOpen = !mobileMenuOpen">
+                        <i class="fas fa-bars text-base"></i>
+                    </button>
                 </div>
             </div>
-        </div>
 
-        <!-- Conteúdo da página -->
-        <slot />
+            <div v-if="mobileMenuOpen" class="border-t border-store-border px-4 py-4 lg:hidden">
+                <form class="relative mb-4" @submit.prevent="submitSearch">
+                    <input v-model="search" type="text" placeholder="O que você procura?"
+                        class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm">
+                </form>
+                <nav class="flex flex-col gap-3">
+                    <a href="/#categorias" class="text-sm font-medium">Categorias</a>
+                    <a href="/#produtos" class="text-sm font-medium">Produtos</a>
+                    <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-sm font-medium">Fale conosco</a>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Page content -->
+        <main>
+            <slot />
+        </main>
 
         <!-- Footer -->
-        <div class="container-fluid footer py-5">
-            <div class="container py-5">
-                <div class="row g-4 rounded mb-5" style="background: rgba(255, 255, 255, .03);">
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="rounded p-4">
-                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mb-4"
-                                style="width: 70px; height: 70px;">
-                                <i class="fas fa-map-marker-alt fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-white">Endereço</h4>
-                                <p class="mb-2">São Paulo - SP</p>
-                            </div>
-                        </div>
+        <footer class="mt-20 border-t border-store-border">
+            <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
+                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                        <span class="font-display text-xl font-semibold">Kaza<span class="text-store-accent">Kora</span></span>
+                        <p class="mt-3 max-w-[28ch] text-sm text-store-fg-muted">
+                            Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
+                        </p>
                     </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="rounded p-4">
-                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mb-4"
-                                style="width: 70px; height: 70px;">
-                                <i class="fas fa-envelope fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-white">E-mail</h4>
-                                <p class="mb-2">contato@kazakora.com</p>
-                            </div>
-                        </div>
+                    <div>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Comprar</h5>
+                        <ul class="flex flex-col gap-2 text-sm">
+                            <li><a href="/#categorias" class="text-store-fg-muted hover:text-store-fg">Categorias</a></li>
+                            <li><a href="/#produtos" class="text-store-fg-muted hover:text-store-fg">Produtos</a></li>
+                            <li><Link href="/carrinho" class="text-store-fg-muted hover:text-store-fg">Meu carrinho</Link></li>
+                        </ul>
                     </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="rounded p-4">
-                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mb-4"
-                                style="width: 70px; height: 70px;">
-                                <i class="fab fa-whatsapp fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-white">WhatsApp</h4>
-                                <p class="mb-2">{{ WHATSAPP_DISPLAY }}</p>
-                            </div>
-                        </div>
+                    <div>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Atendimento</h5>
+                        <ul class="flex flex-col gap-2 text-sm">
+                            <li><a href="mailto:contato@kazakora.com" class="text-store-fg-muted hover:text-store-fg">contato@kazakora.com</a></li>
+                            <li><a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-store-fg-muted hover:text-store-fg">{{ WHATSAPP_DISPLAY }}</a></li>
+                            <li class="text-store-fg-muted">São Paulo - SP</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Minha conta</h5>
+                        <ul class="flex flex-col gap-2 text-sm">
+                            <template v-if="!user">
+                                <li><Link href="/entrar" class="text-store-fg-muted hover:text-store-fg">Entrar</Link></li>
+                                <li><Link href="/cadastro" class="text-store-fg-muted hover:text-store-fg">Cadastrar</Link></li>
+                            </template>
+                            <li v-else><Link href="/perfil" class="text-store-fg-muted hover:text-store-fg">Meu perfil</Link></li>
+                        </ul>
                     </div>
                 </div>
 
-                <div class="row g-5">
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="footer-item d-flex flex-column">
-                            <h4 class="text-primary mb-4">KazaKora</h4>
-                            <p class="mb-3">Decoração para transformar sua casa, com entrega para todo o Brasil.</p>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="footer-item d-flex flex-column">
-                            <h4 class="text-primary mb-4">Atendimento</h4>
-                            <a href="mailto:contato@kazakora.com"><i class="fas fa-angle-right me-2"></i> Fale Conosco</a>
-                            <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank"><i class="fas fa-angle-right me-2"></i> WhatsApp</a>
-                            <Link href="/carrinho"><i class="fas fa-angle-right me-2"></i> Meu Carrinho</Link>
-                        </div>
-                    </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="footer-item d-flex flex-column">
-                            <h4 class="text-primary mb-4">Minha Conta</h4>
-                            <Link v-if="!user" href="/entrar"><i class="fas fa-angle-right me-2"></i> Entrar</Link>
-                            <Link v-if="!user" href="/cadastro"><i class="fas fa-angle-right me-2"></i> Cadastrar</Link>
-                            <Link v-if="user" href="/finalizacao"><i class="fas fa-angle-right me-2"></i> Meus Pedidos</Link>
-                        </div>
+                <div class="mt-12 flex flex-col items-center justify-between gap-3 border-t border-store-border pt-6 text-xs text-store-fg-faint sm:flex-row">
+                    <span>© 2026 KazaKora · CNPJ 65.604.590/0001-07</span>
+                    <div class="font-store-mono flex gap-2">
+                        <span class="rounded border border-store-border px-2 py-1">PIX</span>
+                        <span class="rounded border border-store-border px-2 py-1">VISA</span>
+                        <span class="rounded border border-store-border px-2 py-1">MASTER</span>
                     </div>
                 </div>
             </div>
-        </div>
+        </footer>
 
-        <!-- Copyright -->
-        <div class="container-fluid copyright py-4">
-            <div class="container">
-                <div class="row g-4 align-items-center">
-                    <div class="col-12 text-center text-white small">
-                        © 2026 KazaKora · CNPJ: 65.604.590/0001-07 · Todos os direitos reservados
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- WhatsApp flutuante -->
-        <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" rel="noopener"
-            class="position-fixed d-flex align-items-center justify-content-center rounded-circle"
-            style="bottom:24px;right:24px;width:56px;height:56px;background:#25D366;color:#fff;font-size:28px;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:1050;">
+        <!-- WhatsApp float -->
+        <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" rel="noopener" aria-label="WhatsApp"
+            class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg">
             <i class="fab fa-whatsapp"></i>
         </a>
     </div>
 </template>
+
+<style>
+@keyframes scroll-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+</style>

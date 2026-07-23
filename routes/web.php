@@ -24,6 +24,7 @@ use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
+use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
 use App\Modules\Marketplace\Http\Controllers\ProductChannelController;
 use App\Modules\Profile\Http\Controllers\ProfileAvatarController;
@@ -33,6 +34,10 @@ use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
+
+Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
+    ->middleware('auth')
+    ->name('favoritos.alternar');
 
 Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::get('/', [CartController::class, 'index'])->name('ver');

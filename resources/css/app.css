@@ -9,6 +9,9 @@
 @theme {
     --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Fraunces', ui-serif, Georgia, serif;
+    --font-store: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-store-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
 
     --color-primary: #5d87ff;
     --color-secondary: #49beff;
@@ -34,12 +37,30 @@
     --color-lightinfo: color-mix(in oklab, var(--color-info) 12%, transparent);
 
     --radius-tw: 12px;
+
+    /*
+     * Storefront palette (navy + laranja) — separate from the admin's
+     * blue/violet so `bg-store-accent` etc. resolve independently. Defaults
+     * below are light-mode; overridden for dark inside `.storefront-shell`
+     * further down so the storefront gets its own dark mode.
+     */
+    --color-store-bg: #f2f5f4;
+    --color-store-bg-raised: #ffffff;
+    --color-store-bg-sunken: #e8ebf1;
+    --color-store-fg: #14202e;
+    --color-store-fg-muted: #526075;
+    --color-store-fg-faint: #8089a0;
+    --color-store-accent: #f27a2a;
+    --color-store-accent-strong: #1b3a5c;
+    --color-store-accent-soft: #fbe4d2;
+    --color-store-accent-contrast: #f5f7fa;
+    --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 14%, transparent);
+    --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 26%, transparent);
 }
 
 /*
- * Admin-only design tokens (sidebar/card/badge surfaces). Scoped to the
- * admin shell so the Bootstrap-based storefront (see useStorefrontAssets.js)
- * never sees a `.dark` ancestor class or these CSS variables.
+ * Admin-only design tokens (sidebar/card/badge surfaces), scoped to
+ * `.admin-shell` so they never bleed into the storefront below.
  */
 .admin-shell {
     --surface: #ffffff;
@@ -63,4 +84,27 @@
     --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
     --color-lighterror: color-mix(in oklab, var(--color-error) 20%, transparent);
     --color-lightinfo: color-mix(in oklab, var(--color-info) 20%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+    .storefront-shell {
+        --color-store-bg: #0c1420;
+        --color-store-bg-raised: #141f2e;
+        --color-store-bg-sunken: #09101a;
+        --color-store-fg: #ebf0f6;
+        --color-store-fg-muted: #9aa7bc;
+        --color-store-fg-faint: #667289;
+        --color-store-accent: #ff9152;
+        --color-store-accent-strong: #3e6690;
+        --color-store-accent-soft: #1b2a3e;
+        --color-store-accent-contrast: #f5f7fa;
+        --color-store-border: rgba(235, 240, 246, 0.12);
+        --color-store-border-strong: rgba(235, 240, 246, 0.22);
+        --store-shadow: rgba(0, 0, 0, 0.55);
+    }
+}
+
+.storefront-shell {
+    --store-shadow: rgba(20, 32, 46, 0.16);
+    font-family: var(--font-store);
 }

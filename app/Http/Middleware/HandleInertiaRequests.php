@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Cart\Support\CartManager;
+use App\Modules\Catalog\Models\Favorite;
 use App\Support\Rbac\Permissions;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -45,6 +46,9 @@ class HandleInertiaRequests extends Middleware
             'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),
+            ],
+            'favorites' => fn () => [
+                'count' => $request->user() ? Favorite::query()->where('user_id', $request->user()->id)->count() : 0,
             ],
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),

@@ -49,7 +49,7 @@ const markAllNotificationsRead = () => {
 
 const mobileMenuOpen = ref(false);
 
-const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard', 'diners'];
+const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 </script>
 
 <template>
@@ -229,7 +229,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard',
 
                     <div class="flex justify-center">
                         <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
-                            class="h-24 w-auto rounded-md bg-white p-2 lg:h-64">
+                            class="h-24 w-auto rounded-md bg-white p-2 lg:h-32">
                     </div>
                 </div>
 

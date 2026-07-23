@@ -42,6 +42,10 @@ Route::inertia('/trocas-e-devolucoes', 'Legal/Trocas')->name('legal.trocas');
 Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 
+Route::get('/favoritos', [FavoriteController::class, 'index'])
+    ->middleware('auth')
+    ->name('favoritos.listar');
+
 Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
     ->middleware('auth')
     ->name('favoritos.alternar');

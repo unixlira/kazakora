@@ -7,9 +7,24 @@ use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\Product;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class FavoriteController extends Controller
 {
+    public function index(Request $request): Response
+    {
+        $products = Product::query()
+            ->with('category:id,name,slug', 'images')
+            ->whereHas('favorites', fn ($query) => $query->where('user_id', $request->user()->id))
+            ->latest()
+            ->paginate(12);
+
+        return Inertia::render('Catalog/Favoritos', [
+            'products' => $products,
+        ]);
+    }
+
     public function toggle(Request $request, Product $product): RedirectResponse
     {
         $favorite = Favorite::query()

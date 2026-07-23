@@ -62,6 +62,11 @@ class Product extends Model
         return $this->hasMany(ProductImage::class)->orderBy('position');
     }
 
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
+    }
+
     public function fiscalData(): HasOne
     {
         return $this->hasOne(ProductFiscalData::class);

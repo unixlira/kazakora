@@ -85,7 +85,7 @@ const mobileMenuOpen = ref(false);
                 </form>
 
                 <div class="ml-auto flex items-center gap-1 lg:ml-0">
-                    <Link href="/perfil" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos">
+                    <Link href="/favoritos" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos">
                         <i class="far fa-heart text-base"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ favoritesCount }}</span>
                     </Link>
@@ -234,10 +234,3 @@ const mobileMenuOpen = ref(false);
         </a>
     </div>
 </template>
-
-<style>
-@keyframes scroll-left {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
-}
-</style>

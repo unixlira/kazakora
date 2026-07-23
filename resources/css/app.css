@@ -108,3 +108,13 @@
     --store-shadow: rgba(20, 32, 46, 0.16);
     font-family: var(--font-store);
 }
+
+/* Used by the AppLayout free-shipping marquee. Kept here (global,
+   statically-imported app.css) rather than a per-component <style> block —
+   Vite splits component <style> blocks into their own async CSS chunk, and
+   that chunk was never actually linked on page load, so the animation
+   silently had no @keyframes to run. */
+@keyframes scroll-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}

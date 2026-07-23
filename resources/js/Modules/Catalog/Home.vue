@@ -1,7 +1,8 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
 const props = defineProps({
     featured: {
@@ -29,28 +30,7 @@ const props = defineProps({
 const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
-const formatPrice = (value) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-const addToCart = (productId) => {
-    router.post('/carrinho', { product_id: productId, quantity: 1 }, { preserveScroll: true });
-};
-
-const toggleFavorite = (productId) => {
-    router.post(`/favoritos/${productId}`, {}, { preserveScroll: true });
-};
-
 const isFavorite = (productId) => props.favoriteIds.includes(productId);
-
-const primaryImage = (product) => {
-    const image = product.images?.find((img) => img.is_primary) ?? product.images?.[0];
-    return image?.url ?? null;
-};
-
-const specLine = (product) => {
-    const parts = [product.brand, product.model, product.color].filter(Boolean);
-    return parts.length ? parts.join(' · ') : (product.category?.name ?? null);
-};
 
 const CATEGORY_ICONS = ['fa-box-open', 'fa-tags', 'fa-star'];
 </script>

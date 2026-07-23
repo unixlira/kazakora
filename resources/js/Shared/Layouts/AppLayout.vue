@@ -170,46 +170,49 @@ const mobileMenuOpen = ref(false);
         <!-- Footer -->
         <footer class="mt-20 bg-store-accent-strong text-store-accent-contrast">
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-5">
-                    <div>
+                <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
+                    <div class="lg:max-w-xs lg:shrink-0">
                         <span class="font-display text-xl font-semibold">Kaza<span class="text-store-accent">Kora</span></span>
-                        <p class="mt-3 max-w-[28ch] text-sm opacity-80">
+                        <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
                     </div>
-                    <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
-                        <ul class="flex flex-col gap-2 text-sm opacity-80">
-                            <li><a href="/#categorias" class="hover:opacity-100">Categorias</a></li>
-                            <li><a href="/#produtos" class="hover:opacity-100">Produtos</a></li>
-                            <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h5>
-                        <ul class="flex flex-col gap-2 text-sm opacity-80">
-                            <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
-                            <li><a :href="COMPANY.whatsappLink" target="_blank" class="hover:opacity-100">{{ COMPANY.whatsappDisplay }}</a></li>
-                            <li>São Paulo - SP</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
-                        <ul class="flex flex-col gap-2 text-sm opacity-80">
-                            <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
-                            <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>
-                            <li><Link href="/trocas-e-devolucoes" class="hover:opacity-100">Trocas e Devoluções</Link></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h5>
-                        <ul class="flex flex-col gap-2 text-sm opacity-80">
-                            <template v-if="!user">
-                                <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
-                                <li><Link href="/cadastro" class="hover:opacity-100">Cadastrar</Link></li>
-                            </template>
-                            <li v-else><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
-                        </ul>
+
+                    <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><a href="/#categorias" class="hover:opacity-100">Categorias</a></li>
+                                <li><a href="/#produtos" class="hover:opacity-100">Produtos</a></li>
+                                <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
+                                <li><a :href="COMPANY.whatsappLink" target="_blank" class="hover:opacity-100">{{ COMPANY.whatsappDisplay }}</a></li>
+                                <li>São Paulo - SP</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
+                                <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>
+                                <li><Link href="/trocas-e-devolucoes" class="hover:opacity-100">Trocas e Devoluções</Link></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <template v-if="!user">
+                                    <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
+                                    <li><Link href="/cadastro" class="hover:opacity-100">Cadastrar</Link></li>
+                                </template>
+                                <li v-else><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 

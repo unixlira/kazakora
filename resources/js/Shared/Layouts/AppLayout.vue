@@ -178,6 +178,15 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard',
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
+
+                        <h5 class="font-store-mono mb-3 mt-7 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
+                        <div class="flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand"
+                                class="h-9 w-auto rounded-md bg-white p-1.5">
+                        </div>
+
+                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                            class="mx-auto mt-6 h-16 w-auto rounded-md bg-white p-2 lg:mx-0">
                     </div>
 
                     <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
@@ -218,13 +227,8 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard',
                     </div>
                 </div>
 
-                <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-store-accent-contrast/15 pt-6 text-xs opacity-70 sm:flex-row">
-                    <span class="text-center sm:text-left">© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
-                    <div class="flex flex-wrap items-center justify-center gap-2">
-                        <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand"
-                            class="h-6 w-auto rounded-md bg-white p-1">
-                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado" class="h-8 w-auto rounded-md bg-white p-1">
-                    </div>
+                <div class="mt-12 border-t border-store-accent-contrast/15 pt-6 text-center text-xs opacity-70">
+                    <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
                 </div>
             </div>
         </footer>

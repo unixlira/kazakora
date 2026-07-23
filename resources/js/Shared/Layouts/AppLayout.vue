@@ -178,15 +178,6 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard',
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
-
-                        <h5 class="font-store-mono mb-3 mt-7 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
-                        <div class="no-scrollbar flex flex-nowrap items-center justify-center gap-2 overflow-x-auto lg:flex-wrap lg:justify-start lg:overflow-visible">
-                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand"
-                                class="h-10 w-auto shrink-0 rounded-md bg-white p-1.5 lg:h-9">
-                        </div>
-
-                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
-                            class="mx-auto mt-6 h-24 w-auto rounded-md bg-white p-2 lg:mx-0 lg:h-16">
                     </div>
 
                     <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
@@ -224,6 +215,21 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard',
                                 <li v-else><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
                             </ul>
                         </div>
+                    </div>
+                </div>
+
+                <div class="mt-10 flex flex-col items-center gap-6 text-center lg:mt-12 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8 lg:text-left">
+                    <div>
+                        <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
+                        <div class="no-scrollbar flex flex-nowrap items-center justify-center gap-2 overflow-x-auto lg:flex-wrap lg:justify-start lg:overflow-visible">
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand"
+                                class="h-10 w-auto shrink-0 rounded-md bg-white p-1.5 lg:h-9">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-center">
+                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                            class="h-24 w-auto rounded-md bg-white p-2 lg:h-64">
                     </div>
                 </div>
 

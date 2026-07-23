@@ -18,7 +18,17 @@ const isOpen = ref(false);
 const openModal = () => (isOpen.value = true);
 const closeModal = () => (isOpen.value = false);
 
-const formatDate = (value) => (value ? new Date(`${value}T00:00:00`).toLocaleDateString('pt-BR') : '—');
+// profileUser.birth_date comes from Laravel's `date` cast serialized as a
+// full ISO string ("1990-05-15T00:00:00.000000Z") — work off the YYYY-MM-DD
+// slice directly instead of re-parsing it, which sidesteps both invalid-date
+// and UTC/local timezone-shift bugs.
+const toDateInputValue = (value) => (value ? value.slice(0, 10) : '');
+
+const formatDate = (value) => {
+    if (!value) return '—';
+    const [year, month, day] = toDateInputValue(value).split('-');
+    return `${day}/${month}/${year}`;
+};
 
 const fields = computed(() => [
     { label: 'Nome completo', value: props.profileUser.name },
@@ -33,7 +43,7 @@ const form = useForm({
     email: props.profileUser.email,
     phone: props.profileUser.phone ?? '',
     cpf: props.profileUser.cpf ?? '',
-    birth_date: props.profileUser.birth_date ?? '',
+    birth_date: toDateInputValue(props.profileUser.birth_date),
 });
 
 const editUrl = computed(() => (props.isOwnProfile ? '/perfil' : `/perfil/usuario/${props.profileUser.id}`));

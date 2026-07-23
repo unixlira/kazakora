@@ -168,57 +168,57 @@ const mobileMenuOpen = ref(false);
         </main>
 
         <!-- Footer -->
-        <footer class="mt-20 border-t border-store-border bg-store-bg-sunken">
+        <footer class="mt-20 bg-store-accent-strong text-store-accent-contrast">
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-5">
                     <div>
                         <span class="font-display text-xl font-semibold">Kaza<span class="text-store-accent">Kora</span></span>
-                        <p class="mt-3 max-w-[28ch] text-sm text-store-fg-muted">
+                        <p class="mt-3 max-w-[28ch] text-sm opacity-80">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
                     </div>
                     <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Comprar</h5>
-                        <ul class="flex flex-col gap-2 text-sm">
-                            <li><a href="/#categorias" class="text-store-fg-muted hover:text-store-fg">Categorias</a></li>
-                            <li><a href="/#produtos" class="text-store-fg-muted hover:text-store-fg">Produtos</a></li>
-                            <li><Link href="/carrinho" class="text-store-fg-muted hover:text-store-fg">Meu carrinho</Link></li>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
+                        <ul class="flex flex-col gap-2 text-sm opacity-80">
+                            <li><a href="/#categorias" class="hover:opacity-100">Categorias</a></li>
+                            <li><a href="/#produtos" class="hover:opacity-100">Produtos</a></li>
+                            <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
                         </ul>
                     </div>
                     <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Atendimento</h5>
-                        <ul class="flex flex-col gap-2 text-sm">
-                            <li><a :href="`mailto:${COMPANY.email}`" class="text-store-fg-muted hover:text-store-fg">{{ COMPANY.email }}</a></li>
-                            <li><a :href="COMPANY.whatsappLink" target="_blank" class="text-store-fg-muted hover:text-store-fg">{{ COMPANY.whatsappDisplay }}</a></li>
-                            <li class="text-store-fg-muted">São Paulo - SP</li>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h5>
+                        <ul class="flex flex-col gap-2 text-sm opacity-80">
+                            <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
+                            <li><a :href="COMPANY.whatsappLink" target="_blank" class="hover:opacity-100">{{ COMPANY.whatsappDisplay }}</a></li>
+                            <li>São Paulo - SP</li>
                         </ul>
                     </div>
                     <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Institucional</h5>
-                        <ul class="flex flex-col gap-2 text-sm">
-                            <li><Link href="/politica-de-privacidade" class="text-store-fg-muted hover:text-store-fg">Política de Privacidade</Link></li>
-                            <li><Link href="/termos-de-uso" class="text-store-fg-muted hover:text-store-fg">Termos de Uso</Link></li>
-                            <li><Link href="/trocas-e-devolucoes" class="text-store-fg-muted hover:text-store-fg">Trocas e Devoluções</Link></li>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
+                        <ul class="flex flex-col gap-2 text-sm opacity-80">
+                            <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
+                            <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>
+                            <li><Link href="/trocas-e-devolucoes" class="hover:opacity-100">Trocas e Devoluções</Link></li>
                         </ul>
                     </div>
                     <div>
-                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Minha conta</h5>
-                        <ul class="flex flex-col gap-2 text-sm">
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h5>
+                        <ul class="flex flex-col gap-2 text-sm opacity-80">
                             <template v-if="!user">
-                                <li><Link href="/entrar" class="text-store-fg-muted hover:text-store-fg">Entrar</Link></li>
-                                <li><Link href="/cadastro" class="text-store-fg-muted hover:text-store-fg">Cadastrar</Link></li>
+                                <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
+                                <li><Link href="/cadastro" class="hover:opacity-100">Cadastrar</Link></li>
                             </template>
-                            <li v-else><Link href="/perfil" class="text-store-fg-muted hover:text-store-fg">Meu perfil</Link></li>
+                            <li v-else><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
                         </ul>
                     </div>
                 </div>
 
-                <div class="mt-12 flex flex-col items-center justify-between gap-3 border-t border-store-border pt-6 text-xs text-store-fg-faint sm:flex-row">
+                <div class="mt-12 flex flex-col items-center justify-between gap-3 border-t border-store-accent-contrast/15 pt-6 text-xs opacity-70 sm:flex-row">
                     <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
                     <div class="font-store-mono flex gap-2">
-                        <span class="rounded border border-store-border px-2 py-1">PIX</span>
-                        <span class="rounded border border-store-border px-2 py-1">VISA</span>
-                        <span class="rounded border border-store-border px-2 py-1">MASTER</span>
+                        <span class="rounded border border-store-accent-contrast/25 px-2 py-1">PIX</span>
+                        <span class="rounded border border-store-accent-contrast/25 px-2 py-1">VISA</span>
+                        <span class="rounded border border-store-accent-contrast/25 px-2 py-1">MASTER</span>
                     </div>
                 </div>
             </div>

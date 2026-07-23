@@ -48,6 +48,8 @@ const markAllNotificationsRead = () => {
 };
 
 const mobileMenuOpen = ref(false);
+
+const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'hipercard', 'diners'];
 </script>
 
 <template>
@@ -216,12 +218,12 @@ const mobileMenuOpen = ref(false);
                     </div>
                 </div>
 
-                <div class="mt-12 flex flex-col items-center justify-between gap-3 border-t border-store-accent-contrast/15 pt-6 text-xs opacity-70 sm:flex-row">
-                    <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
-                    <div class="font-store-mono flex gap-2">
-                        <span class="rounded border border-store-accent-contrast/25 px-2 py-1">PIX</span>
-                        <span class="rounded border border-store-accent-contrast/25 px-2 py-1">VISA</span>
-                        <span class="rounded border border-store-accent-contrast/25 px-2 py-1">MASTER</span>
+                <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-store-accent-contrast/15 pt-6 text-xs opacity-70 sm:flex-row">
+                    <span class="text-center sm:text-left">© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
+                    <div class="flex flex-wrap items-center justify-center gap-2">
+                        <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand"
+                            class="h-6 w-auto rounded-md bg-white p-1">
+                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado" class="h-8 w-auto rounded-md bg-white p-1">
                     </div>
                 </div>
             </div>

@@ -36,6 +36,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
 
+// Páginas institucionais/legais — públicas de propósito, precisam ser
+// rastreáveis sem login para aprovação no Google Merchant Center.
+Route::inertia('/trocas-e-devolucoes', 'Legal/Trocas')->name('legal.trocas');
+Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
+Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
+
 Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
     ->middleware('auth')
     ->name('favoritos.alternar');

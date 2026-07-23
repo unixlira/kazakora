@@ -1,0 +1,15 @@
+export const COMPANY = {
+    razaoSocial: '65.604.590 JOSE ROBERTO LIRA',
+    nomeFantasia: 'KazaKora',
+    cnpj: '65.604.590/0001-07',
+    responsavelNome: 'José Roberto Lira',
+    responsavelCpf: '224.096.218-64',
+    enderecoCompleto: 'Rua Mogi Mirim, 20, Vila Bertioga, Mooca, São Paulo/SP, CEP 03187-040',
+    enderecoResumido: 'Rua Mogi Mirim, 20, Mooca, São Paulo/SP',
+    email: 'contato@kazakora.com',
+    whatsappDisplay: '(11) 96572-3990',
+    whatsappNumber: '5511965723990',
+    whatsappLink: 'https://wa.me/5511965723990',
+    site: 'https://kazakora.com',
+    horario: 'Segunda a Sexta, das 9h às 18h | Sábado, das 9h às 13h',
+};

@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { useClickOutside } from '@/Shared/useClickOutside';
+import { COMPANY } from '@/Shared/company';
 
 const page = usePage();
 const cartCount = computed(() => page.props.cart?.count ?? 0);
@@ -47,9 +48,6 @@ const markAllNotificationsRead = () => {
 };
 
 const mobileMenuOpen = ref(false);
-
-const WHATSAPP_NUMBER = '5511965723990';
-const WHATSAPP_DISPLAY = '(11) 96572-3990';
 </script>
 
 <template>
@@ -75,7 +73,7 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                 <nav class="ml-auto hidden items-center gap-7 lg:flex">
                     <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Categorias</a>
                     <a href="/#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
-                    <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
+                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
                 </nav>
 
                 <form class="relative hidden max-w-xs flex-1 lg:block" @submit.prevent="submitSearch">
@@ -159,7 +157,7 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                 <nav class="flex flex-col gap-3">
                     <a href="/#categorias" class="text-sm font-medium">Categorias</a>
                     <a href="/#produtos" class="text-sm font-medium">Produtos</a>
-                    <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-sm font-medium">Fale conosco</a>
+                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium">Fale conosco</a>
                 </nav>
             </div>
         </header>
@@ -172,7 +170,7 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
         <!-- Footer -->
         <footer class="mt-20 border-t border-store-border">
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
-                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-5">
                     <div>
                         <span class="font-display text-xl font-semibold">Kaza<span class="text-store-accent">Kora</span></span>
                         <p class="mt-3 max-w-[28ch] text-sm text-store-fg-muted">
@@ -190,9 +188,17 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                     <div>
                         <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Atendimento</h5>
                         <ul class="flex flex-col gap-2 text-sm">
-                            <li><a href="mailto:contato@kazakora.com" class="text-store-fg-muted hover:text-store-fg">contato@kazakora.com</a></li>
-                            <li><a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-store-fg-muted hover:text-store-fg">{{ WHATSAPP_DISPLAY }}</a></li>
+                            <li><a :href="`mailto:${COMPANY.email}`" class="text-store-fg-muted hover:text-store-fg">{{ COMPANY.email }}</a></li>
+                            <li><a :href="COMPANY.whatsappLink" target="_blank" class="text-store-fg-muted hover:text-store-fg">{{ COMPANY.whatsappDisplay }}</a></li>
                             <li class="text-store-fg-muted">São Paulo - SP</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider text-store-fg-faint">Institucional</h5>
+                        <ul class="flex flex-col gap-2 text-sm">
+                            <li><Link href="/politica-de-privacidade" class="text-store-fg-muted hover:text-store-fg">Política de Privacidade</Link></li>
+                            <li><Link href="/termos-de-uso" class="text-store-fg-muted hover:text-store-fg">Termos de Uso</Link></li>
+                            <li><Link href="/trocas-e-devolucoes" class="text-store-fg-muted hover:text-store-fg">Trocas e Devoluções</Link></li>
                         </ul>
                     </div>
                     <div>
@@ -208,7 +214,7 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                 </div>
 
                 <div class="mt-12 flex flex-col items-center justify-between gap-3 border-t border-store-border pt-6 text-xs text-store-fg-faint sm:flex-row">
-                    <span>© 2026 KazaKora · CNPJ 65.604.590/0001-07</span>
+                    <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
                     <div class="font-store-mono flex gap-2">
                         <span class="rounded border border-store-border px-2 py-1">PIX</span>
                         <span class="rounded border border-store-border px-2 py-1">VISA</span>
@@ -219,7 +225,7 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
         </footer>
 
         <!-- WhatsApp float -->
-        <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" rel="noopener" aria-label="WhatsApp"
+        <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" aria-label="WhatsApp"
             class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg">
             <i class="fab fa-whatsapp"></i>
         </a>

@@ -8,6 +8,10 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    editable: {
+        type: Boolean,
+        default: true,
+    },
 });
 
 const form = useForm({ avatar: null });
@@ -49,26 +53,23 @@ const removeAvatar = async () => {
 </script>
 
 <template>
-    <div class="flex items-center gap-4">
+    <div class="relative h-20 w-20 shrink-0">
         <img v-if="previewUrl || profileUser.avatar_url" :src="previewUrl || profileUser.avatar_url"
-            class="h-22 w-22 rounded-full object-cover" alt="">
-        <span v-else class="flex h-22 w-22 items-center justify-center rounded-full bg-store-accent-soft text-2xl font-semibold text-store-accent-strong">
+            class="h-20 w-20 rounded-full border border-store-border object-cover" alt="">
+        <span v-else class="flex h-20 w-20 items-center justify-center rounded-full border border-store-border bg-store-accent-soft text-xl font-semibold text-store-accent-strong">
             {{ profileUser.initials }}
         </span>
 
-        <div>
-            <div class="flex flex-wrap items-center gap-2">
-                <button type="button" class="rounded-full border border-store-border-strong px-4 py-1.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken disabled:cursor-not-allowed disabled:opacity-50"
-                    :disabled="form.processing" @click="fileInput.click()">
-                    <i class="fas fa-camera mr-2"></i>{{ form.processing ? 'Enviando...' : 'Trocar foto' }}
-                </button>
-                <button v-if="profileUser.avatar_url" type="button" class="rounded-full border border-store-border-strong px-4 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
-                    @click="removeAvatar">
-                    Remover
-                </button>
-            </div>
-            <p class="mt-2 text-sm text-store-fg-muted">JPG, JPEG, PNG ou WEBP, até 2MB.</p>
+        <template v-if="editable">
+            <button type="button" class="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised text-store-fg-muted shadow-sm hover:text-store-accent disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="form.processing" aria-label="Trocar foto" title="JPG, PNG ou WEBP, até 2MB" @click="fileInput.click()">
+                <i class="fas fa-camera text-xs"></i>
+            </button>
+            <button v-if="profileUser.avatar_url" type="button" class="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised text-red-500 shadow-sm hover:bg-red-50"
+                aria-label="Remover foto" @click="removeAvatar">
+                <i class="fas fa-xmark text-[10px]"></i>
+            </button>
             <input ref="fileInput" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onFileSelect">
-        </div>
+        </template>
     </div>
 </template>

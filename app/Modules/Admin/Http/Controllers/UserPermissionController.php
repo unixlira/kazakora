@@ -14,20 +14,14 @@ use Inertia\Response;
 
 class UserPermissionController extends Controller
 {
-    private const ASSIGNABLE_ROLES = [
-        User::ROLE_ADMIN,
-        User::ROLE_MANAGER,
-        User::ROLE_SUBSCRIBER,
-        User::ROLE_CUSTOMER,
-    ];
-
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $grants = RolePermission::query()->get(['role', 'permission', 'granted']);
 
         return Inertia::render('Admin/UserPermissions/Index', [
             'users' => User::query()->orderBy('name')->get(['id', 'name', 'email', 'role']),
-            'roles' => self::ASSIGNABLE_ROLES,
+            'authUserId' => $request->user()->id,
+            'roles' => User::ASSIGNABLE_ROLES,
             'permissions' => Permissions::CONFIGURABLE,
             'matrix' => [
                 User::ROLE_MANAGER => $grants->where('role', User::ROLE_MANAGER)->pluck('granted', 'permission'),
@@ -39,12 +33,23 @@ class UserPermissionController extends Controller
     public function updateRole(Request $request, User $user): RedirectResponse
     {
         $validated = $request->validate([
-            'role' => ['required', Rule::in(self::ASSIGNABLE_ROLES)],
+            'role' => ['required', Rule::in(User::ASSIGNABLE_ROLES)],
         ]);
 
         $user->update($validated);
 
         return back()->with('success', "Perfil de {$user->name} atualizado para \"{$validated['role']}\".");
+    }
+
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        if ($user->is($request->user())) {
+            return back()->with('error', 'Você não pode excluir a própria conta.');
+        }
+
+        $user->delete();
+
+        return back()->with('success', "{$user->name} foi removido.");
     }
 
     public function updatePermissions(Request $request): RedirectResponse

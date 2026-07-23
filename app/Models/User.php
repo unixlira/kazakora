@@ -3,10 +3,12 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Rbac\Auditable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -15,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use Auditable, HasFactory, Notifiable, SoftDeletes;
 
     public const ROLE_ADMIN = 'admin';
 
@@ -27,6 +29,12 @@ class User extends Authenticatable
 
     /** Roles that can sign in to the admin panel (with varying permissions). */
     public const STAFF_ROLES = [self::ROLE_ADMIN, self::ROLE_MANAGER, self::ROLE_SUBSCRIBER];
+
+    /** Roles an admin is allowed to assign to a user. */
+    public const ASSIGNABLE_ROLES = [self::ROLE_ADMIN, self::ROLE_MANAGER, self::ROLE_SUBSCRIBER, self::ROLE_CUSTOMER];
+
+    /** Attributes never written to the audit trail in cleartext. */
+    public static array $auditExcept = ['password', 'remember_token'];
 
     protected $appends = ['avatar_url', 'initials'];
 
@@ -41,6 +49,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'birth_date' => 'date',
+            'deleted_at' => 'datetime',
         ];
     }
 

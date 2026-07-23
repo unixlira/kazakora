@@ -58,6 +58,10 @@ Route::prefix('finalizacao')->name('finalizacao.')->middleware('auth')->group(fu
 Route::middleware('auth')->group(function () {
     Route::get('/perfil', [ProfileController::class, 'edit'])->name('perfil.editar');
     Route::put('/perfil', [ProfileController::class, 'update'])->name('perfil.atualizar');
+    // Mesma tela, mas abrindo o perfil de outro usuário — o controller exige
+    // que quem está logado seja admin sempre que o alvo não for ele mesmo.
+    Route::get('/perfil/usuario/{user}', [ProfileController::class, 'edit'])->name('perfil.editar-outro');
+    Route::put('/perfil/usuario/{user}', [ProfileController::class, 'update'])->name('perfil.atualizar-outro');
     Route::put('/perfil/senha', [ProfilePasswordController::class, 'update'])->name('perfil.senha.atualizar');
     Route::post('/perfil/avatar', [ProfileAvatarController::class, 'store'])->name('perfil.avatar.adicionar');
     Route::delete('/perfil/avatar', [ProfileAvatarController::class, 'destroy'])->name('perfil.avatar.remover');
@@ -203,6 +207,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('admin')->group(function () {
         Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');
         Route::patch('usuarios-permissoes/usuarios/{user}', [UserPermissionController::class, 'updateRole'])->name('usuarios-permissoes.papel.atualizar');
+        Route::delete('usuarios-permissoes/usuarios/{user}', [UserPermissionController::class, 'destroy'])->name('usuarios-permissoes.usuarios.excluir');
         Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');

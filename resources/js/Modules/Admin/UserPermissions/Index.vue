@@ -1,11 +1,13 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable } from '@/Shared/Components/DataTable';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { h, reactive } from 'vue';
+import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     users: { type: Array, default: () => [] },
+    authUserId: { type: Number, required: true },
     roles: { type: Array, default: () => [] },
     permissions: { type: Array, default: () => [] },
     matrix: { type: Object, default: () => ({}) },
@@ -34,6 +36,12 @@ const changeRole = (user, role) => {
     router.patch(`/admin/usuarios-permissoes/usuarios/${user.id}`, { role }, { preserveScroll: true });
 };
 
+const deleteUser = async (user) => {
+    if (await confirmDelete({ title: `Excluir ${user.name}?`, text: 'O usuário poderá ser restaurado depois, se necessário.' })) {
+        router.delete(`/admin/usuarios-permissoes/usuarios/${user.id}`, { preserveScroll: true });
+    }
+};
+
 const matrixState = reactive({
     manager: Object.fromEntries(props.permissions.map((p) => [p, !!props.matrix.manager?.[p]])),
     subscriber: Object.fromEntries(props.permissions.map((p) => [p, !!props.matrix.subscriber?.[p]])),
@@ -56,6 +64,21 @@ const columns = [
                 class: 'rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1 text-sm',
                 onChange: (event) => changeRole(row.original, event.target.value),
             }, props.roles.map((role) => h('option', { value: role, selected: role === row.original.role }, roleLabels[role] ?? role))),
+    },
+    {
+        id: 'actions',
+        header: 'Ações',
+        enableSorting: false,
+        cell: ({ row }) => h('div', { class: 'flex items-center gap-3' }, [
+            h(Link, { href: `/perfil/usuario/${row.original.id}`, class: 'text-sm font-medium text-primary hover:underline' }, () => 'Ver perfil'),
+            row.original.id !== props.authUserId
+                ? h('button', {
+                    type: 'button',
+                    class: 'text-sm font-medium text-red-600 hover:underline',
+                    onClick: () => deleteUser(row.original),
+                }, 'Excluir')
+                : null,
+        ]),
     },
 ];
 </script>

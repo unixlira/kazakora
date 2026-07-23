@@ -16,7 +16,7 @@ trait Auditable
 {
     public static function bootAuditable(): void
     {
-        static::created(fn (Model $model) => self::recordAudit(AuditLog::ACTION_CREATE, $model, null, $model->getAttributes()));
+        static::created(fn (Model $model) => self::recordAudit(AuditLog::ACTION_CREATE, $model, null, self::redact($model, $model->getAttributes())));
 
         static::updated(function (Model $model) {
             $changedKeys = array_keys($model->getChanges());
@@ -27,10 +27,28 @@ trait Auditable
                 return;
             }
 
-            self::recordAudit(AuditLog::ACTION_UPDATE, $model, $original, $changes);
+            self::recordAudit(AuditLog::ACTION_UPDATE, $model, self::redact($model, $original), self::redact($model, $changes));
         });
 
-        static::deleted(fn (Model $model) => self::recordAudit(AuditLog::ACTION_DELETE, $model, $model->getAttributes(), null));
+        static::deleted(fn (Model $model) => self::recordAudit(AuditLog::ACTION_DELETE, $model, self::redact($model, $model->getAttributes()), null));
+    }
+
+    /**
+     * Replace values for any attribute the model lists in a static
+     * `$auditExcept` property (e.g. passwords) before they're written to the
+     * audit trail — we want to know *that* they changed, never the value.
+     */
+    private static function redact(Model $model, array $attributes): array
+    {
+        $except = property_exists($model, 'auditExcept') ? $model::$auditExcept : [];
+
+        foreach ($except as $key) {
+            if (array_key_exists($key, $attributes)) {
+                $attributes[$key] = '••••••••';
+            }
+        }
+
+        return $attributes;
     }
 
     private static function recordAudit(string $action, Model $model, ?array $old, ?array $new): void

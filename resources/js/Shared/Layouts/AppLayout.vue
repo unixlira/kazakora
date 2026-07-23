@@ -8,6 +8,8 @@ const page = usePage();
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => page.props.favorites?.count ?? 0);
 const user = computed(() => page.props.auth?.user);
+const notifications = computed(() => page.props.notifications?.items ?? []);
+const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
 
 watch(
     () => page.props.flash,
@@ -29,6 +31,20 @@ const logout = () => router.post('/sair');
 const userMenuOpen = ref(false);
 const userMenuRef = ref(null);
 useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
+
+const notifMenuOpen = ref(false);
+const notifMenuRef = ref(null);
+useClickOutside(notifMenuRef, () => (notifMenuOpen.value = false));
+
+const markNotificationRead = (item) => {
+    if (!item.read) {
+        router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
+    }
+};
+
+const markAllNotificationsRead = () => {
+    router.post('/notificacoes/ler-todas', {}, { preserveScroll: true, preserveState: true });
+};
 
 const mobileMenuOpen = ref(false);
 
@@ -80,6 +96,37 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ cartCount }}</span>
                     </Link>
 
+                    <div v-if="user" ref="notifMenuRef" class="relative">
+                        <button type="button" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Notificações" @click="notifMenuOpen = !notifMenuOpen">
+                            <i class="far fa-bell text-base"></i>
+                            <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ unreadNotifications }}</span>
+                        </button>
+
+                        <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
+                            <div class="flex items-center justify-between px-4 py-2">
+                                <h5 class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">🔔 Notificações</h5>
+                                <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-store-accent hover:underline" @click="markAllNotificationsRead">
+                                    Marcar todas como lidas
+                                </button>
+                            </div>
+
+                            <p v-if="notifications.length === 0" class="px-4 py-6 text-center text-sm text-store-fg-muted">
+                                Nenhuma notificação por aqui ainda.
+                            </p>
+
+                            <button v-for="item in notifications" :key="item.id" type="button"
+                                class="flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-store-bg-sunken"
+                                :class="{ 'bg-store-accent-soft/40': !item.read }"
+                                @click="markNotificationRead(item)">
+                                <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-store-accent'"></span>
+                                <span>
+                                    <span class="block">{{ item.message }}</span>
+                                    <span class="font-store-mono text-xs text-store-fg-faint">{{ item.createdAt }}</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
                     <div ref="userMenuRef" class="relative">
                         <button v-if="user" type="button" class="flex h-10 w-10 items-center justify-center rounded-full hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
                             <img v-if="user.avatar_url" :src="user.avatar_url" class="h-8 w-8 rounded-full object-cover" alt="">
@@ -90,11 +137,11 @@ const WHATSAPP_DISPLAY = '(11) 96572-3990';
                         </Link>
 
                         <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
-                            <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">Meu perfil</Link>
-                            <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">Configurações</Link>
-                            <Link v-if="user?.role === 'admin'" href="/admin" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">Painel admin</Link>
+                            <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">👤 Meu perfil</Link>
+                            <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">⚙️ Configurações</Link>
+                            <Link v-if="user?.role === 'admin'" href="/admin" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛠️ Painel admin</Link>
                             <hr class="my-1 border-store-border">
-                            <button type="button" class="block w-full whitespace-nowrap px-4 py-2 text-left text-sm hover:bg-store-bg-sunken" @click="logout">Sair</button>
+                            <button type="button" class="block w-full whitespace-nowrap px-4 py-2 text-left text-sm hover:bg-store-bg-sunken" @click="logout">🚪 Sair</button>
                         </div>
                     </div>
 

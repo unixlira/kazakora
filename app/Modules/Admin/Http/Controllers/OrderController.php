@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
+use App\Notifications\OrderStatusUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,7 +43,13 @@ class OrderController extends Controller
             'status' => ['required', Rule::in(self::STATUSES)],
         ]);
 
+        $statusChanged = $order->status !== $validated['status'];
+
         $order->update($validated);
+
+        if ($statusChanged && $order->user) {
+            $order->user->notify(new OrderStatusUpdated($order));
+        }
 
         return back()->with('success', 'Status do pedido atualizado.');
     }

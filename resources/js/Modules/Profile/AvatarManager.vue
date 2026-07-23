@@ -49,25 +49,26 @@ const removeAvatar = async () => {
 </script>
 
 <template>
-    <div class="d-flex align-items-center gap-4">
+    <div class="flex items-center gap-4">
         <img v-if="previewUrl || profileUser.avatar_url" :src="previewUrl || profileUser.avatar_url"
-            class="rounded-circle" style="width:88px;height:88px;object-fit:cover;" alt="">
-        <span v-else class="rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center"
-            style="width:88px;height:88px;font-size:1.75rem;">
+            class="h-22 w-22 rounded-full object-cover" alt="">
+        <span v-else class="flex h-22 w-22 items-center justify-center rounded-full bg-store-accent-soft text-2xl font-semibold text-store-accent-strong">
             {{ profileUser.initials }}
         </span>
 
         <div>
-            <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" :disabled="form.processing"
-                @click="fileInput.click()">
-                <i class="fas fa-camera me-2"></i>{{ form.processing ? 'Enviando...' : 'Trocar foto' }}
-            </button>
-            <button v-if="profileUser.avatar_url" type="button" class="btn btn-outline-danger btn-sm rounded-pill ms-2"
-                @click="removeAvatar">
-                Remover
-            </button>
-            <p class="mt-2 mb-0 text-muted small">JPG, JPEG, PNG ou WEBP, até 2MB.</p>
-            <input ref="fileInput" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="d-none" @change="onFileSelect">
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="rounded-full border border-store-border-strong px-4 py-1.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="form.processing" @click="fileInput.click()">
+                    <i class="fas fa-camera mr-2"></i>{{ form.processing ? 'Enviando...' : 'Trocar foto' }}
+                </button>
+                <button v-if="profileUser.avatar_url" type="button" class="rounded-full border border-store-border-strong px-4 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                    @click="removeAvatar">
+                    Remover
+                </button>
+            </div>
+            <p class="mt-2 text-sm text-store-fg-muted">JPG, JPEG, PNG ou WEBP, até 2MB.</p>
+            <input ref="fileInput" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onFileSelect">
         </div>
     </div>
 </template>

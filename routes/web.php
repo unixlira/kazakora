@@ -27,6 +27,7 @@ use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
 use App\Modules\Marketplace\Http\Controllers\ProductChannelController;
+use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Profile\Http\Controllers\ProfileAvatarController;
 use App\Modules\Profile\Http\Controllers\ProfileController;
 use App\Modules\Profile\Http\Controllers\ProfilePasswordController;
@@ -62,6 +63,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('/perfil/avatar', [ProfileAvatarController::class, 'destroy'])->name('perfil.avatar.remover');
 
     Route::get('/configuracoes', [SettingsController::class, 'edit'])->name('configuracoes.editar');
+
+    Route::post('/notificacoes/{notification}/lida', [NotificationController::class, 'markRead'])->name('notificacoes.lida');
+    Route::post('/notificacoes/ler-todas', [NotificationController::class, 'markAllRead'])->name('notificacoes.ler-todas');
 });
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(function () {

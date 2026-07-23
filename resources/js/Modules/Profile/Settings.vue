@@ -8,49 +8,32 @@ defineProps({
         required: true,
     },
 });
+
+const rows = [
+    { icon: 'fa-envelope', label: 'E-mails de notificação', description: 'Receber e-mails sobre pedidos e novidades' },
+    { icon: 'fa-language', label: 'Idioma', description: 'Português (Brasil)' },
+    { icon: 'fa-sun', label: 'Aparência', description: 'Tema claro' },
+    { icon: 'fa-shield-halved', label: 'Privacidade', description: 'Preferências de dados e privacidade' },
+];
 </script>
 
 <template>
     <Head title="Configurações" />
 
     <AppLayout>
-        <div class="container-fluid py-5">
-            <div class="container" style="max-width: 760px;">
-                <h1 class="display-6 mb-2">Configurações</h1>
-                <p class="text-muted mb-4">Preferências da conta de {{ profileUser.name }}. Em breve.</p>
+        <div class="mx-auto max-w-[760px] px-4 py-12 md:px-6">
+            <h1 class="font-display text-3xl font-semibold">Configurações</h1>
+            <p class="mt-2 text-store-fg-muted">Preferências da conta de {{ profileUser.name }}. Em breve.</p>
 
-                <div class="bg-white rounded shadow-sm p-4 mb-4">
-                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
-                        <div>
-                            <p class="mb-0 fw-semibold"><i class="fas fa-bell me-2 text-muted"></i>Notificações</p>
-                            <p class="mb-0 text-muted small">Receber e-mails sobre pedidos e novidades</p>
-                        </div>
-                        <span class="badge bg-light text-muted">Em breve</span>
+            <div class="mt-8 divide-y divide-store-border rounded-2xl border border-store-border bg-store-bg-raised">
+                <div v-for="row in rows" :key="row.label" class="flex items-center justify-between px-6 py-4">
+                    <div>
+                        <p class="flex items-center gap-2 font-medium">
+                            <i class="fas text-store-fg-muted" :class="row.icon"></i>{{ row.label }}
+                        </p>
+                        <p class="mt-0.5 text-sm text-store-fg-muted">{{ row.description }}</p>
                     </div>
-
-                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
-                        <div>
-                            <p class="mb-0 fw-semibold"><i class="fas fa-language me-2 text-muted"></i>Idioma</p>
-                            <p class="mb-0 text-muted small">Português (Brasil)</p>
-                        </div>
-                        <span class="badge bg-light text-muted">Em breve</span>
-                    </div>
-
-                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom">
-                        <div>
-                            <p class="mb-0 fw-semibold"><i class="fas fa-sun me-2 text-muted"></i>Aparência</p>
-                            <p class="mb-0 text-muted small">Tema claro</p>
-                        </div>
-                        <span class="badge bg-light text-muted">Em breve</span>
-                    </div>
-
-                    <div class="d-flex align-items-center justify-content-between py-3">
-                        <div>
-                            <p class="mb-0 fw-semibold"><i class="fas fa-shield-halved me-2 text-muted"></i>Privacidade</p>
-                            <p class="mb-0 text-muted small">Preferências de dados e privacidade</p>
-                        </div>
-                        <span class="badge bg-light text-muted">Em breve</span>
-                    </div>
+                    <span class="font-store-mono rounded-full bg-store-bg-sunken px-3 py-1 text-xs text-store-fg-faint">Em breve</span>
                 </div>
             </div>
         </div>

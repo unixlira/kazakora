@@ -50,6 +50,17 @@ class HandleInertiaRequests extends Middleware
             'favorites' => fn () => [
                 'count' => $request->user() ? Favorite::query()->where('user_id', $request->user()->id)->count() : 0,
             ],
+            'notifications' => fn () => [
+                'unreadCount' => $request->user()?->unreadNotifications()->count() ?? 0,
+                'items' => $request->user()
+                    ? $request->user()->notifications()->latest()->limit(8)->get()->map(fn ($notification) => [
+                        'id' => $notification->id,
+                        'message' => $notification->data['message'] ?? '',
+                        'read' => $notification->read_at !== null,
+                        'createdAt' => $notification->created_at->diffForHumans(),
+                    ])
+                    : [],
+            ],
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

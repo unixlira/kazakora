@@ -3,11 +3,11 @@ import { COMPANY } from '@/Shared/company';
 </script>
 
 <template>
-    <div class="rounded-2xl border border-store-border-strong bg-store-accent-soft p-6 text-center">
-        <p class="text-sm font-medium text-store-fg">
+    <div class="rounded-2xl bg-store-accent-strong p-6 text-center text-store-accent-contrast">
+        <p class="text-sm font-medium">
             Precisa de ajuda? Nossa equipe está sempre disponível durante o horário comercial, inclusive aos sábados.
         </p>
-        <p class="font-store-mono mt-1 text-xs text-store-fg-muted">{{ COMPANY.horario }}</p>
+        <p class="font-store-mono mt-1 text-xs opacity-80">{{ COMPANY.horario }}</p>
 
         <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
             <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener"
@@ -15,7 +15,7 @@ import { COMPANY } from '@/Shared/company';
                 <i class="fab fa-whatsapp"></i>WhatsApp
             </a>
             <a :href="`mailto:${COMPANY.email}`"
-                class="inline-flex items-center gap-2 rounded-full border border-store-border-strong bg-store-bg-raised px-5 py-2.5 text-sm font-semibold text-store-fg hover:bg-store-bg-sunken">
+                class="inline-flex items-center gap-2 rounded-full bg-store-accent-contrast px-5 py-2.5 text-sm font-semibold text-store-accent-strong hover:opacity-90">
                 <i class="fas fa-envelope"></i>E-mail
             </a>
         </div>

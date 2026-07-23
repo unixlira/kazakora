@@ -168,7 +168,7 @@ const mobileMenuOpen = ref(false);
         </main>
 
         <!-- Footer -->
-        <footer class="mt-20 border-t border-store-border">
+        <footer class="mt-20 border-t border-store-border bg-store-bg-sunken">
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-5">
                     <div>

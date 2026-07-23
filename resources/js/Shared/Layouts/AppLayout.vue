@@ -4,8 +4,8 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { useStorefrontAssets } from '@/Shared/useStorefrontAssets';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 
-useStorefrontAssets();
-onUnmounted(useStorefrontAssets());
+const releaseStorefrontAssets = useStorefrontAssets();
+onUnmounted(releaseStorefrontAssets);
 
 const page = usePage();
 const cartCount = computed(() => page.props.cart?.count ?? 0);

@@ -43,7 +43,7 @@ const submit = () => {
                     type="email"
                     required
                     autocomplete="username"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-[#F28B00] focus:outline-none focus:ring-1 focus:ring-[#F28B00]"
+                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                 <InputError :message="form.errors.email" />
             </div>
@@ -57,7 +57,7 @@ const submit = () => {
                     required
                     autofocus
                     autocomplete="new-password"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-[#F28B00] focus:outline-none focus:ring-1 focus:ring-[#F28B00]"
+                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                 <InputError :message="form.errors.password" />
             </div>
@@ -70,7 +70,7 @@ const submit = () => {
                     type="password"
                     required
                     autocomplete="new-password"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-[#F28B00] focus:outline-none focus:ring-1 focus:ring-[#F28B00]"
+                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                 <InputError :message="form.errors.password_confirmation" />
             </div>
@@ -78,7 +78,7 @@ const submit = () => {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="w-full rounded-lg bg-[#F28B00] py-2.5 font-medium text-white transition-colors hover:bg-[#d97a00] disabled:cursor-not-allowed disabled:bg-gray-300"
+                class="w-full rounded-lg bg-primary py-2.5 font-medium text-white transition-colors hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:bg-gray-300"
             >
                 Redefinir senha
             </button>

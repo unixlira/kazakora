@@ -71,6 +71,11 @@ class Product extends Model
         return $this->hasMany(Favorite::class);
     }
 
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
     public function fiscalData(): HasOne
     {
         return $this->hasOne(ProductFiscalData::class);

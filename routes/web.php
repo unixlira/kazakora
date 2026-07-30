@@ -26,6 +26,7 @@ use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\FavoriteController;
+use App\Modules\Catalog\Http\Controllers\ReviewController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
 use App\Modules\Marketplace\Http\Controllers\ProductChannelController;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
@@ -50,6 +51,10 @@ Route::get('/favoritos', [FavoriteController::class, 'index'])
 Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
     ->middleware('auth')
     ->name('favoritos.alternar');
+
+Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
+    ->middleware('auth')
+    ->name('avaliacoes.armazenar');
 
 Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::get('/', [CartController::class, 'index'])->name('ver');

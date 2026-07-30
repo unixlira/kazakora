@@ -1,8 +1,10 @@
 <script setup>
-import { Link } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import Modal from '@/Shared/Modal.vue';
 import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
-defineProps({
+const props = defineProps({
     product: {
         type: Object,
         required: true,
@@ -15,7 +17,32 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    canReview: {
+        type: Boolean,
+        default: false,
+    },
+    hasReviewed: {
+        type: Boolean,
+        default: false,
+    },
 });
+
+const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
+const ratingCount = computed(() => props.product.reviews_count ?? 0);
+const filledStars = computed(() => Math.round(ratingAvg.value));
+
+const showReviewModal = ref(false);
+const reviewForm = useForm({ rating: 5, comment: '' });
+
+const submitReview = () => {
+    reviewForm.post(`/produtos/${props.product.id}/avaliacoes`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showReviewModal.value = false;
+            reviewForm.reset();
+        },
+    });
+};
 </script>
 
 <template>
@@ -35,7 +62,17 @@ defineProps({
                 <i class="far fa-heart text-sm text-store-fg-muted"></i>
             </Link>
         </div>
-        <div class="flex flex-1 flex-col gap-1.5 p-4">
+
+        <!-- Adicionar ao carrinho: entre a imagem e a descrição -->
+        <div class="flex justify-end px-4 pt-3">
+            <button type="button" :disabled="product.stock < 1"
+                class="flex h-9 w-9 items-center justify-center rounded-full border border-store-border-strong transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Adicionar ao carrinho" @click="addToCart(product.id)">
+                <i class="fas fa-plus text-sm"></i>
+            </button>
+        </div>
+
+        <div class="flex flex-1 flex-col gap-1.5 px-4 pb-4">
             <span v-if="product.category" class="font-store-mono text-[0.68rem] uppercase tracking-wide text-store-fg-faint">{{ product.category.name }}</span>
             <h4 class="font-medium leading-snug">{{ product.name }}</h4>
             <p v-if="specLine(product)" class="font-store-mono text-xs text-store-fg-muted">{{ specLine(product) }}</p>
@@ -44,12 +81,34 @@ defineProps({
                     <span class="text-lg font-semibold">{{ formatPrice(product.price) }}</span>
                     <span v-if="product.stock <= 0" class="mt-0.5 block text-xs text-red-600">Esgotado</span>
                 </div>
-                <button type="button" :disabled="product.stock < 1"
-                    class="flex h-9 w-9 items-center justify-center rounded-full border border-store-border-strong transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="Adicionar ao carrinho" @click="addToCart(product.id)">
-                    <i class="fas fa-plus text-sm"></i>
-                </button>
+                <div class="flex items-center gap-1">
+                    <i v-for="star in 5" :key="star" class="text-xs"
+                        :class="star <= filledStars ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
+                    <span class="text-xs text-store-fg-faint">({{ ratingCount }})</span>
+                </div>
             </div>
+            <button v-if="canReview && !hasReviewed" type="button"
+                class="mt-1 self-start text-xs font-medium text-store-accent hover:underline"
+                @click="showReviewModal = true">
+                Avaliar produto
+            </button>
         </div>
     </article>
+
+    <Modal :open="showReviewModal" max-width="max-w-[480px]" @close="showReviewModal = false">
+        <h3 class="font-display text-xl font-semibold">Avaliar {{ product.name }}</h3>
+        <div class="mt-4 flex gap-1">
+            <button v-for="star in 5" :key="star" type="button" @click="reviewForm.rating = star">
+                <i class="text-2xl" :class="star <= reviewForm.rating ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
+            </button>
+        </div>
+        <textarea v-model="reviewForm.comment" rows="3" placeholder="Conte como foi sua experiência (opcional)"
+            class="mt-4 w-full rounded-lg border border-store-border-strong bg-store-bg px-3 py-2 text-sm"></textarea>
+        <p v-if="reviewForm.errors.review" class="mt-2 text-sm text-red-600">{{ reviewForm.errors.review }}</p>
+        <button type="button" :disabled="reviewForm.processing"
+            class="mt-4 rounded-lg bg-store-accent px-5 py-2.5 text-sm font-semibold text-store-accent-contrast hover:opacity-90 disabled:opacity-50"
+            @click="submitReview">
+            Enviar avaliação
+        </button>
+    </Modal>
 </template>

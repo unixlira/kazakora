@@ -27,6 +27,14 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    reviewableProductIds: {
+        type: Array,
+        default: () => [],
+    },
+    reviewedProductIds: {
+        type: Array,
+        default: () => [],
+    },
     filters: {
         type: Object,
         default: () => ({}),
@@ -37,6 +45,8 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const isFavorite = (productId) => props.favoriteIds.includes(productId);
+const canReview = (productId) => props.reviewableProductIds.includes(productId);
+const hasReviewed = (productId) => props.reviewedProductIds.includes(productId);
 
 const TIPO_TABS = [
     { key: null, label: 'Todos' },
@@ -65,9 +75,10 @@ const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
         <section v-if="featuredProducts.length" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">
             <h2 class="mb-6 font-display text-3xl font-semibold">Destaques</h2>
 
-            <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+            <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
                 <ProductCard v-for="product in featuredProducts" :key="product.id" :product="product"
-                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated" />
+                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
+                    :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
             </div>
 
             <div class="mt-8 flex justify-center">
@@ -107,9 +118,10 @@ const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
                 Nenhum produto encontrado.
             </p>
 
-            <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-6">
                 <ProductCard v-for="product in products.data" :key="product.id" :product="product"
-                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated" />
+                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
+                    :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
             </div>
 
             <nav v-if="products.last_page > 1" class="mt-10 flex flex-wrap justify-center gap-2">

@@ -83,6 +83,35 @@ class CatalogController extends Controller
 
         $user = $request->user();
 
+        $relatedProducts = Product::query()
+            ->with('category:id,name,slug', 'images')
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->where('is_active', true)
+            ->where('id', '!=', $product->id)
+            ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
+            ->inRandomOrder()
+            ->take(5)
+            ->get();
+
+        if ($relatedProducts->count() < 5) {
+            $excludeIds = $relatedProducts->pluck('id')->push($product->id);
+
+            $relatedProducts = $relatedProducts->concat(
+                Product::query()
+                    ->with('category:id,name,slug', 'images')
+                    ->withAvg('reviews', 'rating')
+                    ->withCount('reviews')
+                    ->where('is_active', true)
+                    ->whereNotIn('id', $excludeIds)
+                    ->latest()
+                    ->take(5 - $relatedProducts->count())
+                    ->get()
+            );
+        }
+
+        $relatedIds = $relatedProducts->pluck('id');
+
         return Inertia::render('Catalog/ProductDetail', [
             'product' => $product,
             'reviews' => $reviews,
@@ -97,6 +126,16 @@ class CatalogController extends Controller
             'hasReviewed' => $user
                 ? Review::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,
+            'relatedProducts' => $relatedProducts->values(),
+            'relatedFavoriteIds' => $user
+                ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
+                : [],
+            'relatedReviewableIds' => $user
+                ? array_values(array_intersect($this->reviewableProductIds($request), $relatedIds->all()))
+                : [],
+            'relatedReviewedIds' => $user
+                ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
+                : [],
         ]);
     }
 

@@ -30,6 +30,15 @@ const props = defineProps({
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const filledStars = computed(() => Math.round(ratingAvg.value));
 
+const secondImage = computed(() => {
+    const images = props.product.images ?? [];
+    if (images.length < 2) return null;
+    const primary = images.find((img) => img.is_primary) ?? images[0];
+    return images.find((img) => img.url !== primary.url)?.url ?? null;
+});
+
+const isHovering = ref(false);
+
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
 
@@ -46,8 +55,16 @@ const submitReview = () => {
 
 <template>
     <article class="flex flex-col overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised transition-shadow hover:shadow-lg">
-        <div class="relative aspect-[4/3.3]" style="background: radial-gradient(120% 120% at 25% 15%, color-mix(in oklab, var(--color-store-accent) 14%, var(--color-store-bg-raised)), var(--color-store-bg-sunken) 70%);">
-            <img v-if="primaryImage(product)" :src="primaryImage(product)" :alt="product.name" class="h-full w-full object-cover">
+        <div class="relative aspect-[4/3.3] cursor-pointer" style="background: radial-gradient(120% 120% at 25% 15%, color-mix(in oklab, var(--color-store-accent) 14%, var(--color-store-bg-raised)), var(--color-store-bg-sunken) 70%);"
+            @mouseenter="isHovering = true" @mouseleave="isHovering = false">
+            <template v-if="primaryImage(product)">
+                <img :src="primaryImage(product)" :alt="product.name"
+                    class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                    :class="isHovering && secondImage ? 'opacity-0' : 'opacity-100'">
+                <img v-if="secondImage" :src="secondImage" :alt="product.name"
+                    class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                    :class="isHovering ? 'opacity-100' : 'opacity-0'">
+            </template>
             <div v-else class="flex h-full w-full items-center justify-center">
                 <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
             </div>

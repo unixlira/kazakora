@@ -38,6 +38,7 @@ use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
+Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])->name('produtos.ver');
 
 // Páginas institucionais/legais — públicas de propósito, precisam ser
 // rastreáveis sem login para aprovação no Google Merchant Center.

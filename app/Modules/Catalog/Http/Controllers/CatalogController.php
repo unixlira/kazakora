@@ -10,6 +10,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Operacional\Models\ShippingMethod;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -60,6 +61,42 @@ class CatalogController extends Controller
                 ? Review::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
             'filters' => $request->only('search', 'tipo'),
+        ]);
+    }
+
+    public function show(Request $request, Product $product): Response
+    {
+        abort_unless($product->is_active, 404);
+
+        $product->load([
+            'category:id,name,slug',
+            'images' => fn ($query) => $query->orderBy('position'),
+        ]);
+        $product->loadCount('reviews');
+        $product->loadAvg('reviews', 'rating');
+
+        $reviews = Review::query()
+            ->where('product_id', $product->id)
+            ->with('user:id,name')
+            ->latest()
+            ->get();
+
+        $user = $request->user();
+
+        return Inertia::render('Catalog/ProductDetail', [
+            'product' => $product,
+            'reviews' => $reviews,
+            'shippingMethods' => ShippingMethod::query()
+                ->where('is_active', true)
+                ->orderBy('price')
+                ->get(['id', 'name', 'estimated_days', 'price']),
+            'isFavorite' => $user
+                ? Favorite::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
+                : false,
+            'canReview' => $user ? in_array($product->id, $this->reviewableProductIds($request), true) : false,
+            'hasReviewed' => $user
+                ? Review::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
+                : false,
         ]);
     }
 

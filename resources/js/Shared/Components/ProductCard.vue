@@ -1,5 +1,5 @@
 <script setup>
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
@@ -39,6 +39,8 @@ const secondImage = computed(() => {
 
 const isHovering = ref(false);
 
+const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
+
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
 
@@ -56,7 +58,7 @@ const submitReview = () => {
 <template>
     <article class="flex flex-col overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised transition-shadow hover:shadow-lg">
         <div class="relative aspect-[4/3.3] cursor-pointer" style="background: radial-gradient(120% 120% at 25% 15%, color-mix(in oklab, var(--color-store-accent) 14%, var(--color-store-bg-raised)), var(--color-store-bg-sunken) 70%);"
-            @mouseenter="isHovering = true" @mouseleave="isHovering = false">
+            @mouseenter="isHovering = true" @mouseleave="isHovering = false" @click="goToProduct">
             <template v-if="primaryImage(product)">
                 <img :src="primaryImage(product)" :alt="product.name"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
@@ -70,10 +72,10 @@ const submitReview = () => {
             </div>
             <button v-if="isAuthenticated" type="button"
                 class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow"
-                :aria-pressed="isFavorite" @click="toggleFavorite(product.id)">
+                :aria-pressed="isFavorite" @click.stop="toggleFavorite(product.id)">
                 <i class="text-sm" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
             </button>
-            <Link v-else href="/entrar"
+            <Link v-else href="/entrar" @click.stop
                 class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow">
                 <i class="far fa-heart text-sm text-store-fg-muted"></i>
             </Link>
@@ -81,13 +83,13 @@ const submitReview = () => {
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
                 class="absolute bottom-0 right-[5px] z-10 flex h-10 w-10 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Adicionar ao carrinho" @click="addToCart(product.id)">
+                aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
                 <i class="fas fa-bag-shopping text-sm"></i>
             </button>
         </div>
 
         <div class="flex flex-1 flex-col gap-1 px-4 pb-4 pt-6">
-            <h4 class="truncate text-sm font-medium leading-snug" :title="product.name">{{ product.name }}</h4>
+            <h4 class="cursor-pointer truncate text-sm font-medium leading-snug hover:text-store-accent" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
             <p v-if="specLine(product)" class="truncate font-store-mono text-[11px] text-store-fg-muted" :title="specLine(product)">{{ specLine(product) }}</p>
             <div class="mt-auto pt-2">
                 <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>

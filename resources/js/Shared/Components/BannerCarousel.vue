@@ -80,8 +80,8 @@ onUnmounted(stop);
             <div class="absolute inset-x-0 bottom-3 flex justify-center gap-2">
                 <button v-for="(banner, index) in banners" :key="banner.id" type="button"
                     :aria-label="`Ir para o banner ${index + 1}`"
-                    class="h-2 rounded-full transition-all"
-                    :class="index === current ? 'w-6 bg-white' : 'w-2 bg-white/50'"
+                    class="h-2 rounded-full bg-store-accent transition-all"
+                    :class="index === current ? 'w-6 opacity-100' : 'w-2 opacity-50'"
                     @click="goTo(index)"
                 />
             </div>

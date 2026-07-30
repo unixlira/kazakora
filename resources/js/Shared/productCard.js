@@ -18,5 +18,5 @@ export const primaryImage = (product) => {
 
 export const specLine = (product) => {
     const parts = [product.brand, product.model, product.color].filter(Boolean);
-    return parts.length ? parts.join(' · ') : (product.category?.name ?? null);
+    return parts.length ? parts.join(' · ') : null;
 };

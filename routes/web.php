@@ -5,6 +5,7 @@ use App\Modules\Admin\Http\Controllers\BannerController;
 use App\Modules\Admin\Http\Controllers\CashFlowController;
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\CompanyController;
+use App\Modules\Admin\Http\Controllers\CompetitorAnalysisController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
@@ -138,6 +139,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::patch('banners/{banner}/descer', [BannerController::class, 'moveDown'])
         ->middleware('permission:cadastros.edit')
         ->name('banners.descer');
+
+    Route::get('concorrencia', [CompetitorAnalysisController::class, 'index'])
+        ->name('concorrencia.listar')
+        ->middleware('permission:cadastros.view');
 
     Route::resource('fornecedores', SupplierController::class)->except('show')
         ->parameters(['fornecedores' => 'supplier'])

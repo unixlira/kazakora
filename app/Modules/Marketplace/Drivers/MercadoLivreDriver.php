@@ -33,10 +33,15 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $dto = new ProductDTO(
             title: $product->name,
             category_id: $listing->attributes['category_id'] ?? '',
-            price: (float) $product->price,
+            price: (float) $product->final_price,
             available_quantity: $product->stock,
             description: $product->description,
             pictures: $product->images->map(fn ($image) => ['source' => $image->url])->all(),
+            // Some ML categories require a "product family" name even for a
+            // single, non-variant listing (confirmed live: HTTP 400
+            // body.required_fields → "[family_name]" is missing). We don't
+            // model product families, so just reuse the product's own name.
+            family_name: $product->name,
         );
 
         $response = $this->products->createItem($dto);

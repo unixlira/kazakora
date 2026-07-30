@@ -20,5 +20,6 @@ class ProductDTO extends Data
         public string $currency_id = 'BRL',
         public ?string $description = null,
         public array $pictures = [],
+        public ?string $family_name = null,
     ) {}
 }

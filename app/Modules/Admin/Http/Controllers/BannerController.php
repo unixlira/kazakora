@@ -19,11 +19,6 @@ class BannerController extends Controller
         ]);
     }
 
-    public function create(): Response
-    {
-        return Inertia::render('Admin/Banners/Create');
-    }
-
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validated($request);

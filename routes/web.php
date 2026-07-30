@@ -114,17 +114,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
 
-    Route::resource('banners', BannerController::class)->except('show')
+    Route::resource('banners', BannerController::class)->except(['show', 'create'])
         ->parameters(['banners' => 'banner'])
         ->names([
             'index' => 'banners.listar',
-            'create' => 'banners.criar',
             'store' => 'banners.armazenar',
             'edit' => 'banners.editar',
             'update' => 'banners.atualizar',
             'destroy' => 'banners.excluir',
         ])
-        ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
+        ->middlewareFor('store', 'permission:cadastros.create')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
 

@@ -70,8 +70,8 @@ const submitReview = () => {
         </div>
 
         <div class="flex flex-1 flex-col gap-1 px-4 pb-4 pt-6">
-            <h4 class="text-sm font-medium leading-snug">{{ product.name }}</h4>
-            <p v-if="specLine(product)" class="font-store-mono text-[11px] text-store-fg-muted">{{ specLine(product) }}</p>
+            <h4 class="truncate text-sm font-medium leading-snug" :title="product.name">{{ product.name }}</h4>
+            <p v-if="specLine(product)" class="truncate font-store-mono text-[11px] text-store-fg-muted" :title="specLine(product)">{{ specLine(product) }}</p>
             <div class="mt-auto pt-2">
                 <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
                 <div class="flex items-center justify-between">

@@ -110,8 +110,8 @@ class BannerController extends Controller
         $validated = $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
             'link_url' => ['nullable', 'string', 'max:255'],
-            'image' => [$requireImage ? 'required' : 'nullable', 'image', 'max:4096'],
-            'image_mobile' => ['nullable', 'image', 'max:4096'],
+            'image' => [$requireImage ? 'required' : 'nullable', 'image', 'max:15360'],
+            'image_mobile' => ['nullable', 'image', 'max:15360'],
         ]);
 
         // The quick-upload flow on Index.vue doesn't send `is_active` at all

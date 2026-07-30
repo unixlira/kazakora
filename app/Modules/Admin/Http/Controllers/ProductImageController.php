@@ -18,8 +18,13 @@ class ProductImageController extends Controller
 
     public function store(Request $request, Product $product): RedirectResponse
     {
+        // 4MB used to be the cap here — too tight for an unedited phone
+        // photo (routinely 5-10MB before any compression), so uploads were
+        // silently rejected client-side with no visible error. 15MB comfortably
+        // covers that; optimize() below still shrinks it down to ~150-250KB
+        // on disk regardless of how big the original upload was.
         $request->validate([
-            'image' => ['required', 'image', 'max:4096'],
+            'image' => ['required', 'image', 'max:15360'],
         ]);
 
         $path = $request->file('image')->store("products/{$product->id}", 'public');

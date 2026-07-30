@@ -34,11 +34,15 @@ const uploadNext = (files, index) => {
     if (index >= files.length) return;
 
     uploadingCount.value += 1;
+    const file = files[index];
 
-    form.transform((data) => ({ ...data, image: files[index] })).post(
+    form.transform((data) => ({ ...data, image: file })).post(
         `/admin/produtos/${props.product.id}/imagens`,
         {
             preserveScroll: true,
+            onError: (errors) => {
+                notifyError(errors.image ?? `Falha ao enviar "${file.name}". Tente novamente.`);
+            },
             onFinish: () => {
                 uploadingCount.value -= 1;
                 uploadNext(files, index + 1);

@@ -93,7 +93,7 @@ class CategoryController extends Controller
                 Rule::unique('categories', 'name')->ignore($ignoreId),
             ],
             'description' => ['nullable', 'string'],
-            'image' => ['nullable', 'image', 'max:4096'],
+            'image' => ['nullable', 'image', 'max:15360'],
         ]);
     }
 

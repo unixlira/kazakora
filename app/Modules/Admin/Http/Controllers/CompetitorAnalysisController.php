@@ -27,16 +27,10 @@ class CompetitorAnalysisController extends Controller
             try {
                 $payload = $this->competitorAnalysis->search($selectedProduct);
                 $results = $payload['results'];
-            } catch (RateLimitException) {
-                $error = [
-                    'type' => 'rate_limit',
-                    'message' => 'Muitas consultas em pouco tempo no Mercado Livre. Aguarde um instante e tente novamente.',
-                ];
-            } catch (MercadoLivreException) {
-                $error = [
-                    'type' => 'generic',
-                    'message' => 'Não foi possível consultar o Mercado Livre agora. Tente novamente em instantes.',
-                ];
+            } catch (RateLimitException $e) {
+                $error = ['type' => 'rate_limit', 'message' => $e->getMessage()];
+            } catch (MercadoLivreException $e) {
+                $error = ['type' => 'generic', 'message' => $e->getMessage()];
             }
         }
 

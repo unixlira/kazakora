@@ -119,6 +119,7 @@ const columns = [
             <div v-if="error" class="mb-4 rounded-lg border px-4 py-3 text-sm"
                 :class="error.type === 'rate_limit' ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-red-300 bg-red-50 text-red-700'">
                 <i class="fas fa-triangle-exclamation mr-2"></i>{{ error.message }}
+                <a v-if="error.message.includes('conectada')" href="/admin/integracoes" class="ml-2 font-medium underline">Ir para Integrações</a>
             </div>
 
             <template v-else>

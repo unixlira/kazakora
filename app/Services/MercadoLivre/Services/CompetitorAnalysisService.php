@@ -3,14 +3,14 @@
 namespace App\Services\MercadoLivre\Services;
 
 use App\Modules\Catalog\Models\Product;
-use App\Services\MercadoLivre\MercadoLivrePublicClient;
+use App\Services\MercadoLivre\MercadoLivreClient;
 
 class CompetitorAnalysisService
 {
     /** Preferred order when a category offers more than one listing type. */
     private const LISTING_TYPE_PRIORITY = ['gold_special', 'gold_pro', 'gold_premium'];
 
-    public function __construct(private readonly MercadoLivrePublicClient $client) {}
+    public function __construct(private readonly MercadoLivreClient $client) {}
 
     /**
      * @return array{query: string, results: array<int, array<string, mixed>>}

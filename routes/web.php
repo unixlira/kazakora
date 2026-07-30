@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Admin\Http\Controllers\AuditLogController;
+use App\Modules\Admin\Http\Controllers\BannerController;
 use App\Modules\Admin\Http\Controllers\CashFlowController;
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\CompanyController;
@@ -112,6 +113,27 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    Route::resource('banners', BannerController::class)->except('show')
+        ->parameters(['banners' => 'banner'])
+        ->names([
+            'index' => 'banners.listar',
+            'create' => 'banners.criar',
+            'store' => 'banners.armazenar',
+            'edit' => 'banners.editar',
+            'update' => 'banners.atualizar',
+            'destroy' => 'banners.excluir',
+        ])
+        ->middlewareFor(['create', 'store'], 'permission:cadastros.create')
+        ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
+        ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    Route::patch('banners/{banner}/subir', [BannerController::class, 'moveUp'])
+        ->middleware('permission:cadastros.edit')
+        ->name('banners.subir');
+    Route::patch('banners/{banner}/descer', [BannerController::class, 'moveDown'])
+        ->middleware('permission:cadastros.edit')
+        ->name('banners.descer');
 
     Route::resource('fornecedores', SupplierController::class)->except('show')
         ->parameters(['fornecedores' => 'supplier'])

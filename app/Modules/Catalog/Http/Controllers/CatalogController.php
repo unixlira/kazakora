@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\Product;
@@ -21,18 +22,13 @@ class CatalogController extends Controller
             ->where('is_active', true)
             ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
 
-        $featured = $search->isEmpty()
-            ? (clone $baseQuery)->latest()->first()
-            : null;
-
         $products = (clone $baseQuery)
-            ->when($featured, fn ($query) => $query->whereKeyNot($featured->id))
             ->latest()
             ->paginate(12)
             ->withQueryString();
 
         return Inertia::render('Catalog/Home', [
-            'featured' => $featured,
+            'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'link_url']),
             'products' => $products,
             'categories' => Category::query()
                 ->whereHas('products', fn ($query) => $query->where('is_active', true))

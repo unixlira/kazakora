@@ -23,6 +23,7 @@ export const sidebarSections = [
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', color: 'text-info', permission: 'cadastros.view' },
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-tags', color: 'text-secondary', permission: 'cadastros.view' },
+            { label: 'Banners', href: '/admin/banners', icon: 'fas fa-images', color: 'text-info', permission: 'cadastros.view' },
             { label: 'Fornecedores', href: '/admin/fornecedores', icon: 'fas fa-truck-field', color: 'text-warning', permission: 'cadastros.view' },
             { label: 'Centro de Custos', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', color: 'text-success', permission: 'cadastros.view' },
         ],

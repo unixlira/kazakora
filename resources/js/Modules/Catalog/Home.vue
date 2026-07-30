@@ -1,13 +1,14 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
+import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
 const props = defineProps({
-    featured: {
-        type: Object,
-        default: null,
+    banners: {
+        type: Array,
+        default: () => [],
     },
     products: {
         type: Object,
@@ -39,53 +40,10 @@ const CATEGORY_ICONS = ['fa-box-open', 'fa-tags', 'fa-star'];
     <Head :title="filters.search ? `Busca: ${filters.search}` : 'KazaKora — eletrônicos, gadgets e cozinha'" />
 
     <AppLayout>
-        <!-- Hero -->
-        <section v-if="featured" class="mx-auto max-w-[1320px] px-4 pb-16 pt-12 md:px-6 md:pt-16">
-            <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
-                <div>
-                    <p class="font-store-mono text-xs uppercase tracking-widest text-store-accent">Recém-chegado</p>
-                    <h1 class="mt-3 font-display text-4xl font-semibold leading-[1.05] text-balance md:text-5xl">
-                        {{ featured.name }}
-                    </h1>
-                    <p v-if="featured.description" class="mt-4 max-w-[46ch] text-store-fg-muted">
-                        {{ featured.description }}
-                    </p>
-                    <p v-if="specLine(featured)" class="font-store-mono mt-5 text-sm text-store-fg-muted">
-                        {{ specLine(featured) }}
-                    </p>
-
-                    <div class="mt-6 flex items-baseline gap-3">
-                        <span class="text-3xl font-semibold">{{ formatPrice(featured.price) }}</span>
-                        <span v-if="featured.stock > 0" class="text-sm text-store-fg-muted">em estoque</span>
-                        <span v-else class="text-sm text-red-600">esgotado</span>
-                    </div>
-
-                    <div class="mt-7 flex flex-wrap gap-3">
-                        <button type="button" :disabled="featured.stock < 1"
-                            class="inline-flex items-center gap-2 rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                            @click="addToCart(featured.id)">
-                            Adicionar ao carrinho
-                            <i class="fas fa-arrow-right text-xs"></i>
-                        </button>
-                        <a href="#produtos" class="inline-flex items-center rounded-lg border border-store-border-strong px-6 py-3 text-sm font-semibold hover:border-store-fg">
-                            Ver catálogo
-                        </a>
-                    </div>
-                </div>
-
-                <div class="relative aspect-square rounded-[20px] border border-store-border" style="background: radial-gradient(120% 120% at 30% 20%, color-mix(in oklab, var(--color-store-accent) 18%, var(--color-store-bg-raised)), var(--color-store-bg-raised) 65%);">
-                    <img v-if="primaryImage(featured)" :src="primaryImage(featured)" :alt="featured.name" class="h-full w-full rounded-[20px] object-cover">
-                    <div v-else class="flex h-full w-full items-center justify-center">
-                        <i class="fas fa-box-open text-7xl text-store-accent-strong opacity-40"></i>
-                    </div>
-                    <button type="button"
-                        class="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-store-bg-raised shadow"
-                        :aria-pressed="isFavorite(featured.id)" @click="toggleFavorite(featured.id)">
-                        <i class="text-base" :class="isFavorite(featured.id) ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
-                    </button>
-                </div>
-            </div>
-        </section>
+        <!-- Banner rotativo -->
+        <div v-if="banners.length" class="px-0 pt-4 md:px-6 md:pt-8">
+            <BannerCarousel :banners="banners" />
+        </div>
 
         <!-- Categories -->
         <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">

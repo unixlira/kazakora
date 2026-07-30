@@ -92,6 +92,9 @@ const submit = (channel) => {
                 <label class="block text-xs font-medium uppercase text-slate-400">
                     Atributos específicos do canal (JSON)
                 </label>
+                <p v-if="channel === 'mercado_livre'" class="mt-1 text-xs text-slate-400">
+                    Deixe "category_id" de fora para o sistema tentar identificar a categoria automaticamente pelo nome do produto ao publicar. Só preencha na mão se quiser forçar uma categoria específica.
+                </p>
                 <textarea v-model="forms[channel].attributes" rows="4"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs"
                     placeholder='{"condition": "new", "category_id": "..."}'

@@ -25,10 +25,17 @@ class CategoryService
     }
 
     /**
+     * Suggests a Mercado Livre category (+ any brand/line attributes ML can
+     * infer) for a free-text product title. `sites/MLB/category_predictor`
+     * (the endpoint this used to call) was discontinued by Mercado Livre —
+     * confirmed dead in production (returns their generic "resource not
+     * found" message) — so this uses their current replacement,
+     * `domain_discovery/search`, instead.
+     *
      * @return array<int, array<string, mixed>>
      */
-    public function predictCategory(string $title): array
+    public function discoverCategory(string $title, string $siteId = 'MLB'): array
     {
-        return $this->client->post('sites/MLB/category_predictor', ['title' => $title]);
+        return $this->client->get("sites/{$siteId}/domain_discovery/search", ['q' => $title]);
     }
 }

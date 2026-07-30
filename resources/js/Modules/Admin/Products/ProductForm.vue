@@ -126,6 +126,10 @@ watch(discountType, (type) => {
                 rows="4"
                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
             />
+            <p class="mt-1 text-xs text-gray-500">
+                Dica: separe parágrafos com uma linha em branco. Um título como "Principais benefícios:" seguido de
+                linhas começando com "-" vira uma lista com destaque visual na página do produto.
+            </p>
             <InputError :message="form.errors.description" />
         </div>
 

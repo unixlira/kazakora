@@ -4,7 +4,7 @@ import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -41,6 +41,53 @@ const mediaItems = computed(() => {
 const activeIndex = ref(0);
 const activeMedia = computed(() => mediaItems.value[activeIndex.value] ?? null);
 
+const goPrev = () => {
+    if (mediaItems.value.length < 2) return;
+    activeIndex.value = (activeIndex.value - 1 + mediaItems.value.length) % mediaItems.value.length;
+};
+const goNext = () => {
+    if (mediaItems.value.length < 2) return;
+    activeIndex.value = (activeIndex.value + 1) % mediaItems.value.length;
+};
+
+// Navegação por arrastar o dedo (mobile), tanto na galeria embutida quanto no lightbox.
+const touchStartX = ref(null);
+const onTouchStart = (event) => {
+    touchStartX.value = event.touches[0]?.clientX ?? null;
+};
+const onTouchEnd = (event) => {
+    if (touchStartX.value === null) return;
+    const deltaX = (event.changedTouches[0]?.clientX ?? touchStartX.value) - touchStartX.value;
+    if (Math.abs(deltaX) > 40) {
+        deltaX > 0 ? goPrev() : goNext();
+    }
+    touchStartX.value = null;
+};
+
+const onGalleryClick = () => {
+    if (activeMedia.value?.type === 'image') isLightboxOpen.value = true;
+};
+
+const isLightboxOpen = ref(false);
+
+watch(isLightboxOpen, (open) => {
+    document.body.style.overflow = open ? 'hidden' : '';
+});
+
+const onKeydown = (event) => {
+    const tag = event.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (event.key === 'ArrowLeft') goPrev();
+    if (event.key === 'ArrowRight') goNext();
+    if (event.key === 'Escape' && isLightboxOpen.value) isLightboxOpen.value = false;
+};
+
+onMounted(() => document.addEventListener('keydown', onKeydown));
+onUnmounted(() => {
+    document.removeEventListener('keydown', onKeydown);
+    document.body.style.overflow = '';
+});
+
 const discountPercent = computed(() => {
     if (props.product.discount_percentage) return Math.round(Number(props.product.discount_percentage));
     if (props.product.discount_amount && props.product.price > 0) {
@@ -53,6 +100,28 @@ const specLine = computed(() => {
     const parts = [props.product.brand, props.product.model, props.product.color].filter(Boolean);
     return parts.length ? parts.join(' · ') : null;
 });
+
+// Características: resumo curto na lateral (estilo Mercado Livre) + tabela completa mais abaixo.
+const keySpecs = computed(() => {
+    const specs = [];
+    if (props.product.brand) specs.push({ label: 'Marca', value: props.product.brand });
+    if (props.product.model) specs.push({ label: 'Modelo', value: props.product.model });
+    if (props.product.color) specs.push({ label: 'Cor', value: props.product.color });
+    if (props.product.variation) specs.push({ label: 'Variação', value: props.product.variation });
+    if (props.product.category) specs.push({ label: 'Categoria', value: props.product.category.name });
+    return specs;
+});
+
+const fullSpecs = computed(() => {
+    const specs = [...keySpecs.value];
+    if (props.product.sku) specs.push({ label: 'SKU', value: props.product.sku });
+    specs.push({ label: 'Estoque disponível', value: `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}` });
+    return specs;
+});
+
+const scrollToSpecs = () => {
+    document.getElementById('caracteristicas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
 
 // Quebra a descrição livre em blocos: parágrafos normais, ou um cabeçalho
 // ("Principais benefícios:") seguido de uma lista com marcadores ("- item").
@@ -134,50 +203,69 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
             <div class="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
                 <!-- Galeria: vídeo (se houver) + imagens, miniaturas verticais à esquerda no desktop -->
-                <div class="flex flex-col-reverse gap-3 lg:flex-row lg:gap-3">
-                    <!-- Miniaturas -->
-                    <div v-if="mediaItems.length > 1"
-                        class="flex gap-2 overflow-x-auto pb-1 lg:w-16 lg:shrink-0 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
-                        <button v-for="(item, index) in mediaItems" :key="index" type="button"
-                            class="relative aspect-square w-14 shrink-0 overflow-hidden rounded-xl border-2 bg-store-bg-sunken transition-colors lg:w-full"
-                            :class="index === activeIndex ? 'border-store-accent' : 'border-store-border hover:border-store-border-strong'"
-                            @click="activeIndex = index">
-                            <template v-if="item.type === 'video'">
-                                <video :src="item.src" class="h-full w-full object-cover"></video>
-                                <span class="absolute inset-0 flex items-center justify-center bg-black/30">
-                                    <i class="fas fa-play text-sm text-white"></i>
-                                </span>
-                            </template>
-                            <img v-else :src="item.src" :alt="product.name" class="h-full w-full object-cover">
-                        </button>
-                    </div>
-
-                    <!-- Imagem/vídeo principal -->
-                    <div class="relative aspect-square flex-1 overflow-hidden rounded-2xl border border-store-border bg-store-bg-sunken">
-                        <template v-if="activeMedia?.type === 'video'">
-                            <video :src="activeMedia.src" controls class="h-full w-full object-contain bg-black"></video>
-                        </template>
-                        <template v-else-if="activeMedia?.type === 'image'">
-                            <img :src="activeMedia.src" :alt="product.name" class="h-full w-full object-cover">
-                        </template>
-                        <div v-else class="flex h-full w-full items-center justify-center">
-                            <i class="fas fa-box-open text-6xl text-store-accent-strong opacity-30"></i>
+                <div class="mx-auto w-full md:max-w-[420px] lg:max-w-[460px]">
+                    <div class="flex flex-col-reverse gap-3 lg:flex-row lg:gap-3">
+                        <!-- Miniaturas -->
+                        <div v-if="mediaItems.length > 1"
+                            class="flex gap-2 overflow-x-auto pb-1 lg:w-14 lg:shrink-0 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
+                            <button v-for="(item, index) in mediaItems" :key="index" type="button"
+                                class="relative aspect-square w-12 shrink-0 overflow-hidden rounded-xl border-2 bg-store-bg-sunken transition-colors lg:w-full"
+                                :class="index === activeIndex ? 'border-store-accent' : 'border-store-border hover:border-store-border-strong'"
+                                @click="activeIndex = index">
+                                <template v-if="item.type === 'video'">
+                                    <video :src="item.src" class="h-full w-full object-cover"></video>
+                                    <span class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                        <i class="fas fa-play text-sm text-white"></i>
+                                    </span>
+                                </template>
+                                <img v-else :src="item.src" :alt="product.name" class="h-full w-full object-cover">
+                            </button>
                         </div>
 
-                        <span v-if="discountPercent > 0"
-                            class="absolute left-3 top-3 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow">
-                            -{{ discountPercent }}%
-                        </span>
+                        <!-- Imagem/vídeo principal -->
+                        <div class="group relative aspect-square flex-1 select-none overflow-hidden rounded-2xl border border-store-border bg-store-bg-sunken"
+                            :class="activeMedia?.type === 'image' ? 'cursor-zoom-in' : ''"
+                            @click="onGalleryClick" @touchstart="onTouchStart" @touchend="onTouchEnd">
+                            <template v-if="activeMedia?.type === 'video'">
+                                <video :src="activeMedia.src" controls class="h-full w-full object-contain bg-black" @click.stop></video>
+                            </template>
+                            <template v-else-if="activeMedia?.type === 'image'">
+                                <img :src="activeMedia.src" :alt="product.name"
+                                    class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-110">
+                            </template>
+                            <div v-else class="flex h-full w-full items-center justify-center">
+                                <i class="fas fa-box-open text-6xl text-store-accent-strong opacity-30"></i>
+                            </div>
 
-                        <button v-if="isAuthenticated" type="button"
-                            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-raised shadow"
-                            :aria-pressed="isFavorite" @click="toggleFavorite(product.id)">
-                            <i class="text-base" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
-                        </button>
-                        <Link v-else href="/entrar"
-                            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-raised shadow">
-                            <i class="far fa-heart text-base text-store-fg-muted"></i>
-                        </Link>
+                            <span v-if="discountPercent > 0"
+                                class="absolute left-3 top-3 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white shadow">
+                                -{{ discountPercent }}%
+                            </span>
+
+                            <button v-if="isAuthenticated" type="button"
+                                class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-raised shadow"
+                                :aria-pressed="isFavorite" @click.stop="toggleFavorite(product.id)">
+                                <i class="text-base" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
+                            </button>
+                            <Link v-else href="/entrar" @click.stop
+                                class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-raised shadow">
+                                <i class="far fa-heart text-base text-store-fg-muted"></i>
+                            </Link>
+
+                            <!-- Setas de navegação -->
+                            <template v-if="mediaItems.length > 1">
+                                <button type="button"
+                                    class="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-store-bg-raised/90 text-store-fg shadow transition-opacity hover:bg-store-bg-raised md:opacity-0 md:group-hover:opacity-100"
+                                    aria-label="Mídia anterior" @click.stop="goPrev">
+                                    <i class="fas fa-chevron-left text-xs"></i>
+                                </button>
+                                <button type="button"
+                                    class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-store-bg-raised/90 text-store-fg shadow transition-opacity hover:bg-store-bg-raised md:opacity-0 md:group-hover:opacity-100"
+                                    aria-label="Próxima mídia" @click.stop="goNext">
+                                    <i class="fas fa-chevron-right text-xs"></i>
+                                </button>
+                            </template>
+                        </div>
                     </div>
                 </div>
 
@@ -200,6 +288,22 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <span v-if="reviewsCount">({{ reviewsCount }} avaliação{{ reviewsCount === 1 ? '' : 'ões' }})</span>
                             </span>
                         </div>
+                    </div>
+
+                    <!-- Características principais -->
+                    <div v-if="keySpecs.length" class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                        <h3 class="text-sm font-semibold text-store-fg">Características principais</h3>
+                        <ul class="mt-3 flex flex-col gap-1.5">
+                            <li v-for="spec in keySpecs.slice(0, 4)" :key="spec.label" class="flex items-center justify-between gap-4 text-sm">
+                                <span class="text-store-fg-muted">{{ spec.label }}</span>
+                                <span class="truncate font-medium text-store-fg">{{ spec.value }}</span>
+                            </li>
+                        </ul>
+                        <button type="button" class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-store-accent hover:underline"
+                            @click="scrollToSpecs">
+                            Ver características completas
+                            <i class="fas fa-arrow-down text-[10px]"></i>
+                        </button>
                     </div>
 
                     <!-- Flags coloridas -->
@@ -272,6 +376,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     </div>
                 </div>
             </div>
+
+            <!-- Características: tabela completa -->
+            <section v-if="fullSpecs.length" id="caracteristicas" class="mt-16 scroll-mt-24">
+                <h2 class="mb-6 text-center font-display text-2xl font-semibold text-store-fg md:text-3xl">Características</h2>
+                <div class="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-store-border">
+                    <div v-for="(spec, index) in fullSpecs" :key="spec.label"
+                        class="flex items-center justify-between gap-4 px-5 py-3 text-sm"
+                        :class="index % 2 === 0 ? 'bg-store-bg-raised' : 'bg-store-bg-sunken'">
+                        <span class="text-store-fg-muted">{{ spec.label }}</span>
+                        <span class="font-medium text-store-fg">{{ spec.value }}</span>
+                    </div>
+                </div>
+            </section>
 
             <!-- Descrição: landing page centralizada -->
             <section v-if="product.description" class="mt-16 flex justify-center">
@@ -371,5 +488,39 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                 Enviar avaliação
             </button>
         </Modal>
+
+        <!-- Lightbox: imagem ampliada, fundo preto desfocado, navegação por seta/teclado/arraste -->
+        <Teleport to="body">
+            <div v-if="isLightboxOpen" class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/90 backdrop-blur-md" @click="isLightboxOpen = false"></div>
+
+                <button type="button"
+                    class="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                    aria-label="Fechar" @click="isLightboxOpen = false">
+                    <i class="fas fa-xmark text-lg"></i>
+                </button>
+
+                <template v-if="mediaItems.length > 1">
+                    <button type="button"
+                        class="absolute left-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 md:left-6"
+                        aria-label="Mídia anterior" @click="goPrev">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button type="button"
+                        class="absolute right-3 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 md:right-6"
+                        aria-label="Próxima mídia" @click="goNext">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </template>
+
+                <div class="relative z-0 flex max-h-[90vh] max-w-[90vw] items-center justify-center"
+                    @click.stop @touchstart="onTouchStart" @touchend="onTouchEnd">
+                    <video v-if="activeMedia?.type === 'video'" :src="activeMedia.src" controls autoplay
+                        class="max-h-[90vh] max-w-[90vw] rounded-lg"></video>
+                    <img v-else-if="activeMedia?.type === 'image'" :src="activeMedia.src" :alt="product.name"
+                        class="max-h-[90vh] max-w-[90vw] rounded-lg object-contain">
+                </div>
+            </div>
+        </Teleport>
     </AppLayout>
 </template>

@@ -28,7 +28,7 @@ class CatalogController extends Controller
             ->withQueryString();
 
         return Inertia::render('Catalog/Home', [
-            'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'link_url']),
+            'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'image_path_mobile', 'link_url']),
             'products' => $products,
             'categories' => Category::query()
                 ->whereHas('products', fn ($query) => $query->where('is_active', true))

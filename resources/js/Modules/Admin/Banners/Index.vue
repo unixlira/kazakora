@@ -14,47 +14,58 @@ const props = defineProps({
 });
 
 const page = usePage();
-const bannerError = computed(() => page.props.errors?.banner ?? page.props.errors?.image);
+const bannerError = computed(() => page.props.errors?.banner ?? page.props.errors?.image ?? page.props.errors?.image_mobile);
 const { can } = usePermissions();
 
-const form = useForm({ image: null });
-const isDragging = ref(false);
-const uploadingCount = ref(0);
-const fileInput = ref(null);
+const form = useForm({ image: null, image_mobile: null });
+const desktopPreview = ref(null);
+const mobilePreview = ref(null);
+const desktopInput = ref(null);
+const mobileInput = ref(null);
+const draggingDesktop = ref(false);
+const draggingMobile = ref(false);
 
-const uploadFiles = (files) => {
-    const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
-
-    if (list.length === 0) {
-        notifyError('Selecione apenas arquivos de imagem.');
+const pickFile = (file, target) => {
+    if (!file || !file.type.startsWith('image/')) {
+        notifyError('Selecione um arquivo de imagem.');
         return;
     }
 
-    uploadNext(list, 0);
+    if (target === 'desktop') {
+        form.image = file;
+        desktopPreview.value = URL.createObjectURL(file);
+    } else {
+        form.image_mobile = file;
+        mobilePreview.value = URL.createObjectURL(file);
+    }
 };
 
-const uploadNext = (files, index) => {
-    if (index >= files.length) return;
+const clearDesktop = () => {
+    form.image = null;
+    desktopPreview.value = null;
+    desktopInput.value.value = '';
+};
 
-    uploadingCount.value += 1;
+const clearMobile = () => {
+    form.image_mobile = null;
+    mobilePreview.value = null;
+    mobileInput.value.value = '';
+};
 
-    form.transform((data) => ({ ...data, image: files[index] })).post('/admin/banners', {
+const submitNewBanner = () => {
+    if (!form.image) {
+        notifyError('Selecione ao menos a imagem do site (desktop).');
+        return;
+    }
+
+    form.post('/admin/banners', {
         preserveScroll: true,
-        onFinish: () => {
-            uploadingCount.value -= 1;
-            uploadNext(files, index + 1);
+        onSuccess: () => {
+            form.reset();
+            desktopPreview.value = null;
+            mobilePreview.value = null;
         },
     });
-};
-
-const onDrop = (event) => {
-    isDragging.value = false;
-    uploadFiles(event.dataTransfer.files);
-};
-
-const onFileSelect = (event) => {
-    uploadFiles(event.target.files);
-    event.target.value = '';
 };
 
 const destroy = async (banner) => {
@@ -77,19 +88,59 @@ const move = (banner, direction) => {
 
         <InputError :message="bannerError" class="mb-4" />
 
-        <div v-if="can('cadastros.create')"
-            class="flex cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed px-6 py-10 text-center transition-colors"
-            :class="isDragging ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'"
-            @click="fileInput.click()"
-            @dragover.prevent="isDragging = true"
-            @dragleave.prevent="isDragging = false"
-            @drop.prevent="onDrop">
-            <i class="fas fa-cloud-upload-alt mb-2 text-2xl text-slate-400"></i>
-            <p class="text-sm text-slate-500">
-                <span v-if="uploadingCount > 0">Enviando {{ uploadingCount }} imagem(ns)...</span>
-                <span v-else>Arraste imagens aqui ou clique para selecionar (múltiplas ao mesmo tempo)</span>
-            </p>
-            <input ref="fileInput" type="file" accept="image/*" multiple class="hidden" @change="onFileSelect">
+        <div v-if="can('cadastros.create')" class="rounded border border-gray-200 p-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <p class="mb-1 text-sm font-medium">Imagem do site (desktop)</p>
+                    <p class="mb-2 text-xs text-gray-500">Obrigatória — use uma imagem larga (paisagem), essa é a que aparece em telas de computador.</p>
+                    <div class="relative flex aspect-[21/9] cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed px-4 py-6 text-center transition-colors"
+                        :class="draggingDesktop ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'"
+                        @click="desktopInput.click()"
+                        @dragover.prevent="draggingDesktop = true"
+                        @dragleave.prevent="draggingDesktop = false"
+                        @drop.prevent="draggingDesktop = false; pickFile(($event).dataTransfer.files[0], 'desktop')">
+                        <img v-if="desktopPreview" :src="desktopPreview" class="absolute inset-0 h-full w-full rounded object-cover">
+                        <template v-else>
+                            <i class="fas fa-desktop mb-2 text-2xl text-slate-400"></i>
+                            <p class="text-sm text-slate-500">Arraste ou clique para selecionar</p>
+                        </template>
+                        <button v-if="desktopPreview" type="button"
+                            class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-red-500 shadow"
+                            aria-label="Remover imagem selecionada" @click.stop="clearDesktop">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <input ref="desktopInput" type="file" accept="image/*" class="hidden" @change="pickFile($event.target.files[0], 'desktop')">
+                    </div>
+                </div>
+
+                <div>
+                    <p class="mb-1 text-sm font-medium">Imagem mobile (opcional)</p>
+                    <p class="mb-2 text-xs text-gray-500">Use uma imagem em pé (retrato/quadrada) para celular. Se não enviar, a imagem do site será usada no mobile também.</p>
+                    <div class="relative flex aspect-[21/9] cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed px-4 py-6 text-center transition-colors"
+                        :class="draggingMobile ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-400'"
+                        @click="mobileInput.click()"
+                        @dragover.prevent="draggingMobile = true"
+                        @dragleave.prevent="draggingMobile = false"
+                        @drop.prevent="draggingMobile = false; pickFile(($event).dataTransfer.files[0], 'mobile')">
+                        <img v-if="mobilePreview" :src="mobilePreview" class="absolute inset-0 h-full w-full rounded object-cover">
+                        <template v-else>
+                            <i class="fas fa-mobile-screen mb-2 text-2xl text-slate-400"></i>
+                            <p class="text-sm text-slate-500">Arraste ou clique para selecionar</p>
+                        </template>
+                        <button v-if="mobilePreview" type="button"
+                            class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-red-500 shadow"
+                            aria-label="Remover imagem selecionada" @click.stop="clearMobile">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <input ref="mobileInput" type="file" accept="image/*" class="hidden" @change="pickFile($event.target.files[0], 'mobile')">
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" :disabled="form.processing" class="mt-4 rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                @click="submitNewBanner">
+                {{ form.processing ? 'Enviando...' : 'Adicionar banner' }}
+            </button>
         </div>
 
         <h2 class="mb-4 mt-8 text-sm font-semibold uppercase tracking-wide text-gray-500">Imagens no Storage</h2>
@@ -111,6 +162,9 @@ const move = (banner, direction) => {
 
                     <span v-if="!banner.is_active" class="absolute left-1 top-1 rounded bg-gray-900/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                         Inativo
+                    </span>
+                    <span v-if="banner.image_url_mobile" class="absolute bottom-1 left-1 rounded bg-gray-900/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        <i class="fas fa-mobile-screen"></i> mobile próprio
                     </span>
                 </div>
 

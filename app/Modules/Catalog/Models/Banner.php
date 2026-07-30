@@ -12,12 +12,13 @@ class Banner extends Model
     protected $fillable = [
         'title',
         'image_path',
+        'image_path_mobile',
         'link_url',
         'sort_order',
         'is_active',
     ];
 
-    protected $appends = ['image_url'];
+    protected $appends = ['image_url', 'image_url_mobile'];
 
     protected function casts(): array
     {
@@ -30,5 +31,10 @@ class Banner extends Model
     public function getImageUrlAttribute(): string
     {
         return asset('storage/'.$this->image_path);
+    }
+
+    public function getImageUrlMobileAttribute(): ?string
+    {
+        return $this->image_path_mobile ? asset('storage/'.$this->image_path_mobile) : null;
     }
 }

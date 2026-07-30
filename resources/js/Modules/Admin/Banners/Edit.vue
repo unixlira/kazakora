@@ -16,15 +16,24 @@ const form = useForm({
     link_url: props.banner.link_url ?? '',
     is_active: props.banner.is_active,
     image: null,
+    image_mobile: null,
 });
 
-const preview = ref(null);
-const fileInput = ref(null);
+const desktopPreview = ref(null);
+const mobilePreview = ref(null);
+const desktopInput = ref(null);
+const mobileInput = ref(null);
 
-const onFileSelect = (event) => {
+const onSelectDesktop = (event) => {
     const file = event.target.files[0] ?? null;
     form.image = file;
-    preview.value = file ? URL.createObjectURL(file) : null;
+    desktopPreview.value = file ? URL.createObjectURL(file) : null;
+};
+
+const onSelectMobile = (event) => {
+    const file = event.target.files[0] ?? null;
+    form.image_mobile = file;
+    mobilePreview.value = file ? URL.createObjectURL(file) : null;
 };
 
 const submit = () => {
@@ -38,7 +47,7 @@ const submit = () => {
     <AdminLayout>
         <h1 class="text-2xl font-bold">Editar banner</h1>
 
-        <form class="mt-6 max-w-xl space-y-4" enctype="multipart/form-data" @submit.prevent="submit">
+        <form class="mt-6 max-w-2xl space-y-4" enctype="multipart/form-data" @submit.prevent="submit">
             <div>
                 <label for="title" class="block text-sm font-medium">Título (opcional)</label>
                 <input id="title" v-model="form.title" type="text" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
@@ -52,15 +61,29 @@ const submit = () => {
                 <InputError :message="form.errors.link_url" />
             </div>
 
-            <div>
-                <span class="block text-sm font-medium">Imagem</span>
-                <div class="mt-1 flex cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed border-gray-300 px-6 py-10 text-center hover:border-gray-400"
-                    @click="fileInput.click()">
-                    <img :src="preview ?? banner.image_url" class="mb-2 h-24 rounded object-cover">
-                    <p class="text-sm text-gray-500">Clique para substituir a imagem do banner</p>
-                    <input ref="fileInput" type="file" accept="image/*" class="hidden" @change="onFileSelect">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                    <span class="block text-sm font-medium">Imagem do site (desktop)</span>
+                    <p class="mb-1 text-xs text-gray-500">Imagem larga (paisagem) usada em telas de computador.</p>
+                    <div class="mt-1 flex aspect-[21/9] cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed border-gray-300 px-4 py-6 text-center hover:border-gray-400"
+                        @click="desktopInput.click()">
+                        <img :src="desktopPreview ?? banner.image_url" class="h-full w-full rounded object-cover">
+                        <input ref="desktopInput" type="file" accept="image/*" class="hidden" @change="onSelectDesktop">
+                    </div>
+                    <InputError :message="form.errors.image" />
                 </div>
-                <InputError :message="form.errors.image" />
+
+                <div>
+                    <span class="block text-sm font-medium">Imagem mobile (opcional)</span>
+                    <p class="mb-1 text-xs text-gray-500">Imagem em pé (retrato/quadrada) usada em celular. Sem ela, usa a do site.</p>
+                    <div class="mt-1 flex aspect-[21/9] cursor-pointer flex-col items-center justify-center rounded border-2 border-dashed border-gray-300 px-4 py-6 text-center hover:border-gray-400"
+                        @click="mobileInput.click()">
+                        <img v-if="mobilePreview ?? banner.image_url_mobile" :src="mobilePreview ?? banner.image_url_mobile" class="h-full w-full rounded object-cover">
+                        <p v-else class="text-sm text-gray-500">Clique para adicionar</p>
+                        <input ref="mobileInput" type="file" accept="image/*" class="hidden" @change="onSelectMobile">
+                    </div>
+                    <InputError :message="form.errors.image_mobile" />
+                </div>
             </div>
 
             <label class="flex items-center gap-2 text-sm font-medium">

@@ -23,6 +23,11 @@ class BannerController extends Controller
     {
         $validated = $this->validated($request);
         $validated['image_path'] = $request->file('image')->store('banners', 'public');
+
+        if ($request->hasFile('image_mobile')) {
+            $validated['image_path_mobile'] = $request->file('image_mobile')->store('banners', 'public');
+        }
+
         $validated['sort_order'] = (int) Banner::query()->max('sort_order') + 1;
 
         Banner::create($validated);
@@ -46,6 +51,13 @@ class BannerController extends Controller
             $validated['image_path'] = $request->file('image')->store('banners', 'public');
         }
 
+        if ($request->hasFile('image_mobile')) {
+            if ($banner->image_path_mobile) {
+                Storage::disk('public')->delete($banner->image_path_mobile);
+            }
+            $validated['image_path_mobile'] = $request->file('image_mobile')->store('banners', 'public');
+        }
+
         $banner->update($validated);
 
         return redirect()->route('admin.banners.listar')->with('success', 'Banner atualizado com sucesso.');
@@ -54,6 +66,9 @@ class BannerController extends Controller
     public function destroy(Banner $banner): RedirectResponse
     {
         Storage::disk('public')->delete($banner->image_path);
+        if ($banner->image_path_mobile) {
+            Storage::disk('public')->delete($banner->image_path_mobile);
+        }
         $banner->delete();
 
         return back()->with('success', 'Banner removido com sucesso.');
@@ -96,9 +111,13 @@ class BannerController extends Controller
             'title' => ['nullable', 'string', 'max:255'],
             'link_url' => ['nullable', 'string', 'max:255'],
             'image' => [$requireImage ? 'required' : 'nullable', 'image', 'max:4096'],
+            'image_mobile' => ['nullable', 'image', 'max:4096'],
         ]);
 
-        $validated['is_active'] = $request->boolean('is_active');
+        // The quick-upload flow on Index.vue doesn't send `is_active` at all
+        // (new banners should show right away); Edit.vue always sends it
+        // explicitly via Inertia's useForm, so only default to true there.
+        $validated['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : true;
 
         return $validated;
     }

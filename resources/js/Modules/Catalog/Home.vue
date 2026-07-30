@@ -41,9 +41,7 @@ const CATEGORY_ICONS = ['fa-box-open', 'fa-tags', 'fa-star'];
 
     <AppLayout>
         <!-- Banner rotativo -->
-        <div v-if="banners.length" class="px-0 pt-4 md:px-6 md:pt-8">
-            <BannerCarousel :banners="banners" />
-        </div>
+        <BannerCarousel v-if="banners.length" :banners="banners" class="mb-[10px]" />
 
         <!-- Categories -->
         <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">

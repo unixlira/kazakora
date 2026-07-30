@@ -22,12 +22,15 @@ defineProps({
 
 defineEmits(['click']);
 
+// Same alert palette as StatusBadge.vue (bg-{color}-100/text-{color}-700,
+// dark variants included) so action icons and status pills read as one
+// consistent color system across the admin.
 const COLOR_CLASSES = {
-    slate: 'bg-slate-100 text-slate-600 hover:bg-slate-200',
-    blue: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
-    red: 'bg-red-50 text-red-600 hover:bg-red-100',
-    amber: 'bg-amber-50 text-amber-600 hover:bg-amber-100',
-    violet: 'bg-violet-50 text-violet-600 hover:bg-violet-100',
+    slate: 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300',
+    blue: 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/50 dark:text-blue-300',
+    red: 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-300',
+    amber: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300',
+    violet: 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/50 dark:text-purple-300',
 };
 </script>
 

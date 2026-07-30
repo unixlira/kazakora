@@ -59,7 +59,19 @@ class ProductChannelController extends Controller
             }
 
             $listing->update(['status' => ProductChannelListing::STATUS_PENDING]);
-            PublishProductToChannel::dispatch($product, $listing);
+
+            try {
+                // The queue runs in "sync" mode in this environment (no
+                // persistent worker on shared hosting), so the job executes
+                // inline here and its rethrow (see PublishProductToChannel)
+                // would otherwise bubble up as an unhandled 500 — the job
+                // already recorded status=error/last_error on $listing
+                // before rethrowing, so this catch just turns that into a
+                // normal redirect instead of a crash page.
+                PublishProductToChannel::dispatch($product, $listing);
+            } catch (\Throwable $exception) {
+                return back()->with('warning', 'Não foi possível publicar agora: '.$exception->getMessage());
+            }
 
             return back()->with('success', 'Publicação enviada para a fila. Isso pode levar alguns minutos.');
         }

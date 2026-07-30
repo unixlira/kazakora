@@ -31,6 +31,19 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
     {
         $this->ensureConfigured();
 
+        // Already published: update the existing item instead of creating a
+        // new one every time staff re-save the channel (confirmed live —
+        // re-saving an already-published listing was creating a duplicate
+        // item on Mercado Livre each time).
+        if ($listing->external_id) {
+            $this->products->updateItem($listing->external_id, [
+                'price' => (float) $product->final_price,
+                'available_quantity' => $product->stock,
+            ]);
+
+            return $listing->external_id;
+        }
+
         $categoryId = $listing->attributes['category_id'] ?? '';
         $attributes = $this->buildAttributes($product);
         $pictures = $product->images->map(fn ($image) => ['source' => $image->url])->all();
@@ -102,7 +115,12 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         }
 
         if ($product->color) {
+            // Sent under both IDs: some categories require COLOR, others
+            // require MATERIAL (confirmed live — this store's "cor" field is
+            // sometimes really describing material, e.g. "Bambu"), and there
+            // is no dedicated material field on Product to map separately.
             $attributes[] = ['id' => 'COLOR', 'value_name' => $product->color];
+            $attributes[] = ['id' => 'MATERIAL', 'value_name' => $product->color];
         }
 
         return $attributes;

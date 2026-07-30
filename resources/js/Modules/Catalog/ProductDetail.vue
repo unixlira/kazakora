@@ -68,6 +68,26 @@ const onGalleryClick = () => {
     if (activeMedia.value?.type === 'image') isLightboxOpen.value = true;
 };
 
+// Zoom: em vez de ampliar dentro do card, mostra um painel flutuante fora
+// dele (à direita, no tamanho original) seguindo a posição do mouse.
+const isZooming = ref(false);
+const zoomPosition = ref({ x: 50, y: 50 });
+
+const onGalleryMouseEnter = () => {
+    if (activeMedia.value?.type === 'image') isZooming.value = true;
+};
+const onGalleryMouseLeave = () => {
+    isZooming.value = false;
+};
+const onGalleryMouseMove = (event) => {
+    if (activeMedia.value?.type !== 'image') return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    zoomPosition.value = {
+        x: Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)),
+        y: Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100)),
+    };
+};
+
 const isLightboxOpen = ref(false);
 
 watch(isLightboxOpen, (open) => {
@@ -223,18 +243,29 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         </div>
 
                         <!-- Imagem/vídeo principal -->
-                        <div class="group relative aspect-square flex-1 select-none overflow-hidden rounded-2xl border border-store-border bg-store-bg-sunken"
+                        <div class="group relative aspect-[4/3] flex-1 select-none overflow-hidden rounded-2xl border border-store-border bg-store-bg-sunken"
                             :class="activeMedia?.type === 'image' ? 'cursor-zoom-in' : ''"
-                            @click="onGalleryClick" @touchstart="onTouchStart" @touchend="onTouchEnd">
+                            @click="onGalleryClick" @touchstart="onTouchStart" @touchend="onTouchEnd"
+                            @mouseenter="onGalleryMouseEnter" @mouseleave="onGalleryMouseLeave" @mousemove="onGalleryMouseMove">
                             <template v-if="activeMedia?.type === 'video'">
                                 <video :src="activeMedia.src" controls class="h-full w-full object-contain bg-black" @click.stop></video>
                             </template>
                             <template v-else-if="activeMedia?.type === 'image'">
-                                <img :src="activeMedia.src" :alt="product.name"
-                                    class="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-110">
+                                <img :src="activeMedia.src" :alt="product.name" class="h-full w-full object-contain">
                             </template>
                             <div v-else class="flex h-full w-full items-center justify-center">
                                 <i class="fas fa-box-open text-6xl text-store-accent-strong opacity-30"></i>
+                            </div>
+
+                            <!-- Painel de zoom flutuante: fora do card, tamanho original, segue o mouse -->
+                            <div v-if="isZooming && activeMedia?.type === 'image'"
+                                class="pointer-events-none absolute left-full top-0 z-30 ml-4 hidden aspect-[4/3] w-[480px] overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised shadow-xl lg:block"
+                                :style="{
+                                    backgroundImage: `url(${activeMedia.src})`,
+                                    backgroundSize: '200%',
+                                    backgroundPosition: `${zoomPosition.x}% ${zoomPosition.y}%`,
+                                    backgroundRepeat: 'no-repeat',
+                                }">
                             </div>
 
                             <span v-if="discountPercent > 0"

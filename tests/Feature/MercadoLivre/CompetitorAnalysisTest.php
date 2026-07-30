@@ -110,6 +110,24 @@ class CompetitorAnalysisTest extends TestCase
         $response->assertInertia(fn ($page) => $page->where('error.type', 'rate_limit'));
     }
 
+    public function test_search_forbidden_shows_the_ml_partner_access_message(): void
+    {
+        $this->seedValidToken();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $product = Product::factory()->create();
+
+        Http::fake([
+            'https://api.mercadolibre.com/sites/MLB/search*' => Http::response(['message' => 'forbidden'], 403),
+        ]);
+
+        $response = $this->actingAs($admin)->get("/admin/concorrencia?product_id={$product->id}");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('error.type', 'search_restricted')
+            ->where('error.message', fn ($message) => str_contains($message, 'suporte do Mercado Livre')));
+    }
+
     public function test_generic_failure_shows_a_friendly_error_instead_of_crashing(): void
     {
         $this->seedValidToken();

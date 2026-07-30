@@ -30,7 +30,15 @@ class CompetitorAnalysisController extends Controller
             } catch (RateLimitException $e) {
                 $error = ['type' => 'rate_limit', 'message' => $e->getMessage()];
             } catch (MercadoLivreException $e) {
-                $error = ['type' => 'generic', 'message' => $e->getMessage()];
+                // The classic search endpoint (sites/{site}/search) currently
+                // returns 403 "forbidden" for this app even with a valid,
+                // connected seller token — Mercado Livre restricts it behind
+                // partner approval now. listing_prices/categories work fine
+                // with the same token, so this is specifically a search
+                // access issue, not a connection/auth problem.
+                $error = $e->getCode() === 403
+                    ? ['type' => 'search_restricted', 'message' => 'O Mercado Livre bloqueou a busca de anúncios para este aplicativo (comum para apps sem aprovação de parceiro para esse recurso). Entre em contato com o suporte do Mercado Livre para solicitar acesso à busca — o restante da integração (conexão da conta, cálculo de comissão) já funciona normalmente.']
+                    : ['type' => 'generic', 'message' => $e->getMessage()];
             }
         }
 

@@ -61,34 +61,31 @@ const submitReview = () => {
                 class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow">
                 <i class="far fa-heart text-sm text-store-fg-muted"></i>
             </Link>
-        </div>
 
-        <!-- Adicionar ao carrinho: entre a imagem e a descrição -->
-        <div class="flex justify-end px-4 pt-3">
+            <!-- Adicionar ao carrinho: centralizado sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
-                class="flex h-9 w-9 items-center justify-center rounded-full border border-store-border-strong transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                class="absolute bottom-0 left-1/2 z-10 flex h-10 w-10 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Adicionar ao carrinho" @click="addToCart(product.id)">
                 <i class="fas fa-plus text-sm"></i>
             </button>
         </div>
 
-        <div class="flex flex-1 flex-col gap-1.5 px-4 pb-4">
-            <span v-if="product.category" class="font-store-mono text-[0.68rem] uppercase tracking-wide text-store-fg-faint">{{ product.category.name }}</span>
-            <h4 class="font-medium leading-snug">{{ product.name }}</h4>
-            <p v-if="specLine(product)" class="font-store-mono text-xs text-store-fg-muted">{{ specLine(product) }}</p>
+        <div class="flex flex-1 flex-col gap-1 px-4 pb-4 pt-6">
+            <h4 class="text-sm font-medium leading-snug">{{ product.name }}</h4>
+            <p v-if="specLine(product)" class="font-store-mono text-[11px] text-store-fg-muted">{{ specLine(product) }}</p>
             <div class="mt-auto flex items-center justify-between pt-2">
                 <div>
-                    <span class="text-lg font-semibold">{{ formatPrice(product.price) }}</span>
-                    <span v-if="product.stock <= 0" class="mt-0.5 block text-xs text-red-600">Esgotado</span>
+                    <span class="text-sm font-semibold">{{ formatPrice(product.price) }}</span>
+                    <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <i v-for="star in 5" :key="star" class="text-xs"
+                    <i v-for="star in 5" :key="star" class="text-[11px]"
                         :class="star <= filledStars ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
-                    <span class="text-xs text-store-fg-faint">({{ ratingCount }})</span>
+                    <span class="text-[11px] text-store-fg-faint">({{ ratingCount }})</span>
                 </div>
             </div>
             <button v-if="canReview && !hasReviewed" type="button"
-                class="mt-1 self-start text-xs font-medium text-store-accent hover:underline"
+                class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"
                 @click="showReviewModal = true">
                 Avaliar produto
             </button>

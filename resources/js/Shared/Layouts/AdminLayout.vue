@@ -97,7 +97,7 @@ watch(
                         <ul class="flex list-none flex-col md:min-w-full md:flex-col">
                             <li v-for="item in section.items" :key="item.href">
                                 <Link :href="item.href" :title="item.label"
-                                    class="flex items-center rounded-lg border-l-4 py-2.5 text-sm font-medium transition-colors"
+                                    class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium transition-colors"
                                     :class="isActive(item.href)
                                         ? 'border-primary bg-[var(--surface-border)]/40 text-primary'
                                         : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'">
@@ -112,13 +112,13 @@ watch(
 
                     <ul class="mb-4 flex list-none flex-col md:min-w-full md:flex-col">
                         <li>
-                            <Link href="/" class="flex items-center py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] hover:text-primary" title="Ver loja">
+                            <Link href="/" class="flex items-center gap-2 py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] hover:text-primary" title="Ver loja">
                                 <i class="fas fa-store w-8 text-center text-sm text-slate-400"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
                             </Link>
                         </li>
                         <li>
-                            <button type="button" class="flex w-full items-center py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
+                            <button type="button" class="flex w-full items-center gap-2 py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
                                 <i class="fas fa-sign-out-alt w-8 text-center text-sm text-slate-400"></i>
                                 <span v-if="!sidebarCollapsed">Sair</span>
                             </button>

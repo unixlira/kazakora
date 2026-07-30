@@ -39,4 +39,12 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         // TODO: call /product/202309/inventory/update with $product->stock.
         throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
     }
+
+    public function unpublishProduct(ProductChannelListing $listing): void
+    {
+        $this->ensureConfigured();
+
+        // TODO: call /product/202309/products/deactivate.
+        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+    }
 }

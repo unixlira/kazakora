@@ -92,6 +92,13 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $this->products->updateStock($listing->external_id, $product->stock);
     }
 
+    public function unpublishProduct(ProductChannelListing $listing): void
+    {
+        $this->ensureConfigured();
+
+        $this->products->closeItem($listing->external_id);
+    }
+
     private function requiresProductFamily(MercadoLivreException $exception): bool
     {
         $cause = $exception->context['body']['cause'][0]['message'] ?? '';

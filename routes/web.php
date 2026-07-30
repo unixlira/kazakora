@@ -179,6 +179,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('produtos/{product}/video', [ProductVideoController::class, 'store'])->name('produtos.video.adicionar');
     Route::delete('produtos/{product}/video', [ProductVideoController::class, 'destroy'])->name('produtos.video.remover');
     Route::put('produtos/{product}/canais/{channel}', [ProductChannelController::class, 'update'])->name('produtos.canais.atualizar');
+    Route::post('produtos/{product}/canais/{channel}/sincronizar', [ProductChannelController::class, 'sync'])->name('produtos.canais.sincronizar');
+    Route::delete('produtos/{product}/canais/{channel}', [ProductChannelController::class, 'destroy'])->name('produtos.canais.excluir');
 
     Route::get('pedidos', [AdminOrderController::class, 'index'])->name('pedidos.listar');
     Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');

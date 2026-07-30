@@ -81,11 +81,15 @@ class ProductService
     }
 
     /**
+     * Mercado Livre has no real delete for a listing that has ever been
+     * live (confirmed live: DELETE /items/{id} → 405 "Method DELETE not
+     * allowed") — "removing" an item means closing it instead.
+     *
      * @return array<string, mixed>
      */
-    public function deleteItem(string $itemId): array
+    public function closeItem(string $itemId): array
     {
-        return $this->client->delete("items/{$itemId}");
+        return $this->updateItem($itemId, ['status' => 'closed']);
     }
 
     /**

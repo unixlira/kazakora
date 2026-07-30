@@ -18,4 +18,11 @@ interface MarketplaceChannelDriver
     public function publishProduct(Product $product, ProductChannelListing $listing): string;
 
     public function updateStock(Product $product, ProductChannelListing $listing): void;
+
+    /**
+     * Take the listing down from the marketplace. Most marketplaces don't
+     * support a true delete once a listing has ever gone live (order/review
+     * history has to be preserved) — this closes/deactivates it instead.
+     */
+    public function unpublishProduct(ProductChannelListing $listing): void;
 }

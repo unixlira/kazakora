@@ -1,6 +1,6 @@
 <script setup>
-import { useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
+import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     product: {
@@ -64,6 +64,20 @@ const submit = (channel) => {
         { preserveScroll: true },
     );
 };
+
+const sync = (channel) => {
+    router.post(`/admin/produtos/${props.product.id}/canais/${channel}/sincronizar`, {}, { preserveScroll: true });
+};
+
+const remove = async (channel) => {
+    if (await confirmDelete({
+        title: 'Encerrar este anúncio?',
+        text: 'A maioria dos marketplaces não permite excluir de vez um anúncio que já esteve publicado — isso vai encerrá-lo por lá (ficará inativo/fechado), não apagar o histórico.',
+        confirmButtonText: 'Encerrar anúncio',
+    })) {
+        router.delete(`/admin/produtos/${props.product.id}/canais/${channel}`, { preserveScroll: true });
+    }
+};
 </script>
 
 <template>
@@ -75,6 +89,9 @@ const submit = (channel) => {
                     <span class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs"
                         :class="statusColors[listingFor(channel)?.status ?? 'draft']">
                         {{ statusLabels[listingFor(channel)?.status ?? 'draft'] }}
+                    </span>
+                    <span v-if="listingFor(channel)?.external_id" class="ml-2 font-mono text-xs text-slate-400">
+                        ID do anúncio: {{ listingFor(channel).external_id }}
                     </span>
                 </div>
 
@@ -101,11 +118,25 @@ const submit = (channel) => {
                 />
             </div>
 
-            <button type="button" :disabled="forms[channel].processing"
-                class="mt-3 rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-                @click="submit(channel)">
-                Salvar canal
-            </button>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <button type="button" :disabled="forms[channel].processing"
+                    class="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    @click="submit(channel)">
+                    Salvar canal
+                </button>
+
+                <button v-if="listingFor(channel)?.external_id" type="button"
+                    class="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                    @click="sync(channel)">
+                    Sincronizar
+                </button>
+
+                <button v-if="listingFor(channel)?.external_id" type="button"
+                    class="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                    @click="remove(channel)">
+                    Excluir anúncio
+                </button>
+            </div>
         </div>
     </div>
 </template>

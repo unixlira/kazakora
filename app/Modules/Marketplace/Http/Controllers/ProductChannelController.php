@@ -79,6 +79,55 @@ class ProductChannelController extends Controller
         return back()->with('success', 'Canal atualizado.');
     }
 
+    public function sync(Product $product, string $channel): RedirectResponse
+    {
+        if (! in_array($channel, $this->drivers->channels(), true)) {
+            abort(404);
+        }
+
+        $listing = $product->channelListings()->where('channel', $channel)->first();
+
+        if (! $listing || ! $listing->external_id) {
+            return back()->with('warning', 'Este produto ainda não foi publicado neste canal — não há o que sincronizar.');
+        }
+
+        $listing->update(['status' => ProductChannelListing::STATUS_PENDING]);
+
+        try {
+            PublishProductToChannel::dispatch($product, $listing);
+        } catch (\Throwable $exception) {
+            return back()->with('warning', 'Não foi possível sincronizar agora: '.$exception->getMessage());
+        }
+
+        return back()->with('success', 'Anúncio sincronizado com sucesso.');
+    }
+
+    public function destroy(Product $product, string $channel): RedirectResponse
+    {
+        if (! in_array($channel, $this->drivers->channels(), true)) {
+            abort(404);
+        }
+
+        $listing = $product->channelListings()->where('channel', $channel)->first();
+
+        if (! $listing || ! $listing->external_id) {
+            return back()->with('warning', 'Este produto não está publicado neste canal.');
+        }
+
+        try {
+            // Most marketplaces (confirmed for Mercado Livre — DELETE isn't
+            // supported once an item has ever gone live) close/deactivate
+            // the listing rather than truly deleting it.
+            $this->drivers->driver($channel)->unpublishProduct($listing);
+        } catch (\Throwable $exception) {
+            return back()->with('warning', 'Não foi possível remover o anúncio da plataforma: '.$exception->getMessage());
+        }
+
+        $listing->update(['is_enabled' => false, 'status' => ProductChannelListing::STATUS_DRAFT]);
+
+        return back()->with('success', 'Anúncio encerrado na plataforma.');
+    }
+
     /**
      * Best-effort: ask Mercado Livre to identify the category for this
      * product's name so staff don't have to look up/type the category_id by

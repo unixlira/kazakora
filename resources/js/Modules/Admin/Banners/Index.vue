@@ -1,8 +1,9 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { confirmDelete, notifyError } from '@/Shared/notify';
 
@@ -154,7 +155,7 @@ const move = (banner, direction) => {
                 <div class="relative aspect-[21/9] overflow-hidden rounded border border-slate-200">
                     <img :src="banner.image_url" :alt="banner.title || 'Banner'" class="h-full w-full object-cover">
 
-                    <button v-if="can('cadastros.delete')" type="button"
+                    <button v-if="can('cadastros.delete')" type="button" title="Remover banner"
                         class="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-red-500 shadow"
                         aria-label="Remover banner" @click="destroy(banner)">
                         <i class="fas fa-times"></i>
@@ -170,20 +171,18 @@ const move = (banner, direction) => {
 
                 <div class="mt-1 flex items-center justify-between">
                     <p class="truncate text-xs text-gray-500">{{ banner.title || 'Sem título' }}</p>
-                    <div class="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button v-if="can('cadastros.edit')" type="button" :disabled="index === 0"
-                            class="text-xs text-gray-400 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
+                    <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button v-if="can('cadastros.edit')" type="button" :disabled="index === 0" title="Mover para cima"
+                            class="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
                             aria-label="Mover para cima" @click="move(banner, 'up')">
-                            <i class="fas fa-chevron-up"></i>
+                            <i class="fas fa-chevron-up text-xs"></i>
                         </button>
-                        <button v-if="can('cadastros.edit')" type="button" :disabled="index === banners.length - 1"
-                            class="text-xs text-gray-400 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
+                        <button v-if="can('cadastros.edit')" type="button" :disabled="index === banners.length - 1" title="Mover para baixo"
+                            class="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-30"
                             aria-label="Mover para baixo" @click="move(banner, 'down')">
-                            <i class="fas fa-chevron-down"></i>
+                            <i class="fas fa-chevron-down text-xs"></i>
                         </button>
-                        <Link v-if="can('cadastros.edit')" :href="`/admin/banners/${banner.id}/editar`" class="text-xs hover:text-primary hover:underline">
-                            Editar
-                        </Link>
+                        <ActionIcon v-if="can('cadastros.edit')" icon="fa-pen" label="Editar" color="blue" :href="`/admin/banners/${banner.id}/editar`" />
                     </div>
                 </div>
             </div>

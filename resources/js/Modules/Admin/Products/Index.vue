@@ -1,8 +1,9 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { confirmDelete } from '@/Shared/notify';
 import { h } from 'vue';
 
@@ -63,17 +64,13 @@ const columns = [
             const children = [];
 
             if (can('cadastros.edit')) {
-                children.push(h(Link, { href: `/admin/produtos/${row.original.id}/editar`, class: 'text-sm hover:text-primary hover:underline' }, () => 'Editar'));
+                children.push(h(ActionIcon, { icon: 'fa-pen', label: 'Editar', color: 'blue', href: `/admin/produtos/${row.original.id}/editar` }));
             }
             if (can('cadastros.delete')) {
-                children.push(h('button', {
-                    type: 'button',
-                    class: 'text-sm text-error hover:underline',
-                    onClick: () => destroy(row.original),
-                }, 'Remover'));
+                children.push(h(ActionIcon, { icon: 'fa-trash', label: 'Remover', color: 'red', onClick: () => destroy(row.original) }));
             }
 
-            return h('div', { class: 'flex items-center justify-end gap-3' }, children);
+            return h('div', { class: 'flex items-center justify-end gap-2' }, children);
         },
     },
 ];

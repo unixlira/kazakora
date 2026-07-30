@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { h, ref } from 'vue';
@@ -53,7 +54,7 @@ const columns = [
         header: 'Ações',
         enableSorting: false,
         cell: ({ row }) => (can('operacional.delete')
-            ? h('button', { type: 'button', class: 'text-sm text-error hover:underline', onClick: () => destroy(row.original) }, 'Remover')
+            ? h('div', { class: 'flex justify-end' }, h(ActionIcon, { icon: 'fa-trash', label: 'Remover', color: 'red', onClick: () => destroy(row.original) }))
             : null),
     },
 ];

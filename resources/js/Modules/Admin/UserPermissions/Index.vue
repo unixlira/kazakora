@@ -1,7 +1,8 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable } from '@/Shared/Components/DataTable';
-import { Head, Link, router } from '@inertiajs/vue3';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import { Head, router } from '@inertiajs/vue3';
 import { h, reactive } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
@@ -69,14 +70,10 @@ const columns = [
         id: 'actions',
         header: 'Ações',
         enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'flex items-center gap-3' }, [
-            h(Link, { href: `/perfil/usuario/${row.original.id}`, class: 'text-sm font-medium text-primary hover:underline' }, () => 'Ver perfil'),
+        cell: ({ row }) => h('div', { class: 'flex items-center gap-2' }, [
+            h(ActionIcon, { icon: 'fa-eye', label: 'Ver perfil', color: 'slate', href: `/perfil/usuario/${row.original.id}` }),
             row.original.id !== props.authUserId
-                ? h('button', {
-                    type: 'button',
-                    class: 'text-sm font-medium text-red-600 hover:underline',
-                    onClick: () => deleteUser(row.original),
-                }, 'Excluir')
+                ? h(ActionIcon, { icon: 'fa-trash', label: 'Excluir', color: 'red', onClick: () => deleteUser(row.original) })
                 : null,
         ]),
     },

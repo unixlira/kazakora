@@ -71,9 +71,15 @@ class CatalogController extends Controller
         $product->load([
             'category:id,name,slug',
             'images' => fn ($query) => $query->orderBy('position'),
+            'quantityDiscounts',
         ]);
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
+
+        $salesCount = OrderItem::query()
+            ->where('product_id', $product->id)
+            ->whereHas('order', fn ($query) => $query->where('status', Order::STATUS_COMPLETED))
+            ->sum('quantity');
 
         $reviews = Review::query()
             ->where('product_id', $product->id)
@@ -136,6 +142,7 @@ class CatalogController extends Controller
             'relatedReviewedIds' => $user
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
+            'salesCount' => (int) $salesCount,
         ]);
     }
 

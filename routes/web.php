@@ -16,6 +16,7 @@ use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
 use App\Modules\Admin\Http\Controllers\ProductLogisticsController;
+use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
 use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
 use App\Modules\Admin\Http\Controllers\ReportController;
@@ -175,6 +176,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::put('produtos/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('produtos.fiscal.atualizar');
     Route::put('produtos/{product}/logistica', [ProductLogisticsController::class, 'update'])->name('produtos.logistica.atualizar');
+    Route::put('produtos/{product}/descontos-quantidade', [ProductQuantityDiscountController::class, 'update'])->name('produtos.descontos-quantidade.atualizar');
     Route::post('produtos/{product}/imagens', [ProductImageController::class, 'store'])->name('produtos.imagens.adicionar');
     Route::delete('produtos/{product}/imagens/{image}', [ProductImageController::class, 'destroy'])->name('produtos.imagens.remover');
     Route::post('produtos/{product}/video', [ProductVideoController::class, 'store'])->name('produtos.video.adicionar');

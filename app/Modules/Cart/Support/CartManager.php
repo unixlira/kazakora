@@ -56,11 +56,12 @@ class CartManager
 
         return Product::query()
             ->whereIn('id', array_keys($raw))
+            ->with('quantityDiscounts')
             ->get()
             ->map(fn (Product $product) => [
                 'product' => $product,
                 'quantity' => $quantity = min($raw[$product->id], $product->stock),
-                'subtotal' => round($product->final_price * $quantity, 2),
+                'subtotal' => round($product->unitPriceForQuantity($quantity) * $quantity, 2),
             ]);
     }
 

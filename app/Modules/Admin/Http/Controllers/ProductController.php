@@ -67,6 +67,7 @@ class ProductController extends Controller
             'channels' => $this->drivers->channels(),
             'channelListings' => $product->channelListings,
             'stockMovements' => $product->stockMovements()->latest()->limit(10)->get(),
+            'quantityDiscounts' => $product->quantityDiscounts,
         ]);
     }
 

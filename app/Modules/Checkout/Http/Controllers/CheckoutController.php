@@ -58,6 +58,7 @@ class CheckoutController extends Controller
             $order = DB::transaction(function () use ($data, $request, $cartItems) {
                 $products = Product::query()
                     ->whereIn('id', $cartItems->pluck('product.id'))
+                    ->with('quantityDiscounts')
                     ->lockForUpdate()
                     ->get()
                     ->keyBy('id');
@@ -78,13 +79,14 @@ class CheckoutController extends Controller
                         continue;
                     }
 
-                    $subtotal = round($product->final_price * $quantity, 2);
+                    $unitPrice = $product->unitPriceForQuantity($quantity);
+                    $subtotal = round($unitPrice * $quantity, 2);
                     $total += $subtotal;
 
                     $order->items()->create([
                         'product_id' => $product->id,
                         'product_name' => $product->name,
-                        'product_price' => $product->final_price,
+                        'product_price' => $unitPrice,
                         'quantity' => $quantity,
                         'subtotal' => $subtotal,
                     ]);

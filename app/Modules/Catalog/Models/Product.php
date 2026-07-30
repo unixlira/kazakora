@@ -98,6 +98,24 @@ class Product extends Model
         return $this->hasMany(Review::class);
     }
 
+    public function quantityDiscounts(): HasMany
+    {
+        return $this->hasMany(ProductQuantityDiscount::class)->orderBy('min_quantity');
+    }
+
+    public function unitPriceForQuantity(int $quantity): float
+    {
+        $tier = $this->quantityDiscounts
+            ->filter(fn (ProductQuantityDiscount $discount) => $discount->min_quantity <= $quantity)
+            ->last();
+
+        if (! $tier) {
+            return $this->final_price;
+        }
+
+        return max(0, round($this->final_price * (1 - (float) $tier->discount_percentage / 100), 2));
+    }
+
     public function fiscalData(): HasOne
     {
         return $this->hasOne(ProductFiscalData::class);

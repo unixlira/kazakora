@@ -28,7 +28,6 @@ const props = defineProps({
 });
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
-const ratingCount = computed(() => props.product.reviews_count ?? 0);
 const filledStars = computed(() => Math.round(ratingAvg.value));
 
 const showReviewModal = ref(false);
@@ -73,17 +72,16 @@ const submitReview = () => {
         <div class="flex flex-1 flex-col gap-1 px-4 pb-4 pt-6">
             <h4 class="text-sm font-medium leading-snug">{{ product.name }}</h4>
             <p v-if="specLine(product)" class="font-store-mono text-[11px] text-store-fg-muted">{{ specLine(product) }}</p>
-            <div class="mt-auto flex items-center justify-between pt-2">
-                <div>
-                    <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
+            <div class="mt-auto pt-2">
+                <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
+                <div class="flex items-center justify-between">
                     <span class="text-sm font-semibold" :class="product.has_discount ? 'text-store-accent' : ''">{{ formatPrice(product.final_price) }}</span>
-                    <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
+                    <div class="flex items-center gap-0.5">
+                        <i v-for="star in 5" :key="star" class="text-[11px]"
+                            :class="star <= filledStars ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
+                    </div>
                 </div>
-                <div class="flex items-center gap-1">
-                    <i v-for="star in 5" :key="star" class="text-[11px]"
-                        :class="star <= filledStars ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
-                    <span class="text-[11px] text-store-fg-faint">({{ ratingCount }})</span>
-                </div>
+                <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
             </div>
             <button v-if="canReview && !hasReviewed" type="button"
                 class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"

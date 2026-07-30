@@ -25,6 +25,14 @@ const destroy = async (category) => {
 };
 
 const columns = [
+    {
+        id: 'image',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => row.original.image_url
+            ? h('img', { src: row.original.image_url, class: 'h-9 w-9 rounded-full object-cover' })
+            : h('div', { class: 'h-9 w-9 rounded-full bg-gray-100' }),
+    },
     { accessorKey: 'name', header: 'Nome' },
     { accessorKey: 'products_count', header: 'Produtos' },
     {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -33,6 +34,10 @@ class CategoryController extends Controller
         $validated = $this->validated($request);
         $validated['slug'] = $this->uniqueSlug($validated['name']);
 
+        if ($request->hasFile('image')) {
+            $validated['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
         Category::create($validated);
 
         return redirect()->route('admin.categorias.listar')->with('success', 'Categoria criada com sucesso.');
@@ -53,6 +58,13 @@ class CategoryController extends Controller
             $validated['slug'] = $this->uniqueSlug($validated['name'], $category->id);
         }
 
+        if ($request->hasFile('image')) {
+            if ($category->image_path) {
+                Storage::disk('public')->delete($category->image_path);
+            }
+            $validated['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
         $category->update($validated);
 
         return redirect()->route('admin.categorias.listar')->with('success', 'Categoria atualizada com sucesso.');
@@ -62,6 +74,10 @@ class CategoryController extends Controller
     {
         if ($category->products()->exists()) {
             return back()->withErrors(['category' => 'Não é possível remover uma categoria com produtos vinculados.']);
+        }
+
+        if ($category->image_path) {
+            Storage::disk('public')->delete($category->image_path);
         }
 
         $category->delete();
@@ -77,6 +93,7 @@ class CategoryController extends Controller
                 Rule::unique('categories', 'name')->ignore($ignoreId),
             ],
             'description' => ['nullable', 'string'],
+            'image' => ['nullable', 'image', 'max:4096'],
         ]);
     }
 

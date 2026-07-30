@@ -16,11 +16,19 @@ class Category extends Model
         'name',
         'slug',
         'description',
+        'image_path',
     ];
+
+    protected $appends = ['image_url'];
 
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->image_path ? asset('storage/'.$this->image_path) : null;
     }
 
     protected static function newFactory(): CategoryFactory

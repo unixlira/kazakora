@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
+import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
@@ -32,8 +33,6 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const isFavorite = (productId) => props.favoriteIds.includes(productId);
-
-const CATEGORY_ICONS = ['fa-box-open', 'fa-tags', 'fa-star'];
 </script>
 
 <template>
@@ -45,19 +44,7 @@ const CATEGORY_ICONS = ['fa-box-open', 'fa-tags', 'fa-star'];
 
         <!-- Categories -->
         <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">
-            <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <a v-for="(category, i) in categories" :key="category.id" href="#produtos"
-                    class="flex min-h-[170px] flex-col justify-between rounded-2xl border border-store-border bg-store-bg-raised p-6 no-underline text-store-fg transition-transform hover:-translate-y-0.5">
-                    <i class="fas text-2xl text-store-accent" :class="CATEGORY_ICONS[i % CATEGORY_ICONS.length]"></i>
-                    <div>
-                        <h3 class="font-display text-xl font-semibold">{{ category.name }}</h3>
-                        <div class="mt-3 flex items-center justify-between">
-                            <span class="text-sm text-store-fg-muted">{{ category.products_count }} produto(s)</span>
-                            <span class="font-store-mono text-sm text-store-accent">→</span>
-                        </div>
-                    </div>
-                </a>
-            </div>
+            <CategoryCarousel :categories="categories" />
         </section>
 
         <!-- Product grid -->

@@ -34,7 +34,7 @@ class CatalogController extends Controller
                 ->whereHas('products', fn ($query) => $query->where('is_active', true))
                 ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
                 ->orderByDesc('products_count')
-                ->get(['id', 'name', 'slug']),
+                ->get(['id', 'name', 'slug', 'image_path']),
             'favoriteIds' => $request->user()
                 ? Favorite::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],

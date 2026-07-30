@@ -41,7 +41,10 @@ class ProductService
      */
     public function createItem(ProductDTO $dto): array
     {
-        return $this->client->post('items', $dto->toArray());
+        // Drop nulls (e.g. `title` when publishing under a product family)
+        // instead of sending them as explicit `null`s — ML treats a present-
+        // but-null field differently from an absent one for some endpoints.
+        return $this->client->post('items', array_filter($dto->toArray(), fn ($value) => $value !== null));
     }
 
     /**

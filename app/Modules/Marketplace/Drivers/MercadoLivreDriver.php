@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\MercadoLivre\DTOs\ProductDTO;
+use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
 use App\Services\MercadoLivre\Services\ProductService;
 
 /**
@@ -30,21 +31,43 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
     {
         $this->ensureConfigured();
 
+        $categoryId = $listing->attributes['category_id'] ?? '';
+        $attributes = $this->buildAttributes($product);
+        $pictures = $product->images->map(fn ($image) => ['source' => $image->url])->all();
+
         $dto = new ProductDTO(
-            title: $product->name,
-            category_id: $listing->attributes['category_id'] ?? '',
+            category_id: $categoryId,
             price: (float) $product->final_price,
             available_quantity: $product->stock,
+            title: $product->name,
             description: $product->description,
-            pictures: $product->images->map(fn ($image) => ['source' => $image->url])->all(),
-            // Some ML categories require a "product family" name even for a
-            // single, non-variant listing (confirmed live: HTTP 400
-            // body.required_fields → "[family_name]" is missing). We don't
-            // model product families, so just reuse the product's own name.
-            family_name: $product->name,
+            pictures: $pictures,
+            attributes: $attributes,
         );
 
-        $response = $this->products->createItem($dto);
+        try {
+            $response = $this->products->createItem($dto);
+        } catch (MercadoLivreException $exception) {
+            if (! $this->requiresProductFamily($exception)) {
+                throw $exception;
+            }
+
+            // Confirmed live: this category rejects a plain title and wants
+            // the item grouped under a "product family" instead — ML then
+            // derives the title from family_name + attributes itself, which
+            // is why title must be omitted (sending both is also rejected).
+            $retryDto = new ProductDTO(
+                category_id: $categoryId,
+                price: (float) $product->final_price,
+                available_quantity: $product->stock,
+                description: $product->description,
+                pictures: $pictures,
+                family_name: $product->name,
+                attributes: $attributes,
+            );
+
+            $response = $this->products->createItem($retryDto);
+        }
 
         return (string) $response['id'];
     }
@@ -54,5 +77,34 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $this->ensureConfigured();
 
         $this->products->updateStock($listing->external_id, $product->stock);
+    }
+
+    private function requiresProductFamily(MercadoLivreException $exception): bool
+    {
+        $cause = $exception->context['body']['cause'][0]['message'] ?? '';
+
+        return str_contains($cause, 'family_name');
+    }
+
+    /**
+     * @return array<int, array{id: string, value_name: string}>
+     */
+    private function buildAttributes(Product $product): array
+    {
+        $attributes = [];
+
+        if ($product->brand) {
+            $attributes[] = ['id' => 'BRAND', 'value_name' => $product->brand];
+        }
+
+        if ($product->model) {
+            $attributes[] = ['id' => 'MODEL', 'value_name' => $product->model];
+        }
+
+        if ($product->color) {
+            $attributes[] = ['id' => 'COLOR', 'value_name' => $product->color];
+        }
+
+        return $attributes;
     }
 }

@@ -44,7 +44,7 @@ class CatalogController extends Controller
                 ->where('is_active', true)
                 ->where('is_featured', true)
                 ->latest()
-                ->take(6)
+                ->take(5)
                 ->get(),
             'products' => $products,
             'categories' => Category::query()

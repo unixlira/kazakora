@@ -60,7 +60,7 @@ class CartManager
             ->map(fn (Product $product) => [
                 'product' => $product,
                 'quantity' => $quantity = min($raw[$product->id], $product->stock),
-                'subtotal' => round($product->price * $quantity, 2),
+                'subtotal' => round($product->final_price * $quantity, 2),
             ]);
     }
 

@@ -48,7 +48,7 @@ const removeItem = async (productId) => {
                     <div v-for="item in items" :key="item.product.id" class="flex flex-wrap items-center gap-4 p-5">
                         <div class="min-w-[180px] flex-1">
                             <p class="font-medium">{{ item.product.name }}</p>
-                            <p class="font-store-mono text-sm text-store-fg-muted">{{ formatPrice(item.product.price) }}</p>
+                            <p class="font-store-mono text-sm text-store-fg-muted">{{ formatPrice(item.product.final_price) }}</p>
                         </div>
 
                         <div class="flex items-center gap-2 rounded-full border border-store-border-strong px-1 py-1">

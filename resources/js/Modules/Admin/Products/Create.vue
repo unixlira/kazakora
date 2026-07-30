@@ -20,6 +20,8 @@ const form = useForm({
     variation: '',
     description: '',
     price: '',
+    discount_percentage: null,
+    discount_amount: null,
     stock: 0,
     is_active: true,
     is_featured: false,

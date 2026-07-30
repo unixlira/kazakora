@@ -78,13 +78,13 @@ class CheckoutController extends Controller
                         continue;
                     }
 
-                    $subtotal = round($product->price * $quantity, 2);
+                    $subtotal = round($product->final_price * $quantity, 2);
                     $total += $subtotal;
 
                     $order->items()->create([
                         'product_id' => $product->id,
                         'product_name' => $product->name,
-                        'product_price' => $product->price,
+                        'product_price' => $product->final_price,
                         'quantity' => $quantity,
                         'subtotal' => $subtotal,
                     ]);

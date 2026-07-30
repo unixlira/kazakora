@@ -62,11 +62,11 @@ const submitReview = () => {
                 <i class="far fa-heart text-sm text-store-fg-muted"></i>
             </Link>
 
-            <!-- Adicionar ao carrinho: centralizado sobre a linha imagem/descrição -->
+            <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
-                class="absolute bottom-0 left-1/2 z-10 flex h-10 w-10 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                class="absolute bottom-0 right-[5px] z-10 flex h-10 w-10 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Adicionar ao carrinho" @click="addToCart(product.id)">
-                <i class="fas fa-plus text-sm"></i>
+                <i class="fas fa-bag-shopping text-sm"></i>
             </button>
         </div>
 
@@ -75,7 +75,8 @@ const submitReview = () => {
             <p v-if="specLine(product)" class="font-store-mono text-[11px] text-store-fg-muted">{{ specLine(product) }}</p>
             <div class="mt-auto flex items-center justify-between pt-2">
                 <div>
-                    <span class="text-sm font-semibold">{{ formatPrice(product.price) }}</span>
+                    <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
+                    <span class="text-sm font-semibold" :class="product.has_discount ? 'text-store-accent' : ''">{{ formatPrice(product.final_price) }}</span>
                     <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
                 </div>
                 <div class="flex items-center gap-1">

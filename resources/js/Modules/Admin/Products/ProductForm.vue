@@ -1,5 +1,6 @@
 <script setup>
 import InputError from '@/Shared/Components/InputError.vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps({
     form: {
@@ -17,6 +18,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['submit']);
+
+const discountType = ref(
+    props.form.discount_percentage ? 'percentage' : (props.form.discount_amount ? 'amount' : ''),
+);
+
+watch(discountType, (type) => {
+    if (type !== 'percentage') props.form.discount_percentage = null;
+    if (type !== 'amount') props.form.discount_amount = null;
+});
 </script>
 
 <template>
@@ -145,6 +155,26 @@ const emit = defineEmits(['submit']);
                     class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                 >
                 <InputError :message="form.errors.stock" />
+            </div>
+        </div>
+
+        <div>
+            <label for="discount_type" class="block text-sm font-medium">Desconto (opcional)</label>
+            <select id="discount_type" v-model="discountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                <option value="">Sem desconto</option>
+                <option value="percentage">Percentual (%)</option>
+                <option value="amount">Valor fixo (R$)</option>
+            </select>
+
+            <div v-if="discountType === 'percentage'" class="mt-2">
+                <input v-model="form.discount_percentage" type="number" step="0.01" min="0" max="100"
+                    placeholder="Ex: 10" class="w-full rounded border border-gray-300 px-3 py-2">
+                <InputError :message="form.errors.discount_percentage" />
+            </div>
+            <div v-if="discountType === 'amount'" class="mt-2">
+                <input v-model="form.discount_amount" type="number" step="0.01" min="0"
+                    placeholder="Ex: 20.00" class="w-full rounded border border-gray-300 px-3 py-2">
+                <InputError :message="form.errors.discount_amount" />
             </div>
         </div>
 

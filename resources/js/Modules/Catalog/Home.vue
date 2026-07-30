@@ -75,7 +75,7 @@ const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
         <section v-if="featuredProducts.length" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">
             <h2 class="mb-6 font-display text-3xl font-semibold">Destaques</h2>
 
-            <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
+            <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
                 <ProductCard v-for="product in featuredProducts" :key="product.id" :product="product"
                     :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
@@ -118,7 +118,7 @@ const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
                 Nenhum produto encontrado.
             </p>
 
-            <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-6">
+            <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
                 <ProductCard v-for="product in products.data" :key="product.id" :product="product"
                     :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />

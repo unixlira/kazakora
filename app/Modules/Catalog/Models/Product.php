@@ -31,18 +31,22 @@ class Product extends Model
         'video_path',
         'video_duration_seconds',
         'price',
+        'discount_percentage',
+        'discount_amount',
         'stock',
         'is_active',
         'is_featured',
         'is_new_release',
     ];
 
-    protected $appends = ['video_url'];
+    protected $appends = ['video_url', 'final_price', 'has_discount'];
 
     protected function casts(): array
     {
         return [
             'price' => 'decimal:2',
+            'discount_percentage' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
             'stock' => 'integer',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
@@ -54,6 +58,24 @@ class Product extends Model
     public function getVideoUrlAttribute(): ?string
     {
         return $this->video_path ? asset('storage/'.$this->video_path) : null;
+    }
+
+    public function getHasDiscountAttribute(): bool
+    {
+        return (bool) ($this->discount_percentage || $this->discount_amount);
+    }
+
+    public function getFinalPriceAttribute(): float
+    {
+        if ($this->discount_percentage) {
+            return max(0, round((float) $this->price * (1 - (float) $this->discount_percentage / 100), 2));
+        }
+
+        if ($this->discount_amount) {
+            return max(0, round((float) $this->price - (float) $this->discount_amount, 2));
+        }
+
+        return (float) $this->price;
     }
 
     public function category(): BelongsTo

@@ -33,6 +33,8 @@ class Product extends Model
         'price',
         'stock',
         'is_active',
+        'is_featured',
+        'is_new_release',
     ];
 
     protected $appends = ['video_url'];
@@ -43,6 +45,8 @@ class Product extends Model
             'price' => 'decimal:2',
             'stock' => 'integer',
             'is_active' => 'boolean',
+            'is_featured' => 'boolean',
+            'is_new_release' => 'boolean',
             'video_duration_seconds' => 'integer',
         ];
     }

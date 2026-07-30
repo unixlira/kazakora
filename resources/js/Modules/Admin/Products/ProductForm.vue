@@ -153,6 +153,16 @@ const emit = defineEmits(['submit']);
             Produto ativo (visível no catálogo)
         </label>
 
+        <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_featured" type="checkbox">
+            Destaque (aparece na seção "Destaques" da home)
+        </label>
+
+        <label class="flex items-center gap-2 text-sm">
+            <input v-model="form.is_new_release" type="checkbox">
+            Lançamento (aparece como novidade)
+        </label>
+
         <button
             type="submit"
             :disabled="form.processing"

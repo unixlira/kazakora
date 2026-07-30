@@ -2,12 +2,16 @@
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
+import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
 const props = defineProps({
     banners: {
+        type: Array,
+        default: () => [],
+    },
+    featuredProducts: {
         type: Array,
         default: () => [],
     },
@@ -33,6 +37,21 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const isFavorite = (productId) => props.favoriteIds.includes(productId);
+
+const TIPO_TABS = [
+    { key: null, label: 'Todos' },
+    { key: 'destaque', label: 'Destaques' },
+    { key: 'lancamento', label: 'Lançamentos' },
+];
+
+const listTitle = computed(() => {
+    if (props.filters.search) return `Resultados para "${props.filters.search}"`;
+    if (props.filters.tipo === 'destaque') return 'Destaques';
+    if (props.filters.tipo === 'lancamento') return 'Lançamentos';
+    return 'Catálogo';
+});
+
+const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
 </script>
 
 <template>
@@ -41,6 +60,24 @@ const isFavorite = (productId) => props.favoriteIds.includes(productId);
     <AppLayout>
         <!-- Banner rotativo -->
         <BannerCarousel v-if="banners.length" :banners="banners" class="mb-[10px]" />
+
+        <!-- Destaques -->
+        <section v-if="featuredProducts.length" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">
+            <h2 class="mb-6 font-display text-3xl font-semibold">Destaques</h2>
+
+            <div class="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+                <ProductCard v-for="product in featuredProducts" :key="product.id" :product="product"
+                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated" />
+            </div>
+
+            <div class="mt-8 flex justify-center">
+                <Link href="/?tipo=destaque#produtos"
+                    class="inline-flex items-center gap-2 rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast transition-colors hover:opacity-90">
+                    Ver mais
+                    <i class="fas fa-arrow-right text-xs"></i>
+                </Link>
+            </div>
+        </section>
 
         <!-- Categories -->
         <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-16 md:px-6">
@@ -51,10 +88,18 @@ const isFavorite = (productId) => props.favoriteIds.includes(productId);
         <section id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 md:px-6">
             <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <h2 class="font-display text-3xl font-semibold">
-                        {{ filters.search ? `Resultados para "${filters.search}"` : 'Catálogo' }}
-                    </h2>
+                    <h2 class="font-display text-3xl font-semibold">{{ listTitle }}</h2>
                     <p class="mt-2 text-store-fg-muted">Eletrônicos, gadgets e utensílios de cozinha selecionados pela curadoria KazaKora.</p>
+                </div>
+
+                <div v-if="!filters.search" class="flex flex-wrap gap-2">
+                    <Link v-for="tab in TIPO_TABS" :key="tab.label" :href="tabHref(tab.key)" preserve-scroll
+                        class="rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
+                        :class="(filters.tipo ?? null) === tab.key
+                            ? 'bg-store-accent text-store-accent-contrast'
+                            : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
+                        {{ tab.label }}
+                    </Link>
                 </div>
             </div>
 
@@ -63,40 +108,8 @@ const isFavorite = (productId) => props.favoriteIds.includes(productId);
             </p>
 
             <div v-else class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                <article v-for="product in products.data" :key="product.id"
-                    class="flex flex-col overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised transition-shadow hover:shadow-lg">
-                    <div class="relative aspect-[4/3.3]" style="background: radial-gradient(120% 120% at 25% 15%, color-mix(in oklab, var(--color-store-accent) 14%, var(--color-store-bg-raised)), var(--color-store-bg-sunken) 70%);">
-                        <img v-if="primaryImage(product)" :src="primaryImage(product)" :alt="product.name" class="h-full w-full object-cover">
-                        <div v-else class="flex h-full w-full items-center justify-center">
-                            <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
-                        </div>
-                        <button v-if="isAuthenticated" type="button"
-                            class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow"
-                            :aria-pressed="isFavorite(product.id)" @click="toggleFavorite(product.id)">
-                            <i class="text-sm" :class="isFavorite(product.id) ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
-                        </button>
-                        <Link v-else href="/entrar"
-                            class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow">
-                            <i class="far fa-heart text-sm text-store-fg-muted"></i>
-                        </Link>
-                    </div>
-                    <div class="flex flex-1 flex-col gap-1.5 p-4">
-                        <span v-if="product.category" class="font-store-mono text-[0.68rem] uppercase tracking-wide text-store-fg-faint">{{ product.category.name }}</span>
-                        <h4 class="font-medium leading-snug">{{ product.name }}</h4>
-                        <p v-if="specLine(product)" class="font-store-mono text-xs text-store-fg-muted">{{ specLine(product) }}</p>
-                        <div class="mt-auto flex items-center justify-between pt-2">
-                            <div>
-                                <span class="text-lg font-semibold">{{ formatPrice(product.price) }}</span>
-                                <span v-if="product.stock <= 0" class="mt-0.5 block text-xs text-red-600">Esgotado</span>
-                            </div>
-                            <button type="button" :disabled="product.stock < 1"
-                                class="flex h-9 w-9 items-center justify-center rounded-full border border-store-border-strong transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
-                                aria-label="Adicionar ao carrinho" @click="addToCart(product.id)">
-                                <i class="fas fa-plus text-sm"></i>
-                            </button>
-                        </div>
-                    </div>
-                </article>
+                <ProductCard v-for="product in products.data" :key="product.id" :product="product"
+                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated" />
             </div>
 
             <nav v-if="products.last_page > 1" class="mt-10 flex flex-wrap justify-center gap-2">

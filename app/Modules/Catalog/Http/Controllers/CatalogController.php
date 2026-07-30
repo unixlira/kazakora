@@ -16,11 +16,14 @@ class CatalogController extends Controller
     public function index(Request $request): Response
     {
         $search = $request->string('search')->trim();
+        $tipo = $request->query('tipo');
 
         $baseQuery = Product::query()
             ->with('category:id,name,slug', 'images')
             ->where('is_active', true)
-            ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'));
+            ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
+            ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
+            ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true));
 
         $products = (clone $baseQuery)
             ->latest()
@@ -29,6 +32,13 @@ class CatalogController extends Controller
 
         return Inertia::render('Catalog/Home', [
             'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'image_path_mobile', 'link_url']),
+            'featuredProducts' => Product::query()
+                ->with('category:id,name,slug', 'images')
+                ->where('is_active', true)
+                ->where('is_featured', true)
+                ->latest()
+                ->take(5)
+                ->get(),
             'products' => $products,
             'categories' => Category::query()
                 ->whereHas('products', fn ($query) => $query->where('is_active', true))
@@ -38,7 +48,7 @@ class CatalogController extends Controller
             'favoriteIds' => $request->user()
                 ? Favorite::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
-            'filters' => $request->only('search'),
+            'filters' => $request->only('search', 'tipo'),
         ]);
     }
 }

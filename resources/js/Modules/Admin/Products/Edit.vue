@@ -53,6 +53,8 @@ const form = useForm({
     price: props.product.price,
     stock: props.product.stock,
     is_active: props.product.is_active,
+    is_featured: props.product.is_featured,
+    is_new_release: props.product.is_new_release,
 });
 
 const submit = () => {

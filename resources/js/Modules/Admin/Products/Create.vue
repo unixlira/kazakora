@@ -22,6 +22,8 @@ const form = useForm({
     price: '',
     stock: 0,
     is_active: true,
+    is_featured: false,
+    is_new_release: false,
 });
 
 const submit = () => {

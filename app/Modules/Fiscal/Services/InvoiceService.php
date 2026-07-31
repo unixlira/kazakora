@@ -87,6 +87,10 @@ class InvoiceService
                     'ambiente' => config('nfe.ambiente'),
                     'serie' => config('nfe.serie'),
                     'numero' => $numero,
+                    // NFeXmlBuilderService::build() usa $order->total como vNF
+                    // (valor total da NF-e) — guardamos o mesmo valor aqui pra
+                    // poder somar/consultar sem precisar reabrir o XML.
+                    'valor_total' => $order->total,
                     'chave_acesso' => $chave,
                 ]);
 

@@ -27,9 +27,13 @@ class Order extends Model
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const ORIGIN_STORE = 'loja';
+
     protected $fillable = [
         'user_id',
         'status',
+        'origin',
+        'external_order_id',
         'disputed_at',
         'shipping_method_id',
         'shipping_name',

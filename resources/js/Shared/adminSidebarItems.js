@@ -33,6 +33,7 @@ export const sidebarSections = [
         heading: 'Operacional',
         items: [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', color: 'text-warning', permission: 'pedidos.view' },
+            { label: 'Notas Fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', color: 'text-info', permission: 'pedidos.view' },
             { label: 'Pedidos de Compra', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', color: 'text-info', permission: 'operacional.view' },
             { label: 'Ordens de Serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', color: 'text-secondary', permission: 'operacional.view' },
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', color: 'text-success', permission: 'operacional.view' },

@@ -10,6 +10,7 @@ use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
+use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
@@ -198,6 +199,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')
         ->middleware('permission:pedidos.edit');
+    Route::post('pedidos/{order}/nota/emitir', [InvoiceController::class, 'issue'])
+        ->name('pedidos.nota.emitir')
+        ->middleware('permission:pedidos.edit');
+    Route::post('pedidos/{order}/nota/cancelar', [InvoiceController::class, 'cancel'])
+        ->name('pedidos.nota.cancelar')
+        ->middleware('permission:pedidos.edit');
+
+    Route::get('notas-fiscais', [InvoiceController::class, 'index'])
+        ->name('notas-fiscais.listar')
+        ->middleware('permission:pedidos.view');
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');

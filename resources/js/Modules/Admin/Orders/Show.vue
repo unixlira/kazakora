@@ -3,6 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     order: {
@@ -56,6 +57,25 @@ const form = useForm({
 
 const updateStatus = () => {
     form.patch(`/admin/pedidos/${props.order.id}`);
+};
+
+const canIssue = () => !props.order.invoice || props.order.invoice.status !== 'authorized';
+const canCancel = () => props.order.invoice?.status === 'authorized';
+
+const issueForm = useForm({});
+const issueInvoice = () => {
+    issueForm.post(`/admin/pedidos/${props.order.id}/nota/emitir`);
+};
+
+const showCancelForm = ref(false);
+const cancelForm = useForm({ motivo: '' });
+const cancelInvoice = () => {
+    cancelForm.post(`/admin/pedidos/${props.order.id}/nota/cancelar`, {
+        onSuccess: () => {
+            showCancelForm.value = false;
+            cancelForm.reset();
+        },
+    });
 };
 </script>
 
@@ -111,6 +131,57 @@ const updateStatus = () => {
                             Chave: {{ order.invoice.chave_acesso }}
                         </div>
                     </div>
+
+                    <Can permission="pedidos.edit">
+                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                            <button
+                                v-if="canIssue()"
+                                type="button"
+                                :disabled="issueForm.processing"
+                                class="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="issueInvoice"
+                            >
+                                Emitir nota
+                            </button>
+                            <button
+                                v-if="canCancel() && !showCancelForm"
+                                type="button"
+                                class="rounded-lg border border-error px-3 py-1.5 text-sm font-medium text-error hover:bg-error/10"
+                                @click="showCancelForm = true"
+                            >
+                                Cancelar nota
+                            </button>
+                        </div>
+
+                        <form v-if="showCancelForm" class="mt-3 space-y-2 rounded-lg border border-[var(--surface-border)] p-3" @submit.prevent="cancelInvoice">
+                            <label for="motivo_cancelamento" class="block text-sm font-medium">Motivo do cancelamento (mín. 15 caracteres)</label>
+                            <textarea
+                                id="motivo_cancelamento"
+                                v-model="cancelForm.motivo"
+                                rows="2"
+                                minlength="15"
+                                required
+                                class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
+                            ></textarea>
+                            <p v-if="cancelForm.errors.motivo" class="text-xs text-error">{{ cancelForm.errors.motivo }}</p>
+                            <div class="flex gap-2">
+                                <button
+                                    type="submit"
+                                    :disabled="cancelForm.processing"
+                                    class="rounded-lg bg-error px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Confirmar cancelamento
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--surface-muted)]"
+                                    @click="showCancelForm = false; cancelForm.reset(); cancelForm.clearErrors();"
+                                >
+                                    Voltar
+                                </button>
+                            </div>
+                        </form>
+                    </Can>
 
                     <h3 class="mt-6 text-sm font-semibold text-slate-500">Histórico de emissão da nota</h3>
                     <ul v-if="invoiceGenerationLogs.length" class="mt-2 space-y-2 text-sm">

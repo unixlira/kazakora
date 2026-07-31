@@ -34,6 +34,7 @@ class Invoice extends Model
         'ambiente',
         'serie',
         'numero',
+        'valor_total',
         'chave_acesso',
         'protocolo_autorizacao',
         'autorizada_em',
@@ -50,6 +51,7 @@ class Invoice extends Model
         return [
             'serie' => 'integer',
             'numero' => 'integer',
+            'valor_total' => 'decimal:2',
             'autorizada_em' => 'datetime',
             'cancelada_em' => 'datetime',
         ];

@@ -86,7 +86,7 @@ const columns = [
                     conseguir cotar (produto com peso/dimensões cadastrados) — a lista fica como reserva.
                 </p>
                 <p v-if="melhorEnvio.connected" class="mt-2 text-xs text-emerald-600">
-                    <i class="fas fa-circle-check mr-1"></i> Conectado — {{ melhorEnvio.accountLabel ?? 'conta sem nome' }}
+                    <i class="fas fa-circle-check mr-1"></i> Conectado{{ melhorEnvio.accountLabel ? ` — ${melhorEnvio.accountLabel}` : '' }}
                 </p>
             </div>
             <a v-if="!melhorEnvio.connected" href="/api/melhorenvio/auth"

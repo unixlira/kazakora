@@ -43,7 +43,9 @@ const chooseForm = useForm({
     terms_accepted: false,
 });
 
-const submitChoice = () => chooseForm.post('/finalizacao/pagamento');
+const submitChoice = () => chooseForm.post('/finalizacao/pagamento', {
+    onError: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+});
 
 const couponForm = useForm({ code: '' });
 const showCouponInput = ref(!!props.couponCode);
@@ -218,8 +220,12 @@ onMounted(() => {
                 <div>
                     <!-- Fase 1: escolher método -->
                     <template v-if="!clientSecret && !mercadoPagoPix">
-                        <p v-if="chooseForm.errors.cart" class="mb-4 text-sm text-red-600">{{ chooseForm.errors.cart }}</p>
-                        <p v-if="chooseForm.errors.payment" class="mb-4 text-sm text-red-600">{{ chooseForm.errors.payment }}</p>
+                        <p v-if="chooseForm.errors.cart" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                            <i class="fas fa-triangle-exclamation mr-2"></i>{{ chooseForm.errors.cart }}
+                        </p>
+                        <p v-if="chooseForm.errors.payment" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                            <i class="fas fa-triangle-exclamation mr-2"></i>{{ chooseForm.errors.payment }}
+                        </p>
 
                         <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
                             <label class="flex items-center justify-between gap-3">

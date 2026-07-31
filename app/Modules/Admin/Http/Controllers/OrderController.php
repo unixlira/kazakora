@@ -29,7 +29,13 @@ class OrderController extends Controller
     {
         return Inertia::render('Admin/Orders/Index', [
             'orders' => Order::query()
-                ->with(['user:id,name,email', 'invoice:id,order_id,status', 'latestEmailLog:id,order_id,status,invoice_attached'])
+                // latestEmailLog não pode usar seleção parcial de colunas aqui:
+                // combinado com o latestOfMany(['created_at','id']) da relação,
+                // o Laravel gera um SELECT com `order_id` ambíguo entre as
+                // subqueries — MySQL rejeita (SQLSTATE 23000), reproduzido e
+                // confirmado em 2026-07-31. A tabela é pequena, carregar a
+                // linha inteira não tem custo relevante.
+                ->with(['user:id,name,email', 'invoice:id,order_id,status', 'latestEmailLog'])
                 ->withCount('items')
                 ->latest()
                 ->get(),

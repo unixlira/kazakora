@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps({
     company: {
@@ -38,10 +39,26 @@ const form = useForm({
     neighborhood: props.company?.neighborhood ?? '',
     city: props.company?.city ?? '',
     state: props.company?.state ?? '',
+    certificado: null,
+    certificado_senha: '',
 });
 
+const certificadoInput = ref(null);
+
+const onCertificadoChange = (event) => {
+    form.certificado = event.target.files[0] ?? null;
+};
+
 const submit = () => {
-    form.put('/admin/empresa');
+    form.put('/admin/empresa', {
+        onSuccess: () => {
+            form.certificado = null;
+            form.certificado_senha = '';
+            if (certificadoInput.value) {
+                certificadoInput.value.value = '';
+            }
+        },
+    });
 };
 </script>
 
@@ -54,7 +71,7 @@ const submit = () => {
             Usados na emissão de notas fiscais e no cadastro em marketplaces.
         </p>
 
-        <form class="mt-6 max-w-3xl space-y-6 rounded bg-white p-6 shadow-lg" @submit.prevent="submit">
+        <form class="mt-6 max-w-3xl space-y-6 rounded bg-white p-6 shadow-lg" enctype="multipart/form-data" @submit.prevent="submit">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                     <label class="block text-sm font-medium text-slate-600">Razão social</label>
@@ -136,6 +153,50 @@ const submit = () => {
                 <div>
                     <label class="block text-sm font-medium text-slate-600">UF</label>
                     <input v-model="form.state" type="text" maxlength="2" class="mt-1 w-full rounded border border-slate-300 px-3 py-2 uppercase">
+                </div>
+            </div>
+
+            <hr class="border-slate-200">
+
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold uppercase text-slate-500">Certificado digital (A1)</h2>
+                <span
+                    class="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    :class="company?.has_certificate
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'"
+                >
+                    {{ company?.has_certificate ? 'Certificado configurado' : 'Nenhum certificado enviado' }}
+                </span>
+            </div>
+            <p class="text-sm text-slate-500">
+                Certificado A1 (.pfx/.p12) usado para assinar e enviar as notas fiscais à SEFAZ. Comprado numa
+                Autoridade Certificadora credenciada ICP-Brasil, vinculado ao CNPJ da empresa.
+            </p>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                    <label class="block text-sm font-medium text-slate-600">Arquivo do certificado (.pfx/.p12)</label>
+                    <input
+                        ref="certificadoInput"
+                        type="file"
+                        accept=".pfx,.p12"
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        @change="onCertificadoChange"
+                    >
+                    <p class="mt-1 text-xs text-slate-400">Enviar um novo arquivo substitui o certificado atual.</p>
+                    <InputError :message="form.errors.certificado" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-600">Senha do certificado</label>
+                    <input
+                        v-model="form.certificado_senha"
+                        type="password"
+                        autocomplete="new-password"
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    >
+                    <p class="mt-1 text-xs text-slate-400">Deixe em branco para manter a senha atual.</p>
+                    <InputError :message="form.errors.certificado_senha" />
                 </div>
             </div>
 

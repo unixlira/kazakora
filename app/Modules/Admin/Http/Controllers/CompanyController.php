@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Fiscal\Models\Company;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,14 +46,37 @@ class CompanyController extends Controller
             'neighborhood' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'state' => ['nullable', 'string', 'max:2'],
+            'certificado' => [
+                'nullable', 'file', 'max:5120',
+                function ($attribute, $value, $fail): void {
+                    if (! in_array(strtolower($value->getClientOriginalExtension()), ['pfx', 'p12'], true)) {
+                        $fail('O certificado deve ser um arquivo .pfx ou .p12.');
+                    }
+                },
+            ],
+            'certificado_senha' => ['nullable', 'string', 'max:255', 'required_with:certificado'],
         ]);
 
-        $company = Company::query()->first();
+        $company = Company::query()->first() ?? new Company();
 
-        if ($company) {
+        if ($request->hasFile('certificado')) {
+            if ($company->certificate_path) {
+                Storage::disk('local')->delete($company->certificate_path);
+            }
+
+            $validated['certificate_path'] = $request->file('certificado')->store('nfe', 'local');
+        }
+
+        if (filled($validated['certificado_senha'] ?? null)) {
+            $validated['certificate_password'] = $validated['certificado_senha'];
+        }
+
+        unset($validated['certificado'], $validated['certificado_senha']);
+
+        if ($company->exists) {
             $company->update($validated);
         } else {
-            Company::create($validated);
+            $company->fill($validated)->save();
         }
 
         return back()->with('success', 'Dados da empresa atualizados com sucesso.');

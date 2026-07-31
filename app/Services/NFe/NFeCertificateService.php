@@ -2,16 +2,20 @@
 
 namespace App\Services\NFe;
 
-use Illuminate\Support\Facades\File;
+use App\Modules\Fiscal\Models\Company;
+use Illuminate\Support\Facades\Storage;
 use NFePHP\Common\Certificate;
 
 class NFeCertificateService
 {
     public function isConfigured(): bool
     {
-        $path = config('nfe.certificado_path');
+        $company = Company::query()->first();
 
-        return filled(config('nfe.certificado_senha')) && $path && File::exists($path);
+        return $company
+            && filled($company->certificate_path)
+            && filled($company->certificate_password)
+            && Storage::disk('local')->exists($company->certificate_path);
     }
 
     public function load(): Certificate
@@ -20,8 +24,10 @@ class NFeCertificateService
             throw new NFeCertificateNotConfiguredException();
         }
 
-        $content = File::get(config('nfe.certificado_path'));
+        $company = Company::query()->first();
 
-        return Certificate::readPfx($content, config('nfe.certificado_senha'));
+        $content = Storage::disk('local')->get($company->certificate_path);
+
+        return Certificate::readPfx($content, $company->certificate_password);
     }
 }

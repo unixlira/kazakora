@@ -23,6 +23,8 @@ class Company extends Model
         'regime_tributario',
         'cnae',
         'logo_path',
+        'certificate_path',
+        'certificate_password',
         'phone',
         'email',
         'zip',
@@ -33,4 +35,24 @@ class Company extends Model
         'city',
         'state',
     ];
+
+    protected $hidden = [
+        'certificate_password',
+    ];
+
+    protected $appends = [
+        'has_certificate',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'certificate_password' => 'encrypted',
+        ];
+    }
+
+    public function getHasCertificateAttribute(): bool
+    {
+        return filled($this->certificate_path);
+    }
 }

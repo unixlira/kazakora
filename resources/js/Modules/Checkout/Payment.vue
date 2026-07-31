@@ -4,7 +4,7 @@ import InputError from '@/Shared/Components/InputError.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { loadStripe } from '@stripe/stripe-js';
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
@@ -20,6 +20,9 @@ const props = defineProps({
     stripeKey: { type: String, default: null },
     methodType: { type: String, default: null },
     pendingSecondMethod: { type: String, default: null },
+    // Pix via Mercado Pago: QR já pronto na resposta do backend, sem
+    // nenhuma etapa de confirmação no front-end (diferente do Stripe).
+    mercadoPagoPix: { type: Object, default: null },
 });
 
 const formatPrice = (value) =>
@@ -183,6 +186,25 @@ const confirmPayment = async () => {
 };
 
 const savings = computed(() => props.discountAmount);
+
+// Pix via Mercado Pago já chega com o QR pronto (a criação do pagamento
+// aconteceu no backend, antes desta página renderizar) — só mostrar e
+// começar o polling, sem nenhuma etapa de confirmação como o Stripe exige.
+onMounted(() => {
+    if (! props.mercadoPagoPix) return;
+
+    pixQrImageUrl.value = props.mercadoPagoPix.qrCodeBase64
+        ? `data:image/png;base64,${props.mercadoPagoPix.qrCodeBase64}`
+        : null;
+    pixQrCode.value = props.mercadoPagoPix.qrCode ?? null;
+    paymentState.value = 'awaiting_pix';
+
+    if (props.mercadoPagoPix.expiresAt) {
+        startPixCountdown(new Date(props.mercadoPagoPix.expiresAt).getTime() / 1000);
+    }
+
+    startPolling(props.order.id);
+});
 </script>
 
 <template>
@@ -195,7 +217,7 @@ const savings = computed(() => props.discountAmount);
             <div class="mt-8 grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-start">
                 <div>
                     <!-- Fase 1: escolher método -->
-                    <template v-if="!clientSecret">
+                    <template v-if="!clientSecret && !mercadoPagoPix">
                         <p v-if="chooseForm.errors.cart" class="mb-4 text-sm text-red-600">{{ chooseForm.errors.cart }}</p>
                         <p v-if="chooseForm.errors.payment" class="mb-4 text-sm text-red-600">{{ chooseForm.errors.payment }}</p>
 
@@ -271,6 +293,16 @@ const savings = computed(() => props.discountAmount);
                         </div>
                     </template>
 
+                    <!-- Pix via Mercado Pago: QR já pronto, sem etapa de confirmação aqui — ver PaymentProcessingModal -->
+                    <template v-else-if="mercadoPagoPix">
+                        <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                            <h2 class="mb-2 text-sm font-semibold uppercase text-store-fg-muted">Pagamento via Pix</h2>
+                            <p class="text-sm text-store-fg-muted">
+                                Escaneie o QR code ou copie o código Pix na janela para concluir o pagamento.
+                            </p>
+                        </div>
+                    </template>
+
                     <!-- Fase 2: confirmar com o Stripe -->
                     <template v-else>
                         <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
@@ -310,7 +342,7 @@ const savings = computed(() => props.discountAmount);
                             </span>
                         </div>
 
-                        <template v-if="!clientSecret">
+                        <template v-if="!clientSecret && !mercadoPagoPix">
                             <button v-if="!showCouponInput" type="button" class="text-left font-medium text-store-accent hover:underline" @click="showCouponInput = true">
                                 Inserir código do cupom
                             </button>

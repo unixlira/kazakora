@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Support;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 
 /**
@@ -22,6 +23,7 @@ class OrderPaymentFinalizer
 {
     public function __construct(
         private readonly StripePaymentService $stripe,
+        private readonly MercadoPagoPaymentService $mercadoPago,
     ) {
     }
 
@@ -100,16 +102,19 @@ class OrderPaymentFinalizer
         $errors = [];
 
         foreach ($order->payments as $payment) {
+            $isMercadoPago = $payment->provider === Payment::PROVIDER_MERCADOPAGO;
+            $reference = $isMercadoPago ? $payment->mercadopago_payment_id : $payment->stripe_payment_intent_id;
+
             try {
                 if ($payment->status === Payment::STATUS_CAPTURED) {
-                    $this->stripe->refund($payment->stripe_payment_intent_id);
+                    $isMercadoPago ? $this->mercadoPago->refund($reference) : $this->stripe->refund($reference);
                     $payment->update(['status' => Payment::STATUS_REFUNDED]);
                 } elseif ($payment->status === Payment::STATUS_AUTHORIZED) {
-                    $this->stripe->cancel($payment->stripe_payment_intent_id);
+                    $isMercadoPago ? $this->mercadoPago->cancel($reference) : $this->stripe->cancel($reference);
                     $payment->update(['status' => Payment::STATUS_CANCELED]);
                 }
             } catch (\Throwable $exception) {
-                $errors[] = "Pagamento {$payment->stripe_payment_intent_id}: {$exception->getMessage()}";
+                $errors[] = "Pagamento {$reference}: {$exception->getMessage()}";
             }
         }
 

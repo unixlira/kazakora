@@ -16,7 +16,10 @@ use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
+use App\Services\MercadoPago\Exceptions\MercadoPagoException;
+use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
+use App\Support\PaymentGateway;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +41,7 @@ class CheckoutController extends Controller
         private readonly CartManager $cart,
         private readonly StockManager $stock,
         private readonly StripePaymentService $stripe,
+        private readonly MercadoPagoPaymentService $mercadoPago,
         private readonly OrderPaymentFinalizer $finalizer,
         private readonly FreightQuoteService $freight,
     ) {
@@ -204,7 +208,18 @@ class CheckoutController extends Controller
             return back()->withErrors(['cart' => 'Seu carrinho está vazio.']);
         }
 
-        if (! $this->stripe->isConfigured()) {
+        // Increment 3 (escopo atual): só Pix não-dividido é roteado pro
+        // Mercado Pago quando ele é o gateway ativo — cartão/boleto/split
+        // continuam sempre no Stripe até o próximo incremento.
+        $usePixViaMercadoPago = PaymentGateway::active() === PaymentGateway::MERCADOPAGO
+            && $data['payment_method'] === Payment::METHOD_PIX
+            && ! ($data['split'] ?? false);
+
+        if ($usePixViaMercadoPago && ! $this->mercadoPago->isConfigured()) {
+            return back()->withErrors(['payment' => 'Pagamento via Pix ainda não está disponível — aguarde a configuração do Mercado Pago.']);
+        }
+
+        if (! $usePixViaMercadoPago && ! $this->stripe->isConfigured()) {
             return back()->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
         }
 
@@ -221,7 +236,7 @@ class CheckoutController extends Controller
             : [$data['payment_method']];
 
         try {
-            [$order, $firstIntent] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data, $usePixViaMercadoPago) {
                 $user = $request->user() ?? $this->createGuestAccount($draft['guest']);
 
                 $address = ! empty($draft['address_id'])
@@ -256,6 +271,26 @@ class CheckoutController extends Controller
                     ? round($total * ($data['split_percentage'] / 100), 2)
                     : $total;
 
+                if ($usePixViaMercadoPago) {
+                    $mpResult = $this->mercadoPago->createPixPayment(
+                        $primaryAmount,
+                        $this->mercadoPagoPayer($user, $draft),
+                        ['description' => "Pedido #{$order->id} - KazaKora"],
+                        "order:{$order->id}:payment:1",
+                    );
+
+                    Payment::create([
+                        'order_id' => $order->id,
+                        'provider' => Payment::PROVIDER_MERCADOPAGO,
+                        'mercadopago_payment_id' => (string) $mpResult['id'],
+                        'method_type' => $primaryMethod,
+                        'amount' => $primaryAmount,
+                        'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
+                    ]);
+
+                    return [$order, $mpResult];
+                }
+
                 $intent = $this->stripe->createIntent(
                     $primaryMethod,
                     $primaryAmount,
@@ -265,6 +300,7 @@ class CheckoutController extends Controller
 
                 Payment::create([
                     'order_id' => $order->id,
+                    'provider' => Payment::PROVIDER_STRIPE,
                     'stripe_payment_intent_id' => $intent->id,
                     'method_type' => $primaryMethod,
                     'amount' => $primaryAmount,
@@ -286,9 +322,21 @@ class CheckoutController extends Controller
             ]);
 
             return back()->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
+        } catch (MercadoPagoException $exception) {
+            Log::channel('mercadopago')->error('mercadopago.checkout.payment_failed', [
+                'payment_method' => $data['payment_method'],
+                'message' => $exception->getMessage(),
+                'context' => $exception->context(),
+            ]);
+
+            return back()->withErrors(['payment' => 'Não foi possível iniciar o pagamento Pix agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
-        return $this->renderConfirmingPayment($draft, $order, $firstIntent, $methods[0], count($methods) > 1 ? $methods[1] : null);
+        if ($usePixViaMercadoPago) {
+            return $this->renderConfirmingMercadoPagoPix($draft, $order, $paymentResult);
+        }
+
+        return $this->renderConfirmingPayment($draft, $order, $paymentResult, $methods[0], count($methods) > 1 ? $methods[1] : null);
     }
 
     /**
@@ -315,6 +363,7 @@ class CheckoutController extends Controller
 
         Payment::create([
             'order_id' => $order->id,
+            'provider' => Payment::PROVIDER_STRIPE,
             'stripe_payment_intent_id' => $intent->id,
             'method_type' => $data['method_type'],
             'amount' => $remaining,
@@ -338,6 +387,23 @@ class CheckoutController extends Controller
 
         foreach ($order->payments as $payment) {
             if ($payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+                continue;
+            }
+
+            if ($payment->provider === Payment::PROVIDER_MERCADOPAGO) {
+                $mp = $this->mercadoPago->retrieve($payment->mercadopago_payment_id);
+
+                // Pix no Mercado Pago não tem fase "autorizado sem
+                // capturar" — uma vez aprovado, o dinheiro já é do
+                // vendedor, então vai direto pra captured (Stripe cartão é
+                // o único caso com essa fase intermediária).
+                if ($mp['status'] === 'approved') {
+                    $payment->update(['status' => Payment::STATUS_CAPTURED]);
+                } elseif (in_array($mp['status'], ['cancelled', 'rejected'], true)) {
+                    $payment->update(['status' => Payment::STATUS_CANCELED]);
+                    $this->finalizer->cancelSiblingsAfterFailure($order->fresh(['payments']), $payment);
+                }
+
                 continue;
             }
 
@@ -410,6 +476,14 @@ class CheckoutController extends Controller
             return null;
         }
 
+        if ($pendingPayment->provider === Payment::PROVIDER_MERCADOPAGO) {
+            // Pix via Mercado Pago não usa Stripe Elements — não há nada
+            // pra "retomar" no sentido desta função (client secret/Payment
+            // Element); recarregar a página simplesmente reinicia a escolha
+            // de método. O QR já emitido continua válido até expirar.
+            return null;
+        }
+
         try {
             $intent = $this->stripe->retrieve($pendingPayment->stripe_payment_intent_id);
         } catch (\Throwable) {
@@ -421,6 +495,43 @@ class CheckoutController extends Controller
         }
 
         return [$order, $intent, $pendingPayment->method_type];
+    }
+
+    /**
+     * Pix via Mercado Pago já vem com o QR code pronto na criação — não
+     * precisa de nenhuma etapa de confirmação no front-end (sem client
+     * secret, sem SDK JS pra montar), só mostrar e começar o polling.
+     */
+    private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpResult): Response
+    {
+        $qr = $mpResult['point_of_interaction']['transaction_data'] ?? [];
+
+        return Inertia::render('Checkout/Payment', [
+            ...$this->paymentProps($draft),
+            'order' => $order->only('id', 'total'),
+            'methodType' => Payment::METHOD_PIX,
+            'mercadoPagoPix' => [
+                'qrCode' => $qr['qr_code'] ?? null,
+                'qrCodeBase64' => $qr['qr_code_base64'] ?? null,
+                'expiresAt' => $mpResult['date_of_expiration'] ?? null,
+            ],
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mercadoPagoPayer(User $user, array $draft): array
+    {
+        $cpf = preg_replace('/\D/', '', $draft['guest']['cpf'] ?? $user->cpf ?? '');
+        $nameParts = preg_split('/\s+/', trim($user->name), 2);
+
+        return array_filter([
+            'email' => $user->email,
+            'first_name' => $nameParts[0] ?? $user->name,
+            'last_name' => $nameParts[1] ?? $nameParts[0] ?? $user->name,
+            'identification' => $cpf ? ['type' => 'CPF', 'number' => $cpf] : null,
+        ]);
     }
 
     private function renderConfirmingPayment(array $draft, Order $order, \Stripe\PaymentIntent $intent, string $methodType, ?string $pendingSecondMethod = null): Response

@@ -25,9 +25,15 @@ class Payment extends Model
 
     public const METHOD_BOLETO = 'boleto';
 
+    public const PROVIDER_STRIPE = 'stripe';
+
+    public const PROVIDER_MERCADOPAGO = 'mercadopago';
+
     protected $fillable = [
         'order_id',
+        'provider',
         'stripe_payment_intent_id',
+        'mercadopago_payment_id',
         'method_type',
         'amount',
         'status',

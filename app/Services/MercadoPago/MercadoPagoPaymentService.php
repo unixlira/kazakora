@@ -37,7 +37,10 @@ class MercadoPagoPaymentService
             'description' => $metadata['description'] ?? 'Pedido KazaKora',
             'payer' => $payer,
             'metadata' => $metadata,
-            'date_of_expiration' => now()->addMinutes(30)->toIso8601String(),
+            // Formato exigido pela API: milissegundos + offset com dois-pontos
+            // (ex: 2026-07-31T18:15:00.000-03:00) — ISO8601 "puro" do Carbon
+            // (sem milissegundos) é rejeitado.
+            'date_of_expiration' => now()->addMinutes(30)->format('Y-m-d\TH:i:s.vP'),
         ], $idempotencyKey);
     }
 

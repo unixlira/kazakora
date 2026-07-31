@@ -160,6 +160,12 @@ class CheckoutController extends Controller
         }
 
         $request->session()->put(self::SESSION_KEY, $data);
+        // Grava a sessão já aqui (em vez de esperar a fase terminate() do
+        // kernel) — sob PHP-FPM com fastcgi_finish_request, a resposta do
+        // redirect pode chegar ao navegador antes do terminate() rodar, e o
+        // Inertia segue o redirect rápido o bastante pra ler a sessão antes
+        // da escrita ter sido persistida (bounce de volta pra "entrega").
+        $request->session()->save();
 
         return redirect()->route('finalizacao.pagamento');
     }
@@ -192,6 +198,7 @@ class CheckoutController extends Controller
         $draft = $request->session()->get(self::SESSION_KEY, []);
         $draft['coupon_code'] = $coupon->code;
         $request->session()->put(self::SESSION_KEY, $draft);
+        $request->session()->save();
 
         return back()->with('success', 'Cupom aplicado!');
     }

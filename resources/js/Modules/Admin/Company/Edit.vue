@@ -92,7 +92,14 @@ const onCepInput = async (event) => {
 };
 
 const submit = () => {
-    form.put('/admin/empresa', {
+    // PHP só faz parse de corpo multipart/form-data (upload de arquivo) em
+    // requisições POST de verdade — um PUT real com multipart chega vazio
+    // no Laravel. Por isso sempre mandamos como POST com _method=put (o
+    // spoofing padrão do Laravel), mesmo quando não há arquivo selecionado.
+    form.transform((data) => ({
+        ...data,
+        _method: 'put',
+    })).post('/admin/empresa', {
         onSuccess: () => {
             form.certificado = null;
             form.certificado_senha = '';

@@ -116,6 +116,10 @@ const submit = () => {
             <div v-else class="mt-8 grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-start">
                 <div>
                     <p v-if="form.errors.cart" class="mb-4 text-sm text-red-600">{{ form.errors.cart }}</p>
+                    <p v-if="form.errors.shipping_method_id" class="mb-4 text-sm text-red-600">{{ form.errors.shipping_method_id }}</p>
+                    <p v-if="shippingMethods.length === 0" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        Nenhuma forma de envio disponível no momento. Entre em contato com a loja antes de continuar.
+                    </p>
 
                     <!-- Endereço -->
                     <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
@@ -249,7 +253,7 @@ const submit = () => {
                     </div>
 
                     <div class="mt-6 flex justify-end">
-                        <button type="button" :disabled="form.processing"
+                        <button type="button" :disabled="form.processing || shippingMethods.length === 0"
                             class="rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                             @click="submit">
                             Continuar

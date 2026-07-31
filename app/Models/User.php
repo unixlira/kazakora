@@ -100,6 +100,6 @@ class User extends Authenticatable
     {
         $resetUrl = route('senha.redefinir', ['token' => $token, 'email' => $this->email]);
 
-        Mail::to($this->email)->queue(new PasswordResetMail($this, $resetUrl));
+        Mail::to($this->email)->send(new PasswordResetMail($this, $resetUrl));
     }
 }

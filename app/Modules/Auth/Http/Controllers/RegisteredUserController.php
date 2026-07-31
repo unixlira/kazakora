@@ -38,7 +38,7 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
-        Mail::to($user)->queue(new WelcomeEmail($user));
+        Mail::to($user)->send(new WelcomeEmail($user));
 
         Auth::login($user);
 

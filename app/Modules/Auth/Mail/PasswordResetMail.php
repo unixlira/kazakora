@@ -3,14 +3,17 @@
 namespace App\Modules\Auth\Mail;
 
 use App\Models\User;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-class PasswordResetMail extends Mailable implements ShouldQueue
+/**
+ * Enviada de forma síncrona (User::sendPasswordResetNotification) — o
+ * cliente está esperando esse e-mail na hora (fluxo de senha), então não
+ * pode ficar sujeito ao intervalo de 1 minuto do cron da fila.
+ */
+class PasswordResetMail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(
         public readonly User $user,

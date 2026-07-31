@@ -3,14 +3,17 @@
 namespace App\Modules\Auth\Mail;
 
 use App\Models\User;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-class WelcomeEmail extends Mailable implements ShouldQueue
+/**
+ * Enviada de forma síncrona (RegisteredUserController) — mesmo motivo do
+ * PasswordResetMail: e-mail leve, sem dependência externa lenta, não faz
+ * sentido esperar o cron da fila (até 1 minuto) pra isso.
+ */
+class WelcomeEmail extends Mailable
 {
-    use Queueable, SerializesModels;
+    use SerializesModels;
 
     public function __construct(public readonly User $user)
     {

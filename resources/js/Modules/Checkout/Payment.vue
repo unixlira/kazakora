@@ -1,9 +1,10 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
+import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { loadStripe } from '@stripe/stripe-js';
-import { computed, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
@@ -17,6 +18,7 @@ const props = defineProps({
     order: { type: Object, default: null },
     clientSecret: { type: String, default: null },
     stripeKey: { type: String, default: null },
+    methodType: { type: String, default: null },
     pendingSecondMethod: { type: String, default: null },
 });
 
@@ -71,34 +73,113 @@ const mountPaymentElement = async () => {
 
 watch(() => props.clientSecret, mountPaymentElement, { immediate: true });
 
+// Estado "processando pagamento": cobre o intervalo entre clicar em "Finalizar
+// compra" e a confirmação real — que pode vir da resposta síncrona do Stripe
+// (cartão) OU do polling que espera o webhook confirmar (nunca confiamos só
+// na resposta do front-end pra marcar como pago de verdade).
+const paymentState = ref('idle'); // idle | processing | awaiting_pix | success | timeout
+const pixQrImageUrl = ref(null);
+const pixQrCode = ref(null);
+const pixSecondsLeft = ref(null);
+
+let pixCountdownTimer = null;
+let pollTimer = null;
+let pollStartedAt = null;
+
+const clearTimers = () => {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+    if (pixCountdownTimer) clearInterval(pixCountdownTimer);
+    pixCountdownTimer = null;
+};
+
+onUnmounted(clearTimers);
+
+const startPixCountdown = (expiresAtUnixSeconds) => {
+    const expiresAtMs = expiresAtUnixSeconds * 1000;
+    const tick = () => {
+        pixSecondsLeft.value = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+    };
+    tick();
+    pixCountdownTimer = setInterval(tick, 1000);
+};
+
+const startPolling = (orderId) => {
+    pollStartedAt = Date.now();
+
+    const poll = async () => {
+        try {
+            const response = await fetch(`/finalizacao/${orderId}/status`, { headers: { Accept: 'application/json' } });
+            const data = await response.json();
+
+            if (data.status === 'paid') {
+                clearTimers();
+                paymentState.value = 'success';
+                setTimeout(() => router.visit(data.redirect), 1500);
+                return;
+            }
+
+            if (data.status === 'pending') {
+                // Uma das parcelas falhou e o pedido foi revertido — precisa
+                // recomeçar a escolha de método (o Payment Element atual já
+                // não serve mais).
+                clearTimers();
+                confirming.value = false;
+                router.visit('/finalizacao/pagamento');
+                return;
+            }
+        } catch {
+            // instabilidade de rede — continua tentando, não desiste
+        }
+
+        if (paymentState.value === 'processing' && Date.now() - pollStartedAt > 60000) {
+            paymentState.value = 'timeout';
+        }
+    };
+
+    poll();
+    pollTimer = setInterval(poll, 4000);
+};
+
 const confirmPayment = async () => {
     if (! stripeInstance.value || ! elementsInstance.value) return;
 
     confirming.value = true;
     stripeError.value = null;
+    paymentState.value = 'processing';
 
-    const { error } = await stripeInstance.value.confirmPayment({
+    const { error, paymentIntent } = await stripeInstance.value.confirmPayment({
         elements: elementsInstance.value,
         redirect: 'if_required',
     });
 
     if (error) {
+        clearTimers();
+        paymentState.value = 'idle';
         stripeError.value = error.message;
         confirming.value = false;
         return;
+    }
+
+    if (paymentIntent?.next_action?.type === 'pix_display_qr_code') {
+        const qr = paymentIntent.next_action.pix_display_qr_code;
+        pixQrImageUrl.value = qr.image_url_png ?? null;
+        pixQrCode.value = qr.data ?? null;
+        paymentState.value = 'awaiting_pix';
+        if (qr.expires_at) startPixCountdown(qr.expires_at);
     }
 
     if (props.pendingSecondMethod) {
         router.post(`/finalizacao/${props.order.id}/pagamento/proxima-parte`, {
             method_type: props.pendingSecondMethod,
         }, {
+            onSuccess: () => { paymentState.value = 'idle'; },
             onFinish: () => { confirming.value = false; },
         });
-    } else {
-        router.post(`/finalizacao/${props.order.id}/concluir`, {}, {
-            onFinish: () => { confirming.value = false; },
-        });
+        return;
     }
+
+    startPolling(props.order.id);
 };
 
 const savings = computed(() => props.discountAmount);
@@ -204,7 +285,7 @@ const savings = computed(() => props.discountAmount);
                             <button type="button" :disabled="!elementReady || confirming"
                                 class="rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                                 @click="confirmPayment">
-                                {{ confirming ? 'Processando...' : 'Pagar' }}
+                                {{ confirming ? 'Processando...' : 'Finalizar compra' }}
                             </button>
                         </div>
                     </template>
@@ -265,5 +346,13 @@ const savings = computed(() => props.discountAmount);
                 </div>
             </div>
         </div>
+
+        <PaymentProcessingModal
+            :open="paymentState !== 'idle'"
+            :state="paymentState"
+            :order-total="order?.total ?? total"
+            :pix-qr-image-url="pixQrImageUrl"
+            :pix-qr-code="pixQrCode"
+            :pix-seconds-left="pixSecondsLeft" />
     </AppLayout>
 </template>

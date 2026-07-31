@@ -13,6 +13,8 @@ use UnexpectedValueException;
 
 class StripePaymentService
 {
+    public const PIX_EXPIRES_AFTER_SECONDS = 1800;
+
     private ?StripeClient $client = null;
 
     public function isConfigured(): bool
@@ -41,6 +43,12 @@ class StripePaymentService
 
         if ($stripeMethod === 'card') {
             $payload['capture_method'] = 'manual';
+        }
+
+        if ($stripeMethod === 'pix') {
+            $payload['payment_method_options'] = [
+                'pix' => ['expires_after_seconds' => self::PIX_EXPIRES_AFTER_SECONDS],
+            ];
         }
 
         $options = $idempotencyKey ? ['idempotency_key' => $idempotencyKey] : [];

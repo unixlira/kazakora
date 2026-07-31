@@ -67,7 +67,7 @@ class CartCheckoutQuantityDiscountTest extends TestCase
 
         $order = Order::latest('id')->first();
 
-        $this->actingAs($user)->post("/finalizacao/{$order->id}/concluir");
+        $this->actingAs($user)->get("/finalizacao/{$order->id}/status")->assertOk()->assertJson(['status' => 'paid']);
 
         $this->assertDatabaseHas('order_items', [
             'product_id' => $product->id,

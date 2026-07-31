@@ -69,7 +69,7 @@ class GuestCheckoutTest extends TestCase
         $order = Order::where('user_id', $user->id)->first();
         $this->assertNotNull($order);
 
-        $this->post("/finalizacao/{$order->id}/concluir")->assertRedirect(route('finalizacao.confirmacao', $order));
+        $this->get("/finalizacao/{$order->id}/status")->assertOk()->assertJson(['status' => 'paid']);
 
         $this->assertAuthenticatedAs($user);
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);

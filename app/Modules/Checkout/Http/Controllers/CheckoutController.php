@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -105,6 +106,10 @@ class CheckoutController extends Controller
             return redirect()->route('finalizacao.entrega');
         }
 
+        if ($request->user() && $resumable = $this->resumePendingOrder($request->user())) {
+            return $this->renderConfirmingPayment($draft, ...$resumable);
+        }
+
         return Inertia::render('Checkout/Payment', $this->paymentProps($draft));
     }
 
@@ -137,6 +142,13 @@ class CheckoutController extends Controller
 
         if (! $draft) {
             return redirect()->route('finalizacao.entrega');
+        }
+
+        // Trava contra duplo clique/retry: se já existe um pedido aguardando
+        // pagamento com uma parcela ainda viva no Stripe, reaproveita em vez
+        // de criar um pedido/cobrança novo pro mesmo carrinho.
+        if ($request->user() && $resumable = $this->resumePendingOrder($request->user())) {
+            return $this->renderConfirmingPayment($draft, ...$resumable);
         }
 
         $data = $request->validate([
@@ -225,13 +237,7 @@ class CheckoutController extends Controller
             return back()->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
         }
 
-        return Inertia::render('Checkout/Payment', [
-            ...$this->paymentProps($draft),
-            'order' => $order->only('id', 'total'),
-            'clientSecret' => $firstIntent->client_secret,
-            'stripeKey' => config('services.stripe.key'),
-            'pendingSecondMethod' => count($methods) > 1 ? $methods[1] : null,
-        ]);
+        return $this->renderConfirmingPayment($draft, $order, $firstIntent, $methods[0], count($methods) > 1 ? $methods[1] : null);
     }
 
     /**
@@ -264,48 +270,49 @@ class CheckoutController extends Controller
             'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
         ]);
 
-        return Inertia::render('Checkout/Payment', [
-            ...$this->paymentProps($request->session()->get(self::SESSION_KEY, [])),
-            'order' => $order->only('id', 'total'),
-            'clientSecret' => $intent->client_secret,
-            'stripeKey' => config('services.stripe.key'),
-            'pendingSecondMethod' => null,
-        ]);
+        return $this->renderConfirmingPayment($request->session()->get(self::SESSION_KEY, []), $order, $intent, $data['method_type']);
     }
 
     /**
-     * Chamado pelo navegador do cliente depois que o(s) Payment Element(s)
-     * confirmaram do lado do Stripe.js. Reverifica direto com o Stripe (não
-     * confia só no que o front-end diz), finaliza o pedido e limpa o
-     * carrinho — só esta rota tem acesso à sessão de verdade do cliente
-     * (o webhook não tem, por isso ele não limpa o carrinho).
+     * Chamado pelo front-end em polling (a cada poucos segundos) enquanto o
+     * modal de "processando pagamento" estiver aberto. Reverifica direto com
+     * o Stripe (nunca confia só no que o front-end diz), finaliza o pedido
+     * via OrderPaymentFinalizer — a mesma fonte da verdade que o webhook usa
+     * — e só esta rota limpa o carrinho (é a única com acesso à sessão real
+     * do cliente; o webhook não tem sessão nenhuma).
      */
-    public function finalize(Request $request, Order $order): RedirectResponse
+    public function status(Request $request, Order $order): JsonResponse
     {
         abort_unless($order->user_id === optional($request->user())->id, 403);
 
         foreach ($order->payments as $payment) {
-            if ($payment->status === Payment::STATUS_REQUIRES_CONFIRMATION) {
-                $intent = $this->stripe->retrieve($payment->stripe_payment_intent_id);
+            if ($payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+                continue;
+            }
 
-                if (in_array($intent->status, ['requires_capture', 'succeeded'], true)) {
-                    $payment->update(['status' => Payment::STATUS_AUTHORIZED]);
-                } elseif ($intent->status === 'canceled') {
-                    $payment->update(['status' => Payment::STATUS_CANCELED]);
-                }
+            $intent = $this->stripe->retrieve($payment->stripe_payment_intent_id);
+
+            if (in_array($intent->status, ['requires_capture', 'succeeded'], true)) {
+                $payment->update(['status' => Payment::STATUS_AUTHORIZED]);
+            } elseif ($intent->status === 'canceled') {
+                $payment->update(['status' => Payment::STATUS_CANCELED]);
+                $this->finalizer->cancelSiblingsAfterFailure($order->fresh(['payments']), $payment);
             }
         }
 
-        $paid = $this->finalizer->finalize($order->fresh());
+        $wasPaid = $order->status === Order::STATUS_PAID;
 
-        if (! $paid) {
-            return back()->withErrors(['payment' => 'Pagamento ainda não confirmado. Tente novamente em instantes.']);
+        if ($this->finalizer->finalize($order->fresh(['payments'])) && ! $wasPaid) {
+            $this->cart->clear();
+            $request->session()->forget(self::SESSION_KEY);
         }
 
-        $this->cart->clear();
-        $request->session()->forget(self::SESSION_KEY);
+        $order->refresh();
 
-        return redirect()->route('finalizacao.confirmacao', $order)->with('success', 'Pedido realizado com sucesso!');
+        return response()->json([
+            'status' => $order->status,
+            'redirect' => $order->status === Order::STATUS_PAID ? route('finalizacao.confirmacao', $order) : null,
+        ]);
     }
 
     public function confirmation(Request $request, Order $order): Response
@@ -314,6 +321,67 @@ class CheckoutController extends Controller
 
         return Inertia::render('Checkout/Confirmation', [
             'order' => $order->load('items'),
+        ]);
+    }
+
+    public function myOrders(Request $request): Response
+    {
+        return Inertia::render('Checkout/MyOrders', [
+            'orders' => $request->user()->orders()->with('items')->latest()->paginate(10),
+        ]);
+    }
+
+    /**
+     * Encontra um pedido do usuário ainda aguardando pagamento com uma
+     * parcela genuinamente viva no Stripe (não só no nosso banco — reverifica
+     * de verdade). Usado tanto pra evitar criar um pedido duplicado num
+     * duplo clique/retry quanto pra retomar a tela de confirmação se o
+     * cliente atualizar a aba no meio do processamento.
+     *
+     * @return array{0: Order, 1: \Stripe\PaymentIntent, 2: string}|null
+     */
+    private function resumePendingOrder(User $user): ?array
+    {
+        $order = Order::query()
+            ->where('user_id', $user->id)
+            ->where('status', Order::STATUS_AWAITING_PAYMENT)
+            ->with('payments')
+            ->latest()
+            ->first();
+
+        if (! $order) {
+            return null;
+        }
+
+        $pendingPayment = $order->payments->firstWhere('status', Payment::STATUS_REQUIRES_CONFIRMATION);
+
+        if (! $pendingPayment) {
+            return null;
+        }
+
+        try {
+            $intent = $this->stripe->retrieve($pendingPayment->stripe_payment_intent_id);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! in_array($intent->status, ['requires_payment_method', 'requires_confirmation', 'requires_action'], true)) {
+            return null;
+        }
+
+        return [$order, $intent, $pendingPayment->method_type];
+    }
+
+    private function renderConfirmingPayment(array $draft, Order $order, \Stripe\PaymentIntent $intent, string $methodType, ?string $pendingSecondMethod = null): Response
+    {
+        return Inertia::render('Checkout/Payment', [
+            ...$this->paymentProps($draft),
+            'order' => $order->only('id', 'total'),
+            'clientSecret' => $intent->client_secret,
+            'stripeKey' => config('services.stripe.key'),
+            'methodType' => $methodType,
+            'pixExpiresAfterSeconds' => $methodType === Payment::METHOD_PIX ? StripePaymentService::PIX_EXPIRES_AFTER_SECONDS : null,
+            'pendingSecondMethod' => $pendingSecondMethod,
         ]);
     }
 

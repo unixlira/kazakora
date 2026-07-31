@@ -74,9 +74,11 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
     Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:10,1')->name('pagamento.iniciar');
     Route::post('/{order}/pagamento/proxima-parte', [CheckoutController::class, 'storeSecondPayment'])->middleware('throttle:10,1')->name('pagamento.proxima-parte');
-    Route::post('/{order}/concluir', [CheckoutController::class, 'finalize'])->name('concluir');
+    Route::get('/{order}/status', [CheckoutController::class, 'status'])->name('status');
     Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->middleware('auth')->name('confirmacao');
 });
+
+Route::get('/pedidos', [CheckoutController::class, 'myOrders'])->middleware('auth')->name('pedidos.meus');
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto
 // pelo painel admin, sempre operando sobre o próprio usuário logado.

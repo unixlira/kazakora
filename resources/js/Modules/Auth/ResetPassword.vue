@@ -1,5 +1,5 @@
 <script setup>
-import GuestLayout from '@/Shared/Layouts/GuestLayout.vue';
+import AuthLayout from '@/Shared/Layouts/AuthLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 
@@ -21,6 +21,8 @@ const form = useForm({
     password_confirmation: '',
 });
 
+const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-store-bg-raised px-3 py-2 text-sm focus:border-store-accent focus:outline-none focus:ring-1 focus:ring-store-accent';
+
 const submit = () => {
     form.post('/redefinir-senha', {
         onFinish: () => form.reset('password', 'password_confirmation'),
@@ -31,8 +33,8 @@ const submit = () => {
 <template>
     <Head title="Redefinir senha" />
 
-    <GuestLayout>
-        <h1 class="text-xl font-bold">Redefinir senha</h1>
+    <AuthLayout>
+        <h1 class="font-display text-xl font-semibold">Redefinir senha</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
@@ -43,7 +45,7 @@ const submit = () => {
                     type="email"
                     required
                     autocomplete="username"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    :class="inputClass"
                 >
                 <InputError :message="form.errors.email" />
             </div>
@@ -57,7 +59,7 @@ const submit = () => {
                     required
                     autofocus
                     autocomplete="new-password"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    :class="inputClass"
                 >
                 <InputError :message="form.errors.password" />
             </div>
@@ -70,7 +72,7 @@ const submit = () => {
                     type="password"
                     required
                     autocomplete="new-password"
-                    class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    :class="inputClass"
                 >
                 <InputError :message="form.errors.password_confirmation" />
             </div>
@@ -78,10 +80,10 @@ const submit = () => {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="w-full rounded-lg bg-primary py-2.5 font-medium text-white transition-colors hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:bg-gray-300"
+                class="w-full rounded-lg bg-store-accent py-2.5 font-medium text-store-accent-contrast transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 Redefinir senha
             </button>
         </form>
-    </GuestLayout>
+    </AuthLayout>
 </template>

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Modules\Auth\Mail\PasswordResetMail;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Order;
 use App\Support\Rbac\Auditable;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Mail;
 
 #[Fillable(['name', 'email', 'password', 'role', 'phone', 'cpf', 'birth_date', 'avatar_path'])]
 #[Hidden(['password', 'remember_token'])]
@@ -87,5 +89,17 @@ class User extends Authenticatable
         $letters = array_map(fn (string $word) => mb_strtoupper(mb_substr($word, 0, 1)), array_filter($words));
 
         return implode('', array_slice($letters, 0, 2)) ?: '?';
+    }
+
+    /**
+     * Substitui a notificação padrão do Laravel (e-mail cru, sem marca) por
+     * um Mailable com o template responsivo da loja. O link continua vindo
+     * da mesma rota nomeada que Password::sendResetLink()/reset() já usam.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $resetUrl = route('senha.redefinir', ['token' => $token, 'email' => $this->email]);
+
+        Mail::to($this->email)->queue(new PasswordResetMail($this, $resetUrl));
     }
 }

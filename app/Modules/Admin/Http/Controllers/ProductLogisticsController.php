@@ -12,11 +12,13 @@ class ProductLogisticsController extends Controller
     public function update(Request $request, Product $product): RedirectResponse
     {
         $validated = $request->validate([
-            'peso_bruto' => ['nullable', 'numeric', 'min:0'],
+            // Obrigatórios: sem esses 4 a cotação de frete (Melhor Envio)
+            // ignora o produto por completo — ver FreightQuoteService.
+            'peso_bruto' => ['required', 'numeric', 'min:0.001'],
+            'altura_cm' => ['required', 'numeric', 'min:0.01'],
+            'largura_cm' => ['required', 'numeric', 'min:0.01'],
+            'profundidade_cm' => ['required', 'numeric', 'min:0.01'],
             'peso_liquido' => ['nullable', 'numeric', 'min:0'],
-            'altura_cm' => ['nullable', 'numeric', 'min:0'],
-            'largura_cm' => ['nullable', 'numeric', 'min:0'],
-            'profundidade_cm' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $product->fiscalData()->updateOrCreate(['product_id' => $product->id], $validated);

@@ -3,13 +3,13 @@
 namespace Tests\Feature\Checkout;
 
 use App\Models\User;
-use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Services\Stripe\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Stripe\PaymentIntent;
 use Tests\TestCase;
 
@@ -52,7 +52,7 @@ class SplitPaymentFinalizerTest extends TestCase
 
     public function test_order_is_finalized_and_captured_once_both_payments_are_authorized(): void
     {
-        Mail::fake();
+        Queue::fake();
 
         $this->mock(StripePaymentService::class, function ($mock) {
             $mock->shouldReceive('capture')->twice()->andReturn(PaymentIntent::constructFrom(['id' => 'pi', 'status' => 'succeeded']));
@@ -69,7 +69,7 @@ class SplitPaymentFinalizerTest extends TestCase
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);
         $this->assertDatabaseHas('payments', ['stripe_payment_intent_id' => 'pi_1', 'status' => Payment::STATUS_CAPTURED]);
         $this->assertDatabaseHas('payments', ['stripe_payment_intent_id' => 'pi_2', 'status' => Payment::STATUS_CAPTURED]);
-        Mail::assertQueued(OrderConfirmation::class);
+        Queue::assertPushed(GenerateInvoiceJob::class, fn (GenerateInvoiceJob $job) => $job->orderId === $order->id);
     }
 
     public function test_failure_of_one_payment_cancels_the_other_authorized_payment_without_capturing(): void

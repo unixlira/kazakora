@@ -28,7 +28,11 @@ class OrderController extends Controller
     public function index(): Response
     {
         return Inertia::render('Admin/Orders/Index', [
-            'orders' => Order::query()->with('user:id,name,email')->withCount('items')->latest()->get(),
+            'orders' => Order::query()
+                ->with(['user:id,name,email', 'invoice:id,order_id,status', 'latestEmailLog:id,order_id,status,invoice_attached'])
+                ->withCount('items')
+                ->latest()
+                ->get(),
             'statuses' => self::STATUSES,
         ]);
     }
@@ -36,8 +40,10 @@ class OrderController extends Controller
     public function show(Order $order): Response
     {
         return Inertia::render('Admin/Orders/Show', [
-            'order' => $order->load(['items', 'user:id,name,email']),
+            'order' => $order->load(['items', 'user:id,name,email', 'invoice']),
             'statuses' => self::STATUSES,
+            'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
+            'emailLogs' => $order->emailLogs,
         ]);
     }
 

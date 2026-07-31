@@ -8,17 +8,24 @@ use App\Services\NFe\NFeCertificateService;
 use App\Services\NFe\NFeDanfeService;
 use App\Services\NFe\NFeWebserviceService;
 use App\Services\NFe\NFeXmlBuilderService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use SimpleXMLElement;
-use Throwable;
 
 /**
  * Orquestra a emissão da NF-e de um pedido pago (Etapas 1-4 do plano) e o
- * cancelamento (Etapa 5). Nunca deve travar/interromper a confirmação do
- * pagamento em si — se algo falhar aqui, registra e segue (o pedido já está
- * pago de verdade; a nota pode ser emitida manualmente depois).
+ * cancelamento (Etapa 5).
+ *
+ * issue() agora É chamado de dentro de um job de fila (GenerateInvoiceJob) e
+ * portanto LANÇA exceção em falha técnica (conexão, SOAP, certificado,
+ * resposta ilegível da SEFAZ) — é assim que o retry/backoff nativo do
+ * Laravel funciona. Uma resposta definitiva da SEFAZ (autorizada, rejeitada
+ * ou denegada) nunca lança: já é um resultado terminal, tentar de novo com
+ * os mesmos dados não muda o resultado. Falta de certificado configurado
+ * também não lança (não é algo que um retry de minutos resolve).
  */
 class InvoiceService
 {
@@ -30,12 +37,40 @@ class InvoiceService
     ) {
     }
 
-    public function issue(Order $order): ?Invoice
+    public function issue(Order $order): Invoice
     {
-        if ($order->invoice) {
+        $order->loadMissing('invoice');
+
+        if ($order->invoice && in_array($order->invoice->status, [
+            Invoice::STATUS_AUTHORIZED,
+            Invoice::STATUS_REJECTED,
+            Invoice::STATUS_DENIED,
+        ], true)) {
+            // Já existe uma resposta definitiva da SEFAZ (ou já foi
+            // autorizada) — idempotente, não há nada novo a fazer.
             return $order->invoice;
         }
 
+        $invoice = $order->invoice ?? $this->createPendingInvoice($order);
+
+        if (! $this->certificateService->isConfigured()) {
+            Log::channel('stripe')->info('nfe.issue.blocked_no_certificate', ['order_id' => $order->id, 'invoice_id' => $invoice->id]);
+
+            return $invoice;
+        }
+
+        $this->signAndSend($invoice);
+
+        return $invoice->fresh();
+    }
+
+    /**
+     * Cria a linha pendente (numero/chave reservados) e guarda o XML ainda
+     * não assinado. Feito uma única vez por pedido — retries reaproveitam a
+     * MESMA linha (mesmo numero), nunca reservam um novo numero de NF-e.
+     */
+    private function createPendingInvoice(Order $order): Invoice
+    {
         try {
             return DB::transaction(function () use ($order) {
                 $numero = (Invoice::query()
@@ -59,25 +94,26 @@ class InvoiceService
                 Storage::disk('local')->put($xmlPath, $xml);
                 $invoice->update(['xml_path' => $xmlPath]);
 
-                if (! $this->certificateService->isConfigured()) {
-                    Log::channel('stripe')->info('nfe.issue.blocked_no_certificate', ['order_id' => $order->id, 'invoice_id' => $invoice->id]);
-
-                    return $invoice;
-                }
-
-                $this->signAndSend($invoice, $xml);
-
-                return $invoice->fresh();
+                return $invoice;
             });
-        } catch (Throwable $exception) {
-            Log::error('nfe.issue.failed', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
+        } catch (QueryException $exception) {
+            // Corrida rara: duas execuções concorrentes pro mesmo pedido
+            // (ex: retry manual cruzando com o automático). unique(order_id)
+            // barra a segunda no banco — em vez de quebrar, reaproveita a
+            // linha que a primeira já criou.
+            $existing = $order->fresh()->invoice;
 
-            return $order->invoice;
+            if (! $existing) {
+                throw $exception;
+            }
+
+            return $existing;
         }
     }
 
-    private function signAndSend(Invoice $invoice, string $xml): void
+    private function signAndSend(Invoice $invoice): void
     {
+        $xml = Storage::disk('local')->get($invoice->xml_path);
         $certificate = $this->certificateService->load();
         $signedXml = $this->webservice->sign($xml, $certificate);
 
@@ -93,9 +129,9 @@ class InvoiceService
         $infProt = $protNFe[0] ?? null;
 
         if (! $infProt) {
-            $invoice->update(['status' => Invoice::STATUS_ERROR, 'motivo_rejeicao' => 'Resposta da SEFAZ sem protocolo reconhecível.']);
-
-            return;
+            // Resposta sem protocolo reconhecível — pode ser uma falha
+            // transitória de comunicação/parsing, vale tentar de novo.
+            throw new RuntimeException('Resposta da SEFAZ sem protocolo reconhecível.');
         }
 
         $cStat = (string) $infProt->cStat;
@@ -103,9 +139,6 @@ class InvoiceService
 
         // 100 = autorizada; 110/301/302 = denegada; qualquer outro = rejeitada
         if ($cStat === '100') {
-            $authorizedXml = str_replace('</NFe>', '', $xml)
-                ."<protNFe versao=\"4.00\">{$infProt->asXML()}</protNFe>";
-            // nfeProc real: sped-nfe expõe helper próprio pra isso, mantido simples aqui.
             $invoice->update([
                 'status' => Invoice::STATUS_AUTHORIZED,
                 'protocolo_autorizacao' => (string) $infProt->nProt,
@@ -125,20 +158,18 @@ class InvoiceService
 
     /**
      * Etapa 5. Só cancela se a nota estiver autorizada e ainda dentro do
-     * prazo de 24h da autorização (regra pedida explicitamente — não existe
-     * essa checagem em nenhum outro lugar do projeto ainda, foi construída
-     * aqui pela primeira vez).
+     * prazo de 24h da autorização.
      */
     public function cancel(Order $order, string $motivo): Invoice
     {
         $invoice = $order->invoice;
 
         if (! $invoice || $invoice->status !== Invoice::STATUS_AUTHORIZED) {
-            throw new \RuntimeException('Não há uma NF-e autorizada para este pedido.');
+            throw new RuntimeException('Não há uma NF-e autorizada para este pedido.');
         }
 
         if ($invoice->autorizada_em?->diffInHours(now()) >= 24) {
-            throw new \RuntimeException('Prazo de 24h para cancelamento da NF-e expirado.');
+            throw new RuntimeException('Prazo de 24h para cancelamento da NF-e expirado.');
         }
 
         $certificate = $this->certificateService->load();
@@ -157,7 +188,7 @@ class InvoiceService
                 'cancelada_em' => now(),
             ]);
         } else {
-            throw new \RuntimeException('SEFAZ não confirmou o cancelamento: '.($infEvento?->xMotivo ?? 'resposta inesperada'));
+            throw new RuntimeException('SEFAZ não confirmou o cancelamento: '.($infEvento?->xMotivo ?? 'resposta inesperada'));
         }
 
         return $invoice->fresh();

@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Models;
 
 use App\Models\User;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -76,5 +77,20 @@ class Order extends Model
     public function invoice(): HasOne
     {
         return $this->hasOne(Invoice::class);
+    }
+
+    public function invoiceGenerationLogs(): HasMany
+    {
+        return $this->hasMany(InvoiceGenerationLog::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(OrderEmailLog::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    public function latestEmailLog(): HasOne
+    {
+        return $this->hasOne(OrderEmailLog::class)->latestOfMany(['created_at', 'id']);
     }
 }

@@ -5,8 +5,10 @@ namespace Tests\Feature\Checkout;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Services\Stripe\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Stripe\PaymentIntent;
 use Tests\TestCase;
 
@@ -49,6 +51,8 @@ class PaymentStatusPollingTest extends TestCase
 
     public function test_status_endpoint_confirms_and_marks_paid_once_stripe_authorizes(): void
     {
+        Queue::fake();
+
         $this->mock(StripePaymentService::class, function ($mock) {
             $mock->shouldReceive('retrieve')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_1', 'status' => 'requires_capture']));
             $mock->shouldReceive('capture')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_1', 'status' => 'succeeded']));
@@ -62,6 +66,7 @@ class PaymentStatusPollingTest extends TestCase
 
         $response->assertOk()->assertJson(['status' => Order::STATUS_PAID]);
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);
+        Queue::assertPushed(GenerateInvoiceJob::class, fn (GenerateInvoiceJob $job) => $job->orderId === $order->id);
     }
 
     public function test_status_endpoint_reverts_order_to_pending_when_a_payment_is_canceled(): void

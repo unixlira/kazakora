@@ -4,12 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Stripe\PaymentIntent;
 use Tests\TestCase;
 
@@ -37,6 +38,7 @@ class CartCheckoutQuantityDiscountTest extends TestCase
     public function test_checkout_charges_the_quantity_discount_price_on_the_order_item(): void
     {
         Mail::fake();
+        Queue::fake();
         $this->mockStripe();
 
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
@@ -78,7 +80,7 @@ class CartCheckoutQuantityDiscountTest extends TestCase
 
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);
 
-        Mail::assertQueued(OrderConfirmation::class);
+        Queue::assertPushed(GenerateInvoiceJob::class, fn (GenerateInvoiceJob $job) => $job->orderId === $order->id);
     }
 
     private function mockStripe(): void

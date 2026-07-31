@@ -3,16 +3,18 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Checkout\Models\Order;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 
-class OrderConfirmation extends Mailable implements ShouldQueue
+/**
+ * Não é ShouldQueue: sempre enviada de dentro de
+ * App\Modules\Checkout\Jobs\SendOrderReceiptEmailJob, que já é o job na
+ * fila — enviar aqui de novo criaria um segundo job invisível, escondendo o
+ * resultado real do try/catch de retry/log do job.
+ */
+class OrderConfirmation extends Mailable
 {
-    use Queueable, SerializesModels;
 
     public function __construct(public readonly Order $order)
     {

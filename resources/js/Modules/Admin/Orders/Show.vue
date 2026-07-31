@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -12,10 +13,42 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    invoiceGenerationLogs: {
+        type: Array,
+        default: () => [],
+    },
+    emailLogs: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const formatDateTime = (value) => new Date(value).toLocaleString('pt-BR');
+
+const invoiceBadge = {
+    pending: { color: 'pending', label: 'Pendente' },
+    signed: { color: 'shipped', label: 'Assinada' },
+    sent: { color: 'shipped', label: 'Enviada à SEFAZ' },
+    authorized: { color: 'completed', label: 'Emitida' },
+    rejected: { color: 'cancelled', label: 'Rejeitada' },
+    denied: { color: 'cancelled', label: 'Denegada' },
+    cancelled: { color: 'cancelled', label: 'Cancelada' },
+    error: { color: 'cancelled', label: 'Erro' },
+};
+
+const emailBadge = {
+    sent: { color: 'completed', label: 'Enviado' },
+    failed: { color: 'cancelled', label: 'Falhou' },
+};
+
+const generationLogBadge = {
+    success: { color: 'completed', label: 'Sucesso' },
+    retrying: { color: 'in_progress', label: 'Tentando novamente' },
+    failed: { color: 'cancelled', label: 'Falhou' },
+};
 
 const form = useForm({
     status: props.order.status,
@@ -59,6 +92,60 @@ const updateStatus = () => {
                         {{ order.shipping_neighborhood }} - {{ order.shipping_city }}/{{ order.shipping_state }}<br>
                         CEP {{ order.shipping_zip }}
                     </p>
+                </div>
+
+                <div class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Nota fiscal e e-mail</h2>
+
+                    <div class="mt-3 flex flex-wrap items-center gap-6 text-sm">
+                        <div>
+                            <span class="text-slate-500">Nota fiscal:</span>
+                            <StatusBadge
+                                v-if="order.invoice"
+                                :status="invoiceBadge[order.invoice.status]?.color ?? order.invoice.status"
+                                :label="invoiceBadge[order.invoice.status]?.label ?? order.invoice.status"
+                            />
+                            <span v-else class="text-slate-400">— ainda não emitida</span>
+                        </div>
+                        <div v-if="order.invoice?.chave_acesso" class="font-mono text-xs text-slate-500">
+                            Chave: {{ order.invoice.chave_acesso }}
+                        </div>
+                    </div>
+
+                    <h3 class="mt-6 text-sm font-semibold text-slate-500">Histórico de emissão da nota</h3>
+                    <ul v-if="invoiceGenerationLogs.length" class="mt-2 space-y-2 text-sm">
+                        <li v-for="log in invoiceGenerationLogs" :key="log.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
+                            <div>
+                                <StatusBadge
+                                    :status="generationLogBadge[log.status]?.color ?? log.status"
+                                    :label="generationLogBadge[log.status]?.label ?? log.status"
+                                />
+                                <span class="ml-2 text-xs text-slate-400">tentativa {{ log.attempt }}</span>
+                                <p v-if="log.error_message" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ log.error_message }}</p>
+                            </div>
+                            <span class="whitespace-nowrap text-xs text-slate-400">{{ formatDateTime(log.created_at) }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="mt-2 text-sm text-slate-400">Nenhuma tentativa de emissão registrada ainda.</p>
+
+                    <h3 class="mt-6 text-sm font-semibold text-slate-500">Histórico de e-mail de recibo</h3>
+                    <ul v-if="emailLogs.length" class="mt-2 space-y-2 text-sm">
+                        <li v-for="log in emailLogs" :key="log.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
+                            <div>
+                                <StatusBadge
+                                    :status="emailBadge[log.status]?.color ?? log.status"
+                                    :label="emailBadge[log.status]?.label ?? log.status"
+                                />
+                                <span class="ml-2 text-xs text-slate-400">tentativa {{ log.attempt }}</span>
+                                <span v-if="log.status === 'sent' && !log.invoice_attached" class="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                                    sem a nota em anexo
+                                </span>
+                                <p v-if="log.error_message" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ log.error_message }}</p>
+                            </div>
+                            <span class="whitespace-nowrap text-xs text-slate-400">{{ formatDateTime(log.created_at) }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="mt-2 text-sm text-slate-400">Nenhum e-mail de recibo enviado ainda.</p>
                 </div>
             </div>
 

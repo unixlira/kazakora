@@ -9,6 +9,8 @@ import { sidebarSections } from '@/Shared/adminSidebarItems';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
+const notifications = computed(() => page.props.notifications?.items ?? []);
+const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
 const { can } = usePermissions();
@@ -25,9 +27,22 @@ const visibleSections = computed(() =>
 const collapseShow = ref('hidden');
 const userMenuOpen = ref(false);
 const userMenuRef = ref(null);
+const notifMenuOpen = ref(false);
+const notifMenuRef = ref(null);
 const sidebarCollapsed = ref(false);
 
 useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
+useClickOutside(notifMenuRef, () => (notifMenuOpen.value = false));
+
+const markNotificationRead = (item) => {
+    if (!item.read) {
+        router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
+    }
+};
+
+const markAllNotificationsRead = () => {
+    router.post('/notificacoes/ler-todas', {}, { preserveScroll: true, preserveState: true });
+};
 
 onMounted(() => {
     sidebarCollapsed.value = localStorage.getItem('admin_sidebar_collapsed') === '1';
@@ -165,11 +180,38 @@ watch(
                             <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>
                         </button>
 
-                        <!-- Notifications (placeholder) -->
-                        <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
-                            title="Notificações">
-                            <i class="fas fa-bell"></i>
-                        </button>
+                        <!-- Notifications -->
+                        <div ref="notifMenuRef" class="relative">
+                            <button type="button" class="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
+                                title="Notificações" @click="notifMenuOpen = !notifMenuOpen">
+                                <i class="fas fa-bell"></i>
+                                <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-primary px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
+                            </button>
+
+                            <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
+                                <div class="flex items-center justify-between px-4 py-2">
+                                    <h5 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Notificações</h5>
+                                    <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-primary hover:underline" @click="markAllNotificationsRead">
+                                        Marcar todas como lidas
+                                    </button>
+                                </div>
+
+                                <p v-if="notifications.length === 0" class="px-4 py-6 text-center text-sm text-slate-400">
+                                    Nenhuma notificação por aqui ainda.
+                                </p>
+
+                                <button v-for="item in notifications" :key="item.id" type="button"
+                                    class="flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-[var(--surface-muted)]"
+                                    :class="{ 'bg-lightprimary': !item.read }"
+                                    @click="markNotificationRead(item)">
+                                    <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-primary'"></span>
+                                    <span>
+                                        <span class="block">{{ item.message }}</span>
+                                        <span class="text-xs text-slate-400">{{ item.createdAt }}</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
 
                         <div ref="userMenuRef" class="relative ml-2">
                             <button type="button" class="flex items-center text-sm" @click="userMenuOpen = !userMenuOpen">

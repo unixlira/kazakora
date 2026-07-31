@@ -4,13 +4,14 @@ namespace Tests\Feature\Checkout;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Stripe\PaymentIntent;
 use Tests\TestCase;
 
@@ -32,6 +33,7 @@ class GuestCheckoutTest extends TestCase
     {
         Mail::fake();
         Notification::fake();
+        Queue::fake();
         $this->mockStripe();
 
         $product = Product::factory()->create(['price' => 200, 'stock' => 10, 'is_active' => true]);
@@ -73,7 +75,7 @@ class GuestCheckoutTest extends TestCase
 
         $this->assertAuthenticatedAs($user);
         $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);
-        Mail::assertQueued(OrderConfirmation::class);
+        Queue::assertPushed(GenerateInvoiceJob::class, fn (GenerateInvoiceJob $job) => $job->orderId === $order->id);
     }
 
     public function test_guest_checkout_is_rejected_when_email_already_has_an_account(): void

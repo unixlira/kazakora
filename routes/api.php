@@ -2,12 +2,16 @@
 
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
+use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
 // Chamado pelos servidores do Stripe, não por um navegador — sem sessão/CSRF
 // (ver bootstrap/app.php), a assinatura é verificada dentro do controller.
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('api.stripe.webhook');
+
+// Idem, pro Mercado Pago — assinatura HMAC verificada dentro do controller.
+Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('api.mercadopago.webhook');
 
 Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
     // OAuth is initiated/completed by a logged-in admin's browser, so it

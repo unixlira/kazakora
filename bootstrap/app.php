@@ -39,6 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'api/mercadolivre/webhook',
             'api/stripe/webhook',
+            'api/mercadopago/webhook',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

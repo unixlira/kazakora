@@ -52,10 +52,12 @@ return [
     ],
 
     'melhorenvio' => [
-        // Token de Integração gerado no painel do Melhor Envio (Configurações
-        // > Tokens) — sem OAuth, é um Bearer token estático por conta.
-        'token' => env('MELHORENVIO_TOKEN'),
+        'client_id' => env('MELHORENVIO_CLIENT_ID'),
+        'client_secret' => env('MELHORENVIO_CLIENT_SECRET'),
+        'redirect_uri' => env('MELHORENVIO_REDIRECT_URI'),
         'api_base_url' => env('MELHORENVIO_API_BASE_URL', 'https://sandbox.melhorenvio.com.br/api/v2'),
+        'auth_url' => env('MELHORENVIO_AUTH_URL', 'https://sandbox.melhorenvio.com.br/oauth/authorize'),
+        'token_url' => env('MELHORENVIO_TOKEN_URL', 'https://sandbox.melhorenvio.com.br/oauth/token'),
     ],
 
 ];

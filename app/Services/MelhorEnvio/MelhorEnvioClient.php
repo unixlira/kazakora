@@ -10,15 +10,18 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Thin HTTP client for a Melhor Envio "Token de Integração" (token estático
- * gerado no painel deles, sem OAuth) — mesmo padrão de retry/log do
- * MercadoLivreClient, mais simples pq não tem refresh de token.
+ * Thin HTTP client for the Melhor Envio API (OAuth2 — conta conectada via
+ * MelhorEnvioAuthService, mesmo padrão de retry/log do MercadoLivreClient).
  */
 class MelhorEnvioClient
 {
+    public function __construct(private readonly MelhorEnvioAuthService $auth)
+    {
+    }
+
     public function isConfigured(): bool
     {
-        return filled(config('services.melhorenvio.token'));
+        return $this->auth->currentToken() !== null;
     }
 
     /**
@@ -34,12 +37,10 @@ class MelhorEnvioClient
      */
     private function request(string $method, string $uri, array $data): array
     {
-        if (! $this->isConfigured()) {
-            throw new MelhorEnvioException('Token do Melhor Envio não configurado.');
-        }
+        $token = $this->auth->ensureValidToken($this->auth->currentToken());
 
         $request = Http::baseUrl(config('services.melhorenvio.api_base_url'))
-            ->withToken(config('services.melhorenvio.token'))
+            ->withToken($token->access_token)
             ->withHeaders(['User-Agent' => config('melhorenvio.user_agent')])
             ->timeout((int) config('melhorenvio.timeout'))
             ->connectTimeout((int) config('melhorenvio.connect_timeout'))

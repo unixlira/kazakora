@@ -9,10 +9,15 @@ import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     shippingMethods: { type: Array, default: () => [] },
+    melhorEnvio: { type: Object, default: () => ({ connected: false, accountLabel: null }) },
 });
 
 const { can } = usePermissions();
 const showForm = ref(false);
+
+const disconnectMelhorEnvio = () => {
+    router.delete('/admin/logistica/melhor-envio', { preserveScroll: true });
+};
 
 const form = useForm({
     name: '',
@@ -70,6 +75,28 @@ const columns = [
                 class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"
                 @click="showForm = !showForm">
                 <i class="fas fa-plus text-xs"></i> Novo método
+            </button>
+        </div>
+
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+            <div>
+                <h2 class="text-sm font-semibold">Melhor Envio</h2>
+                <p class="mt-0.5 text-xs text-slate-400">
+                    Cotação real de frete no checkout. Quando conectado, substitui a lista abaixo sempre que
+                    conseguir cotar (produto com peso/dimensões cadastrados) — a lista fica como reserva.
+                </p>
+                <p v-if="melhorEnvio.connected" class="mt-2 text-xs text-emerald-600">
+                    <i class="fas fa-circle-check mr-1"></i> Conectado — {{ melhorEnvio.accountLabel ?? 'conta sem nome' }}
+                </p>
+            </div>
+            <a v-if="!melhorEnvio.connected" href="/api/melhorenvio/auth"
+                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                <i class="fas fa-plug text-xs"></i> Conectar Melhor Envio
+            </a>
+            <button v-else type="button"
+                class="rounded-lg border border-error px-4 py-2 text-sm font-medium text-error hover:bg-error/10"
+                @click="disconnectMelhorEnvio">
+                Desconectar
             </button>
         </div>
 

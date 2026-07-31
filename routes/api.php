@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -20,4 +21,9 @@ Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
     // Called by Mercado Livre's servers, not a browser — stays stateless
     // and CSRF-exempt (see bootstrap/app.php).
     Route::post('/webhook', [MercadoLivreController::class, 'webhook'])->name('webhook');
+});
+
+Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth', 'admin'])->group(function () {
+    Route::get('/auth', [MelhorEnvioController::class, 'redirectToAuth'])->name('auth');
+    Route::get('/callback', [MelhorEnvioController::class, 'callback'])->name('callback');
 });

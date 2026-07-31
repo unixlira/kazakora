@@ -2,6 +2,7 @@
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import InputError from '@/Shared/Components/InputError.vue';
+import { maskCep, useCep } from '@/Shared/useCep';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -43,6 +44,25 @@ const form = useForm({
 
 const useNewAddress = ref(!form.address_id);
 const showAddressPicker = ref(false);
+
+const { loading: cepLoading, error: cepError, lookup: lookupCep } = useCep();
+
+const onCepInput = async (event) => {
+    form.new_address.zip = maskCep(event.target.value);
+
+    if (form.new_address.zip.replace(/\D/g, '').length !== 8) {
+        return;
+    }
+
+    const result = await lookupCep(form.new_address.zip);
+
+    if (result) {
+        form.new_address.street = result.street;
+        form.new_address.neighborhood = result.neighborhood;
+        form.new_address.city = result.city;
+        form.new_address.state = result.state;
+    }
+};
 
 const selectedAddress = computed(() => props.addresses.find((address) => address.id === form.address_id) ?? null);
 
@@ -171,8 +191,12 @@ const submit = () => {
                             </div>
                             <div>
                                 <label class="text-sm font-medium">CEP</label>
-                                <input v-model="form.new_address.zip" type="text" required :class="inputClass">
+                                <div class="relative">
+                                    <input :value="form.new_address.zip" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" required :class="inputClass" @input="onCepInput">
+                                    <i v-if="cepLoading" class="fas fa-spinner absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-xs text-store-fg-muted"></i>
+                                </div>
                                 <InputError :message="form.errors['new_address.zip']" />
+                                <p v-if="cepError" class="mt-1 text-xs text-red-600">{{ cepError }}</p>
                             </div>
                             <div class="sm:col-span-2 sm:grid sm:grid-cols-3 sm:gap-4">
                                 <div class="sm:col-span-2">

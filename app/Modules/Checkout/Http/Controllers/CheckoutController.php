@@ -23,10 +23,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Stripe\Exception\ApiErrorException;
 
 class CheckoutController extends Controller
 {
@@ -273,6 +275,17 @@ class CheckoutController extends Controller
             });
         } catch (GuestEmailAlreadyExistsException) {
             return back()->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        } catch (ApiErrorException $exception) {
+            // Erro real da API do Stripe (ex: método de pagamento não
+            // ativado no dashboard, credencial inválida, instabilidade) —
+            // sem isso, essa exceção subia sem tratamento e virava uma 500
+            // crua, sem nenhum feedback pro cliente no checkout.
+            Log::channel('stripe')->error('stripe.checkout.payment_intent_failed', [
+                'payment_method' => $data['payment_method'],
+                'message' => $exception->getMessage(),
+            ]);
+
+            return back()->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
         return $this->renderConfirmingPayment($draft, $order, $firstIntent, $methods[0], count($methods) > 1 ? $methods[1] : null);

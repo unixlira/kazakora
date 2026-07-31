@@ -3,6 +3,8 @@
 namespace App\Services\Stripe;
 
 use App\Modules\Checkout\Models\Payment;
+use Illuminate\Support\Facades\Log;
+use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\PaymentIntent;
 use Stripe\StripeClient;
@@ -26,7 +28,7 @@ class StripePaymentService
      * valor já é transferido — por isso NUNCA devem ser a primeira parte
      * criada num split; ver orquestração em CheckoutController.
      */
-    public function createIntent(string $methodType, float $amount, array $metadata = []): PaymentIntent
+    public function createIntent(string $methodType, float $amount, array $metadata = [], ?string $idempotencyKey = null): PaymentIntent
     {
         $stripeMethod = $this->stripeMethodType($methodType);
 
@@ -41,7 +43,33 @@ class StripePaymentService
             $payload['capture_method'] = 'manual';
         }
 
-        return $this->client()->paymentIntents->create($payload);
+        $options = $idempotencyKey ? ['idempotency_key' => $idempotencyKey] : [];
+
+        Log::channel('stripe')->info('stripe.payment_intent.creating', [
+            'order_id' => $metadata['order_id'] ?? null,
+            'method_type' => $stripeMethod,
+            'amount_cents' => $payload['amount'],
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        try {
+            $intent = $this->client()->paymentIntents->create($payload, $options);
+        } catch (ApiErrorException $exception) {
+            Log::channel('stripe')->warning('stripe.payment_intent.create_failed', [
+                'order_id' => $metadata['order_id'] ?? null,
+                'method_type' => $stripeMethod,
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+
+        Log::channel('stripe')->info('stripe.payment_intent.created', [
+            'order_id' => $metadata['order_id'] ?? null,
+            'payment_intent_id' => $intent->id,
+        ]);
+
+        return $intent;
     }
 
     public function capture(string $paymentIntentId): PaymentIntent

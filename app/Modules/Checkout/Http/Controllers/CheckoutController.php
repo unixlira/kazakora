@@ -10,6 +10,7 @@ use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -24,7 +25,6 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
-use RuntimeException;
 
 class CheckoutController extends Controller
 {
@@ -204,7 +204,12 @@ class CheckoutController extends Controller
                     ? round($total * ($data['split_percentage'] / 100), 2)
                     : $total;
 
-                $intent = $this->stripe->createIntent($primaryMethod, $primaryAmount, ['order_id' => $order->id]);
+                $intent = $this->stripe->createIntent(
+                    $primaryMethod,
+                    $primaryAmount,
+                    ['order_id' => $order->id],
+                    "order:{$order->id}:payment:1",
+                );
 
                 Payment::create([
                     'order_id' => $order->id,
@@ -216,10 +221,8 @@ class CheckoutController extends Controller
 
                 return [$order, $intent];
             });
-        } catch (RuntimeException $exception) {
-            return back()->withErrors(['cart' => $exception->getMessage() === 'email_exists'
-                ? 'Já existe uma conta com esse e-mail. Faça login para continuar.'
-                : 'Os produtos do seu carrinho não estão mais disponíveis.']);
+        } catch (GuestEmailAlreadyExistsException) {
+            return back()->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
         }
 
         return Inertia::render('Checkout/Payment', [
@@ -246,7 +249,12 @@ class CheckoutController extends Controller
         $alreadyPaid = $order->payments()->sum('amount');
         $remaining = round((float) $order->total - (float) $alreadyPaid, 2);
 
-        $intent = $this->stripe->createIntent($data['method_type'], $remaining, ['order_id' => $order->id]);
+        $intent = $this->stripe->createIntent(
+            $data['method_type'],
+            $remaining,
+            ['order_id' => $order->id],
+            "order:{$order->id}:payment:2",
+        );
 
         Payment::create([
             'order_id' => $order->id,
@@ -381,7 +389,7 @@ class CheckoutController extends Controller
     private function createGuestAccount(array $guest): User
     {
         if (User::where('email', $guest['email'])->exists()) {
-            throw new RuntimeException('email_exists');
+            throw new GuestEmailAlreadyExistsException();
         }
 
         $user = User::create([

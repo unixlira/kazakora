@@ -9,6 +9,7 @@ use App\Services\Stripe\StripePaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Stripe\Dispute;
 use Stripe\Exception\SignatureVerificationException;
 use UnexpectedValueException;
 
@@ -28,9 +29,17 @@ class StripeWebhookController extends Controller
                 $request->header('Stripe-Signature', ''),
             );
         } catch (SignatureVerificationException|UnexpectedValueException $exception) {
-            Log::warning('stripe.webhook.invalid_signature', ['message' => $exception->getMessage()]);
+            Log::channel('stripe')->warning('stripe.webhook.invalid_signature', ['message' => $exception->getMessage()]);
 
             return response()->json(['error' => 'invalid_signature'], 400);
+        }
+
+        Log::channel('stripe')->info('stripe.webhook.received', ['type' => $event->type, 'id' => $event->id]);
+
+        if ($event->type === 'charge.dispute.created') {
+            $this->handleDispute($event->data->object);
+
+            return response()->json(['status' => 'received']);
         }
 
         $intent = $event->data->object;
@@ -47,6 +56,28 @@ class StripeWebhookController extends Controller
         };
 
         return response()->json(['status' => 'received']);
+    }
+
+    /**
+     * O objeto do evento de disputa é um Dispute, não um PaymentIntent — o
+     * vínculo com o nosso Payment/Order é via `dispute->payment_intent`, não
+     * `dispute->id`. Não automatiza reembolso/resposta (decisão de negócio,
+     * feita manualmente no painel do Stripe) — só registra e sinaliza o pedido.
+     */
+    private function handleDispute(Dispute $dispute): void
+    {
+        $payment = Payment::query()->where('stripe_payment_intent_id', $dispute->payment_intent)->first();
+
+        Log::channel('stripe')->warning('stripe.webhook.dispute_created', [
+            'dispute_id' => $dispute->id,
+            'payment_intent_id' => $dispute->payment_intent,
+            'reason' => $dispute->reason,
+            'order_id' => $payment?->order_id,
+        ]);
+
+        if ($payment) {
+            $payment->order()->update(['disputed_at' => now()]);
+        }
     }
 
     private function handleSuccess(Payment $payment): void

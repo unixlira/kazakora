@@ -64,7 +64,7 @@ const mountPaymentElement = async () => {
     if (! props.clientSecret || ! props.stripeKey) return;
 
     stripeInstance.value = await loadStripe(props.stripeKey);
-    elementsInstance.value = stripeInstance.value.elements({ clientSecret: props.clientSecret });
+    elementsInstance.value = stripeInstance.value.elements({ clientSecret: props.clientSecret, locale: 'pt-BR' });
     elementsInstance.value.create('payment').mount('#payment-element');
     elementReady.value = true;
 };

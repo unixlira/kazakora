@@ -22,6 +22,7 @@ class Company extends Model
         'inscricao_municipal',
         'regime_tributario',
         'cnae',
+        'logo_path',
         'phone',
         'email',
         'zip',

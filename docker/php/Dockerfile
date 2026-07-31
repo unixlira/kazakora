@@ -24,7 +24,8 @@ RUN docker-php-ext-configure gd --with-jpeg --with-freetype \
         pcntl \
         bcmath \
         intl \
-        opcache
+        opcache \
+        soap
 
 RUN pecl install redis && docker-php-ext-enable redis
 

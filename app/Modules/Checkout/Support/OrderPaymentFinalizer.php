@@ -5,8 +5,11 @@ namespace App\Modules\Checkout\Support;
 use App\Modules\Checkout\Mail\OrderConfirmation;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Fiscal\Services\InvoiceService;
 use App\Services\Stripe\StripePaymentService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 /**
  * Coordena o "tudo ou nada" do split de pagamento: só marca o pedido como
@@ -21,8 +24,10 @@ use Illuminate\Support\Facades\Mail;
  */
 class OrderPaymentFinalizer
 {
-    public function __construct(private readonly StripePaymentService $stripe)
-    {
+    public function __construct(
+        private readonly StripePaymentService $stripe,
+        private readonly InvoiceService $invoices,
+    ) {
     }
 
     public function finalize(Order $order): bool
@@ -53,6 +58,15 @@ class OrderPaymentFinalizer
         }
 
         $order->update(['status' => Order::STATUS_PAID]);
+
+        // A emissão da NF-e nunca pode travar a confirmação do pagamento —
+        // se falhar (ex: certificado A1 ainda não configurado), só registra
+        // e segue; o pedido já está pago de verdade de qualquer forma.
+        try {
+            $this->invoices->issue($order->fresh());
+        } catch (Throwable $exception) {
+            Log::error('nfe.issue.unexpected_failure', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
+        }
 
         Mail::to($order->user)->send(new OrderConfirmation($order));
 

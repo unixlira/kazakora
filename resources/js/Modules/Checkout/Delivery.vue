@@ -124,8 +124,8 @@ const submit = () => {
                             <div class="min-w-0 flex-1">
                                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                                     <span class="font-semibold text-store-fg">Enviar para o endereço</span>
-                                    <span class="font-store-mono text-sm font-semibold" :class="shippingCost === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-store-fg'">
-                                        {{ shippingCost === 0 ? 'Grátis' : formatPrice(shippingCost) }}
+                                    <span class="font-store text-sm font-semibold" :class="shippingCost === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-store-fg'">
+                                        {{ shippingCost === 0 ? 'Frete Grátis' : formatPrice(shippingCost) }}
                                     </span>
                                 </div>
 
@@ -176,7 +176,7 @@ const submit = () => {
                         <h2 class="mb-4 text-sm font-semibold uppercase text-store-fg-muted">Endereço de entrega</h2>
                         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div class="sm:col-span-2">
-                                <label class="text-sm font-medium">Rótulo (opcional)</label>
+                                <label class="text-sm font-medium">Apelido (opcional)</label>
                                 <input v-model="form.new_address.label" type="text" placeholder="Casa, Trabalho..." :class="inputClass">
                             </div>
                             <div class="sm:col-span-2">
@@ -242,8 +242,8 @@ const submit = () => {
                             :class="form.shipping_method_id === method.id ? 'border-store-accent bg-store-accent/5' : 'border-store-border hover:border-store-border-strong'">
                             <input v-model="form.shipping_method_id" type="radio" :value="method.id" class="h-4 w-4 accent-store-accent">
                             <span class="flex-1 text-sm">{{ method.name }} · até {{ method.estimated_days }} dia{{ method.estimated_days === 1 ? '' : 's' }}</span>
-                            <span class="font-store-mono text-sm font-semibold" :class="Number(method.price) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-store-fg'">
-                                {{ Number(method.price) === 0 ? 'Grátis' : formatPrice(method.price) }}
+                            <span class="font-store text-sm font-semibold" :class="Number(method.price) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-store-fg'">
+                                {{ Number(method.price) === 0 ? 'Frete Grátis' : formatPrice(method.price) }}
                             </span>
                         </label>
                     </div>

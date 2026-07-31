@@ -51,6 +51,13 @@ return [
         'token_url' => env('ML_TOKEN_URL', 'https://api.mercadolibre.com/oauth/token'),
     ],
 
+    'mercadopago' => [
+        'access_token' => env('MERCADOPAGO_ACCESS_TOKEN'),
+        'public_key' => env('MERCADOPAGO_PUBLIC_KEY'),
+        'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
+        'api_base_url' => env('MERCADOPAGO_API_BASE_URL', 'https://api.mercadopago.com'),
+    ],
+
     'melhorenvio' => [
         'client_id' => env('MELHORENVIO_CLIENT_ID'),
         'client_secret' => env('MELHORENVIO_CLIENT_SECRET'),

@@ -12,6 +12,7 @@ use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\KpiController;
+use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
@@ -213,6 +214,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');
+
+    Route::get('pagamentos', [PaymentSettingsController::class, 'edit'])->name('pagamentos.editar');
+    Route::put('pagamentos', [PaymentSettingsController::class, 'update'])->name('pagamentos.atualizar');
 
     // Gestão
     Route::middleware('permission:relatorios.view')->group(function () {

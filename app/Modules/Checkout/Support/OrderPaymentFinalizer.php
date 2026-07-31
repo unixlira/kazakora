@@ -83,4 +83,36 @@ class OrderPaymentFinalizer
             $order->update(['status' => Order::STATUS_PENDING]);
         }
     }
+
+    /**
+     * Disparado quando o admin cancela um pedido (OrderController::update).
+     * Pagamento capturado (dinheiro já saiu de verdade) → reembolso real via
+     * API; pagamento só autorizado (nunca capturado) → apenas cancela, sem
+     * reembolso, porque o dinheiro nunca chegou a sair. Nunca lança — cada
+     * falha vira uma mensagem na lista de retorno, pra não travar o
+     * cancelamento do pedido em si por causa de um problema no Stripe.
+     *
+     * @return array<int, string>
+     */
+    public function refundOrder(Order $order): array
+    {
+        $order->loadMissing('payments');
+        $errors = [];
+
+        foreach ($order->payments as $payment) {
+            try {
+                if ($payment->status === Payment::STATUS_CAPTURED) {
+                    $this->stripe->refund($payment->stripe_payment_intent_id);
+                    $payment->update(['status' => Payment::STATUS_REFUNDED]);
+                } elseif ($payment->status === Payment::STATUS_AUTHORIZED) {
+                    $this->stripe->cancel($payment->stripe_payment_intent_id);
+                    $payment->update(['status' => Payment::STATUS_CANCELED]);
+                }
+            } catch (\Throwable $exception) {
+                $errors[] = "Pagamento {$payment->stripe_payment_intent_id}: {$exception->getMessage()}";
+            }
+        }
+
+        return $errors;
+    }
 }

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\PaymentIntent;
+use Stripe\Refund;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 use UnexpectedValueException;
@@ -93,6 +94,34 @@ class StripePaymentService
     public function retrieve(string $paymentIntentId): PaymentIntent
     {
         return $this->client()->paymentIntents->retrieve($paymentIntentId);
+    }
+
+    /**
+     * Reembolsa um PaymentIntent já capturado (dinheiro já saiu — devolve
+     * de verdade via API, não é o mesmo que cancel(), que só funciona antes
+     * da captura).
+     */
+    public function refund(string $paymentIntentId): Refund
+    {
+        Log::channel('stripe')->info('stripe.refund.creating', ['payment_intent_id' => $paymentIntentId]);
+
+        try {
+            $refund = $this->client()->refunds->create(['payment_intent' => $paymentIntentId]);
+        } catch (ApiErrorException $exception) {
+            Log::channel('stripe')->warning('stripe.refund.failed', [
+                'payment_intent_id' => $paymentIntentId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+
+        Log::channel('stripe')->info('stripe.refund.created', [
+            'payment_intent_id' => $paymentIntentId,
+            'refund_id' => $refund->id,
+        ]);
+
+        return $refund;
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Notifications\OrderStatusUpdated;
@@ -53,7 +54,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function update(Request $request, Order $order, InvoiceService $invoices): RedirectResponse
+    public function update(Request $request, Order $order, InvoiceService $invoices, OrderPaymentFinalizer $finalizer): RedirectResponse
     {
         $validated = $request->validate([
             'status' => ['required', Rule::in(self::STATUSES)],
@@ -67,15 +68,25 @@ class OrderController extends Controller
             $order->user->notify(new OrderStatusUpdated($order));
         }
 
-        $invoiceWarning = null;
+        $warnings = [];
 
         if ($statusChanged && $validated['status'] === Order::STATUS_CANCELLED) {
-            $invoiceWarning = $this->cancelInvoiceIfAuthorized($order, $invoices);
+            if ($invoiceWarning = $this->cancelInvoiceIfAuthorized($order, $invoices)) {
+                $warnings[] = $invoiceWarning;
+            }
+
+            // Sem gate por status anterior: refundOrder() só age em Payment
+            // já capturado/autorizado (nunca existe nenhum pra um pedido que
+            // nunca chegou a ser cobrado), então chamar sempre é seguro.
+            foreach ($finalizer->refundOrder($order) as $refundError) {
+                Log::error('stripe.refund.order_cancel_failed', ['order_id' => $order->id, 'message' => $refundError]);
+                $warnings[] = "Reembolso: {$refundError}";
+            }
         }
 
         $response = back()->with('success', 'Status do pedido atualizado.');
 
-        return $invoiceWarning ? $response->with('warning', $invoiceWarning) : $response;
+        return $warnings ? $response->with('warning', implode(' ', $warnings)) : $response;
     }
 
     /**

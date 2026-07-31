@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { maskCpfCnpj } from '@/Shared/useMasks';
 
 const form = useForm({
     name: '',
@@ -12,6 +13,10 @@ const form = useForm({
     state: '',
     is_active: true,
 });
+
+const onDocumentInput = (event) => {
+    form.document = maskCpfCnpj(event.target.value);
+};
 
 const submit = () => {
     form.post('/admin/fornecedores');
@@ -35,8 +40,8 @@ const submit = () => {
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <label for="document" class="block text-sm font-medium">CNPJ/CPF</label>
-                    <input id="document" v-model="form.document" type="text"
-                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2">
+                    <input id="document" :value="form.document" type="text" inputmode="numeric" maxlength="18"
+                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2" @input="onDocumentInput">
                     <InputError :message="form.errors.document" />
                 </div>
                 <div>

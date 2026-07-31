@@ -3,6 +3,7 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
+import { maskCpf } from '@/Shared/useMasks';
 import { useFreightQuote } from '@/Shared/useFreightQuote';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -92,6 +93,10 @@ watch(effectiveZip, async (zip) => {
         form.shipping_method_id = liveQuotes.value[0].id;
     }
 }, { immediate: true });
+
+const onGuestCpfInput = (event) => {
+    form.guest.cpf = maskCpf(event.target.value);
+};
 
 const selectExistingAddress = (address) => {
     form.address_id = address.id;
@@ -203,7 +208,7 @@ const submit = () => {
                             </div>
                             <div>
                                 <label class="text-sm font-medium">CPF</label>
-                                <input v-model="form.guest.cpf" type="text" required :class="inputClass">
+                                <input :value="form.guest.cpf" type="text" inputmode="numeric" maxlength="14" required :class="inputClass" @input="onGuestCpfInput">
                                 <InputError :message="form.errors['guest.cpf']" />
                             </div>
                         </div>

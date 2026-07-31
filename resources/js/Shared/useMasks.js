@@ -1,3 +1,20 @@
+export function maskCpf(value) {
+    return (value ?? '')
+        .replace(/\D/g, '')
+        .slice(0, 11)
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+}
+
+// Campo único que aceita PF ou PJ (ex: "CNPJ/CPF" de fornecedor) — troca de
+// máscara sozinho conforme a quantidade de dígitos já digitados.
+export function maskCpfCnpj(value) {
+    const digits = (value ?? '').replace(/\D/g, '').slice(0, 14);
+
+    return digits.length > 11 ? maskCnpj(digits) : maskCpf(digits);
+}
+
 export function maskCnpj(value) {
     return (value ?? '')
         .replace(/\D/g, '')

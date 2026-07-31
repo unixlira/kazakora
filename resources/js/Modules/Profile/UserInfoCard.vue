@@ -2,6 +2,7 @@
 import { useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
+import { maskCpf } from '@/Shared/useMasks';
 
 const props = defineProps({
     profileUser: {
@@ -34,7 +35,7 @@ const fields = computed(() => [
     { label: 'Nome completo', value: props.profileUser.name },
     { label: 'E-mail', value: props.profileUser.email },
     { label: 'Telefone', value: props.profileUser.phone || '—' },
-    { label: 'CPF', value: props.profileUser.cpf || '—' },
+    { label: 'CPF', value: props.profileUser.cpf ? maskCpf(props.profileUser.cpf) : '—' },
     { label: 'Data de nascimento', value: formatDate(props.profileUser.birth_date) },
 ]);
 
@@ -42,9 +43,13 @@ const form = useForm({
     name: props.profileUser.name,
     email: props.profileUser.email,
     phone: props.profileUser.phone ?? '',
-    cpf: props.profileUser.cpf ?? '',
+    cpf: maskCpf(props.profileUser.cpf ?? ''),
     birth_date: toDateInputValue(props.profileUser.birth_date),
 });
+
+const onCpfInput = (event) => {
+    form.cpf = maskCpf(event.target.value);
+};
 
 const editUrl = computed(() => (props.isOwnProfile ? '/perfil' : `/perfil/usuario/${props.profileUser.id}`));
 
@@ -97,7 +102,7 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
             </div>
             <div>
                 <label class="text-sm font-medium">CPF</label>
-                <input v-model="form.cpf" type="text" placeholder="000.000.000-00" :class="inputClass">
+                <input :value="form.cpf" type="text" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" :class="inputClass" @input="onCpfInput">
                 <p v-if="form.errors.cpf" class="mt-1 text-xs text-red-600">{{ form.errors.cpf }}</p>
             </div>
             <div class="sm:col-span-2">

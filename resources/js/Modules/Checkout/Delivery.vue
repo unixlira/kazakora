@@ -94,6 +94,27 @@ watch(effectiveZip, async (zip) => {
     }
 }, { immediate: true });
 
+// form.shipping_quote precisa viajar junto com form.shipping_method_id
+// sempre que ele aponta pra uma cotação ao vivo (id "me:...") — sem isso o
+// backend rejeita ("Forma de envio inválida") porque não existe linha
+// correspondente em shipping_methods pra validar. Calcular isso só dentro
+// de submit() deixava uma janela real: se a cotação ainda não tivesse
+// chegado (ou a página reidratasse com um shipping_method_id de um draft
+// antigo) no momento do clique, ia vazio — daí o pedido "trava e não
+// avança" sem nenhum aviso claro. Um watch mantém os dois sempre em sincronia.
+watch([() => form.shipping_method_id, liveQuotes], ([methodId, quotes]) => {
+    const selected = quotes.find((option) => option.id === methodId);
+
+    form.shipping_quote = selected
+        ? {
+            name: selected.name,
+            carrier_name: selected.carrier_name,
+            price: selected.price,
+            estimated_days: selected.estimated_days,
+        }
+        : null;
+}, { immediate: true });
+
 const onGuestCpfInput = (event) => {
     form.guest.cpf = maskCpf(event.target.value);
 };
@@ -129,17 +150,11 @@ const submit = () => {
         form.address_id = null;
     }
 
-    const selectedQuote = liveQuotes.value.find((option) => option.id === form.shipping_method_id);
-    form.shipping_quote = selectedQuote
-        ? {
-            name: selectedQuote.name,
-            carrier_name: selectedQuote.carrier_name,
-            price: selectedQuote.price,
-            estimated_days: selectedQuote.estimated_days,
-        }
-        : null;
-
-    form.post('/finalizacao/entrega');
+    // form.shipping_quote já é mantido em sincronia pelo watch acima —
+    // não recalcula aqui de novo (evita os dois ficarem defasados entre si).
+    form.post('/finalizacao/entrega', {
+        onError: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+    });
 };
 </script>
 
@@ -157,8 +172,12 @@ const submit = () => {
 
             <div v-else class="mt-8 grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-start">
                 <div>
-                    <p v-if="form.errors.cart" class="mb-4 text-sm text-red-600">{{ form.errors.cart }}</p>
-                    <p v-if="form.errors.shipping_method_id" class="mb-4 text-sm text-red-600">{{ form.errors.shipping_method_id }}</p>
+                    <p v-if="form.errors.cart" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.cart }}
+                    </p>
+                    <p v-if="form.errors.shipping_method_id" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.shipping_method_id }}
+                    </p>
                     <p v-if="availableOptions.length === 0 && !freightLoading" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         Nenhuma forma de envio disponível no momento. Entre em contato com a loja antes de continuar.
                     </p>

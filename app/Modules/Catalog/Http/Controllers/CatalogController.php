@@ -146,6 +146,15 @@ class CatalogController extends Controller
         ]);
     }
 
+    public function shipping(Product $product): Response
+    {
+        abort_unless($product->is_active, 404);
+
+        return Inertia::render('Catalog/ProductShipping', [
+            'product' => $product->only('id', 'name', 'slug'),
+        ]);
+    }
+
     private function reviewableProductIds(Request $request): array
     {
         if (! $request->user()) {

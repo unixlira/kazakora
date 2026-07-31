@@ -301,7 +301,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
             <div class="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)_360px] lg:items-start lg:gap-10">
                 <!-- COLUNA A: Galeria (miniaturas + imagem/vídeo principal) -->
-                <div class="mx-auto w-full md:max-w-[420px] lg:mx-0 lg:max-w-none">
+                <div class="mx-auto w-full md:max-w-[420px] lg:sticky lg:top-24 lg:mx-0 lg:max-w-none">
                     <div class="flex flex-col-reverse gap-3 lg:flex-row lg:gap-3">
                         <!-- Miniaturas (cap fixo, sem scroll — o que sobra vira "+N") -->
                         <div v-if="mediaItems.length > 1" class="flex gap-2 overflow-x-auto pb-1 lg:w-14 lg:shrink-0 lg:flex-col lg:overflow-visible lg:pb-0">
@@ -385,7 +385,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                 </div>
 
                 <!-- COLUNA B: Informações do produto -->
-                <div class="flex flex-col gap-5">
+                <div class="flex flex-col gap-5 lg:sticky lg:top-24">
                     <div>
                         <div class="flex items-center justify-between gap-4">
                             <span class="font-store-mono text-xs uppercase tracking-wider text-store-fg-muted">Novo</span>
@@ -519,8 +519,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                     <!-- Estoque + seletor de quantidade -->
                     <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                        <p v-if="isFreeShipping" class="mb-1 flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                            <i class="fas fa-house"></i>
+                            Chegará grátis na sua residência
+                        </p>
                         <p v-if="product.stock > 0" class="text-sm font-semibold text-store-fg">Estoque disponível</p>
                         <p v-else class="text-sm font-semibold text-red-600">Produto esgotado</p>
+                        <Link :href="`/produtos/${product.slug}/envio`" class="mt-1 inline-block text-sm font-medium text-store-accent hover:underline">
+                            Mais formas de envios
+                        </Link>
                         <p v-if="quantityDiscounts.length" class="mt-0.5 text-xs text-store-fg-muted">Economize com preços de atacado</p>
 
                         <div v-if="product.stock > 0" class="mt-4 flex items-center gap-3">

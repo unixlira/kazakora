@@ -67,10 +67,15 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
 });
 
-Route::prefix('finalizacao')->name('finalizacao.')->middleware('auth')->group(function () {
-    Route::get('/', [CheckoutController::class, 'index'])->name('ver');
-    Route::post('/', [CheckoutController::class, 'store'])->name('finalizar');
-    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->name('confirmacao');
+Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
+    Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
+    Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');
+    Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
+    Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
+    Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->name('pagamento.iniciar');
+    Route::post('/{order}/pagamento/proxima-parte', [CheckoutController::class, 'storeSecondPayment'])->name('pagamento.proxima-parte');
+    Route::post('/{order}/concluir', [CheckoutController::class, 'finalize'])->name('concluir');
+    Route::get('/{order}/confirmacao', [CheckoutController::class, 'confirmation'])->middleware('auth')->name('confirmacao');
 });
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto

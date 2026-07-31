@@ -56,7 +56,7 @@ class CartManager
 
         return Product::query()
             ->whereIn('id', array_keys($raw))
-            ->with('quantityDiscounts')
+            ->with('quantityDiscounts', 'images')
             ->get()
             ->map(fn (Product $product) => [
                 'product' => $product,

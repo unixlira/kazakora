@@ -5,8 +5,12 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Mail\OrderConfirmation;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Operacional\Models\ShippingMethod;
+use App\Services\Stripe\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Stripe\PaymentIntent;
 use Tests\TestCase;
 
 class CartCheckoutQuantityDiscountTest extends TestCase
@@ -33,23 +37,37 @@ class CartCheckoutQuantityDiscountTest extends TestCase
     public function test_checkout_charges_the_quantity_discount_price_on_the_order_item(): void
     {
         Mail::fake();
+        $this->mockStripe();
 
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
         $product = Product::factory()->create(['price' => 100, 'stock' => 50, 'is_active' => true]);
         $product->quantityDiscounts()->create(['min_quantity' => 5, 'discount_percentage' => 10]);
+        $shippingMethod = ShippingMethod::factory()->create(['price' => 0, 'is_active' => true]);
 
         $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 5]);
 
-        $this->actingAs($user)->post('/finalizacao', [
-            'shipping_name' => 'Cliente Teste',
-            'shipping_phone' => '11999999999',
-            'shipping_zip' => '01000-000',
-            'shipping_street' => 'Rua Teste',
-            'shipping_number' => '100',
-            'shipping_neighborhood' => 'Centro',
-            'shipping_city' => 'São Paulo',
-            'shipping_state' => 'SP',
-        ])->assertRedirect();
+        $this->actingAs($user)->post('/finalizacao/entrega', [
+            'shipping_method_id' => $shippingMethod->id,
+            'new_address' => [
+                'recipient_name' => 'Cliente Teste',
+                'phone' => '11999999999',
+                'zip' => '01000-000',
+                'street' => 'Rua Teste',
+                'number' => '100',
+                'neighborhood' => 'Centro',
+                'city' => 'São Paulo',
+                'state' => 'SP',
+            ],
+        ])->assertRedirect(route('finalizacao.pagamento'));
+
+        $this->actingAs($user)->post('/finalizacao/pagamento', [
+            'payment_method' => 'card',
+            'terms_accepted' => true,
+        ]);
+
+        $order = Order::latest('id')->first();
+
+        $this->actingAs($user)->post("/finalizacao/{$order->id}/concluir");
 
         $this->assertDatabaseHas('order_items', [
             'product_id' => $product->id,
@@ -58,6 +76,19 @@ class CartCheckoutQuantityDiscountTest extends TestCase
             'subtotal' => 450,
         ]);
 
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => Order::STATUS_PAID]);
+
         Mail::assertQueued(OrderConfirmation::class);
+    }
+
+    private function mockStripe(): void
+    {
+        $this->mock(StripePaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createIntent')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_test_'.uniqid(), 'client_secret' => 'secret_test_'.uniqid()]));
+            $mock->shouldReceive('retrieve')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_test', 'status' => 'requires_capture']));
+            $mock->shouldReceive('capture')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_test', 'status' => 'succeeded']));
+            $mock->shouldReceive('cancel')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_test', 'status' => 'canceled']));
+        });
     }
 }

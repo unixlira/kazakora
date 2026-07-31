@@ -35,6 +35,12 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
     'mercadolivre' => [
         'app_id' => env('ML_APP_ID'),
         'client_secret' => env('ML_CLIENT_SECRET'),

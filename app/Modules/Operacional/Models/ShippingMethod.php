@@ -3,11 +3,13 @@
 namespace App\Modules\Operacional\Models;
 
 use App\Support\Rbac\Auditable;
+use Database\Factories\ShippingMethodFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class ShippingMethod extends Model
 {
-    use Auditable;
+    use Auditable, HasFactory;
 
     protected $fillable = [
         'name',
@@ -23,5 +25,10 @@ class ShippingMethod extends Model
             'estimated_days' => 'integer',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function newFactory(): ShippingMethodFactory
+    {
+        return ShippingMethodFactory::new();
     }
 }

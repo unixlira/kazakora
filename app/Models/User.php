@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Order;
 use App\Support\Rbac\Auditable;
 use Database\Factories\UserFactory;
@@ -68,6 +69,11 @@ class User extends Authenticatable
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(Address::class)->orderByDesc('is_default')->latest();
     }
 
     public function getAvatarUrlAttribute(): ?string

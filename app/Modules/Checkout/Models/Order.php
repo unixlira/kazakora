@@ -14,6 +14,8 @@ class Order extends Model
 
     public const STATUS_PENDING = 'pending';
 
+    public const STATUS_AWAITING_PAYMENT = 'awaiting_payment';
+
     public const STATUS_PAID = 'paid';
 
     public const STATUS_SHIPPED = 'shipped';
@@ -25,6 +27,7 @@ class Order extends Model
     protected $fillable = [
         'user_id',
         'status',
+        'shipping_method_id',
         'shipping_name',
         'shipping_phone',
         'shipping_zip',
@@ -35,6 +38,9 @@ class Order extends Model
         'shipping_city',
         'shipping_state',
         'subtotal',
+        'shipping_cost',
+        'coupon_code',
+        'discount_amount',
         'total',
     ];
 
@@ -42,6 +48,8 @@ class Order extends Model
     {
         return [
             'subtotal' => 'decimal:2',
+            'shipping_cost' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
             'total' => 'decimal:2',
         ];
     }
@@ -54,5 +62,10 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
     }
 }

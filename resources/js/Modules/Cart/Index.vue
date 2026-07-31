@@ -2,6 +2,7 @@
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { confirmDelete } from '@/Shared/notify';
+import { primaryImage } from '@/Shared/productCard';
 
 const props = defineProps({
     items: {
@@ -46,8 +47,14 @@ const removeItem = async (productId) => {
             <template v-else>
                 <div class="mt-8 divide-y divide-store-border rounded-2xl border border-store-border bg-store-bg-raised">
                     <div v-for="item in items" :key="item.product.id" class="flex flex-wrap items-center gap-4 p-5">
+                        <Link :href="`/produtos/${item.product.slug}`"
+                            class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-store-border bg-store-bg-sunken">
+                            <img v-if="primaryImage(item.product)" :src="primaryImage(item.product)" :alt="item.product.name" class="h-full w-full object-cover">
+                            <i v-else class="fas fa-box-open text-xl text-store-accent-strong opacity-40"></i>
+                        </Link>
+
                         <div class="min-w-[180px] flex-1">
-                            <p class="font-medium">{{ item.product.name }}</p>
+                            <Link :href="`/produtos/${item.product.slug}`" class="font-medium hover:text-store-accent hover:underline">{{ item.product.name }}</Link>
                             <p class="font-store-mono text-sm text-store-fg-muted">{{ formatPrice(item.product.final_price) }}</p>
                         </div>
 

@@ -32,12 +32,27 @@ class CompanyController extends Controller
         $validated = $request->validate([
             'razao_social' => ['required', 'string', 'max:255'],
             'nome_fantasia' => ['nullable', 'string', 'max:255'],
-            'cnpj' => ['required', 'string', 'max:18'],
-            'inscricao_estadual' => ['nullable', 'string', 'max:20'],
+            'cnpj' => [
+                'required', 'string', 'max:18',
+                function ($attribute, $value, $fail): void {
+                    if (strlen(preg_replace('/\D/', '', $value)) !== 14) {
+                        $fail('CNPJ inválido — deve ter 14 dígitos.');
+                    }
+                },
+            ],
+            'inscricao_estadual' => ['nullable', 'string', 'max:20', 'regex:/^(ISENTO|[0-9.\-\/]+)$/i'],
             'inscricao_municipal' => ['nullable', 'string', 'max:20'],
             'regime_tributario' => ['required', 'in:'.implode(',', self::REGIMES)],
             'cnae' => ['nullable', 'string', 'max:20'],
-            'phone' => ['nullable', 'string', 'max:20'],
+            'phone' => [
+                'nullable', 'string', 'max:20',
+                function ($attribute, $value, $fail): void {
+                    $digits = strlen(preg_replace('/\D/', '', $value ?? ''));
+                    if ($digits !== 0 && ! in_array($digits, [10, 11], true)) {
+                        $fail('Telefone inválido — use DDD + número.');
+                    }
+                },
+            ],
             'email' => ['nullable', 'email', 'max:255'],
             'zip' => ['nullable', 'string', 'max:9'],
             'street' => ['nullable', 'string', 'max:255'],

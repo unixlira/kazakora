@@ -2,7 +2,9 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { maskCep, useCep } from '@/Shared/useCep';
+import { isValidEmail, maskCnpj, maskIe, maskPhone } from '@/Shared/useMasks';
 
 const props = defineProps({
     company: {
@@ -25,14 +27,14 @@ const regimeLabels = {
 const form = useForm({
     razao_social: props.company?.razao_social ?? '',
     nome_fantasia: props.company?.nome_fantasia ?? '',
-    cnpj: props.company?.cnpj ?? '',
-    inscricao_estadual: props.company?.inscricao_estadual ?? '',
+    cnpj: maskCnpj(props.company?.cnpj ?? ''),
+    inscricao_estadual: maskIe(props.company?.inscricao_estadual ?? ''),
     inscricao_municipal: props.company?.inscricao_municipal ?? '',
     regime_tributario: props.company?.regime_tributario ?? 'simples_nacional',
     cnae: props.company?.cnae ?? '',
-    phone: props.company?.phone ?? '',
+    phone: maskPhone(props.company?.phone ?? ''),
     email: props.company?.email ?? '',
-    zip: props.company?.zip ?? '',
+    zip: maskCep(props.company?.zip ?? ''),
     street: props.company?.street ?? '',
     number: props.company?.number ?? '',
     complement: props.company?.complement ?? '',
@@ -47,6 +49,46 @@ const certificadoInput = ref(null);
 
 const onCertificadoChange = (event) => {
     form.certificado = event.target.files[0] ?? null;
+};
+
+const onCnpjInput = (event) => {
+    form.cnpj = maskCnpj(event.target.value);
+};
+
+const onPhoneInput = (event) => {
+    form.phone = maskPhone(event.target.value);
+};
+
+const onIeInput = (event) => {
+    form.inscricao_estadual = maskIe(event.target.value);
+};
+
+const emailTouched = ref(false);
+const emailError = computed(() => {
+    if (!emailTouched.value || form.errors.email) {
+        return null;
+    }
+
+    return isValidEmail(form.email) ? null : 'Informe um e-mail válido.';
+});
+
+const { loading: cepLoading, error: cepError, lookup: lookupCep } = useCep();
+
+const onCepInput = async (event) => {
+    form.zip = maskCep(event.target.value);
+
+    if (form.zip.replace(/\D/g, '').length !== 8) {
+        return;
+    }
+
+    const result = await lookupCep(form.zip);
+
+    if (result) {
+        form.street = result.street;
+        form.neighborhood = result.neighborhood;
+        form.city = result.city;
+        form.state = result.state;
+    }
 };
 
 const submit = () => {
@@ -85,7 +127,11 @@ const submit = () => {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-600">CNPJ</label>
-                    <input v-model="form.cnpj" type="text" class="mt-1 w-full rounded border border-slate-300 px-3 py-2" required>
+                    <input
+                        :value="form.cnpj" type="text" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00"
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2" required
+                        @input="onCnpjInput"
+                    >
                     <InputError :message="form.errors.cnpj" />
                 </div>
                 <div>
@@ -97,7 +143,11 @@ const submit = () => {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-600">Inscrição estadual</label>
-                    <input v-model="form.inscricao_estadual" type="text" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+                    <input
+                        :value="form.inscricao_estadual" type="text" maxlength="20" placeholder="000.000.000.000 ou ISENTO"
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        @input="onIeInput"
+                    >
                     <InputError :message="form.errors.inscricao_estadual" />
                 </div>
                 <div>
@@ -112,12 +162,21 @@ const submit = () => {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-600">Telefone</label>
-                    <input v-model="form.phone" type="text" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+                    <input
+                        :value="form.phone" type="text" inputmode="numeric" maxlength="15" placeholder="(00) 00000-0000"
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        @input="onPhoneInput"
+                    >
+                    <InputError :message="form.errors.phone" />
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-600">E-mail</label>
-                    <input v-model="form.email" type="email" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+                    <input
+                        v-model="form.email" type="email" class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                        @blur="emailTouched = true"
+                    >
                     <InputError :message="form.errors.email" />
+                    <p v-if="emailError" class="mt-1 text-xs text-red-600">{{ emailError }}</p>
                 </div>
             </div>
 
@@ -128,7 +187,16 @@ const submit = () => {
             <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                     <label class="block text-sm font-medium text-slate-600">CEP</label>
-                    <input v-model="form.zip" type="text" class="mt-1 w-full rounded border border-slate-300 px-3 py-2">
+                    <div class="relative">
+                        <input
+                            :value="form.zip" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000"
+                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                            @input="onCepInput"
+                        >
+                        <i v-if="cepLoading" class="fas fa-spinner absolute right-3 top-1/2 mt-0.5 -translate-y-1/2 animate-spin text-xs text-slate-400"></i>
+                    </div>
+                    <InputError :message="form.errors.zip" />
+                    <p v-if="cepError" class="mt-1 text-xs text-red-600">{{ cepError }}</p>
                 </div>
                 <div class="md:col-span-2">
                     <label class="block text-sm font-medium text-slate-600">Rua</label>

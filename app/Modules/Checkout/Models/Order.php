@@ -36,6 +36,7 @@ class Order extends Model
         'external_order_id',
         'disputed_at',
         'shipping_method_id',
+        'shipping_carrier_name',
         'shipping_name',
         'shipping_phone',
         'shipping_zip',

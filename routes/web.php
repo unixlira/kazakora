@@ -71,6 +71,7 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');
+    Route::post('/frete', [CheckoutController::class, 'quoteFreight'])->middleware('throttle:20,1')->name('frete.cotar');
     Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
     Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:10,1')->name('pagamento.iniciar');

@@ -51,4 +51,11 @@ return [
         'token_url' => env('ML_TOKEN_URL', 'https://api.mercadolibre.com/oauth/token'),
     ],
 
+    'melhorenvio' => [
+        // Token de Integração gerado no painel do Melhor Envio (Configurações
+        // > Tokens) — sem OAuth, é um Bearer token estático por conta.
+        'token' => env('MELHORENVIO_TOKEN'),
+        'api_base_url' => env('MELHORENVIO_API_BASE_URL', 'https://sandbox.melhorenvio.com.br/api/v2'),
+    ],
+
 ];

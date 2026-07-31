@@ -3,8 +3,9 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
+import { useFreightQuote } from '@/Shared/useFreightQuote';
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
@@ -40,12 +41,21 @@ const form = useForm({
     },
     guest: props.guest ? (props.draft?.guest ?? { name: '', email: '', cpf: '' }) : null,
     shipping_method_id: props.draft?.shipping_method_id ?? props.shippingMethods[0]?.id ?? null,
+    shipping_quote: null,
 });
 
 const useNewAddress = ref(!form.address_id);
 const showAddressPicker = ref(false);
 
 const { loading: cepLoading, error: cepError, lookup: lookupCep } = useCep();
+const { loading: freightLoading, quote: quoteFreight } = useFreightQuote();
+
+// Cotações reais do Melhor Envio pro CEP atual — quando vem alguma,
+// substituem por completo a lista estática (props.shippingMethods) nas
+// opções mostradas; se vier vazio (token não configurado, produto sem
+// peso/dimensão cadastrado, API fora do ar), cai de volta pra estática.
+const liveQuotes = ref([]);
+const availableOptions = computed(() => (liveQuotes.value.length > 0 ? liveQuotes.value : props.shippingMethods));
 
 const onCepInput = async (event) => {
     form.new_address.zip = maskCep(event.target.value);
@@ -66,6 +76,23 @@ const onCepInput = async (event) => {
 
 const selectedAddress = computed(() => props.addresses.find((address) => address.id === form.address_id) ?? null);
 
+const effectiveZip = computed(() => (useNewAddress.value ? form.new_address.zip : (selectedAddress.value?.zip ?? '')));
+
+watch(effectiveZip, async (zip) => {
+    const digits = (zip ?? '').replace(/\D/g, '');
+
+    if (digits.length !== 8) {
+        liveQuotes.value = [];
+        return;
+    }
+
+    liveQuotes.value = await quoteFreight(zip);
+
+    if (liveQuotes.value.length && !liveQuotes.value.some((option) => option.id === form.shipping_method_id)) {
+        form.shipping_method_id = liveQuotes.value[0].id;
+    }
+}, { immediate: true });
+
 const selectExistingAddress = (address) => {
     form.address_id = address.id;
     useNewAddress.value = false;
@@ -84,7 +111,7 @@ const addressLine = (address) =>
 const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-store-bg-raised px-3 py-2 text-sm focus:border-store-accent focus:outline-none focus:ring-1 focus:ring-store-accent';
 
 const shippingCost = computed(() => {
-    const method = props.shippingMethods.find((m) => m.id === form.shipping_method_id);
+    const method = availableOptions.value.find((m) => m.id === form.shipping_method_id);
     return method ? Number(method.price) : 0;
 });
 
@@ -96,6 +123,16 @@ const submit = () => {
     } else {
         form.address_id = null;
     }
+
+    const selectedQuote = liveQuotes.value.find((option) => option.id === form.shipping_method_id);
+    form.shipping_quote = selectedQuote
+        ? {
+            name: selectedQuote.name,
+            carrier_name: selectedQuote.carrier_name,
+            price: selectedQuote.price,
+            estimated_days: selectedQuote.estimated_days,
+        }
+        : null;
 
     form.post('/finalizacao/entrega');
 };
@@ -117,7 +154,7 @@ const submit = () => {
                 <div>
                     <p v-if="form.errors.cart" class="mb-4 text-sm text-red-600">{{ form.errors.cart }}</p>
                     <p v-if="form.errors.shipping_method_id" class="mb-4 text-sm text-red-600">{{ form.errors.shipping_method_id }}</p>
-                    <p v-if="shippingMethods.length === 0" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                    <p v-if="availableOptions.length === 0 && !freightLoading" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         Nenhuma forma de envio disponível no momento. Entre em contato com a loja antes de continuar.
                     </p>
 
@@ -239,21 +276,31 @@ const submit = () => {
                     </div>
 
                     <!-- Forma de envio -->
-                    <div v-if="shippingMethods.length > 1" class="mt-6 rounded-2xl border border-store-border bg-store-bg-raised p-5">
-                        <h2 class="mb-3 text-sm font-semibold uppercase text-store-fg-muted">Forma de envio</h2>
-                        <label v-for="method in shippingMethods" :key="method.id"
-                            class="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors"
-                            :class="form.shipping_method_id === method.id ? 'border-store-accent bg-store-accent/5' : 'border-store-border hover:border-store-border-strong'">
-                            <input v-model="form.shipping_method_id" type="radio" :value="method.id" class="h-4 w-4 accent-store-accent">
-                            <span class="flex-1 text-sm">{{ method.name }} · até {{ method.estimated_days }} dia{{ method.estimated_days === 1 ? '' : 's' }}</span>
-                            <span class="font-store text-sm font-semibold" :class="Number(method.price) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-store-fg'">
-                                {{ Number(method.price) === 0 ? 'Frete Grátis' : formatPrice(method.price) }}
-                            </span>
-                        </label>
+                    <div class="mt-6 rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                        <div class="mb-3 flex items-center gap-2">
+                            <h2 class="text-sm font-semibold uppercase text-store-fg-muted">Forma de envio</h2>
+                            <i v-if="freightLoading" class="fas fa-spinner animate-spin text-xs text-store-fg-muted"></i>
+                        </div>
+                        <p v-if="freightLoading" class="text-sm text-store-fg-muted">Calculando frete para o seu CEP...</p>
+                        <template v-else-if="availableOptions.length > 1">
+                            <label v-for="method in availableOptions" :key="method.id"
+                                class="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors"
+                                :class="form.shipping_method_id === method.id ? 'border-store-accent bg-store-accent/5' : 'border-store-border hover:border-store-border-strong'">
+                                <input v-model="form.shipping_method_id" type="radio" :value="method.id" class="h-4 w-4 accent-store-accent">
+                                <span class="flex-1 text-sm">{{ method.name }} · até {{ method.estimated_days }} dia{{ method.estimated_days === 1 ? '' : 's' }}</span>
+                                <span class="font-store text-sm font-semibold" :class="Number(method.price) === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-store-fg'">
+                                    {{ Number(method.price) === 0 ? 'Frete Grátis' : formatPrice(method.price) }}
+                                </span>
+                            </label>
+                        </template>
+                        <p v-else-if="availableOptions.length === 1" class="text-sm text-store-fg-muted">
+                            {{ availableOptions[0].name }} · até {{ availableOptions[0].estimated_days }} dia{{ availableOptions[0].estimated_days === 1 ? '' : 's' }}
+                        </p>
+                        <p v-else class="text-sm text-store-fg-muted">Informe um CEP válido para ver as opções de envio.</p>
                     </div>
 
                     <div class="mt-6 flex justify-end">
-                        <button type="button" :disabled="form.processing || shippingMethods.length === 0"
+                        <button type="button" :disabled="form.processing || availableOptions.length === 0"
                             class="rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                             @click="submit">
                             Continuar

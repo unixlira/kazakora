@@ -10,6 +10,7 @@ use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
@@ -36,6 +37,7 @@ class CheckoutController extends Controller
         private readonly StockManager $stock,
         private readonly StripePaymentService $stripe,
         private readonly OrderPaymentFinalizer $finalizer,
+        private readonly FreightQuoteService $freight,
     ) {
     }
 
@@ -54,6 +56,25 @@ class CheckoutController extends Controller
         ]);
     }
 
+    /**
+     * Cotação de frete ao vivo (Melhor Envio) pro CEP informado — chamada
+     * via JS assim que o CEP de entrega é preenchido. Nunca falha "alto":
+     * FreightQuoteService já devolve lista vazia se não for possível cotar,
+     * e o front cai de volta pras formas de envio estáticas nesse caso.
+     */
+    public function quoteFreight(Request $request): JsonResponse
+    {
+        $data = $request->validate(['zip' => ['required', 'string']]);
+
+        $cartItems = $this->cart->items();
+
+        if ($cartItems->isEmpty()) {
+            return response()->json(['quotes' => []]);
+        }
+
+        return response()->json(['quotes' => $this->freight->quote($cartItems, $data['zip'])]);
+    }
+
     public function storeDelivery(Request $request): RedirectResponse
     {
         if ($this->cart->items()->isEmpty()) {
@@ -61,7 +82,23 @@ class CheckoutController extends Controller
         }
 
         $rules = [
-            'shipping_method_id' => ['required', 'exists:shipping_methods,id'],
+            'shipping_method_id' => [
+                'required',
+                function ($attribute, $value, $fail) use ($request): void {
+                    // Cotação ao vivo do Melhor Envio não tem linha na
+                    // tabela shipping_methods — só as formas de envio
+                    // estáticas cadastradas em /admin/logistica precisam
+                    // existir de verdade no banco.
+                    if (! $request->filled('shipping_quote') && ! ShippingMethod::whereKey($value)->exists()) {
+                        $fail('Forma de envio inválida.');
+                    }
+                },
+            ],
+            'shipping_quote' => ['nullable', 'array'],
+            'shipping_quote.name' => ['required_with:shipping_quote', 'string', 'max:255'],
+            'shipping_quote.carrier_name' => ['nullable', 'string', 'max:255'],
+            'shipping_quote.price' => ['required_with:shipping_quote', 'numeric', 'min:0'],
+            'shipping_quote.estimated_days' => ['nullable', 'integer', 'min:0'],
             'address_id' => ['nullable', 'integer'],
             'new_address' => ['required_without:address_id', 'array'],
             'new_address.label' => ['nullable', 'string', 'max:60'],
@@ -169,20 +206,20 @@ class CheckoutController extends Controller
             return back()->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
         }
 
-        $shippingMethod = ShippingMethod::findOrFail($draft['shipping_method_id']);
+        $shipping = $this->resolveShipping($draft);
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $coupon = ! empty($draft['coupon_code'])
             ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
             : null;
         $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
-        $total = round($subtotal - $discount + (float) $shippingMethod->price, 2);
+        $total = round($subtotal - $discount + $shipping['cost'], 2);
 
         $methods = $data['split'] ?? false
             ? $this->sortMethodsSafely([$data['payment_method'], $data['payment_method_secondary']])
             : [$data['payment_method']];
 
         try {
-            [$order, $firstIntent] = DB::transaction(function () use ($request, $draft, $cartItems, $shippingMethod, $subtotal, $coupon, $discount, $total, $methods, $data) {
+            [$order, $firstIntent] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data) {
                 $user = $request->user() ?? $this->createGuestAccount($draft['guest']);
 
                 $address = ! empty($draft['address_id'])
@@ -192,7 +229,8 @@ class CheckoutController extends Controller
                 $order = Order::create([
                     'user_id' => $user->id,
                     'status' => Order::STATUS_AWAITING_PAYMENT,
-                    'shipping_method_id' => $shippingMethod->id,
+                    'shipping_method_id' => $shipping['method_id'],
+                    'shipping_carrier_name' => $shipping['carrier_name'],
                     'shipping_name' => $address->recipient_name,
                     'shipping_phone' => $address->phone,
                     'shipping_zip' => $address->zip,
@@ -203,7 +241,7 @@ class CheckoutController extends Controller
                     'shipping_city' => $address->city,
                     'shipping_state' => $address->state,
                     'subtotal' => $subtotal,
-                    'shipping_cost' => $shippingMethod->price,
+                    'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
                     'discount_amount' => $discount,
                     'total' => $total,
@@ -389,8 +427,7 @@ class CheckoutController extends Controller
     {
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $shippingMethod = ! empty($draft['shipping_method_id']) ? ShippingMethod::find($draft['shipping_method_id']) : null;
-        $shippingCost = (float) ($shippingMethod->price ?? 0);
+        $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft)['cost'] : 0.0;
         $coupon = ! empty($draft['coupon_code'])
             ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
             : null;
@@ -472,6 +509,30 @@ class CheckoutController extends Controller
         Password::sendResetLink(['email' => $user->email]);
 
         return $user;
+    }
+
+    /**
+     * @return array{method_id: ?int, carrier_name: ?string, cost: float}
+     */
+    private function resolveShipping(array $draft): array
+    {
+        if (! empty($draft['shipping_quote'])) {
+            $quote = $draft['shipping_quote'];
+
+            return [
+                'method_id' => null,
+                'carrier_name' => $quote['carrier_name'] ?? $quote['name'] ?? 'Frete',
+                'cost' => (float) $quote['price'],
+            ];
+        }
+
+        $shippingMethod = ShippingMethod::findOrFail($draft['shipping_method_id']);
+
+        return [
+            'method_id' => $shippingMethod->id,
+            'carrier_name' => $shippingMethod->name,
+            'cost' => (float) $shippingMethod->price,
+        ];
     }
 
     private function sortMethodsSafely(array $methods): array

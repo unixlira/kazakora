@@ -90,12 +90,14 @@ class CheckoutController extends Controller
         $rules = [
             'shipping_method_id' => [
                 'required',
-                function ($attribute, $value, $fail) use ($request): void {
-                    // Cotação ao vivo do Melhor Envio não tem linha na
-                    // tabela shipping_methods — só as formas de envio
-                    // estáticas cadastradas em /admin/logistica precisam
-                    // existir de verdade no banco.
-                    if (! $request->filled('shipping_quote') && ! ShippingMethod::whereKey($value)->exists()) {
+                function ($attribute, $value, $fail): void {
+                    // IDs de cotação ao vivo (Melhor Envio, prefixo "me:")
+                    // são confirmados depois — se o front não mandou os
+                    // detalhes junto (shipping_quote), o backend reconsulta
+                    // a API sozinho logo abaixo, em vez de recusar aqui.
+                    // Só um ID estático (numérico, de shipping_methods)
+                    // precisa já existir de verdade nesse ponto.
+                    if (! str_starts_with((string) $value, 'me:') && ! ShippingMethod::whereKey($value)->exists()) {
                         $fail('Forma de envio inválida.');
                     }
                 },
@@ -129,11 +131,32 @@ class CheckoutController extends Controller
         $data = $request->validate($rules);
 
         if ($request->user() && ! empty($data['address_id'])) {
-            $request->user()->addresses()->findOrFail($data['address_id']);
+            $address = $request->user()->addresses()->findOrFail($data['address_id']);
         }
 
         if (! $request->user() && User::where('email', $data['guest']['email'])->exists()) {
             return back()->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        }
+
+        // Reforço server-side: se o ID é de cotação ao vivo mas o front não
+        // mandou (ou mandou incompleto) o shipping_quote — por qualquer
+        // motivo do lado do navegador — recotamos aqui em vez de recusar.
+        // Não depende de o front nunca dessincronizar os dois campos.
+        if (str_starts_with((string) $data['shipping_method_id'], 'me:') && empty($data['shipping_quote'])) {
+            $zip = $data['new_address']['zip'] ?? ($address ?? null)?->zip;
+            $quotes = $zip ? $this->freight->quote($this->cart->items(), $zip) : [];
+            $match = collect($quotes)->firstWhere('id', $data['shipping_method_id']);
+
+            if (! $match) {
+                return back()->withErrors(['shipping_method_id' => 'Não foi possível confirmar essa forma de envio agora. Selecione novamente e tente de novo.']);
+            }
+
+            $data['shipping_quote'] = [
+                'name' => $match['name'],
+                'carrier_name' => $match['carrier_name'],
+                'price' => $match['price'],
+                'estimated_days' => $match['estimated_days'],
+            ];
         }
 
         $request->session()->put(self::SESSION_KEY, $data);

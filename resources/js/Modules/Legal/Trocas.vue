@@ -101,10 +101,6 @@ const passos = [
                             <i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i>
                             <span><strong class="text-store-fg">PIX:</strong> devolução em até 1 dia útil</span>
                         </li>
-                        <li class="flex items-start gap-2.5">
-                            <i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i>
-                            <span><strong class="text-store-fg">Boleto:</strong> devolução via PIX em até 3 dias úteis após confirmação</span>
-                        </li>
                     </ul>
                 </LegalCard>
 

@@ -84,7 +84,7 @@ const usoProibido = [
 
                 <LegalCard title="Pagamentos">
                     <ul class="flex flex-col gap-2.5">
-                        <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>Aceitamos cartões de crédito (Visa, Mastercard), PIX e boleto bancário</span></li>
+                        <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>Aceitamos cartões de crédito (Visa, Mastercard) e PIX</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>O processamento de pagamentos é feito por intermediadores seguros</span></li>
                         <li class="flex items-start gap-2.5"><i class="fas fa-circle mt-1.5 shrink-0 text-[6px] text-store-fg-faint"></i><span>Pedidos não pagos dentro do prazo serão cancelados automaticamente</span></li>
                     </ul>

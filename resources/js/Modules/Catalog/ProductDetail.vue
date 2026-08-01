@@ -736,10 +736,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <i class="fas fa-credit-card w-5 text-store-accent"></i>
                     Cartão de crédito em até 12x sem juros ({{ formatPrice(installmentValue) }}/mês)
                 </li>
-                <li class="flex items-center gap-3">
-                    <i class="fas fa-barcode w-5 text-store-accent"></i>
-                    Boleto bancário
-                </li>
             </ul>
         </Modal>
 

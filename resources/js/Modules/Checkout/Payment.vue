@@ -31,7 +31,6 @@ const formatPrice = (value) =>
 const METHOD_LABELS = {
     card: 'Cartão de crédito',
     pix: 'Pix',
-    boleto: 'Boleto',
 };
 
 // Fase 1: escolher método(s) de pagamento
@@ -244,15 +243,15 @@ onMounted(() => {
                                 {{ chooseForm.split ? 'Meio de pagamento 1' : 'Meio de pagamento' }}
                             </h2>
                             <div class="flex flex-col gap-2">
-                                <label v-for="method in ['pix', 'card', 'boleto']" :key="method"
+                                <label v-for="method in ['pix', 'card']" :key="method"
                                     class="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors"
                                     :class="chooseForm.payment_method === method ? 'border-store-accent bg-store-accent/5' : 'border-store-border hover:border-store-border-strong'">
                                     <input v-model="chooseForm.payment_method" type="radio" :value="method" class="h-4 w-4 accent-store-accent">
-                                    <i class="fas w-5 text-store-accent" :class="method === 'pix' ? 'fa-qrcode' : method === 'card' ? 'fa-credit-card' : 'fa-barcode'"></i>
+                                    <i class="fas w-5 text-store-accent" :class="method === 'pix' ? 'fa-qrcode' : 'fa-credit-card'"></i>
                                     <div>
                                         <p class="text-sm font-medium">{{ METHOD_LABELS[method] }}</p>
                                         <p class="text-xs text-store-fg-muted">
-                                            {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Em até 12x' : 'Vence em 3 dias úteis' }}
+                                            {{ method === 'pix' ? 'Aprovação imediata' : 'Em até 12x' }}
                                         </p>
                                     </div>
                                 </label>
@@ -262,11 +261,11 @@ onMounted(() => {
                         <div v-if="chooseForm.split" class="mt-6 rounded-2xl border border-store-border bg-store-bg-raised p-5">
                             <h2 class="mb-3 text-sm font-semibold uppercase text-store-fg-muted">Meio de pagamento 2</h2>
                             <div class="flex flex-col gap-2">
-                                <label v-for="method in ['pix', 'card', 'boleto'].filter((m) => m !== chooseForm.payment_method)" :key="method"
+                                <label v-for="method in ['pix', 'card'].filter((m) => m !== chooseForm.payment_method)" :key="method"
                                     class="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors"
                                     :class="chooseForm.payment_method_secondary === method ? 'border-store-accent bg-store-accent/5' : 'border-store-border hover:border-store-border-strong'">
                                     <input v-model="chooseForm.payment_method_secondary" type="radio" :value="method" class="h-4 w-4 accent-store-accent">
-                                    <i class="fas w-5 text-store-accent" :class="method === 'pix' ? 'fa-qrcode' : method === 'card' ? 'fa-credit-card' : 'fa-barcode'"></i>
+                                    <i class="fas w-5 text-store-accent" :class="method === 'pix' ? 'fa-qrcode' : 'fa-credit-card'"></i>
                                     <span class="text-sm font-medium">{{ METHOD_LABELS[method] }}</span>
                                 </label>
                             </div>

@@ -252,9 +252,9 @@ class CheckoutController extends Controller
         }
 
         $paymentValidator = Validator::make($request->all(), [
-            'payment_method' => ['required', 'in:card,pix,boleto'],
+            'payment_method' => ['required', 'in:card,pix'],
             'split' => ['boolean'],
-            'payment_method_secondary' => ['required_if:split,true', 'nullable', 'in:card,pix,boleto', 'different:payment_method'],
+            'payment_method_secondary' => ['required_if:split,true', 'nullable', 'in:card,pix', 'different:payment_method'],
             'split_percentage' => ['required_if:split,true', 'nullable', 'integer', 'min:1', 'max:99'],
             'terms_accepted' => ['accepted'],
         ]);
@@ -411,7 +411,7 @@ class CheckoutController extends Controller
         abort_unless($order->user_id === optional($request->user())->id, 403);
 
         $data = $request->validate([
-            'method_type' => ['required', 'in:card,pix,boleto'],
+            'method_type' => ['required', 'in:card,pix'],
         ]);
 
         $alreadyPaid = $order->payments()->sum('amount');

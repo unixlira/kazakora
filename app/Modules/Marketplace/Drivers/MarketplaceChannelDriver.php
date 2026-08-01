@@ -25,4 +25,32 @@ interface MarketplaceChannelDriver
      * history has to be preserved) — this closes/deactivates it instead.
      */
     public function unpublishProduct(ProductChannelListing $listing): void;
+
+    /**
+     * Fetch an order placed on the channel and normalize it to a common
+     * shape, so OrderImportService never has to know which channel it came
+     * from. `status` must already be translated to one of Order::STATUS_*
+     * — each driver owns the mapping from its own native vocabulary.
+     * `items[].external_id` must match a `product_channel_listings.external_id`
+     * for this channel, so the import can resolve it back to a local Product.
+     *
+     * @return array{
+     *     external_order_id: string,
+     *     status: string,
+     *     subtotal: float,
+     *     shipping_cost: float,
+     *     total: float,
+     *     buyer_name: string,
+     *     buyer_phone: ?string,
+     *     shipping_zip: string,
+     *     shipping_street: string,
+     *     shipping_number: string,
+     *     shipping_complement: ?string,
+     *     shipping_neighborhood: string,
+     *     shipping_city: string,
+     *     shipping_state: string,
+     *     items: array<int, array{external_id: string, quantity: int, unit_price: float}>,
+     * }
+     */
+    public function importOrder(string $externalOrderId): array;
 }

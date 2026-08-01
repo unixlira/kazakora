@@ -3,11 +3,14 @@
 namespace App\Modules\Marketplace\Drivers;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\MercadoLivre\DTOs\ProductDTO;
 use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
+use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
+use App\Services\MercadoLivre\Services\ShipmentService;
 
 /**
  * Mercado Livre — API docs: https://developers.mercadolivre.com.br
@@ -20,7 +23,11 @@ use App\Services\MercadoLivre\Services\ProductService;
  */
 class MercadoLivreDriver extends AbstractMarketplaceDriver
 {
-    public function __construct(private readonly ProductService $products) {}
+    public function __construct(
+        private readonly ProductService $products,
+        private readonly OrderService $orders,
+        private readonly ShipmentService $shipments,
+    ) {}
 
     public function channel(): string
     {
@@ -97,6 +104,105 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $this->ensureConfigured();
 
         $this->products->closeItem($listing->external_id);
+    }
+
+    public function importOrder(string $externalOrderId): array
+    {
+        $this->ensureConfigured();
+
+        $order = $this->orders->getOrder($externalOrderId);
+        $address = $this->resolveShippingAddress($order->shipping);
+
+        $itemsSubtotal = 0.0;
+        $items = [];
+
+        foreach ($order->order_items as $item) {
+            $externalId = (string) ($item['item']['id'] ?? '');
+            $quantity = (int) ($item['quantity'] ?? 0);
+            $unitPrice = (float) ($item['unit_price'] ?? 0);
+
+            if ($externalId === '' || $quantity < 1) {
+                continue;
+            }
+
+            $itemsSubtotal += $unitPrice * $quantity;
+            $items[] = ['external_id' => $externalId, 'quantity' => $quantity, 'unit_price' => $unitPrice];
+        }
+
+        $buyer = $order->buyer;
+        $buyerName = trim(($buyer['first_name'] ?? '').' '.($buyer['last_name'] ?? '')) ?: ($buyer['nickname'] ?? 'Comprador Mercado Livre');
+
+        return [
+            'external_order_id' => (string) $order->id,
+            'status' => $this->mapOrderStatus($order->status),
+            'subtotal' => round($itemsSubtotal, 2),
+            'shipping_cost' => round(max(0, $order->total_amount - $itemsSubtotal), 2),
+            'total' => round($order->total_amount, 2),
+            'buyer_name' => $buyerName,
+            'buyer_phone' => $buyer['phone']['number'] ?? null,
+            'shipping_zip' => $address['zip'],
+            'shipping_street' => $address['street'],
+            'shipping_number' => $address['number'],
+            'shipping_complement' => $address['complement'],
+            'shipping_neighborhood' => $address['neighborhood'],
+            'shipping_city' => $address['city'],
+            'shipping_state' => $address['state'],
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * ML só devolve o `shipping.id` no payload do pedido — o endereço em si
+     * vem de uma chamada separada em /shipments/{id}. Extração toda
+     * defensiva (com fallback "Não informado") porque nem todo pedido tem
+     * frete gerenciado pelo ML com endereço estruturado (ex: retirada em
+     * loja), e um campo faltando não pode derrubar a importação do pedido.
+     *
+     * @param  array<string, mixed>  $shipping
+     * @return array{zip: string, street: string, number: string, complement: ?string, neighborhood: string, city: string, state: string}
+     */
+    private function resolveShippingAddress(array $shipping): array
+    {
+        $fallback = [
+            'zip' => '00000000',
+            'street' => 'Não informado',
+            'number' => 'S/N',
+            'complement' => null,
+            'neighborhood' => 'Não informado',
+            'city' => 'Não informado',
+            'state' => 'NA',
+        ];
+
+        $shipmentId = $shipping['id'] ?? null;
+
+        if (! $shipmentId) {
+            return $fallback;
+        }
+
+        $receiver = $this->shipments->getShipment((string) $shipmentId)['receiver_address'] ?? [];
+
+        if (empty($receiver)) {
+            return $fallback;
+        }
+
+        return [
+            'zip' => (string) ($receiver['zip_code'] ?? $fallback['zip']),
+            'street' => (string) ($receiver['street_name'] ?? $fallback['street']),
+            'number' => (string) ($receiver['street_number'] ?? $fallback['number']),
+            'complement' => $receiver['comment'] ?? null,
+            'neighborhood' => (string) ($receiver['neighborhood']['name'] ?? $fallback['neighborhood']),
+            'city' => (string) ($receiver['city']['name'] ?? $fallback['city']),
+            'state' => (string) ($receiver['state']['id'] ?? $receiver['state']['name'] ?? $fallback['state']),
+        ];
+    }
+
+    private function mapOrderStatus(string $status): string
+    {
+        return match ($status) {
+            'paid' => Order::STATUS_PAID,
+            'cancelled', 'invalid' => Order::STATUS_CANCELLED,
+            default => Order::STATUS_AWAITING_PAYMENT,
+        };
     }
 
     private function requiresProductFamily(MercadoLivreException $exception): bool

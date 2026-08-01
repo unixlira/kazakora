@@ -47,4 +47,13 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         // TODO: call /product/202309/products/deactivate.
         throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
     }
+
+    public function importOrder(string $externalOrderId): array
+    {
+        $this->ensureConfigured();
+
+        // TODO: call /order/202309/orders and normalize the response to
+        // the shape declared in MarketplaceChannelDriver::importOrder().
+        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+    }
 }

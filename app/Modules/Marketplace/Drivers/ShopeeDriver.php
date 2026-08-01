@@ -46,4 +46,13 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         // TODO: call v2.product.unlist_item.
         throw new \RuntimeException('Integração com Shopee ainda não implementada.');
     }
+
+    public function importOrder(string $externalOrderId): array
+    {
+        $this->ensureConfigured();
+
+        // TODO: call v2.order.get_order_detail and normalize the response
+        // to the shape declared in MarketplaceChannelDriver::importOrder().
+        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+    }
 }

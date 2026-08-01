@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { h } from 'vue';
 
@@ -84,6 +85,17 @@ const columns = [
         accessorKey: 'created_at',
         header: 'Data',
         cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString('pt-BR'),
+    },
+    {
+        id: 'actions',
+        header: 'Ações',
+        enableSorting: false,
+        cell: ({ row }) => h('div', { class: 'flex justify-end' }, h(ActionIcon, {
+            icon: 'fa-eye',
+            label: 'Ver pedido',
+            color: 'blue',
+            href: `/admin/pedidos/${row.original.id}`,
+        })),
     },
 ];
 </script>

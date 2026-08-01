@@ -138,6 +138,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
                         <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
                             <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">👤 Meu perfil</Link>
+                            <Link href="/pedidos" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛍️ Compras</Link>
                             <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">⚙️ Configurações</Link>
                             <Link v-if="user?.role === 'admin'" href="/admin" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛠️ Painel admin</Link>
                             <hr class="my-1 border-store-border">
@@ -212,7 +213,10 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                                     <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
                                     <li><Link href="/cadastro" class="hover:opacity-100">Cadastrar</Link></li>
                                 </template>
-                                <li v-else><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
+                                <template v-else>
+                                    <li><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
+                                    <li><Link href="/pedidos" class="hover:opacity-100">Compras</Link></li>
+                                </template>
                             </ul>
                         </div>
                     </div>

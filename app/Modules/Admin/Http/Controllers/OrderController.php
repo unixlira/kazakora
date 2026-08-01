@@ -62,6 +62,7 @@ class OrderController extends Controller
             'statuses' => self::STATUSES,
             'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
             'emailLogs' => $order->emailLogs,
+            'fulfillmentEvents' => $order->fulfillmentEvents,
             'auditLogs' => AuditLog::query()
                 ->where('entity', class_basename(Order::class))
                 ->where('entity_id', $order->id)

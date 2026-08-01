@@ -67,4 +67,8 @@ return [
         'token_url' => env('MELHORENVIO_TOKEN_URL', 'https://sandbox.melhorenvio.com.br/oauth/token'),
     ],
 
+    'print_agent' => [
+        'token' => env('PRINT_AGENT_TOKEN'),
+    ],
+
 ];

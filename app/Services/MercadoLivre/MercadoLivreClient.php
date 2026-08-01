@@ -53,6 +53,74 @@ class MercadoLivreClient
     }
 
     /**
+     * Upload de arquivo (multipart) — usado pelo envio de NF-e ao ML
+     * (/packs/{id}/fiscal_documents). Sem retry automático de propósito:
+     * reenviar silenciosamente um upload que já pode ter chegado do lado do
+     * ML arrisca duplicar o envio da nota; o chamador decide se tenta de
+     * novo.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array{contents: string, filename: string}  $file
+     * @return array<string, mixed>
+     */
+    public function postMultipart(string $uri, array $data, array $file, string $fileFieldName = 'file'): array
+    {
+        $token = $this->auth->ensureValidToken($this->auth->currentToken());
+
+        $response = Http::baseUrl(config('services.mercadolivre.api_base_url'))
+            ->withToken($token->access_token)
+            ->timeout((int) config('mercadolivre.timeout'))
+            ->connectTimeout((int) config('mercadolivre.connect_timeout'))
+            ->acceptJson()
+            ->attach($fileFieldName, $file['contents'], $file['filename'])
+            ->post(ltrim($uri, '/'), $data);
+
+        $this->log('POST', $uri, $response);
+
+        return $this->handleResponse($response);
+    }
+
+    /**
+     * Resposta binária (PDF/ZPL da etiqueta) — não passa por
+     * handleResponse() porque o corpo não é JSON.
+     *
+     * @return array{contents: string, content_type: ?string}
+     */
+    public function getBinary(string $uri, array $query = []): array
+    {
+        $token = $this->auth->ensureValidToken($this->auth->currentToken());
+
+        $response = Http::baseUrl(config('services.mercadolivre.api_base_url'))
+            ->withToken($token->access_token)
+            ->timeout((int) config('mercadolivre.timeout'))
+            ->connectTimeout((int) config('mercadolivre.connect_timeout'))
+            ->get(ltrim($uri, '/'), $query);
+
+        $this->log('GET', $uri, $response);
+
+        if ($response->status() === 401) {
+            throw TokenExpiredException::make();
+        }
+
+        if ($response->status() === 429) {
+            throw RateLimitException::make((int) $response->header('Retry-After') ?: null);
+        }
+
+        if ($response->failed()) {
+            throw new MercadoLivreException(
+                "Erro na API do Mercado Livre (HTTP {$response->status()}).",
+                $response->status(),
+                ['body' => $response->body()],
+            );
+        }
+
+        return [
+            'contents' => $response->body(),
+            'content_type' => $response->header('Content-Type'),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function request(string $method, string $uri, array $options = []): array

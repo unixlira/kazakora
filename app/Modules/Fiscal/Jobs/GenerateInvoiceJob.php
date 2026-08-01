@@ -5,9 +5,12 @@ namespace App\Modules\Fiscal\Jobs;
 use App\Models\User;
 use App\Modules\Checkout\Jobs\SendOrderReceiptEmailJob;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -55,7 +58,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         return [60, 300, 900];
     }
 
-    public function handle(InvoiceService $invoices): void
+    public function handle(InvoiceService $invoices, OrderFulfillmentTimeline $timeline): void
     {
         $order = Order::findOrFail($this->orderId);
 
@@ -77,6 +80,21 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
                     : InvoiceGenerationLog::STATUS_FAILED,
                 'error_message' => $errorMessage,
             ]);
+
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                $invoice->status === Invoice::STATUS_AUTHORIZED ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
+                $errorMessage ?? "NF-e autorizada, chave {$invoice->chave_acesso}",
+            );
+
+            // Pedido de canal externo + nota autorizada: dispara a etapa
+            // seguinte (enviar a nota pro canal, que libera o envio do lado
+            // deles). Pedido do site (origin=loja) não passa por canal
+            // nenhum, então não tem próxima etapa aqui.
+            if ($invoice->status === Invoice::STATUS_AUTHORIZED && $order->origin !== Order::ORIGIN_STORE) {
+                SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
+            }
         } catch (Throwable $exception) {
             InvoiceGenerationLog::create([
                 'order_id' => $order->id,
@@ -87,6 +105,10 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
                     : InvoiceGenerationLog::STATUS_FAILED,
                 'error_message' => $exception->getMessage(),
             ]);
+
+            if ($this->attempts() >= $this->tries) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $exception->getMessage());
+            }
 
             throw $exception;
         }

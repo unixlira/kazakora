@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+Schedule::command('marketplace:poll-labels')->everyFiveMinutes();

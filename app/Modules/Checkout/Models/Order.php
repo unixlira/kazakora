@@ -112,4 +112,9 @@ class Order extends Model
     {
         return $this->hasOne(OrderEmailLog::class)->latestOfMany(['created_at', 'id']);
     }
+
+    public function fulfillmentEvents(): HasMany
+    {
+        return $this->hasMany(OrderFulfillmentEvent::class)->orderBy('created_at')->orderBy('id');
+    }
 }

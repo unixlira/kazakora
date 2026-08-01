@@ -26,7 +26,27 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    fulfillmentEvents: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const FULFILLMENT_STEP_LABELS = {
+    webhook_received: 'Pedido recebido',
+    stock_updated: 'Estoque atualizado',
+    invoice_issued: 'Nota fiscal emitida',
+    invoice_submitted: 'Nota enviada ao canal',
+    shipping_confirmed: 'Frete confirmado',
+    label_generated: 'Etiqueta gerada',
+    label_printed: 'Etiqueta impressa',
+};
+
+const fulfillmentStatusBadge = {
+    success: { color: 'completed', label: 'OK' },
+    pending: { color: 'pending', label: 'Pendente' },
+    failed: { color: 'cancelled', label: 'Falhou' },
+};
 
 const STATUS_LABELS_PT = {
     pending: 'Pendente',
@@ -205,6 +225,22 @@ const cancelInvoice = () => {
                             </div>
                         </form>
                     </Can>
+
+                    <h3 class="mt-6 text-sm font-semibold text-slate-500">Linha do tempo do pedido</h3>
+                    <ul v-if="fulfillmentEvents.length" class="mt-2 space-y-2 text-sm">
+                        <li v-for="event in fulfillmentEvents" :key="event.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
+                            <div>
+                                <StatusBadge
+                                    :status="fulfillmentStatusBadge[event.status]?.color ?? event.status"
+                                    :label="fulfillmentStatusBadge[event.status]?.label ?? event.status"
+                                />
+                                <span class="ml-2 font-medium">{{ FULFILLMENT_STEP_LABELS[event.step] ?? event.step }}</span>
+                                <p v-if="event.message" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.message }}</p>
+                            </div>
+                            <span class="whitespace-nowrap text-xs text-slate-400">{{ formatDateTime(event.created_at) }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="mt-2 text-sm text-slate-400">Nenhum evento registrado ainda.</p>
 
                     <h3 class="mt-6 text-sm font-semibold text-slate-500">Histórico de emissão da nota</h3>
                     <ul v-if="invoiceGenerationLogs.length" class="mt-2 space-y-2 text-sm">

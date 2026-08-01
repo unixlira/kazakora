@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
+use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,4 +31,13 @@ Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
 Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth', 'admin'])->group(function () {
     Route::get('/auth', [MelhorEnvioController::class, 'redirectToAuth'])->name('auth');
     Route::get('/callback', [MelhorEnvioController::class, 'callback'])->name('callback');
+});
+
+// Chamado pelo agente local de impressão (fora deste servidor) — token fixo,
+// não sessão. Ver AuthenticatePrintAgent.
+Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent')->group(function () {
+    Route::get('/jobs', [PrintAgentController::class, 'index'])->name('jobs.index');
+    Route::post('/jobs/{printJob}/claim', [PrintAgentController::class, 'claim'])->name('jobs.claim');
+    Route::get('/jobs/{printJob}/label', [PrintAgentController::class, 'label'])->name('jobs.label');
+    Route::post('/jobs/{printJob}/complete', [PrintAgentController::class, 'complete'])->name('jobs.complete');
 });

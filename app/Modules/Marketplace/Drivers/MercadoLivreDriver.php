@@ -4,13 +4,18 @@ namespace App\Modules\Marketplace\Drivers;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\MercadoLivre\DTOs\ProductDTO;
 use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
+use App\Services\MercadoLivre\MercadoLivreClient;
 use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
 use App\Services\MercadoLivre\Services\ShipmentService;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 /**
  * Mercado Livre — API docs: https://developers.mercadolivre.com.br
@@ -27,6 +32,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         private readonly ProductService $products,
         private readonly OrderService $orders,
         private readonly ShipmentService $shipments,
+        private readonly MercadoLivreClient $client,
     ) {}
 
     public function channel(): string
@@ -147,8 +153,114 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'shipping_neighborhood' => $address['neighborhood'],
             'shipping_city' => $address['city'],
             'shipping_state' => $address['state'],
+            'external_shipment_id' => isset($order->shipping['id']) ? (string) $order->shipping['id'] : null,
             'items' => $items,
         ];
+    }
+
+    /**
+     * Envia o XML da NF-e assinada pro Mercado Livre. Endpoint documentado
+     * pra Flex/Turbo/ME1/Drop Off — a doc em inglês desse mesmo endpoint diz
+     * "não disponível pro Brasil" enquanto a doc em português o documenta
+     * especificamente pra vendedores brasileiros; **não confirmado ao vivo**
+     * (bloqueado pelo certificado NF-e sem senha correta — nenhuma nota real
+     * foi autorizada ainda pra testar isso de ponta a ponta). Usa
+     * external_order_id como pack_id, conforme a própria doc do ML orienta
+     * quando o pack_id não está disponível separadamente.
+     */
+    public function submitInvoice(Order $order, Invoice $invoice): array
+    {
+        $this->ensureConfigured();
+
+        if (! $invoice->xml_path) {
+            throw new RuntimeException('Nota fiscal sem XML disponível para envio.');
+        }
+
+        $xml = Storage::disk('local')->get($invoice->xml_path);
+        $filename = "nfe-{$invoice->chave_acesso}.xml";
+
+        try {
+            $response = $this->client->postMultipart(
+                "packs/{$order->external_order_id}/fiscal_documents",
+                [],
+                ['contents' => $xml, 'filename' => $filename],
+                'fiscal_document',
+            );
+
+            return [
+                'status' => 'sent',
+                'external_reference' => isset($response['id']) ? (string) $response['id'] : null,
+                'response' => $response,
+            ];
+        } catch (MercadoLivreException $exception) {
+            return [
+                'status' => 'error',
+                'external_reference' => null,
+                'response' => ['error' => $exception->getMessage(), 'context' => $exception->context],
+            ];
+        }
+    }
+
+    /**
+     * Flex x envio padrão é decidido automaticamente pelo Mercado Livre (item
+     * com Flex ativo + categoria elegível + CEP do comprador dentro da área
+     * de cobertura do vendedor) — este método só CONSULTA a decisão já
+     * tomada via /shipments/{id}, nunca escolhe nada. Campo real confirmado
+     * ao vivo (2026-08-01, pedido 2000017253083882): `logistic_type` e
+     * `mode` são campos de topo no shipment, não aninhados sob `logistic.*`
+     * como a documentação do ML sugere.
+     */
+    public function confirmShipping(Order $order): array
+    {
+        $this->ensureConfigured();
+
+        $shipmentId = $this->resolveShipmentId($order);
+        $shipment = $this->shipments->getShipment($shipmentId);
+
+        return [
+            'external_shipment_id' => (string) ($shipment['id'] ?? $shipmentId),
+            'shipping_method' => $shipment['logistic_type'] ?? 'unknown',
+            'status' => $shipment['status'] ?? 'unknown',
+        ];
+    }
+
+    /**
+     * Etiqueta só fica disponível com status=ready_to_ship e
+     * substatus=ready_to_print — fora disso, `ready: false` (não é erro, só
+     * ainda não chegou lá). Sem webhook dedicado a "etiqueta pronta": o
+     * chamador precisa reconsultar (ver comando agendado de polling).
+     */
+    public function fetchLabel(Order $order): array
+    {
+        $this->ensureConfigured();
+
+        $shipmentId = $this->resolveShipmentId($order);
+        $shipment = $this->shipments->getShipment($shipmentId);
+
+        if (($shipment['status'] ?? null) !== 'ready_to_ship' || ($shipment['substatus'] ?? null) !== 'ready_to_print') {
+            return ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
+
+        $label = $this->client->getBinary('shipment_labels', [
+            'shipment_ids' => $shipmentId,
+            'response_type' => 'pdf',
+        ]);
+
+        return ['ready' => true, 'contents' => $label['contents'], 'content_type' => $label['content_type']];
+    }
+
+    private function resolveShipmentId(Order $order): string
+    {
+        $shipmentId = ChannelShipment::query()
+            ->where('order_id', $order->id)
+            ->where('channel', $this->channel())
+            ->value('external_shipment_id');
+
+        if (! $shipmentId) {
+            throw new RuntimeException("Pedido #{$order->id} não tem shipment_id do Mercado Livre registrado.");
+        }
+
+        return $shipmentId;
     }
 
     /**

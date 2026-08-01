@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticatePrintAgent;
 use App\Http\Middleware\EnsureHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
@@ -31,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureUserIsAdmin::class,
             'staff' => EnsureUserIsStaff::class,
             'permission' => EnsureHasPermission::class,
+            'print.agent' => AuthenticatePrintAgent::class,
         ]);
 
         // The 'api' group has no session/CSRF middleware to begin with, but the

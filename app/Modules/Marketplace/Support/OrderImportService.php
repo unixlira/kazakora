@@ -3,10 +3,14 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +30,7 @@ class OrderImportService
         private readonly MarketplaceDriverManager $manager,
         private readonly StockManager $stock,
         private readonly OrderPaymentFinalizer $finalizer,
+        private readonly OrderFulfillmentTimeline $timeline,
     ) {
     }
 
@@ -39,6 +44,8 @@ class OrderImportService
             ->first();
 
         if ($existing) {
+            $this->timeline->record($existing, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Webhook reentregue ({$channel}), status={$data['status']}");
+
             return $this->syncStatus($existing, $data['status']);
         }
 
@@ -87,6 +94,10 @@ class OrderImportService
                 'total' => $data['total'],
             ]);
 
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Pedido importado do canal {$channel}", ['external_order_id' => $data['external_order_id']]);
+
+            $unmappedItems = [];
+
             foreach ($data['items'] as $item) {
                 $listing = ProductChannelListing::query()
                     ->where('channel', $channel)
@@ -109,6 +120,8 @@ class OrderImportService
                         'item_external_id' => $item['external_id'],
                     ]);
 
+                    $unmappedItems[] = $item['external_id'];
+
                     continue;
                 }
 
@@ -119,6 +132,23 @@ class OrderImportService
                     reason: 'Venda importada — '.$channel,
                     reference: $order,
                 );
+            }
+
+            if ($unmappedItems) {
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_FAILED, 'Itens sem produto local mapeado, estoque não debitado para eles', ['unmapped_external_ids' => $unmappedItems]);
+            } else {
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Estoque central debitado para todos os itens');
+            }
+
+            if (! empty($data['external_shipment_id'])) {
+                ChannelShipment::query()->updateOrCreate(
+                    ['order_id' => $order->id, 'channel' => $channel],
+                    ['external_shipment_id' => $data['external_shipment_id']],
+                );
+            }
+
+            if ($data['status'] === Order::STATUS_PAID) {
+                GenerateInvoiceJob::dispatch($order->id)->afterCommit();
             }
 
             return $order;
@@ -132,11 +162,16 @@ class OrderImportService
         }
 
         $wasCancelled = $order->status === Order::STATUS_CANCELLED;
+        $wasPaid = $order->status === Order::STATUS_PAID;
 
         $order->update(['status' => $newStatus]);
 
         if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled) {
             $this->finalizer->restoreStockIfNeeded($order, 'Pedido cancelado no canal de origem');
+        }
+
+        if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
+            GenerateInvoiceJob::dispatch($order->id);
         }
 
         return $order;

@@ -3,6 +3,8 @@
 namespace App\Modules\Marketplace\Drivers;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 
@@ -54,6 +56,40 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
 
         // TODO: call /order/202309/orders and normalize the response to
         // the shape declared in MarketplaceChannelDriver::importOrder().
+        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+    }
+
+    /**
+     * Confirmado (2026-08-01): TikTok Shop BR exige NF-e (XML, <10MB) via
+     * "Gerenciar Pedidos" antes do pedido poder virar "Pronto para envio" —
+     * existe uma página de doc dedicada "BR market - Updated API workflow
+     * to support Order, Invoice and Warehouse", mas o conteúdo fica atrás de
+     * login de parceiro aprovado — endpoint exato não confirmado ainda.
+     */
+    public function submitInvoice(Order $order, Invoice $invoice): array
+    {
+        $this->ensureConfigured();
+
+        // TODO: endpoint exato só visível com credencial de parceiro
+        // aprovada — ver "BR market - Order, Invoice and Warehouse" no
+        // Partner Center quando a conta existir.
+        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+    }
+
+    public function confirmShipping(Order $order): array
+    {
+        $this->ensureConfigured();
+
+        // TODO: Fulfillment API, fluxo geral (não confirmado em detalhe):
+        // Get Shipping Provider → Create Package → Ship Package.
+        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+    }
+
+    public function fetchLabel(Order $order): array
+    {
+        $this->ensureConfigured();
+
+        // TODO: "Get Package Shipping Document", pós Ship Package.
         throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
     }
 }

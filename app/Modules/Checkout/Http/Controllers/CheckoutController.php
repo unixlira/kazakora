@@ -359,7 +359,7 @@ class CheckoutController extends Controller
                     );
                     $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
 
-                    if (($mpPayment['status'] ?? null) === 'rejected') {
+                    if (in_array($mpPayment['status'] ?? null, ['failed', 'rejected'], true)) {
                         throw new MercadoPagoException(
                             $primaryMethod === Payment::METHOD_CARD
                                 ? 'Pagamento no cartão recusado: '.($mpPayment['status_detail'] ?? 'motivo não informado pela operadora.')
@@ -374,11 +374,7 @@ class CheckoutController extends Controller
                         'mercadopago_payment_id' => isset($mpPayment['id']) ? (string) $mpPayment['id'] : null,
                         'method_type' => $primaryMethod,
                         'amount' => $primaryAmount,
-                        'status' => match ($mpPayment['status'] ?? null) {
-                            'approved' => Payment::STATUS_CAPTURED,
-                            'authorized' => Payment::STATUS_AUTHORIZED,
-                            default => Payment::STATUS_REQUIRES_CONFIRMATION,
-                        },
+                        'status' => $this->mercadoPagoLocalStatus($mpPayment),
                     ]);
 
                     return [$order, $mpOrder];
@@ -532,17 +528,17 @@ class CheckoutController extends Controller
 
             if ($payment->provider === Payment::PROVIDER_MERCADOPAGO) {
                 $mpOrder = $this->mercadoPago->retrieveOrder($payment->mercadopago_order_id);
-                $mpStatus = $mpOrder['transactions']['payments'][0]['status'] ?? null;
+                $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
 
-                // Pix no Mercado Pago não tem fase "autorizado sem
-                // capturar" — uma vez aprovado, o dinheiro já é do
-                // vendedor, então vai direto pra captured (Stripe cartão é
-                // o único caso com essa fase intermediária).
-                if ($mpStatus === 'approved') {
-                    $payment->update(['status' => Payment::STATUS_CAPTURED]);
-                } elseif (in_array($mpStatus, ['cancelled', 'rejected'], true)) {
+                if (in_array($mpPayment['status'] ?? null, ['failed', 'rejected', 'cancelled'], true)) {
                     $payment->update(['status' => Payment::STATUS_CANCELED]);
                     $this->finalizer->cancelSiblingsAfterFailure($order->fresh(['payments']), $payment);
+                } else {
+                    $localStatus = $this->mercadoPagoLocalStatus($mpPayment);
+
+                    if ($localStatus !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+                        $payment->update(['status' => $localStatus]);
+                    }
                 }
 
                 continue;
@@ -721,7 +717,11 @@ class CheckoutController extends Controller
                 'token' => $data['mp_card_token'],
                 'installments' => (int) $data['mp_card_installments'],
             ]
-            : ['id' => 'pix', 'type' => 'digital_wallet'];
+            // Tipos válidos confirmados direto na API (erro 400 real
+            // devolveu a lista completa): credit_card, debit_card, ticket,
+            // atm, bank_transfer, account_money, prepaid_card,
+            // digital_currency, smart_transfer, wallet — Pix é bank_transfer.
+            : ['id' => 'pix', 'type' => 'bank_transfer'];
 
         return [
             'type' => 'online',
@@ -736,6 +736,27 @@ class CheckoutController extends Controller
                 ]],
             ],
         ];
+    }
+
+    /**
+     * Vocabulário real de status da API de Orders (confirmado testando
+     * cartões de teste oficiais direto contra a API, não documentação —
+     * "approved"/"authorized"/"rejected" da API de Payments antiga não
+     * existem aqui):
+     * - "processed" + status_detail "accredited" → pago/capturado de verdade.
+     * - "action_required" + status_detail "waiting_capture" → autorizado,
+     *   aguardando captura manual (parte 1 de um split).
+     * - "action_required" + qualquer outro status_detail (ex:
+     *   "waiting_transfer" do Pix) → ainda pendente de confirmação.
+     * - "failed"/"rejected" → recusado (tratado antes de chegar aqui).
+     */
+    private function mercadoPagoLocalStatus(array $mpPayment): string
+    {
+        return match (true) {
+            ($mpPayment['status'] ?? null) === 'processed' => Payment::STATUS_CAPTURED,
+            ($mpPayment['status'] ?? null) === 'action_required' && ($mpPayment['status_detail'] ?? null) === 'waiting_capture' => Payment::STATUS_AUTHORIZED,
+            default => Payment::STATUS_REQUIRES_CONFIRMATION,
+        };
     }
 
     private function renderConfirmingPayment(array $draft, Order $order, \Stripe\PaymentIntent $intent, string $methodType, ?string $pendingSecondMethod = null): Response

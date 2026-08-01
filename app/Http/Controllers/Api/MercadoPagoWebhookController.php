@@ -59,11 +59,15 @@ class MercadoPagoWebhookController extends Controller
             return response()->json(['status' => 'error'], 500);
         }
 
+        // Vocabulário real da API de Orders (confirmado direto na API, não
+        // documentação): "processed" é sucesso, "failed"/"rejected"/
+        // "cancelled" são falha. "approved" (API de Payments antiga) não
+        // existe mais aqui.
         $mpStatus = $mpOrder['transactions']['payments'][0]['status'] ?? null;
 
-        match ($mpStatus) {
-            'approved' => $this->handleSuccess($payment),
-            'cancelled', 'rejected' => $this->handleFailure($payment),
+        match (true) {
+            $mpStatus === 'processed' => $this->handleSuccess($payment),
+            in_array($mpStatus, ['failed', 'rejected', 'cancelled'], true) => $this->handleFailure($payment),
             default => null,
         };
 

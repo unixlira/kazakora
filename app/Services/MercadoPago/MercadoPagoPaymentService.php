@@ -35,7 +35,13 @@ class MercadoPagoPaymentService
      */
     public function createOrder(array $payload, string $idempotencyKey): array
     {
-        return $this->request('POST', 'v1/orders', $payload, $idempotencyKey, toleratedStatuses: [402]);
+        $result = $this->request('POST', 'v1/orders', $payload, $idempotencyKey, toleratedStatuses: [402]);
+
+        // HTTP 402 ("order criada mas transação falhou", ex: cartão
+        // recusado) devolve a order real dentro de "data" em vez do objeto
+        // direto na raiz — confirmado testando um cartão de teste recusado.
+        // Sucesso (201) nunca tem essa chave, então isso não afeta esse caso.
+        return $result['data'] ?? $result;
     }
 
     public function retrieveOrder(string $orderId): array

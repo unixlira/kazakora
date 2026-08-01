@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Models;
 use App\Models\User;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,12 +30,24 @@ class Order extends Model
 
     public const ORIGIN_STORE = 'loja';
 
+    // Mesmo vocabulário de canal que o módulo de Marketplace já usa
+    // (product_channel_listings.channel, marketplace_accounts.channel) —
+    // não um conjunto paralelo, pra "canal" ser um conceito único no app
+    // inteiro e um canal novo (ex: TikTok Shop de verdade) não precisar
+    // de mapeamento nenhum entre os dois lados.
+    public const ORIGIN_MERCADO_LIVRE = MarketplaceAccount::CHANNEL_MERCADO_LIVRE;
+
+    public const ORIGIN_SHOPEE = MarketplaceAccount::CHANNEL_SHOPEE;
+
+    public const ORIGIN_TIKTOK_SHOP = MarketplaceAccount::CHANNEL_TIKTOK_SHOP;
+
     protected $fillable = [
         'user_id',
         'status',
         'origin',
         'external_order_id',
         'disputed_at',
+        'stock_restored_at',
         'shipping_method_id',
         'shipping_carrier_name',
         'shipping_name',
@@ -61,6 +74,7 @@ class Order extends Model
             'discount_amount' => 'decimal:2',
             'total' => 'decimal:2',
             'disputed_at' => 'datetime',
+            'stock_restored_at' => 'datetime',
         ];
     }
 

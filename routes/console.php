@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
+Schedule::command('orders:expire-abandoned')->everyFiveMinutes();

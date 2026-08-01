@@ -5,6 +5,8 @@ namespace App\Modules\Checkout\Support;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockManager;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 
@@ -24,6 +26,7 @@ class OrderPaymentFinalizer
     public function __construct(
         private readonly StripePaymentService $stripe,
         private readonly MercadoPagoPaymentService $mercadoPago,
+        private readonly StockManager $stock,
     ) {
     }
 
@@ -87,7 +90,37 @@ class OrderPaymentFinalizer
 
         if ($order->status !== Order::STATUS_PAID) {
             $order->update(['status' => Order::STATUS_PENDING]);
+            $this->restoreStockIfNeeded($order, 'Pagamento não concluído');
         }
+    }
+
+    /**
+     * O estoque é debitado na hora que o pedido é criado (antes do
+     * pagamento confirmar — reserva otimista, evita vender a mesma unidade
+     * duas vezes enquanto um pagamento está em andamento), mas nada
+     * devolvia esse estoque se o pagamento falhasse/expirasse/fosse
+     * cancelado — bug real, encontrado ao construir a sincronização
+     * multi-canal (um carrinho abandonado no site "sumia" estoque que
+     * continuava disponível nos outros canais). `stock_restored_at` evita
+     * devolver duas vezes o mesmo pedido.
+     */
+    public function restoreStockIfNeeded(Order $order, string $reason): void
+    {
+        if ($order->stock_restored_at) {
+            return;
+        }
+
+        $order->loadMissing('items.product');
+
+        foreach ($order->items as $item) {
+            if (! $item->product) {
+                continue;
+            }
+
+            $this->stock->adjust($item->product, $item->quantity, StockMovement::TYPE_RETURN, reason: $reason, reference: $order);
+        }
+
+        $order->update(['stock_restored_at' => now()]);
     }
 
     /**

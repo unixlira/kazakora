@@ -67,7 +67,8 @@ class OrderController extends Controller
             'status' => ['required', Rule::in(self::STATUSES)],
         ]);
 
-        $statusChanged = $order->status !== $validated['status'];
+        $previousStatus = $order->status;
+        $statusChanged = $previousStatus !== $validated['status'];
 
         $order->update($validated);
 
@@ -88,6 +89,13 @@ class OrderController extends Controller
             foreach ($finalizer->refundOrder($order) as $refundError) {
                 Log::error('stripe.refund.order_cancel_failed', ['order_id' => $order->id, 'message' => $refundError]);
                 $warnings[] = "Reembolso: {$refundError}";
+            }
+
+            // Só devolve estoque se o pedido nunca chegou a ser enviado —
+            // se já saiu (shipped/completed), o produto saiu de verdade e
+            // devolver aqui criaria estoque fantasma.
+            if (! in_array($previousStatus, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true)) {
+                $finalizer->restoreStockIfNeeded($order, 'Pedido cancelado pelo admin');
             }
         }
 

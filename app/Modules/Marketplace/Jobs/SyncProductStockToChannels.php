@@ -31,6 +31,8 @@ class SyncProductStockToChannels implements ShouldQueue
             ->where('status', ProductChannelListing::STATUS_PUBLISHED)
             ->get();
 
+        $lastFailure = null;
+
         foreach ($listings as $listing) {
             try {
                 $manager->driver($listing->channel)->updateStock($this->product, $listing);
@@ -38,7 +40,16 @@ class SyncProductStockToChannels implements ShouldQueue
                 $listing->update(['last_synced_at' => now(), 'last_error' => null]);
             } catch (Throwable $exception) {
                 $listing->update(['last_error' => $exception->getMessage()]);
+                $lastFailure = $exception;
             }
+        }
+
+        // Relança pra tries/backoff do job funcionarem de verdade — sem
+        // isso, um canal fora do ar nunca tenta de novo sozinho. Continua
+        // tentando os outros canais mesmo se um falhar (loop acima não para),
+        // só relança no fim pra não perder o retry.
+        if ($lastFailure) {
+            throw $lastFailure;
         }
     }
 }

@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Stripe\Exception\ApiErrorException;
@@ -254,7 +255,16 @@ class CheckoutController extends Controller
         $paymentValidator = Validator::make($request->all(), [
             'payment_method' => ['required', 'in:card,pix'],
             'split' => ['boolean'],
-            'payment_method_secondary' => ['required_if:split,true', 'nullable', 'in:card,pix', 'different:payment_method'],
+            // "different:payment_method" só faz sentido quando split está
+            // ativo — sem isso, o valor padrão do front (payment_method_secondary
+            // sempre mandado, mesmo sem split) rejeitava qualquer compra só de
+            // Pix, já que o padrão de payment_method_secondary também é "pix".
+            'payment_method_secondary' => [
+                'nullable',
+                'in:card,pix',
+                Rule::requiredIf(fn () => $request->boolean('split')),
+                Rule::when($request->boolean('split'), ['different:payment_method']),
+            ],
             'split_percentage' => ['required_if:split,true', 'nullable', 'integer', 'min:1', 'max:99'],
             'terms_accepted' => ['accepted'],
         ]);

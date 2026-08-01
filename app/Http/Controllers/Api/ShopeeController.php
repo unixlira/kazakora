@@ -71,7 +71,13 @@ class ShopeeController extends Controller
         if (! $signatureValid) {
             Log::channel('shopee')->warning('shopee.webhook.invalid_signature', ['log_id' => $log->id]);
 
-            return response()->json(['error' => 'invalid_signature'], 401);
+            // 200 mesmo aqui, de propósito: a validação de "Test Callback
+            // URL" do painel da Shopee falhava com "callback_url is
+            // invalid" quando essa rota devolvia 401 — vários painéis de
+            // marketplace exigem 200 incondicional pra considerar a URL
+            // viva. Rejeição de verdade (não processar) já acontece aqui
+            // dentro, só não é sinalizada pelo status HTTP.
+            return response()->json(['status' => 'rejected'], 200);
         }
 
         Log::channel('shopee')->info('shopee.webhook.received', $payload);

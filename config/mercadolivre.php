@@ -31,7 +31,12 @@ return [
 
     'log_channel' => env('ML_LOG_CHANNEL', 'mercadolivre'),
 
-    'queue' => env('ML_QUEUE', 'mercadolivre'),
+    // Bug real encontrado 2026-08-01: o cron do homolog roda `queue:work`
+    // sem `--queue=`, então só drena a fila "default" — jobs numa fila
+    // nomeada nunca são processados (46 webhooks do ML ficaram parados até
+    // isso ser descoberto). Default trocado pra "default" pra usar o worker
+    // que já funciona; só sai daqui se ML_QUEUE for setado explicitamente.
+    'queue' => env('ML_QUEUE', 'default'),
 
     'token_refresh_threshold_minutes' => (int) env('ML_TOKEN_REFRESH_THRESHOLD_MINUTES', 5),
 ];

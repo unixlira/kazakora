@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -83,8 +84,14 @@ class CheckoutController extends Controller
 
     public function storeDelivery(Request $request): RedirectResponse
     {
+        // Todo erro nesta ação redireciona explicitamente pra tela de
+        // entrega (nunca back()) — back() depende de _previous.url, que
+        // reflete a última página GET vista nesta sessão e pode estar
+        // apontando pra qualquer lugar (inclusive um endpoint JSON-only como
+        // /finalizacao/frete) se o usuário navegou entre abas ou ficou
+        // muito tempo na tela. Já causou a tela "trava"/mostra JSON cru.
         if ($this->cart->items()->isEmpty()) {
-            return back()->withErrors(['cart' => 'Seu carrinho está vazio.']);
+            return redirect()->route('finalizacao.entrega')->withErrors(['cart' => 'Seu carrinho está vazio.']);
         }
 
         // address_id só existe no payload de um usuário autenticado (o
@@ -98,7 +105,7 @@ class CheckoutController extends Controller
                 'session_id' => $request->session()->getId(),
             ]);
 
-            return back()->withErrors(['session' => 'Sua sessão expirou. Faça login novamente para continuar.']);
+            return redirect()->route('finalizacao.entrega')->withErrors(['session' => 'Sua sessão expirou. Faça login novamente para continuar.']);
         }
 
         $rules = [
@@ -142,14 +149,20 @@ class CheckoutController extends Controller
             $rules['guest.cpf'] = ['required', 'string', 'max:14'];
         }
 
-        $data = $request->validate($rules);
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return redirect()->route('finalizacao.entrega')->withErrors($validator)->withInput();
+        }
+
+        $data = $validator->validated();
 
         if ($request->user() && ! empty($data['address_id'])) {
             $address = $request->user()->addresses()->findOrFail($data['address_id']);
         }
 
         if (! $request->user() && User::where('email', $data['guest']['email'])->exists()) {
-            return back()->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+            return redirect()->route('finalizacao.entrega')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
         }
 
         // Reforço server-side: se o ID é de cotação ao vivo mas o front não
@@ -162,7 +175,7 @@ class CheckoutController extends Controller
             $match = collect($quotes)->firstWhere('id', $data['shipping_method_id']);
 
             if (! $match) {
-                return back()->withErrors(['shipping_method_id' => 'Não foi possível confirmar essa forma de envio agora. Selecione novamente e tente de novo.']);
+                return redirect()->route('finalizacao.entrega')->withErrors(['shipping_method_id' => 'Não foi possível confirmar essa forma de envio agora. Selecione novamente e tente de novo.']);
             }
 
             $data['shipping_quote'] = [
@@ -206,7 +219,7 @@ class CheckoutController extends Controller
         $coupon = Coupon::query()->where('code', $data['code'])->where('is_active', true)->first();
 
         if (! $coupon) {
-            return back()->withErrors(['code' => 'Cupom inválido.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['code' => 'Cupom inválido.']);
         }
 
         $draft = $request->session()->get(self::SESSION_KEY, []);
@@ -214,7 +227,7 @@ class CheckoutController extends Controller
         $request->session()->put(self::SESSION_KEY, $draft);
         $request->session()->save();
 
-        return back()->with('success', 'Cupom aplicado!');
+        return redirect()->route('finalizacao.pagamento')->with('success', 'Cupom aplicado!');
     }
 
     /**
@@ -238,7 +251,7 @@ class CheckoutController extends Controller
             return $this->renderConfirmingPayment($draft, ...$resumable);
         }
 
-        $data = $request->validate([
+        $paymentValidator = Validator::make($request->all(), [
             'payment_method' => ['required', 'in:card,pix,boleto'],
             'split' => ['boolean'],
             'payment_method_secondary' => ['required_if:split,true', 'nullable', 'in:card,pix,boleto', 'different:payment_method'],
@@ -246,10 +259,16 @@ class CheckoutController extends Controller
             'terms_accepted' => ['accepted'],
         ]);
 
+        if ($paymentValidator->fails()) {
+            return redirect()->route('finalizacao.pagamento')->withErrors($paymentValidator)->withInput();
+        }
+
+        $data = $paymentValidator->validated();
+
         $cartItems = $this->cart->items();
 
         if ($cartItems->isEmpty()) {
-            return back()->withErrors(['cart' => 'Seu carrinho está vazio.']);
+            return redirect()->route('finalizacao.entrega')->withErrors(['cart' => 'Seu carrinho está vazio.']);
         }
 
         // Increment 3 (escopo atual): só Pix não-dividido é roteado pro
@@ -260,11 +279,11 @@ class CheckoutController extends Controller
             && ! ($data['split'] ?? false);
 
         if ($usePixViaMercadoPago && ! $this->mercadoPago->isConfigured()) {
-            return back()->withErrors(['payment' => 'Pagamento via Pix ainda não está disponível — aguarde a configuração do Mercado Pago.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento via Pix ainda não está disponível — aguarde a configuração do Mercado Pago.']);
         }
 
         if (! $usePixViaMercadoPago && ! $this->stripe->isConfigured()) {
-            return back()->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
         }
 
         $shipping = $this->resolveShipping($draft);
@@ -354,7 +373,7 @@ class CheckoutController extends Controller
                 return [$order, $intent];
             });
         } catch (GuestEmailAlreadyExistsException) {
-            return back()->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
         } catch (ApiErrorException $exception) {
             // Erro real da API do Stripe (ex: método de pagamento não
             // ativado no dashboard, credencial inválida, instabilidade) —
@@ -365,7 +384,7 @@ class CheckoutController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            return back()->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         } catch (MercadoPagoException $exception) {
             Log::channel('mercadopago')->error('mercadopago.checkout.payment_failed', [
                 'payment_method' => $data['payment_method'],
@@ -373,7 +392,7 @@ class CheckoutController extends Controller
                 'context' => $exception->context(),
             ]);
 
-            return back()->withErrors(['payment' => 'Não foi possível iniciar o pagamento Pix agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento Pix agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
         if ($usePixViaMercadoPago) {

@@ -2,9 +2,11 @@
 
 namespace App\Modules\Cart\Support;
 
+use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Catalog\Models\Product;
 use Illuminate\Contracts\Session\Session;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 
 class CartManager
 {
@@ -44,6 +46,7 @@ class CartManager
     public function clear(): void
     {
         $this->session->forget(self::SESSION_KEY);
+        CartSnapshot::where('session_id', $this->session->getId())->delete();
     }
 
     public function items(): Collection
@@ -83,5 +86,30 @@ class CartManager
     private function save(array $items): void
     {
         $this->session->put(self::SESSION_KEY, $items);
+        $this->syncSnapshot($items);
+    }
+
+    /**
+     * Espelha o carrinho numa tabela própria só pra visibilidade agregada
+     * (dashboard admin) — a sessão continua sendo a fonte de verdade real do
+     * carrinho. Sem item = sem registro, então "existe snapshot" já significa
+     * "carrinho ativo", sem precisar de outro filtro no lado de quem lê.
+     */
+    private function syncSnapshot(array $items): void
+    {
+        if (empty($items)) {
+            CartSnapshot::where('session_id', $this->session->getId())->delete();
+
+            return;
+        }
+
+        CartSnapshot::updateOrCreate(
+            ['session_id' => $this->session->getId()],
+            [
+                'user_id' => Auth::id(),
+                'items_count' => array_sum($items),
+                'total' => $this->total(),
+            ],
+        );
     }
 }

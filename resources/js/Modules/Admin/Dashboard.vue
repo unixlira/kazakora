@@ -141,6 +141,14 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
                 stat-icon-name="fas fa-rotate-left" variant="warning" />
+            <CardStats stat-subtitle="CARRINHOS ATIVOS" :stat-title="String(stats.activeCartsCount)"
+                stat-icon-name="fas fa-cart-arrow-down" variant="info" />
+            <CardStats stat-subtitle="CLIQUES EM PRODUTOS" :stat-title="String(stats.productViewsCount)"
+                stat-icon-name="fas fa-computer-mouse" variant="secondary" />
+            <div class="flex min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-center text-slate-400">
+                <i class="fas fa-plus text-xl"></i>
+                <span class="text-sm">Métrica reservada</span>
+            </div>
         </div>
 
         <div class="mt-8 flex flex-wrap">

@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Inventory\Models\StockMovement;
@@ -21,6 +22,9 @@ class DashboardController extends Controller
         Order::STATUS_CANCELLED => 'Cancelado',
     ];
 
+    /** "Vendas confirmadas" pros cards de faturamento — pending/awaiting_payment nunca foram pagos de verdade. */
+    private const PAID_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
     public function index(): Response
     {
         $today = Carbon::today();
@@ -29,21 +33,34 @@ class DashboardController extends Controller
         return Inertia::render('Admin/Dashboard', [
             'stats' => [
                 'ordersCount' => Order::query()->count(),
-                'revenue' => (float) Order::query()->whereNot('status', Order::STATUS_CANCELLED)->sum('total'),
-                'productsCount' => Product::query()->count(),
+                'revenue' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->sum('total'),
+                'productsCount' => Product::query()->where('is_active', true)->count(),
                 'lowStockCount' => Product::query()->where('stock', '<=', 5)->count(),
                 'visitsToday' => SiteVisit::query()->whereDate('created_at', $today)->count(),
                 'ordersToday' => Order::query()->whereDate('created_at', $today)->count(),
                 'ordersMonth' => Order::query()->where('created_at', '>=', $startOfMonth)->count(),
                 'revenueToday' => (float) Order::query()
                     ->whereDate('created_at', $today)
-                    ->whereNot('status', Order::STATUS_CANCELLED)
+                    ->whereIn('status', self::PAID_STATUSES)
                     ->sum('total'),
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
                     ->where('created_at', '>=', $startOfMonth)
                     ->distinct()
                     ->count('product_id'),
+                // Um snapshot só existe enquanto o carrinho tiver item (ver
+                // CartManager::syncSnapshot) — "ativo" aqui só filtra sessões
+                // que ainda não expiraram (mesma janela do SESSION_LIFETIME).
+                'activeCartsCount' => CartSnapshot::query()
+                    ->where('updated_at', '>=', now()->subMinutes((int) config('session.lifetime')))
+                    ->count(),
+                // site_visits.path já registra todo acesso à página de
+                // produto — não precisa de tracking novo, só excluir a
+                // sub-página de frete (/produtos/{slug}/envio).
+                'productViewsCount' => SiteVisit::query()
+                    ->where('path', 'like', '/produtos/%')
+                    ->where('path', 'not like', '%/envio')
+                    ->count(),
             ],
             'recentOrders' => Order::query()
                 ->with('user:id,name')

@@ -34,9 +34,18 @@ Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth
     Route::get('/callback', [MelhorEnvioController::class, 'callback'])->name('callback');
 });
 
-Route::prefix('shopee')->name('api.shopee.')->middleware(['web', 'auth', 'admin'])->group(function () {
-    Route::get('/auth', [ShopeeController::class, 'redirectToAuth'])->name('auth');
-    Route::get('/callback', [ShopeeController::class, 'callback'])->name('callback');
+Route::prefix('shopee')->name('api.shopee.')->group(function () {
+    // OAuth: navegador do admin logado, precisa de sessão/CSRF (ver
+    // /api/mercadolivre acima).
+    Route::middleware(['web', 'auth', 'admin'])->group(function () {
+        Route::get('/auth', [ShopeeController::class, 'redirectToAuth'])->name('auth');
+        Route::get('/callback', [ShopeeController::class, 'callback'])->name('callback');
+    });
+
+    // Chamado pelos servidores da Shopee (Push Notification), não por um
+    // navegador — sem sessão/CSRF, a assinatura é verificada dentro do
+    // controller.
+    Route::post('/webhook', [ShopeeController::class, 'webhook'])->name('webhook');
 });
 
 // Chamado pelo agente local de impressão (fora deste servidor) — token fixo,

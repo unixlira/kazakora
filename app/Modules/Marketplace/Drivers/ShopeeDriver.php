@@ -55,13 +55,102 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         throw new \RuntimeException('Integração com Shopee ainda não implementada.');
     }
 
+    /**
+     * `v2.order.get_order_detail` — não confirmado ao vivo ainda (nenhum
+     * pedido real da Shopee existe pra testar contra), os nomes de campo
+     * abaixo seguem o schema publicamente documentado dessa API, que é
+     * estável entre implementações (open.shopee.com ficou inacessível pra
+     * conferência direta nesta sessão, ver plano). Primeira importação real
+     * (via "Test Push" ou uma venda de verdade) é o momento de confirmar/
+     * ajustar isso.
+     */
     public function importOrder(string $externalOrderId): array
     {
         $this->ensureConfigured();
 
-        // TODO: call v2.order.get_order_detail and normalize the response
-        // to the shape declared in MarketplaceChannelDriver::importOrder().
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        $response = $this->client->get('/api/v2/order/get_order_detail', [
+            'order_sn_list' => $externalOrderId,
+            'response_optional_fields' => 'buyer_username,recipient_address,item_list,total_amount,order_status,estimated_shipping_fee,actual_shipping_fee',
+        ]);
+
+        $order = $response['response']['order_list'][0] ?? null;
+
+        if (! $order) {
+            throw new RuntimeException("Pedido {$externalOrderId} não encontrado na Shopee.");
+        }
+
+        $address = $order['recipient_address'] ?? [];
+        $itemsSubtotal = 0.0;
+        $items = [];
+
+        foreach ($order['item_list'] ?? [] as $item) {
+            $externalItemId = (string) ($item['item_id'] ?? '');
+            $quantity = (int) ($item['model_quantity_purchased'] ?? 0);
+            $unitPrice = (float) ($item['model_discounted_price'] ?? $item['model_original_price'] ?? 0);
+
+            if ($externalItemId === '' || $quantity < 1) {
+                continue;
+            }
+
+            $itemsSubtotal += $unitPrice * $quantity;
+            $items[] = ['external_id' => $externalItemId, 'quantity' => $quantity, 'unit_price' => $unitPrice];
+        }
+
+        $shippingCost = (float) ($order['actual_shipping_fee'] ?? $order['estimated_shipping_fee'] ?? 0);
+        $total = (float) ($order['total_amount'] ?? ($itemsSubtotal + $shippingCost));
+
+        return [
+            'external_order_id' => (string) ($order['order_sn'] ?? $externalOrderId),
+            'status' => $this->mapOrderStatus((string) ($order['order_status'] ?? '')),
+            'subtotal' => round($itemsSubtotal, 2),
+            'shipping_cost' => round($shippingCost, 2),
+            'total' => round($total, 2),
+            'buyer_name' => $address['name'] ?? ($order['buyer_username'] ?? 'Comprador Shopee'),
+            'buyer_phone' => $address['phone'] ?? null,
+            'shipping_zip' => $address['zipcode'] ?? '00000000',
+            'shipping_street' => $address['full_address'] ?? 'Não informado',
+            'shipping_number' => 'S/N',
+            'shipping_complement' => null,
+            'shipping_neighborhood' => $address['district'] ?? 'Não informado',
+            'shipping_city' => $address['city'] ?? 'Não informado',
+            'shipping_state' => $this->extractState($address['state'] ?? 'NA'),
+            'external_shipment_id' => null,
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * Vocabulário real de `order_status` da Shopee: UNPAID, READY_TO_SHIP,
+     * PROCESSED, SHIPPED, TO_CONFIRM_RECEIVE, COMPLETED, CANCELLED,
+     * TO_RETURN, IN_CANCEL. Mapeamento conservador — qualquer coisa não
+     * reconhecida cai em "aguardando pagamento" em vez de assumir que já
+     * foi pago (mesma cautela que MercadoLivreDriver::mapOrderStatus() já
+     * aplica).
+     */
+    private function mapOrderStatus(string $status): string
+    {
+        return match ($status) {
+            'READY_TO_SHIP', 'PROCESSED', 'TO_CONFIRM_RECEIVE' => Order::STATUS_PAID,
+            'SHIPPED' => Order::STATUS_SHIPPED,
+            'COMPLETED' => Order::STATUS_COMPLETED,
+            'CANCELLED', 'IN_CANCEL', 'TO_RETURN' => Order::STATUS_CANCELLED,
+            default => Order::STATUS_AWAITING_PAYMENT,
+        };
+    }
+
+    /**
+     * `shipping_state` na tabela orders é varchar(2) (limite que já mordeu
+     * o Mercado Livre uma vez, que devolvia "BR-SP" em vez da sigla — ver
+     * histórico). Não confirmei ainda em que formato a Shopee devolve esse
+     * campo (sigla direta, nome completo, etc.), então só trunca pro limite
+     * da coluna em vez de tentar adivinhar um padrão de prefixo que pode
+     * nem existir aqui — ajustar com um payload real assim que disponível.
+     */
+    private function extractState(string $state): string
+    {
+        $state = strtoupper(trim($state));
+
+        return substr($state, 0, 2) ?: 'NA';
     }
 
     /**

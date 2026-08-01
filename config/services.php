@@ -79,6 +79,11 @@ return [
         'partner_id' => env('SHOPEE_TEST_PARTNER_ID', env('SHOPEE_PARTNER_ID')),
         'partner_key' => env('SHOPEE_TEST_PARTNER_KEY', env('SHOPEE_PARTNER_KEY')),
         'redirect_url' => env('SHOPEE_REDIRECT_URL'),
+        // URL fixa (não $request->fullUrl()) porque não há TrustProxies
+        // configurado — atrás do Nginx do Hostinger, a URL calculada a
+        // partir da request poderia vir como http:// em vez de https://,
+        // o que quebraria a validação de assinatura do push silenciosamente.
+        'push_url' => env('SHOPEE_PUSH_URL'),
         'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
     ],
 

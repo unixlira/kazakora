@@ -49,6 +49,7 @@ jobs:
             --exclude='/storage' \
             --exclude='node_modules' \
             --exclude='tests' \
+            --exclude='/print-agent' \
             -e "ssh -p ${{ secrets.HOMOLOG_SSH_PORT }}" \
             ./ ${{ secrets.HOMOLOG_SSH_USER }}@${{ secrets.HOMOLOG_SSH_HOST }}:${{ secrets.HOMOLOG_DEPLOY_PATH }}/
 

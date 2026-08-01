@@ -354,7 +354,7 @@ class CheckoutController extends Controller
 
                 if ($useMercadoPago) {
                     $mpOrder = $this->mercadoPago->createOrder(
-                        $this->mercadoPagoOrderPayload($primaryMethod, $primaryAmount, $user, $data, ! $isSplit, "order:{$order->id}:payment:1"),
+                        $this->mercadoPagoOrderPayload($primaryMethod, $primaryAmount, $user, $data, ! $isSplit, "order-{$order->id}-payment-1"),
                         "order:{$order->id}:payment:1",
                     );
                     $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
@@ -462,7 +462,7 @@ class CheckoutController extends Controller
         if (PaymentGateway::active() === PaymentGateway::MERCADOPAGO) {
             try {
                 $mpOrder = $this->mercadoPago->createOrder(
-                    $this->mercadoPagoOrderPayload(Payment::METHOD_PIX, $remaining, $order->user, [], true, "order:{$order->id}:payment:2"),
+                    $this->mercadoPagoOrderPayload(Payment::METHOD_PIX, $remaining, $order->user, [], true, "order-{$order->id}-payment-2"),
                     "order:{$order->id}:payment:2",
                 );
             } catch (MercadoPagoException $exception) {

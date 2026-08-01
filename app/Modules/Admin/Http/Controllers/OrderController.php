@@ -27,7 +27,14 @@ class OrderController extends Controller
         Order::STATUS_CANCELLED,
     ];
 
-    public function index(): Response
+    private const CHANNELS = [
+        Order::ORIGIN_STORE,
+        Order::ORIGIN_MERCADO_LIVRE,
+        Order::ORIGIN_SHOPEE,
+        Order::ORIGIN_TIKTOK_SHOP,
+    ];
+
+    public function index(Request $request): Response
     {
         return Inertia::render('Admin/Orders/Index', [
             'orders' => Order::query()
@@ -39,9 +46,12 @@ class OrderController extends Controller
                 // linha inteira não tem custo relevante.
                 ->with(['user:id,name,email', 'invoice:id,order_id,status', 'latestEmailLog'])
                 ->withCount('items')
+                ->when($request->filled('origin'), fn ($query) => $query->where('origin', $request->string('origin')))
                 ->latest()
                 ->get(),
             'statuses' => self::STATUSES,
+            'channels' => self::CHANNELS,
+            'filters' => $request->only('origin'),
         ]);
     }
 

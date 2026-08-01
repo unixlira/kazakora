@@ -30,7 +30,18 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    revenueByChannel: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const CHANNEL_LABELS = {
+    loja: 'Site',
+    mercado_livre: 'Mercado Livre',
+    shopee: 'Shopee',
+    tiktok_shop: 'TikTok Shop',
+};
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -148,6 +159,16 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             <div class="flex min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-center text-slate-400">
                 <i class="fas fa-plus text-xl"></i>
                 <span class="text-sm">Métrica reservada</span>
+            </div>
+        </div>
+
+        <div v-if="revenueByChannel.length" class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+            <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400">Faturamento por canal</h3>
+            <div class="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                <span v-for="row in revenueByChannel" :key="row.origin">
+                    <span class="text-slate-500 dark:text-slate-400">{{ CHANNEL_LABELS[row.origin] ?? row.origin }}:</span>
+                    <span class="font-semibold">{{ formatPrice(row.total) }}</span>
+                </span>
             </div>
         </div>
 

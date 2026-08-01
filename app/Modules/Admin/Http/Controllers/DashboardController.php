@@ -75,7 +75,20 @@ class DashboardController extends Controller
             'orderStatusBreakdown' => $this->orderStatusBreakdown(),
             'visitsSeries' => $this->visitsSeries(),
             'revenueSeries' => $this->revenueSeries(),
+            'revenueByChannel' => $this->revenueByChannel(),
         ]);
+    }
+
+    /** @return array<int, array{origin: string, total: float}> */
+    private function revenueByChannel(): array
+    {
+        return Order::query()
+            ->selectRaw('origin, SUM(total) as total')
+            ->whereIn('status', self::PAID_STATUSES)
+            ->groupBy('origin')
+            ->get()
+            ->map(fn ($row) => ['origin' => $row->origin, 'total' => (float) $row->total])
+            ->all();
     }
 
     private function orderStatusBreakdown(): array

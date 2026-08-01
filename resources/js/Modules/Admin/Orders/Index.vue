@@ -2,15 +2,36 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
-import { Head, Link } from '@inertiajs/vue3';
-import { h } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { h, reactive } from 'vue';
 
 const props = defineProps({
     orders: {
         type: Array,
         default: () => [],
     },
+    channels: {
+        type: Array,
+        default: () => [],
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
+    },
 });
+
+const channelBadge = {
+    loja: { color: 'shipped', label: 'Site' },
+    mercado_livre: { color: 'pending', label: 'Mercado Livre' },
+    shopee: { color: 'processing', label: 'Shopee' },
+    tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
+};
+
+const filterState = reactive({ origin: props.filters.origin ?? '' });
+
+const applyFilters = () => {
+    router.get('/admin/pedidos', filterState, { preserveState: true });
+};
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -46,7 +67,20 @@ const columns = [
     {
         accessorKey: 'id',
         header: 'Pedido',
-        cell: ({ row }) => h(Link, { href: `/admin/pedidos/${row.original.id}`, class: 'hover:text-primary hover:underline' }, () => `#${row.original.id}`),
+        cell: ({ row }) => h('div', {}, [
+            h(Link, { href: `/admin/pedidos/${row.original.id}`, class: 'hover:text-primary hover:underline' }, () => `#${row.original.id}`),
+            row.original.external_order_id
+                ? h('div', { class: 'text-xs text-slate-400' }, row.original.external_order_id)
+                : null,
+        ]),
+    },
+    {
+        id: 'origin',
+        header: 'Canal',
+        cell: ({ row }) => {
+            const badge = channelBadge[row.original.origin] ?? { color: row.original.origin, label: row.original.origin };
+            return h(StatusBadge, { status: badge.color, label: badge.label });
+        },
     },
     { id: 'customer', header: 'Cliente', accessorFn: (row) => row.user?.name ?? '—' },
     { accessorKey: 'items_count', header: 'Itens' },
@@ -105,6 +139,19 @@ const columns = [
 
     <AdminLayout>
         <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
+
+        <div class="mb-4 flex items-end gap-2">
+            <div>
+                <label class="text-xs font-medium text-slate-500">Canal</label>
+                <select v-model="filterState.origin" @change="applyFilters"
+                    class="mt-1 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+                    <option value="">Todos</option>
+                    <option v-for="channel in props.channels" :key="channel" :value="channel">
+                        {{ channelBadge[channel]?.label ?? channel }}
+                    </option>
+                </select>
+            </div>
+        </div>
 
         <DataTable
             :columns="columns"

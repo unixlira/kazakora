@@ -63,6 +63,13 @@ const generationLogBadge = {
     failed: { color: 'cancelled', label: 'Falhou' },
 };
 
+const channelBadge = {
+    loja: { color: 'shipped', label: 'Site' },
+    mercado_livre: { color: 'pending', label: 'Mercado Livre' },
+    shopee: { color: 'processing', label: 'Shopee' },
+    tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
+};
+
 const form = useForm({
     status: props.order.status,
 });
@@ -95,7 +102,11 @@ const cancelInvoice = () => {
     <Head :title="`Pedido #${order.id}`" />
 
     <AdminLayout>
-        <h1 class="text-2xl font-bold">Pedido #{{ order.id }}</h1>
+        <div class="flex flex-wrap items-center gap-3">
+            <h1 class="text-2xl font-bold">Pedido #{{ order.id }}</h1>
+            <StatusBadge :status="channelBadge[order.origin]?.color ?? order.origin" :label="channelBadge[order.origin]?.label ?? order.origin" />
+            <span v-if="order.external_order_id" class="text-sm text-slate-400">Ref. no canal: {{ order.external_order_id }}</span>
+        </div>
 
         <div class="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">

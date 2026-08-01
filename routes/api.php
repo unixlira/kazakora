@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\PrintAgentController;
+use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,11 @@ Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
 Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth', 'admin'])->group(function () {
     Route::get('/auth', [MelhorEnvioController::class, 'redirectToAuth'])->name('auth');
     Route::get('/callback', [MelhorEnvioController::class, 'callback'])->name('callback');
+});
+
+Route::prefix('shopee')->name('api.shopee.')->middleware(['web', 'auth', 'admin'])->group(function () {
+    Route::get('/auth', [ShopeeController::class, 'redirectToAuth'])->name('auth');
+    Route::get('/callback', [ShopeeController::class, 'callback'])->name('callback');
 });
 
 // Chamado pelo agente local de impressão (fora deste servidor) — token fixo,

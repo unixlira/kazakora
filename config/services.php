@@ -71,4 +71,15 @@ return [
         'token' => env('PRINT_AGENT_TOKEN'),
     ],
 
+    'shopee' => [
+        // Credenciais atuais são de teste/sandbox (SHOPEE_TEST_*, confirmado
+        // pelo próprio nome) — pareiam com o host test-stable, não o de
+        // produção. Trocar pra produção = trocar as 3 envs junto (partner_id
+        // e partner_key reais têm valores diferentes dos de teste).
+        'partner_id' => env('SHOPEE_TEST_PARTNER_ID', env('SHOPEE_PARTNER_ID')),
+        'partner_key' => env('SHOPEE_TEST_PARTNER_KEY', env('SHOPEE_PARTNER_KEY')),
+        'redirect_url' => env('SHOPEE_REDIRECT_URL'),
+        'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
+    ],
+
 ];

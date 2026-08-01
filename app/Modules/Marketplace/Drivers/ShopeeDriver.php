@@ -7,6 +7,10 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Services\Shopee\Exceptions\ShopeeException;
+use App\Services\Shopee\ShopeeClient;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 /**
  * Shopee — API docs: https://open.shopee.com (Open Platform, partner approval required).
@@ -18,6 +22,8 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
  */
 class ShopeeDriver extends AbstractMarketplaceDriver
 {
+    public function __construct(private readonly ShopeeClient $client) {}
+
     public function channel(): string
     {
         return MarketplaceAccount::CHANNEL_SHOPEE;
@@ -59,55 +65,96 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * Pesquisado e confirmado (2026-08-01) via schemas oficiais da Open
-     * Platform, mas SEM conta/credencial Shopee pra testar ao vivo —
-     * endpoint e formato têm alta confiança, mas nunca foram exercitados de
-     * verdade. `v2.order.upload_invoice_doc`
-     * (POST /api/v2/order/upload_invoice_doc), multipart, campos:
-     * order_sn, file_type (1=PDF, 2=JPEG, 3=PNG, 4=XML), file (máx 1MB).
-     * Aceita o XML da NF-e (file_type=4) direto — não precisa do DANFE.
+     * `v2.order.upload_invoice_doc` (POST /api/v2/order/upload_invoice_doc),
+     * multipart: order_sn, file_type=4 (XML), file. Aceita o XML da NF-e
+     * direto, sem precisar do DANFE. Endpoint específico BR (e PH),
+     * confirmado no schema oficial da Open Platform.
      */
     public function submitInvoice(Order $order, Invoice $invoice): array
     {
         $this->ensureConfigured();
 
-        // TODO: multipart POST pra v2.order.upload_invoice_doc com
-        // order_sn=$order->external_order_id, file_type=4, file=XML de
-        // Storage::disk('local')->get($invoice->xml_path).
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        if (! $invoice->xml_path) {
+            throw new RuntimeException('Nota fiscal sem XML disponível para envio.');
+        }
+
+        $xml = Storage::disk('local')->get($invoice->xml_path);
+        $filename = "nfe-{$invoice->chave_acesso}.xml";
+
+        try {
+            $response = $this->client->postMultipart(
+                '/api/v2/order/upload_invoice_doc',
+                ['order_sn' => $order->external_order_id, 'file_type' => 4],
+                ['contents' => $xml, 'filename' => $filename],
+            );
+
+            return ['status' => 'sent', 'external_reference' => $order->external_order_id, 'response' => $response];
+        } catch (ShopeeException $exception) {
+            return ['status' => 'error', 'external_reference' => null, 'response' => ['error' => $exception->getMessage(), 'context' => $exception->context]];
+        }
     }
 
     /**
-     * Fluxo confirmado: v2.logistics.get_shipping_parameter (order_sn) diz
-     * se o pedido suporta dropoff/pickup/non_integrated e, pro dropoff,
-     * devolve os branch_id disponíveis — depois v2.logistics.ship_order
-     * (order_sn + dropoff.branch_id) confirma de fato. Não é 100%
-     * automático mesmo em dropoff: pode existir mais de um branch_id
-     * configurado, exigindo escolha (ficaria "o único disponível" na
-     * prática pra uma conta com um endereço de coleta só).
+     * get_shipping_parameter diz quais métodos o pedido suporta e, pro
+     * dropoff, devolve os branch_id disponíveis — usa o primeiro (conta com
+     * um único ponto de coleta configurado não precisa de escolha real).
+     * ship_order confirma de fato o método.
      */
     public function confirmShipping(Order $order): array
     {
         $this->ensureConfigured();
 
-        // TODO: get_shipping_parameter → escolher branch_id (dropoff) →
-        // ship_order → normalizar retorno pro formato do contrato.
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        $params = $this->client->get('/api/v2/logistics/get_shipping_parameter', [
+            'order_sn' => $order->external_order_id,
+        ]);
+
+        $branchId = $params['response']['info_needed']['dropoff']['branch_list'][0]['branch_id'] ?? null;
+
+        if (! $branchId) {
+            throw new RuntimeException("Pedido {$order->external_order_id}: nenhum branch_id de dropoff disponível na Shopee.");
+        }
+
+        $result = $this->client->post('/api/v2/logistics/ship_order', [
+            'order_sn' => $order->external_order_id,
+            'dropoff' => ['branch_id' => $branchId],
+        ]);
+
+        return [
+            'external_shipment_id' => $order->external_order_id,
+            'shipping_method' => 'drop_off',
+            'status' => empty($result['error']) ? 'confirmed' : 'error',
+        ];
     }
 
     /**
-     * Fluxo confirmado, 3 chamadas: v2.logistics.create_shipping_document
-     * (order_sn) cria a tarefa → v2.logistics.get_shipping_document_result
-     * até status=READY (processamento assíncrono do lado da Shopee, por
-     * isso o polling) → v2.logistics.download_shipping_document devolve o
-     * arquivo (binário) direto no corpo da resposta.
+     * 3 chamadas: create_shipping_document cria a tarefa (idempotente por
+     * order_sn) → get_shipping_document_result até status=READY
+     * (processamento assíncrono do lado da Shopee) → download_shipping_document
+     * devolve o binário. `ready: false` enquanto ainda está PROCESSING.
      */
     public function fetchLabel(Order $order): array
     {
         $this->ensureConfigured();
 
-        // TODO: create_shipping_document (idempotente por order_sn) →
-        // get_shipping_document_result → se READY, download_shipping_document.
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        $this->client->post('/api/v2/logistics/create_shipping_document', [
+            'order_list' => [['order_sn' => $order->external_order_id]],
+        ]);
+
+        $result = $this->client->post('/api/v2/logistics/get_shipping_document_result', [
+            'order_list' => [['order_sn' => $order->external_order_id]],
+        ]);
+
+        $status = $result['response']['result_list'][0]['status'] ?? null;
+
+        if ($status !== 'READY') {
+            return ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
+
+        $label = $this->client->getBinary('/api/v2/logistics/download_shipping_document', [
+            'order_list' => [['order_sn' => $order->external_order_id]],
+            'shipping_document_type' => 'THERMAL_AIR_WAYBILL',
+        ]);
+
+        return ['ready' => true, 'contents' => $label['contents'], 'content_type' => $label['content_type']];
     }
 }

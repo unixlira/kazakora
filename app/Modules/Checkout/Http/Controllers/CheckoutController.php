@@ -87,6 +87,20 @@ class CheckoutController extends Controller
             return back()->withErrors(['cart' => 'Seu carrinho está vazio.']);
         }
 
+        // address_id só existe no payload de um usuário autenticado (o
+        // formulário de convidado nunca manda esse campo) — se ele veio mas
+        // $request->user() é null, a sessão expirou/foi perdida entre o
+        // carregamento da página e o envio do formulário. Sem esse guard,
+        // isso cai nas regras de "guest" abaixo (todas ausentes) e o usuário
+        // só vê a mesma tela de novo, sem entender por quê.
+        if (! $request->user() && $request->filled('address_id')) {
+            Log::warning('checkout.storeDelivery.session_lost_mid_flow', [
+                'session_id' => $request->session()->getId(),
+            ]);
+
+            return back()->withErrors(['session' => 'Sua sessão expirou. Faça login novamente para continuar.']);
+        }
+
         $rules = [
             'shipping_method_id' => [
                 'required',

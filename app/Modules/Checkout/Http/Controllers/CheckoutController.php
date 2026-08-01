@@ -129,7 +129,7 @@ class CheckoutController extends Controller
             'shipping_quote.price' => ['required_with:shipping_quote', 'numeric', 'min:0'],
             'shipping_quote.estimated_days' => ['nullable', 'integer', 'min:0'],
             'address_id' => ['nullable', 'integer'],
-            'new_address' => ['required_without:address_id', 'array'],
+            'new_address' => ['nullable', 'required_without:address_id', 'array'],
             'new_address.label' => ['nullable', 'string', 'max:60'],
             'new_address.recipient_name' => ['required_without:address_id', 'string', 'max:255'],
             'new_address.phone' => ['required_without:address_id', 'string', 'max:20'],

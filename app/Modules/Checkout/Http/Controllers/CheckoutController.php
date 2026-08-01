@@ -353,58 +353,35 @@ class CheckoutController extends Controller
                     : $total;
 
                 if ($useMercadoPago) {
-                    if ($primaryMethod === Payment::METHOD_CARD) {
-                        $mpResult = $this->mercadoPago->createCardPayment(
-                            $primaryAmount,
-                            $data['mp_card_token'],
-                            (int) $data['mp_card_installments'],
-                            $data['mp_payment_method_id'],
-                            $data['mp_issuer_id'] ?? null,
-                            $this->mercadoPagoPayer($user),
-                            ['description' => "Pedido #{$order->id} - KazaKora"],
-                            "order:{$order->id}:payment:1",
-                            capture: ! $isSplit,
-                        );
-
-                        if (($mpResult['status'] ?? null) === 'rejected') {
-                            throw new MercadoPagoException(
-                                'Pagamento no cartão recusado: '.($mpResult['status_detail'] ?? 'motivo não informado pela operadora.'),
-                            );
-                        }
-
-                        Payment::create([
-                            'order_id' => $order->id,
-                            'provider' => Payment::PROVIDER_MERCADOPAGO,
-                            'mercadopago_payment_id' => (string) $mpResult['id'],
-                            'method_type' => $primaryMethod,
-                            'amount' => $primaryAmount,
-                            'status' => match ($mpResult['status']) {
-                                'approved' => Payment::STATUS_CAPTURED,
-                                'authorized' => Payment::STATUS_AUTHORIZED,
-                                default => Payment::STATUS_REQUIRES_CONFIRMATION,
-                            },
-                        ]);
-
-                        return [$order, $mpResult];
-                    }
-
-                    $mpResult = $this->mercadoPago->createPixPayment(
-                        $primaryAmount,
-                        $this->mercadoPagoPayer($user),
-                        ['description' => "Pedido #{$order->id} - KazaKora"],
+                    $mpOrder = $this->mercadoPago->createOrder(
+                        $this->mercadoPagoOrderPayload($primaryMethod, $primaryAmount, $user, $data, ! $isSplit),
                         "order:{$order->id}:payment:1",
                     );
+                    $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
+
+                    if (($mpPayment['status'] ?? null) === 'rejected') {
+                        throw new MercadoPagoException(
+                            $primaryMethod === Payment::METHOD_CARD
+                                ? 'Pagamento no cartão recusado: '.($mpPayment['status_detail'] ?? 'motivo não informado pela operadora.')
+                                : 'Não foi possível gerar o Pix agora. Tente novamente em instantes.',
+                        );
+                    }
 
                     Payment::create([
                         'order_id' => $order->id,
                         'provider' => Payment::PROVIDER_MERCADOPAGO,
-                        'mercadopago_payment_id' => (string) $mpResult['id'],
+                        'mercadopago_order_id' => (string) $mpOrder['id'],
+                        'mercadopago_payment_id' => isset($mpPayment['id']) ? (string) $mpPayment['id'] : null,
                         'method_type' => $primaryMethod,
                         'amount' => $primaryAmount,
-                        'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
+                        'status' => match ($mpPayment['status'] ?? null) {
+                            'approved' => Payment::STATUS_CAPTURED,
+                            'authorized' => Payment::STATUS_AUTHORIZED,
+                            default => Payment::STATUS_REQUIRES_CONFIRMATION,
+                        },
                     ]);
 
-                    return [$order, $mpResult];
+                    return [$order, $mpOrder];
                 }
 
                 $intent = $this->stripe->createIntent(
@@ -488,10 +465,8 @@ class CheckoutController extends Controller
 
         if (PaymentGateway::active() === PaymentGateway::MERCADOPAGO) {
             try {
-                $mpResult = $this->mercadoPago->createPixPayment(
-                    $remaining,
-                    $this->mercadoPagoPayer($order->user),
-                    ['description' => "Pedido #{$order->id} - KazaKora"],
+                $mpOrder = $this->mercadoPago->createOrder(
+                    $this->mercadoPagoOrderPayload(Payment::METHOD_PIX, $remaining, $order->user, [], true),
                     "order:{$order->id}:payment:2",
                 );
             } catch (MercadoPagoException $exception) {
@@ -504,16 +479,19 @@ class CheckoutController extends Controller
                 return $this->renderConfirmingMercadoPagoCard($draft, $order);
             }
 
+            $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
+
             Payment::create([
                 'order_id' => $order->id,
                 'provider' => Payment::PROVIDER_MERCADOPAGO,
-                'mercadopago_payment_id' => (string) $mpResult['id'],
+                'mercadopago_order_id' => (string) $mpOrder['id'],
+                'mercadopago_payment_id' => isset($mpPayment['id']) ? (string) $mpPayment['id'] : null,
                 'method_type' => $data['method_type'],
                 'amount' => $remaining,
                 'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
             ]);
 
-            return $this->renderConfirmingMercadoPagoPix($draft, $order, $mpResult);
+            return $this->renderConfirmingMercadoPagoPix($draft, $order, $mpOrder);
         }
 
         $intent = $this->stripe->createIntent(
@@ -553,15 +531,16 @@ class CheckoutController extends Controller
             }
 
             if ($payment->provider === Payment::PROVIDER_MERCADOPAGO) {
-                $mp = $this->mercadoPago->retrieve($payment->mercadopago_payment_id);
+                $mpOrder = $this->mercadoPago->retrieveOrder($payment->mercadopago_order_id);
+                $mpStatus = $mpOrder['transactions']['payments'][0]['status'] ?? null;
 
                 // Pix no Mercado Pago não tem fase "autorizado sem
                 // capturar" — uma vez aprovado, o dinheiro já é do
                 // vendedor, então vai direto pra captured (Stripe cartão é
                 // o único caso com essa fase intermediária).
-                if ($mp['status'] === 'approved') {
+                if ($mpStatus === 'approved') {
                     $payment->update(['status' => Payment::STATUS_CAPTURED]);
-                } elseif (in_array($mp['status'], ['cancelled', 'rejected'], true)) {
+                } elseif (in_array($mpStatus, ['cancelled', 'rejected'], true)) {
                     $payment->update(['status' => Payment::STATUS_CANCELED]);
                     $this->finalizer->cancelSiblingsAfterFailure($order->fresh(['payments']), $payment);
                 }
@@ -664,18 +643,23 @@ class CheckoutController extends Controller
      * precisa de nenhuma etapa de confirmação no front-end (sem client
      * secret, sem SDK JS pra montar), só mostrar e começar o polling.
      */
-    private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpResult): Response
+    private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpOrder): Response
     {
-        $qr = $mpResult['point_of_interaction']['transaction_data'] ?? [];
+        // API de Orders devolve os dados do QR dentro do payment_method do
+        // pagamento (não mais em point_of_interoperability.transaction_data,
+        // que era o formato da API de Payments antiga).
+        $paymentMethod = $mpOrder['transactions']['payments'][0]['payment_method'] ?? [];
 
         return Inertia::render('Checkout/Payment', [
             ...$this->paymentProps($draft),
             'order' => $order->only('id', 'total'),
             'methodType' => Payment::METHOD_PIX,
             'mercadoPagoPix' => [
-                'qrCode' => $qr['qr_code'] ?? null,
-                'qrCodeBase64' => $qr['qr_code_base64'] ?? null,
-                'expiresAt' => $mpResult['date_of_expiration'] ?? null,
+                'qrCode' => $paymentMethod['qr_code'] ?? null,
+                'qrCodeBase64' => $paymentMethod['qr_code_base64'] ?? null,
+                'expiresAt' => $mpOrder['transactions']['payments'][0]['expiration_time']
+                    ?? $mpOrder['transactions']['payments'][0]['date_of_expiration']
+                    ?? null,
             ],
         ]);
     }
@@ -718,6 +702,40 @@ class CheckoutController extends Controller
             'last_name' => $nameParts[1] ?? $nameParts[0] ?? $user->name,
             'identification' => $cpf ? ['type' => 'CPF', 'number' => $cpf] : null,
         ]);
+    }
+
+    /**
+     * Monta o corpo de uma Order (Checkout Transparente) com uma única
+     * transação — cartão e Pix só diferem no formato de payment_method.
+     * $capture false autoriza sem capturar (dá pra cancelar sem tirar
+     * dinheiro se a outra parte de um pagamento dividido falhar) — a API de
+     * Orders controla isso em capture_mode no nível da order, não por
+     * transação.
+     */
+    private function mercadoPagoOrderPayload(string $method, float $amount, User $user, array $data, bool $capture): array
+    {
+        $paymentMethod = $method === Payment::METHOD_CARD
+            ? [
+                'id' => $data['mp_payment_method_id'],
+                'type' => 'credit_card',
+                'token' => $data['mp_card_token'],
+                'installments' => (int) $data['mp_card_installments'],
+            ]
+            : ['id' => 'pix', 'type' => 'digital_wallet'];
+
+        return [
+            'type' => 'online',
+            'processing_mode' => 'automatic',
+            'capture_mode' => $capture ? 'automatic' : 'manual',
+            'total_amount' => (string) $amount,
+            'payer' => $this->mercadoPagoPayer($user),
+            'transactions' => [
+                'payments' => [[
+                    'amount' => (string) $amount,
+                    'payment_method' => $paymentMethod,
+                ]],
+            ],
+        ];
     }
 
     private function renderConfirmingPayment(array $draft, Order $order, \Stripe\PaymentIntent $intent, string $methodType, ?string $pendingSecondMethod = null): Response

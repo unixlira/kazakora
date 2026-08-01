@@ -34,6 +34,7 @@ class Payment extends Model
         'provider',
         'stripe_payment_intent_id',
         'mercadopago_payment_id',
+        'mercadopago_order_id',
         'method_type',
         'amount',
         'status',

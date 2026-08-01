@@ -10,11 +10,13 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Cliente HTTP + orquestração de pagamentos via Mercado Pago (cartão, Pix e
- * boleto) — mesmo padrão de retry/log dos outros clients do projeto
- * (MercadoLivreClient/MelhorEnvioClient). Autenticação é um Access Token
- * direto (Bearer), sem OAuth — o token já é o segredo da própria conta,
- * igual à chave secreta do Stripe.
+ * Cliente HTTP + orquestração de pagamentos via Mercado Pago usando a API de
+ * Orders (Checkout Transparente) — não a API de Payments antiga. A aplicação
+ * cadastrada no painel do Mercado Pago só está inscrita nos tópicos de
+ * webhook `order`/fraude/contestação, então é essa API que precisa ser usada
+ * pra os webhooks realmente chegarem. Mesmo padrão de retry/log dos outros
+ * clients do projeto (MercadoLivreClient/MelhorEnvioClient). Autenticação é
+ * um Access Token direto (Bearer), sem OAuth.
  */
 class MercadoPagoPaymentService
 {
@@ -24,90 +26,48 @@ class MercadoPagoPaymentService
     }
 
     /**
-     * Pix no Mercado Pago não tem etapa de confirmação no front-end — a
-     * resposta já vem com o QR code (copia-e-cola) e a imagem em base64
-     * prontos pra mostrar, ao contrário do Stripe (que exige montar o
-     * Payment Element e só recebe o QR depois de confirmPayment()).
+     * Cria e processa uma Order em modo automático — cartão (com token do
+     * Card Payment Brick) e Pix usam o mesmo endpoint, só muda o formato de
+     * `payment_method` dentro de `transactions.payments[0]`. HTTP 402
+     * ("Order criada mas transação falhou") é tratado como resposta válida
+     * aqui, não como erro — o corpo ainda traz o status real do pagamento
+     * (ex: cartão recusado), que o chamador decide como tratar.
      */
-    public function createPixPayment(float $amount, array $payer, array $metadata, string $idempotencyKey): array
+    public function createOrder(array $payload, string $idempotencyKey): array
     {
-        return $this->request('POST', 'v1/payments', [
-            'transaction_amount' => $amount,
-            'payment_method_id' => 'pix',
-            'description' => $metadata['description'] ?? 'Pedido KazaKora',
-            'payer' => $payer,
-            'metadata' => $metadata,
-            // Formato exigido pela API: milissegundos + offset com dois-pontos
-            // (ex: 2026-07-31T18:15:00.000-03:00) — ISO8601 "puro" do Carbon
-            // (sem milissegundos) é rejeitado.
-            'date_of_expiration' => now()->addMinutes(30)->format('Y-m-d\TH:i:s.vP'),
-        ], $idempotencyKey);
+        return $this->request('POST', 'v1/orders', $payload, $idempotencyKey, toleratedStatuses: [402]);
     }
 
-    /**
-     * Cartão a partir de um token gerado no front-end pelo SDK JS do Mercado
-     * Pago (Card Payment Brick) — o backend nunca vê o número do cartão,
-     * só o token, igual ao Stripe. capture=false autoriza sem capturar
-     * (mesmo uso que o Stripe: dá pra cancelar sem tirar dinheiro se a
-     * outra parte de um pagamento dividido falhar).
-     */
-    public function createCardPayment(
-        float $amount,
-        string $token,
-        int $installments,
-        string $paymentMethodId,
-        ?string $issuerId,
-        array $payer,
-        array $metadata,
-        string $idempotencyKey,
-        bool $capture = true,
+    public function retrieveOrder(string $orderId): array
+    {
+        return $this->request('GET', "v1/orders/{$orderId}");
+    }
+
+    /** Só captura o valor total — a API de Orders não suporta captura parcial. */
+    public function captureOrder(string $orderId): array
+    {
+        return $this->request('POST', "v1/orders/{$orderId}/capture");
+    }
+
+    /** Só funciona com a order ainda em status "created" (antes de processar). */
+    public function cancelOrder(string $orderId): array
+    {
+        return $this->request('POST', "v1/orders/{$orderId}/cancel");
+    }
+
+    /** Só funciona com a order em status "processed". Sem $amount, estorna o valor total. */
+    public function refundOrder(string $orderId, ?float $amount = null): array
+    {
+        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : []);
+    }
+
+    private function request(
+        string $method,
+        string $uri,
+        array $data = [],
+        ?string $idempotencyKey = null,
+        array $toleratedStatuses = [],
     ): array {
-        return $this->request('POST', 'v1/payments', array_filter([
-            'transaction_amount' => $amount,
-            'token' => $token,
-            'installments' => $installments,
-            'payment_method_id' => $paymentMethodId,
-            'issuer_id' => $issuerId,
-            'capture' => $capture,
-            'payer' => $payer,
-            'metadata' => $metadata,
-        ], fn ($value) => $value !== null), $idempotencyKey);
-    }
-
-    public function createBoletoPayment(float $amount, array $payer, array $metadata, string $idempotencyKey): array
-    {
-        return $this->request('POST', 'v1/payments', [
-            'transaction_amount' => $amount,
-            'payment_method_id' => 'bolbradesco',
-            'description' => $metadata['description'] ?? 'Pedido KazaKora',
-            'payer' => $payer,
-            'metadata' => $metadata,
-        ], $idempotencyKey);
-    }
-
-    public function retrieve(string $paymentId): array
-    {
-        return $this->request('GET', "v1/payments/{$paymentId}");
-    }
-
-    public function capture(string $paymentId): array
-    {
-        return $this->request('PUT', "v1/payments/{$paymentId}", ['capture' => true]);
-    }
-
-    /** Só funciona antes da captura — depois disso precisa de refund(). */
-    public function cancel(string $paymentId): array
-    {
-        return $this->request('PUT', "v1/payments/{$paymentId}", ['status' => 'cancelled']);
-    }
-
-    public function refund(string $paymentId): array
-    {
-        return $this->request('POST', "v1/payments/{$paymentId}/refunds");
-    }
-
-    private function request(string $method, string $uri, array $data = [], ?string $idempotencyKey = null): array
-    {
         if (! $this->isConfigured()) {
             throw new MercadoPagoException('Mercado Pago não configurado.');
         }
@@ -126,7 +86,7 @@ class MercadoPagoPaymentService
 
         $this->log($method, $uri, $response);
 
-        return $this->handleResponse($response);
+        return $this->handleResponse($response, $toleratedStatuses);
     }
 
     private function sendWithRetry(PendingRequest $request, string $method, string $uri, array $data): Response
@@ -166,9 +126,9 @@ class MercadoPagoPaymentService
         usleep($baseDelayMs * 1000 * (2 ** ($attempt - 1)));
     }
 
-    private function handleResponse(Response $response): array
+    private function handleResponse(Response $response, array $toleratedStatuses = []): array
     {
-        if ($response->failed()) {
+        if ($response->failed() && ! in_array($response->status(), $toleratedStatuses, true)) {
             throw new MercadoPagoException(
                 $response->json('message') ?? "Erro na API do Mercado Pago (HTTP {$response->status()}).",
                 $response->status(),

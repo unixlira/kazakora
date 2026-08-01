@@ -50,7 +50,7 @@ class OrderPaymentFinalizer
         foreach ($order->payments as $payment) {
             if ($payment->status === Payment::STATUS_AUTHORIZED) {
                 $payment->provider === Payment::PROVIDER_MERCADOPAGO
-                    ? $this->mercadoPago->capture($payment->mercadopago_payment_id)
+                    ? $this->mercadoPago->captureOrder($payment->mercadopago_order_id)
                     : $this->stripe->capture($payment->stripe_payment_intent_id);
                 $payment->update(['status' => Payment::STATUS_CAPTURED]);
             }
@@ -79,7 +79,7 @@ class OrderPaymentFinalizer
 
             if ($payment->status === Payment::STATUS_AUTHORIZED) {
                 $payment->provider === Payment::PROVIDER_MERCADOPAGO
-                    ? $this->mercadoPago->cancel($payment->mercadopago_payment_id)
+                    ? $this->mercadoPago->cancelOrder($payment->mercadopago_order_id)
                     : $this->stripe->cancel($payment->stripe_payment_intent_id);
                 $payment->update(['status' => Payment::STATUS_CANCELED]);
             }
@@ -107,14 +107,14 @@ class OrderPaymentFinalizer
 
         foreach ($order->payments as $payment) {
             $isMercadoPago = $payment->provider === Payment::PROVIDER_MERCADOPAGO;
-            $reference = $isMercadoPago ? $payment->mercadopago_payment_id : $payment->stripe_payment_intent_id;
+            $reference = $isMercadoPago ? $payment->mercadopago_order_id : $payment->stripe_payment_intent_id;
 
             try {
                 if ($payment->status === Payment::STATUS_CAPTURED) {
-                    $isMercadoPago ? $this->mercadoPago->refund($reference) : $this->stripe->refund($reference);
+                    $isMercadoPago ? $this->mercadoPago->refundOrder($reference) : $this->stripe->refund($reference);
                     $payment->update(['status' => Payment::STATUS_REFUNDED]);
                 } elseif ($payment->status === Payment::STATUS_AUTHORIZED) {
-                    $isMercadoPago ? $this->mercadoPago->cancel($reference) : $this->stripe->cancel($reference);
+                    $isMercadoPago ? $this->mercadoPago->cancelOrder($reference) : $this->stripe->cancel($reference);
                     $payment->update(['status' => Payment::STATUS_CANCELED]);
                 }
             } catch (\Throwable $exception) {

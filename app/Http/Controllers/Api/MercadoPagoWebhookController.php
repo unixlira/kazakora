@@ -28,17 +28,20 @@ class MercadoPagoWebhookController extends Controller
         }
 
         $type = $request->input('type');
-        $paymentId = $request->input('data.id') ?? $request->query('data_id');
+        $resourceId = $request->input('data.id') ?? $request->query('data_id');
 
-        Log::channel('mercadopago')->info('mercadopago.webhook.received', ['type' => $type, 'payment_id' => $paymentId]);
+        Log::channel('mercadopago')->info('mercadopago.webhook.received', ['type' => $type, 'resource_id' => $resourceId]);
 
-        if ($type !== 'payment' || ! $paymentId) {
+        // A aplicação só está inscrita nos tópicos order/fraude/contestação
+        // (não "payment") — fraude e contestação só são reconhecidos e
+        // logados por enquanto, sem lógica de negócio ainda.
+        if ($type !== 'order' || ! $resourceId) {
             return response()->json(['status' => 'ignored']);
         }
 
         $payment = Payment::query()
             ->where('provider', Payment::PROVIDER_MERCADOPAGO)
-            ->where('mercadopago_payment_id', (string) $paymentId)
+            ->where('mercadopago_order_id', (string) $resourceId)
             ->first();
 
         if (! $payment) {
@@ -46,17 +49,19 @@ class MercadoPagoWebhookController extends Controller
         }
 
         try {
-            $mpPayment = $this->mercadoPago->retrieve((string) $paymentId);
+            $mpOrder = $this->mercadoPago->retrieveOrder((string) $resourceId);
         } catch (Throwable $exception) {
             Log::channel('mercadopago')->error('mercadopago.webhook.retrieve_failed', [
-                'payment_id' => $paymentId,
+                'order_id' => $resourceId,
                 'message' => $exception->getMessage(),
             ]);
 
             return response()->json(['status' => 'error'], 500);
         }
 
-        match ($mpPayment['status'] ?? null) {
+        $mpStatus = $mpOrder['transactions']['payments'][0]['status'] ?? null;
+
+        match ($mpStatus) {
             'approved' => $this->handleSuccess($payment),
             'cancelled', 'rejected' => $this->handleFailure($payment),
             default => null,

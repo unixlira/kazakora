@@ -192,7 +192,9 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'complement' => $receiver['comment'] ?? null,
             'neighborhood' => (string) ($receiver['neighborhood']['name'] ?? $fallback['neighborhood']),
             'city' => (string) ($receiver['city']['name'] ?? $fallback['city']),
-            'state' => (string) ($receiver['state']['id'] ?? $receiver['state']['name'] ?? $fallback['state']),
+            // orders.shipping_state é varchar(2) — o state.id do ML vem
+            // como "BR-SP" (prefixo de país + UF), então só a UF interessa.
+            'state' => strtoupper(substr((string) ($receiver['state']['id'] ?? ''), -2)) ?: $fallback['state'],
         ];
     }
 

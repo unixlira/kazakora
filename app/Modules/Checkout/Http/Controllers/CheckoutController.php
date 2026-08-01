@@ -354,7 +354,7 @@ class CheckoutController extends Controller
 
                 if ($useMercadoPago) {
                     $mpOrder = $this->mercadoPago->createOrder(
-                        $this->mercadoPagoOrderPayload($primaryMethod, $primaryAmount, $user, $data, ! $isSplit),
+                        $this->mercadoPagoOrderPayload($primaryMethod, $primaryAmount, $user, $data, ! $isSplit, "order:{$order->id}:payment:1"),
                         "order:{$order->id}:payment:1",
                     );
                     $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
@@ -462,7 +462,7 @@ class CheckoutController extends Controller
         if (PaymentGateway::active() === PaymentGateway::MERCADOPAGO) {
             try {
                 $mpOrder = $this->mercadoPago->createOrder(
-                    $this->mercadoPagoOrderPayload(Payment::METHOD_PIX, $remaining, $order->user, [], true),
+                    $this->mercadoPagoOrderPayload(Payment::METHOD_PIX, $remaining, $order->user, [], true, "order:{$order->id}:payment:2"),
                     "order:{$order->id}:payment:2",
                 );
             } catch (MercadoPagoException $exception) {
@@ -708,7 +708,7 @@ class CheckoutController extends Controller
      * Orders controla isso em capture_mode no nível da order, não por
      * transação.
      */
-    private function mercadoPagoOrderPayload(string $method, float $amount, User $user, array $data, bool $capture): array
+    private function mercadoPagoOrderPayload(string $method, float $amount, User $user, array $data, bool $capture, string $externalReference): array
     {
         $paymentMethod = $method === Payment::METHOD_CARD
             ? [
@@ -727,6 +727,7 @@ class CheckoutController extends Controller
             'type' => 'online',
             'processing_mode' => 'automatic',
             'capture_mode' => $capture ? 'automatic' : 'manual',
+            'external_reference' => $externalReference,
             'total_amount' => (string) $amount,
             'payer' => $this->mercadoPagoPayer($user),
             'transactions' => [

@@ -84,6 +84,12 @@ return [
         // partir da request poderia vir como http:// em vez de https://,
         // o que quebraria a validação de assinatura do push silenciosamente.
         'push_url' => env('SHOPEE_PUSH_URL'),
+        // Chave separada da partner_key acima — a própria Shopee gera uma
+        // "Push Partner Key" específica pra assinar/validar notificações de
+        // push, distinta da partner_key usada nas chamadas normais de API
+        // (confirmado pelo usuário direto no painel deles, não documentado
+        // em lugar nenhum que consegui acessar nesta sessão).
+        'push_partner_key' => env('SHOPEE_PUSH_PARTNER_KEY'),
         'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
     ],
 

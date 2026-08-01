@@ -84,13 +84,13 @@ class ShopeeController extends Controller
     private function hasValidSignature(string $rawBody, string $authorizationHeader): bool
     {
         $pushUrl = config('services.shopee.push_url');
-        $partnerKey = config('services.shopee.partner_key');
+        $pushPartnerKey = config('services.shopee.push_partner_key');
 
-        if (! $pushUrl || ! $partnerKey || $authorizationHeader === '') {
+        if (! $pushUrl || ! $pushPartnerKey || $authorizationHeader === '') {
             return false;
         }
 
-        $expected = hash_hmac('sha256', $pushUrl.'|'.$rawBody, $partnerKey);
+        $expected = hash_hmac('sha256', $pushUrl.'|'.$rawBody, $pushPartnerKey);
 
         return hash_equals($expected, $authorizationHeader);
     }

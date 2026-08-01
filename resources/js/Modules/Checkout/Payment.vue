@@ -5,7 +5,7 @@ import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.v
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { loadStripe } from '@stripe/stripe-js';
 import { loadMercadoPagoSdk } from '@/Shared/useMercadoPagoSdk';
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
@@ -297,42 +297,48 @@ const isChoosingMethod = computed(() =>
 // Pix via Mercado Pago já chega com o QR pronto (a criação do pagamento
 // aconteceu no backend, antes desta página renderizar) — só mostrar e
 // começar o polling, sem nenhuma etapa de confirmação como o Stripe exige.
-onMounted(() => {
-    if (props.mercadoPagoPix) {
-        pixQrImageUrl.value = props.mercadoPagoPix.qrCodeBase64
-            ? `data:image/png;base64,${props.mercadoPagoPix.qrCodeBase64}`
-            : null;
-        pixQrCode.value = props.mercadoPagoPix.qrCode ?? null;
-        paymentState.value = 'awaiting_pix';
+//
+// É um watch (com immediate), não onMounted: ao escolher Pix na Fase 1, o
+// Inertia troca as props desta MESMA instância de Payment.vue (mesma rota,
+// mesmo componente — não remonta o componente do zero), então onMounted()
+// só dispararia na primeira visita à página, antes do QR existir, e nunca
+// mais — a tela ficava presa no texto de fundo sem o QR aparecer de verdade.
+watch(() => props.mercadoPagoPix, (pix) => {
+    if (! pix) return;
 
-        if (props.mercadoPagoPix.expiresAt) {
-            startPixCountdown(new Date(props.mercadoPagoPix.expiresAt).getTime() / 1000);
-        }
+    clearTimers();
+    pixQrImageUrl.value = pix.qrCodeBase64 ? `data:image/png;base64,${pix.qrCodeBase64}` : null;
+    pixQrCode.value = pix.qrCode ?? null;
+    paymentState.value = 'awaiting_pix';
 
-        startPolling(props.order.id);
+    if (pix.expiresAt) {
+        startPixCountdown(new Date(pix.expiresAt).getTime() / 1000);
+    }
+
+    startPolling(props.order.id);
+}, { immediate: true });
+
+// Cartão via Mercado Pago já resolveu no backend (aprovado/autorizado), sem
+// nada pra confirmar aqui. Se ainda falta a segunda parcela (Pix, num
+// split), dispara sozinho — não há ação nenhuma do cliente pra esperar
+// nessa etapa. Mesmo motivo do watch acima pra não ser onMounted.
+watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
+    if (! confirmed) return;
+
+    clearTimers();
+    paymentState.value = 'processing';
+
+    if (props.pendingSecondMethod) {
+        router.post(`/finalizacao/${props.order.id}/pagamento/proxima-parte`, {
+            method_type: props.pendingSecondMethod,
+        }, {
+            onError: () => { paymentState.value = 'idle'; },
+        });
         return;
     }
 
-    // Cartão via Mercado Pago já resolveu no backend (aprovado/autorizado),
-    // sem nada pra confirmar aqui. Se ainda falta a segunda parcela (Pix,
-    // num split), dispara sozinho — não há ação nenhuma do cliente pra
-    // esperar nessa etapa. A resposta troca esta página por uma nova com
-    // mercadoPagoPix preenchido, que cai no bloco acima ao remontar.
-    if (props.mercadoPagoCardConfirmed) {
-        paymentState.value = 'processing';
-
-        if (props.pendingSecondMethod) {
-            router.post(`/finalizacao/${props.order.id}/pagamento/proxima-parte`, {
-                method_type: props.pendingSecondMethod,
-            }, {
-                onError: () => { paymentState.value = 'idle'; },
-            });
-            return;
-        }
-
-        startPolling(props.order.id);
-    }
-});
+    startPolling(props.order.id);
+}, { immediate: true });
 </script>
 
 <template>
@@ -452,9 +458,7 @@ onMounted(() => {
                     <template v-else-if="mercadoPagoPix">
                         <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
                             <h2 class="mb-2 text-sm font-semibold uppercase text-store-fg-muted">Pagamento via Pix</h2>
-                            <p class="text-sm text-store-fg-muted">
-                                Escaneie o QR code ou copie o código Pix na janela para concluir o pagamento.
-                            </p>
+                            <p class="text-sm text-store-fg-muted">Confirmando seu pedido...</p>
                         </div>
                     </template>
 

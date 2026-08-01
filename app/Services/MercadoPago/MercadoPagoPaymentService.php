@@ -10,13 +10,16 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Cliente HTTP + orquestração de pagamentos via Mercado Pago usando a API de
- * Orders (Checkout Transparente) — não a API de Payments antiga. A aplicação
- * cadastrada no painel do Mercado Pago só está inscrita nos tópicos de
- * webhook `order`/fraude/contestação, então é essa API que precisa ser usada
- * pra os webhooks realmente chegarem. Mesmo padrão de retry/log dos outros
- * clients do projeto (MercadoLivreClient/MelhorEnvioClient). Autenticação é
- * um Access Token direto (Bearer), sem OAuth.
+ * Cliente HTTP + orquestração de pagamentos via Mercado Pago. Híbrido por
+ * necessidade real, não por escolha: cartão usa a API de Orders (Checkout
+ * Transparente) — a aplicação só está inscrita nos tópicos de webhook
+ * `order`/fraude/contestação, então é essa API que faz os webhooks
+ * chegarem. Pix usa a API de Payments clássica (v1/payments) porque a API
+ * de Orders rejeita "bank_transfer" como payment_method.type válido nessa
+ * conta, mesmo com Pix ativo — ver createPixPayment(). Mesmo padrão de
+ * retry/log dos outros clients do projeto (MercadoLivreClient/
+ * MelhorEnvioClient). Autenticação é um Access Token direto (Bearer), sem
+ * OAuth.
  */
 class MercadoPagoPaymentService
 {
@@ -65,6 +68,47 @@ class MercadoPagoPaymentService
     public function refundOrder(string $orderId, ?float $amount = null): array
     {
         return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : []);
+    }
+
+    /**
+     * Pix passa pela API de Payments clássica (v1/payments), não pela de
+     * Orders — confirmado direto na API: essa conta tem Pix ativo
+     * (/v1/payment_methods lista "pix" com status active), mas a API de
+     * Orders rejeita "bank_transfer" como type válido pra ela mesmo assim
+     * (erro real: "value must be one of credit_card, debit_card,
+     * account_money, digital_currency, wallet" — sem bank_transfer). Um Pix
+     * de teste real via v1/payments funcionou normalmente na mesma conta,
+     * então é uma limitação específica da API de Orders pra Pix nessa
+     * conta/momento, não um bug daqui. Cartão continua na API de Orders
+     * (funciona e os webhooks chegam). Sem webhook pro tópico "payment"
+     * nessa aplicação, a confirmação do Pix depende só do polling — que já
+     * é o mecanismo usado de qualquer forma enquanto o QR não é pago.
+     */
+    public function createPixPayment(float $amount, array $payer, string $externalReference, string $idempotencyKey): array
+    {
+        return $this->request('POST', 'v1/payments', [
+            'transaction_amount' => $amount,
+            'payment_method_id' => 'pix',
+            'description' => "Pedido {$externalReference} - KazaKora",
+            'external_reference' => $externalReference,
+            'payer' => $payer,
+            'date_of_expiration' => now()->addMinutes(10)->format('Y-m-d\TH:i:s.vP'),
+        ], $idempotencyKey);
+    }
+
+    public function retrievePayment(string $paymentId): array
+    {
+        return $this->request('GET', "v1/payments/{$paymentId}");
+    }
+
+    public function cancelPayment(string $paymentId): array
+    {
+        return $this->request('PUT', "v1/payments/{$paymentId}", ['status' => 'cancelled']);
+    }
+
+    public function refundPayment(string $paymentId): array
+    {
+        return $this->request('POST', "v1/payments/{$paymentId}/refunds");
     }
 
     private function request(

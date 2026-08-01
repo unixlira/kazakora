@@ -107,14 +107,30 @@ class OrderPaymentFinalizer
 
         foreach ($order->payments as $payment) {
             $isMercadoPago = $payment->provider === Payment::PROVIDER_MERCADOPAGO;
-            $reference = $isMercadoPago ? $payment->mercadopago_order_id : $payment->stripe_payment_intent_id;
+            // Pix (Mercado Pago) é sempre a API de Payments clássica, sem
+            // mercadopago_order_id — cartão (Mercado Pago) é sempre a API
+            // de Orders. Ver MercadoPagoPaymentService.
+            $isMercadoPagoOrder = $isMercadoPago && $payment->mercadopago_order_id;
+            $reference = match (true) {
+                $isMercadoPagoOrder => $payment->mercadopago_order_id,
+                $isMercadoPago => $payment->mercadopago_payment_id,
+                default => $payment->stripe_payment_intent_id,
+            };
 
             try {
                 if ($payment->status === Payment::STATUS_CAPTURED) {
-                    $isMercadoPago ? $this->mercadoPago->refundOrder($reference) : $this->stripe->refund($reference);
+                    match (true) {
+                        $isMercadoPagoOrder => $this->mercadoPago->refundOrder($reference),
+                        $isMercadoPago => $this->mercadoPago->refundPayment($reference),
+                        default => $this->stripe->refund($reference),
+                    };
                     $payment->update(['status' => Payment::STATUS_REFUNDED]);
                 } elseif ($payment->status === Payment::STATUS_AUTHORIZED) {
-                    $isMercadoPago ? $this->mercadoPago->cancelOrder($reference) : $this->stripe->cancel($reference);
+                    match (true) {
+                        $isMercadoPagoOrder => $this->mercadoPago->cancelOrder($reference),
+                        $isMercadoPago => $this->mercadoPago->cancelPayment($reference),
+                        default => $this->stripe->cancel($reference),
+                    };
                     $payment->update(['status' => Payment::STATUS_CANCELED]);
                 }
             } catch (\Throwable $exception) {

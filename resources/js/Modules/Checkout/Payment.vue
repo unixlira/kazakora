@@ -4,7 +4,8 @@ import InputError from '@/Shared/Components/InputError.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { loadStripe } from '@stripe/stripe-js';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { loadMercadoPagoSdk } from '@/Shared/useMercadoPagoSdk';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
@@ -23,6 +24,14 @@ const props = defineProps({
     // Pix via Mercado Pago: QR já pronto na resposta do backend, sem
     // nenhuma etapa de confirmação no front-end (diferente do Stripe).
     mercadoPagoPix: { type: Object, default: null },
+    // 'stripe' ou 'mercadopago' — decide se cartão usa o Payment Element do
+    // Stripe (Fase 2 abaixo) ou o Card Payment Brick do Mercado Pago.
+    paymentGateway: { type: String, default: 'stripe' },
+    mercadoPagoPublicKey: { type: String, default: null },
+    // Cartão via Mercado Pago já foi aprovado/autorizado no backend antes
+    // desta página renderizar (sem Payment Element pra confirmar) — só
+    // falta começar o polling, igual ao Pix.
+    mercadoPagoCardConfirmed: { type: Boolean, default: false },
 });
 
 const formatPrice = (value) =>
@@ -42,9 +51,78 @@ const chooseForm = useForm({
     terms_accepted: false,
 });
 
-const submitChoice = () => chooseForm.post('/finalizacao/pagamento', {
-    onError: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
-});
+// Cartão + Mercado Pago precisa do Card Payment Brick tokenizar o cartão
+// no navegador ANTES de qualquer chamada ao backend (o backend nunca vê o
+// número do cartão) — split sempre tem cartão como parte 1
+// (sortMethodsSafely no backend), então qualquer split com MP também
+// precisa passar por aqui primeiro.
+const mpCardPhase = ref(false);
+const mpCardError = ref(null);
+const mpCardReady = ref(false);
+let mpBrickController = null;
+
+const submitChoice = async () => {
+    const needsMpCardToken = props.paymentGateway === 'mercadopago'
+        && (chooseForm.payment_method === 'card' || chooseForm.split);
+
+    if (needsMpCardToken) {
+        mpCardPhase.value = true;
+        await nextTick();
+        mountMpCardBrick();
+        return;
+    }
+
+    chooseForm.post('/finalizacao/pagamento', {
+        onError: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+    });
+};
+
+const backToChoice = () => {
+    mpCardPhase.value = false;
+    mpCardError.value = null;
+    mpBrickController?.unmount();
+    mpBrickController = null;
+};
+
+const mountMpCardBrick = async () => {
+    mpCardError.value = null;
+    mpCardReady.value = false;
+
+    try {
+        const MercadoPago = await loadMercadoPagoSdk();
+        const mp = new MercadoPago(props.mercadoPagoPublicKey, { locale: 'pt-BR' });
+        const primaryAmount = chooseForm.split
+            ? Number((props.total * (chooseForm.split_percentage / 100)).toFixed(2))
+            : props.total;
+
+        mpBrickController = await mp.bricks().create('cardPayment', 'mpCardBrick-container', {
+            initialization: { amount: primaryAmount },
+            callbacks: {
+                onReady: () => { mpCardReady.value = true; },
+                onError: (error) => {
+                    mpCardError.value = error?.message ?? 'Não foi possível carregar o formulário de cartão.';
+                },
+                onSubmit: (formData) => new Promise((resolve, reject) => {
+                    chooseForm.transform((data) => ({
+                        ...data,
+                        mp_card_token: formData.token,
+                        mp_card_installments: formData.installments,
+                        mp_payment_method_id: formData.payment_method_id,
+                        mp_issuer_id: formData.issuer_id ?? null,
+                    })).post('/finalizacao/pagamento', {
+                        onSuccess: () => resolve(),
+                        onError: () => {
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            reject();
+                        },
+                    });
+                }),
+            },
+        });
+    } catch (error) {
+        mpCardError.value = error?.message ?? 'Não foi possível carregar o formulário de cartão.';
+    }
+};
 
 const couponForm = useForm({ code: '' });
 const showCouponInput = ref(!!props.couponCode);
@@ -97,7 +175,10 @@ const clearTimers = () => {
     pixCountdownTimer = null;
 };
 
-onUnmounted(clearTimers);
+onUnmounted(() => {
+    clearTimers();
+    mpBrickController?.unmount();
+});
 
 const startPixCountdown = (expiresAtUnixSeconds) => {
     const expiresAtMs = expiresAtUnixSeconds * 1000;
@@ -188,23 +269,49 @@ const confirmPayment = async () => {
 
 const savings = computed(() => props.discountAmount);
 
+// Verdadeiro só na Fase 1 (escolher método) — usado tanto lá quanto pro
+// cupom no resumo da compra, que não faz sentido nas fases seguintes.
+const isChoosingMethod = computed(() =>
+    ! props.clientSecret && ! props.mercadoPagoPix && ! mpCardPhase.value && ! props.mercadoPagoCardConfirmed);
+
 // Pix via Mercado Pago já chega com o QR pronto (a criação do pagamento
 // aconteceu no backend, antes desta página renderizar) — só mostrar e
 // começar o polling, sem nenhuma etapa de confirmação como o Stripe exige.
 onMounted(() => {
-    if (! props.mercadoPagoPix) return;
+    if (props.mercadoPagoPix) {
+        pixQrImageUrl.value = props.mercadoPagoPix.qrCodeBase64
+            ? `data:image/png;base64,${props.mercadoPagoPix.qrCodeBase64}`
+            : null;
+        pixQrCode.value = props.mercadoPagoPix.qrCode ?? null;
+        paymentState.value = 'awaiting_pix';
 
-    pixQrImageUrl.value = props.mercadoPagoPix.qrCodeBase64
-        ? `data:image/png;base64,${props.mercadoPagoPix.qrCodeBase64}`
-        : null;
-    pixQrCode.value = props.mercadoPagoPix.qrCode ?? null;
-    paymentState.value = 'awaiting_pix';
+        if (props.mercadoPagoPix.expiresAt) {
+            startPixCountdown(new Date(props.mercadoPagoPix.expiresAt).getTime() / 1000);
+        }
 
-    if (props.mercadoPagoPix.expiresAt) {
-        startPixCountdown(new Date(props.mercadoPagoPix.expiresAt).getTime() / 1000);
+        startPolling(props.order.id);
+        return;
     }
 
-    startPolling(props.order.id);
+    // Cartão via Mercado Pago já resolveu no backend (aprovado/autorizado),
+    // sem nada pra confirmar aqui. Se ainda falta a segunda parcela (Pix,
+    // num split), dispara sozinho — não há ação nenhuma do cliente pra
+    // esperar nessa etapa. A resposta troca esta página por uma nova com
+    // mercadoPagoPix preenchido, que cai no bloco acima ao remontar.
+    if (props.mercadoPagoCardConfirmed) {
+        paymentState.value = 'processing';
+
+        if (props.pendingSecondMethod) {
+            router.post(`/finalizacao/${props.order.id}/pagamento/proxima-parte`, {
+                method_type: props.pendingSecondMethod,
+            }, {
+                onError: () => { paymentState.value = 'idle'; },
+            });
+            return;
+        }
+
+        startPolling(props.order.id);
+    }
 });
 </script>
 
@@ -217,8 +324,31 @@ onMounted(() => {
 
             <div class="mt-8 grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-start">
                 <div>
+                    <!-- Cartão + Mercado Pago: Card Payment Brick tokeniza no navegador -->
+                    <template v-if="mpCardPhase">
+                        <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                            <h2 class="mb-4 text-sm font-semibold uppercase text-store-fg-muted">Dados do cartão</h2>
+                            <div id="mpCardBrick-container"></div>
+                            <p v-if="mpCardError" class="mt-3 text-sm text-red-600">{{ mpCardError }}</p>
+                        </div>
+
+                        <div class="mt-6 flex justify-start">
+                            <button type="button" class="text-sm font-medium text-store-fg-muted hover:text-store-fg" @click="backToChoice">
+                                ← Voltar
+                            </button>
+                        </div>
+                    </template>
+
+                    <!-- Cartão via Mercado Pago já resolveu no backend, sem nada pra confirmar aqui — ver PaymentProcessingModal -->
+                    <template v-else-if="mercadoPagoCardConfirmed">
+                        <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                            <h2 class="mb-2 text-sm font-semibold uppercase text-store-fg-muted">Processando pagamento</h2>
+                            <p class="text-sm text-store-fg-muted">Confirmando seu pagamento no cartão, só um instante.</p>
+                        </div>
+                    </template>
+
                     <!-- Fase 1: escolher método -->
-                    <template v-if="!clientSecret && !mercadoPagoPix">
+                    <template v-else-if="isChoosingMethod">
                         <p v-if="chooseForm.errors.cart" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
                             <i class="fas fa-triangle-exclamation mr-2"></i>{{ chooseForm.errors.cart }}
                         </p>
@@ -347,7 +477,7 @@ onMounted(() => {
                             </span>
                         </div>
 
-                        <template v-if="!clientSecret && !mercadoPagoPix">
+                        <template v-if="isChoosingMethod">
                             <button v-if="!showCouponInput" type="button" class="text-left font-medium text-store-accent hover:underline" @click="showCouponInput = true">
                                 Inserir código do cupom
                             </button>

@@ -49,7 +49,9 @@ class OrderPaymentFinalizer
 
         foreach ($order->payments as $payment) {
             if ($payment->status === Payment::STATUS_AUTHORIZED) {
-                $this->stripe->capture($payment->stripe_payment_intent_id);
+                $payment->provider === Payment::PROVIDER_MERCADOPAGO
+                    ? $this->mercadoPago->capture($payment->mercadopago_payment_id)
+                    : $this->stripe->capture($payment->stripe_payment_intent_id);
                 $payment->update(['status' => Payment::STATUS_CAPTURED]);
             }
         }
@@ -76,7 +78,9 @@ class OrderPaymentFinalizer
             }
 
             if ($payment->status === Payment::STATUS_AUTHORIZED) {
-                $this->stripe->cancel($payment->stripe_payment_intent_id);
+                $payment->provider === Payment::PROVIDER_MERCADOPAGO
+                    ? $this->mercadoPago->cancel($payment->mercadopago_payment_id)
+                    : $this->stripe->cancel($payment->stripe_payment_intent_id);
                 $payment->update(['status' => Payment::STATUS_CANCELED]);
             }
         }

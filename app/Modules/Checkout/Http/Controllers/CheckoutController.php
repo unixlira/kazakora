@@ -271,18 +271,35 @@ class CheckoutController extends Controller
             return redirect()->route('finalizacao.entrega')->withErrors(['cart' => 'Seu carrinho está vazio.']);
         }
 
-        // Increment 3 (escopo atual): só Pix não-dividido é roteado pro
-        // Mercado Pago quando ele é o gateway ativo — cartão/boleto/split
-        // continuam sempre no Stripe até o próximo incremento.
-        $usePixViaMercadoPago = PaymentGateway::active() === PaymentGateway::MERCADOPAGO
-            && $data['payment_method'] === Payment::METHOD_PIX
-            && ! ($data['split'] ?? false);
+        // Gateway ativo decide tudo (não é mais só o Pix) — cartão vai pro
+        // Mercado Pago via token do Card Payment Brick, gerado no front-end
+        // antes deste POST (o backend nunca vê o número do cartão, igual
+        // ao Stripe Elements). Split sempre tem cartão como parte 1
+        // (sortMethodsSafely), então qualquer split com MP ativo também
+        // precisa do token.
+        $useMercadoPago = PaymentGateway::active() === PaymentGateway::MERCADOPAGO;
+        $includesCard = $data['payment_method'] === Payment::METHOD_CARD || ($data['split'] ?? false);
 
-        if ($usePixViaMercadoPago && ! $this->mercadoPago->isConfigured()) {
-            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento via Pix ainda não está disponível — aguarde a configuração do Mercado Pago.']);
+        if ($useMercadoPago && $includesCard) {
+            $cardValidator = Validator::make($request->all(), [
+                'mp_card_token' => ['required', 'string'],
+                'mp_card_installments' => ['required', 'integer', 'min:1'],
+                'mp_payment_method_id' => ['required', 'string'],
+                'mp_issuer_id' => ['nullable', 'string'],
+            ]);
+
+            if ($cardValidator->fails()) {
+                return redirect()->route('finalizacao.pagamento')->withErrors($cardValidator)->withInput();
+            }
+
+            $data = [...$data, ...$cardValidator->validated()];
         }
 
-        if (! $usePixViaMercadoPago && ! $this->stripe->isConfigured()) {
+        if ($useMercadoPago && ! $this->mercadoPago->isConfigured()) {
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Mercado Pago.']);
+        }
+
+        if (! $useMercadoPago && ! $this->stripe->isConfigured()) {
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
         }
 
@@ -299,7 +316,7 @@ class CheckoutController extends Controller
             : [$data['payment_method']];
 
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data, $usePixViaMercadoPago) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data, $useMercadoPago) {
                 $user = $request->user() ?? $this->createGuestAccount($draft['guest']);
 
                 $address = ! empty($draft['address_id'])
@@ -330,14 +347,50 @@ class CheckoutController extends Controller
                 $this->createOrderItems($order, $cartItems);
 
                 $primaryMethod = $methods[0];
-                $primaryAmount = count($methods) > 1
+                $isSplit = count($methods) > 1;
+                $primaryAmount = $isSplit
                     ? round($total * ($data['split_percentage'] / 100), 2)
                     : $total;
 
-                if ($usePixViaMercadoPago) {
+                if ($useMercadoPago) {
+                    if ($primaryMethod === Payment::METHOD_CARD) {
+                        $mpResult = $this->mercadoPago->createCardPayment(
+                            $primaryAmount,
+                            $data['mp_card_token'],
+                            (int) $data['mp_card_installments'],
+                            $data['mp_payment_method_id'],
+                            $data['mp_issuer_id'] ?? null,
+                            $this->mercadoPagoPayer($user),
+                            ['description' => "Pedido #{$order->id} - KazaKora"],
+                            "order:{$order->id}:payment:1",
+                            capture: ! $isSplit,
+                        );
+
+                        if (($mpResult['status'] ?? null) === 'rejected') {
+                            throw new MercadoPagoException(
+                                'Pagamento no cartão recusado: '.($mpResult['status_detail'] ?? 'motivo não informado pela operadora.'),
+                            );
+                        }
+
+                        Payment::create([
+                            'order_id' => $order->id,
+                            'provider' => Payment::PROVIDER_MERCADOPAGO,
+                            'mercadopago_payment_id' => (string) $mpResult['id'],
+                            'method_type' => $primaryMethod,
+                            'amount' => $primaryAmount,
+                            'status' => match ($mpResult['status']) {
+                                'approved' => Payment::STATUS_CAPTURED,
+                                'authorized' => Payment::STATUS_AUTHORIZED,
+                                default => Payment::STATUS_REQUIRES_CONFIRMATION,
+                            },
+                        ]);
+
+                        return [$order, $mpResult];
+                    }
+
                     $mpResult = $this->mercadoPago->createPixPayment(
                         $primaryAmount,
-                        $this->mercadoPagoPayer($user, $draft),
+                        $this->mercadoPagoPayer($user),
                         ['description' => "Pedido #{$order->id} - KazaKora"],
                         "order:{$order->id}:payment:1",
                     );
@@ -392,11 +445,22 @@ class CheckoutController extends Controller
                 'context' => $exception->context(),
             ]);
 
-            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento Pix agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => $exception->getMessage() ?: 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
-        if ($usePixViaMercadoPago) {
-            return $this->renderConfirmingMercadoPagoPix($draft, $order, $paymentResult);
+        if ($useMercadoPago) {
+            if ($methods[0] === Payment::METHOD_PIX) {
+                return $this->renderConfirmingMercadoPagoPix($draft, $order, $paymentResult);
+            }
+
+            // Cartão via MP já resolve na hora (aprovado/autorizado), sem
+            // etapa de confirmação no front-end como o Stripe exige — se
+            // for a única parcela, já está indo pro polling normal (mesmo
+            // mecanismo do Pix). Se for split, ainda falta criar o Pix da
+            // segunda parcela — o front-end chama proxima-parte sozinho,
+            // sem esperar nenhuma ação do cliente (não há nada pra
+            // confirmar do lado dele nessa etapa).
+            return $this->renderConfirmingMercadoPagoCard($draft, $order, count($methods) > 1 ? $methods[1] : null);
         }
 
         return $this->renderConfirmingPayment($draft, $order, $paymentResult, $methods[0], count($methods) > 1 ? $methods[1] : null);
@@ -405,6 +469,10 @@ class CheckoutController extends Controller
     /**
      * Chamado pelo front-end depois que a primeira parte (cartão) confirmou
      * com segurança — só então criamos a parte irreversível (Pix/boleto).
+     * Com Mercado Pago ativo essa segunda parte é sempre Pix (cartão é
+     * sempre a parte 1, ver sortMethodsSafely()) e não precisa de nenhuma
+     * confirmação do cliente pra ser chamada — o front-end dispara isso
+     * sozinho assim que a parte 1 resolve, sem esperar clique nenhum.
      */
     public function storeSecondPayment(Request $request, Order $order): Response
     {
@@ -416,6 +484,37 @@ class CheckoutController extends Controller
 
         $alreadyPaid = $order->payments()->sum('amount');
         $remaining = round((float) $order->total - (float) $alreadyPaid, 2);
+        $draft = $request->session()->get(self::SESSION_KEY, []);
+
+        if (PaymentGateway::active() === PaymentGateway::MERCADOPAGO) {
+            try {
+                $mpResult = $this->mercadoPago->createPixPayment(
+                    $remaining,
+                    $this->mercadoPagoPayer($order->user),
+                    ['description' => "Pedido #{$order->id} - KazaKora"],
+                    "order:{$order->id}:payment:2",
+                );
+            } catch (MercadoPagoException $exception) {
+                Log::channel('mercadopago')->error('mercadopago.checkout.second_payment_failed', [
+                    'order_id' => $order->id,
+                    'message' => $exception->getMessage(),
+                    'context' => $exception->context(),
+                ]);
+
+                return $this->renderConfirmingMercadoPagoCard($draft, $order);
+            }
+
+            Payment::create([
+                'order_id' => $order->id,
+                'provider' => Payment::PROVIDER_MERCADOPAGO,
+                'mercadopago_payment_id' => (string) $mpResult['id'],
+                'method_type' => $data['method_type'],
+                'amount' => $remaining,
+                'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
+            ]);
+
+            return $this->renderConfirmingMercadoPagoPix($draft, $order, $mpResult);
+        }
 
         $intent = $this->stripe->createIntent(
             $data['method_type'],
@@ -433,7 +532,7 @@ class CheckoutController extends Controller
             'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
         ]);
 
-        return $this->renderConfirmingPayment($request->session()->get(self::SESSION_KEY, []), $order, $intent, $data['method_type']);
+        return $this->renderConfirmingPayment($draft, $order, $intent, $data['method_type']);
     }
 
     /**
@@ -582,11 +681,35 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Cartão via MP já foi aprovado/autorizado de forma síncrona no
+     * storePayment() — não existe "Payment Element" nem etapa de
+     * confirmação aqui como no Stripe. Sem segunda parcela pendente, o
+     * front-end só precisa começar o polling normal (mesmo endpoint que o
+     * Pix usa) pra pegar a confirmação e liberar a tela de sucesso.
+     */
+    private function renderConfirmingMercadoPagoCard(array $draft, Order $order, ?string $pendingSecondMethod = null): Response
+    {
+        return Inertia::render('Checkout/Payment', [
+            ...$this->paymentProps($draft),
+            'order' => $order->only('id', 'total'),
+            'methodType' => Payment::METHOD_CARD,
+            'mercadoPagoCardConfirmed' => true,
+            'pendingSecondMethod' => $pendingSecondMethod,
+        ]);
+    }
+
+    /**
+     * $user->cpf já está sempre preenchido nesse ponto (usuário autenticado
+     * com CPF cadastrado, ou conta de convidado — createGuestAccount() seta
+     * o CPF do formulário na criação) — não depende mais do draft da sessão,
+     * o que permite reusar isto na segunda parcela de um split (onde o
+     * draft pode já não fazer mais sentido consultar).
+     *
      * @return array<string, mixed>
      */
-    private function mercadoPagoPayer(User $user, array $draft): array
+    private function mercadoPagoPayer(User $user): array
     {
-        $cpf = preg_replace('/\D/', '', $draft['guest']['cpf'] ?? $user->cpf ?? '');
+        $cpf = preg_replace('/\D/', '', $user->cpf ?? '');
         $nameParts = preg_split('/\s+/', trim($user->name), 2);
 
         return array_filter([
@@ -629,6 +752,10 @@ class CheckoutController extends Controller
             'discountAmount' => $discount,
             'total' => round($subtotal - $discount + $shippingCost, 2),
             'originalTotal' => round($subtotal + $shippingCost, 2),
+            'paymentGateway' => PaymentGateway::active(),
+            'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
+                ? config('services.mercadopago.public_key')
+                : null,
         ];
     }
 

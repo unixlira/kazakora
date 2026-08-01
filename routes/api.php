@@ -46,6 +46,12 @@ Route::prefix('shopee')->name('api.shopee.')->group(function () {
     // navegador — sem sessão/CSRF, a assinatura é verificada dentro do
     // controller.
     Route::post('/webhook', [ShopeeController::class, 'webhook'])->name('webhook');
+
+    // O painel da Shopee testa se a "Test Callback URL" existe com um GET
+    // simples antes de liberar o teste de push de verdade — sem isso a
+    // rota (só POST) devolvia 405 e a Shopee mostrava "callback_url is
+    // invalid" mesmo com tudo certo do lado de cá.
+    Route::match(['get', 'head'], '/webhook', fn () => response()->json(['status' => 'ok']))->name('webhook.verify');
 });
 
 // Chamado pelo agente local de impressão (fora deste servidor) — token fixo,

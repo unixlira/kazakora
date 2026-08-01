@@ -7,13 +7,16 @@ const props = defineProps({
     state: {
         type: String,
         default: 'processing',
-        validator: (value) => ['processing', 'awaiting_pix', 'success', 'timeout'].includes(value),
+        validator: (value) => ['processing', 'awaiting_pix', 'success', 'timeout', 'failed'].includes(value),
     },
     orderTotal: { type: Number, default: null },
     pixQrImageUrl: { type: String, default: null },
     pixQrCode: { type: String, default: null },
     pixSecondsLeft: { type: Number, default: null },
+    failureMessage: { type: String, default: null },
 });
+
+const emit = defineEmits(['retry']);
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -83,6 +86,19 @@ const copyPixCode = async () => {
                         Total pago: <span class="font-semibold text-store-fg">{{ formatPrice(orderTotal) }}</span>
                     </p>
                     <p class="mt-1 text-sm text-store-fg-muted">Redirecionando para os detalhes do pedido...</p>
+                </template>
+
+                <template v-else-if="state === 'failed'">
+                    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/50">
+                        <i class="fas fa-xmark text-2xl text-red-600 dark:text-red-300"></i>
+                    </div>
+                    <h2 class="mt-4 font-display text-xl font-semibold text-store-fg">Pagamento não concluído</h2>
+                    <p class="mt-2 text-sm text-store-fg-muted">{{ failureMessage ?? 'Não foi possível confirmar esse pagamento.' }}</p>
+                    <button type="button"
+                        class="mt-6 w-full rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast hover:opacity-90"
+                        @click="emit('retry')">
+                        Tentar novamente
+                    </button>
                 </template>
             </div>
         </div>

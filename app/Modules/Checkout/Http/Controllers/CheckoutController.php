@@ -653,9 +653,10 @@ class CheckoutController extends Controller
             'mercadoPagoPix' => [
                 'qrCode' => $paymentMethod['qr_code'] ?? null,
                 'qrCodeBase64' => $paymentMethod['qr_code_base64'] ?? null,
-                'expiresAt' => $mpOrder['transactions']['payments'][0]['expiration_time']
-                    ?? $mpOrder['transactions']['payments'][0]['date_of_expiration']
-                    ?? null,
+                // date_of_expiration é o timestamp absoluto real — expiration_time
+                // é a duração ISO 8601 que pedimos (ex: "PT10M"), não dá pra
+                // montar um contador com ela diretamente.
+                'expiresAt' => $mpOrder['transactions']['payments'][0]['date_of_expiration'] ?? null,
             ],
         ]);
     }
@@ -710,18 +711,31 @@ class CheckoutController extends Controller
      */
     private function mercadoPagoOrderPayload(string $method, float $amount, User $user, array $data, bool $capture, string $externalReference): array
     {
-        $paymentMethod = $method === Payment::METHOD_CARD
-            ? [
-                'id' => $data['mp_payment_method_id'],
-                'type' => 'credit_card',
-                'token' => $data['mp_card_token'],
-                'installments' => (int) $data['mp_card_installments'],
-            ]
-            // Tipos válidos confirmados direto na API (erro 400 real
-            // devolveu a lista completa): credit_card, debit_card, ticket,
-            // atm, bank_transfer, account_money, prepaid_card,
-            // digital_currency, smart_transfer, wallet — Pix é bank_transfer.
-            : ['id' => 'pix', 'type' => 'bank_transfer'];
+        $paymentTransaction = [
+            'amount' => (string) $amount,
+            'payment_method' => $method === Payment::METHOD_CARD
+                ? [
+                    'id' => $data['mp_payment_method_id'],
+                    'type' => 'credit_card',
+                    'token' => $data['mp_card_token'],
+                    'installments' => (int) $data['mp_card_installments'],
+                ]
+                // Tipos válidos confirmados direto na API (erro 400 real
+                // devolveu a lista completa): credit_card, debit_card,
+                // ticket, atm, bank_transfer, account_money, prepaid_card,
+                // digital_currency, smart_transfer, wallet — Pix é
+                // bank_transfer.
+                : ['id' => 'pix', 'type' => 'bank_transfer'],
+        ];
+
+        if ($method === Payment::METHOD_PIX) {
+            // Formato exigido pela API: duração ISO 8601 (ex: "PT10M"), não
+            // um timestamp — confirmado testando direto na API (um
+            // timestamp aqui dá erro "not valid duration"). A resposta
+            // ainda devolve o timestamp absoluto real em date_of_expiration,
+            // que é o que o front-end usa pra montar o contador.
+            $paymentTransaction['expiration_time'] = 'PT10M';
+        }
 
         return [
             'type' => 'online',
@@ -731,10 +745,7 @@ class CheckoutController extends Controller
             'total_amount' => (string) $amount,
             'payer' => $this->mercadoPagoPayer($user),
             'transactions' => [
-                'payments' => [[
-                    'amount' => (string) $amount,
-                    'payment_method' => $paymentMethod,
-                ]],
+                'payments' => [$paymentTransaction],
             ],
         ];
     }

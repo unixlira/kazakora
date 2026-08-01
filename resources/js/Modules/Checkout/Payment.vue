@@ -159,7 +159,8 @@ watch(() => props.clientSecret, mountPaymentElement, { immediate: true });
 // compra" e a confirmação real — que pode vir da resposta síncrona do Stripe
 // (cartão) OU do polling que espera o webhook confirmar (nunca confiamos só
 // na resposta do front-end pra marcar como pago de verdade).
-const paymentState = ref('idle'); // idle | processing | awaiting_pix | success | timeout
+const paymentState = ref('idle'); // idle | processing | awaiting_pix | success | timeout | failed
+const failureMessage = ref(null);
 const pixQrImageUrl = ref(null);
 const pixQrCode = ref(null);
 const pixSecondsLeft = ref(null);
@@ -183,7 +184,17 @@ onUnmounted(() => {
 const startPixCountdown = (expiresAtUnixSeconds) => {
     const expiresAtMs = expiresAtUnixSeconds * 1000;
     const tick = () => {
-        pixSecondsLeft.value = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+        const secondsLeft = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+        pixSecondsLeft.value = secondsLeft;
+
+        // Expira localmente assim que o contador zera, sem esperar o
+        // próximo poll confirmar — evita ficar preso na tela de QR code
+        // depois do prazo (10 minutos) já ter passado.
+        if (secondsLeft === 0 && paymentState.value === 'awaiting_pix') {
+            clearTimers();
+            failureMessage.value = 'O tempo para pagar esse Pix acabou.';
+            paymentState.value = 'failed';
+        }
     };
     tick();
     pixCountdownTimer = setInterval(tick, 1000);
@@ -205,11 +216,20 @@ const startPolling = (orderId) => {
             }
 
             if (data.status === 'pending') {
-                // Uma das parcelas falhou e o pedido foi revertido — precisa
-                // recomeçar a escolha de método (o Payment Element atual já
-                // não serve mais).
                 clearTimers();
                 confirming.value = false;
+
+                // Pix (método único, não split) recusado/expirado — mostra o
+                // motivo em vermelho em vez de já sair da tela sem explicar
+                // nada. Split com uma parcela falhando continua indo direto
+                // pra escolha de método (o Payment Element atual já não
+                // serve mais, não tem o que mostrar ali).
+                if (paymentState.value === 'awaiting_pix') {
+                    failureMessage.value = 'Não foi possível confirmar esse pagamento Pix.';
+                    paymentState.value = 'failed';
+                    return;
+                }
+
                 router.visit('/finalizacao/pagamento');
                 return;
             }
@@ -520,6 +540,8 @@ onMounted(() => {
             :order-total="order?.total ?? total"
             :pix-qr-image-url="pixQrImageUrl"
             :pix-qr-code="pixQrCode"
-            :pix-seconds-left="pixSecondsLeft" />
+            :pix-seconds-left="pixSecondsLeft"
+            :failure-message="failureMessage"
+            @retry="() => router.visit('/finalizacao/pagamento')" />
     </AppLayout>
 </template>

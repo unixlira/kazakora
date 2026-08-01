@@ -21,10 +21,10 @@ class IntegrationController extends Controller
         ],
         MarketplaceAccount::CHANNEL_SHOPEE => [
             'name' => 'Shopee',
-            'description' => 'Publique produtos e sincronize estoque e pedidos.',
+            'description' => 'Envio de nota fiscal, confirmação de frete e etiqueta de envio. Publicação de produto ainda não implementada.',
             'icon' => 'fas fa-bag-shopping',
-            'connectHref' => null,
-            'available' => false,
+            'connectHref' => '/api/shopee/auth',
+            'available' => true,
         ],
         MarketplaceAccount::CHANNEL_TIKTOK_SHOP => [
             'name' => 'TikTok Shop',
@@ -69,6 +69,20 @@ class IntegrationController extends Controller
             }
 
             return back()->with('success', 'Mercado Livre desconectado.');
+        }
+
+        if ($channel === MarketplaceAccount::CHANNEL_SHOPEE) {
+            // Shopee não tem endpoint de revogação nesse fluxo (mesma
+            // situação do Mercado Livre) — desconectar aqui significa só
+            // parar de usar as credenciais localmente.
+            MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->update([
+                'status' => MarketplaceAccount::STATUS_DISCONNECTED,
+                'access_token' => null,
+                'refresh_token' => null,
+                'token_expires_at' => null,
+            ]);
+
+            return back()->with('success', 'Shopee desconectada.');
         }
 
         return back()->with('error', 'Esse canal ainda não está disponível.');

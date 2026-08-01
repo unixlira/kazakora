@@ -42,10 +42,13 @@ async function enqueueIfNew(job) {
             return;
         }
 
+        // BullMQ rejeita jobId customizado que pareça um inteiro puro (nem
+        // em string) — colidiria com o próprio contador incremental interno
+        // dele. Prefixo não-numérico resolve, mantendo o dedupe determinístico.
         await printQueue.add(
             'print-label',
             { printJobId: job.id, orderId: job.order_id },
-            { jobId: String(job.id) },
+            { jobId: `print-job-${job.id}` },
         );
 
         logger.info('poller.job_enqueued', { print_job_id: job.id, order_id: job.order_id });

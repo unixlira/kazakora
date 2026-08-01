@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
@@ -51,6 +52,12 @@ class OrderController extends Controller
             'statuses' => self::STATUSES,
             'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
             'emailLogs' => $order->emailLogs,
+            'auditLogs' => AuditLog::query()
+                ->where('entity', class_basename(Order::class))
+                ->where('entity_id', $order->id)
+                ->with('user:id,name')
+                ->latest('created_at')
+                ->get(),
         ]);
     }
 

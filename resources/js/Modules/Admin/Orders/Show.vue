@@ -22,7 +22,19 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    auditLogs: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const STATUS_LABELS_PT = {
+    pending: 'Pendente',
+    paid: 'Pago',
+    shipped: 'Enviado',
+    completed: 'Concluído',
+    cancelled: 'Cancelado',
+};
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -217,6 +229,24 @@ const cancelInvoice = () => {
                         </li>
                     </ul>
                     <p v-else class="mt-2 text-sm text-slate-400">Nenhum e-mail de recibo enviado ainda.</p>
+
+                    <h3 class="mt-6 text-sm font-semibold text-slate-500">Histórico de alterações</h3>
+                    <ul v-if="auditLogs.length" class="mt-2 space-y-2 text-sm">
+                        <li v-for="log in auditLogs" :key="log.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
+                            <div>
+                                <span class="font-medium">{{ log.user?.name ?? 'Sistema' }}</span>
+                                <span v-if="log.old_values?.status && log.new_values?.status" class="text-slate-400">
+                                    alterou o status de
+                                    <strong>{{ STATUS_LABELS_PT[log.old_values.status] ?? log.old_values.status }}</strong>
+                                    para
+                                    <strong>{{ STATUS_LABELS_PT[log.new_values.status] ?? log.new_values.status }}</strong>
+                                </span>
+                                <span v-else class="text-slate-400">atualizou o pedido</span>
+                            </div>
+                            <span class="whitespace-nowrap text-xs text-slate-400">{{ formatDateTime(log.created_at) }}</span>
+                        </li>
+                    </ul>
+                    <p v-else class="mt-2 text-sm text-slate-400">Nenhuma alteração registrada ainda.</p>
                 </div>
             </div>
 

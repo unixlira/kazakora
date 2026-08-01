@@ -141,6 +141,16 @@ npm start
 Roda Poller e Worker juntos num único processo no terminal (Ctrl+C pra
 parar) — útil pra validar a configuração antes de registrar no PM2.
 
+### Testar só a integração com a API (sem Redis, sem imprimir de verdade)
+
+```
+npm run test:integration
+```
+
+Faz claim -> download -> complete contra um job real pendente, sem passar
+pela fila nem pela impressora — útil pra confirmar rapidinho que
+`API_BASE_URL`/`PRINT_AGENT_TOKEN` estão certos antes de configurar o resto.
+
 ## Variáveis de ambiente (`.env`)
 
 | Variável | Descrição | Padrão |

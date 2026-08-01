@@ -9,7 +9,8 @@
     "poller": "node src/poller-process.js",
     "worker": "node src/worker-process.js",
     "dlq": "node src/dlq.js",
-    "printers": "node src/list-printers.js"
+    "printers": "node src/list-printers.js",
+    "test:integration": "node src/manual-integration-test.js"
   },
   "dependencies": {
     "axios": "^1.7.7",

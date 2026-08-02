@@ -92,7 +92,15 @@ class DashboardAgentControllerTest extends TestCase
 
     public function test_metrics_reports_todays_revenue_sales_cancellations_refunds_and_cart_items(): void
     {
-        $this->makeOrder(['status' => Order::STATUS_PAID, 'total' => 150]);
+        $mlOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'total' => 150, 'origin' => Order::ORIGIN_MERCADO_LIVRE]);
+        OrderChannelFee::create([
+            'order_id' => $mlOrder->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'gross_amount' => 150,
+            'fee_amount' => 20,
+            'source' => OrderChannelFee::SOURCE_API,
+            'computed_at' => now(),
+        ]);
         $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'total' => 50]);
         $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'total' => 30]);
         $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'total' => 999]);
@@ -118,6 +126,10 @@ class DashboardAgentControllerTest extends TestCase
             'cancelled_today' => 1,
             'refunded_today' => 1,
             'cart_items_count' => 5,
+            // 280 de bruto - 20 de taxa real (só o pedido do ML tem taxa
+            // capturada) - os outros dois pedidos pagos hoje não têm
+            // OrderChannelFee, então entram sem desconto nenhum.
+            'net_profit_today' => 260.0,
         ]);
     }
 

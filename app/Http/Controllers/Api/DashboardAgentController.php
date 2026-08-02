@@ -122,12 +122,32 @@ class DashboardAgentController extends Controller
             ->where('updated_at', '>=', now()->subMinutes((int) config('session.lifetime')))
             ->sum('items_count');
 
+        // "Lucro líquido" É UMA APROXIMAÇÃO, não lucro real — o sistema não
+        // tem custo de produto cadastrado em lugar nenhum (só preço de
+        // venda), então isso é só faturamento menos a taxa real do
+        // marketplace (hoje só o Mercado Livre tem taxa capturada de
+        // verdade — ver OrderChannelFee/MercadoLivreDriver::importOrder()).
+        // Pedidos sem taxa capturada (site próprio, Shopee, TikTok Shop)
+        // entram no cálculo sem desconto nenhum. Confirmado explicitamente
+        // com o usuário como aceitável até custo de produto ser cadastrado.
+        $todaysPaidOrderIds = Order::query()
+            ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->pluck('id');
+
+        $marketplaceFeesToday = (float) OrderChannelFee::query()
+            ->whereIn('order_id', $todaysPaidOrderIds)
+            ->sum('fee_amount');
+
+        $netProfitToday = $revenueToday - $marketplaceFeesToday;
+
         return response()->json([
             'revenue_today' => $revenueToday,
             'sales_today' => $salesToday,
             'cancelled_today' => $cancelledToday,
             'refunded_today' => $refundedToday,
             'cart_items_count' => $cartItemsCount,
+            'net_profit_today' => $netProfitToday,
         ]);
     }
 

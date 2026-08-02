@@ -227,9 +227,16 @@ class NFeXmlBuilderService
         ];
 
         if ($order->payments->isEmpty()) {
+            // Pedido de canal externo nunca tem Payment local — o
+            // pagamento acontece do lado do marketplace, não aqui. SEFAZ
+            // exige xPag (descrição) sempre que tPag=99 "outros"
+            // (rejeição real 441, confirmada em produção 2026-08-02).
             $detPag = new stdClass();
             $detPag->indPag = 0;
             $detPag->tPag = '99';
+            $detPag->xPag = $order->origin === Order::ORIGIN_STORE
+                ? 'Pagamento processado externamente'
+                : 'Pagamento processado pelo canal de origem do pedido';
             $detPag->vPag = (float) $order->total;
             $make->tagdetPag($detPag);
         } else {
@@ -237,6 +244,11 @@ class NFeXmlBuilderService
                 $detPag = new stdClass();
                 $detPag->indPag = 0;
                 $detPag->tPag = $paymentMethodCodes[$payment->method_type] ?? '99';
+
+                if ($detPag->tPag === '99') {
+                    $detPag->xPag = "Pagamento via {$payment->method_type}";
+                }
+
                 $detPag->vPag = (float) $payment->amount;
                 $make->tagdetPag($detPag);
             }

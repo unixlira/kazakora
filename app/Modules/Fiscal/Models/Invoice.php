@@ -24,13 +24,6 @@ class Invoice extends Model
 
     public const STATUS_ERROR = 'error';
 
-    // Canal de origem já emite a própria NF-e (confirmado ao vivo pro
-    // Mercado Livre, 2026-08-02 — chave de acesso real, CNPJ e CPF do
-    // pedido batendo, emitida pelo "Faturador" deles) — Kazakora
-    // deliberadamente não tenta emitir de novo pra não duplicar nota
-    // fiscal da mesma venda. Ver InvoiceService::issue().
-    public const STATUS_EXTERNAL = 'external';
-
     public const AMBIENTE_PRODUCAO = 'producao';
 
     public const AMBIENTE_HOMOLOGACAO = 'homologacao';

@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -144,6 +145,21 @@ class OrderImportService
                 ChannelShipment::query()->updateOrCreate(
                     ['order_id' => $order->id, 'channel' => $channel],
                     ['external_shipment_id' => $data['external_shipment_id']],
+                );
+            }
+
+            // Nem todo driver retorna 'marketplace_fee' hoje (Shopee/TikTok
+            // ainda são stubs sem integração real) — só grava quando o dado é
+            // real, nunca inventa um valor pra canal sem essa informação.
+            if (array_key_exists('marketplace_fee', $data)) {
+                OrderChannelFee::query()->updateOrCreate(
+                    ['order_id' => $order->id, 'channel' => $channel],
+                    [
+                        'gross_amount' => $data['total'],
+                        'fee_amount' => $data['marketplace_fee'],
+                        'source' => OrderChannelFee::SOURCE_API,
+                        'computed_at' => now(),
+                    ],
                 );
             }
 

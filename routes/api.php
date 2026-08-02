@@ -64,4 +64,5 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::post('/jobs/{printJob}/complete', [PrintAgentController::class, 'complete'])->name('jobs.complete');
     Route::get('/dashboard/channels', [DashboardAgentController::class, 'channels'])->name('dashboard.channels');
     Route::get('/dashboard/metrics', [DashboardAgentController::class, 'metrics'])->name('dashboard.metrics');
+    Route::get('/dashboard/channels/{channel}/orders', [DashboardAgentController::class, 'channelOrders'])->name('dashboard.channel-orders');
 });

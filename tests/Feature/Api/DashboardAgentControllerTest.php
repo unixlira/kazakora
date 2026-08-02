@@ -6,7 +6,9 @@ use App\Models\User;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -117,5 +119,79 @@ class DashboardAgentControllerTest extends TestCase
             'refunded_today' => 1,
             'cart_items_count' => 5,
         ]);
+    }
+
+    public function test_channel_orders_returns_404_for_an_unknown_channel(): void
+    {
+        $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/channels/nao-existe/orders')
+            ->assertNotFound();
+    }
+
+    public function test_channel_orders_reports_products_fee_and_shipping_method_when_available(): void
+    {
+        $order = $this->makeOrder([
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-123',
+            'shipping_name' => 'Fulano de Tal',
+            'total' => 180.80,
+        ]);
+
+        $order->items()->create([
+            'product_name' => 'Lixeira Inox 12l',
+            'product_price' => 180.80,
+            'quantity' => 1,
+            'subtotal' => 180.80,
+        ]);
+
+        OrderChannelFee::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'gross_amount' => 180.80,
+            'fee_amount' => 27.12,
+            'source' => OrderChannelFee::SOURCE_API,
+            'computed_at' => now(),
+        ]);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => ChannelShipment::METHOD_FLEX,
+        ]);
+
+        // Pedido de outro canal não deve aparecer na lista do Mercado Livre.
+        $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/channels/mercado_livre/orders');
+
+        $response->assertOk();
+        $orders = $response->json('orders');
+
+        $this->assertCount(1, $orders);
+        $this->assertSame($order->id, $orders[0]['id']);
+        $this->assertSame('ML-123', $orders[0]['external_order_id']);
+        $this->assertSame('Fulano de Tal', $orders[0]['customer_name']);
+        $this->assertSame('Lixeira Inox 12l', $orders[0]['products'][0]['name']);
+        $this->assertSame(180.80, $orders[0]['gross_amount']);
+        $this->assertSame(27.12, $orders[0]['fee_amount']);
+        $this->assertSame(153.68, $orders[0]['net_amount']);
+        $this->assertSame(ChannelShipment::METHOD_FLEX, $orders[0]['shipping_method']);
+    }
+
+    public function test_channel_orders_reports_null_fee_when_the_channel_has_no_fee_integration_yet(): void
+    {
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/channels/shopee/orders');
+
+        $response->assertOk();
+        $orders = $response->json('orders');
+
+        $this->assertCount(1, $orders);
+        $this->assertNull($orders[0]['fee_amount']);
+        $this->assertNull($orders[0]['net_amount']);
+        $this->assertNull($orders[0]['shipping_method']);
     }
 }

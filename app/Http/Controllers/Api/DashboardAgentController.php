@@ -6,9 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
  * Dados agregados pro dashboard do agente local (app nativo Windows que
@@ -125,5 +129,54 @@ class DashboardAgentController extends Controller
             'refunded_today' => $refundedToday,
             'cart_items_count' => $cartItemsCount,
         ]);
+    }
+
+    public function channelOrders(Request $request, string $channel): JsonResponse
+    {
+        if (! in_array($channel, self::CHANNELS, true)) {
+            throw new NotFoundHttpException("Canal \"{$channel}\" não existe.");
+        }
+
+        $orders = Order::query()
+            ->where('origin', $channel)
+            ->with(['items:id,order_id,product_name,quantity'])
+            ->latest('id')
+            ->limit(100)
+            ->get(['id', 'external_order_id', 'status', 'shipping_name', 'total', 'created_at']);
+
+        $fees = OrderChannelFee::query()
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->get()
+            ->keyBy('order_id');
+
+        $shipments = ChannelShipment::query()
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->where('channel', $channel)
+            ->get()
+            ->keyBy('order_id');
+
+        $result = $orders->map(function (Order $order) use ($fees, $shipments) {
+            $fee = $fees->get($order->id);
+
+            return [
+                'id' => $order->id,
+                'external_order_id' => $order->external_order_id,
+                'status' => $order->status,
+                'customer_name' => $order->shipping_name,
+                'products' => $order->items->map(fn ($item) => [
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                ]),
+                'gross_amount' => (float) $order->total,
+                // null quando o canal ainda não tem integração de taxa real
+                // (Shopee/TikTok são stubs hoje) — nunca um valor inventado.
+                'fee_amount' => $fee ? (float) $fee->fee_amount : null,
+                'net_amount' => $fee ? $fee->netAmount() : null,
+                'shipping_method' => $shipments->get($order->id)?->shipping_method,
+                'created_at' => $order->created_at,
+            ];
+        });
+
+        return response()->json(['orders' => $result]);
     }
 }

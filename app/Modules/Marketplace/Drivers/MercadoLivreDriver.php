@@ -120,6 +120,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $address = $this->resolveShippingAddress($order->shipping);
 
         $itemsSubtotal = 0.0;
+        $marketplaceFee = 0.0;
         $items = [];
 
         foreach ($order->order_items as $item) {
@@ -132,6 +133,11 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             }
 
             $itemsSubtotal += $unitPrice * $quantity;
+            // sale_fee é a comissão REAL cobrada pelo Mercado Livre nesse
+            // item (confirmado no payload de um pedido real, 2026-08-02 —
+            // não é estimativa, é o valor de fato descontado na venda), por
+            // unidade — mesma convenção de unit_price, por isso ×quantity.
+            $marketplaceFee += (float) ($item['sale_fee'] ?? 0) * $quantity;
             $items[] = ['external_id' => $externalId, 'quantity' => $quantity, 'unit_price' => $unitPrice];
         }
 
@@ -144,6 +150,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => round(max(0, $order->total_amount - $itemsSubtotal), 2),
             'total' => round($order->total_amount, 2),
+            'marketplace_fee' => round($marketplaceFee, 2),
             'buyer_name' => $buyerName,
             'buyer_phone' => $buyer['phone']['number'] ?? null,
             'shipping_zip' => $address['zip'],

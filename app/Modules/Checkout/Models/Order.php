@@ -48,6 +48,7 @@ class Order extends Model
         'status',
         'origin',
         'external_order_id',
+        'buyer_document',
         'disputed_at',
         'stock_restored_at',
         'shipping_method_id',

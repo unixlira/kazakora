@@ -90,13 +90,35 @@ class NFeXmlBuilderService
         $customer = $order->user;
         $cMunDest = $this->ibge->resolve($order->shipping_city, $order->shipping_state);
 
+        // Pedido de canal externo não tem Order::user (user_id fica null
+        // em importação de marketplace) — o CPF real vem de
+        // buyer_document, capturado na importação via endpoint dedicado
+        // do canal (ver MercadoLivreDriver::importOrder()). Pedido do
+        // site sempre tem um user local com cpf (checkout, inclusive
+        // convidado, exige o campo).
+        $document = preg_replace('/\D/', '', (string) ($order->buyer_document ?: $customer?->cpf));
+
+        if ($document === '') {
+            // CNPJ/CPF/idEstrangeiro é elemento obrigatório no schema do
+            // modelo 55 antes de xNome — sem isso o XML é inválido e a
+            // SEFAZ rejeita (confirmado ao vivo, 2026-08-02: erro
+            // "Element xNome: not expected"). Falha cedo com mensagem
+            // clara em vez de deixar o validador do schema estourar com
+            // um erro críptico.
+            throw new RuntimeException("Pedido #{$order->id}: não foi possível identificar o CPF/CNPJ do comprador — não é possível emitir NF-e sem essa informação.");
+        }
+
         $dest = new stdClass();
         $dest->xNome = $order->shipping_name;
         $dest->indIEDest = 9; // não contribuinte
         $dest->email = $customer?->email;
-        if ($customer?->cpf) {
-            $dest->CPF = preg_replace('/\D/', '', $customer->cpf);
+
+        if (strlen($document) === 14) {
+            $dest->CNPJ = $document;
+        } else {
+            $dest->CPF = $document;
         }
+
         $make->tagdest($dest);
 
         $enderDest = new stdClass();

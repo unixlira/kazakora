@@ -65,6 +65,32 @@ class OrderService
     }
 
     /**
+     * CPF/CNPJ real do comprador — não vem no payload normal do pedido
+     * (confirmado, só tem nome/endereço ali), mas a Mercado Livre mantém
+     * esse endpoint dedicado especificamente pra emissão de nota fiscal.
+     * Retorna null (nunca lança) se o endpoint falhar ou não trouxer
+     * documento — quem chama decide o que fazer com "sem CPF disponível",
+     * não é motivo pra derrubar a importação do pedido inteira.
+     */
+    public function getBuyerDocument(string $orderId): ?string
+    {
+        try {
+            $response = $this->client->get("orders/{$orderId}/billing_info");
+        } catch (Throwable $exception) {
+            Log::channel('mercadolivre')->warning('mercadolivre.billing_info_failed', [
+                'order_id' => $orderId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $docNumber = $response['billing_info']['doc_number'] ?? null;
+
+        return $docNumber ? preg_replace('/\D/', '', (string) $docNumber) : null;
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     public function processWebhook(array $payload): void

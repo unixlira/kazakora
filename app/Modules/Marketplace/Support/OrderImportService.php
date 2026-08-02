@@ -81,6 +81,7 @@ class OrderImportService
                 'status' => $data['status'],
                 'origin' => $channel,
                 'external_order_id' => $data['external_order_id'],
+                'buyer_document' => $data['buyer_document'] ?? null,
                 'shipping_name' => $data['buyer_name'],
                 'shipping_phone' => $data['buyer_phone'] ?? 'Não informado',
                 'shipping_zip' => $data['shipping_zip'],

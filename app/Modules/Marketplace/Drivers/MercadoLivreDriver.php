@@ -144,6 +144,14 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $buyer = $order->buyer;
         $buyerName = trim(($buyer['first_name'] ?? '').' '.($buyer['last_name'] ?? '')) ?: ($buyer['nickname'] ?? 'Comprador Mercado Livre');
 
+        // O payload padrão do pedido não traz CPF (só nome/endereço,
+        // confirmado antes) — precisa desse endpoint dedicado, que a ML
+        // mantém especificamente pra emissão de nota fiscal. Sem isso a
+        // NF-e não tem como identificar o destinatário (CPF é obrigatório
+        // no modelo 55, real bug real encontrado 2026-08-02 travando o
+        // pipeline inteiro venda→nota→envio→etiqueta pra pedido de canal).
+        $buyerDocument = $this->orders->getBuyerDocument($externalOrderId);
+
         return [
             'external_order_id' => (string) $order->id,
             'status' => $this->mapOrderStatus($order->status),
@@ -152,6 +160,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'total' => round($order->total_amount, 2),
             'marketplace_fee' => round($marketplaceFee, 2),
             'buyer_name' => $buyerName,
+            'buyer_document' => $buyerDocument,
             'buyer_phone' => $buyer['phone']['number'] ?? null,
             'shipping_zip' => $address['zip'],
             'shipping_street' => $address['street'],

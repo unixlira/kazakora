@@ -68,7 +68,17 @@ class NFeXmlBuilderService
         $emit->xNome = $company->razao_social;
         $emit->xFant = $company->nome_fantasia;
         $emit->IE = $company->inscricao_estadual;
-        $emit->CRT = 1; // Simples Nacional
+        // Estava fixo em 1 (Simples Nacional) sempre, ignorando o regime
+        // real cadastrado — rejeição real da SEFAZ em produção 2026-08-02
+        // ("Código Regime Tributário do emitente diverge do cadastro")
+        // porque o valor enviado não bate com o que está registrado pra
+        // esse CNPJ. CRT=2 (Simples Nacional excesso de sublimite) não tem
+        // como inferir de Company::regime_tributario — se for esse o caso,
+        // precisa de campo/config novo, não dá pra adivinhar.
+        $emit->CRT = match ($company->regime_tributario) {
+            Company::REGIME_LUCRO_PRESUMIDO, Company::REGIME_LUCRO_REAL => 3,
+            default => 1, // simples_nacional e mei
+        };
         $emit->CNPJ = preg_replace('/\D/', '', $company->cnpj);
         $emit->CNAE = $company->cnae;
         $make->tagemit($emit);

@@ -23,12 +23,15 @@ class ShopeeAuthService
     {
         $path = '/api/v2/shop/auth_partner';
         $timestamp = now()->timestamp;
+        $sign = $this->publicSign($path, $timestamp);
+
+        $this->logSigningAttempt('shopee.oauth_redirect_signed', $path, $timestamp, $sign);
 
         $query = http_build_query([
             'partner_id' => (int) config('services.shopee.partner_id'),
             'redirect' => config('services.shopee.redirect_url'),
             'timestamp' => $timestamp,
-            'sign' => $this->publicSign($path, $timestamp),
+            'sign' => $sign,
         ]);
 
         return config('services.shopee.api_base_url').$path.'?'.$query;
@@ -38,20 +41,39 @@ class ShopeeAuthService
     {
         $path = '/api/v2/auth/token/get';
         $timestamp = now()->timestamp;
+        $sign = $this->publicSign($path, $timestamp);
+
+        $this->logSigningAttempt('shopee.token_exchange_signed', $path, $timestamp, $sign, [
+            'shop_id' => $shopId,
+            'code_fingerprint' => substr($code, 0, 4).'...('.strlen($code).' chars)',
+        ]);
+
+        $queryString = http_build_query([
+            'partner_id' => (int) config('services.shopee.partner_id'),
+            'timestamp' => $timestamp,
+            'sign' => $sign,
+        ]);
 
         $response = Http::baseUrl(config('services.shopee.api_base_url'))
-            ->post($path.'?'.http_build_query([
-                'partner_id' => (int) config('services.shopee.partner_id'),
-                'timestamp' => $timestamp,
-                'sign' => $this->publicSign($path, $timestamp),
-            ]), [
+            ->post($path.'?'.$queryString, [
                 'code' => $code,
                 'shop_id' => $shopId,
                 'partner_id' => (int) config('services.shopee.partner_id'),
             ]);
 
         if ($response->failed() || $response->json('error')) {
-            Log::channel('shopee')->error('shopee.oauth_callback_failed', ['status' => $response->status(), 'body' => $response->json()]);
+            Log::channel('shopee')->error('shopee.oauth_callback_failed', [
+                'status' => $response->status(),
+                'body' => $response->json(),
+                'request' => [
+                    'full_url' => rtrim((string) config('services.shopee.api_base_url'), '/').$path.'?'.$queryString,
+                    'path' => $path,
+                    'timestamp' => $timestamp,
+                    'base_string' => (int) config('services.shopee.partner_id')."{$path}{$timestamp}",
+                    'sign' => $sign,
+                    'key_fingerprint' => $this->keyFingerprint(),
+                ],
+            ]);
 
             throw new ShopeeException($response->json('message') ?? 'Não foi possível concluir a autenticação com a Shopee.', $response->status(), ['body' => $response->json()]);
         }
@@ -111,6 +133,43 @@ class ShopeeAuthService
         $baseString = "{$partnerId}{$path}{$timestamp}";
 
         return hash_hmac('sha256', $baseString, (string) config('services.shopee.partner_key'));
+    }
+
+    /**
+     * Log de diagnóstico da assinatura — nunca loga a partner_key crua, só
+     * um fingerprint (bastante pra confirmar que dois pontos de chamada
+     * estão lendo a MESMA chave, sem expor o segredo). Gated por
+     * SHOPEE_DEBUG_SIGNING pra poder ligar/desligar via .env sem redeploy
+     * quando for necessário investigar um "Wrong sign" da Shopee de novo.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    private function logSigningAttempt(string $event, string $path, int $timestamp, string $sign, array $extra = []): void
+    {
+        if (! config('services.shopee.debug_signing')) {
+            return;
+        }
+
+        $partnerId = (int) config('services.shopee.partner_id');
+
+        Log::channel('shopee')->debug($event, array_merge([
+            'partner_id' => $partnerId,
+            'path' => $path,
+            'timestamp' => $timestamp,
+            'base_string' => "{$partnerId}{$path}{$timestamp}",
+            'sign' => $sign,
+            'key_fingerprint' => $this->keyFingerprint(),
+            'api_base_url' => config('services.shopee.api_base_url'),
+        ], $extra));
+    }
+
+    private function keyFingerprint(): string
+    {
+        $key = (string) config('services.shopee.partner_key');
+
+        return strlen($key) > 8
+            ? substr($key, 0, 4).'...'.substr($key, -4).' (len='.strlen($key).')'
+            : '(too short to fingerprint, len='.strlen($key).')';
     }
 
     /**

@@ -41,5 +41,9 @@
         <env name="ML_TOKEN_URL" value="https://api.mercadolibre.com/oauth/token"/>
         <env name="ML_HTTP_RETRY_TIMES" value="2"/>
         <env name="ML_HTTP_RETRY_BASE_DELAY_MS" value="0"/>
+        <env name="SHOPEE_TEST_PARTNER_ID" value="1239829"/>
+        <env name="SHOPEE_TEST_PARTNER_KEY" value="test-partner-key"/>
+        <env name="SHOPEE_REDIRECT_URL" value="http://localhost/api/shopee/callback"/>
+        <env name="SHOPEE_API_BASE_URL" value="https://partner.test-stable.shopeemobile.com"/>
     </php>
 </phpunit>

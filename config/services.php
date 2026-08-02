@@ -91,6 +91,10 @@ return [
         // em lugar nenhum que consegui acessar nesta sessão).
         'push_partner_key' => env('SHOPEE_PUSH_PARTNER_KEY'),
         'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
+        // Liga log de diagnóstico da assinatura (base string, sign, fingerprint
+        // da key — nunca a key crua) sem precisar redeploy. Usado pra investigar
+        // um "Wrong sign" real da Shopee (2026-08-01) — ver ShopeeAuthService.
+        'debug_signing' => (bool) env('SHOPEE_DEBUG_SIGNING', false),
     ],
 
 ];

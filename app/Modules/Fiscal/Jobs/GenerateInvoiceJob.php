@@ -10,6 +10,7 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Bus\Queueable;
@@ -65,8 +66,11 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         try {
             $invoice = $invoices->issue($order);
 
+            $isTerminalSuccess = in_array($invoice->status, [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL], true);
+
             $errorMessage = match (true) {
                 $invoice->status === Invoice::STATUS_AUTHORIZED => null,
+                $invoice->status === Invoice::STATUS_EXTERNAL => null,
                 $invoice->status === Invoice::STATUS_PENDING => 'Certificado digital não configurado — emissão pendente.',
                 default => $invoice->motivo_rejeicao,
             };
@@ -75,7 +79,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
                 'order_id' => $order->id,
                 'invoice_id' => $invoice->id,
                 'attempt' => $this->attempts(),
-                'status' => $invoice->status === Invoice::STATUS_AUTHORIZED
+                'status' => $isTerminalSuccess
                     ? InvoiceGenerationLog::STATUS_SUCCESS
                     : InvoiceGenerationLog::STATUS_FAILED,
                 'error_message' => $errorMessage,
@@ -84,16 +88,25 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             $timeline->record(
                 $order,
                 OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
-                $invoice->status === Invoice::STATUS_AUTHORIZED ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
-                $errorMessage ?? "NF-e autorizada, chave {$invoice->chave_acesso}",
+                $isTerminalSuccess ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
+                match (true) {
+                    $invoice->status === Invoice::STATUS_AUTHORIZED => "NF-e autorizada, chave {$invoice->chave_acesso}",
+                    $invoice->status === Invoice::STATUS_EXTERNAL => 'Nota fiscal emitida pelo próprio canal — Kazakora não emite pra evitar duplicidade.',
+                    default => $errorMessage,
+                },
             );
 
-            // Pedido de canal externo + nota autorizada: dispara a etapa
-            // seguinte (enviar a nota pro canal, que libera o envio do lado
-            // deles). Pedido do site (origin=loja) não passa por canal
-            // nenhum, então não tem próxima etapa aqui.
+            // Nota nossa autorizada: dispara a etapa seguinte de verdade
+            // (enviar a nota pro canal via API, que é o que libera o envio
+            // do lado deles). Nota externa (canal já emitiu a própria):
+            // não tem nota nossa pra enviar, mas o envio ainda precisa ser
+            // confirmado/consultado — pula direto pra essa etapa, sem
+            // passar pela submissão de nota. Pedido do site (origin=loja)
+            // não passa por canal nenhum, não tem próxima etapa aqui.
             if ($invoice->status === Invoice::STATUS_AUTHORIZED && $order->origin !== Order::ORIGIN_STORE) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
+            } elseif ($invoice->status === Invoice::STATUS_EXTERNAL) {
+                ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
             }
         } catch (Throwable $exception) {
             InvoiceGenerationLog::create([

@@ -79,6 +79,33 @@ class GenerateInvoiceJobTest extends TestCase
         Queue::assertPushed(SendOrderReceiptEmailJob::class, fn (SendOrderReceiptEmailJob $job) => $job->orderId === $order->id);
     }
 
+    public function test_handle_logs_success_and_confirms_shipping_directly_when_invoice_is_external(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder();
+        $order->update(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1']);
+        $invoice = Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_EXTERNAL, 'serie' => 0, 'numero' => $order->id]);
+
+        $invoices = Mockery::mock(InvoiceService::class);
+        $invoices->shouldReceive('issue')->once()->andReturn($invoice);
+
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new \App\Modules\Checkout\Support\OrderFulfillmentTimeline());
+
+        $this->assertDatabaseHas('invoice_generation_logs', [
+            'order_id' => $order->id,
+            'invoice_id' => $invoice->id,
+            'status' => InvoiceGenerationLog::STATUS_SUCCESS,
+            'error_message' => null,
+        ]);
+
+        // Canal já emitiu a própria nota — não faz sentido submeter nota
+        // nossa (não existe uma de verdade), mas o envio ainda precisa ser
+        // confirmado/etiqueta buscada, então pula direto pra essa etapa.
+        Queue::assertPushed(\App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob::class, fn ($job) => $job->orderId === $order->id);
+        Queue::assertNotPushed(\App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob::class);
+        Queue::assertPushed(SendOrderReceiptEmailJob::class);
+    }
+
     public function test_handle_logs_a_clear_failed_message_when_blocked_by_missing_certificate(): void
     {
         Queue::fake();

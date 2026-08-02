@@ -12,6 +12,8 @@ class MarketplaceAccount extends Model
 
     public const CHANNEL_TIKTOK_SHOP = 'tiktok_shop';
 
+    public const CHANNEL_AMAZON = 'amazon';
+
     public const STATUS_DISCONNECTED = 'disconnected';
 
     public const STATUS_CONNECTED = 'connected';

@@ -41,6 +41,8 @@ class Order extends Model
 
     public const ORIGIN_TIKTOK_SHOP = MarketplaceAccount::CHANNEL_TIKTOK_SHOP;
 
+    public const ORIGIN_AMAZON = MarketplaceAccount::CHANNEL_AMAZON;
+
     protected $fillable = [
         'user_id',
         'status',

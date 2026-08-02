@@ -35,6 +35,7 @@ class DashboardAgentController extends Controller
         Order::ORIGIN_MERCADO_LIVRE,
         Order::ORIGIN_SHOPEE,
         Order::ORIGIN_TIKTOK_SHOP,
+        Order::ORIGIN_AMAZON,
     ];
 
     public function channels(): JsonResponse

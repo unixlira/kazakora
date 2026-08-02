@@ -45,5 +45,6 @@
         <env name="SHOPEE_TEST_PARTNER_KEY" value="test-partner-key"/>
         <env name="SHOPEE_REDIRECT_URL" value="http://localhost/api/shopee/callback"/>
         <env name="SHOPEE_API_BASE_URL" value="https://partner.test-stable.shopeemobile.com"/>
+        <env name="PRINT_AGENT_TOKEN" value="test-print-agent-token"/>
     </php>
 </phpunit>

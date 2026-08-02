@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
@@ -61,4 +62,6 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::post('/jobs/{printJob}/claim', [PrintAgentController::class, 'claim'])->name('jobs.claim');
     Route::get('/jobs/{printJob}/label', [PrintAgentController::class, 'label'])->name('jobs.label');
     Route::post('/jobs/{printJob}/complete', [PrintAgentController::class, 'complete'])->name('jobs.complete');
+    Route::get('/dashboard/channels', [DashboardAgentController::class, 'channels'])->name('dashboard.channels');
+    Route::get('/dashboard/metrics', [DashboardAgentController::class, 'metrics'])->name('dashboard.metrics');
 });

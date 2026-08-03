@@ -107,7 +107,7 @@ class LabelProcessingService
             $fontSize = $columns > 1 ? 6 : 7;
             $lineHeight = $fontSize * 0.42; // mm — compacto, do tamanho do texto miúdo do DANFE simplificado
 
-            $marginSide = 3; // mm
+            $marginSide = 6; // mm — mais folga que antes: 3mm cortava o "Destinatário" impresso perto da borda esquerda
             $marginBottom = 2; // mm
             $lineGap = 1.5; // mm entre a linha separadora e o texto
 
@@ -130,7 +130,7 @@ class LabelProcessingService
                 $row = $index % $itemsPerColumn;
 
                 $pdf->SetXY($marginSide + ($column * $columnWidth), $textTop + ($row * $lineHeight));
-                $pdf->Cell($columnWidth - 1, $lineHeight, $name, 0, 0, 'L');
+                $pdf->Cell($columnWidth - 1, $lineHeight, $name, 0, 0, 'C');
             }
 
             return $pdf->Output('S');

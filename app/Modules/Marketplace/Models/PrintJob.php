@@ -18,6 +18,8 @@ class PrintJob extends Model
 
     protected $fillable = [
         'order_id',
+        'channel',
+        'is_thank_you',
         'label_path',
         'status',
         'claimed_by',
@@ -31,6 +33,7 @@ class PrintJob extends Model
         return [
             'claimed_at' => 'datetime',
             'printed_at' => 'datetime',
+            'is_thank_you' => 'boolean',
         ];
     }
 

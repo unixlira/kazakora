@@ -48,6 +48,7 @@ export const sidebarSections = [
             { label: 'Usuários e Permissões', href: '/admin/usuarios-permissoes', icon: 'fas fa-user-shield', color: 'text-error', permission: 'configuracoes.usuarios' },
             { label: 'Integrações', href: '/admin/integracoes', icon: 'fas fa-plug', color: 'text-secondary', permission: 'configuracoes.integracoes' },
             { label: 'Impressões', href: '/admin/impressoes', icon: 'fas fa-print', color: 'text-info', permission: 'configuracoes.integracoes' },
+            { label: 'Etiquetas Manuais', href: '/admin/etiquetas-manuais/nova', icon: 'fas fa-tags', color: 'text-secondary', permission: 'configuracoes.integracoes' },
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', color: 'text-primary', permission: 'configuracoes.auditoria' },
         ],
     },

@@ -12,6 +12,7 @@ use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\KpiController;
+use App\Modules\Admin\Http\Controllers\ManualLabelController;
 use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\PrintJobController;
@@ -293,6 +294,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('impressoes', [PrintJobController::class, 'index'])->name('impressoes.listar');
         Route::get('impressoes/lista', [PrintJobController::class, 'list'])->name('impressoes.lista');
+
+        Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');
+        Route::post('etiquetas-manuais', [ManualLabelController::class, 'store'])->name('etiquetas-manuais.armazenar');
+        Route::get('etiquetas-manuais', [ManualLabelController::class, 'list'])->name('etiquetas-manuais.listar');
+        Route::get('etiquetas-manuais/{print_job}', [ManualLabelController::class, 'show'])->name('etiquetas-manuais.ver');
+        Route::get('etiquetas-manuais/{print_job}/pdf', [ManualLabelController::class, 'pdf'])->name('etiquetas-manuais.pdf');
+        Route::put('etiquetas-manuais/{print_job}', [ManualLabelController::class, 'update'])->name('etiquetas-manuais.atualizar');
+        Route::delete('etiquetas-manuais/{print_job}', [ManualLabelController::class, 'destroy'])->name('etiquetas-manuais.excluir');
     });
 });
 

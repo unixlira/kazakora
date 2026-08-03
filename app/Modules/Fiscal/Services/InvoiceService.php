@@ -41,6 +41,28 @@ class InvoiceService
     {
         $order->loadMissing('invoice');
 
+        // Mercado Livre emite a própria NF-e pro vendedor (confirmado ao
+        // vivo 2026-08-02 — chave de acesso real, mesmo CNPJ/CPF do
+        // pedido, DANFE com o texto/layout deles, não o nosso). Tentar
+        // emitir aqui também duplicaria a nota fiscal da mesma venda —
+        // problema real de conformidade, não só redundância. Se outro
+        // canal também tiver emissão própria confirmada, adicionar aqui.
+        if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
+            return $order->invoice ?? Invoice::create([
+                'order_id' => $order->id,
+                'status' => Invoice::STATUS_EXTERNAL,
+                'ambiente' => config('nfe.ambiente'),
+                // Série 0 nunca é usada pra número real de NF-e (config
+                // nfe.serie começa em 1) — reservada só pra essas linhas
+                // "não emitimos, o canal emitiu". numero=order_id garante
+                // unicidade sem precisar reservar sequência real (índice
+                // único é (serie, numero, ambiente)).
+                'serie' => 0,
+                'numero' => $order->id,
+                'valor_total' => $order->total,
+            ]);
+        }
+
         if ($order->invoice && in_array($order->invoice->status, [
             Invoice::STATUS_AUTHORIZED,
             Invoice::STATUS_REJECTED,

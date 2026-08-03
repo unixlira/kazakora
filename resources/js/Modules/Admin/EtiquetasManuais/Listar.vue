@@ -42,7 +42,6 @@ const destroy = async (job) => {
                     <tr>
                         <th class="px-4 py-3">Etiqueta</th>
                         <th class="px-4 py-3">Canal</th>
-                        <th class="px-4 py-3">Tipo</th>
                         <th class="px-4 py-3">Status</th>
                         <th class="px-4 py-3">Criada em</th>
                         <th class="px-4 py-3">Ações</th>
@@ -52,10 +51,6 @@ const destroy = async (job) => {
                     <tr v-for="job in props.jobs.data" :key="job.id" class="hover:bg-[var(--surface-muted)]/50">
                         <td class="px-4 py-3 font-medium">#{{ job.id }}</td>
                         <td class="px-4 py-3">{{ job.channel }}</td>
-                        <td class="px-4 py-3">
-                            <span v-if="job.isThankYou" class="text-xs text-slate-400">Agradecimento</span>
-                            <span v-else class="text-xs text-slate-400">Etiqueta</span>
-                        </td>
                         <td class="px-4 py-3">
                             <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
                                 :class="STATUS_META[job.status]?.color ?? 'bg-slate-100 text-slate-700'">
@@ -72,7 +67,7 @@ const destroy = async (job) => {
                     </tr>
 
                     <tr v-if="props.jobs.data.length === 0">
-                        <td colspan="6" class="px-4 py-10 text-center text-slate-400">Nenhuma etiqueta manual gerada ainda.</td>
+                        <td colspan="5" class="px-4 py-10 text-center text-slate-400">Nenhuma etiqueta manual gerada ainda.</td>
                     </tr>
                 </tbody>
             </table>

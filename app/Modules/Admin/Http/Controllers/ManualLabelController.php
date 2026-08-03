@@ -104,13 +104,17 @@ class ManualLabelController extends Controller
     {
         $jobs = PrintJob::query()
             ->whereNull('order_id')
+            // Etiqueta de agradecimento é gerada automaticamente junto com a
+            // principal (mesmo PrintJob que o KoraSync consome), mas não é
+            // o que o usuário quer listar aqui — só a etiqueta em si, pedido
+            // explícito.
+            ->where('is_thank_you', false)
             ->latest('id')
             ->paginate(25)
             ->withQueryString()
             ->through(fn (PrintJob $job) => [
                 'id' => $job->id,
                 'channel' => self::CHANNELS[$job->channel] ?? $job->channel ?? '—',
-                'isThankYou' => $job->is_thank_you,
                 'status' => $job->status,
                 'errorMessage' => $job->error_message,
                 'createdAt' => $job->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),

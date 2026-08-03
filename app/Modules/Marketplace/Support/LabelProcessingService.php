@@ -130,12 +130,22 @@ class LabelProcessingService
                 $row = $index % $itemsPerColumn;
 
                 $pdf->SetXY($marginSide + ($column * $columnWidth), $textTop + ($row * $lineHeight));
-                $pdf->Cell($columnWidth - 1, $lineHeight, $name, 0, 0, 'C');
+                $pdf->Cell($columnWidth - 1, $lineHeight, $this->toLatin1($name), 0, 0, 'C');
             }
 
             return $pdf->Output('S');
         } finally {
             @unlink($tempPdfPath);
         }
+    }
+
+    /**
+     * As fontes nativas do FPDF (Arial/Helvetica) esperam ISO-8859-1, não
+     * UTF-8 — sem essa conversão, acento em nome de produto ("ã", "ç" etc,
+     * comuns em português) sai como caractere corrompido na etiqueta.
+     */
+    private function toLatin1(string $text): string
+    {
+        return mb_convert_encoding($text, 'ISO-8859-1', 'UTF-8');
     }
 }

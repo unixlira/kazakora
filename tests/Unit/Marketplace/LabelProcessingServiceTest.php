@@ -78,6 +78,17 @@ class LabelProcessingServiceTest extends TestCase
         $this->assertStringStartsWith('%PDF', $result);
     }
 
+    public function test_overlay_converts_accented_product_names_to_latin1_for_fpdf_core_fonts(): void
+    {
+        // As fontes nativas do FPDF (Arial/Helvetica) esperam ISO-8859-1 —
+        // sem converter, "ç" (UTF-8: 0xC3 0xA7) sai corrompido na etiqueta
+        // em vez do byte único Latin-1 (0xE7) que o FPDF sabe desenhar.
+        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), ['Café com Açúcar']);
+
+        $this->assertStringNotContainsString("\xC3\xA7", $result);
+        $this->assertStringContainsString("\xE7", $result);
+    }
+
     public function test_overlay_never_creates_a_second_page(): void
     {
         // A margem padrão de quebra automática do FPDF (2cm) já causou isso

@@ -16,20 +16,28 @@ use setasign\Fpdi\Fpdi;
  */
 class LabelProcessingService
 {
+    /** Dots por mm assumido pro ZPL da Shopee — impressoras térmicas de etiqueta de marketplace usam quase sempre 203dpi. */
+    private const DENSITY_DPMM = 8;
+
     /**
      * Zebra (ZPL) não tem conversor nativo em PHP — delega pra API pública
-     * da Labelary (gratuita, sem autenticação, confirmada em uso real —
-     * o próprio usuário já tinha essa ferramenta aberta no navegador).
-     * Assume densidade 8dpmm (203dpi) e etiqueta 4x6" — os valores mais
-     * comuns pra etiqueta de envio de marketplace; se o ZPL de origem usar
-     * outro tamanho, isso precisa virar configurável (não dá pra saber sem
-     * testar contra uma etiqueta real da Shopee).
+     * da Labelary (gratuita, sem autenticação).
+     *
+     * O ZPL da Shopee traz a etiqueta inteira renderizada como bitmap
+     * (~DG/^XG), então o tamanho real da etiqueta vem dos comandos
+     * ^PW (largura em dots) e ^LL (comprimento em dots) do próprio ZPL —
+     * pedir ao Labelary um tamanho fixo diferente do declarado distorce a
+     * imagem e foi a causa raiz do texto saindo grande demais e cobrindo
+     * o código de barras. Se o ZPL não declarar ^PW/^LL, cai no fallback
+     * 4x6" (formato mais comum de etiqueta de envio).
      */
     public function convertZplToPdf(string $zpl): string
     {
+        [$width, $height] = $this->extractLabelSizeInInches($zpl);
+
         $response = Http::withHeaders(['Accept' => 'application/pdf'])
             ->withBody($zpl, 'application/x-www-form-urlencoded')
-            ->post('http://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/');
+            ->post("http://api.labelary.com/v1/printers/".self::DENSITY_DPMM."dpmm/labels/{$width}x{$height}/0/");
 
         if ($response->failed()) {
             throw new RuntimeException(
@@ -41,17 +49,36 @@ class LabelProcessingService
     }
 
     /**
-     * Sobrescreve uma área da primeira página do PDF com a lista de
-     * produtos em negrito grosso — o resto da etiqueta original permanece
-     * intacto (FPDI importa a página como template e desenha por cima, só
-     * a região do retângulo branco é realmente coberta).
+     * @return array{0: float, 1: float} largura e altura em polegadas
+     */
+    private function extractLabelSizeInInches(string $zpl): array
+    {
+        if (! preg_match('/\^PW(\d+)/', $zpl, $widthMatch) || ! preg_match('/\^LL(\d+)/', $zpl, $heightMatch)) {
+            return [4.0, 6.0];
+        }
+
+        $dotsPerInch = self::DENSITY_DPMM * 25.4;
+
+        return [
+            round((int) $widthMatch[1] / $dotsPerInch, 2),
+            round((int) $heightMatch[1] / $dotsPerInch, 2),
+        ];
+    }
+
+    /**
+     * Adiciona a lista de produtos no rodapé da etiqueta, abaixo de uma
+     * linha separadora, sem tocar em mais nada da etiqueta original (FPDI
+     * importa a página como template e só desenha por cima — nenhum
+     * retângulo de fundo é pintado, então nada da etiqueta original é
+     * apagado, mesmo que a faixa calculada não fique exatamente onde
+     * deveria).
      *
-     * A faixa fica colada na borda inferior da etiqueta, abaixo do código
-     * de barras (que nos labels reais testados fica no topo/meio) — uma
-     * primeira tentativa no topo cobriu o meio da etiqueta e cortou o
-     * código de barras. Altura limitada a 20mm (ou 15% da etiqueta, o que
-     * for menor) pra não invadir o conteúdo original mesmo em etiquetas
-     * menores.
+     * Fica sempre colada na borda inferior, com fonte pequena (mesma
+     * ordem de grandeza do DANFE simplificado, não do texto principal da
+     * etiqueta) — se a lista tiver mais de 6 produtos, reduz a fonte e
+     * divide em duas colunas (grid) pra não crescer verticalmente e
+     * invadir a área do código de barras/QR/endereço, que ficam sempre
+     * acima dessa faixa.
      *
      * @param  array<int, string>  $productNames
      */
@@ -69,19 +96,36 @@ class LabelProcessingService
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
             $pdf->useTemplate($templateId);
 
-            $marginBottom = 3; // mm
-            $bandHeight = min(20, $size['height'] * 0.15); // mm
-            $bandTop = $size['height'] - $marginBottom - $bandHeight;
+            $names = $productNames !== [] ? $productNames : ['(sem produtos)'];
+            $columns = count($names) > 6 ? 2 : 1;
+            $fontSize = $columns > 1 ? 6 : 7;
+            $lineHeight = $fontSize * 0.42; // mm — compacto, do tamanho do texto miúdo do DANFE simplificado
 
-            $pdf->SetFillColor(255, 255, 255);
-            $pdf->Rect(2, $bandTop, $size['width'] - 4, $bandHeight, 'F');
+            $marginSide = 3; // mm
+            $marginBottom = 2; // mm
+            $lineGap = 1.5; // mm entre a linha separadora e o texto
+
+            $itemsPerColumn = (int) ceil(count($names) / $columns);
+            $bandHeight = ($itemsPerColumn * $lineHeight) + $lineGap + 1;
+            $lineY = $size['height'] - $marginBottom - $bandHeight;
+            $textTop = $lineY + $lineGap;
+
+            $pdf->SetDrawColor(0, 0, 0);
+            $pdf->SetLineWidth(0.3);
+            $pdf->Line($marginSide, $lineY, $size['width'] - $marginSide, $lineY);
 
             $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetFont('Arial', 'B', 11);
-            $pdf->SetXY(3, $bandTop + 1);
+            $pdf->SetFont('Arial', 'B', $fontSize);
 
-            $text = implode(' | ', $productNames !== [] ? $productNames : ['(sem produtos)']);
-            $pdf->MultiCell($size['width'] - 6, 4.5, $text, 0, 'L');
+            $columnWidth = ($size['width'] - (2 * $marginSide)) / $columns;
+
+            foreach ($names as $index => $name) {
+                $column = (int) floor($index / $itemsPerColumn);
+                $row = $index % $itemsPerColumn;
+
+                $pdf->SetXY($marginSide + ($column * $columnWidth), $textTop + ($row * $lineHeight));
+                $pdf->Cell($columnWidth - 1, $lineHeight, $name, 0, 0, 'L');
+            }
 
             return $pdf->Output('S');
         } finally {

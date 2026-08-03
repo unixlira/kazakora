@@ -1,7 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
@@ -23,8 +23,16 @@ const disconnect = async (integration) => {
     <Head title="Integrações" />
 
     <AdminLayout>
-        <h1 class="mb-1 text-2xl font-bold">Integrações</h1>
-        <p class="mb-6 text-sm text-slate-500 dark:text-slate-400">Marketplaces conectados à loja.</p>
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="mb-1 text-2xl font-bold">Integrações</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Marketplaces conectados à loja.</p>
+            </div>
+            <Link href="/admin/integracoes/teste-impressao"
+                class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary">
+                Testar impressão de etiquetas
+            </Link>
+        </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div v-for="integration in props.integrations" :key="integration.channel"

@@ -4,6 +4,7 @@ namespace Tests\Unit\Marketplace;
 
 use App\Modules\Marketplace\Support\LabelProcessingService;
 use Illuminate\Support\Facades\Http;
+use setasign\Fpdi\Fpdi;
 use Tests\TestCase;
 
 class LabelProcessingServiceTest extends TestCase
@@ -75,5 +76,26 @@ class LabelProcessingServiceTest extends TestCase
         $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), []);
 
         $this->assertStringStartsWith('%PDF', $result);
+    }
+
+    public function test_overlay_never_creates_a_second_page(): void
+    {
+        // A margem padrão de quebra automática do FPDF (2cm) já causou isso
+        // uma vez: conteúdo colado no rodapé virava página 2 em vez de
+        // desenhar na etiqueta atual — o produto "sumia" pra outra etiqueta.
+        $result = (new LabelProcessingService)->overlayProductList(
+            self::minimalPdf(),
+            array_map(fn ($i) => "Produto {$i}", range(1, 9))
+        );
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $pageCount = (new Fpdi)->setSourceFile($tempPath);
+            $this->assertSame(1, $pageCount);
+        } finally {
+            @unlink($tempPath);
+        }
     }
 }

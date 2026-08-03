@@ -93,6 +93,12 @@ class LabelProcessingService
             $templateId = $pdf->importPage(1);
             $size = $pdf->getTemplateSize($templateId);
 
+            // Sem isso, a margem padrão de quebra automática do FPDF (2cm)
+            // manda o conteúdo colado no rodapé pra uma SEGUNDA página em
+            // vez de desenhar na etiqueta atual — foi por isso que o nome
+            // do produto saiu numa "etiqueta" separada.
+            $pdf->SetAutoPageBreak(false);
+
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
             $pdf->useTemplate($templateId);
 

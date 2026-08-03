@@ -46,11 +46,12 @@ class LabelProcessingService
      * intacto (FPDI importa a página como template e desenha por cima, só
      * a região do retângulo branco é realmente coberta).
      *
-     * Área escolhida (canto superior, faixa horizontal cheia) é um
-     * primeiro palpite razoável, não validado contra etiqueta real de
-     * nenhum canal ainda — é exatamente o que esta tela de teste existe
-     * pra descobrir. Ajustar $marginTop/$bandHeight depois de ver o
-     * resultado impresso de verdade.
+     * A faixa fica colada na borda inferior da etiqueta, abaixo do código
+     * de barras (que nos labels reais testados fica no topo/meio) — uma
+     * primeira tentativa no topo cobriu o meio da etiqueta e cortou o
+     * código de barras. Altura limitada a 20mm (ou 15% da etiqueta, o que
+     * for menor) pra não invadir o conteúdo original mesmo em etiquetas
+     * menores.
      *
      * @param  array<int, string>  $productNames
      */
@@ -68,18 +69,19 @@ class LabelProcessingService
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
             $pdf->useTemplate($templateId);
 
-            $marginTop = 4; // mm
-            $bandHeight = min(40, $size['height'] * 0.35); // mm — nunca mais que 35% da etiqueta
+            $marginBottom = 3; // mm
+            $bandHeight = min(20, $size['height'] * 0.15); // mm
+            $bandTop = $size['height'] - $marginBottom - $bandHeight;
 
             $pdf->SetFillColor(255, 255, 255);
-            $pdf->Rect(2, $marginTop, $size['width'] - 4, $bandHeight, 'F');
+            $pdf->Rect(2, $bandTop, $size['width'] - 4, $bandHeight, 'F');
 
             $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetFont('Arial', 'B', 13);
-            $pdf->SetXY(3, $marginTop + 1);
+            $pdf->SetFont('Arial', 'B', 11);
+            $pdf->SetXY(3, $bandTop + 1);
 
-            $text = implode("\n", $productNames !== [] ? $productNames : ['(sem produtos)']);
-            $pdf->MultiCell($size['width'] - 6, 5.5, $text, 0, 'L');
+            $text = implode(' | ', $productNames !== [] ? $productNames : ['(sem produtos)']);
+            $pdf->MultiCell($size['width'] - 6, 4.5, $text, 0, 'L');
 
             return $pdf->Output('S');
         } finally {

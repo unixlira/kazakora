@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -35,21 +36,27 @@ class PrintTestController extends Controller
     public function index(): Response
     {
         $orders = Order::query()
-            ->with('items:id,order_id,product_name,quantity')
             ->latest('id')
             ->limit(100)
-            ->get(['id', 'origin', 'shipping_name', 'created_at'])
+            ->get(['id', 'origin', 'shipping_name'])
             ->map(fn (Order $order) => [
                 'id' => $order->id,
                 'label' => "#{$order->id} — {$order->shipping_name} ({$order->origin})",
-                'products' => $order->items->map(fn ($item) => $item->quantity > 1
-                    ? "{$item->product_name} (x{$item->quantity})"
-                    : $item->product_name)->all(),
+            ]);
+
+        $products = Product::query()
+            ->orderBy('name')
+            ->limit(500)
+            ->get(['id', 'name', 'sku'])
+            ->map(fn (Product $product) => [
+                'id' => $product->id,
+                'label' => "{$product->name} ({$product->sku})",
             ]);
 
         return Inertia::render('Admin/Integracoes/TesteImpressao', [
             'channels' => collect(self::CHANNELS)->map(fn ($name, $channel) => ['value' => $channel, 'label' => $name])->values(),
             'orders' => $orders,
+            'products' => $products,
         ]);
     }
 
@@ -58,6 +65,8 @@ class PrintTestController extends Controller
         $validated = $request->validate([
             'channel' => ['required', Rule::in(array_keys(self::CHANNELS))],
             'order_id' => ['required', 'integer', 'exists:orders,id'],
+            'product_ids' => ['required', 'array', 'min:1'],
+            'product_ids.*' => ['integer', 'exists:products,id'],
             'file' => ['required', 'file', 'max:10240'],
         ]);
 
@@ -73,10 +82,12 @@ class PrintTestController extends Controller
                 : "Esse canal espera um arquivo .pdf (recebido .{$extension}).");
         }
 
-        $order = Order::query()->with('items')->findOrFail($validated['order_id']);
-        $productNames = $order->items->map(fn ($item) => $item->quantity > 1
-            ? "{$item->product_name} (x{$item->quantity})"
-            : $item->product_name)->all();
+        $order = Order::query()->findOrFail($validated['order_id']);
+        $productNames = Product::query()
+            ->whereIn('id', $validated['product_ids'])
+            ->orderBy('name')
+            ->pluck('name')
+            ->all();
 
         try {
             $pdfBytes = $isShopee

@@ -6,11 +6,13 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 const props = defineProps({
     channels: { type: Array, default: () => [] },
     orders: { type: Array, default: () => [] },
+    products: { type: Array, default: () => [] },
 });
 
 const form = useForm({
     channel: props.channels[0]?.value ?? '',
     order_id: '',
+    product_ids: [],
     file: null,
 });
 
@@ -18,8 +20,6 @@ const fileInput = ref(null);
 
 const isShopee = computed(() => form.channel === 'shopee');
 const acceptedExtension = computed(() => (isShopee.value ? '.txt' : '.pdf'));
-
-const selectedOrder = computed(() => props.orders.find((order) => order.id === Number(form.order_id)) ?? null);
 
 const onChannelChange = () => {
     form.file = null;
@@ -74,7 +74,7 @@ const submit = () => {
                 </div>
 
                 <div>
-                    <label class="text-sm font-medium">Pedido (fonte da lista de produtos)</label>
+                    <label class="text-sm font-medium">Pedido (usado só pra vincular o job de impressão)</label>
                     <select v-model="form.order_id"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
                         <option value="" disabled>Selecione um pedido</option>
@@ -83,10 +83,18 @@ const submit = () => {
                         </option>
                     </select>
                     <p v-if="form.errors.order_id" class="mt-1 text-xs text-error">{{ form.errors.order_id }}</p>
+                </div>
 
-                    <ul v-if="selectedOrder && selectedOrder.products.length" class="mt-2 rounded-lg bg-lightprimary px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
-                        <li v-for="(product, index) in selectedOrder.products" :key="index">{{ product }}</li>
-                    </ul>
+                <div>
+                    <label class="text-sm font-medium">Produtos que devem aparecer em destaque na etiqueta</label>
+                    <select v-model="form.product_ids" multiple size="6"
+                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
+                        <option v-for="product in props.products" :key="product.id" :value="product.id">
+                            {{ product.label }}
+                        </option>
+                    </select>
+                    <p class="mt-1 text-xs text-slate-400">Segure Ctrl (ou Cmd) pra selecionar mais de um produto.</p>
+                    <p v-if="form.errors.product_ids" class="mt-1 text-xs text-error">{{ form.errors.product_ids }}</p>
                 </div>
 
                 <div>
@@ -99,7 +107,8 @@ const submit = () => {
                     <p v-if="form.errors.file" class="mt-1 text-xs text-error">{{ form.errors.file }}</p>
                 </div>
 
-                <button type="submit" :disabled="form.processing || !form.file || !form.order_id"
+                <button type="submit"
+                    :disabled="form.processing || !form.file || !form.order_id || form.product_ids.length === 0"
                     class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50">
                     {{ form.processing ? 'Processando...' : 'Processar e enfileirar impressão' }}
                 </button>

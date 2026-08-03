@@ -3,8 +3,8 @@
 namespace Tests\Feature\Marketplace;
 
 use App\Models\User;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
-use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -47,9 +47,9 @@ class PrintTestControllerTest extends TestCase
         return $pdf;
     }
 
-    private function createOrderWithItems(string $origin): Order
+    private function createOrder(string $origin): Order
     {
-        $order = Order::create([
+        return Order::create([
             'status' => Order::STATUS_PAID,
             'origin' => $origin,
             'external_order_id' => 'TEST-'.uniqid(),
@@ -65,15 +65,6 @@ class PrintTestControllerTest extends TestCase
             'shipping_cost' => 0,
             'total' => 0,
         ]);
-
-        $order->items()->create([
-            'product_name' => 'Produto Teste',
-            'product_price' => 10,
-            'quantity' => 2,
-            'subtotal' => 20,
-        ]);
-
-        return $order;
     }
 
     public function test_only_admin_can_access_print_test_screen(): void
@@ -93,13 +84,15 @@ class PrintTestControllerTest extends TestCase
         ]);
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $order = $this->createOrderWithItems('shopee');
+        $order = $this->createOrder('shopee');
+        $product = Product::factory()->create();
 
         $file = UploadedFile::fake()->createWithContent('etiqueta.txt', "^XA^FO20,20^A0N,30,30^FDTeste ZPL^FS^XZ");
 
         $response = $this->actingAs($admin)->post('/admin/integracoes/teste-impressao', [
             'channel' => 'shopee',
             'order_id' => $order->id,
+            'product_ids' => [$product->id],
             'file' => $file,
         ]);
 
@@ -124,13 +117,15 @@ class PrintTestControllerTest extends TestCase
         Http::fake();
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $order = $this->createOrderWithItems('mercado_livre');
+        $order = $this->createOrder('mercado_livre');
+        $product = Product::factory()->create();
 
         $file = UploadedFile::fake()->createWithContent('etiqueta.pdf', self::minimalPdf());
 
         $response = $this->actingAs($admin)->post('/admin/integracoes/teste-impressao', [
             'channel' => 'mercado_livre',
             'order_id' => $order->id,
+            'product_ids' => [$product->id],
             'file' => $file,
         ]);
 
@@ -148,13 +143,15 @@ class PrintTestControllerTest extends TestCase
     public function test_rejects_wrong_file_extension_for_channel(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $order = $this->createOrderWithItems('shopee');
+        $order = $this->createOrder('shopee');
+        $product = Product::factory()->create();
 
         $file = UploadedFile::fake()->createWithContent('etiqueta.pdf', self::minimalPdf());
 
         $response = $this->actingAs($admin)->post('/admin/integracoes/teste-impressao', [
             'channel' => 'shopee',
             'order_id' => $order->id,
+            'product_ids' => [$product->id],
             'file' => $file,
         ]);
 

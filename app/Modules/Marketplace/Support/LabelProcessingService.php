@@ -101,12 +101,12 @@ class LabelProcessingService
 
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
 
-            // Desloca a etiqueta original inteira ~5px pra direita — ela vinha
+            // Desloca a etiqueta original inteira ~10px pra direita — ela vinha
             // colada na borda esquerda cortando o "Destinatário" impresso ali,
             // enquanto sobrava espaço em branco do lado direito. Área da
             // página não muda (mesma largura/altura), só a posição do
             // conteúdo original dentro dela.
-            $leftMarginMm = 5 * (25.4 / 96); // 5px a 96dpi ≈ 1.32mm
+            $leftMarginMm = 10 * (25.4 / 96); // 10px a 96dpi ≈ 2.65mm
             $pdf->useTemplate($templateId, $leftMarginMm, 0);
 
             $names = $productNames !== [] ? $productNames : ['(sem produtos)'];

@@ -19,6 +19,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Notification;
+use NFePHP\Common\Exception\ValidatorException;
 use Throwable;
 
 /**
@@ -29,7 +30,10 @@ use Throwable;
  * ilegível) — ver InvoiceService::issue(). Uma resposta definitiva da SEFAZ
  * (autorizada/rejeitada/denegada) ou a ausência de certificado configurado
  * não geram exceção, então terminam o job normalmente (sem retry) e já
- * disparam o e-mail de recibo em seguida.
+ * disparam o e-mail de recibo em seguida. Falha de validação local do XML
+ * (ValidatorException, antes de qualquer chamada à SEFAZ) também é
+ * terminal na primeira tentativa — é sempre um erro determinístico de
+ * dados, nunca resolvido por retry.
  */
 class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
 {
@@ -95,6 +99,27 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             if ($invoice->status === Invoice::STATUS_AUTHORIZED && $order->origin !== Order::ORIGIN_STORE) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
             }
+        } catch (ValidatorException $exception) {
+            // XML inválido localmente (barrado pelo validador do sped-nfe
+            // antes de qualquer chamada à SEFAZ) é sempre um erro
+            // determinístico dos dados/geração do XML — tentar de novo com
+            // os mesmos dados nunca vai dar certo. Falha na hora em vez de
+            // gastar minutos em retries com backoff pra chegar no mesmo
+            // erro (foi o que aconteceu de verdade nos pedidos #15/#16,
+            // 2026-08-03: ~7min de retry até desistir).
+            InvoiceGenerationLog::create([
+                'order_id' => $order->id,
+                'invoice_id' => $order->fresh()->invoice?->id,
+                'attempt' => $this->attempts(),
+                'status' => InvoiceGenerationLog::STATUS_FAILED,
+                'error_message' => $exception->getMessage(),
+            ]);
+
+            $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $exception->getMessage());
+
+            $this->fail($exception);
+
+            return;
         } catch (Throwable $exception) {
             InvoiceGenerationLog::create([
                 'order_id' => $order->id,

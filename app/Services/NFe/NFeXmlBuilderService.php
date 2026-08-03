@@ -4,6 +4,7 @@ namespace App\Services\NFe;
 
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Company;
+use Illuminate\Support\Str;
 use NFePHP\NFe\Make;
 use RuntimeException;
 use stdClass;
@@ -131,13 +132,20 @@ class NFeXmlBuilderService
 
         $make->tagdest($dest);
 
+        // Str::limit(..., 60) nos campos de texto livre abaixo: o schema da
+        // NFe limita xLgr/xCpl/xBairro/xMun a 60 caracteres, mas pedido
+        // importado de marketplace usa texto livre sem esse limite (ex:
+        // Mercado Livre manda o "comment" do comprador, tipo instrução de
+        // entrega, direto pro complemento) — sem isso o XML falha na
+        // validação local do sped-nfe e a emissão nunca sai do lugar
+        // (bug real em produção, pedidos #15/#16, 2026-08-03).
         $enderDest = new stdClass();
-        $enderDest->xLgr = $order->shipping_street;
+        $enderDest->xLgr = Str::limit((string) $order->shipping_street, 60, '');
         $enderDest->nro = $order->shipping_number;
-        $enderDest->xCpl = $order->shipping_complement;
-        $enderDest->xBairro = $order->shipping_neighborhood;
+        $enderDest->xCpl = Str::limit((string) $order->shipping_complement, 60, '');
+        $enderDest->xBairro = Str::limit((string) $order->shipping_neighborhood, 60, '');
         $enderDest->cMun = $cMunDest;
-        $enderDest->xMun = $order->shipping_city;
+        $enderDest->xMun = Str::limit((string) $order->shipping_city, 60, '');
         $enderDest->UF = $order->shipping_state;
         $enderDest->CEP = preg_replace('/\D/', '', $order->shipping_zip);
         $enderDest->cPais = 1058;

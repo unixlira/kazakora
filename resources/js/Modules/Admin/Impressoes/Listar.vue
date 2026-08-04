@@ -1,12 +1,16 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { toRef } from 'vue';
+import { usePollWhilePending } from '@/Shared/usePollWhilePending';
 
 const props = defineProps({
     jobs: { type: Object, required: true },
     statusFilter: { type: String, default: null },
     statusOptions: { type: Array, default: () => [] },
 });
+
+usePollWhilePending(toRef(props, 'jobs'));
 
 const BADGE_STYLES = {
     yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300',

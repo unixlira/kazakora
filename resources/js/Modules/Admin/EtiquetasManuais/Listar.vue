@@ -2,11 +2,15 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { toRef } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
+import { usePollWhilePending } from '@/Shared/usePollWhilePending';
 
 const props = defineProps({
     jobs: { type: Object, required: true },
 });
+
+usePollWhilePending(toRef(props, 'jobs'));
 
 const STATUS_META = {
     queued: { label: 'Na fila', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' },

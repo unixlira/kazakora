@@ -322,14 +322,17 @@ class DashboardAgentController extends Controller
     public function labels(): JsonResponse
     {
         $jobs = PrintJob::query()
-            ->with(['order:id,external_order_id', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
+            ->with(['order:id,external_order_id,origin', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
             ->latest('id')
             ->limit(50)
             ->get(['id', 'order_id', 'channel', 'status', 'error_message', 'created_at', 'printed_at']);
 
         $result = $jobs->map(fn (PrintJob $job) => [
             'id' => $job->id,
-            'channel' => $job->channel,
+            // Jobs antigos de teste têm PrintJob.channel nulo mesmo com
+            // pedido associado — usa o origin do pedido como fallback antes
+            // de mostrar "canal desconhecido" à toa.
+            'channel' => $job->channel ?? $job->order?->origin,
             'order_id' => $job->order_id,
             'external_order_id' => $job->order?->external_order_id,
             'products' => $job->order?->items->map(fn ($item) => [

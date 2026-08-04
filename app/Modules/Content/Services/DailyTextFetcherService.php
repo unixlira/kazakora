@@ -88,6 +88,21 @@ class DailyTextFetcherService
         }
 
         $referenceNode = $xpath->query('.//a', $quoteNode)->item(0);
+        $reference = $referenceNode ? $this->cleanText($referenceNode->textContent) : '';
+
+        // O texto vem sempre no formato "<citação> — <referência>." num
+        // único nó — separa aqui pra scripture_quote guardar só a citação
+        // (a referência já tem coluna própria, não devia vir duplicada
+        // dentro dela). O formato "— referência" é constante em qualquer
+        // texto diário da JW (confirmado ao vivo 2026-08-04), então corta
+        // tudo a partir do travessão em vez de tentar remover a referência
+        // por substring (mais frágil se o texto da referência aparecer em
+        // outro lugar da citação por coincidência).
+        $fullQuoteText = $this->cleanText($quoteNode->textContent);
+        $dashPosition = mb_strpos($fullQuoteText, '—');
+        $quoteOnly = $dashPosition !== false
+            ? trim(mb_substr($fullQuoteText, 0, $dashPosition))
+            : $fullQuoteText;
 
         $sourceDocId = null;
         if (preg_match('/docId-(\d+)/', $item->getAttribute('class'), $matches)) {
@@ -96,8 +111,8 @@ class DailyTextFetcherService
 
         return [
             'weekday_label' => $this->cleanText($weekdayNode->textContent),
-            'scripture_quote' => $this->cleanText($quoteNode->textContent),
-            'scripture_reference' => $referenceNode ? $this->cleanText($referenceNode->textContent) : '',
+            'scripture_quote' => $quoteOnly,
+            'scripture_reference' => $reference,
             'commentary' => $this->cleanText($bodyNode->textContent),
             'source_doc_id' => $sourceDocId,
         ];

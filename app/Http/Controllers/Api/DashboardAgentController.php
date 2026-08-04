@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Content\Models\DailyText;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
@@ -366,5 +367,33 @@ class DashboardAgentController extends Controller
         ]);
 
         return response()->json(['labels' => $result]);
+    }
+
+    /**
+     * Texto diário das Testemunhas de Jeová — só leitura do que já foi
+     * salvo pelo comando agendado (App\Console\Commands\FetchDailyText,
+     * roda a cada 12h). Não busca ao vivo aqui: esse endpoint precisa
+     * responder rápido pro KoraSync, e raspar wol.jw.org na hora da
+     * requisição arriscaria travar/atrasar o dashboard por causa de um
+     * site externo.
+     */
+    public function dailyText(): JsonResponse
+    {
+        $dailyText = DailyText::query()->latest('date')->first();
+
+        if (! $dailyText) {
+            return response()->json(['daily_text' => null]);
+        }
+
+        return response()->json([
+            'daily_text' => [
+                'date' => $dailyText->date->toDateString(),
+                'weekday_label' => $dailyText->weekday_label,
+                'scripture_quote' => $dailyText->scripture_quote,
+                'scripture_reference' => $dailyText->scripture_reference,
+                'commentary' => $dailyText->commentary,
+                'fetched_at' => $dailyText->fetched_at,
+            ],
+        ]);
     }
 }

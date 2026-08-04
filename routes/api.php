@@ -66,4 +66,5 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::get('/dashboard/metrics', [DashboardAgentController::class, 'metrics'])->name('dashboard.metrics');
     Route::get('/dashboard/channels/{channel}/orders', [DashboardAgentController::class, 'channelOrders'])->name('dashboard.channel-orders');
     Route::get('/dashboard/labels', [DashboardAgentController::class, 'labels'])->name('dashboard.labels');
+    Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
 });

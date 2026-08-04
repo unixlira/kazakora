@@ -224,7 +224,9 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * tomada via /shipments/{id}, nunca escolhe nada. Campo real confirmado
      * ao vivo (2026-08-01, pedido 2000017253083882): `logistic_type` e
      * `mode` são campos de topo no shipment, não aninhados sob `logistic.*`
-     * como a documentação do ML sugere.
+     * como a documentação oficial do ML mostra (`logistic.type`/`logistic.mode`)
+     * — mantém fallback pro formato aninhado da doc caso o topo não venha
+     * preenchido em algum site/categoria.
      */
     public function confirmShipping(Order $order): array
     {
@@ -233,9 +235,11 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $shipmentId = $this->resolveShipmentId($order);
         $shipment = $this->shipments->getShipment($shipmentId);
 
+        $logisticType = $shipment['logistic_type'] ?? $shipment['logistic']['type'] ?? 'unknown';
+
         return [
             'external_shipment_id' => (string) ($shipment['id'] ?? $shipmentId),
-            'shipping_method' => $shipment['logistic_type'] ?? 'unknown',
+            'shipping_method' => $logisticType,
             'status' => $shipment['status'] ?? 'unknown',
         ];
     }

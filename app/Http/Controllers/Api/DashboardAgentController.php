@@ -51,12 +51,20 @@ class DashboardAgentController extends Controller
             ->groupBy('origin')
             ->pluck('last_order_id', 'origin');
 
+        // selectRaw()+MAX() devolve string crua no formato do MySQL
+        // ("2026-08-03 19:44:42"), não um Carbon — sem esse parse, o JSON
+        // sai sem o "T"/offset ISO 8601 que o DateTimeOffset do C# exige,
+        // e o KoraSync quebra ao desserializar (achado ao vivo 2026-08-04,
+        // reproduzido rodando o parser real do cliente contra essa resposta
+        // — a exceção derrubava o tick inteiro, inclusive a busca de
+        // etiquetas, que roda depois dessa no mesmo ciclo).
         $lastPrintedJobs = PrintJob::query()
             ->join('orders', 'orders.id', '=', 'print_jobs.order_id')
             ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
             ->selectRaw('orders.origin, MAX(print_jobs.printed_at) as last_printed_at')
             ->groupBy('orders.origin')
-            ->pluck('last_printed_at', 'orders.origin');
+            ->pluck('last_printed_at', 'orders.origin')
+            ->map(fn ($value) => $value ? \Carbon\Carbon::parse($value) : null);
 
         $printedTodayByChannel = PrintJob::query()
             ->join('orders', 'orders.id', '=', 'print_jobs.order_id')

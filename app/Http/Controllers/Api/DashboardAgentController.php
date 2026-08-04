@@ -336,7 +336,13 @@ class DashboardAgentController extends Controller
             // usado na listagem de Etiquetas Manuais.
             ->where('is_thank_you', false)
             ->with(['order:id,external_order_id,origin', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
-            ->latest('id')
+            // COALESCE(printed_at, created_at): a última IMPRESSA de verdade
+            // fica sempre primeiro (pedido explícito 2026-08-04), não só a
+            // mais recentemente criada — um job criado antes mas impresso
+            // depois de outro (ex: reentrou na fila por retry) sobe pro
+            // topo assim que imprime de verdade. Jobs ainda sem printed_at
+            // (queued/claimed/failed) continuam ordenados por created_at.
+            ->orderByRaw('COALESCE(printed_at, created_at) DESC')
             ->limit(50)
             ->get(['id', 'order_id', 'channel', 'status', 'error_message', 'created_at', 'printed_at']);
 

@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Models;
 use App\Models\User;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Model;
@@ -55,6 +56,8 @@ class Order extends Model
         'shipping_carrier_name',
         'shipping_name',
         'shipping_phone',
+        'shipping_email',
+        'shipping_whatsapp',
         'shipping_zip',
         'shipping_street',
         'shipping_number',
@@ -114,6 +117,11 @@ class Order extends Model
     public function latestEmailLog(): HasOne
     {
         return $this->hasOne(OrderEmailLog::class)->latestOfMany(['created_at', 'id']);
+    }
+
+    public function channelShipment(): HasOne
+    {
+        return $this->hasOne(ChannelShipment::class);
     }
 
     public function fulfillmentEvents(): HasMany

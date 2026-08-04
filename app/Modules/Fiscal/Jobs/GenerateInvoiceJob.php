@@ -10,7 +10,6 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
-use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Bus\Queueable;
@@ -43,6 +42,16 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
     public int $tries = 3;
 
     public int $timeout = 120;
+
+    /**
+     * Fila própria (não 'default') — isola a nota fiscal do resto (envio,
+     * e-mail, sincronização de estoque), como pedido explicitamente: a nota
+     * pode ficar lenta/travada (SEFAZ fora do ar, certificado ruim) sem
+     * atrasar nada mais na fila. Precisa do worker do homolog escutando
+     * essa fila também (`queue:work --queue=nfe,default`), não só a
+     * default — ver comando no cron do Hostinger.
+     */
+    public string $queue = 'nfe';
 
     public function __construct(public readonly int $orderId)
     {
@@ -100,17 +109,13 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
                 },
             );
 
-            // Nota nossa autorizada: dispara a etapa seguinte de verdade
-            // (enviar a nota pro canal via API, que é o que libera o envio
-            // do lado deles). Nota externa (canal já emitiu a própria):
-            // não tem nota nossa pra enviar, mas o envio ainda precisa ser
-            // confirmado/consultado — pula direto pra essa etapa, sem
-            // passar pela submissão de nota. Pedido do site (origin=loja)
-            // não passa por canal nenhum, não tem próxima etapa aqui.
+            // Nota nossa autorizada: envia pro canal via API (etapa própria
+            // do pipeline de nota fiscal, não afeta envio/etiqueta — esses
+            // já disparam direto na importação do pedido, ver
+            // OrderImportService). Pedido do site (origin=loja) não passa
+            // por canal nenhum, não tem o que enviar aqui.
             if ($invoice->status === Invoice::STATUS_AUTHORIZED && $order->origin !== Order::ORIGIN_STORE) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
-            } elseif ($invoice->status === Invoice::STATUS_EXTERNAL) {
-                ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
             }
         } catch (ValidatorException $exception) {
             // XML inválido localmente (barrado pelo validador do sped-nfe

@@ -90,6 +90,15 @@ const channelBadge = {
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
 };
 
+const LOGISTIC_TYPE_LABELS = {
+    self_service: 'Flex',
+    drop_off: 'Agência / Correios',
+    xd_drop_off: 'Coleta (Places)',
+    cross_docking: 'Coleta',
+    fulfillment: 'Full',
+    turbo: 'Turbo',
+};
+
 const form = useForm({
     status: props.order.status,
 });
@@ -131,7 +140,10 @@ const cancelInvoice = () => {
         <div class="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                    <h2 class="font-semibold">Itens</h2>
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-semibold">Itens</h2>
+                        <span class="text-sm text-slate-500">{{ order.units_count ?? 0 }} unidade(s)</span>
+                    </div>
 
                     <ul class="mt-4 space-y-2 text-sm">
                         <li v-for="item in order.items" :key="item.id" class="flex justify-between">
@@ -147,9 +159,16 @@ const cancelInvoice = () => {
                 </div>
 
                 <div class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                    <h2 class="font-semibold">Entrega</h2>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h2 class="font-semibold">Entrega</h2>
+                        <span v-if="order.channel_shipment?.shipping_method" class="text-sm text-slate-500">
+                            Tipo de envio: <strong>{{ LOGISTIC_TYPE_LABELS[order.channel_shipment.shipping_method] ?? order.channel_shipment.shipping_method }}</strong>
+                        </span>
+                    </div>
                     <p class="mt-2 text-sm text-slate-500">
                         {{ order.shipping_name }} — {{ order.shipping_phone }}<br>
+                        <span v-if="order.shipping_whatsapp">WhatsApp: {{ order.shipping_whatsapp }}<br></span>
+                        <span v-if="order.shipping_email">E-mail: {{ order.shipping_email }}<br></span>
                         {{ order.shipping_street }}, {{ order.shipping_number }}
                         <span v-if="order.shipping_complement">- {{ order.shipping_complement }}</span><br>
                         {{ order.shipping_neighborhood }} - {{ order.shipping_city }}/{{ order.shipping_state }}<br>

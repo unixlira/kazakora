@@ -10,9 +10,11 @@ use App\Modules\Marketplace\Models\ChannelShipment;
 use Throwable;
 
 /**
- * Etapa 4: confirma/consulta o método de envio no canal (a decisão em si —
- * Flex x padrão no Mercado Livre, drop-off na Shopee — é feita pelo próprio
- * canal ou já decidida automaticamente; ver MarketplaceChannelDriver::confirmShipping()).
+ * Confirma/consulta o método de envio no canal (a decisão em si — Flex x
+ * padrão no Mercado Livre, drop-off na Shopee — é feita pelo próprio canal
+ * ou já decidida automaticamente; ver MarketplaceChannelDriver::confirmShipping()).
+ * Dispara direto na importação do pedido pago (OrderImportService), em
+ * paralelo com a nota fiscal — não depende dela.
  */
 class ChannelShippingService
 {

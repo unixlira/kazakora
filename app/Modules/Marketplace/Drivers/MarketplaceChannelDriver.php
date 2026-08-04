@@ -44,6 +44,8 @@ interface MarketplaceChannelDriver
      *     total: float,
      *     buyer_name: string,
      *     buyer_phone: ?string,
+     *     buyer_email?: ?string,
+     *     buyer_whatsapp?: ?string,
      *     shipping_zip: string,
      *     shipping_street: string,
      *     shipping_number: string,

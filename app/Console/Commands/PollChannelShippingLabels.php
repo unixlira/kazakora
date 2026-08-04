@@ -7,16 +7,17 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Marketplace\Support\LabelProcessingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
- * Etapa 5 do pipeline venda→nota→envio→etiqueta: nenhum canal pesquisado
- * (Mercado Livre, Shopee) tem webhook dedicado a "etiqueta pronta" — os dois
- * exigem consultar o status periodicamente até virar disponível. Roda a
- * cada 5 min sobre os envios já confirmados que ainda não têm etiqueta.
+ * Nenhum canal pesquisado (Mercado Livre, Shopee) tem webhook dedicado a
+ * "etiqueta pronta" — os dois exigem consultar o status periodicamente até
+ * virar disponível. Roda a cada 5 min sobre os envios já confirmados que
+ * ainda não têm etiqueta. Pipeline de etiqueta, independente da nota fiscal.
  */
 class PollChannelShippingLabels extends Command
 {
@@ -24,11 +25,11 @@ class PollChannelShippingLabels extends Command
 
     protected $description = 'Consulta os canais por etiquetas de envio prontas para pedidos com frete já confirmado';
 
-    public function handle(MarketplaceDriverManager $manager, OrderFulfillmentTimeline $timeline): int
+    public function handle(MarketplaceDriverManager $manager, OrderFulfillmentTimeline $timeline, LabelProcessingService $processor): int
     {
         $shipments = ChannelShipment::query()
             ->where('status', ChannelShipment::STATUS_CONFIRMED)
-            ->with('order')
+            ->with('order.items')
             ->get();
 
         if ($shipments->isEmpty()) {
@@ -54,9 +55,31 @@ class PollChannelShippingLabels extends Command
                 continue;
             }
 
-            $extension = str_contains((string) $label['content_type'], 'pdf') ? 'pdf' : 'bin';
+            $isPdf = str_contains((string) $label['content_type'], 'pdf');
+            $contents = $label['contents'];
+
+            // Sobrepõe a lista de produtos na etiqueta, igual já validado
+            // manualmente na tela de teste de impressão — só é possível pra
+            // etiqueta em PDF (formato pedido ao Mercado Livre); se o
+            // overlay falhar por qualquer motivo, ainda imprime a etiqueta
+            // crua em vez de travar o pedido inteiro por causa disso.
+            if ($isPdf) {
+                try {
+                    $productNames = $shipment->order->items->map(function ($item) {
+                        return $item->quantity > 1
+                            ? "{$item->quantity}x {$item->product_name}"
+                            : $item->product_name;
+                    })->all();
+
+                    $contents = $processor->overlayProductList($contents, $productNames);
+                } catch (Throwable $exception) {
+                    Log::warning('marketplace.poll_labels.overlay_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
+                }
+            }
+
+            $extension = $isPdf ? 'pdf' : 'bin';
             $path = "labels/{$shipment->order_id}/etiqueta-{$shipment->id}.{$extension}";
-            Storage::disk('local')->put($path, $label['contents']);
+            Storage::disk('local')->put($path, $contents);
 
             $shipment->update([
                 'status' => ChannelShipment::STATUS_LABEL_READY,

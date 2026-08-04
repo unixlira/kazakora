@@ -6,14 +6,17 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
-use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use Throwable;
 
 /**
- * Etapa 3 do pipeline venda→nota→envio→etiqueta: envia a NF-e autorizada de
- * um pedido de canal externo pro canal correspondente. Canal-agnóstico —
- * delega o formato/endpoint real pro driver (MarketplaceChannelDriver::submitInvoice()).
+ * Envia a NF-e autorizada de um pedido de canal externo pro canal
+ * correspondente. Canal-agnóstico — delega o formato/endpoint real pro
+ * driver (MarketplaceChannelDriver::submitInvoice()).
+ *
+ * Pipeline de nota fiscal, independente do pipeline de envio/etiqueta (que
+ * dispara direto na importação do pedido — ver OrderImportService): sucesso
+ * ou falha aqui não confirma nem bloqueia o frete, só afeta a nota em si.
  */
 class ChannelInvoiceSubmissionService
 {
@@ -68,10 +71,6 @@ class ChannelInvoiceSubmissionService
             $sent ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
             $sent ? 'Nota enviada ao canal' : ($result['response']['error'] ?? 'Canal rejeitou o envio da nota.'),
         );
-
-        if ($sent) {
-            ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
-        }
 
         return $submission;
     }

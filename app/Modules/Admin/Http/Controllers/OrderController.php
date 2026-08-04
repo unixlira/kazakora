@@ -58,7 +58,8 @@ class OrderController extends Controller
     public function show(Order $order): Response
     {
         return Inertia::render('Admin/Orders/Show', [
-            'order' => $order->load(['items', 'user:id,name,email', 'invoice']),
+            'order' => $order->load(['items', 'user:id,name,email', 'invoice', 'channelShipment'])
+                ->loadSum('items as units_count', 'quantity'),
             'statuses' => self::STATUSES,
             'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
             'emailLogs' => $order->emailLogs,

@@ -18,6 +18,9 @@ class SubmitInvoiceToChannelJob implements ShouldQueue
 
     public array $backoff = [60, 300, 900];
 
+    /** Mesma fila isolada da nota fiscal — ver GenerateInvoiceJob::$queue. */
+    public string $queue = 'nfe';
+
     public function __construct(public readonly int $orderId)
     {
     }

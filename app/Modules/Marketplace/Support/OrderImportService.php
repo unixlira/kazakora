@@ -10,6 +10,7 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -84,6 +85,8 @@ class OrderImportService
                 'buyer_document' => $data['buyer_document'] ?? null,
                 'shipping_name' => $data['buyer_name'],
                 'shipping_phone' => $data['buyer_phone'] ?? 'Não informado',
+                'shipping_email' => $data['buyer_email'] ?? null,
+                'shipping_whatsapp' => $data['buyer_whatsapp'] ?? null,
                 'shipping_zip' => $data['shipping_zip'],
                 'shipping_street' => $data['shipping_street'],
                 'shipping_number' => $data['shipping_number'],
@@ -164,7 +167,16 @@ class OrderImportService
                 );
             }
 
+            // Etiqueta e nota fiscal são dois pipelines paralelos e
+            // independentes a partir daqui — nenhum bloqueia o outro. Antes,
+            // a confirmação de envio só disparava depois que a nota fiscal
+            // era emitida E aceita pelo canal; com o certificado da NF-e
+            // quebrado, isso travava a etiqueta inteira também. Agora a
+            // etiqueta anda sozinha assim que o pedido é pago, e a nota
+            // fiscal segue seu próprio caminho (fila dedicada, ver
+            // GenerateInvoiceJob) sem afetar o envio.
             if ($data['status'] === Order::STATUS_PAID) {
+                ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
                 GenerateInvoiceJob::dispatch($order->id)->afterCommit();
             }
 
@@ -188,6 +200,7 @@ class OrderImportService
         }
 
         if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
+            ConfirmChannelShippingJob::dispatch($order->id);
             GenerateInvoiceJob::dispatch($order->id);
         }
 

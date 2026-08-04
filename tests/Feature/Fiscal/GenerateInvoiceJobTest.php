@@ -79,7 +79,7 @@ class GenerateInvoiceJobTest extends TestCase
         Queue::assertPushed(SendOrderReceiptEmailJob::class, fn (SendOrderReceiptEmailJob $job) => $job->orderId === $order->id);
     }
 
-    public function test_handle_logs_success_and_confirms_shipping_directly_when_invoice_is_external(): void
+    public function test_handle_logs_success_and_does_not_submit_invoice_to_channel_when_invoice_is_external(): void
     {
         Queue::fake();
         $order = $this->makeOrder();
@@ -99,9 +99,10 @@ class GenerateInvoiceJobTest extends TestCase
         ]);
 
         // Canal já emitiu a própria nota — não faz sentido submeter nota
-        // nossa (não existe uma de verdade), mas o envio ainda precisa ser
-        // confirmado/etiqueta buscada, então pula direto pra essa etapa.
-        Queue::assertPushed(\App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob::class, fn ($job) => $job->orderId === $order->id);
+        // nossa (não existe uma de verdade). Confirmação de envio/etiqueta
+        // não é mais responsabilidade deste job — dispara direto na
+        // importação do pedido (OrderImportService), em paralelo com a nota.
+        Queue::assertNotPushed(\App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob::class);
         Queue::assertNotPushed(\App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob::class);
         Queue::assertPushed(SendOrderReceiptEmailJob::class);
     }

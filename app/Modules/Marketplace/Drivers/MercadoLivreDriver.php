@@ -161,7 +161,18 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'marketplace_fee' => round($marketplaceFee, 2),
             'buyer_name' => $buyerName,
             'buyer_document' => $buyerDocument,
+            // 'email' aqui é o relay mascarado do próprio Mercado Livre
+            // (algo como xxx@mail.mercadolivre.com), não o e-mail real do
+            // comprador — o ML não expõe o e-mail verdadeiro pra vendedor
+            // por privacidade. Guardado do mesmo jeito porque ainda serve
+            // pra contato via esse relay.
+            'buyer_email' => $buyer['email'] ?? null,
             'buyer_phone' => $buyer['phone']['number'] ?? null,
+            // alternative_phone é o único campo que a ML separa do telefone
+            // principal — preenchido só quando o comprador informa um
+            // segundo número; não é literalmente "o WhatsApp dele", é o
+            // melhor proxy que a API oferece pra um segundo contato.
+            'buyer_whatsapp' => $buyer['alternative_phone']['number'] ?? null,
             'shipping_zip' => $address['zip'],
             'shipping_street' => $address['street'],
             'shipping_number' => $address['number'],

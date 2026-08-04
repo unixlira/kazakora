@@ -43,18 +43,19 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
 
     public int $timeout = 120;
 
-    /**
-     * Fila própria (não 'default') — isola a nota fiscal do resto (envio,
-     * e-mail, sincronização de estoque), como pedido explicitamente: a nota
-     * pode ficar lenta/travada (SEFAZ fora do ar, certificado ruim) sem
-     * atrasar nada mais na fila. Precisa do worker do homolog escutando
-     * essa fila também (`queue:work --queue=nfe,default`), não só a
-     * default — ver comando no cron do Hostinger.
-     */
-    public string $queue = 'nfe';
-
     public function __construct(public readonly int $orderId)
     {
+        // Fila própria (não 'default') — isola a nota fiscal do resto
+        // (envio, e-mail, sincronização de estoque), como pedido
+        // explicitamente: a nota pode ficar lenta/travada (SEFAZ fora do
+        // ar, certificado ruim) sem atrasar nada mais na fila. Precisa do
+        // worker do homolog escutando essa fila também
+        // (`queue:work --queue=default,nfe`), não só a default — ver
+        // comando no cron do Hostinger. Setado via onQueue() (não uma
+        // redeclaração de $queue) porque o trait Queueable já declara essa
+        // propriedade — redeclarar com valor default diferente é rejeitado
+        // pelo PHP como composição incompatível.
+        $this->onQueue('nfe');
     }
 
     public function uniqueId(): string

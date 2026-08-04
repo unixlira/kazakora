@@ -33,11 +33,17 @@ const TEXT_STYLES = {
     <Head title="Impressões" />
 
     <AdminLayout>
-        <div class="mb-6">
-            <h1 class="mb-1 text-2xl font-bold">Impressões</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Monitoramento dos jobs de impressão consumidos pelo KoraSync (agente nativo). {{ totalGeral }} no total.
-            </p>
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h1 class="mb-1 text-2xl font-bold">Impressões</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    Monitoramento dos jobs de impressão consumidos pelo KoraSync (agente nativo). {{ totalGeral }} no total.
+                </p>
+            </div>
+            <Link href="/admin/impressoes/teste-webhook"
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                Teste Webhook Marketplaces
+            </Link>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

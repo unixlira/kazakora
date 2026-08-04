@@ -17,6 +17,7 @@ use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\PrintJobController;
 use App\Modules\Admin\Http\Controllers\PrintTestController;
+use App\Modules\Admin\Http\Controllers\WebhookTestController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
@@ -294,6 +295,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('impressoes', [PrintJobController::class, 'index'])->name('impressoes.listar');
         Route::get('impressoes/lista', [PrintJobController::class, 'list'])->name('impressoes.lista');
+        Route::get('impressoes/teste-webhook', [WebhookTestController::class, 'create'])->name('impressoes.teste-webhook');
+        Route::post('impressoes/teste-webhook', [WebhookTestController::class, 'store'])->name('impressoes.teste-webhook.armazenar');
 
         Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');
         Route::post('etiquetas-manuais', [ManualLabelController::class, 'store'])->name('etiquetas-manuais.armazenar');

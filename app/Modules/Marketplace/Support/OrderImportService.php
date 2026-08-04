@@ -40,6 +40,20 @@ class OrderImportService
     {
         $data = $this->manager->driver($channel)->importOrder($externalOrderId);
 
+        return $this->importNormalized($channel, $data);
+    }
+
+    /**
+     * Mesmo caminho real do import via webhook (pedido, itens, débito de
+     * estoque, disparo de etiqueta/nota), mas recebendo os dados já
+     * normalizados em vez de buscar via driver — ponto de entrada usado
+     * pela tela de teste de webhook (Admin/Impressoes/TesteWebhook), que
+     * não tem um pedido de verdade em nenhum marketplace pra consultar.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true): Order
+    {
         $existing = Order::query()
             ->where('origin', $channel)
             ->where('external_order_id', $data['external_order_id'])
@@ -52,7 +66,7 @@ class OrderImportService
         }
 
         try {
-            return $this->createOrder($channel, $data);
+            return $this->createOrder($channel, $data, $dispatchShippingConfirmation);
         } catch (QueryException $exception) {
             // Reentrega de webhook quase simultânea pode passar pelo check
             // de existência acima antes do outro processo commitar — o
@@ -74,9 +88,9 @@ class OrderImportService
     /**
      * @param  array<string, mixed>  $data
      */
-    private function createOrder(string $channel, array $data): Order
+    private function createOrder(string $channel, array $data, bool $dispatchShippingConfirmation = true): Order
     {
-        return DB::transaction(function () use ($channel, $data) {
+        return DB::transaction(function () use ($channel, $data, $dispatchShippingConfirmation) {
             $order = Order::create([
                 'user_id' => null,
                 'status' => $data['status'],
@@ -176,7 +190,15 @@ class OrderImportService
             // fiscal segue seu próprio caminho (fila dedicada, ver
             // GenerateInvoiceJob) sem afetar o envio.
             if ($data['status'] === Order::STATUS_PAID) {
-                ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
+                // Desligado pela tela de teste de webhook: o pedido fake não
+                // existe de verdade no canal, então confirmar o envio pela
+                // API real (ConfirmChannelShippingJob -> driver real) só
+                // devolveria erro. O controller de teste simula esse trecho
+                // diretamente em vez de disparar o job real.
+                if ($dispatchShippingConfirmation) {
+                    ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
+                }
+
                 GenerateInvoiceJob::dispatch($order->id)->afterCommit();
             }
 

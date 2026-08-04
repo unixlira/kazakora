@@ -14,6 +14,8 @@ class MarketplaceAccount extends Model
 
     public const CHANNEL_AMAZON = 'amazon';
 
+    public const CHANNEL_SHEIN = 'shein';
+
     public const STATUS_DISCONNECTED = 'disconnected';
 
     public const STATUS_CONNECTED = 'connected';

@@ -36,11 +36,13 @@ class DashboardAgentController extends Controller
         Order::ORIGIN_SHOPEE,
         Order::ORIGIN_TIKTOK_SHOP,
         Order::ORIGIN_AMAZON,
+        Order::ORIGIN_SHEIN,
     ];
 
     public function channels(): JsonResponse
     {
         $today = now()->startOfDay();
+        $monthStart = now()->startOfMonth();
 
         $accounts = MarketplaceAccount::query()->get()->keyBy('channel');
 
@@ -64,7 +66,54 @@ class DashboardAgentController extends Controller
             ->groupBy('orders.origin')
             ->pluck('total', 'orders.origin');
 
-        $channels = collect(self::CHANNELS)->map(function (string $channel) use ($accounts, $lastOrders, $lastPrintedJobs, $printedTodayByChannel) {
+        // Uma query agrupada por métrica em vez de uma por canal — 6 canais
+        // × várias métricas em query separada viraria N+1 real, pesado pra
+        // um endpoint que o KoraSync consulta a cada poucos segundos.
+        $revenueMonthByChannel = Order::query()
+            ->where('created_at', '>=', $monthStart)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, SUM(total) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $revenueTodayByChannel = Order::query()
+            ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, SUM(total) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $salesMonthByChannel = Order::query()
+            ->where('created_at', '>=', $monthStart)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $ordersTodayByChannel = Order::query()
+            ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        // Mesma definição de "devolução" usada em metrics() — pedido com ao
+        // menos um Payment estornado (não existe integração real com
+        // devolução física/reclamação de nenhum marketplace ainda).
+        $returnsMonthByChannel = Order::query()
+            ->whereHas('payments', function ($query) use ($monthStart) {
+                $query->where('status', Payment::STATUS_REFUNDED)
+                    ->where('updated_at', '>=', $monthStart);
+            })
+            ->selectRaw('origin, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $channels = collect(self::CHANNELS)->map(function (string $channel) use (
+            $accounts, $lastOrders, $lastPrintedJobs, $printedTodayByChannel,
+            $revenueMonthByChannel, $revenueTodayByChannel, $salesMonthByChannel,
+            $ordersTodayByChannel, $returnsMonthByChannel,
+        ) {
             $lastOrderId = $lastOrders->get($channel);
             $lastOrder = $lastOrderId ? Order::query()->find($lastOrderId, ['id', 'external_order_id', 'created_at']) : null;
 
@@ -81,6 +130,11 @@ class DashboardAgentController extends Controller
                 ] : null,
                 'last_label_printed_at' => $lastPrintedJobs->get($channel),
                 'labels_printed_today' => (int) ($printedTodayByChannel->get($channel) ?? 0),
+                'revenue_month' => (float) ($revenueMonthByChannel->get($channel) ?? 0),
+                'revenue_today' => (float) ($revenueTodayByChannel->get($channel) ?? 0),
+                'sales_month' => (int) ($salesMonthByChannel->get($channel) ?? 0),
+                'orders_today' => (int) ($ordersTodayByChannel->get($channel) ?? 0),
+                'returns_month' => (int) ($returnsMonthByChannel->get($channel) ?? 0),
             ];
         });
 
@@ -89,10 +143,33 @@ class DashboardAgentController extends Controller
 
     public function metrics(): JsonResponse
     {
-        $today = now()->startOfDay();
+        $now = now();
+        $today = $now->copy()->startOfDay();
+        $yesterday = $today->copy()->subDay();
+        $monthStart = $now->copy()->startOfMonth();
+        // Comparação justa "mês até agora" vs "mesmo trecho do mês
+        // anterior" (não o mês anterior inteiro, que sempre pareceria maior
+        // só por ter mais dias já fechados).
+        $prevMonthStart = $monthStart->copy()->subMonthNoOverflow();
+        $prevMonthToDate = $prevMonthStart->copy()->addDays($now->day - 1)->endOfDay();
 
         $revenueToday = (float) Order::query()
             ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum('total');
+
+        $revenueYesterday = (float) Order::query()
+            ->whereBetween('created_at', [$yesterday, $today])
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum('total');
+
+        $revenueMonth = (float) Order::query()
+            ->where('created_at', '>=', $monthStart)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum('total');
+
+        $revenueMonthPrev = (float) Order::query()
+            ->whereBetween('created_at', [$prevMonthStart, $prevMonthToDate])
             ->whereIn('status', self::PAID_STATUSES)
             ->sum('total');
 
@@ -101,18 +178,31 @@ class DashboardAgentController extends Controller
             ->whereIn('status', self::PAID_STATUSES)
             ->count();
 
+        $salesYesterday = Order::query()
+            ->whereBetween('created_at', [$yesterday, $today])
+            ->whereIn('status', self::PAID_STATUSES)
+            ->count();
+
         $cancelledToday = Order::query()
             ->where('status', Order::STATUS_CANCELLED)
             ->where('updated_at', '>=', $today)
             ->count();
 
-        // "Reembolsadas" vem do status do Payment, não existe status de
-        // reembolso no Order em si — contamos pedidos distintos com pelo
-        // menos um pagamento marcado como refunded hoje.
+        // "Reembolsadas"/"devoluções" vem do status do Payment, não existe
+        // status de devolução física no Order em si (nenhum marketplace tem
+        // integração de reclamação/devolução real aqui ainda) — contamos
+        // pedidos distintos com pelo menos um pagamento estornado.
         $refundedToday = Order::query()
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('status', Payment::STATUS_REFUNDED)
                     ->where('updated_at', '>=', $today);
+            })
+            ->count();
+
+        $returnsMonth = Order::query()
+            ->whereHas('payments', function ($query) use ($monthStart) {
+                $query->where('status', Payment::STATUS_REFUNDED)
+                    ->where('updated_at', '>=', $monthStart);
             })
             ->count();
 
@@ -149,7 +239,28 @@ class DashboardAgentController extends Controller
             'refunded_today' => $refundedToday,
             'cart_items_count' => $cartItemsCount,
             'net_profit_today' => $netProfitToday,
+            'revenue_month' => $revenueMonth,
+            'revenue_month_variation_pct' => $this->variationPct($revenueMonth, $revenueMonthPrev),
+            'revenue_today_variation_pct' => $this->variationPct($revenueToday, $revenueYesterday),
+            'sales_today_variation_pct' => $this->variationPct($salesToday, $salesYesterday),
+            'returns_month' => $returnsMonth,
+            'month_label' => $now->translatedFormat('F'),
+            'today_label' => $now->format('d/m/Y'),
         ]);
+    }
+
+    /**
+     * null quando não há base de comparação (ex: mês anterior sem nenhuma
+     * venda) — o cliente decide como exibir "sem dado" em vez de receber um
+     * 0% ou um Infinity mascarado de 0.
+     */
+    private function variationPct(float $current, float $previous): ?float
+    {
+        if ($previous <= 0.0) {
+            return null;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
     }
 
     public function channelOrders(Request $request, string $channel): JsonResponse
@@ -199,5 +310,39 @@ class DashboardAgentController extends Controller
         });
 
         return response()->json(['orders' => $result]);
+    }
+
+    /**
+     * Listagem read-only pra dashboard (KoraSync) mostrar produto/SKU/pedido
+     * por etiqueta — separado de propósito do índice usado pelo próprio
+     * agente de impressão (PrintAgentController::index(), só QUEUED, campos
+     * mínimos, é o loop de trabalho real). Aqui é histórico recente de
+     * qualquer status, só pra exibição.
+     */
+    public function labels(): JsonResponse
+    {
+        $jobs = PrintJob::query()
+            ->with(['order:id,external_order_id', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
+            ->latest('id')
+            ->limit(50)
+            ->get(['id', 'order_id', 'channel', 'status', 'error_message', 'created_at', 'printed_at']);
+
+        $result = $jobs->map(fn (PrintJob $job) => [
+            'id' => $job->id,
+            'channel' => $job->channel,
+            'order_id' => $job->order_id,
+            'external_order_id' => $job->order?->external_order_id,
+            'products' => $job->order?->items->map(fn ($item) => [
+                'name' => $item->product_name,
+                'quantity' => $item->quantity,
+                'sku' => $item->product?->sku,
+            ]) ?? [],
+            'status' => $job->status,
+            'error_message' => $job->error_message,
+            'created_at' => $job->created_at,
+            'printed_at' => $job->printed_at,
+        ]);
+
+        return response()->json(['labels' => $result]);
     }
 }

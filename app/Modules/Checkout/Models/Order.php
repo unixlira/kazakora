@@ -44,6 +44,8 @@ class Order extends Model
 
     public const ORIGIN_AMAZON = MarketplaceAccount::CHANNEL_AMAZON;
 
+    public const ORIGIN_SHEIN = MarketplaceAccount::CHANNEL_SHEIN;
+
     protected $fillable = [
         'user_id',
         'status',

@@ -17,6 +17,7 @@ use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\PrintJobController;
 use App\Modules\Admin\Http\Controllers\PrintTestController;
+use App\Modules\Admin\Http\Controllers\WebhookLogController;
 use App\Modules\Admin\Http\Controllers\WebhookTestController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
@@ -289,6 +290,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('integracoes', [IntegrationController::class, 'index'])->name('integracoes.listar');
         Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');
+
+        Route::get('integracoes/webhooks', [WebhookLogController::class, 'index'])->name('integracoes.webhooks');
 
         Route::get('integracoes/teste-impressao', [PrintTestController::class, 'index'])->name('integracoes.teste-impressao');
         Route::post('integracoes/teste-impressao', [PrintTestController::class, 'store'])->name('integracoes.teste-impressao.armazenar');

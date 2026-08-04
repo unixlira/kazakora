@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessMercadoLivreWebhook;
+use App\Modules\Marketplace\Models\ChannelWebhookLog;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
 use App\Services\MercadoLivre\MercadoLivreAuthService;
 use Illuminate\Http\JsonResponse;
@@ -39,15 +41,33 @@ class MercadoLivreController extends Controller
         );
     }
 
+    /**
+     * Igual ao padrão já usado no ShopeeController::webhook() —
+     * ChannelWebhookLog dá visibilidade real (consultável, ver
+     * WebhookLogController) de "recebemos o webhook ou não", em vez de só
+     * um log de arquivo que só dá pra ver via SSH. Mercado Livre não tem
+     * mecanismo de assinatura documentado/implementado aqui (diferente da
+     * Shopee, HMAC) — signature_valid fica sempre true, só existe pra
+     * manter o schema consistente entre canais.
+     */
     public function webhook(Request $request): JsonResponse
     {
         $payload = $request->all();
 
         Log::channel(config('mercadolivre.log_channel'))->info('mercadolivre.webhook.raw', $payload);
 
+        $log = ChannelWebhookLog::create([
+            'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'event_type' => $payload['topic'] ?? null,
+            'payload' => $payload,
+            'headers' => $request->headers->all(),
+            'signature_valid' => true,
+            'status' => ChannelWebhookLog::STATUS_RECEIVED,
+        ]);
+
         // Acknowledge immediately — Mercado Livre expects a fast 200 and
         // retries/blocks the app's webhook URL if it doesn't get one.
-        ProcessMercadoLivreWebhook::dispatch($payload);
+        ProcessMercadoLivreWebhook::dispatch($payload, $log->id);
 
         return response()->json(['status' => 'received']);
     }

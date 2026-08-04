@@ -21,13 +21,13 @@ class ProcessMercadoLivreWebhook implements ShouldQueue
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function __construct(public readonly array $payload)
+    public function __construct(public readonly array $payload, public readonly int $webhookLogId)
     {
         $this->onQueue(config('mercadolivre.queue'));
     }
 
     public function handle(WebhookHandler $handler): void
     {
-        $handler->handle($this->payload);
+        $handler->handle($this->payload, $this->webhookLogId);
     }
 }

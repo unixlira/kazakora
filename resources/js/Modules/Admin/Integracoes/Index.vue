@@ -28,10 +28,16 @@ const disconnect = async (integration) => {
                 <h1 class="mb-1 text-2xl font-bold">Integrações</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Marketplaces conectados à loja.</p>
             </div>
-            <Link href="/admin/integracoes/teste-impressao"
-                class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary">
-                Testar impressão de etiquetas
-            </Link>
+            <div class="flex flex-wrap gap-2">
+                <Link href="/admin/integracoes/webhooks"
+                    class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary">
+                    Logs de webhook
+                </Link>
+                <Link href="/admin/integracoes/teste-impressao"
+                    class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary">
+                    Testar impressão de etiquetas
+                </Link>
+            </div>
         </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">

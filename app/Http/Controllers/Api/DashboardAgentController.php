@@ -322,6 +322,11 @@ class DashboardAgentController extends Controller
     public function labels(): JsonResponse
     {
         $jobs = PrintJob::query()
+            // Etiqueta de agradecimento (gerada junto com toda etiqueta
+            // manual, ver ManualLabelController) não é um dado operacional
+            // de pedido — não deve aparecer nessa lista, mesmo filtro já
+            // usado na listagem de Etiquetas Manuais.
+            ->where('is_thank_you', false)
             ->with(['order:id,external_order_id,origin', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
             ->latest('id')
             ->limit(50)

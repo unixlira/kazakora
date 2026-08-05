@@ -1,6 +1,7 @@
 <script setup>
 import InputError from '@/Shared/Components/InputError.vue';
 import { ref, watch } from 'vue';
+import { useSkuPreview } from '@/Shared/useSkuPreview';
 
 const props = defineProps({
     form: {
@@ -27,6 +28,43 @@ watch(discountType, (type) => {
     if (type !== 'percentage') props.form.discount_percentage = null;
     if (type !== 'amount') props.form.discount_amount = null;
 });
+
+// Prévia automática do SKU: dispara depois que o usuário para de digitar
+// (debounce) em qualquer campo que alimenta o gerador (categoria, nome,
+// marca, modelo, cor, variação). Um produto que já chegou do servidor COM
+// sku (tela de edição) nunca entra aqui — SkuGeneratorService nunca
+// regenera um SKU existente (ver ProductController::update()), então
+// ficar reescrevendo o campo ali seria mentira (não é o que vai ser
+// salvo). Já num produto novo (sku começa vazio), a prévia é recalculada
+// a cada mudança até o usuário salvar de vez.
+const hadSkuOnLoad = Boolean(props.form.sku);
+const { loading: skuLoading, preview: previewSku } = useSkuPreview();
+let skuDebounceTimer = null;
+
+watch(
+    () => [props.form.category_id, props.form.name, props.form.brand, props.form.model, props.form.color, props.form.variation],
+    () => {
+        if (hadSkuOnLoad) {
+            return;
+        }
+
+        clearTimeout(skuDebounceTimer);
+        skuDebounceTimer = setTimeout(async () => {
+            const result = await previewSku({
+                category_id: props.form.category_id,
+                name: props.form.name,
+                brand: props.form.brand,
+                model: props.form.model,
+                color: props.form.color,
+                variation: props.form.variation,
+            });
+
+            if (result) {
+                props.form.sku = result.toUpperCase();
+            }
+        }, 600);
+    },
+);
 </script>
 
 <template>
@@ -41,21 +79,6 @@ watch(discountType, (type) => {
                 class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
             >
             <InputError :message="form.errors.name" />
-        </div>
-
-        <div v-if="form.sku !== undefined">
-            <label for="sku" class="block text-sm font-medium">SKU</label>
-            <input
-                id="sku"
-                name="sku"
-                type="text"
-                :value="form.sku || 'Gerado automaticamente ao salvar'"
-                readonly
-                class="mt-1 w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500"
-            >
-            <p class="mt-1 text-xs text-gray-400">
-                Gerado automaticamente a partir de categoria, nome, marca, modelo, cor e variação. Não pode ser editado.
-            </p>
         </div>
 
         <div>
@@ -116,6 +139,24 @@ watch(discountType, (type) => {
                 >
                 <InputError :message="form.errors.variation" />
             </div>
+        </div>
+
+        <div v-if="form.sku !== undefined">
+            <label for="sku" class="block text-sm font-medium">SKU</label>
+            <div class="relative mt-1">
+                <input
+                    id="sku"
+                    name="sku"
+                    type="text"
+                    :value="skuLoading ? 'Gerando...' : (form.sku || 'Preencha os campos acima para gerar')"
+                    disabled
+                    class="w-full rounded border border-warning bg-lightwarning px-3 py-2 pr-9 text-warning-emphasis disabled:cursor-not-allowed"
+                >
+                <i v-if="skuLoading" class="fas fa-spinner fa-spin absolute right-3 top-1/2 -translate-y-1/2 text-warning-emphasis"></i>
+            </div>
+            <p class="mt-1 text-xs text-gray-400">
+                Gerado automaticamente a partir de categoria, nome, marca, modelo, cor e variação, em caixa alta. Não pode ser editado.
+            </p>
         </div>
 
         <div>

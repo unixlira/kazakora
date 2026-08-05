@@ -10,6 +10,7 @@ use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Services\SkuGeneratorService;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -37,6 +38,35 @@ class ProductController extends Controller
     {
         return Inertia::render('Admin/Products/Create', [
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * Prévia do SKU em tempo real, chamada pelo front (ProductForm.vue)
+     * assim que o usuário para de digitar categoria/nome/marca/modelo/cor/
+     * variação — mesmo SkuGeneratorService::generate() usado de verdade em
+     * store()/update(), só que sem criar nada no banco (não reserva o
+     * número de sequência: um "PROD-0007" mostrado aqui pode não ser o
+     * SKU final se outro produto for salvo primeiro, o real só é fixado
+     * ao salvar de verdade — igual ao próprio texto do campo já avisa).
+     */
+    public function previewSku(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'brand' => ['nullable', 'string', 'max:100'],
+            'model' => ['nullable', 'string', 'max:100'],
+            'color' => ['nullable', 'string', 'max:100'],
+            'variation' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $category = $validated['category_id'] ?? null
+            ? Category::query()->find($validated['category_id'])
+            : null;
+
+        return response()->json([
+            'sku' => $this->skuGenerator->generate($this->skuPayload($validated, $category?->name)),
         ]);
     }
 

@@ -128,6 +128,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
 
+    Route::post('produtos/sku-preview', [ProductController::class, 'previewSku'])
+        ->name('produtos.sku-preview')
+        ->middleware('permission:cadastros.create');
+
     Route::resource('categorias', CategoryController::class)->except('show')
         ->parameters(['categorias' => 'category'])
         ->names([

@@ -189,7 +189,7 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
                     <div class="border-b border-[var(--surface-border)] px-4 py-4">
                         <h3 class="text-lg font-semibold">Visitas</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 14 dias</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 3 meses</p>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="line" :data="visitsChartData" />
@@ -201,7 +201,7 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
                     <div class="border-b border-[var(--surface-border)] px-4 py-4">
                         <h3 class="text-lg font-semibold">Faturamento diário</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 14 dias</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 3 meses</p>
                     </div>
                     <div class="p-4">
                         <ChartCanvas type="bar" :data="revenueChartData" />

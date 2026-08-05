@@ -109,7 +109,7 @@ class DashboardController extends Controller
 
     private function visitsSeries(): array
     {
-        $start = Carbon::today()->subDays(13);
+        $start = Carbon::today()->subMonths(3);
 
         $views = SiteVisit::query()
             ->selectRaw('DATE(created_at) as date, COUNT(*) as total')
@@ -133,7 +133,7 @@ class DashboardController extends Controller
 
     private function revenueSeries(): array
     {
-        $start = Carbon::today()->subDays(13);
+        $start = Carbon::today()->subMonths(3);
 
         $rows = Order::query()
             ->selectRaw('DATE(created_at) as date, SUM(total) as total')

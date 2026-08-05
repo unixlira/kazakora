@@ -65,38 +65,36 @@ const destroy = async (job) => {
             <table class="w-full text-left text-sm">
                 <thead class="border-b border-[var(--surface-border)] text-xs uppercase text-slate-400">
                     <tr>
-                        <th class="px-4 py-3">Job</th>
-                        <th class="px-4 py-3">Canal</th>
-                        <th class="px-4 py-3">Pedido</th>
+                        <th class="px-4 py-3">Canal / Pedido</th>
                         <th class="px-4 py-3">Status</th>
-                        <th class="px-4 py-3">Criado em</th>
-                        <th class="px-4 py-3">Capturado em</th>
-                        <th class="px-4 py-3">Impresso em</th>
+                        <th class="px-4 py-3">Criado / Capturado / Impresso</th>
                         <th class="px-4 py-3">Detalhes</th>
                         <th class="px-4 py-3 text-right">Ações</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--surface-border)]">
                     <tr v-for="job in props.jobs.data" :key="job.id" class="hover:bg-[var(--surface-muted)]/50">
-                        <td class="px-4 py-3 font-medium">#{{ job.id }}</td>
                         <td class="px-4 py-3">
-                            <span class="inline-flex items-center gap-1.5">
+                            <span class="inline-flex items-center gap-1.5 font-medium">
                                 <i :class="job.channelIcon" class="text-slate-400"></i>
                                 {{ job.channel ?? '—' }}
                             </span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <div>Pedido #{{ job.orderId }}</div>
-                            <div v-if="job.saleId" class="text-xs text-slate-400">ID venda: {{ job.saleId }}</div>
+                            <div class="text-xs text-slate-400">
+                                <span v-if="job.orderId">Pedido #{{ job.orderId }}</span>
+                                <span v-else>Sem pedido vinculado</span>
+                                <span v-if="job.saleId"> · ID venda: {{ job.saleId }}</span>
+                            </div>
                         </td>
                         <td class="px-4 py-3">
                             <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium" :class="BADGE_STYLES[job.statusColor]">
                                 {{ job.statusLabel }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-slate-500">{{ job.createdAt ?? '—' }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ job.claimedAt ?? '—' }}</td>
-                        <td class="px-4 py-3 text-slate-500">{{ job.printedAt ?? '—' }}</td>
+                        <td class="space-y-0.5 px-4 py-3 text-xs text-slate-500">
+                            <div>Criado: {{ job.createdAt ?? '—' }}</div>
+                            <div>Capturado: {{ job.claimedAt ?? '—' }}</div>
+                            <div>Impresso: {{ job.printedAt ?? '—' }}</div>
+                        </td>
                         <td class="px-4 py-3 text-slate-500">
                             <span v-if="job.errorMessage" class="text-error" :title="job.errorMessage">
                                 <i class="fas fa-circle-exclamation"></i> {{ job.errorMessage }}
@@ -113,7 +111,7 @@ const destroy = async (job) => {
                     </tr>
 
                     <tr v-if="props.jobs.data.length === 0">
-                        <td colspan="9" class="px-4 py-10 text-center text-slate-400">Nenhuma impressão encontrada.</td>
+                        <td colspan="5" class="px-4 py-10 text-center text-slate-400">Nenhuma impressão encontrada.</td>
                     </tr>
                 </tbody>
             </table>

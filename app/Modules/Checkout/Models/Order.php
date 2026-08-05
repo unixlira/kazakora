@@ -7,6 +7,7 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -124,6 +125,11 @@ class Order extends Model
     public function channelShipment(): HasOne
     {
         return $this->hasOne(ChannelShipment::class);
+    }
+
+    public function channelFee(): HasOne
+    {
+        return $this->hasOne(OrderChannelFee::class);
     }
 
     public function fulfillmentEvents(): HasMany

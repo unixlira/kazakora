@@ -58,6 +58,12 @@ const disconnect = async (integration) => {
                     Conta: {{ integration.accountLabel }}
                 </p>
 
+                <div v-if="integration.connected && integration.channel === 'mercado_livre'" class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <Link href="/admin/integracoes/mercado-livre/vendas" class="text-primary hover:underline">Vendas</Link>
+                    <Link href="/admin/integracoes/mercado-livre/anuncios" class="text-primary hover:underline">Anúncios</Link>
+                    <Link href="/admin/integracoes/mercado-livre/envios" class="text-primary hover:underline">Tipos de envio</Link>
+                </div>
+
                 <div class="mt-4">
                     <a v-if="!integration.connected && integration.available" :href="integration.connectHref"
                         class="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">

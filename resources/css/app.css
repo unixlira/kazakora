@@ -86,6 +86,20 @@
     --color-lightinfo: color-mix(in oklab, var(--color-info) 20%, transparent);
 }
 
+/*
+ * <select>/<option> não herdam bem cor/fundo customizados no popup nativo
+ * do navegador — o box fechado respeitava bg-[var(--surface)] certinho,
+ * mas a lista aberta caía no branco padrão do SO com texto claro por cima
+ * (herdado do dark mode), ficando ilegível. Bug real reportado pelo
+ * usuário 2026-08-05. Fallback hex igual ao valor de .dark .admin-shell
+ * acima, caso a variável não cascate até o popup em algum navegador.
+ */
+.dark select,
+.dark select option {
+    background-color: var(--surface, #1e293b);
+    color: var(--surface-foreground, #e2e8f0);
+}
+
 @media (prefers-color-scheme: dark) {
     .storefront-shell {
         --color-store-bg: #0c1420;

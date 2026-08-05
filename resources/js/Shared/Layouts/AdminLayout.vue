@@ -239,12 +239,16 @@ watch(
                 </div>
             </nav>
 
-            <div class="mx-auto mt-4 w-full max-w-[1600px] p-4 pb-16 md:p-6">
+            <div class="mx-auto mt-4 w-full max-w-[1600px] p-4 md:p-6">
                 <slot />
             </div>
 
-            <footer class="fixed inset-x-0 bottom-0 z-10 border-t border-[var(--surface-border)] bg-[var(--surface)] transition-all"
-                :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
+            <!-- Rodapé no fluxo normal da página (não mais fixed) — fixo
+            cobria o final do conteúdo real em telas com bastante coisa
+            (tabelas grandes, formulários longos), dando a impressão de que
+            o scroll nunca "chegava no final". Bug real reportado pelo
+            usuário 2026-08-05. -->
+            <footer class="border-t border-[var(--surface-border)] bg-[var(--surface)]">
                 <div class="px-4 py-3 text-center text-sm text-slate-500 md:px-10">
                     © 2026 KazaKora · CNPJ: 65.604.590/0001-07
                 </div>

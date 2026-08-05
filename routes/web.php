@@ -296,6 +296,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');
 
         Route::get('integracoes/webhooks', [WebhookLogController::class, 'index'])->name('integracoes.webhooks');
+        Route::post('integracoes/webhooks/{channel_webhook_log}/reprocessar', [WebhookLogController::class, 'reprocess'])->name('integracoes.webhooks.reprocessar');
 
         Route::get('integracoes/mercado-livre/vendas', [MercadoLivreSalesController::class, 'index'])->name('integracoes.mercado-livre.vendas');
         Route::get('integracoes/mercado-livre/anuncios', [MercadoLivreListingsController::class, 'index'])->name('integracoes.mercado-livre.anuncios');

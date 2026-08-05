@@ -8,6 +8,13 @@ const props = defineProps({
     integrations: { type: Array, default: () => [] },
 });
 
+const mercadoLivreTabs = [
+    { label: 'Vendas', href: '/admin/integracoes/mercado-livre/vendas' },
+    { label: 'Anúncios', href: '/admin/integracoes/mercado-livre/anuncios' },
+    { label: 'Tipos de envio', href: '/admin/integracoes/mercado-livre/envios' },
+    { label: 'Devoluções', href: '/admin/integracoes/mercado-livre/devolucoes' },
+];
+
 const disconnect = async (integration) => {
     if (await confirmDelete({
         title: `Desconectar ${integration.name}?`,
@@ -58,10 +65,11 @@ const disconnect = async (integration) => {
                     Conta: {{ integration.accountLabel }}
                 </p>
 
-                <div v-if="integration.connected && integration.channel === 'mercado_livre'" class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                    <Link href="/admin/integracoes/mercado-livre/vendas" class="text-primary hover:underline">Vendas</Link>
-                    <Link href="/admin/integracoes/mercado-livre/anuncios" class="text-primary hover:underline">Anúncios</Link>
-                    <Link href="/admin/integracoes/mercado-livre/envios" class="text-primary hover:underline">Tipos de envio</Link>
+                <div v-if="integration.connected && integration.channel === 'mercado_livre'" class="mt-3 flex flex-wrap gap-1.5">
+                    <Link v-for="tab in mercadoLivreTabs" :key="tab.href" :href="tab.href"
+                        class="rounded-full bg-lightprimary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary hover:text-white">
+                        {{ tab.label }}
+                    </Link>
                 </div>
 
                 <div class="mt-4">

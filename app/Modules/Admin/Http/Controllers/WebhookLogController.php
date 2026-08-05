@@ -5,16 +5,22 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\ChannelWebhookLog;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Services\MercadoLivre\Webhooks\WebhookHandler;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 /**
  * Visibilidade real de "recebemos o webhook ou não" de cada marketplace —
- * antes só dava pra ver via log de arquivo (SSH). Read-only, não altera
- * nada — ChannelWebhookLog é escrito pelos controllers de webhook de cada
- * canal (MercadoLivreController, ShopeeController) e atualizado pelos
- * respectivos WebhookHandler conforme o processamento avança.
+ * antes só dava pra ver via log de arquivo (SSH). index() é read-only, não
+ * altera nada. reprocess() é a exceção deliberada: existe especificamente
+ * pra webhooks que ficaram "ignorado" antes de um tópico passar a ser
+ * tratado (caso real: post_purchase virou suportado só em 2026-08-05,
+ * vários chegaram e ficaram ignorados nas horas antes do deploy) — reroda
+ * o mesmo payload já salvo contra o WebhookHandler atual, sem precisar o
+ * Mercado Livre reenviar nada.
  */
 class WebhookLogController extends Controller
 {
@@ -57,5 +63,20 @@ class WebhookLogController extends Controller
             ],
             'filters' => $request->only('channel', 'status'),
         ]);
+    }
+
+    public function reprocess(ChannelWebhookLog $channel_webhook_log, WebhookHandler $handler): RedirectResponse
+    {
+        if ($channel_webhook_log->channel !== MarketplaceAccount::CHANNEL_MERCADO_LIVRE) {
+            return back()->with('error', 'Reprocessamento manual só existe pro Mercado Livre por enquanto.');
+        }
+
+        try {
+            $handler->handle($channel_webhook_log->payload ?? [], $channel_webhook_log->id);
+        } catch (Throwable $exception) {
+            return back()->with('error', "Falha ao reprocessar: {$exception->getMessage()}");
+        }
+
+        return back()->with('success', 'Webhook reprocessado — confira o status atualizado abaixo.');
     }
 }

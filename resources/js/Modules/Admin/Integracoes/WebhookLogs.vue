@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { confirmDelete } from '@/Shared/notify';
 import { ref } from 'vue';
 
 const props = defineProps({
@@ -31,6 +32,18 @@ const applyFilters = () => {
 const expandedId = ref(null);
 const toggleExpand = (id) => {
     expandedId.value = expandedId.value === id ? null : id;
+};
+
+const canReprocess = (log) => log.channel === 'Mercado Livre' && ['ignored', 'failed'].includes(log.status);
+
+const reprocess = async (log) => {
+    if (await confirmDelete({
+        title: 'Reprocessar esse webhook?',
+        text: 'Roda o payload já salvo de novo contra o processamento atual — útil quando o tópico não era tratado na hora que chegou.',
+        confirmButtonText: 'Sim, reprocessar',
+    })) {
+        router.post(`/admin/integracoes/webhooks/${log.id}/reprocessar`, {}, { preserveScroll: true });
+    }
 };
 </script>
 
@@ -88,6 +101,11 @@ const toggleExpand = (id) => {
                             <td colspan="5" class="bg-[var(--surface-muted)]/30 px-4 py-4">
                                 <p v-if="log.errorMessage" class="mb-2 text-sm text-error">{{ log.errorMessage }}</p>
                                 <pre class="max-h-96 overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100">{{ JSON.stringify(log.payload, null, 2) }}</pre>
+                                <button v-if="canReprocess(log)" type="button"
+                                    class="mt-3 rounded-lg border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-lightprimary"
+                                    @click.stop="reprocess(log)">
+                                    Reprocessar
+                                </button>
                             </td>
                         </tr>
                     </template>

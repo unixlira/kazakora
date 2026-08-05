@@ -3,6 +3,7 @@
 namespace Tests\Feature\MercadoLivre;
 
 use App\Jobs\ProcessMercadoLivreWebhook;
+use App\Modules\Marketplace\Jobs\PokeMercadoLivreLabelChecksJob;
 use App\Modules\Marketplace\Models\ChannelWebhookLog;
 use App\Services\MercadoLivre\Services\MessageService;
 use App\Services\MercadoLivre\Services\OrderService;
@@ -47,6 +48,21 @@ class WebhookTest extends TestCase
             ProcessMercadoLivreWebhook::class,
             fn (ProcessMercadoLivreWebhook $job) => $job->payload['topic'] === 'orders' && $job->webhookLogId === $log->id,
         );
+
+        // Pedido 2026-08-05: QUALQUER webhook (mesmo um tópico que o
+        // WebhookHandler vai ignorar) precisa "cutucar" a reconferência de
+        // etiquetas pendentes, não só orders/shipments.
+        Queue::assertPushed(PokeMercadoLivreLabelChecksJob::class);
+    }
+
+    public function test_webhook_endpoint_pokes_label_checks_even_for_a_topic_the_handler_ignores(): void
+    {
+        Queue::fake();
+
+        $this->postJson('/api/mercadolivre/webhook', ['topic' => 'payments', 'resource' => '/payments/1'])
+            ->assertOk();
+
+        Queue::assertPushed(PokeMercadoLivreLabelChecksJob::class);
     }
 
     public function test_webhook_handler_dispatches_orders_topic_and_marks_log_processed(): void

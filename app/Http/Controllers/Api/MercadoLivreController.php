@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessMercadoLivreWebhook;
+use App\Modules\Marketplace\Jobs\PokeMercadoLivreLabelChecksJob;
 use App\Modules\Marketplace\Models\ChannelWebhookLog;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
@@ -68,6 +69,15 @@ class MercadoLivreController extends Controller
         // Acknowledge immediately — Mercado Livre expects a fast 200 and
         // retries/blocks the app's webhook URL if it doesn't get one.
         ProcessMercadoLivreWebhook::dispatch($payload, $log->id);
+
+        // Pedido explícito do usuário 2026-08-05: qualquer webhook do
+        // Mercado Livre (não só orders_v2/shipments) serve de "empurrão"
+        // pra reconferir etiquetas pendentes — em vez de depender só do
+        // cron de polling. Fica de fora do topic-filter do WebhookHandler
+        // de propósito (aquele ignora tópicos não tratados; este dispara
+        // pra QUALQUER um, igual pedido). Só mais um push de fila, não
+        // atrasa o ack — mesmo custo do dispatch acima.
+        PokeMercadoLivreLabelChecksJob::dispatch();
 
         return response()->json(['status' => 'received']);
     }

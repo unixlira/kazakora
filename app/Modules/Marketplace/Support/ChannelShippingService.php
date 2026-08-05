@@ -6,6 +6,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use Throwable;
 
@@ -48,6 +49,15 @@ class ChannelShippingService
         ]);
 
         $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_SUCCESS, "Método: {$result['shipping_method']}");
+
+        // Dispara o retry orientado a evento assim que o envio existe do
+        // lado do canal — não espera o próximo webhook nem um ciclo de
+        // polling. Só Mercado Livre por enquanto: Shopee/TikTok ainda não
+        // têm fetchLabel() implementado (stub), disparar aqui só geraria
+        // falha garantida após 4h de tentativas inúteis.
+        if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
+            CheckShipmentLabelJob::dispatch($shipment->id)->afterCommit();
+        }
 
         return $shipment;
     }

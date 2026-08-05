@@ -5,6 +5,7 @@ namespace Tests\Feature\MercadoLivre;
 use App\Jobs\ProcessMercadoLivreWebhook;
 use App\Modules\Marketplace\Jobs\PokeMercadoLivreLabelChecksJob;
 use App\Modules\Marketplace\Models\ChannelWebhookLog;
+use App\Services\MercadoLivre\Services\ClaimService;
 use App\Services\MercadoLivre\Services\MessageService;
 use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
@@ -77,9 +78,27 @@ class WebhookTest extends TestCase
 
         $messages = Mockery::mock(MessageService::class);
         $shipments = Mockery::mock(ShipmentService::class);
+        $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
         $handler->handle(['topic' => 'orders'], $log->id);
+
+        $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
+    }
+
+    public function test_webhook_handler_dispatches_post_purchase_topic_to_claim_service(): void
+    {
+        $log = ChannelWebhookLog::create(['channel' => 'mercado_livre', 'event_type' => 'post_purchase', 'status' => ChannelWebhookLog::STATUS_RECEIVED]);
+
+        $orders = Mockery::mock(OrderService::class);
+        $products = Mockery::mock(ProductService::class);
+        $messages = Mockery::mock(MessageService::class);
+        $shipments = Mockery::mock(ShipmentService::class);
+        $claims = Mockery::mock(ClaimService::class);
+        $claims->shouldReceive('processWebhook')->once()->with(['topic' => 'post_purchase']);
+
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
+        $handler->handle(['topic' => 'post_purchase'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
     }
@@ -95,8 +114,9 @@ class WebhookTest extends TestCase
 
         $messages = Mockery::mock(MessageService::class);
         $shipments = Mockery::mock(ShipmentService::class);
+        $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
         $handler->handle(['topic' => 'prices'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_PROCESSED, $log->fresh()->status);
@@ -110,8 +130,9 @@ class WebhookTest extends TestCase
         $products = Mockery::mock(ProductService::class);
         $messages = Mockery::mock(MessageService::class);
         $shipments = Mockery::mock(ShipmentService::class);
+        $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
         $handler->handle(['topic' => 'unknown_topic'], $log->id);
 
         $this->assertSame(ChannelWebhookLog::STATUS_IGNORED, $log->fresh()->status);
@@ -127,8 +148,9 @@ class WebhookTest extends TestCase
         $products = Mockery::mock(ProductService::class);
         $messages = Mockery::mock(MessageService::class);
         $shipments = Mockery::mock(ShipmentService::class);
+        $claims = Mockery::mock(ClaimService::class);
 
-        $handler = new WebhookHandler($orders, $products, $messages, $shipments);
+        $handler = new WebhookHandler($orders, $products, $messages, $shipments, $claims);
 
         $this->expectException(RuntimeException::class);
 

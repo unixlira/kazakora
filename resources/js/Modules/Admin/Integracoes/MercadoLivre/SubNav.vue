@@ -7,6 +7,7 @@ const tabs = [
     { label: 'Vendas', href: '/admin/integracoes/mercado-livre/vendas' },
     { label: 'Anúncios', href: '/admin/integracoes/mercado-livre/anuncios' },
     { label: 'Tipos de envio', href: '/admin/integracoes/mercado-livre/envios' },
+    { label: 'Devoluções', href: '/admin/integracoes/mercado-livre/devolucoes' },
 ];
 
 const isActive = (href) => page.url.startsWith(href);

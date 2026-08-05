@@ -10,6 +10,7 @@ use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
+use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreSalesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
@@ -299,6 +300,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('integracoes/mercado-livre/vendas', [MercadoLivreSalesController::class, 'index'])->name('integracoes.mercado-livre.vendas');
         Route::get('integracoes/mercado-livre/anuncios', [MercadoLivreListingsController::class, 'index'])->name('integracoes.mercado-livre.anuncios');
         Route::get('integracoes/mercado-livre/envios', [MercadoLivreShippingController::class, 'index'])->name('integracoes.mercado-livre.envios');
+        Route::get('integracoes/mercado-livre/devolucoes', [MercadoLivreClaimsController::class, 'index'])->name('integracoes.mercado-livre.devolucoes');
+        Route::post('integracoes/mercado-livre/devolucoes/{marketplace_claim}/reverter-estoque', [MercadoLivreClaimsController::class, 'revertStock'])->name('integracoes.mercado-livre.devolucoes.reverter-estoque');
 
         Route::get('integracoes/teste-impressao', [PrintTestController::class, 'index'])->name('integracoes.teste-impressao');
         Route::post('integracoes/teste-impressao', [PrintTestController::class, 'store'])->name('integracoes.teste-impressao.armazenar');

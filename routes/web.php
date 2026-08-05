@@ -311,6 +311,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('impressoes/lista', [PrintJobController::class, 'list'])->name('impressoes.lista');
         Route::get('impressoes/teste-webhook', [WebhookTestController::class, 'create'])->name('impressoes.teste-webhook');
         Route::post('impressoes/teste-webhook', [WebhookTestController::class, 'store'])->name('impressoes.teste-webhook.armazenar');
+        Route::get('impressoes/{print_job}', [PrintJobController::class, 'show'])->name('impressoes.ver');
+        Route::get('impressoes/{print_job}/pdf', [PrintJobController::class, 'pdf'])->name('impressoes.pdf');
+        Route::delete('impressoes/{print_job}', [PrintJobController::class, 'destroy'])->name('impressoes.excluir');
 
         Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');
         Route::post('etiquetas-manuais', [ManualLabelController::class, 'store'])->name('etiquetas-manuais.armazenar');

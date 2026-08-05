@@ -5,7 +5,10 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -93,5 +96,55 @@ class PrintJobController extends Controller
             'statusFilter' => $validated['status'] ?? null,
             'statusOptions' => collect(self::STATUS_META)->map(fn ($meta, $status) => ['value' => $status, 'label' => $meta['label']])->values(),
         ]);
+    }
+
+    public function show(PrintJob $printJob): Response
+    {
+        $printJob->load('order:id,origin,external_order_id,shipping_name');
+
+        return Inertia::render('Admin/Impressoes/Show', [
+            'job' => [
+                'id' => $printJob->id,
+                'orderId' => $printJob->order_id,
+                'saleId' => $printJob->order?->external_order_id,
+                'shippingName' => $printJob->order?->shipping_name,
+                'channel' => self::CHANNEL_LABELS[$printJob->order?->origin] ?? $printJob->order?->origin,
+                'channelIcon' => self::CHANNEL_ICONS[$printJob->order?->origin] ?? 'fas fa-shop',
+                'status' => $printJob->status,
+                'statusLabel' => self::STATUS_META[$printJob->status]['label'] ?? $printJob->status,
+                'statusColor' => self::STATUS_META[$printJob->status]['color'] ?? 'slate',
+                'claimedBy' => $printJob->claimed_by,
+                'errorMessage' => $printJob->error_message,
+                'createdAt' => $printJob->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i:s'),
+                'claimedAt' => $printJob->claimed_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i:s'),
+                'printedAt' => $printJob->printed_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i:s'),
+                'hasLabelFile' => (bool) ($printJob->label_path && Storage::disk('local')->exists($printJob->label_path)),
+            ],
+        ]);
+    }
+
+    /**
+     * Mesmo disco/Content-Type que ManualLabelController::pdf() — só que
+     * sem o `abort_if(order_id !== null)` de lá, porque aqui é justamente o
+     * job real do pipeline automático, com pedido associado.
+     */
+    public function pdf(PrintJob $printJob): HttpResponse
+    {
+        abort_unless($printJob->label_path && Storage::disk('local')->exists($printJob->label_path), 404, 'Arquivo da etiqueta não encontrado.');
+
+        return response(Storage::disk('local')->get($printJob->label_path), 200, [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    public function destroy(PrintJob $printJob): RedirectResponse
+    {
+        if ($printJob->label_path && Storage::disk('local')->exists($printJob->label_path)) {
+            Storage::disk('local')->delete($printJob->label_path);
+        }
+
+        $printJob->delete();
+
+        return back()->with('success', "Impressão #{$printJob->id} removida.");
     }
 }

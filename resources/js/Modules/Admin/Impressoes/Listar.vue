@@ -1,8 +1,10 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { toRef } from 'vue';
 import { usePollWhilePending } from '@/Shared/usePollWhilePending';
+import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     jobs: { type: Object, required: true },
@@ -21,6 +23,12 @@ const BADGE_STYLES = {
 
 const filterByStatus = (status) => {
     router.get('/admin/impressoes/lista', status ? { status } : {}, { preserveState: true, preserveScroll: true });
+};
+
+const destroy = async (job) => {
+    if (await confirmDelete({ title: `Remover a impressão #${job.id}?` })) {
+        router.delete(`/admin/impressoes/${job.id}`, { preserveScroll: true, preserveState: true });
+    }
 };
 </script>
 
@@ -65,6 +73,7 @@ const filterByStatus = (status) => {
                         <th class="px-4 py-3">Capturado em</th>
                         <th class="px-4 py-3">Impresso em</th>
                         <th class="px-4 py-3">Detalhes</th>
+                        <th class="px-4 py-3 text-right">Ações</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-[var(--surface-border)]">
@@ -95,10 +104,16 @@ const filterByStatus = (status) => {
                             <span v-else-if="job.claimedBy" class="text-xs">Agente: {{ job.claimedBy }}</span>
                             <span v-else>—</span>
                         </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center justify-end gap-2">
+                                <ActionIcon icon="fa-eye" label="Visualizar" color="slate" :href="`/admin/impressoes/${job.id}`" />
+                                <ActionIcon icon="fa-trash" label="Excluir" color="red" @click="destroy(job)" />
+                            </div>
+                        </td>
                     </tr>
 
                     <tr v-if="props.jobs.data.length === 0">
-                        <td colspan="8" class="px-4 py-10 text-center text-slate-400">Nenhuma impressão encontrada.</td>
+                        <td colspan="9" class="px-4 py-10 text-center text-slate-400">Nenhuma impressão encontrada.</td>
                     </tr>
                 </tbody>
             </table>

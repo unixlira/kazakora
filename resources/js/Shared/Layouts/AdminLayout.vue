@@ -206,7 +206,7 @@ watch(
                                     @click="markNotificationRead(item)">
                                     <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-primary'"></span>
                                     <span>
-                                        <span class="block">{{ item.message }}</span>
+                                        <span class="block text-slate-700 dark:text-slate-200">{{ item.message }}</span>
                                         <span class="text-xs text-slate-400">{{ item.createdAt }}</span>
                                     </span>
                                 </button>

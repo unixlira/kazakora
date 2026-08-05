@@ -4,12 +4,34 @@ namespace App\Http\Middleware;
 
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Favorite;
+use App\Notifications\InvoiceIssuanceFailedNotification;
+use App\Notifications\LabelUnavailableNotification;
+use App\Notifications\OversellDetectedNotification;
+use App\Notifications\PrintJobFailedNotification;
 use App\Support\Rbac\Permissions;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    /**
+     * Notificações operacionais internas (NF-e falhou, etiqueta presa,
+     * estoque negativo evitado) — só existem porque Notification::send()
+     * manda pra cada admin (User::where('role', ROLE_ADMIN)), então já são
+     * corretamente isoladas por usuário (a relação notifications() do
+     * Laravel filtra por notifiable_id, nunca vaza entre contas). O
+     * problema real era outro: a MESMA sineta/prop é usada tanto em
+     * AdminLayout quanto em AppLayout (loja) — um admin navegando pela loja
+     * como cliente via a própria conta via esses alertas internos ali,
+     * fora de contexto. Filtra esses tipos fora do contexto admin.
+     */
+    private const ADMIN_ONLY_NOTIFICATION_TYPES = [
+        InvoiceIssuanceFailedNotification::class,
+        LabelUnavailableNotification::class,
+        PrintJobFailedNotification::class,
+        OversellDetectedNotification::class,
+    ];
+
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -50,22 +72,51 @@ class HandleInertiaRequests extends Middleware
             'favorites' => fn () => [
                 'count' => $request->user() ? Favorite::query()->where('user_id', $request->user()->id)->count() : 0,
             ],
-            'notifications' => fn () => [
-                'unreadCount' => $request->user()?->unreadNotifications()->count() ?? 0,
-                'items' => $request->user()
-                    ? $request->user()->notifications()->latest()->limit(8)->get()->map(fn ($notification) => [
-                        'id' => $notification->id,
-                        'message' => $notification->data['message'] ?? '',
-                        'read' => $notification->read_at !== null,
-                        'createdAt' => $notification->created_at->diffForHumans(),
-                    ])
-                    : [],
-            ],
+            'notifications' => fn () => $this->notificationsFor($request),
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
                 'warning' => $request->session()->get('warning'),
             ],
+        ];
+    }
+
+    /**
+     * @return array{unreadCount: int, items: array<int, array<string, mixed>>}
+     */
+    private function notificationsFor(Request $request): array
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return ['unreadCount' => 0, 'items' => []];
+        }
+
+        // Fora de /admin (loja), mesmo um usuário com role admin não deve
+        // ver os alertas operacionais internos ali — essa sineta é a
+        // mesma dos dois layouts, só o conteúdo muda por contexto.
+        // ->notifications() é chamado de novo (não reaproveitado/clonado)
+        // pra cada query — MorphMany não clona a Builder interna de forma
+        // confiável, então reconstruir do zero evita as duas consultas se
+        // contaminarem.
+        $isAdminArea = $request->is('admin*');
+
+        $scope = function ($query) use ($isAdminArea) {
+            if (! $isAdminArea) {
+                $query->whereNotIn('type', self::ADMIN_ONLY_NOTIFICATION_TYPES);
+            }
+
+            return $query;
+        };
+
+        return [
+            'unreadCount' => $scope($user->notifications())->whereNull('read_at')->count(),
+            'items' => $scope($user->notifications())->latest()->limit(8)->get()->map(fn ($notification) => [
+                'id' => $notification->id,
+                'message' => $notification->data['message'] ?? '',
+                'read' => $notification->read_at !== null,
+                'createdAt' => $notification->created_at->diffForHumans(),
+            ])->all(),
         ];
     }
 }

@@ -120,7 +120,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                                 @click="markNotificationRead(item)">
                                 <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-store-accent'"></span>
                                 <span>
-                                    <span class="block">{{ item.message }}</span>
+                                    <span class="block text-store-fg">{{ item.message }}</span>
                                     <span class="font-store-mono text-xs text-store-fg-faint">{{ item.createdAt }}</span>
                                 </span>
                             </button>

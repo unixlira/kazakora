@@ -206,4 +206,47 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertNull($orders[0]['net_amount']);
         $this->assertNull($orders[0]['shipping_method']);
     }
+
+    public function test_queue_returns_only_todays_paid_orders_in_descending_order_with_all_products(): void
+    {
+        $older = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1', 'shipping_name' => 'Cliente Antigo']);
+        $older->items()->create(['product_name' => 'Produto A', 'product_price' => 50, 'quantity' => 1, 'subtotal' => 50]);
+
+        $newest = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-2', 'shipping_name' => 'Cliente Novo']);
+        // 2 produtos diferentes no mesmo pedido — exatamente o cenário que
+        // motivou "listar todos os produtos" em vez de só o primeiro (ver
+        // commit 6cfa401 do painel web).
+        $newest->items()->create(['product_name' => 'Produto B', 'product_price' => 30, 'quantity' => 2, 'subtotal' => 60]);
+        $newest->items()->create(['product_name' => 'Produto C', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        // Não deve aparecer: pedido de ontem (filtro "só hoje", exclusivo
+        // desse endpoint) e pedido de hoje mas já enviado (não é mais fila
+        // de expedição). created_at não está em Order::$fillable, então
+        // nem create() nem update() conseguem setá-lo — só forceFill()
+        // ignora esse limite de propósito (bug real encontrado escrevendo
+        // este teste: o ->update(['created_at' => ...]) que
+        // PrintJobControllerTest usa também não funciona de verdade, só
+        // nunca quebrou nenhuma asserção lá porque aquele teste não
+        // depende de cruzar a virada do dia).
+        $yesterday = $this->makeOrder();
+        $yesterday->forceFill(['created_at' => now()->subDay()])->save();
+        $this->makeOrder(['status' => Order::STATUS_SHIPPED]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = $response->json('queue');
+
+        $this->assertCount(2, $queue);
+
+        $this->assertSame($newest->id, $queue[0]['id']);
+        $this->assertSame('SHP-2', $queue[0]['external_order_id']);
+        $this->assertSame(Order::ORIGIN_SHOPEE, $queue[0]['channel']);
+        $this->assertSame('Cliente Novo', $queue[0]['customer_name']);
+        $this->assertSame(3, $queue[0]['units_count']);
+        $this->assertCount(2, $queue[0]['products']);
+
+        $this->assertSame($older->id, $queue[1]['id']);
+        $this->assertSame(1, $queue[1]['units_count']);
+    }
 }

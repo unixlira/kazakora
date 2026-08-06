@@ -370,6 +370,52 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * Fila de expedição do dia pro KoraSync (app nativo) — pedido explícito
+     * 2026-08-06: 2 cards em destaque (mais recente + penúltimo) + lista com
+     * scroll pro resto, tudo em ordem decrescente. Mesmo conceito da fila
+     * já usada em Modules\Admin\Http\Controllers\PrintJobController::index()
+     * (pedido pago, ainda não embalado/enviado — sai da lista assim que sai
+     * de "paid"), mas com um filtro A MAIS que a versão do admin não tem:
+     * só pedidos de HOJE, pedido explícito do usuário pra esse fluxo
+     * específico (a versão web mantém todos os pendentes, sem esse corte).
+     */
+    public function queue(): JsonResponse
+    {
+        $today = now()->startOfDay();
+
+        $orders = Order::query()
+            ->where('status', Order::STATUS_PAID)
+            ->where('created_at', '>=', $today)
+            ->with('items:id,order_id,product_name,quantity')
+            ->withSum('items as units_count', 'quantity')
+            // orderByDesc('id') em vez de latest()/created_at: dois pedidos
+            // pagos a poucos segundos de distância (ex: 2 vendas quase
+            // simultâneas em canais diferentes) podem cair no mesmo
+            // segundo de created_at (granularidade do datetime do MySQL),
+            // e ORDER BY created_at DESC sozinho não garante desempate —
+            // achado real testando este endpoint (o mais antigo dos dois
+            // vinha primeiro). id crescente já é uma ordem cronológica
+            // exata e sem empate possível.
+            ->orderByDesc('id')
+            ->get();
+
+        $result = $orders->map(fn (Order $order) => [
+            'id' => $order->id,
+            'external_order_id' => $order->external_order_id,
+            'channel' => $order->origin,
+            'customer_name' => $order->shipping_name,
+            'units_count' => (int) $order->units_count,
+            'products' => $order->items->map(fn ($item) => [
+                'name' => $item->product_name,
+                'quantity' => $item->quantity,
+            ]),
+            'created_at' => $order->created_at,
+        ]);
+
+        return response()->json(['queue' => $result]);
+    }
+
+    /**
      * Texto diário das Testemunhas de Jeová — só leitura do que já foi
      * salvo pelo comando agendado (App\Console\Commands\FetchDailyText,
      * roda a cada 12h). Não busca ao vivo aqui: esse endpoint precisa

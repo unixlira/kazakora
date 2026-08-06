@@ -82,12 +82,19 @@ class PrintJobController extends Controller
         // Fila de expedição: pedido pago que ainda não foi enviado — assim
         // que sai de "paid" (enviado/cancelado), some da tela, porque já
         // foi embalado (ou não vai mais ser). Ordem decrescente = mais
-        // recente primeiro, igual pedido do usuário.
+        // recente primeiro, igual pedido do usuário. orderByDesc('id') em
+        // vez de latest()/created_at: dois pedidos pagos no mesmo segundo
+        // (granularidade do datetime do MySQL) empatam em created_at e
+        // ORDER BY created_at DESC sozinho não garante desempate — bug real
+        // encontrado 2026-08-06 escrevendo o endpoint equivalente do
+        // KoraSync nativo (PrintJobControllerTest::dispatch_queue já
+        // reproduzia isso, só nunca tinha sido notado). id crescente é
+        // ordem cronológica exata, sem empate possível.
         $queue = Order::query()
             ->where('status', Order::STATUS_PAID)
             ->with('items:id,order_id,product_name,quantity')
             ->withSum('items as units_count', 'quantity')
-            ->latest()
+            ->orderByDesc('id')
             ->get()
             ->map(fn (Order $order) => [
                 'id' => $order->id,

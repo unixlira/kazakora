@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Shopee\Exceptions\ShopeeException;
 use App\Services\Shopee\ShopeeClient;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -184,6 +185,21 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
+     * Padrão aceito como "Expresso" no nome do transportador que a Shopee
+     * devolve em `shipping_carrier` (ex: "SPX Express", "Entrega Expressa").
+     * A loja só opera com Shopee Express habilitado no Seller Center — o
+     * comprador escolhe a transportadora no checkout da Shopee, o vendedor
+     * não escolhe via API (get_shipping_parameter só junta o que falta pra
+     * UM transportador já decidido, não deixa trocar). Esse regex é uma
+     * checagem defensiva de que a suposição continua válida, não uma
+     * seleção — se um pedido vier com outro transportador, o envio ainda é
+     * confirmado normalmente (não vale travar uma venda real por causa
+     * disso), só fica registrado no log e na linha do tempo do pedido pra
+     * o usuário perceber e investigar no Seller Center.
+     */
+    private const EXPRESS_CARRIER_PATTERN = '/express|expresso|expressa|spx/i';
+
+    /**
      * get_shipping_parameter diz quais métodos o pedido suporta e, pro
      * dropoff, devolve os branch_id disponíveis — usa o primeiro (conta com
      * um único ponto de coleta configurado não precisa de escolha real).
@@ -192,6 +208,8 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     public function confirmShipping(Order $order): array
     {
         $this->ensureConfigured();
+
+        $carrier = $this->resolveShippingCarrier($order);
 
         $params = $this->client->get('/api/v2/logistics/get_shipping_parameter', [
             'order_sn' => $order->external_order_id,
@@ -210,9 +228,47 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         return [
             'external_shipment_id' => $order->external_order_id,
-            'shipping_method' => 'drop_off',
+            'shipping_method' => $carrier ?? 'drop_off',
             'status' => empty($result['error']) ? 'confirmed' : 'error',
         ];
+    }
+
+    /**
+     * Consulta `shipping_carrier` no detalhe do pedido e loga um alerta se
+     * não bater com o padrão "Expresso" esperado — ver comentário de
+     * EXPRESS_CARRIER_PATTERN. Nunca lança exceção: uma falha aqui (campo
+     * ausente, erro de rede) não pode derrubar a confirmação de envio real,
+     * só faz a verificação virar "não verificado" em vez de travar o
+     * pedido.
+     */
+    private function resolveShippingCarrier(Order $order): ?string
+    {
+        try {
+            $response = $this->client->get('/api/v2/order/get_order_detail', [
+                'order_sn_list' => $order->external_order_id,
+                'response_optional_fields' => 'shipping_carrier',
+            ]);
+
+            $carrier = $response['response']['order_list'][0]['shipping_carrier'] ?? null;
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.shipping_carrier.lookup_failed', [
+                'order_id' => $order->id,
+                'order_sn' => $order->external_order_id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if ($carrier && ! preg_match(self::EXPRESS_CARRIER_PATTERN, $carrier)) {
+            Log::channel('shopee')->warning('shopee.shipping_carrier.not_express', [
+                'order_id' => $order->id,
+                'order_sn' => $order->external_order_id,
+                'carrier' => $carrier,
+            ]);
+        }
+
+        return $carrier;
     }
 
     /**

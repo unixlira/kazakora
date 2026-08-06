@@ -17,8 +17,9 @@ use Tests\TestCase;
 /**
  * Confirma o gatilho novo (2026-08-05): assim que o frete é confirmado no
  * canal, o retry orientado a evento já dispara na hora, sem esperar
- * webhook nem polling — só pra Mercado Livre (Shopee/TikTok ainda não têm
- * fetchLabel() implementado, disparar lá só geraria falha garantida).
+ * webhook nem polling — pra Mercado Livre e Shopee (2026-08-06, quando
+ * ShopeeDriver::fetchLabel() deixou de ser stub), não pra TikTok/Amazon/
+ * Shein (ainda são stubs, disparar lá só geraria falha garantida).
  */
 class ChannelShippingServiceLabelDispatchTest extends TestCase
 {
@@ -71,13 +72,28 @@ class ChannelShippingServiceLabelDispatchTest extends TestCase
         Queue::assertPushed(CheckShipmentLabelJob::class, fn (CheckShipmentLabelJob $job) => $job->shipmentId === $shipment->id);
     }
 
-    public function test_confirm_does_not_dispatch_for_other_channels(): void
+    public function test_confirm_dispatches_check_shipment_label_job_for_shopee(): void
     {
         Queue::fake();
-        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_SHOPEE);
+        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
         $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_SHOPEE, [
             'external_shipment_id' => 'SHOPEE-1',
-            'shipping_method' => 'drop_off',
+            'shipping_method' => 'SPX Express',
+            'status' => 'confirmed',
+        ]);
+
+        $shipment = app(ChannelShippingService::class)->confirm($order);
+
+        Queue::assertPushed(CheckShipmentLabelJob::class, fn (CheckShipmentLabelJob $job) => $job->shipmentId === $shipment->id);
+    }
+
+    public function test_confirm_does_not_dispatch_for_channels_without_real_fetch_label(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_TIKTOK_SHOP, [
+            'external_shipment_id' => 'TT-1',
+            'shipping_method' => 'standard',
             'status' => 'confirmed',
         ]);
 

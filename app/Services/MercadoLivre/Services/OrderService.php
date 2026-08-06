@@ -25,15 +25,19 @@ class OrderService
     }
 
     /**
-     * Todos os pedidos do vendedor, não só os "recentes" — usado pro
-     * backfill (App\Console\Commands\SyncMercadoLivreOrders, 2026-08-06)
-     * que traz pro banco local qualquer venda que nunca chegou por webhook
-     * (ex: cron parado, app desconectado num período). orders/search
-     * pagina por offset/limit real (confirmado ao vivo).
+     * Pedidos do vendedor num intervalo de datas (não só os "recentes") —
+     * usado pelo backfill (App\Console\Commands\SyncMercadoLivreOrders,
+     * 2026-08-06, refeito no mesmo dia pra escopar por data em vez de
+     * trazer o histórico inteiro — pedido explícito do usuário) que traz
+     * pro banco local qualquer venda que nunca chegou por webhook (ex: cron
+     * parado, app desconectado num período). Filtro de data real da API
+     * (order.date_created.from/to, confirmado ao vivo) — não filtra
+     * client-side depois de já ter baixado tudo. orders/search pagina por
+     * offset/limit real (confirmado ao vivo).
      *
      * @return array<int, string>
      */
-    public function listAllOrderIds(int $mlUserId): array
+    public function listOrderIds(int $mlUserId, \Carbon\CarbonInterface $from, \Carbon\CarbonInterface $to): array
     {
         $ids = [];
         $offset = 0;
@@ -42,6 +46,8 @@ class OrderService
         do {
             $page = $this->client->get('orders/search', [
                 'seller' => $mlUserId,
+                'order.date_created.from' => $from->toIso8601String(),
+                'order.date_created.to' => $to->toIso8601String(),
                 'offset' => $offset,
                 'limit' => $limit,
             ]);

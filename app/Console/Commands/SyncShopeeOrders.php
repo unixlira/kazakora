@@ -6,19 +6,20 @@ use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Throwable;
 
 /**
- * Backfill de todos os pedidos da loja na Shopee — mesmo pedido/motivo do
- * SyncMercadoLivreOrders (a loja vendia na Shopee antes da conexão com o
- * Kazakora ter sido feita hoje, 2026-08-06 — nenhum desses pedidos nunca
- * chegou por webhook). Idempotente, seguro rodar de novo.
+ * Importa/sincroniza os pedidos da Shopee pro banco local, filtrado por
+ * data direto na API (não busca tudo pra filtrar depois) — pedido real do
+ * usuário 2026-08-06 ("só o mês atual", refeito no mesmo dia depois de um
+ * primeiro backfill sem escopo de data). Idempotente, seguro rodar de novo.
  */
 class SyncShopeeOrders extends Command
 {
-    protected $signature = 'orders:sync-shopee {--dias=365 : Quantos dias pra trás verificar}';
+    protected $signature = 'orders:sync-shopee {--desde= : Data inicial (Y-m-d), padrão: início do mês corrente} {--ate= : Data final (Y-m-d), padrão: agora}';
 
-    protected $description = 'Importa/sincroniza todos os pedidos da Shopee pro banco local';
+    protected $description = 'Importa/sincroniza os pedidos da Shopee pro banco local, por período';
 
     public function handle(ShopeeDriver $driver, OrderImportService $importer): int
     {
@@ -30,11 +31,12 @@ class SyncShopeeOrders extends Command
             return self::FAILURE;
         }
 
-        $lookbackDays = (int) $this->option('dias');
+        $from = $this->option('desde') ? Carbon::parse($this->option('desde'))->startOfDay() : now()->startOfMonth();
+        $to = $this->option('ate') ? Carbon::parse($this->option('ate'))->endOfDay() : now();
 
-        $this->info("Buscando pedidos dos últimos {$lookbackDays} dias...");
-        $sns = $driver->listAllOrderSns($lookbackDays);
-        $this->info(count($sns).' pedido(s) encontrado(s) na loja.');
+        $this->info("Buscando pedidos de {$from->toDateString()} até {$to->toDateString()}...");
+        $sns = $driver->listOrderSns($from, $to);
+        $this->info(count($sns).' pedido(s) encontrado(s) no período.');
 
         $imported = 0;
         $failed = 0;

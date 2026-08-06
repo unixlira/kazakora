@@ -118,49 +118,32 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * `v2.order.get_order_detail` — não confirmado ao vivo ainda (nenhum
-     * pedido real da Shopee existe pra testar contra), os nomes de campo
-     * abaixo seguem o schema publicamente documentado dessa API, que é
-     * estável entre implementações (open.shopee.com ficou inacessível pra
-     * conferência direta nesta sessão, ver plano). Primeira importação real
-     * (via "Test Push" ou uma venda de verdade) é o momento de confirmar/
-     * ajustar isso.
-     */
-    /**
-     * Todos os order_sn dos últimos $lookbackDays — usado pro backfill
-     * (App\Console\Commands\SyncShopeeOrders, 2026-08-06) que traz pro
-     * banco local vendas que nunca chegaram por webhook (loja Shopee
-     * vendendo há um tempo antes da conexão com o Kazakora ter sido feita
-     * hoje). get_order_list só aceita janelas de até 15 dias por chamada
-     * (confirmado ao vivo — erro explícito da API acima disso), então
-     * varre em janelas de 15 dias voltando no tempo até uma janela vazia
-     * (loja sem pedido nenhum ali) ou o teto de segurança de $lookbackDays.
-     * Paginação dentro de cada janela via next_cursor/more.
+     * order_sn de todos os pedidos num intervalo de datas — usado pelo
+     * backfill (App\Console\Commands\SyncShopeeOrders, 2026-08-06, refeito
+     * no mesmo dia pra escopar por data em vez de trazer o histórico
+     * inteiro — pedido explícito do usuário). get_order_list só aceita
+     * janelas de até 15 dias por chamada (confirmado ao vivo — erro
+     * explícito da API acima disso), então varre $from..$to em fatias de
+     * 15 dias. Paginação dentro de cada fatia via next_cursor/more.
      *
      * @return array<int, string>
      */
-    public function listAllOrderSns(int $lookbackDays = 365): array
+    public function listOrderSns(\Carbon\CarbonInterface $from, \Carbon\CarbonInterface $to): array
     {
         $this->ensureConfigured();
 
         $sns = [];
-        $windowEnd = now();
-        $earliestAllowed = now()->subDays($lookbackDays);
+        $sliceStart = $from->copy();
 
-        while ($windowEnd->gt($earliestAllowed)) {
-            $windowStart = $windowEnd->copy()->subDays(15);
-            if ($windowStart->lt($earliestAllowed)) {
-                $windowStart = $earliestAllowed->copy();
-            }
-
-            $foundInWindow = 0;
+        while ($sliceStart->lt($to)) {
+            $sliceEnd = $sliceStart->copy()->addDays(15)->min($to);
             $cursor = '';
 
             do {
                 $page = $this->client->get('/api/v2/order/get_order_list', array_filter([
                     'time_range_field' => 'create_time',
-                    'time_from' => $windowStart->timestamp,
-                    'time_to' => $windowEnd->timestamp,
+                    'time_from' => $sliceStart->timestamp,
+                    'time_to' => $sliceEnd->timestamp,
                     'page_size' => 50,
                     'cursor' => $cursor,
                 ], fn ($value) => $value !== ''));
@@ -170,7 +153,6 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 foreach ($orders as $order) {
                     if (isset($order['order_sn'])) {
                         $sns[] = (string) $order['order_sn'];
-                        $foundInWindow++;
                     }
                 }
 
@@ -178,19 +160,17 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 $cursor = (string) ($page['response']['next_cursor'] ?? '');
             } while ($more && $cursor !== '');
 
-            // Janela sem nenhum pedido = provavelmente chegou antes do
-            // início real das vendas na loja — para de voltar no tempo em
-            // vez de gastar chamadas até o teto de $lookbackDays à toa.
-            if ($foundInWindow === 0) {
-                break;
-            }
-
-            $windowEnd = $windowStart;
+            $sliceStart = $sliceEnd;
         }
 
         return array_values(array_unique($sns));
     }
 
+    /**
+     * `v2.order.get_order_detail` — confirmado ao vivo 2026-08-06 contra
+     * 93 pedidos reais da loja conectada; os nomes de campo abaixo batem
+     * com o payload de verdade, não só com a doc.
+     */
     public function importOrder(string $externalOrderId): array
     {
         $this->ensureConfigured();

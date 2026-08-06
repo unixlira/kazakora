@@ -26,9 +26,8 @@ Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 // segurança pro caso de um webhook se perder por qualquer motivo (fila
 // parada, instabilidade do canal, etc.). Idempotente
 // (OrderImportService::importNormalized() já detecta pedido existente),
-// seguro rodar de hora em hora. Shopee limitado aos últimos 2 dias (o
-// backfill completo de histórico já rodou manualmente uma vez) — sem isso
-// varreria o ano inteiro em janelas de 15 dias a cada execução, sem
-// necessidade real pra reconciliação de rotina.
+// seguro rodar de hora em hora. Sem --desde/--ate, os dois comandos
+// escopam pro mês corrente por padrão (pedido explícito do usuário) — não
+// varre o histórico inteiro a cada execução.
 Schedule::command('orders:sync-mercadolivre')->hourly();
-Schedule::command('orders:sync-shopee --dias=2')->hourly();
+Schedule::command('orders:sync-shopee')->hourly();

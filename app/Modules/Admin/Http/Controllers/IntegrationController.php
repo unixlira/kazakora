@@ -5,11 +5,13 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Concerns\HandlesShopeeAuthorizationLanding;
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\ShopeeProductImportService;
 use App\Services\MercadoLivre\MercadoLivreAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class IntegrationController extends Controller
 {
@@ -98,5 +100,37 @@ class IntegrationController extends Controller
         }
 
         return back()->with('error', 'Esse canal ainda não está disponível.');
+    }
+
+    /**
+     * Vincula anúncios já publicados na Shopee (feitos direto por lá, fora
+     * do Kazakora) a produtos locais existentes, por similaridade de nome
+     * — ver ShopeeProductImportService. Roda síncrono (a lista de itens da
+     * loja não é grande o bastante pra justificar fila) e devolve o
+     * resultado via flash, mesmo padrão das outras ações desta página.
+     */
+    public function importShopeeProducts(ShopeeProductImportService $service): RedirectResponse
+    {
+        try {
+            $result = $service->import();
+        } catch (Throwable $exception) {
+            return back()->with('error', 'Erro ao importar produtos da Shopee: '.$exception->getMessage());
+        }
+
+        $message = "{$result['linked']} produto(s) vinculado(s) automaticamente.";
+
+        if ($result['already_linked'] > 0) {
+            $message .= " {$result['already_linked']} já estava(m) vinculado(s).";
+        }
+
+        if ($result['unmatched']) {
+            $count = count($result['unmatched']);
+            $names = implode(', ', array_slice($result['unmatched'], 0, 5));
+            $message .= " {$count} sem correspondência confiável, precisam de vínculo manual: {$names}".($count > 5 ? '...' : '.');
+
+            return back()->with('warning', $message);
+        }
+
+        return back()->with('success', $message);
     }
 }

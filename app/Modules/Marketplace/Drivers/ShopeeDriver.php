@@ -30,6 +30,66 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         return MarketplaceAccount::CHANNEL_SHOPEE;
     }
 
+    /**
+     * Lista todos os itens ativos (NORMAL) já publicados na loja Shopee,
+     * direto pela API — usado por ShopeeProductImportService pra vincular
+     * anúncios já existentes na Shopee (feitos fora do Kazakora) a produtos
+     * locais, sem precisar cadastrar tudo nem republicar nada. Confirmado
+     * contra a conta real 2026-08-06 (get_item_list + get_item_base_info,
+     * paginado — a loja tinha 33 itens, has_next_page=true na primeira
+     * página de 20).
+     *
+     * @return array<int, array{external_id: string, name: string, price: ?float}>
+     */
+    public function fetchOwnItems(): array
+    {
+        $this->ensureConfigured();
+
+        $itemIds = [];
+        $offset = 0;
+        $pageSize = 50;
+
+        do {
+            $page = $this->client->get('/api/v2/product/get_item_list', [
+                'offset' => $offset,
+                'page_size' => $pageSize,
+                'item_status' => 'NORMAL',
+            ]);
+
+            $items = $page['response']['item'] ?? [];
+
+            foreach ($items as $item) {
+                if (isset($item['item_id'])) {
+                    $itemIds[] = (int) $item['item_id'];
+                }
+            }
+
+            $hasNext = (bool) ($page['response']['has_next_page'] ?? false);
+            $offset += $pageSize;
+        } while ($hasNext);
+
+        $result = [];
+
+        // get_item_base_info aceita no máximo 50 ids por chamada.
+        foreach (array_chunk($itemIds, 50) as $chunk) {
+            $base = $this->client->get('/api/v2/product/get_item_base_info', [
+                'item_id_list' => implode(',', $chunk),
+            ]);
+
+            foreach ($base['response']['item_list'] ?? [] as $item) {
+                $result[] = [
+                    'external_id' => (string) $item['item_id'],
+                    'name' => (string) ($item['item_name'] ?? ''),
+                    'price' => isset($item['price_info'][0]['current_price'])
+                        ? (float) $item['price_info'][0]['current_price']
+                        : null,
+                ];
+            }
+        }
+
+        return $result;
+    }
+
     public function publishProduct(Product $product, ProductChannelListing $listing): string
     {
         $this->ensureConfigured();

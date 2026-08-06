@@ -300,6 +300,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('integracoes', [IntegrationController::class, 'index'])->name('integracoes.listar');
         Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');
+        Route::post('integracoes/shopee/importar-produtos', [IntegrationController::class, 'importShopeeProducts'])->name('integracoes.shopee.importar-produtos');
 
         Route::get('integracoes/webhooks', [WebhookLogController::class, 'index'])->name('integracoes.webhooks');
         Route::post('integracoes/webhooks/{channel_webhook_log}/reprocessar', [WebhookLogController::class, 'reprocess'])->name('integracoes.webhooks.reprocessar');

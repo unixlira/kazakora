@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
@@ -15,6 +16,16 @@ const mercadoLivreTabs = [
     { label: 'Devoluções', href: '/admin/integracoes/mercado-livre/devolucoes' },
     { label: 'Impressão Full', href: '/admin/integracoes/mercado-livre/impressao-full' },
 ];
+
+const importingShopeeProducts = ref(false);
+
+const importShopeeProducts = () => {
+    importingShopeeProducts.value = true;
+    router.post('/admin/integracoes/shopee/importar-produtos', {}, {
+        preserveScroll: true,
+        onFinish: () => { importingShopeeProducts.value = false; },
+    });
+};
 
 const disconnect = async (integration) => {
     if (await confirmDelete({
@@ -45,6 +56,10 @@ const disconnect = async (integration) => {
                     class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary">
                     Testar impressão de etiquetas
                 </Link>
+                <button type="button" :disabled="importingShopeeProducts" @click="importShopeeProducts"
+                    class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary disabled:opacity-50">
+                    {{ importingShopeeProducts ? 'Importando...' : 'Importar produtos da Shopee' }}
+                </button>
             </div>
         </div>
 

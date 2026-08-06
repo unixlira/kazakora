@@ -30,6 +30,16 @@ class LabelProcessingService
      * imagem e foi a causa raiz do texto saindo grande demais e cobrindo
      * o código de barras. Se o ZPL não declarar ^PW/^LL, cai no fallback
      * 4x6" (formato mais comum de etiqueta de envio).
+     *
+     * Sem o segmento de índice (0-based) no fim da URL de propósito — bug
+     * real encontrado 2026-08-06 (Impressão Full): com esse índice fixo
+     * em "0", a Labelary sempre devolvia SÓ a primeira etiqueta do ZPL,
+     * mesmo com várias marcações ^XA...^XZ na entrada (ex: um lote do
+     * Mercado Envios Full com 15 volumes virava um PDF de 1 página só).
+     * A própria documentação da Labelary confirma: pra resposta em PDF,
+     * omitir o índice devolve TODAS as etiquetas, uma por página — é
+     * estritamente melhor que o índice fixo pros outros chamadores desse
+     * método também (ZPL de 1 etiqueta só continua saindo com 1 página).
      */
     public function convertZplToPdf(string $zpl): string
     {
@@ -37,7 +47,7 @@ class LabelProcessingService
 
         $response = Http::withHeaders(['Accept' => 'application/pdf'])
             ->withBody($zpl, 'application/x-www-form-urlencoded')
-            ->post("http://api.labelary.com/v1/printers/".self::DENSITY_DPMM."dpmm/labels/{$width}x{$height}/0/");
+            ->post("http://api.labelary.com/v1/printers/".self::DENSITY_DPMM."dpmm/labels/{$width}x{$height}/");
 
         if ($response->failed()) {
             throw new RuntimeException(

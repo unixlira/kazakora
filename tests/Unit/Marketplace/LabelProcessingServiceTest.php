@@ -62,6 +62,27 @@ class LabelProcessingServiceTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), '/labels/4x6/'));
     }
 
+    /**
+     * Bug real encontrado 2026-08-06 (Impressão Full): a URL tinha um
+     * índice fixo "0" no fim (.../labels/4x6/0/), e a Labelary só devolve
+     * UMA etiqueta quando um índice é passado — um ZPL de lote com várias
+     * marcações ^XA...^XZ (ex: 15 volumes do Mercado Envios Full) virava
+     * um PDF de 1 página só. Confirmado ao vivo contra a API real da
+     * Labelary antes de corrigir (3 etiquetas -> 1 página com índice, 3
+     * páginas sem). Trava a ausência do índice na URL pra não regredir
+     * silenciosamente — os dois testes acima só checam a substring
+     * "/labels/{tamanho}/", que continuaria passando mesmo com um índice
+     * de volta no fim.
+     */
+    public function test_convert_zpl_to_pdf_never_sends_a_label_index_so_all_labels_come_back(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        (new LabelProcessingService)->convertZplToPdf('^XA^FDTeste^FS^XZ');
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/labels/4x6/'));
+    }
+
     public function test_overlay_switches_to_two_column_grid_for_more_than_six_products(): void
     {
         $names = array_map(fn ($i) => "Produto {$i}", range(1, 9));

@@ -21,3 +21,14 @@ Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
 // Texto só muda 1x por dia — rodar 2x (00h/12h) é redundante de propósito,
 // cobre o caso da tentativa da meia-noite falhar por instabilidade de rede.
 Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
+
+// Reconciliação periódica pedido/faturamento (2026-08-06) — rede de
+// segurança pro caso de um webhook se perder por qualquer motivo (fila
+// parada, instabilidade do canal, etc.). Idempotente
+// (OrderImportService::importNormalized() já detecta pedido existente),
+// seguro rodar de hora em hora. Shopee limitado aos últimos 2 dias (o
+// backfill completo de histórico já rodou manualmente uma vez) — sem isso
+// varreria o ano inteiro em janelas de 15 dias a cada execução, sem
+// necessidade real pra reconciliação de rotina.
+Schedule::command('orders:sync-mercadolivre')->hourly();
+Schedule::command('orders:sync-shopee --dias=2')->hourly();

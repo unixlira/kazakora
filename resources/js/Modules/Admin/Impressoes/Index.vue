@@ -1,71 +1,115 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import QueueCard from './QueueCard.vue';
+import { Head } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
-    cards: { type: Array, default: () => [] },
-    totalGeral: { type: Number, default: 0 },
+    stats: { type: Object, default: () => ({}) },
+    channelCounts: { type: Array, default: () => [] },
+    queue: { type: Array, default: () => [] },
 });
 
-const CARD_STYLES = {
-    yellow: 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-900/50',
-    purple: 'bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-900/50',
-    green: 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-900/50',
-    red: 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-900/50',
-};
+const formatPrice = (value) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
 
-const ICON_STYLES = {
-    yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300',
-    purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-    green: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    red: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-};
+const current = computed(() => props.queue[0] ?? null);
+const next = computed(() => props.queue[1] ?? null);
+const rest = computed(() => props.queue.slice(2));
 
-const TEXT_STYLES = {
-    yellow: 'text-yellow-700 dark:text-yellow-300',
-    purple: 'text-purple-700 dark:text-purple-300',
-    green: 'text-green-700 dark:text-green-300',
-    red: 'text-red-700 dark:text-red-300',
-};
+// Botões de maximizar/minimizar além do F11/Esc nativos do navegador (que
+// continuam funcionando do mesmo jeito, sem nenhum código aqui) — pedido
+// explícito do usuário pra quem tá controlando por mouse/touch numa tela
+// de expedição, sem teclado por perto.
+const isFullscreen = ref(false);
+const enterFullscreen = () => document.documentElement.requestFullscreen?.();
+const exitFullscreen = () => document.exitFullscreen?.();
+const handleFullscreenChange = () => { isFullscreen.value = Boolean(document.fullscreenElement); };
+
+onMounted(() => document.addEventListener('fullscreenchange', handleFullscreenChange));
+onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFullscreenChange));
 </script>
 
 <template>
-    <Head title="Impressões" />
+    <Head title="Painel de Expedição" />
 
     <AdminLayout>
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h1 class="mb-1 text-2xl font-bold">Impressões</h1>
-                <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Monitoramento dos jobs de impressão consumidos pelo KoraSync (agente nativo). {{ totalGeral }} no total.
-                </p>
+                <h1 class="mb-1 text-2xl font-bold">Painel de Expedição</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Pedidos pagos aguardando separação e envio, do mais recente pro mais antigo.</p>
             </div>
-            <Link href="/admin/impressoes/teste-webhook"
-                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
-                Teste Webhook Marketplaces
-            </Link>
+            <div class="flex gap-2">
+                <button v-if="!isFullscreen" type="button" title="Maximizar"
+                    class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary"
+                    @click="enterFullscreen">
+                    <i class="fas fa-expand"></i> Maximizar
+                </button>
+                <button v-else type="button" title="Minimizar"
+                    class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary"
+                    @click="exitFullscreen">
+                    <i class="fas fa-compress"></i> Minimizar
+                </button>
+            </div>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Link v-for="card in props.cards" :key="card.status" :href="`/admin/impressoes/lista?status=${card.status}`"
-                class="flex flex-col rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md"
-                :class="CARD_STYLES[card.color]">
-                <div class="flex items-start justify-between">
-                    <div class="flex h-12 w-12 items-center justify-center rounded-full" :class="ICON_STYLES[card.color]">
-                        <i :class="card.icon" class="text-xl"></i>
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Faturamento do mês</p>
+                <p class="mt-1 text-2xl font-bold">{{ formatPrice(props.stats.revenueMonth) }}</p>
+            </div>
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Faturamento de hoje</p>
+                <p class="mt-1 text-2xl font-bold">{{ formatPrice(props.stats.revenueToday) }}</p>
+            </div>
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total de pedidos</p>
+                <p class="mt-1 text-2xl font-bold">{{ props.stats.ordersTotal ?? 0 }}</p>
+            </div>
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+                <p class="mb-2 text-sm text-slate-500 dark:text-slate-400">Pedidos por canal</p>
+                <div class="grid grid-cols-4 gap-2">
+                    <div v-for="channel in props.channelCounts" :key="channel.channel" class="text-center">
+                        <i :class="channel.icon" class="text-slate-400"></i>
+                        <p class="text-lg font-bold">{{ channel.total }}</p>
+                        <p class="truncate text-[0.65rem] text-slate-400">{{ channel.label }}</p>
                     </div>
-                    <span class="text-3xl font-bold" :class="TEXT_STYLES[card.color]">{{ card.total }}</span>
                 </div>
-
-                <h3 class="mt-4 text-lg font-semibold">{{ card.label }}</h3>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ card.description }}</p>
-            </Link>
+            </div>
         </div>
 
-        <div class="mt-6">
-            <Link href="/admin/impressoes/lista" class="text-sm text-primary hover:underline">
-                Ver todas as impressões &rarr;
-            </Link>
+        <div v-if="current" class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div class="space-y-6">
+                <QueueCard :order="current" size="xl" />
+                <QueueCard v-if="next" :order="next" size="lg" />
+            </div>
+
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+                <div class="border-b border-[var(--surface-border)] px-4 py-3">
+                    <h3 class="font-semibold">Próximos na fila ({{ rest.length }})</h3>
+                </div>
+                <div class="max-h-[720px] divide-y divide-[var(--surface-border)] overflow-y-auto">
+                    <div v-for="order in rest" :key="order.id" class="px-4 py-3">
+                        <div class="flex items-center justify-between">
+                            <span class="font-semibold">#{{ order.id }}</span>
+                            <span class="rounded-full bg-lightwarning px-2 py-0.5 text-xs font-bold text-warning-emphasis">
+                                {{ order.unitsCount }} un.
+                            </span>
+                        </div>
+                        <p class="truncate text-sm text-slate-600 dark:text-slate-300">{{ order.customer || 'Cliente não informado' }}</p>
+                        <p class="text-xs text-slate-400">
+                            <i :class="order.channelIcon"></i> {{ order.channel }} · {{ order.createdAt }}
+                        </p>
+                    </div>
+                    <p v-if="rest.length === 0" class="px-4 py-8 text-center text-sm text-slate-400">Nenhum outro pedido na fila.</p>
+                </div>
+            </div>
+        </div>
+
+        <div v-else class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-16 text-center shadow-sm">
+            <i class="fas fa-circle-check mb-3 text-4xl text-success"></i>
+            <p class="text-lg font-semibold">Tudo embalado!</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Nenhum pedido pago aguardando separação no momento.</p>
         </div>
     </AdminLayout>
 </template>

@@ -3,19 +3,28 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Monitoramento dos PrintJobs consumidos pelo KoraSync (agente nativo de
- * impressão) — só leitura, não interfere no fluxo real de impressão.
+ * Painel do KoraSync — pedido do usuário 2026-08-05: virou um painel de
+ * expedição estilo "chamada de senha de consultório" (pedido atual em
+ * destaque + fila decrescente), não mais um monitor de status de PrintJob.
+ * O motivo real: o painel antigo mostrava status de impressão, não o que
+ * precisa ser separado pra embalar — resultou numa devolução perdida (2
+ * itens do mesmo pedido, só 1 percebido). Fila é por Order (status "paid",
+ * ainda não embalado/enviado), não por PrintJob — todo canal entra
+ * (inclusive venda direto na loja), e mostra quantidade de itens (soma de
+ * quantity, não linhas) + nome de cada produto.
  */
 class PrintJobController extends Controller
 {
@@ -24,6 +33,16 @@ class PrintJobController extends Controller
         MarketplaceAccount::CHANNEL_MERCADO_LIVRE => 'Mercado Livre',
         MarketplaceAccount::CHANNEL_TIKTOK_SHOP => 'TikTok Shop',
         MarketplaceAccount::CHANNEL_AMAZON => 'Amazon',
+    ];
+
+    // Canais mostrados no card "pedidos por canal" — Shein deliberadamente
+    // fora (pedido explícito do usuário), loja própria também não entra
+    // aqui (esse card é só sobre marketplace).
+    private const CHANNEL_QUEUE_ORDER = [
+        MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+        MarketplaceAccount::CHANNEL_SHOPEE,
+        MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+        MarketplaceAccount::CHANNEL_AMAZON,
     ];
 
     private const CHANNEL_ICONS = [
@@ -46,19 +65,57 @@ class PrintJobController extends Controller
         PrintJob::STATUS_FAILED => ['label' => 'Falhou', 'description' => 'Erro ao processar ou imprimir a etiqueta.', 'icon' => 'fas fa-triangle-exclamation', 'color' => 'red'],
     ];
 
+    /** Mesma definição de "venda confirmada" que o DashboardController usa pro faturamento. */
+    private const PAID_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
     public function index(): Response
     {
-        $counts = PrintJob::query()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        $today = Carbon::today();
+        $startOfMonth = Carbon::today()->startOfMonth();
 
-        $cards = collect(self::STATUS_META)->map(fn ($meta, $status) => [
-            'status' => $status,
-            ...$meta,
-            'total' => (int) $counts->get($status, 0),
-        ])->values();
+        $channelCounts = Order::query()
+            ->whereIn('origin', self::CHANNEL_QUEUE_ORDER)
+            ->selectRaw('origin, count(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        // Fila de expedição: pedido pago que ainda não foi enviado — assim
+        // que sai de "paid" (enviado/cancelado), some da tela, porque já
+        // foi embalado (ou não vai mais ser). Ordem decrescente = mais
+        // recente primeiro, igual pedido do usuário.
+        $queue = Order::query()
+            ->where('status', Order::STATUS_PAID)
+            ->with('items:id,order_id,product_name,quantity')
+            ->withSum('items as units_count', 'quantity')
+            ->latest()
+            ->get()
+            ->map(fn (Order $order) => [
+                'id' => $order->id,
+                'externalOrderId' => $order->external_order_id,
+                'channel' => self::CHANNEL_LABELS[$order->origin] ?? ($order->origin === Order::ORIGIN_STORE ? 'Site' : $order->origin),
+                'channelIcon' => self::CHANNEL_ICONS[$order->origin] ?? 'fas fa-shop',
+                'customer' => $order->shipping_name,
+                'unitsCount' => (int) $order->units_count,
+                'products' => $order->items->map(fn ($item) => $item->quantity > 1
+                    ? "{$item->quantity}x {$item->product_name}"
+                    : $item->product_name)->all(),
+                'total' => (float) $order->total,
+                'createdAt' => $order->created_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+            ]);
 
         return Inertia::render('Admin/Impressoes/Index', [
-            'cards' => $cards,
-            'totalGeral' => (int) $counts->sum(),
+            'stats' => [
+                'revenueMonth' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->where('created_at', '>=', $startOfMonth)->sum('total'),
+                'revenueToday' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->whereDate('created_at', $today)->sum('total'),
+                'ordersTotal' => Order::query()->count(),
+            ],
+            'channelCounts' => collect(self::CHANNEL_QUEUE_ORDER)->map(fn ($channel) => [
+                'channel' => $channel,
+                'label' => self::CHANNEL_LABELS[$channel],
+                'icon' => self::CHANNEL_ICONS[$channel],
+                'total' => (int) ($channelCounts->get($channel) ?? 0),
+            ])->values(),
+            'queue' => $queue,
         ]);
     }
 

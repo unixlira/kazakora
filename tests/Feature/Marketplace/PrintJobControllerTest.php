@@ -38,7 +38,7 @@ class PrintJobControllerTest extends TestCase
         ]);
     }
 
-    public function test_only_admin_can_view_print_job_cards(): void
+    public function test_only_admin_can_view_the_dispatch_panel(): void
     {
         $manager = User::factory()->create(['role' => User::ROLE_MANAGER]);
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
@@ -47,22 +47,73 @@ class PrintJobControllerTest extends TestCase
         $this->actingAs($admin)->get('/admin/impressoes')->assertOk();
     }
 
-    public function test_cards_reflect_real_counts_per_status(): void
+    /**
+     * Painel de expedição (2026-08-05): fila é por Order (status paid), não
+     * mais por PrintJob — mostra quantidade de UNIDADES (soma de quantity),
+     * não linhas de item, decrescente por data. Cobre o bug real que
+     * motivou a mudança: pedido com 1 linha mas quantity=2 tem que aparecer
+     * como "2 produtos pra separar", não 1.
+     */
+    public function test_dispatch_queue_shows_paid_orders_with_unit_count_descending(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->createPrintJob(PrintJob::STATUS_QUEUED);
-        $this->createPrintJob(PrintJob::STATUS_QUEUED);
-        $this->createPrintJob(PrintJob::STATUS_FAILED);
+        $older = $this->makeOrder(Order::STATUS_PAID, 'shopee');
+        $older->items()->create(['product_name' => 'Caneca', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+        $older->update(['created_at' => now()->subMinutes(10)]);
+
+        // Criado depois, com created_at real (agora) — garante ordem
+        // determinística sem depender de timing de execução do teste.
+        $newer = $this->makeOrder(Order::STATUS_PAID, 'mercado_livre');
+        $newer->items()->create(['product_name' => 'Fone Bluetooth', 'product_price' => 50, 'quantity' => 2, 'subtotal' => 100]);
+
+        $shipped = $this->makeOrder(Order::STATUS_SHIPPED); // já embalado — não deve aparecer na fila
 
         $response = $this->actingAs($admin)->get('/admin/impressoes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('totalGeral', 3)
-            ->where('cards.0.status', PrintJob::STATUS_QUEUED)
-            ->where('cards.0.total', 2)
-        );
+            ->has('queue', 2)
+            ->where('queue.0.id', $newer->id)
+            ->where('queue.0.unitsCount', 2)
+            ->where('queue.0.products.0', '2x Fone Bluetooth')
+            ->where('queue.1.id', $older->id)
+            ->where('queue.1.unitsCount', 1));
+    }
+
+    public function test_channel_counts_exclude_shein_and_store_origin(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->makeOrder(Order::STATUS_PAID, 'mercado_livre');
+        $this->makeOrder(Order::STATUS_PAID, 'shein');
+        $this->makeOrder(Order::STATUS_PAID, 'loja');
+
+        $response = $this->actingAs($admin)->get('/admin/impressoes');
+
+        $response->assertInertia(fn ($page) => $page
+            ->has('channelCounts', 4)
+            ->where('channelCounts.0.channel', 'mercado_livre')
+            ->where('channelCounts.0.total', 1));
+    }
+
+    private function makeOrder(string $status, string $origin = 'loja'): Order
+    {
+        return Order::create([
+            'status' => $status,
+            'origin' => $origin,
+            'external_order_id' => $origin === 'loja' ? null : 'VENDA-'.uniqid(),
+            'shipping_name' => 'Cliente Teste',
+            'shipping_phone' => 'Não informado',
+            'shipping_zip' => '00000000',
+            'shipping_street' => 'Rua Teste',
+            'shipping_number' => 'S/N',
+            'shipping_neighborhood' => 'Não informado',
+            'shipping_city' => 'Não informado',
+            'shipping_state' => 'SP',
+            'subtotal' => 0,
+            'shipping_cost' => 0,
+            'total' => 0,
+        ]);
     }
 
     public function test_list_shows_channel_and_sale_id(): void

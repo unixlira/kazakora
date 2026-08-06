@@ -76,9 +76,16 @@ class NFeXmlBuilderService
         // esse CNPJ. CRT=2 (Simples Nacional excesso de sublimite) não tem
         // como inferir de Company::regime_tributario — se for esse o caso,
         // precisa de campo/config novo, não dá pra adivinhar.
+        //
+        // Segunda rejeição real (pedido #17, 2026-08-03): MEI ainda caía no
+        // default (CRT=1), mas a NT 2024.001 tornou obrigatório CRT=4
+        // ("Simples Nacional — Microempreendedor Individual — MEI") pra
+        // emitentes MEI a partir de abril/2025 — confirmado contra a nota
+        // técnica oficial, não é mais opcional/inferido.
         $emit->CRT = match ($company->regime_tributario) {
             Company::REGIME_LUCRO_PRESUMIDO, Company::REGIME_LUCRO_REAL => 3,
-            default => 1, // simples_nacional e mei
+            Company::REGIME_MEI => 4,
+            default => 1, // simples_nacional
         };
         $emit->CNPJ = preg_replace('/\D/', '', $company->cnpj);
         $emit->CNAE = $company->cnae;
@@ -87,7 +94,10 @@ class NFeXmlBuilderService
         $enderEmit = new stdClass();
         $enderEmit->xLgr = $company->street;
         $enderEmit->nro = $company->number;
-        $enderEmit->xCpl = $company->complement;
+        // Mesmo limite de 60 caracteres do xCpl do destinatário logo abaixo
+        // — rejeição real da SEFAZ (pedidos #15/#16, 2026-08-03) porque o
+        // complemento do emitente tinha 73 caracteres.
+        $enderEmit->xCpl = Str::limit((string) $company->complement, 60, '');
         $enderEmit->xBairro = $company->neighborhood;
         $enderEmit->cMun = $cMunFG;
         $enderEmit->xMun = $company->city;

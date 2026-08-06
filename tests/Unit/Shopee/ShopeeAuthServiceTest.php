@@ -22,13 +22,13 @@ class ShopeeAuthServiceTest extends TestCase
         config([
             'services.shopee.partner_id' => '1239829',
             'services.shopee.redirect_url' => 'https://kazakora.devlira.com.br/api/shopee/callback',
-            'services.shopee.auth_base_url' => 'https://open.sandbox.test-stable.shopee.com.br',
+            'services.shopee.auth_base_url' => 'https://open.test-stable.shopee.com',
             'services.shopee.api_base_url' => 'https://partner.test-stable.shopeemobile.com',
         ]);
 
         $url = (new ShopeeAuthService)->getAuthorizationUrl();
 
-        $this->assertStringStartsWith('https://open.sandbox.test-stable.shopee.com.br/auth?', $url);
+        $this->assertStringStartsWith('https://open.test-stable.shopee.com/auth?', $url);
         $this->assertStringNotContainsString('partner.test-stable.shopeemobile.com', $url);
         $this->assertStringNotContainsString('auth_partner', $url);
         $this->assertStringNotContainsString('timestamp=', $url);

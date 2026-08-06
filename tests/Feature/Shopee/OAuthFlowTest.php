@@ -31,7 +31,7 @@ class OAuthFlowTest extends TestCase
         $response->assertRedirect();
         $location = $response->headers->get('Location');
 
-        $this->assertStringStartsWith('https://open.sandbox.test-stable.shopee.com.br/auth?', $location);
+        $this->assertStringStartsWith('https://open.test-stable.shopee.com/auth?', $location);
         $this->assertStringNotContainsString('sign=', $location);
 
         parse_str((string) parse_url($location, PHP_URL_QUERY), $query);

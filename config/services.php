@@ -93,15 +93,22 @@ return [
         'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
         // Host do LINK de autorização (o vendedor clica e é levado pra lá) —
         // achado real 2026-08-06: a Shopee usa um host REGIONAL específico
-        // pra esse link, diferente do api_base_url usado nas chamadas de
-        // API (token/get etc.) — confirmado contra a doc oficial
-        // (open.shopee.com/developer-guide/20, tabela "Generating the
-        // Authorization Link"): produção Brasil é open.shopee.com.br,
-        // sandbox Brasil é open.sandbox.test-stable.shopee.com.br. Usar o
+        // pra esse link em PRODUÇÃO, diferente do api_base_url usado nas
+        // chamadas de API (token/get etc.) — confirmado contra a doc
+        // oficial (open.shopee.com/developer-guide/20, tabela "Generating
+        // the Authorization Link") E contra DNS de verdade: produção
+        // Brasil é open.shopee.com.br (resolve, responde 200). A doc
+        // TAMBÉM lista um "sandbox Brasil" (open.sandbox.test-stable.
+        // shopee.com.br) que na prática NÃO EXISTE (NXDOMAIN, confirmado)
+        // — sandbox não tem infraestrutura regional, é sempre o host
+        // global mesmo (open.test-stable.shopee.com, sem "sandbox." antes
+        // de "test-stable" — esse SIM resolve e responde 302, bate com o
+        // exemplo de link da própria doc, só a tabela de hosts é que tá
+        // errada/desatualizada nesse ponto específico). Usar o
         // api_base_url aqui (como o código fazia antes) gera um link que a
-        // própria Shopee rejeita — foi exatamente o "endpoint errado" que o
-        // suporte deles apontou. Ver ShopeeAuthService::getAuthorizationUrl().
-        'auth_base_url' => env('SHOPEE_AUTH_BASE_URL', 'https://open.sandbox.test-stable.shopee.com.br'),
+        // própria Shopee rejeita — foi exatamente o "endpoint errado" que
+        // o suporte deles apontou. Ver ShopeeAuthService::getAuthorizationUrl().
+        'auth_base_url' => env('SHOPEE_AUTH_BASE_URL', 'https://open.test-stable.shopee.com'),
         // Liga log de diagnóstico da assinatura (base string, sign, fingerprint
         // da key — nunca a key crua) sem precisar redeploy. Usado pra investigar
         // um "Wrong sign" real da Shopee (2026-08-01) — ver ShopeeAuthService.

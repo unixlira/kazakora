@@ -90,6 +90,11 @@ class ShopeeAuthService
             throw new ShopeeException($response->json('message') ?? 'Não foi possível concluir a autenticação com a Shopee.', $response->status(), ['body' => $response->json()]);
         }
 
+        // Só a falha era logada antes (2026-08-06) — sem um log de sucesso
+        // não dava pra saber se uma troca anterior já tinha consumido o
+        // code antes de uma segunda tentativa falhar com "invalid_code".
+        Log::channel('shopee')->info('shopee.oauth_callback_succeeded', ['shop_id' => $shopId]);
+
         return $this->persistToken($shopId, $response->json());
     }
 

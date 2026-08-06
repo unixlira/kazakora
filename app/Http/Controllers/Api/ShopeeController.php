@@ -32,10 +32,10 @@ class ShopeeController extends Controller
         try {
             $this->auth->handleCallback($validated['code'], (int) $validated['shop_id']);
         } catch (ShopeeException $exception) {
-            return redirect('/admin/empresa')->with('error', $exception->getMessage());
+            return redirect('/admin/integracoes')->with('error', $exception->getMessage());
         }
 
-        return redirect('/admin/empresa')->with('success', 'Loja da Shopee conectada com sucesso.');
+        return redirect('/admin/integracoes')->with('success', 'Loja da Shopee conectada com sucesso.');
     }
 
     /**

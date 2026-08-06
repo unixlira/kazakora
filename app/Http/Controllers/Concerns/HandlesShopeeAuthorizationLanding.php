@@ -20,6 +20,19 @@ use Illuminate\Http\Request;
  * controller que é um destino plausível desse redirect usa este trait —
  * não importa qual dos três a Shopee realmente usar, o handshake completa
  * igual.
+ *
+ * Confirmado com diagnóstico ao vivo 2026-08-06: a Shopee só considera o
+ * `code` válido quando o navegador cai exatamente no domínio cadastrado
+ * como "Live Redirect URL Domain" — um `code` entregue no `redirect_uri`
+ * que a gente mandava no próprio link de autorização
+ * (`/api/shopee/callback`) foi consistentemente rejeitado com
+ * "invalid_code" pela `/api/v2/auth/token/get`, mesmo com
+ * assinatura/host/timing corretos. `SHOPEE_REDIRECT_URL` foi ajustado
+ * pra apontar pro mesmo destino cadastrado no console
+ * (`/admin/integracoes`), então os dois fluxos (nosso link e o botão
+ * "Authorize" do console) convergem pro mesmo lugar — mas este trait
+ * continua existindo como rede de segurança caso a Shopee volte a
+ * ignorar o `redirect_uri` de novo.
  */
 trait HandlesShopeeAuthorizationLanding
 {

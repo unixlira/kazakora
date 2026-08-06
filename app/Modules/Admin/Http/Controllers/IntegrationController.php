@@ -5,7 +5,10 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\MercadoLivre\MercadoLivreAuthService;
+use App\Services\Shopee\Exceptions\ShopeeException;
+use App\Services\Shopee\ShopeeAuthService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,8 +40,24 @@ class IntegrationController extends Controller
 
     public function __construct(private readonly MercadoLivreAuthService $mercadoLivreAuth) {}
 
-    public function index(): Response
+    /**
+     * Achado real 2026-08-06/07: o link de autorização "Seller In House" da
+     * Shopee (botão Authorize no console deles, não o /api/shopee/auth que
+     * a gente gera) usa a "Redirect URL Domain" cadastrada lá — que, ao
+     * contrário do que a primeira correção assumiu (ver
+     * CatalogController::index()), não é o domínio raiz "/", é
+     * literalmente "/admin/integracoes". code/shop_id chegavam aqui e eram
+     * silenciosamente ignorados (sem erro nenhum — a página só renderizava
+     * normal), então a loja nunca ficava conectada de fato. Mesma lógica
+     * de ShopeeController::callback()/CatalogController::index(), só mais
+     * um ponto de entrada possível pro mesmo handshake.
+     */
+    public function index(Request $request): Response|RedirectResponse
     {
+        if ($request->filled('code') && $request->filled('shop_id')) {
+            return $this->handleShopeeAuthorizationLanding($request);
+        }
+
         $accounts = MarketplaceAccount::query()->get()->keyBy('channel');
         $mercadoLivreToken = $this->mercadoLivreAuth->currentToken();
 
@@ -86,5 +105,26 @@ class IntegrationController extends Controller
         }
 
         return back()->with('error', 'Esse canal ainda não está disponível.');
+    }
+
+    /**
+     * Mesma lógica de ShopeeController::callback() —
+     * ShopeeAuthService::handleCallback() já é idempotente/self-contained,
+     * só o ponto de entrada muda (aqui em vez de /api/shopee/callback).
+     */
+    private function handleShopeeAuthorizationLanding(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'string'],
+            'shop_id' => ['required', 'integer'],
+        ]);
+
+        try {
+            app(ShopeeAuthService::class)->handleCallback($validated['code'], (int) $validated['shop_id']);
+        } catch (ShopeeException $exception) {
+            return redirect('/admin/integracoes')->with('error', $exception->getMessage());
+        }
+
+        return redirect('/admin/integracoes')->with('success', 'Loja da Shopee conectada com sucesso.');
     }
 }

@@ -11,30 +11,42 @@ use Illuminate\Support\Facades\Log;
  * OAuth2 pra Shopee Open Platform v2 — autorização de loja (shop-level).
  *
  * Diferente do Mercado Livre (authorization code + PKCE), a Shopee assina
- * cada chamada (inclusive as de auth) com HMAC-SHA256 usando o partner_key,
- * não usa code_verifier nem "state" (sem proteção CSRF própria no fluxo —
- * decisão da própria Shopee, não uma omissão daqui).
+ * as chamadas de API de verdade (token/get, access_token/get) com
+ * HMAC-SHA256 usando o partner_key — mas o link de autorização em si
+ * (getAuthorizationUrl) NÃO é assinado, usa um host regional fixo e um
+ * formato de query simples (ver comentário do método). Sem code_verifier
+ * nem "state" no callback (sem proteção CSRF própria nesse fluxo — decisão
+ * da própria Shopee, não uma omissão daqui).
  *
- * @see PDF oficial "OpenAPI Authorization & Authentication v1 & v2" (Shopee, 2021)
+ * @see https://open.shopee.com/developer-guide/20 (Authorization & Authentication v2, doc atual)
  */
 class ShopeeAuthService
 {
+    /**
+     * Achado real 2026-08-06 (suporte da Shopee apontou "endpoint errado"
+     * ao tentar autorizar em produção/homolog): esse link NÃO usa o mesmo
+     * host das chamadas de API (api_base_url) nem é assinado com HMAC —
+     * ele usa um host REGIONAL fixo (auth_base_url, Brasil-específico) e
+     * um formato de query simples (partner_id/auth_type/redirect_uri/
+     * response_type), documentado em open.shopee.com/developer-guide/20
+     * ("Generating the Authorization Link"). A versão antiga daqui
+     * montava `{api_base_url}/api/v2/shop/auth_partner` com timestamp+sign
+     * — isso batia com um PDF mais antigo da Shopee (2021, ainda citado na
+     * classe), mas não é mais o link real que a Shopee aceita hoje pra
+     * essa etapa. O restante do fluxo (handleCallback/refreshToken, que
+     * SÃO chamadas de API de verdade contra api_base_url) continua
+     * assinado normalmente — só o link de redirecionamento mudou.
+     */
     public function getAuthorizationUrl(): string
     {
-        $path = '/api/v2/shop/auth_partner';
-        $timestamp = now()->timestamp;
-        $sign = $this->publicSign($path, $timestamp);
-
-        $this->logSigningAttempt('shopee.oauth_redirect_signed', $path, $timestamp, $sign);
-
         $query = http_build_query([
             'partner_id' => (int) config('services.shopee.partner_id'),
-            'redirect' => config('services.shopee.redirect_url'),
-            'timestamp' => $timestamp,
-            'sign' => $sign,
+            'auth_type' => 'seller',
+            'redirect_uri' => config('services.shopee.redirect_url'),
+            'response_type' => 'code',
         ]);
 
-        return config('services.shopee.api_base_url').$path.'?'.$query;
+        return rtrim((string) config('services.shopee.auth_base_url'), '/').'/auth?'.$query;
     }
 
     public function handleCallback(string $code, int $shopId): MarketplaceAccount

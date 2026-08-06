@@ -13,9 +13,17 @@ class OAuthFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_redirect_to_auth_generates_a_correctly_signed_authorization_url(): void
+    /**
+     * Bug real encontrado 2026-08-06 (suporte da Shopee apontou "endpoint
+     * errado" ao autorizar): esse link usa um host regional próprio
+     * (auth_base_url, Brasil), NÃO o api_base_url das chamadas de API, e
+     * não é assinado com HMAC — só o formato simples documentado em
+     * open.shopee.com/developer-guide/20. Ver ShopeeAuthServiceTest para
+     * a cobertura unitária mais detalhada; aqui só confirma que a rota
+     * real (/api/shopee/auth) devolve esse link.
+     */
+    public function test_redirect_to_auth_generates_the_regional_unsigned_authorization_url(): void
     {
-        Carbon::setTestNow(Carbon::createFromTimestamp(1735689600));
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
         $response = $this->actingAs($admin)->get('/api/shopee/auth');
@@ -23,19 +31,14 @@ class OAuthFlowTest extends TestCase
         $response->assertRedirect();
         $location = $response->headers->get('Location');
 
-        $this->assertStringStartsWith('https://partner.test-stable.shopeemobile.com/api/v2/shop/auth_partner?', $location);
+        $this->assertStringStartsWith('https://open.sandbox.test-stable.shopee.com.br/auth?', $location);
+        $this->assertStringNotContainsString('sign=', $location);
 
         parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
 
-        $expectedSign = hash_hmac(
-            'sha256',
-            '1239829/api/v2/shop/auth_partner1735689600',
-            'test-partner-key'
-        );
-
         $this->assertSame('1239829', $query['partner_id']);
-        $this->assertSame('1735689600', $query['timestamp']);
-        $this->assertSame($expectedSign, $query['sign']);
+        $this->assertSame('seller', $query['auth_type']);
+        $this->assertSame('code', $query['response_type']);
     }
 
     public function test_callback_signs_the_token_exchange_request_correctly(): void

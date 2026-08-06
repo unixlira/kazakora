@@ -91,6 +91,17 @@ return [
         // em lugar nenhum que consegui acessar nesta sessão).
         'push_partner_key' => env('SHOPEE_PUSH_PARTNER_KEY'),
         'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
+        // Host do LINK de autorização (o vendedor clica e é levado pra lá) —
+        // achado real 2026-08-06: a Shopee usa um host REGIONAL específico
+        // pra esse link, diferente do api_base_url usado nas chamadas de
+        // API (token/get etc.) — confirmado contra a doc oficial
+        // (open.shopee.com/developer-guide/20, tabela "Generating the
+        // Authorization Link"): produção Brasil é open.shopee.com.br,
+        // sandbox Brasil é open.sandbox.test-stable.shopee.com.br. Usar o
+        // api_base_url aqui (como o código fazia antes) gera um link que a
+        // própria Shopee rejeita — foi exatamente o "endpoint errado" que o
+        // suporte deles apontou. Ver ShopeeAuthService::getAuthorizationUrl().
+        'auth_base_url' => env('SHOPEE_AUTH_BASE_URL', 'https://open.sandbox.test-stable.shopee.com.br'),
         // Liga log de diagnóstico da assinatura (base string, sign, fingerprint
         // da key — nunca a key crua) sem precisar redeploy. Usado pra investigar
         // um "Wrong sign" real da Shopee (2026-08-01) — ver ShopeeAuthService.

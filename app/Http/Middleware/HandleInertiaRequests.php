@@ -114,6 +114,11 @@ class HandleInertiaRequests extends Middleware
             'items' => $scope($user->notifications())->latest()->limit(8)->get()->map(fn ($notification) => [
                 'id' => $notification->id,
                 'message' => $notification->data['message'] ?? '',
+                // 'body'/'link' só existem em PromotionalNotification por
+                // enquanto (cupom/promoção) — null nos outros tipos, front
+                // já trata como opcional.
+                'body' => $notification->data['body'] ?? null,
+                'link' => $notification->data['link'] ?? null,
                 'read' => $notification->read_at !== null,
                 'createdAt' => $notification->created_at->diffForHumans(),
             ])->all(),

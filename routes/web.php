@@ -33,6 +33,7 @@ use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
 use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
 use App\Modules\Admin\Http\Controllers\ReportController;
+use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
@@ -160,6 +161,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor('store', 'permission:cadastros.create')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
+        ->middleware('permission:cadastros.view')
+        ->name('notificacoes-promocionais.listar');
+    Route::post('notificacoes-promocionais', [PromotionalNotificationController::class, 'store'])
+        ->middleware('permission:cadastros.create')
+        ->name('notificacoes-promocionais.armazenar');
 
     Route::patch('banners/{banner}/subir', [BannerController::class, 'moveUp'])
         ->middleware('permission:cadastros.edit')

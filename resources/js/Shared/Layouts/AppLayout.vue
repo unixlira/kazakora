@@ -41,6 +41,12 @@ const markNotificationRead = (item) => {
     if (!item.read) {
         router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
     }
+
+    // Notificação promocional pode ter um link (cupom, categoria em
+    // promoção) — navega pra lá depois de marcar como lida.
+    if (item.link) {
+        router.visit(item.link);
+    }
 };
 
 const markAllNotificationsRead = () => {
@@ -120,7 +126,8 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                                 @click="markNotificationRead(item)">
                                 <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-store-accent'"></span>
                                 <span>
-                                    <span class="block text-store-fg">{{ item.message }}</span>
+                                    <span class="block font-medium text-store-fg">{{ item.message }}</span>
+                                    <span v-if="item.body" class="block text-xs text-store-fg-muted">{{ item.body }}</span>
                                     <span class="font-store-mono text-xs text-store-fg-faint">{{ item.createdAt }}</span>
                                 </span>
                             </button>

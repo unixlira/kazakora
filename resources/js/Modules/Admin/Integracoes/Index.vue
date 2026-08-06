@@ -13,6 +13,7 @@ const mercadoLivreTabs = [
     { label: 'Anúncios', href: '/admin/integracoes/mercado-livre/anuncios' },
     { label: 'Tipos de envio', href: '/admin/integracoes/mercado-livre/envios' },
     { label: 'Devoluções', href: '/admin/integracoes/mercado-livre/devolucoes' },
+    { label: 'Impressão Full', href: '/admin/integracoes/mercado-livre/impressao-full' },
 ];
 
 const disconnect = async (integration) => {

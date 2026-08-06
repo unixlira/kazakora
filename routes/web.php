@@ -17,6 +17,8 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\ManualLabelController;
+use App\Modules\Admin\Http\Controllers\MercadoLivreFullPrintController;
+use App\Modules\Admin\Http\Controllers\OrderImportController;
 use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\PrintJobController;
@@ -308,6 +310,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('integracoes/mercado-livre/devolucoes', [MercadoLivreClaimsController::class, 'index'])->name('integracoes.mercado-livre.devolucoes');
         Route::post('integracoes/mercado-livre/devolucoes/{marketplace_claim}/reverter-estoque', [MercadoLivreClaimsController::class, 'revertStock'])->name('integracoes.mercado-livre.devolucoes.reverter-estoque');
 
+        Route::get('integracoes/mercado-livre/impressao-full', [MercadoLivreFullPrintController::class, 'create'])->name('integracoes.mercado-livre.impressao-full');
+        Route::post('integracoes/mercado-livre/impressao-full', [MercadoLivreFullPrintController::class, 'store'])->name('integracoes.mercado-livre.impressao-full.armazenar');
+
         Route::get('integracoes/teste-impressao', [PrintTestController::class, 'index'])->name('integracoes.teste-impressao');
         Route::post('integracoes/teste-impressao', [PrintTestController::class, 'store'])->name('integracoes.teste-impressao.armazenar');
 
@@ -318,6 +323,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('impressoes/{print_job}', [PrintJobController::class, 'show'])->name('impressoes.ver');
         Route::get('impressoes/{print_job}/pdf', [PrintJobController::class, 'pdf'])->name('impressoes.pdf');
         Route::delete('impressoes/{print_job}', [PrintJobController::class, 'destroy'])->name('impressoes.excluir');
+
+        Route::get('importar-pedido', [OrderImportController::class, 'create'])->name('importar-pedido.nova');
+        Route::post('importar-pedido', [OrderImportController::class, 'store'])->name('importar-pedido.armazenar');
 
         Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');
         Route::post('etiquetas-manuais', [ManualLabelController::class, 'store'])->name('etiquetas-manuais.armazenar');

@@ -11,6 +11,7 @@ use App\Services\Shopee\Exceptions\ShopeeException;
 use App\Services\Shopee\ShopeeClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -125,6 +126,71 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * (via "Test Push" ou uma venda de verdade) é o momento de confirmar/
      * ajustar isso.
      */
+    /**
+     * Todos os order_sn dos últimos $lookbackDays — usado pro backfill
+     * (App\Console\Commands\SyncShopeeOrders, 2026-08-06) que traz pro
+     * banco local vendas que nunca chegaram por webhook (loja Shopee
+     * vendendo há um tempo antes da conexão com o Kazakora ter sido feita
+     * hoje). get_order_list só aceita janelas de até 15 dias por chamada
+     * (confirmado ao vivo — erro explícito da API acima disso), então
+     * varre em janelas de 15 dias voltando no tempo até uma janela vazia
+     * (loja sem pedido nenhum ali) ou o teto de segurança de $lookbackDays.
+     * Paginação dentro de cada janela via next_cursor/more.
+     *
+     * @return array<int, string>
+     */
+    public function listAllOrderSns(int $lookbackDays = 365): array
+    {
+        $this->ensureConfigured();
+
+        $sns = [];
+        $windowEnd = now();
+        $earliestAllowed = now()->subDays($lookbackDays);
+
+        while ($windowEnd->gt($earliestAllowed)) {
+            $windowStart = $windowEnd->copy()->subDays(15);
+            if ($windowStart->lt($earliestAllowed)) {
+                $windowStart = $earliestAllowed->copy();
+            }
+
+            $foundInWindow = 0;
+            $cursor = '';
+
+            do {
+                $page = $this->client->get('/api/v2/order/get_order_list', array_filter([
+                    'time_range_field' => 'create_time',
+                    'time_from' => $windowStart->timestamp,
+                    'time_to' => $windowEnd->timestamp,
+                    'page_size' => 50,
+                    'cursor' => $cursor,
+                ], fn ($value) => $value !== ''));
+
+                $orders = $page['response']['order_list'] ?? [];
+
+                foreach ($orders as $order) {
+                    if (isset($order['order_sn'])) {
+                        $sns[] = (string) $order['order_sn'];
+                        $foundInWindow++;
+                    }
+                }
+
+                $more = (bool) ($page['response']['more'] ?? false);
+                $cursor = (string) ($page['response']['next_cursor'] ?? '');
+            } while ($more && $cursor !== '');
+
+            // Janela sem nenhum pedido = provavelmente chegou antes do
+            // início real das vendas na loja — para de voltar no tempo em
+            // vez de gastar chamadas até o teto de $lookbackDays à toa.
+            if ($foundInWindow === 0) {
+                break;
+            }
+
+            $windowEnd = $windowStart;
+        }
+
+        return array_values(array_unique($sns));
+    }
+
     public function importOrder(string $externalOrderId): array
     {
         $this->ensureConfigured();
@@ -194,6 +260,13 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'shipping_city' => $address['city'] ?? 'Não informado',
             'shipping_state' => $this->extractState($address['state'] ?? 'NA'),
             'external_shipment_id' => null,
+            // Mesmo motivo do MercadoLivreDriver — create_time é a data real
+            // da venda na Shopee (unix timestamp, campo base do
+            // get_order_detail), usado como created_at real do pedido em vez
+            // de now() no backfill.
+            'placed_at' => isset($order['create_time'])
+                ? \Illuminate\Support\Carbon::createFromTimestamp((int) $order['create_time'])
+                : null,
             'items' => $items,
         ];
     }
@@ -220,16 +293,38 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     /**
      * `shipping_state` na tabela orders é varchar(2) (limite que já mordeu
      * o Mercado Livre uma vez, que devolvia "BR-SP" em vez da sigla — ver
-     * histórico). Não confirmei ainda em que formato a Shopee devolve esse
-     * campo (sigla direta, nome completo, etc.), então só trunca pro limite
-     * da coluna em vez de tentar adivinhar um padrão de prefixo que pode
-     * nem existir aqui — ajustar com um payload real assim que disponível.
+     * histórico). Achado real 2026-08-06, rodando o backfill contra pedidos
+     * reais: a Shopee devolve o NOME COMPLETO do estado ("São Paulo"), não
+     * a sigla — e `substr($state, 0, 2)` num nome acentuado corta no meio
+     * do caractere multi-byte de "ã"/"é"/etc., gerando um byte UTF-8
+     * inválido que o MySQL rejeita na hora do insert (33 de 93 pedidos
+     * reais falharam com "Incorrect string value" antes desse fix). Mapa
+     * nome completo → sigla, comparado sem acento (evita depender de a
+     * Shopee mandar sempre com a acentuação "certa"); mb_substr como
+     * fallback pra qualquer coisa não reconhecida, pelo menos não quebra
+     * o insert mesmo se vier um valor novo/inesperado.
      */
+    private const STATE_NAMES_TO_UF = [
+        'ACRE' => 'AC', 'ALAGOAS' => 'AL', 'AMAPA' => 'AP', 'AMAZONAS' => 'AM',
+        'BAHIA' => 'BA', 'CEARA' => 'CE', 'DISTRITO FEDERAL' => 'DF',
+        'ESPIRITO SANTO' => 'ES', 'GOIAS' => 'GO', 'MARANHAO' => 'MA',
+        'MATO GROSSO' => 'MT', 'MATO GROSSO DO SUL' => 'MS', 'MINAS GERAIS' => 'MG',
+        'PARA' => 'PA', 'PARAIBA' => 'PB', 'PARANA' => 'PR', 'PERNAMBUCO' => 'PE',
+        'PIAUI' => 'PI', 'RIO DE JANEIRO' => 'RJ', 'RIO GRANDE DO NORTE' => 'RN',
+        'RIO GRANDE DO SUL' => 'RS', 'RONDONIA' => 'RO', 'RORAIMA' => 'RR',
+        'SANTA CATARINA' => 'SC', 'SAO PAULO' => 'SP', 'SERGIPE' => 'SE',
+        'TOCANTINS' => 'TO',
+    ];
+
     private function extractState(string $state): string
     {
-        $state = strtoupper(trim($state));
+        $normalized = strtoupper(trim(Str::ascii($state)));
 
-        return substr($state, 0, 2) ?: 'NA';
+        if (isset(self::STATE_NAMES_TO_UF[$normalized])) {
+            return self::STATE_NAMES_TO_UF[$normalized];
+        }
+
+        return mb_substr($normalized, 0, 2) ?: 'NA';
     }
 
     /**

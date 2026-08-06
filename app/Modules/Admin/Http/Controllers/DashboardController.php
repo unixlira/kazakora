@@ -33,7 +33,16 @@ class DashboardController extends Controller
         return Inertia::render('Admin/Dashboard', [
             'stats' => [
                 'ordersCount' => Order::query()->count(),
-                'revenue' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->sum('total'),
+                // Achado real 2026-08-06: "FATURAMENTO" era all-time (sem
+                // filtro de data nenhum) — ao lado de "FATURADO HOJE",
+                // parecia representar um período, mas somava a loja inteira
+                // desde o início. Escopado pro mês corrente, mesma definição
+                // que o KoraSync (DashboardAgentController::metrics()) já
+                // usava certo pra "revenue_month".
+                'revenue' => (float) Order::query()
+                    ->where('created_at', '>=', $startOfMonth)
+                    ->whereIn('status', self::PAID_STATUSES)
+                    ->sum('total'),
                 'productsCount' => Product::query()->where('is_active', true)->count(),
                 'lowStockCount' => Product::query()->where('stock', '<=', 5)->count(),
                 'visitsToday' => SiteVisit::query()->whereDate('created_at', $today)->count(),

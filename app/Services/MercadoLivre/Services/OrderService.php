@@ -24,6 +24,43 @@ class OrderService
         return $this->client->get('orders/search/recent', ['seller' => $mlUserId]);
     }
 
+    /**
+     * Todos os pedidos do vendedor, não só os "recentes" — usado pro
+     * backfill (App\Console\Commands\SyncMercadoLivreOrders, 2026-08-06)
+     * que traz pro banco local qualquer venda que nunca chegou por webhook
+     * (ex: cron parado, app desconectado num período). orders/search
+     * pagina por offset/limit real (confirmado ao vivo).
+     *
+     * @return array<int, string>
+     */
+    public function listAllOrderIds(int $mlUserId): array
+    {
+        $ids = [];
+        $offset = 0;
+        $limit = 50;
+
+        do {
+            $page = $this->client->get('orders/search', [
+                'seller' => $mlUserId,
+                'offset' => $offset,
+                'limit' => $limit,
+            ]);
+
+            $results = $page['results'] ?? [];
+
+            foreach ($results as $order) {
+                if (isset($order['id'])) {
+                    $ids[] = (string) $order['id'];
+                }
+            }
+
+            $total = (int) ($page['paging']['total'] ?? 0);
+            $offset += $limit;
+        } while ($offset < $total);
+
+        return $ids;
+    }
+
     public function getOrder(string $orderId): OrderDTO
     {
         $order = $this->client->get("orders/{$orderId}");

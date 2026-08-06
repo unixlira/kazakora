@@ -192,6 +192,13 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'shipping_city' => $address['city'],
             'shipping_state' => $address['state'],
             'external_shipment_id' => isset($order->shipping['id']) ? (string) $order->shipping['id'] : null,
+            // Data real da venda no Mercado Livre — sem isso, OrderImportService
+            // usa now() como created_at, o que é ok pra webhook em tempo real
+            // (chega em segundos) mas fica errado pro backfill (achado real
+            // 2026-08-06: pedidos de meses atrás sendo importados hoje
+            // ficavam marcados como "vendidos hoje", inflando os cards de
+            // faturamento do dia/mês).
+            'placed_at' => \Illuminate\Support\Carbon::parse($order->date_created),
             'items' => $items,
         ];
     }

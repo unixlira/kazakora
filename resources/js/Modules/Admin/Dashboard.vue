@@ -130,7 +130,7 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
                 stat-icon-name="fas fa-receipt" variant="primary" />
-            <CardStats stat-subtitle="FATURAMENTO" :stat-title="formatPrice(stats.revenue)"
+            <CardStats stat-subtitle="FATURAMENTO NO MÊS" :stat-title="formatPrice(stats.revenue)"
                 stat-icon-name="fas fa-sack-dollar" variant="success" />
             <CardStats stat-subtitle="PRODUTOS" :stat-title="String(stats.productsCount)"
                 stat-icon-name="fas fa-couch" variant="secondary" />

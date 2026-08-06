@@ -62,6 +62,14 @@ class OrderImportService
         if ($existing) {
             $this->timeline->record($existing, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Webhook reentregue ({$channel}), status={$data['status']}");
 
+            // Autocorreção pra pedidos que entraram antes de placed_at
+            // existir (achado real 2026-08-06, ver comentário em
+            // createOrder()) — reprocessar o backfill já corrige a data sem
+            // precisar de um script separado.
+            if (! empty($data['placed_at']) && ! $existing->created_at->equalTo($data['placed_at'])) {
+                $existing->forceFill(['created_at' => $data['placed_at']])->save();
+            }
+
             return $this->syncStatus($existing, $data['status']);
         }
 
@@ -112,6 +120,19 @@ class OrderImportService
                 'shipping_cost' => $data['shipping_cost'],
                 'total' => $data['total'],
             ]);
+
+            // created_at não está no $fillable de Order (proteção normal de
+            // mass-assignment) — Order::create() acima sempre grava now(),
+            // então corrige com forceFill logo em seguida quando o canal
+            // manda a data real da venda (placed_at). Achado real
+            // 2026-08-06 (backfill de pedidos antigos do Mercado
+            // Livre/Shopee): sem isso, um pedido de meses atrás importado
+            // hoje aparecia como "vendido hoje" nos cards de faturamento.
+            // Sem placed_at (tela de teste de webhook, pedido fake), fica
+            // now() mesmo, que já é o comportamento correto pra isso.
+            if (! empty($data['placed_at'])) {
+                $order->forceFill(['created_at' => $data['placed_at']])->save();
+            }
 
             $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Pedido importado do canal {$channel}", ['external_order_id' => $data['external_order_id']]);
 

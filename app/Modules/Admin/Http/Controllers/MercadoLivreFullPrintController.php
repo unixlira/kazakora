@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Support\LabelProcessingService;
-use App\Services\MercadoLivre\MercadoLivreClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,29 +15,25 @@ use Throwable;
 
 /**
  * Impressão em lote de etiquetas do Full (Mercado Envios Full) — pedido
- * explícito 2026-08-06. Reaproveita o MESMO endpoint que
- * MercadoLivreDriver::fetchLabel() já usa pra 1 etiqueta
- * (GET shipment_labels?shipment_ids=...&response_type=...), só que aqui
- * passando o(s) código(s) que o usuário digitar direto pra
- * response_type=zpl2 — a API do ML devolve um único arquivo ZPL com todas
- * as etiquetas em sequência (confirmado contra um ZPL real baixado pelo
- * usuário: várias marcações ^XA...^XZ concatenadas, uma por volume/envio).
+ * explícito 2026-08-06.
  *
- * Não implementado/confirmado nesta sessão: se o "código" que o usuário
- * tem em mãos é um shipment_id individual, uma lista deles, ou o ID do
- * envio "pai" (self-service inbound) que a API resolve sozinha pro lado
- * de dentro — não existe documentação pública clara pra essa resolução, e
- * não temos acesso a um envio Full real pra testar antes. A tela aceita
- * o texto como o usuário digitar (1 código ou vários separados por vírgula/
- * linha) e repassa direto pro parâmetro shipment_ids; se a API do ML
- * rejeitar, o erro real dela aparece na tela pra ajustar na hora.
+ * Versão 1 desta tela tentava buscar a etiqueta na API do ML a partir de
+ * um "código" digitado (GET shipment_labels?shipment_ids=...) — corrigido
+ * no mesmo dia depois de testar ao vivo: o usuário já baixa o ZPL pronto
+ * direto do painel do Full (não precisa nenhuma chamada de API daqui), e
+ * o download já vem com TODAS as etiquetas do lote concatenadas
+ * (confirmado contra um arquivo real: 15 blocos ^XA...^XZ em sequência,
+ * um por volume). Então essa tela é, na prática, a mesma coisa que
+ * ManualLabelController já faz (colar/enviar ZPL -> PDF -> PrintJob) — só
+ * que com entrada própria dentro da integração do Mercado Livre, pra ser
+ * o lugar óbvio de colar isso toda vez que sair um envio Full, sem
+ * misturar com a tela genérica de Etiquetas Manuais.
  *
- * Reaproveita LabelProcessingService::convertZplToPdf() (mesma conversão
- * já usada pra Shopee/Etiquetas Manuais) — a API pública da Labelary
- * devolve um PDF de várias páginas quando o ZPL de entrada tem vários
- * blocos ^XA...^XZ, uma página por etiqueta, então o PDF final já sai
- * pronto pra imprimir tudo em sequência sem nenhum código novo de
- * paginação aqui.
+ * Reaproveita LabelProcessingService::convertZplToPdf() sem nenhuma
+ * mudança — a API pública da Labelary devolve um PDF de várias páginas
+ * quando o ZPL de entrada tem vários blocos ^XA...^XZ, uma página por
+ * etiqueta, então o PDF final já sai pronto pra imprimir tudo em
+ * sequência.
  */
 class MercadoLivreFullPrintController extends Controller
 {
@@ -47,38 +42,23 @@ class MercadoLivreFullPrintController extends Controller
         return Inertia::render('Admin/Integracoes/MercadoLivre/ImpressaoFull');
     }
 
-    public function store(Request $request, MercadoLivreClient $client, LabelProcessingService $processor): RedirectResponse
+    public function store(Request $request, LabelProcessingService $processor): RedirectResponse
     {
         $validated = $request->validate([
-            'codes' => ['required', 'string'],
+            'file' => ['required_without:content', 'nullable', 'file', 'mimes:txt', 'max:4096'],
+            'content' => ['required_without:file', 'nullable', 'string'],
         ]);
 
-        // Aceita vírgula, quebra de linha ou espaço como separador — o
-        // usuário pode ter só 1 código ou vários, não força um formato
-        // específico.
-        $ids = collect(preg_split('/[\s,]+/', trim($validated['codes'])))
-            ->filter()
-            ->unique()
-            ->values();
-
-        if ($ids->isEmpty()) {
-            return back()->withInput()->with('error', 'Informe pelo menos um código.');
-        }
+        $rawContent = $request->hasFile('file')
+            ? $request->file('file')->get()
+            : $validated['content'];
 
         try {
-            $label = $client->getBinary('shipment_labels', [
-                'shipment_ids' => $ids->implode(','),
-                'response_type' => 'zpl2',
-            ]);
-
-            $pdfBytes = $processor->convertZplToPdf($label['contents']);
+            $pdfBytes = $processor->convertZplToPdf($rawContent);
         } catch (Throwable $exception) {
             report($exception);
 
-            return back()->withInput()->with(
-                'error',
-                'Falha ao buscar/converter a etiqueta no Mercado Livre: '.$exception->getMessage()
-            );
+            return back()->withInput()->with('error', 'Falha ao gerar o PDF das etiquetas: '.$exception->getMessage());
         }
 
         $path = 'labels/full-'.now()->timestamp.'-'.uniqid().'.pdf';
@@ -94,11 +74,8 @@ class MercadoLivreFullPrintController extends Controller
             'status' => PrintJob::STATUS_QUEUED,
         ]);
 
-        $count = $ids->count();
-        $plural = $count > 1 ? "{$count} códigos" : '1 código';
-
         return redirect()
             ->route('admin.integracoes.mercado-livre.impressao-full')
-            ->with('success', "Etiqueta #{$printJob->id} gerada a partir de {$plural} — o KoraSync vai imprimir tudo em sequência assim que estiver aberto.");
+            ->with('success', "Etiqueta #{$printJob->id} gerada — o KoraSync vai imprimir tudo em sequência assim que estiver aberto.");
     }
 }

@@ -5,16 +5,21 @@ namespace Tests\Feature\Admin;
 use App\Models\User;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
-use App\Services\MercadoLivre\MercadoLivreClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use Mockery;
 use Tests\TestCase;
 
 class MercadoLivreFullPrintControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * ZPL com 2 blocos ^XA...^XZ (2 volumes), mesmo shape do arquivo real
+     * baixado do painel do Full que motivou essa tela.
+     */
+    private const MULTI_LABEL_ZPL = "^XA^FO20,20^A0N,30,30^FDEnvio: 73851942/1^FS^XZ^XA^FO20,20^A0N,30,30^FDEnvio: 73851942/2^FS^XZ";
 
     private static function minimalPdf(): string
     {
@@ -47,17 +52,6 @@ class MercadoLivreFullPrintControllerTest extends TestCase
         return $pdf;
     }
 
-    private function mockClient(string $zplContents): void
-    {
-        $client = Mockery::mock(MercadoLivreClient::class);
-        $client->shouldReceive('getBinary')
-            ->once()
-            ->with('shipment_labels', Mockery::on(fn ($query) => $query['response_type'] === 'zpl2'))
-            ->andReturn(['contents' => $zplContents, 'content_type' => 'application/x-zpl']);
-
-        $this->app->instance(MercadoLivreClient::class, $client);
-    }
-
     public function test_only_admin_can_access_the_form(): void
     {
         $manager = User::factory()->create(['role' => User::ROLE_MANAGER]);
@@ -67,31 +61,25 @@ class MercadoLivreFullPrintControllerTest extends TestCase
         $this->actingAs($admin)->get('/admin/integracoes/mercado-livre/impressao-full')->assertOk();
     }
 
-    public function test_store_rejects_empty_codes(): void
+    public function test_store_requires_either_file_or_content(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->post('/admin/integracoes/mercado-livre/impressao-full', [
-            'codes' => '   ',
-        ])->assertSessionHasErrors('codes');
+        $this->actingAs($admin)->post('/admin/integracoes/mercado-livre/impressao-full', [])
+            ->assertSessionHasErrors(['file', 'content']);
     }
 
-    public function test_store_fetches_zpl_converts_to_pdf_and_creates_a_single_print_job(): void
+    public function test_store_converts_pasted_zpl_and_creates_a_single_print_job(): void
     {
         Storage::fake('local');
         Http::fake([
             'api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf']),
         ]);
 
-        $zpl = "^XA^FO20,20^A0N,30,30^FDEnvio: 1/1^FS^XZ^XA^FO20,20^A0N,30,30^FDEnvio: 1/2^FS^XZ";
-        $this->mockClient($zpl);
-
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        // 3 formas de separador na mesma entrada (vírgula, espaço, quebra
-        // de linha) — todas devem virar 1 shipment_ids único deduplicado.
         $response = $this->actingAs($admin)->post('/admin/integracoes/mercado-livre/impressao-full', [
-            'codes' => "73851942\n47699073188, 47700259172 47699073188",
+            'content' => self::MULTI_LABEL_ZPL,
         ]);
 
         $response->assertRedirect(route('admin.integracoes.mercado-livre.impressao-full'));
@@ -107,20 +95,37 @@ class MercadoLivreFullPrintControllerTest extends TestCase
         Storage::disk('local')->assertExists($printJob->label_path);
     }
 
-    public function test_store_shows_the_real_ml_error_instead_of_a_generic_failure(): void
+    public function test_store_accepts_an_uploaded_txt_file_instead_of_pasted_content(): void
     {
-        $client = Mockery::mock(MercadoLivreClient::class);
-        $client->shouldReceive('getBinary')->once()->andThrow(new \RuntimeException('Erro na API do Mercado Livre (HTTP 404).'));
-        $this->app->instance(MercadoLivreClient::class, $client);
+        Storage::fake('local');
+        Http::fake([
+            'api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $file = UploadedFile::fake()->createWithContent('etiquetas-full.txt', self::MULTI_LABEL_ZPL);
+
+        $this->actingAs($admin)->post('/admin/integracoes/mercado-livre/impressao-full', [
+            'file' => $file,
+        ])->assertSessionHas('success');
+
+        $this->assertDatabaseCount('print_jobs', 1);
+    }
+
+    public function test_store_shows_the_real_conversion_error_instead_of_a_generic_failure(): void
+    {
+        Http::fake([
+            'api.labelary.com/*' => Http::response('não deu', 422),
+        ]);
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
         $response = $this->actingAs($admin)->post('/admin/integracoes/mercado-livre/impressao-full', [
-            'codes' => '999999999',
+            'content' => self::MULTI_LABEL_ZPL,
         ]);
 
         $response->assertSessionHas('error');
-        $this->assertStringContainsString('Erro na API do Mercado Livre (HTTP 404).', session('error'));
+        $this->assertStringContainsString('Labelary', session('error'));
         $this->assertDatabaseCount('print_jobs', 0);
     }
 }

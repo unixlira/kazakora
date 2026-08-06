@@ -2,6 +2,7 @@
 
 namespace App\Modules\Catalog\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesShopeeAuthorizationLanding;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
@@ -11,8 +12,6 @@ use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Operacional\Models\ShippingMethod;
-use App\Services\Shopee\Exceptions\ShopeeException;
-use App\Services\Shopee\ShopeeAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,22 +19,16 @@ use Inertia\Response;
 
 class CatalogController extends Controller
 {
+    use HandlesShopeeAuthorizationLanding;
+
+    /**
+     * Um dos 3 destinos plausíveis do redirect de autorização "Seller In
+     * House" da Shopee — ver HandlesShopeeAuthorizationLanding.
+     */
     public function index(Request $request): Response|RedirectResponse
     {
-        // Achado real 2026-08-06: apps "Seller In House" da Shopee são
-        // autorizados DIRETO no console deles (botão "Authorize" ao lado
-        // do app), não pelo link /auth que a gente gera — e esse fluxo do
-        // console usa a "Live/Test Redirect URL Domain" cadastrada lá, que
-        // é só o domínio raiz (https://kazakora.devlira.com.br/), sem
-        // caminho nenhum. Não tem como mudar isso pelo nosso lado (é
-        // configuração de dentro do painel da Shopee, sem acesso daqui) —
-        // então a home precisa reconhecer esse caso e processar o
-        // code/shop_id que chegam aqui, em vez de simplesmente ignorá-los
-        // e mostrar a loja normal. Delega pro mesmo ShopeeAuthService que
-        // ShopeeController::callback() usa — mesmo resultado final
-        // (MarketplaceAccount conectada), só a origem da requisição muda.
-        if ($request->filled('code') && $request->filled('shop_id')) {
-            return $this->handleShopeeAuthorizationLandingOnHome($request);
+        if ($redirect = $this->shopeeAuthorizationLandingRedirect($request)) {
+            return $redirect;
         }
 
         $search = $request->string('search')->trim();
@@ -186,28 +179,5 @@ class CatalogController extends Controller
             ->unique()
             ->values()
             ->all();
-    }
-
-    /**
-     * Ver comentário em index() — só existe porque a Shopee redireciona
-     * apps "Seller In House" pro domínio raiz cadastrado no console deles,
-     * sem caminho, então code/shop_id chegam aqui em vez de
-     * /api/shopee/callback. Mesma lógica/resultado de
-     * ShopeeController::callback(), só o ponto de entrada muda.
-     */
-    private function handleShopeeAuthorizationLandingOnHome(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'code' => ['required', 'string'],
-            'shop_id' => ['required', 'integer'],
-        ]);
-
-        try {
-            app(ShopeeAuthService::class)->handleCallback($validated['code'], (int) $validated['shop_id']);
-        } catch (ShopeeException $exception) {
-            return redirect('/admin/integracoes')->with('error', $exception->getMessage());
-        }
-
-        return redirect('/admin/integracoes')->with('success', 'Loja da Shopee conectada com sucesso.');
     }
 }

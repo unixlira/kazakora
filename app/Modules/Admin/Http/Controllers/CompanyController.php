@@ -2,6 +2,7 @@
 
 namespace App\Modules\Admin\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesShopeeAuthorizationLanding;
 use App\Http\Controllers\Controller;
 use App\Modules\Fiscal\Models\Company;
 use Illuminate\Http\RedirectResponse;
@@ -12,6 +13,8 @@ use Inertia\Response;
 
 class CompanyController extends Controller
 {
+    use HandlesShopeeAuthorizationLanding;
+
     private const REGIMES = [
         Company::REGIME_MEI,
         Company::REGIME_SIMPLES_NACIONAL,
@@ -19,8 +22,16 @@ class CompanyController extends Controller
         Company::REGIME_LUCRO_REAL,
     ];
 
-    public function edit(): Response
+    /**
+     * Um dos 3 destinos plausíveis do redirect de autorização "Seller In
+     * House" da Shopee — ver HandlesShopeeAuthorizationLanding.
+     */
+    public function edit(Request $request): Response|RedirectResponse
     {
+        if ($redirect = $this->shopeeAuthorizationLandingRedirect($request)) {
+            return $redirect;
+        }
+
         return Inertia::render('Admin/Company/Edit', [
             'company' => Company::query()->first(),
             'regimes' => self::REGIMES,

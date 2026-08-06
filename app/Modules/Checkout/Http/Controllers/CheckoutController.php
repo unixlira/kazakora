@@ -449,7 +449,16 @@ class CheckoutController extends Controller
                 'context' => $exception->context(),
             ]);
 
-            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => $exception->getMessage() ?: 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
+            // Achado real 2026-08-06: $exception->getMessage() aqui é o
+            // texto CRU devolvido pela API do Mercado Pago
+            // (MercadoPagoPaymentService::handleResponse() usa
+            // $response->json('message') direto), não uma mensagem pensada
+            // pra cliente — coisas como nome de parâmetro interno ou motivo
+            // técnico de rejeição iam parar na tela de checkout de qualquer
+            // comprador. Log já guarda o texto real pra investigação; só a
+            // mensagem genérica (mesma do catch do Stripe acima) vai pro
+            // cliente agora.
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 
         if ($useMercadoPago) {

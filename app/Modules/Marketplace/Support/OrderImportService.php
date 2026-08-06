@@ -126,7 +126,9 @@ class OrderImportService
 
                 $order->items()->create([
                     'product_id' => $product?->id,
-                    'product_name' => $product?->name ?? "Item {$item['external_id']} (sem produto local mapeado)",
+                    'product_name' => $product?->name
+                        ?? ($item['external_name'] ?? null)
+                        ?? "Item {$item['external_id']} (sem produto local mapeado)",
                     'product_price' => $item['unit_price'],
                     'quantity' => $item['quantity'],
                     'subtotal' => round($item['unit_price'] * $item['quantity'], 2),

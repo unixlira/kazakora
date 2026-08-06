@@ -94,7 +94,25 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             }
 
             $itemsSubtotal += $unitPrice * $quantity;
-            $items[] = ['external_id' => $externalItemId, 'quantity' => $quantity, 'unit_price' => $unitPrice];
+            // external_name é o nome real do anúncio na Shopee (item_name)
+            // + a variação (model_name, quando existe e não é o valor
+            // padrão "-" que a Shopee usa pra produto sem variação de
+            // verdade) — usado como fallback pelo OrderImportService
+            // quando o item ainda não tem produto local mapeado (achado
+            // real 2026-08-06, mesmo gap existia no driver do Mercado
+            // Livre — corrigido nos dois juntos).
+            $itemName = (string) ($item['item_name'] ?? '');
+            $modelName = (string) ($item['model_name'] ?? '');
+            $externalName = $modelName !== '' && $modelName !== '-'
+                ? trim("{$itemName} - {$modelName}")
+                : ($itemName ?: null);
+
+            $items[] = [
+                'external_id' => $externalItemId,
+                'external_name' => $externalName,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+            ];
         }
 
         $shippingCost = (float) ($order['actual_shipping_fee'] ?? $order['estimated_shipping_fee'] ?? 0);

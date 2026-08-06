@@ -138,7 +138,18 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // não é estimativa, é o valor de fato descontado na venda), por
             // unidade — mesma convenção de unit_price, por isso ×quantity.
             $marketplaceFee += (float) ($item['sale_fee'] ?? 0) * $quantity;
-            $items[] = ['external_id' => $externalId, 'quantity' => $quantity, 'unit_price' => $unitPrice];
+            // external_name (item.title) é o nome real do anúncio no
+            // Mercado Livre — usado como fallback pelo OrderImportService
+            // quando o item ainda não tem produto local mapeado (achado
+            // real 2026-08-06: sem isso, um item não mapeado importava
+            // como "Item {id} (sem produto local mapeado)" mesmo tendo o
+            // nome disponível no payload o tempo todo).
+            $items[] = [
+                'external_id' => $externalId,
+                'external_name' => $item['item']['title'] ?? null,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+            ];
         }
 
         $buyer = $order->buyer;

@@ -56,10 +56,6 @@ const disconnect = async (integration) => {
                     class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary">
                     Testar impressão de etiquetas
                 </Link>
-                <button type="button" :disabled="importingShopeeProducts" @click="importShopeeProducts"
-                    class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-lightprimary disabled:opacity-50">
-                    {{ importingShopeeProducts ? 'Importando...' : 'Importar produtos da Shopee' }}
-                </button>
             </div>
         </div>
 
@@ -85,6 +81,17 @@ const disconnect = async (integration) => {
                     <Link v-for="tab in mercadoLivreTabs" :key="tab.href" :href="tab.href"
                         class="rounded-full bg-lightprimary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary hover:text-white">
                         {{ tab.label }}
+                    </Link>
+                </div>
+
+                <div v-if="integration.connected && integration.channel === 'shopee'" class="mt-3 flex flex-wrap gap-1.5">
+                    <button type="button" :disabled="importingShopeeProducts" @click="importShopeeProducts"
+                        class="rounded-full bg-lightprimary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary hover:text-white disabled:opacity-50">
+                        {{ importingShopeeProducts ? 'Importando...' : 'Importar produtos' }}
+                    </button>
+                    <Link href="/admin/integracoes/webhooks?channel=shopee"
+                        class="rounded-full bg-lightprimary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary hover:text-white">
+                        Logs de webhook
                     </Link>
                 </div>
 

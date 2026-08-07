@@ -196,6 +196,10 @@ const cancelInvoice = () => {
                             class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary">
                             <i class="fas fa-file-pdf"></i> Baixar DANFE
                         </a>
+                        <a v-if="order.invoice?.status === 'authorized'" :href="`/admin/pedidos/${order.id}/nota/xml`"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary">
+                            <i class="fas fa-file-code"></i> Baixar XML
+                        </a>
                     </div>
 
                     <Can permission="pedidos.edit">

@@ -233,6 +233,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('pedidos/{order}/nota/danfe', [InvoiceController::class, 'danfe'])
         ->name('pedidos.nota.danfe')
         ->middleware('permission:pedidos.view');
+    Route::get('pedidos/{order}/nota/xml', [InvoiceController::class, 'xml'])
+        ->name('pedidos.nota.xml')
+        ->middleware('permission:pedidos.view');
 
     Route::get('notas-fiscais', [InvoiceController::class, 'index'])
         ->name('notas-fiscais.listar')

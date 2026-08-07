@@ -76,6 +76,23 @@ class InvoiceController extends Controller
         ]);
     }
 
+    /**
+     * Download do XML autorizado (nfeProc) — Amazon (e outros canais/
+     * contadores) às vezes pedem o XML em vez do PDF do DANFE. Mesmo
+     * padrão de danfe() acima.
+     */
+    public function xml(Order $order): HttpResponse
+    {
+        $order->loadMissing('invoice');
+
+        abort_unless($order->invoice?->xml_path && Storage::disk('local')->exists($order->invoice->xml_path), 404, 'XML não encontrado — nota ainda não autorizada.');
+
+        return response(Storage::disk('local')->get($order->invoice->xml_path), 200, [
+            'Content-Type' => 'application/xml',
+            'Content-Disposition' => "attachment; filename=\"nfe-pedido-{$order->id}.xml\"",
+        ]);
+    }
+
     public function cancel(Request $request, Order $order, InvoiceService $invoices): RedirectResponse
     {
         $validated = $request->validate([

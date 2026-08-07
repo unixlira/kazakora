@@ -45,7 +45,12 @@ class DashboardController extends Controller
                     ->sum('total'),
                 'productsCount' => Product::query()->where('is_active', true)->count(),
                 'lowStockCount' => Product::query()->where('stock', '<=', 5)->count(),
-                'visitsToday' => SiteVisit::query()->whereDate('created_at', $today)->count(),
+                // "Visita" = IP diferente, não pageview — um mesmo visitante
+                // navegando por várias páginas ou dando refresh no navegador
+                // não deve inflar esse número (pedido explícito do usuário
+                // 2026-08-07). Antes contava toda linha de site_visits (uma
+                // por página carregada), o que inflava bastante.
+                'visitsToday' => SiteVisit::query()->whereDate('created_at', $today)->distinct()->count('ip'),
                 'ordersToday' => Order::query()->whereDate('created_at', $today)->count(),
                 'ordersMonth' => Order::query()->where('created_at', '>=', $startOfMonth)->count(),
                 'revenueToday' => (float) Order::query()
@@ -127,8 +132,12 @@ class DashboardController extends Controller
             ->pluck('total', 'date')
             ->all();
 
+        // "Visitantes" = IP diferente por dia, não visitor_id (cookie) — ver
+        // comentário em 'visitsToday' acima pra motivo. 'views' acima
+        // continua sendo o pageview cru de propósito (métrica diferente,
+        // útil pra saber engajamento, não é o que o usuário pediu pra mudar).
         $visitors = SiteVisit::query()
-            ->selectRaw('DATE(created_at) as date, COUNT(DISTINCT visitor_id) as total')
+            ->selectRaw('DATE(created_at) as date, COUNT(DISTINCT ip) as total')
             ->where('created_at', '>=', $start)
             ->groupBy('date')
             ->pluck('total', 'date')

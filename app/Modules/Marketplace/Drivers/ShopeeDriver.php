@@ -281,12 +281,26 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * reconhecida cai em "aguardando pagamento" em vez de assumir que já
      * foi pago (mesma cautela que MercadoLivreDriver::mapOrderStatus() já
      * aplica).
+     *
+     * BUG REAL corrigido 2026-08-07: `TO_CONFIRM_RECEIVE` estava mapeado
+     * pra `STATUS_PAID` — errado, esse status só existe DEPOIS do produto
+     * já ter sido enviado (é o comprador confirmando que recebeu, não uma
+     * venda nova). Pro pedido #158 (real), esse webhook chegou depois do
+     * pedido já estar `shipped`, e o mapeamento pra `paid` fez o status
+     * REGREDIR (shipped → paid) — como OrderImportService::syncStatus()
+     * dispara ConfirmChannelShippingJob/GenerateInvoiceJob sempre que o
+     * status novo é `paid` e o antigo não era, isso reprocessou envio e
+     * nota fiscal de um pedido que já tinha etiqueta impressa há dias.
+     * Corrigido pro mapeamento certo (`SHIPPED`) — ver também a trava geral
+     * em OrderImportService::syncStatus() contra qualquer regressão de
+     * status, que blinda esse mesmo tipo de bug pra qualquer canal, não só
+     * a Shopee.
      */
     private function mapOrderStatus(string $status): string
     {
         return match ($status) {
-            'READY_TO_SHIP', 'PROCESSED', 'TO_CONFIRM_RECEIVE' => Order::STATUS_PAID,
-            'SHIPPED' => Order::STATUS_SHIPPED,
+            'READY_TO_SHIP', 'PROCESSED' => Order::STATUS_PAID,
+            'SHIPPED', 'TO_CONFIRM_RECEIVE' => Order::STATUS_SHIPPED,
             'COMPLETED' => Order::STATUS_COMPLETED,
             'CANCELLED', 'IN_CANCEL', 'TO_RETURN' => Order::STATUS_CANCELLED,
             default => Order::STATUS_AWAITING_PAYMENT,

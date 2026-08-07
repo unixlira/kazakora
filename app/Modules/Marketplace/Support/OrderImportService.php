@@ -246,9 +246,72 @@ class OrderImportService
         });
     }
 
+    /**
+     * Ordem "de progresso" normal de um pedido — usado só pra bloquear
+     * regressão (ver isStaleStatus() abaixo), nunca pra decidir uma
+     * transição válida (isso continua sendo responsabilidade de cada
+     * driver/mapOrderStatus()).
+     */
+    private const STATUS_PROGRESS = [
+        Order::STATUS_PENDING => 0,
+        Order::STATUS_AWAITING_PAYMENT => 1,
+        Order::STATUS_PAID => 2,
+        Order::STATUS_SHIPPED => 3,
+        Order::STATUS_COMPLETED => 4,
+    ];
+
+    /**
+     * BUG REAL encontrado 2026-08-07 (pedido #158, Shopee): um webhook de
+     * status "atrasado" (chegou depois de outro mais recente já ter
+     * avançado o pedido — no caso, TO_CONFIRM_RECEIVE chegando depois de
+     * SHIPPED, mapeado à época incorretamente pra `paid`, ver
+     * ShopeeDriver::mapOrderStatus()) fez o pedido regredir de `shipped`
+     * pra `paid` e reprocessou envio/nota fiscal de um pedido que já
+     * estava com etiqueta impressa. O mapeamento errado específico já foi
+     * corrigido, mas essa trava aqui é a defesa de verdade: nenhum canal
+     * (não só a Shopee) deveria conseguir mover um pedido pra trás na
+     * esteira normal (pending → awaiting_payment → paid → shipped →
+     * completed) via reimportação/webhook — só forward, ou pra
+     * `cancelled` (sempre aceito, de qualquer estado, é um evento real
+     * mesmo vindo fora de ordem). Pedido cancelado nunca "reabre" via
+     * webhook atrasado.
+     */
+    private function isStaleStatus(string $current, string $newStatus): bool
+    {
+        if ($newStatus === Order::STATUS_CANCELLED) {
+            return false;
+        }
+
+        if ($current === Order::STATUS_CANCELLED) {
+            return true;
+        }
+
+        $currentRank = self::STATUS_PROGRESS[$current] ?? null;
+        $newRank = self::STATUS_PROGRESS[$newStatus] ?? null;
+
+        if ($currentRank === null || $newRank === null) {
+            return false;
+        }
+
+        return $newRank < $currentRank;
+    }
+
     private function syncStatus(Order $order, string $newStatus): Order
     {
         if ($order->status === $newStatus) {
+            return $order;
+        }
+
+        if ($this->isStaleStatus($order->status, $newStatus)) {
+            Log::info('marketplace.order_import.stale_status_ignored', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'current_status' => $order->status,
+                'ignored_status' => $newStatus,
+            ]);
+
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Status \"{$newStatus}\" do canal ignorado — pedido já estava em \"{$order->status}\", mais avançado (webhook fora de ordem).");
+
             return $order;
         }
 

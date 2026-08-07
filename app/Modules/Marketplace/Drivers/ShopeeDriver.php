@@ -395,36 +395,32 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * um único ponto de coleta configurado não precisa de escolha real).
      * ship_order confirma de fato o método.
      *
-     * Achado real 2026-08-07, 3 vendas reais seguidas (#180/#181/#182):
-     * ship_order SEMPRE falhava nessa conta ("nenhum branch_id disponível"
-     * ou "not eligible for rescheduling"), mas get_tracking_info mostrava
-     * que a Shopee já tinha assumido a logística sozinha
-     * (LOGISTICS_REQUEST_CREATED/LOGISTICS_READY) em todos os 3 casos —
-     * ship_order nunca é necessário/válido nessa conta, é sempre rejeitado
-     * por já estar feito do lado deles. Confere isso PRIMEIRO agora, antes
-     * de tentar ship_order — evita 3 tentativas manuais toda vez que uma
-     * venda chega.
+     * BUG REAL corrigido 2026-08-07 (pedido #183, achado ao vivo — venda
+     * ficou travada sem etiqueta, painel da Shopee mostrando "Organizar
+     * Envio" ainda pendente enquanto o Kazakora achava que já estava
+     * confirmado): a versão anterior deste método pulava ship_order sempre
+     * que `logistics_status` não era `LOGISTICS_PENDING` — heurística
+     * criada a partir de 3 vendas anteriores (#180/#181/#182) onde
+     * `LOGISTICS_READY`/`LOGISTICS_REQUEST_CREATED` de fato já significavam
+     * "feito". Pro pedido #183 isso era falso: `logistics_status` veio
+     * `LOGISTICS_READY` MESMO SEM ship_order nunca ter sido chamado —
+     * chamando manualmente ao vivo pra diagnosticar, o status só avançou
+     * de verdade pra `LOGISTICS_REQUEST_CREATED` depois disso. Ou seja,
+     * `LOGISTICS_READY` não é garantia de nada, invalidando a heurística.
+     *
+     * Correção: chama ship_order SEMPRE, sem pular com base em status. Pro
+     * caso em que já estava mesmo feito (as 3 vendas originais que
+     * motivaram a heurística errada), a Shopee rejeita a chamada
+     * ("nenhum branch_id disponível"/"not eligible for rescheduling") —
+     * isso é tratado como não-erro aqui (só loga), porque quem realmente
+     * decide se a etiqueta sai ou não é get_shipping_document_result via
+     * CheckShipmentLabelJob, não esse retorno.
      */
     public function confirmShipping(Order $order): array
     {
         $this->ensureConfigured();
 
         $carrier = $this->resolveShippingCarrier($order);
-
-        $tracking = $this->client->get('/api/v2/logistics/get_tracking_info', [
-            'order_sn' => $order->external_order_id,
-        ]);
-
-        $logisticsStatus = $tracking['response']['logistics_status'] ?? null;
-
-        if ($logisticsStatus && $logisticsStatus !== 'LOGISTICS_PENDING') {
-            return [
-                'external_shipment_id' => $order->external_order_id,
-                'tracking_code' => $this->resolveTrackingNumber($order),
-                'shipping_method' => $carrier ?? 'drop_off',
-                'status' => 'confirmed',
-            ];
-        }
 
         $params = $this->client->get('/api/v2/logistics/get_shipping_parameter', [
             'order_sn' => $order->external_order_id,
@@ -441,16 +437,27 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         // faltava mandar o dropoff sem branch_id.
         $dropoff = $branchId ? ['branch_id' => $branchId] : new \stdClass();
 
-        $result = $this->client->post('/api/v2/logistics/ship_order', [
-            'order_sn' => $order->external_order_id,
-            'dropoff' => $dropoff,
-        ]);
+        try {
+            $this->client->post('/api/v2/logistics/ship_order', [
+                'order_sn' => $order->external_order_id,
+                'dropoff' => $dropoff,
+            ]);
+        } catch (ShopeeException $exception) {
+            // Sinal conhecido de "já estava feito" (as 3 vendas que
+            // motivaram a heurística errada acima sempre caíam aqui) — não
+            // é uma falha real do envio, só ship_order sendo redundante.
+            Log::channel('shopee')->info('shopee.ship_order.rejected_likely_already_done', [
+                'order_id' => $order->id,
+                'order_sn' => $order->external_order_id,
+                'message' => $exception->getMessage(),
+            ]);
+        }
 
         return [
             'external_shipment_id' => $order->external_order_id,
             'tracking_code' => $this->resolveTrackingNumber($order),
             'shipping_method' => $carrier ?? 'drop_off',
-            'status' => empty($result['error']) ? 'confirmed' : 'error',
+            'status' => 'confirmed',
         ];
     }
 

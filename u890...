@@ -1,0 +1,49 @@
+<?php
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Models\ChannelWebhookLog;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+
+$order = Order::where('origin', 'shopee')->latest('id')->first();
+if (!$order) { echo "Nenhum pedido Shopee encontrado\n"; exit; }
+
+echo "Order #{$order->id} external={$order->external_order_id} status={$order->status} created_at={$order->created_at} total={$order->total}\n";
+
+echo "\n--- ChannelShipment ---\n";
+$shipment = ChannelShipment::where('order_id', $order->id)->first();
+if ($shipment) {
+    echo "status={$shipment->status} external_shipment_id={$shipment->external_shipment_id} tracking_code={$shipment->tracking_code} error={$shipment->error_message} label_path={$shipment->label_path}\n";
+} else {
+    echo "Nenhum ChannelShipment criado ainda\n";
+}
+
+echo "\n--- PrintJob ---\n";
+$job = PrintJob::where('order_id', $order->id)->first();
+if ($job) {
+    echo "id={$job->id} status={$job->status} error={$job->error_message} channel={$job->channel}\n";
+} else {
+    echo "Nenhum PrintJob criado ainda\n";
+}
+
+echo "\n--- Timeline (OrderFulfillmentEvent) ---\n";
+$events = OrderFulfillmentEvent::where('order_id', $order->id)->orderBy('id')->get();
+foreach ($events as $e) {
+    echo "[{$e->created_at}] {$e->step} - {$e->status} - {$e->message}\n";
+}
+
+echo "\n--- Webhooks recentes (Shopee) ---\n";
+$logs = ChannelWebhookLog::where('channel', 'shopee')->latest('id')->limit(5)->get(['id','event_type','status','payload','created_at']);
+foreach ($logs as $l) {
+    $sn = $l->payload['data']['ordersn'] ?? '?';
+    echo "#{$l->id} code={$l->event_type} status={$l->status} ordersn={$sn} created_at={$l->created_at}\n";
+}
+
+echo "\n--- Jobs falhados (failed_jobs) relacionados ---\n";
+$failed = \DB::table('failed_jobs')->latest('failed_at')->limit(5)->get(['uuid','queue','payload','exception','failed_at']);
+foreach ($failed as $f) {
+    $payload = json_decode($f->payload, true);
+    $job = $payload['displayName'] ?? '?';
+    $excerpt = substr($f->exception, 0, 200);
+    echo "[{$f->failed_at}] queue={$f->queue} job={$job}\n  {$excerpt}\n";
+}

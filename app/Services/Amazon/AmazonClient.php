@@ -126,11 +126,17 @@ class AmazonClient
     }
 
     /**
-     * Feeds API (usado pra POST_INVOICE_CONFIRMATION — upload da NF-e) e
-     * Reports API seguem o mesmo padrão de 2 passos: cria um "documento"
-     * (devolve um id + uma URL pré-assinada da Amazon pra upload) e depois
-     * faz o PUT do conteúdo direto nessa URL (fora da SP-API em si, sem
-     * header de auth da Amazon — a URL já carrega a autorização).
+     * Feeds API e Reports API seguem o mesmo padrão de 2 passos: cria um
+     * "documento" (devolve um id + uma URL pré-assinada da Amazon pra
+     * upload) e depois faz o PUT do conteúdo direto nessa URL (fora da
+     * SP-API em si, sem header de auth da Amazon — a URL já carrega a
+     * autorização). Não usado por nenhum método de AmazonDriver hoje — a
+     * hipótese inicial de usar isso pra enviar a NF-e (feedType
+     * POST_INVOICE_CONFIRMATION) se mostrou errada ao confirmar contra a
+     * doc oficial (esse feedType não existe — ver comentário de
+     * AmazonDriver::submitInvoice()); mantido como infraestrutura genérica
+     * reaproveitável se um feedType real de nota fiscal for confirmado, ou
+     * pra qualquer feed/report futuro.
      *
      * @return array{feedDocumentId: string, url: string}
      */

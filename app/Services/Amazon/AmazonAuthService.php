@@ -34,12 +34,21 @@ class AmazonAuthService
 {
     private const TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 
+    /**
+     * Confirmado contra a doc oficial (developer-docs.amazon/sp-api/docs/
+     * website-authorization-workflow, 2026-08-07): a URI de autorização leva
+     * SÓ `application_id`+`state` (+`version=beta` enquanto o app estiver em
+     * estado "Draft") — `redirect_uri` NÃO é parâmetro dessa URL, fica
+     * registrado à parte no cadastro do app no Seller Central (diferente do
+     * OAuth "clássico" do Mercado Livre, que exige redirect_uri na query).
+     * Mandar esse parâmetro a mais aqui não é documentado e pode ser
+     * rejeitado pela Amazon.
+     */
     public function getAuthorizationUrl(string $state): string
     {
         $query = http_build_query(array_filter([
             'application_id' => config('services.amazon.app_id'),
             'state' => $state,
-            'redirect_uri' => config('services.amazon.redirect_uri'),
             // Exigido pelo próprio Amazon enquanto o app estiver em estado
             // "Draft" no Seller Central (self-teste antes de publicar).
             'version' => config('services.amazon.auth_draft_mode') ? 'beta' : null,

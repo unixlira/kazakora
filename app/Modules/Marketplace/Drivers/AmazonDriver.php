@@ -12,7 +12,6 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -21,19 +20,22 @@ use RuntimeException;
  * https://developer-docs.amazon.com/sp-api
  *
  * Autenticação: LWA via App\Services\Amazon\AmazonAuthService/AmazonClient
- * (ver comentário lá pra assinatura/RDT). Pedido importado via Orders API,
- * nota fiscal via Feeds API (POST_INVOICE_CONFIRMATION, exigido só pra
- * BR/MX/IN), envio+etiqueta via Merchant Fulfillment API (MFN) — a Amazon
- * devolve a etiqueta já pronta na mesma chamada que compra o frete
- * (síncrono, diferente do Mercado Livre/Shopee que processam a etiqueta de
- * forma assíncrona), por isso confirmShipping() já resolve os dois passos e
- * fetchLabel() só relê o que já foi baixado.
+ * (ver comentário lá pra assinatura/RDT). Pedido importado via Orders API
+ * (real, confirmado contra o schema oficial). Envio+etiqueta via Merchant
+ * Fulfillment API (MFN) — a Amazon devolve a etiqueta já pronta na mesma
+ * chamada que compra o frete (síncrono, diferente do Mercado Livre/Shopee
+ * que processam a etiqueta de forma assíncrona), por isso confirmShipping()
+ * já resolve os dois passos e fetchLabel() só relê o que já foi baixado.
  *
- * publishProduct/updateStock/unpublishProduct ficam como stub (Listings
- * Items API) — fora do escopo pedido (webhook de venda → nota fiscal →
- * envio → etiqueta) e o payload real depende do `productType` de cada
- * categoria (Product Type Definitions API), sem como confirmar o schema
- * exato sem uma chamada real contra a conta conectada.
+ * submitInvoice() e publishProduct/updateStock/unpublishProduct ficam como
+ * stub. Os dois últimos por estarem fora do escopo pedido (webhook de venda
+ * → nota fiscal → envio → etiqueta) e o payload real depender do
+ * `productType` de cada categoria (Listings Items API / Product Type
+ * Definitions API), sem como confirmar o schema exato sem uma chamada real.
+ * `submitInvoice()` por um motivo diferente: **não existe, na documentação
+ * pública, um endpoint SP-API pra um vendedor MFN brasileiro enviar NF-e** —
+ * ver o comentário do método pra o que foi de fato checado (Feeds API,
+ * Invoices API, Shipment Invoicing API) antes de concluir isso.
  */
 class AmazonDriver extends AbstractMarketplaceDriver
 {
@@ -208,10 +210,19 @@ class AmazonDriver extends AbstractMarketplaceDriver
 
     /**
      * `getOrderBuyerInfo`, dado pessoal — exige RDT com dataElements
-     * `buyerInfo`. `TaxClassifications` é onde a Amazon Brasil expõe
-     * CPF/CNPJ do comprador (obrigatório pra emissão de NF-e) — mesmo
-     * princípio do `buyer_cpf_id` que o driver da Shopee já precisou
-     * descobrir na prática; não confirmado ao vivo aqui ainda.
+     * `buyerInfo` (confirmado contra o schema oficial da Orders API: o
+     * dataElement `buyerInfo` já inclui `BuyerTaxInfo` — não existe/não é
+     * preciso um dataElement separado pra isso; `buyerTaxInformation` é
+     * outro campo, específico da Turquia, não relacionado). `TaxClassifications`
+     * é onde a Amazon Brasil expõe CPF/CNPJ do comprador (obrigatório pra
+     * emissão de NF-e) — mesmo princípio do `buyer_cpf_id` que o driver da
+     * Shopee já precisou descobrir na prática. **Ressalva real encontrada
+     * na doc**: `BuyerTaxInfo` só é preenchido "for business orders in the
+     * Brazil, Mexico and India marketplaces" — não confirmado se isso
+     * cobre toda venda B2C brasileira (onde CPF é sempre obrigatório por
+     * lei) ou só compras feitas via Amazon Business; se `document` vier
+     * sempre null na prática, essa é a explicação mais provável, não um
+     * bug de código.
      *
      * @return array{name: ?string, email: ?string, document: ?string}
      */
@@ -252,71 +263,39 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * Feeds API, feedType POST_INVOICE_CONFIRMATION — obrigatório pra
-     * BR/MX/IN antes do pedido poder ser enviado. Fluxo assíncrono de 2
-     * passos (cria documento → upload → cria feed referenciando o
-     * documento); a Amazon processa depois, então "sent" aqui significa
-     * "aceito pra processamento", não "nota validada" (mesmo vocabulário já
-     * usado pelas outras submissões — ChannelInvoiceSubmission::STATUS_SENT).
-     * Formato exato do envelope XML esperado pela Amazon pra esse feedType
-     * não confirmado contra sandbox real (bloqueado por client_secret LWA
-     * ainda não configurado nesta sessão) — usa o AmazonEnvelope padrão
-     * documentado pra feeds XML, mas pode precisar de ajuste na primeira
-     * submissão real.
+     * CORREÇÃO REAL (2026-08-07): a primeira versão deste método usava um
+     * feedType inventado (`POST_INVOICE_CONFIRMATION`) sem confirmação
+     * contra a doc oficial — verificado agora contra
+     * developer-docs.amazon/sp-api/docs/feed-type-values e
+     * invoicing-feed-type-values e esse feedType **não existe**. O que
+     * existe de fato relacionado a nota fiscal na SP-API:
+     * - `UPLOAD_VAT_INVOICE` (Feeds API) — é só pra "EU store (VAT
+     *   program)", não cobre o Brasil.
+     * - Invoices API (`invoices-v2024-06-19`) — **somente leitura**
+     *   ("This API is only able to retrieve Brazilian FBA invoices"), serve
+     *   pra baixar nota já emitida, não pra enviar uma.
+     * - Shipment Invoicing API (`submitInvoice`) — existe e aceita upload
+     *   (base64+MD5) mas é **exclusiva de "Brazilian FBA Onsite Orders"**
+     *   ("You cannot use this API in other Amazon stores or with other
+     *   fulfillment programs") — pedidos MFN (envio pelo próprio vendedor,
+     *   o caso da Kazakora) ficam de fora.
+     * Não encontrei, na documentação pública disponível, um endpoint SP-API
+     * pra um vendedor MFN brasileiro enviar a NF-e pra Amazon. Fica como
+     * stub explícito (mesmo padrão do TikTok/Shopee quando o endpoint real
+     * não pôde ser confirmado) em vez de manter uma implementação
+     * fabricada. Hipótese mais provável, a confirmar com o usuário: a NF-e
+     * de pedido MFN talvez precise só viajar fisicamente com o pacote
+     * (DANFE impresso junto da etiqueta, igual já acontece pro site
+     * próprio) — se for esse o caso, o pipeline certo não é "enviar pro
+     * canal", é anexar o DANFE ao PDF da etiqueta antes de imprimir (dá pra
+     * reaproveitar App\Modules\Marketplace\Support\LabelProcessingService,
+     * que já sabe fazer overlay em PDF de etiqueta).
      */
     public function submitInvoice(Order $order, Invoice $invoice): array
     {
         $this->ensureConfigured();
 
-        if (! $invoice->xml_path) {
-            throw new RuntimeException('Nota fiscal sem XML disponível para envio.');
-        }
-
-        $nfeXml = Storage::disk('local')->get($invoice->xml_path);
-        $envelope = $this->buildInvoiceFeedEnvelope($order, $nfeXml);
-
-        try {
-            $document = $this->client->createFeedDocument('text/xml; charset=UTF-8');
-            $this->client->uploadFeedDocument($document['url'], $envelope, 'text/xml; charset=UTF-8');
-
-            $feed = $this->client->post('/feeds/2021-06-30/feeds', [
-                'feedType' => 'POST_INVOICE_CONFIRMATION',
-                'marketplaceIds' => [config('services.amazon.marketplace_id')],
-                'inputFeedDocumentId' => $document['feedDocumentId'],
-            ]);
-
-            return ['status' => 'sent', 'external_reference' => $feed['feedId'] ?? null, 'response' => $feed];
-        } catch (AmazonException $exception) {
-            return ['status' => 'error', 'external_reference' => null, 'response' => ['error' => $exception->getMessage(), 'context' => $exception->context]];
-        }
-    }
-
-    /**
-     * @see submitInvoice() pra ressalva sobre o formato não confirmado.
-     */
-    private function buildInvoiceFeedEnvelope(Order $order, string $nfeXml): string
-    {
-        $nfeInner = preg_replace('/^<\?xml[^>]*\?>/', '', trim($nfeXml));
-
-        return <<<XML
-        <?xml version="1.0" encoding="UTF-8"?>
-        <AmazonEnvelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="amzn-envelope.xsd">
-            <Header>
-                <DocumentVersion>1.02</DocumentVersion>
-                <MerchantIdentifier>{$order->origin}</MerchantIdentifier>
-            </Header>
-            <MessageType>Invoice</MessageType>
-            <Message>
-                <MessageID>1</MessageID>
-                <Invoice>
-                    <AmazonOrderID>{$order->external_order_id}</AmazonOrderID>
-                    <InvoiceNumber>{$order->invoice?->numero}</InvoiceNumber>
-                    <InvoiceDate>{$order->invoice?->autorizada_em?->toAtomString()}</InvoiceDate>
-                    <InvoiceDocument>{$nfeInner}</InvoiceDocument>
-                </Invoice>
-            </Message>
-        </AmazonEnvelope>
-        XML;
+        throw new RuntimeException('Envio de nota fiscal pra Amazon ainda não implementado — endpoint SP-API real pra pedido MFN (não-FBA) no Brasil não confirmado na documentação pública. Ver comentário deste método.');
     }
 
     /**
@@ -354,8 +333,14 @@ class AmazonDriver extends AbstractMarketplaceDriver
         [$weightGrams, $dimensions] = $this->resolvePackageMeasurements($order);
         $company = Company::query()->first();
 
-        if (! $company?->zip) {
-            throw new RuntimeException('Endereço de origem (dados da empresa) não cadastrado — necessário pra cotar o envio na Amazon.');
+        // Address (MFN) exige AddressLine1/City/CountryCode/Email/Name/
+        // Phone/PostalCode — confirmado contra o schema real
+        // (merchantFulfillmentV0.json, "required" do definitions.Address).
+        // Email é fácil de esquecer (nenhum outro canal deste projeto pede
+        // e-mail da empresa pra nada) — sem ele a Amazon rejeita a cotação
+        // inteira.
+        if (! $company?->zip || ! $company->email) {
+            throw new RuntimeException('Endereço/e-mail de origem (dados da empresa) não cadastrado — necessário pra cotar o envio na Amazon.');
         }
 
         $shipmentRequestDetails = [
@@ -367,15 +352,24 @@ class AmazonDriver extends AbstractMarketplaceDriver
                 'AddressLine1' => trim("{$company->street}, {$company->number}"),
                 'AddressLine2' => $company->complement,
                 'City' => $company->city,
-                'StateOrRegion' => $company->state,
+                // Confirmado contra o schema real: o campo aqui é
+                // `StateOrProvinceCode`, diferente de `StateOrRegion` da
+                // Orders API (schema distinto, mesmo conceito).
+                'StateOrProvinceCode' => $company->state,
                 'PostalCode' => preg_replace('/\D/', '', (string) $company->zip),
                 'CountryCode' => 'BR',
+                'Email' => $company->email,
                 'Phone' => $company->phone,
             ],
             'PackageDimensions' => $dimensions,
             'Weight' => ['Value' => $weightGrams, 'Unit' => 'g'],
             'ShippingServiceOptions' => [
-                'DeliveryExperience' => 'NoSignatureRequired',
+                // Enum real (confirmado no schema, DeliveryExperienceType):
+                // DeliveryConfirmationWithAdultSignature/WithSignature/
+                // WithoutSignature/NoTracking — "NoSignatureRequired" não
+                // existe, era um valor inventado numa versão anterior deste
+                // arquivo.
+                'DeliveryExperience' => 'DeliveryConfirmationWithoutSignature',
                 'CarrierWillPickUp' => false,
             ],
         ];
@@ -390,11 +384,15 @@ class AmazonDriver extends AbstractMarketplaceDriver
         usort($services, fn ($a, $b) => ($a['Rate']['Amount'] ?? PHP_FLOAT_MAX) <=> ($b['Rate']['Amount'] ?? PHP_FLOAT_MAX));
         $chosen = $services[0];
 
-        $shipment = $this->client->post('/mfn/v0/shipments', [
+        // ShippingServiceOfferId é opcional (CreateShipmentRequest só exige
+        // ShipmentRequestDetails+ShippingServiceId) — só entra no corpo
+        // quando a cotação realmente devolveu um, nunca como null explícito
+        // (schema estrito pode rejeitar um campo opcional mandado como null).
+        $shipment = $this->client->post('/mfn/v0/shipments', array_filter([
             'ShipmentRequestDetails' => $shipmentRequestDetails,
             'ShippingServiceId' => $chosen['ShippingServiceId'],
             'ShippingServiceOfferId' => $chosen['ShippingServiceOfferId'] ?? null,
-        ]);
+        ], fn ($value) => $value !== null));
 
         $payload = $shipment['payload'] ?? [];
         $shipmentId = (string) ($payload['ShipmentId'] ?? '');

@@ -43,7 +43,7 @@ class IntegrationController extends Controller
         ],
         MarketplaceAccount::CHANNEL_AMAZON => [
             'name' => 'Amazon',
-            'description' => 'Importação de pedidos, envio da nota fiscal (POST_INVOICE_CONFIRMATION) e etiqueta via Fulfillment por Comerciante. Publicação de produto ainda não implementada.',
+            'description' => 'Importação de pedidos e etiqueta via Fulfillment por Comerciante (MFN). Envio de nota fiscal e publicação de produto ainda não implementados — endpoint SP-API real pra NF-e de pedido não-FBA não confirmado na documentação pública.',
             'icon' => 'fab fa-amazon',
             'connectHref' => '/api/amazon/auth',
             // Apps privados (não publicados) não usam o redirect OAuth — o

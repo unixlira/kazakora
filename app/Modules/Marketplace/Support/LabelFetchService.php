@@ -114,6 +114,20 @@ class LabelFetchService
         $path = "labels/{$shipment->order_id}/etiqueta-{$shipment->id}.{$extension}";
         Storage::disk('local')->put($path, $contents);
 
+        // Achado real 2026-08-07 (pedido #183): tracking_code é resolvido só
+        // uma vez, dentro de confirmShipping() — na Shopee o número de
+        // rastreio pode não existir ainda nesse instante (é atribuído de
+        // forma assíncrona depois do ship_order de verdade acontecer), o
+        // que deixava o campo gravado vazio pra sempre mesmo depois da
+        // etiqueta ficar pronta. Como a etiqueta só existe DEPOIS do
+        // rastreio ter sido atribuído de verdade pelo canal, esse é o
+        // ponto certo pra reconsultar — nunca bloqueia a etiqueta em si se
+        // falhar (o KoraSync só perde o nome "por rastreio" do arquivo
+        // arquivado, não a impressão).
+        if (! $shipment->tracking_code) {
+            $this->refreshTrackingCode($shipment);
+        }
+
         $shipment->update([
             'status' => ChannelShipment::STATUS_LABEL_READY,
             'label_path' => $path,
@@ -135,6 +149,28 @@ class LabelFetchService
         );
 
         return true;
+    }
+
+    /**
+     * @see attempt() pro motivo — chama confirmShipping() de novo só pra
+     * pegar o tracking_code atualizado (idempotente em todos os drivers
+     * reais: ML só consulta o shipment já existente, Shopee trata
+     * ship_order redundante como não-erro desde a correção de 2026-08-07).
+     * Nunca lança — falha aqui não pode derrubar a etiqueta já pronta.
+     */
+    private function refreshTrackingCode(ChannelShipment $shipment): void
+    {
+        try {
+            $result = $this->manager->driver($shipment->channel)->confirmShipping($shipment->order);
+        } catch (Throwable $exception) {
+            Log::warning('marketplace.label_fetch.tracking_code_refresh_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
+
+            return;
+        }
+
+        if (! empty($result['tracking_code'])) {
+            $shipment->tracking_code = $result['tracking_code'];
+        }
     }
 
     /**

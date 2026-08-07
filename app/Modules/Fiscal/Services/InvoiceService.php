@@ -95,11 +95,14 @@ class InvoiceService
     {
         try {
             return DB::transaction(function () use ($order) {
-                $numero = (Invoice::query()
+                $localMax = Invoice::query()
                     ->where('serie', config('nfe.serie'))
                     ->where('ambiente', config('nfe.ambiente'))
                     ->lockForUpdate()
-                    ->max('numero') ?? 0) + 1;
+                    ->max('numero') ?? 0;
+
+                // max(local, numero_inicial) — ver comentário em config/nfe.php.
+                $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
 
                 ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
 

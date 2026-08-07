@@ -105,7 +105,14 @@ class NFeXmlBuilderService
         $enderEmit->CEP = preg_replace('/\D/', '', (string) $company->zip);
         $enderEmit->cPais = 1058;
         $enderEmit->xPais = 'Brasil';
-        $enderEmit->fone = preg_replace('/\D/', '', (string) $company->phone);
+
+        // Mesma defesa do enderDest logo abaixo — fone é opcional, só seta
+        // quando tem dígito suficiente pro pattern [0-9]{6,14} da NF-e.
+        $emitPhone = preg_replace('/\D/', '', (string) $company->phone);
+        if (strlen($emitPhone) >= 6) {
+            $enderEmit->fone = $emitPhone;
+        }
+
         $make->tagenderEmit($enderEmit);
 
         $customer = $order->user;
@@ -160,15 +167,53 @@ class NFeXmlBuilderService
         $enderDest->CEP = preg_replace('/\D/', '', $order->shipping_zip);
         $enderDest->cPais = 1058;
         $enderDest->xPais = 'Brasil';
-        $enderDest->fone = preg_replace('/\D/', '', (string) $order->shipping_phone);
+
+        // Achado real 2026-08-06 (pedidos Shopee reais #180/#181): a Shopee
+        // mascara o telefone por privacidade ("******97") — depois de tirar
+        // os não-dígitos sobra só "97", 2 caracteres, e o schema da NF-e
+        // exige 6-14 ([0-9]{6,14} pattern). Rejeição real do validador
+        // local antes até de chegar na SEFAZ. fone é opcional no XML —
+        // omite em vez de mandar um valor curto demais que nunca vai
+        // validar.
+        $destPhone = preg_replace('/\D/', '', (string) $order->shipping_phone);
+        if (strlen($destPhone) >= 6) {
+            $enderDest->fone = $destPhone;
+        }
+
         $make->tagenderDest($enderDest);
 
         $totalVProd = 0.0;
+
+        // Rejeição real da SEFAZ (535, pedido #180, 2026-08-06): "Total do
+        // Frete difere do somatório dos itens" — o total (icmsTot->vFrete
+        // logo abaixo) sempre foi só order->shipping_cost, sem NENHUM item
+        // declarar frete individual, e a SEFAZ exige que o total bata com a
+        // soma do vFrete de cada item quando o total é > 0. Distribuído
+        // proporcionalmente ao valor de cada item (não dividido igual entre
+        // eles — item mais caro carrega mais frete, mais justo e é o padrão
+        // usado por a maioria dos emissores), com o resto do arredondamento
+        // absorvido pelo último item pra sempre bater exatamente com o
+        // total, nunca sobrar/faltar centavo por causa de round() em cada
+        // parcela.
+        $totalShipping = (float) $order->shipping_cost;
+        $orderSubtotal = (float) $order->subtotal;
+        $itemsCount = $order->items->count();
+        $allocatedShipping = 0.0;
 
         foreach ($order->items as $index => $item) {
             $n = $index + 1;
             $fiscal = $item->product->fiscalData;
             $cfop = $order->shipping_state === $company->state ? $fiscal->cfop : $fiscal->cfop_outros_estados;
+
+            if ($n === $itemsCount) {
+                $itemShipping = round($totalShipping - $allocatedShipping, 2);
+            } else {
+                $itemShipping = $orderSubtotal > 0
+                    ? round($totalShipping * ((float) $item->subtotal / $orderSubtotal), 2)
+                    : 0.0;
+            }
+
+            $allocatedShipping += $itemShipping;
 
             $prod = new stdClass();
             $prod->item = $n;
@@ -186,6 +231,9 @@ class NFeXmlBuilderService
             $prod->qTrib = (float) $item->quantity;
             $prod->vUnTrib = (float) $item->product_price;
             $prod->indTot = 1;
+            if ($itemShipping > 0) {
+                $prod->vFrete = $itemShipping;
+            }
             if ($fiscal->cest) {
                 $prod->CEST = $fiscal->cest;
             }

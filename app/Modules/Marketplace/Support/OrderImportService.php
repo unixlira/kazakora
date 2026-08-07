@@ -70,6 +70,23 @@ class OrderImportService
                 $existing->forceFill(['created_at' => $data['placed_at']])->save();
             }
 
+            // Mesma lógica pro total (achado real 2026-08-06,
+            // ShopeeDriver::importOrder() — total_amount da Shopee nunca
+            // incluía o frete, todo pedido já importado antes desse fix
+            // ficou com o total sub-contado). Reprocessar o sync já
+            // corrige os pedidos existentes, sem script separado.
+            $financialFields = array_filter([
+                'subtotal' => $data['subtotal'] ?? null,
+                'shipping_cost' => $data['shipping_cost'] ?? null,
+                'total' => $data['total'] ?? null,
+            ], fn ($value) => $value !== null);
+
+            $changed = array_filter($financialFields, fn ($value, $field) => (float) $existing->{$field} !== (float) $value, ARRAY_FILTER_USE_BOTH);
+
+            if ($changed) {
+                $existing->update($changed);
+            }
+
             return $this->syncStatus($existing, $data['status']);
         }
 

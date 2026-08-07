@@ -177,7 +177,15 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         $response = $this->client->get('/api/v2/order/get_order_detail', [
             'order_sn_list' => $externalOrderId,
-            'response_optional_fields' => 'buyer_username,recipient_address,item_list,total_amount,order_status,estimated_shipping_fee,actual_shipping_fee',
+            // buyer_cpf_id adicionado 2026-08-06 — achado real: pedidos
+            // Shopee reais ficavam presos pra sempre no pipeline (nota
+            // fiscal nunca emitida por falta de CPF/CNPJ do comprador,
+            // etiqueta nunca liberada por consequência, já que a Shopee
+            // exige a nota antes — ver ConfirmChannelShippingJob) porque
+            // esse campo nunca era pedido à API, mesmo a Shopee mandando o
+            // CPF de verdade quando solicitado (confirmado ao vivo contra
+            // um pedido real).
+            'response_optional_fields' => 'buyer_username,recipient_address,item_list,total_amount,order_status,estimated_shipping_fee,actual_shipping_fee,buyer_cpf_id',
         ]);
 
         $order = $response['response']['order_list'][0] ?? null;
@@ -222,7 +230,17 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         }
 
         $shippingCost = (float) ($order['actual_shipping_fee'] ?? $order['estimated_shipping_fee'] ?? 0);
-        $total = (float) ($order['total_amount'] ?? ($itemsSubtotal + $shippingCost));
+
+        // Achado real 2026-08-06 (rejeição 610 da SEFAZ investigando o
+        // pedido #180 revelou isso): total_amount da Shopee é só o valor
+        // dos ITENS, nunca inclui o frete (confirmado contra o payload
+        // real — total_amount idêntico ao subtotal dos itens mesmo com
+        // actual_shipping_fee > 0). O código antes preferia total_amount
+        // (sempre presente, então o fallback nunca disparava) e todo
+        // pedido Shopee com frete ficava sub-contado no total — impacto
+        // financeiro real, não só um detalhe de nota fiscal. Sempre
+        // recalculamos aqui, nunca confiamos em total_amount pra isso.
+        $total = round($itemsSubtotal + $shippingCost, 2);
 
         return [
             'external_order_id' => (string) ($order['order_sn'] ?? $externalOrderId),
@@ -232,6 +250,11 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'total' => round($total, 2),
             'buyer_name' => $address['name'] ?? ($order['buyer_username'] ?? 'Comprador Shopee'),
             'buyer_phone' => $address['phone'] ?? null,
+            // Sem isso, InvoiceService::issue() sempre falhava com "não foi
+            // possível identificar o CPF/CNPJ do comprador" — nunca emitia
+            // nota, nunca liberava etiqueta na Shopee (achado real
+            // 2026-08-06, ver comentário em response_optional_fields acima).
+            'buyer_document' => isset($order['buyer_cpf_id']) ? preg_replace('/\D/', '', (string) $order['buyer_cpf_id']) : null,
             'shipping_zip' => $address['zipcode'] ?? '00000000',
             'shipping_street' => $address['full_address'] ?? 'Não informado',
             'shipping_number' => 'S/N',

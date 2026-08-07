@@ -1,8 +1,9 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import QueueCard from './QueueCard.vue';
-import { Head } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { DataTable } from '@/Shared/Components/DataTable';
+import { Head, Link } from '@inertiajs/vue3';
+import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     stats: { type: Object, default: () => ({}) },
@@ -15,7 +16,47 @@ const formatPrice = (value) =>
 
 const current = computed(() => props.queue[0] ?? null);
 const next = computed(() => props.queue[1] ?? null);
-const rest = computed(() => props.queue.slice(2));
+
+// Lista completa da fila em DataTable (busca/ordenação/paginação de graça,
+// mesmo padrão já usado em Vendas — Mercado Livre e outras telas do admin) —
+// antes era uma lista simples sem busca nem ordenação, pedido explícito do
+// usuário 2026-08-07 pra padronizar. Os 2 cards "chamada de senha" acima
+// continuam mostrando os mesmos pedidos #1/#2 da tabela — intencional,
+// aquilo é o painel físico de separação, isso aqui é a lista/consulta.
+const queueColumns = [
+    {
+        accessorKey: 'id',
+        header: 'Pedido',
+        cell: ({ row }) => h('div', {}, [
+            h(Link, { href: `/admin/pedidos/${row.original.id}`, class: 'font-semibold hover:text-primary hover:underline' }, () => `#${row.original.id}`),
+            row.original.externalOrderId
+                ? h('div', { class: 'text-xs text-slate-400' }, row.original.externalOrderId)
+                : null,
+        ]),
+    },
+    { id: 'customer', header: 'Cliente', accessorFn: (row) => row.customer || 'Cliente não informado' },
+    {
+        id: 'channel',
+        header: 'Canal',
+        accessorFn: (row) => row.channel,
+        cell: ({ row }) => h('span', { class: 'inline-flex items-center gap-1.5' }, [
+            h('i', { class: [row.original.channelIcon, 'text-slate-400'] }),
+            row.original.channel,
+        ]),
+    },
+    {
+        accessorKey: 'unitsCount',
+        header: 'Itens',
+        cell: ({ row }) => h('span', { class: 'rounded-full bg-lightwarning px-2 py-0.5 text-xs font-bold text-warning-emphasis' }, `${row.original.unitsCount} un.`),
+    },
+    {
+        id: 'products',
+        header: 'Produtos',
+        accessorFn: (row) => row.products.join(', '),
+        cell: ({ row }) => h('span', { class: 'block max-w-xs truncate text-slate-500', title: row.original.products.join(', ') }, row.original.products.join(', ')),
+    },
+    { accessorKey: 'createdAt', header: 'Criado em' },
+];
 
 // Botões de maximizar/minimizar além do F11/Esc nativos do navegador (que
 // continuam funcionando do mesmo jeito, sem nenhum código aqui) — pedido
@@ -78,33 +119,16 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFul
             </div>
         </div>
 
-        <div v-if="current" class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <div class="space-y-6">
+        <template v-if="current">
+            <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <QueueCard :order="current" size="xl" />
                 <QueueCard v-if="next" :order="next" size="lg" />
             </div>
 
-            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-                <div class="border-b border-[var(--surface-border)] px-4 py-3">
-                    <h3 class="font-semibold">Próximos na fila ({{ rest.length }})</h3>
-                </div>
-                <div class="max-h-[720px] divide-y divide-[var(--surface-border)] overflow-y-auto">
-                    <div v-for="order in rest" :key="order.id" class="px-4 py-3">
-                        <div class="flex items-center justify-between">
-                            <span class="font-semibold">#{{ order.id }}</span>
-                            <span class="rounded-full bg-lightwarning px-2 py-0.5 text-xs font-bold text-warning-emphasis">
-                                {{ order.unitsCount }} un.
-                            </span>
-                        </div>
-                        <p class="truncate text-sm text-slate-600 dark:text-slate-300">{{ order.customer || 'Cliente não informado' }}</p>
-                        <p class="text-xs text-slate-400">
-                            <i :class="order.channelIcon"></i> {{ order.channel }} · {{ order.createdAt }}
-                        </p>
-                    </div>
-                    <p v-if="rest.length === 0" class="px-4 py-8 text-center text-sm text-slate-400">Nenhum outro pedido na fila.</p>
-                </div>
-            </div>
-        </div>
+            <h3 class="mb-3 font-semibold">Fila de separação ({{ props.queue.length }})</h3>
+            <DataTable :columns="queueColumns" :data="props.queue" search-placeholder="Buscar por pedido, cliente ou canal..."
+                empty-message="Nenhum pedido na fila." />
+        </template>
 
         <div v-else class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-16 text-center shadow-sm">
             <i class="fas fa-circle-check mb-3 text-4xl text-success"></i>

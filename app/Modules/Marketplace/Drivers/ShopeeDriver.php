@@ -417,13 +417,18 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         $branchId = $params['response']['info_needed']['dropoff']['branch_list'][0]['branch_id'] ?? null;
 
-        if (! $branchId) {
-            throw new RuntimeException("Pedido {$order->external_order_id}: nenhum branch_id de dropoff disponível na Shopee.");
-        }
+        // Achado real 2026-08-07 (pedido #182): branch_list vem null/vazio
+        // quando não há ponto de coleta pra escolher — não é um erro, é só
+        // que essa venda/transportadora não precisa de escolha de branch
+        // (confirmado testando ao vivo: ship_order com dropoff VAZIO
+        // funciona igual, a Shopee que decide o ponto sozinha). Antes disso
+        // travava aqui achando que faltava dado, quando na verdade só
+        // faltava mandar o dropoff sem branch_id.
+        $dropoff = $branchId ? ['branch_id' => $branchId] : new \stdClass();
 
         $result = $this->client->post('/api/v2/logistics/ship_order', [
             'order_sn' => $order->external_order_id,
-            'dropoff' => ['branch_id' => $branchId],
+            'dropoff' => $dropoff,
         ]);
 
         return [
@@ -472,22 +477,40 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * 3 chamadas: create_shipping_document cria a tarefa (idempotente por
-     * order_sn) → get_shipping_document_result até status=READY
+     * 3 chamadas: create_shipping_document cria a tarefa (só na PRIMEIRA
+     * tentativa) → get_shipping_document_result até status=READY
      * (processamento assíncrono do lado da Shopee) → download_shipping_document
      * devolve o binário. `ready: false` enquanto ainda está PROCESSING.
+     *
+     * Achado real 2026-08-07 (pedido #182): create_shipping_document NÃO é
+     * seguro chamar de novo depois que o documento já existe — descrito
+     * como "idempotente" mas repetir a chamada (CheckShipmentLabelJob tenta
+     * de 5 em 5s) quebrava um documento que já estava com status=READY,
+     * sempre devolvendo "package_can_not_print"/"All failed" mesmo com o
+     * documento pronto pra baixar. Confirmado ao vivo: chamando só
+     * get_shipping_document_result (sem create) direto, o status já vinha
+     * READY e o download funcionou na hora. Agora só chama create quando
+     * get_shipping_document_result falha (documento ainda nem existe).
      */
     public function fetchLabel(Order $order): array
     {
         $this->ensureConfigured();
 
-        $this->client->post('/api/v2/logistics/create_shipping_document', [
-            'order_list' => [['order_sn' => $order->external_order_id]],
-        ]);
+        try {
+            $result = $this->client->post('/api/v2/logistics/get_shipping_document_result', [
+                'order_list' => [['order_sn' => $order->external_order_id]],
+            ]);
+        } catch (ShopeeException) {
+            // Documento ainda não existe — cria a tarefa e volta "não
+            // pronto ainda" pra esse ciclo, deixa o retry natural do
+            // CheckShipmentLabelJob (5s) consultar de novo em seguida, sem
+            // criar duas vezes.
+            $this->client->post('/api/v2/logistics/create_shipping_document', [
+                'order_list' => [['order_sn' => $order->external_order_id]],
+            ]);
 
-        $result = $this->client->post('/api/v2/logistics/get_shipping_document_result', [
-            'order_list' => [['order_sn' => $order->external_order_id]],
-        ]);
+            return ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
 
         $status = $result['response']['result_list'][0]['status'] ?? null;
 

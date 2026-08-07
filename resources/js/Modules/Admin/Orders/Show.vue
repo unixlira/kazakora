@@ -192,6 +192,10 @@ const cancelInvoice = () => {
                         <div v-if="order.invoice?.chave_acesso" class="font-mono text-xs text-slate-500">
                             Chave: {{ order.invoice.chave_acesso }}
                         </div>
+                        <a v-if="order.invoice?.status === 'authorized'" :href="`/admin/pedidos/${order.id}/nota/danfe`"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary">
+                            <i class="fas fa-file-pdf"></i> Baixar DANFE
+                        </a>
                     </div>
 
                     <Can permission="pedidos.edit">

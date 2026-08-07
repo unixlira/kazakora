@@ -230,6 +230,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('pedidos/{order}/nota/cancelar', [InvoiceController::class, 'cancel'])
         ->name('pedidos.nota.cancelar')
         ->middleware('permission:pedidos.edit');
+    Route::get('pedidos/{order}/nota/danfe', [InvoiceController::class, 'danfe'])
+        ->name('pedidos.nota.danfe')
+        ->middleware('permission:pedidos.view');
 
     Route::get('notas-fiscais', [InvoiceController::class, 'index'])
         ->name('notas-fiscais.listar')

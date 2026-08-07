@@ -9,6 +9,8 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -53,6 +55,25 @@ class InvoiceController extends Controller
         GenerateInvoiceJob::dispatch($order->id);
 
         return back()->with('success', 'Emissão da nota fiscal agendada.');
+    }
+
+    /**
+     * Download do DANFE via navegador do admin — não existia nenhuma rota
+     * pra isso antes (só o e-mail de recibo anexa o PDF automaticamente).
+     * Pedido explícito 2026-08-07: precisava de um jeito de baixar a nota
+     * de um pedido específico pra salvar manualmente numa pasta local
+     * (não tem como o Kazakora escrever direto no PC do usuário).
+     */
+    public function danfe(Order $order): HttpResponse
+    {
+        $order->loadMissing('invoice');
+
+        abort_unless($order->invoice?->danfe_path && Storage::disk('local')->exists($order->invoice->danfe_path), 404, 'DANFE não encontrado — nota ainda não autorizada ou PDF não gerado.');
+
+        return response(Storage::disk('local')->get($order->invoice->danfe_path), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "attachment; filename=\"danfe-pedido-{$order->id}.pdf\"",
+        ]);
     }
 
     public function cancel(Request $request, Order $order, InvoiceService $invoices): RedirectResponse

@@ -380,12 +380,36 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * dropoff, devolve os branch_id disponíveis — usa o primeiro (conta com
      * um único ponto de coleta configurado não precisa de escolha real).
      * ship_order confirma de fato o método.
+     *
+     * Achado real 2026-08-07, 3 vendas reais seguidas (#180/#181/#182):
+     * ship_order SEMPRE falhava nessa conta ("nenhum branch_id disponível"
+     * ou "not eligible for rescheduling"), mas get_tracking_info mostrava
+     * que a Shopee já tinha assumido a logística sozinha
+     * (LOGISTICS_REQUEST_CREATED/LOGISTICS_READY) em todos os 3 casos —
+     * ship_order nunca é necessário/válido nessa conta, é sempre rejeitado
+     * por já estar feito do lado deles. Confere isso PRIMEIRO agora, antes
+     * de tentar ship_order — evita 3 tentativas manuais toda vez que uma
+     * venda chega.
      */
     public function confirmShipping(Order $order): array
     {
         $this->ensureConfigured();
 
         $carrier = $this->resolveShippingCarrier($order);
+
+        $tracking = $this->client->get('/api/v2/logistics/get_tracking_info', [
+            'order_sn' => $order->external_order_id,
+        ]);
+
+        $logisticsStatus = $tracking['response']['logistics_status'] ?? null;
+
+        if ($logisticsStatus && $logisticsStatus !== 'LOGISTICS_PENDING') {
+            return [
+                'external_shipment_id' => $order->external_order_id,
+                'shipping_method' => $carrier ?? 'drop_off',
+                'status' => 'confirmed',
+            ];
+        }
 
         $params = $this->client->get('/api/v2/logistics/get_shipping_parameter', [
             'order_sn' => $order->external_order_id,

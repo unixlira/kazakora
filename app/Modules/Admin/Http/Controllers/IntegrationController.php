@@ -82,6 +82,18 @@ class IntegrationController extends Controller
                 'connectedAt' => $account?->connected_at,
                 'accountLabel' => $channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE ? $mercadoLivreToken?->ml_nickname : $account?->seller_id,
                 'manualConnect' => $meta['manualConnect'] ?? false,
+                // Amazon: quando o .env já tem client_id/secret + o refresh
+                // token de self-authorization, o card conecta com 1 clique
+                // em vez de pedir pra colar o token nos campos de novo
+                // (pedido explícito do usuário 2026-08-07 — "deve carregar
+                // essas informações do env"). connectAmazon() usa esses
+                // mesmos valores de config como fallback quando o form vem
+                // vazio.
+                'envConfigured' => $channel === MarketplaceAccount::CHANNEL_AMAZON
+                    ? filled(config('services.amazon.lwa_client_id'))
+                        && filled(config('services.amazon.lwa_client_secret'))
+                        && filled(config('services.amazon.bootstrap_refresh_token'))
+                    : false,
             ];
         })->values();
 
@@ -141,16 +153,35 @@ class IntegrationController extends Controller
      * precisar do redirect OAuth completo (ver AmazonController, usado só
      * se/quando o app for publicado). AmazonAuthService::connectWithRefreshToken()
      * valida o token contra a API de verdade antes de persistir.
+     *
+     * Campos do form são opcionais: quando vêm vazios (botão "Conectar
+     * (usar .env)" do card, sem form nenhum), cai pro que já está no .env
+     * (AMAZON_REFRESH_TOKEN/AMAZON_SELLER_ID) — mesmo valor que o card já
+     * usa pra decidir se mostra esse atalho (`envConfigured`, ver index()).
+     * Colar manualmente continua funcionando do mesmo jeito, tem prioridade
+     * sobre o .env quando os dois existem.
      */
     public function connectAmazon(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'refresh_token' => ['required', 'string'],
+            'refresh_token' => ['nullable', 'string'],
             'seller_id' => ['nullable', 'string'],
         ]);
 
+        $refreshToken = filled($validated['refresh_token'] ?? null)
+            ? $validated['refresh_token']
+            : config('services.amazon.bootstrap_refresh_token');
+
+        $sellerId = filled($validated['seller_id'] ?? null)
+            ? $validated['seller_id']
+            : config('services.amazon.bootstrap_seller_id');
+
+        if (! filled($refreshToken)) {
+            return back()->with('error', 'Informe o refresh token da Amazon (nenhum encontrado no .env nem no formulário).');
+        }
+
         try {
-            $this->amazonAuth->connectWithRefreshToken($validated['refresh_token'], $validated['seller_id'] ?? null);
+            $this->amazonAuth->connectWithRefreshToken($refreshToken, $sellerId);
         } catch (AmazonException $exception) {
             return back()->with('error', 'Não foi possível conectar a Amazon: '.$exception->getMessage());
         }

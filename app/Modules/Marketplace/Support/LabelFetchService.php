@@ -49,6 +49,22 @@ class LabelFetchService
 
         $contents = $label['contents'];
 
+        // Guarda o arquivo exatamente como o canal devolveu (zip da Shopee,
+        // pdf do Mercado Livre), ANTES de qualquer descompactação/conversão
+        // abaixo — pedido explícito 2026-08-06: o KoraSync arquiva esse
+        // arquivo bruto numa pasta local (Vendas/Mês/Canal/Dia), nomeado
+        // pelo código de rastreio. Detecta a extensão pela assinatura real
+        // dos bytes, não pelo content_type do canal (já visto vindo inútil,
+        // "application/force-download").
+        $rawContents = $contents;
+        $rawExtension = match (true) {
+            str_starts_with($rawContents, "PK\x03\x04") => 'zip',
+            str_starts_with($rawContents, '%PDF-') => 'pdf',
+            default => 'bin',
+        };
+        $rawPath = "labels/{$shipment->order_id}/raw-{$shipment->id}.{$rawExtension}";
+        Storage::disk('local')->put($rawPath, $rawContents);
+
         // Achado real 2026-08-07 (pedidos #180/#181/#182 travados na
         // impressão física): a Shopee devolve um ZIP (assinatura real
         // "PK\x03\x04", confirmado nos bytes) contendo um
@@ -101,6 +117,7 @@ class LabelFetchService
         $shipment->update([
             'status' => ChannelShipment::STATUS_LABEL_READY,
             'label_path' => $path,
+            'raw_label_path' => $rawPath,
             'label_ready_at' => now(),
         ]);
 
@@ -108,7 +125,13 @@ class LabelFetchService
 
         PrintJob::query()->firstOrCreate(
             ['order_id' => $shipment->order_id],
-            ['label_path' => $path, 'status' => PrintJob::STATUS_QUEUED],
+            [
+                'channel' => $shipment->channel,
+                'tracking_code' => $shipment->tracking_code,
+                'label_path' => $path,
+                'raw_label_path' => $rawPath,
+                'status' => PrintJob::STATUS_QUEUED,
+            ],
         );
 
         return true;

@@ -19,8 +19,10 @@ class PrintJob extends Model
     protected $fillable = [
         'order_id',
         'channel',
+        'tracking_code',
         'is_thank_you',
         'label_path',
+        'raw_label_path',
         'status',
         'claimed_by',
         'claimed_at',

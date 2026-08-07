@@ -32,7 +32,7 @@ class PrintAgentController extends Controller
         $jobs = PrintJob::query()
             ->where('status', PrintJob::STATUS_QUEUED)
             ->oldest()
-            ->get(['id', 'order_id', 'created_at']);
+            ->get(['id', 'order_id', 'channel', 'tracking_code', 'created_at']);
 
         return response()->json(['jobs' => $jobs]);
     }
@@ -61,6 +61,25 @@ class PrintAgentController extends Controller
 
         return response(Storage::disk('local')->get($printJob->label_path), 200, [
             'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+    /**
+     * Arquivo bruto exatamente como o canal devolveu (zip da Shopee, pdf do
+     * Mercado Livre) — o KoraSync baixa isso separado do /label (que já
+     * vem convertido/pronto pra imprimir) só pra guardar uma cópia local em
+     * disco (pasta de Vendas), sem afetar o fluxo de impressão em si. Não
+     * existe pra etiqueta manual (sem raw_label_path) nem pra pedidos
+     * antigos anteriores a essa feature — 404 nesses casos é esperado, o
+     * agente só pula o arquivamento.
+     */
+    public function archive(PrintJob $printJob): HttpResponse
+    {
+        abort_unless($printJob->status === PrintJob::STATUS_CLAIMED, 409, 'Job precisa ser reivindicado antes de baixar o arquivo bruto.');
+        abort_unless($printJob->raw_label_path && Storage::disk('local')->exists($printJob->raw_label_path), 404, 'Arquivo bruto da etiqueta não encontrado.');
+
+        return response(Storage::disk('local')->get($printJob->raw_label_path), 200, [
+            'Content-Type' => 'application/octet-stream',
         ]);
     }
 

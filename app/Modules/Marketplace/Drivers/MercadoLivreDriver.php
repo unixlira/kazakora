@@ -268,6 +268,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
         return [
             'external_shipment_id' => (string) ($shipment['id'] ?? $shipmentId),
+            'tracking_code' => $shipment['tracking_number'] ?? null,
             'shipping_method' => $logisticType,
             'status' => $shipment['status'] ?? 'unknown',
         ];

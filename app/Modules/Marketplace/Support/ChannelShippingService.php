@@ -43,6 +43,7 @@ class ChannelShippingService
 
         $shipment->update([
             'external_shipment_id' => $result['external_shipment_id'] ?? $shipment->external_shipment_id,
+            'tracking_code' => $result['tracking_code'] ?? $shipment->tracking_code,
             'shipping_method' => $result['shipping_method'],
             'status' => ChannelShipment::STATUS_CONFIRMED,
             'confirmed_at' => now(),

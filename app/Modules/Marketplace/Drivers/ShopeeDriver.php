@@ -406,6 +406,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         if ($logisticsStatus && $logisticsStatus !== 'LOGISTICS_PENDING') {
             return [
                 'external_shipment_id' => $order->external_order_id,
+                'tracking_code' => $this->resolveTrackingNumber($order),
                 'shipping_method' => $carrier ?? 'drop_off',
                 'status' => 'confirmed',
             ];
@@ -433,9 +434,39 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         return [
             'external_shipment_id' => $order->external_order_id,
+            'tracking_code' => $this->resolveTrackingNumber($order),
             'shipping_method' => $carrier ?? 'drop_off',
             'status' => empty($result['error']) ? 'confirmed' : 'error',
         ];
+    }
+
+    /**
+     * Endpoint dedicado (não é o mesmo que get_tracking_info, que só traz o
+     * status/histórico) — pedido explícito 2026-08-06: arquivar o zip da
+     * etiqueta localmente usando o código de rastreio como nome do arquivo.
+     * Não lança exceção: o rastreio pode ainda não existir no instante em
+     * que ship_order acabou de confirmar (Shopee gera de forma assíncrona
+     * em alguns casos) — nesse caso fica null e o arquivamento local só
+     * ganha o nome real na próxima vez que confirmShipping rodar pra esse
+     * pedido (CheckShipmentLabelJob mantém tentando via retry).
+     */
+    private function resolveTrackingNumber(Order $order): ?string
+    {
+        try {
+            $response = $this->client->get('/api/v2/logistics/get_tracking_number', [
+                'order_sn' => $order->external_order_id,
+            ]);
+
+            return $response['response']['tracking_number'] ?? null;
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.tracking_number.lookup_failed', [
+                'order_id' => $order->id,
+                'order_sn' => $order->external_order_id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     /**

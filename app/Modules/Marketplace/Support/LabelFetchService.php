@@ -9,7 +9,9 @@ use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 use Throwable;
+use ZipArchive;
 
 /**
  * Núcleo de "consultar o canal e, se a etiqueta já estiver pronta,
@@ -45,8 +47,34 @@ class LabelFetchService
             return false;
         }
 
-        $isPdf = str_contains((string) $label['content_type'], 'pdf');
         $contents = $label['contents'];
+
+        // Achado real 2026-08-07 (pedidos #180/#181/#182 travados na
+        // impressão física): a Shopee devolve um ZIP (assinatura real
+        // "PK\x03\x04", confirmado nos bytes) contendo um
+        // "thermal_zpl_shipping_label.txt" — nunca um PDF direto, mesmo
+        // pedindo shipping_document_type=THERMAL_AIR_WAYBILL.
+        // content_type vinha "application/force-download" (inútil pra
+        // decidir), então a checagem antiga (str_contains content_type,
+        // 'pdf') sempre dava falso e o ZIP cru ia direto pro SumatraPDF do
+        // KoraSync, que falhava sempre (não é um PDF válido). Descompacta
+        // primeiro (se for zip), depois converte o ZPL extraído pra PDF via
+        // LabelProcessingService::convertZplToPdf() (já existia, usado só
+        // na tela de teste manual).
+        if (str_starts_with($contents, "PK\x03\x04")) {
+            $contents = $this->extractZplFromZip($contents);
+        }
+
+        // A etiqueta real da Shopee começa com "~DG" (comando ZPL de
+        // download de imagem — a etiqueta é um bitmap embutido, ver
+        // LabelProcessingService) ANTES do bloco "^XA...^XZ", não direto
+        // com "^XA" — checa a presença em vez de exigir como primeiro
+        // caractere.
+        if (str_contains($contents, '^XA')) {
+            $contents = $this->processor->convertZplToPdf($contents);
+        }
+
+        $isPdf = str_starts_with($contents, '%PDF-');
 
         // Sobrepõe a lista de produtos na etiqueta, igual já validado
         // manualmente na tela de teste de impressão — só é possível pra
@@ -84,5 +112,41 @@ class LabelFetchService
         );
 
         return true;
+    }
+
+    /**
+     * O zip da Shopee tem um único arquivo de verdade dentro
+     * (thermal_zpl_shipping_label.txt, confirmado ao vivo) — pega o
+     * primeiro/único entry em vez de fixar esse nome exato, que pode variar
+     * por conta/idioma sem aviso.
+     */
+    private function extractZplFromZip(string $zipContents): string
+    {
+        $tempZipPath = tempnam(sys_get_temp_dir(), 'shopee_label_').'.zip';
+        file_put_contents($tempZipPath, $zipContents);
+
+        try {
+            $zip = new ZipArchive();
+
+            if ($zip->open($tempZipPath) !== true) {
+                throw new RuntimeException('Não foi possível abrir o zip da etiqueta da Shopee.');
+            }
+
+            if ($zip->numFiles < 1) {
+                throw new RuntimeException('Zip da etiqueta da Shopee veio vazio.');
+            }
+
+            $entryName = $zip->getNameIndex(0);
+            $extracted = $zip->getFromName($entryName);
+            $zip->close();
+
+            if ($extracted === false) {
+                throw new RuntimeException("Não foi possível extrair \"{$entryName}\" do zip da etiqueta.");
+            }
+
+            return $extracted;
+        } finally {
+            @unlink($tempZipPath);
+        }
     }
 }

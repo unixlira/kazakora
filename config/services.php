@@ -115,4 +115,44 @@ return [
         'debug_signing' => (bool) env('SHOPEE_DEBUG_SIGNING', false),
     ],
 
+    'amazon' => [
+        // "Identificador de cliente" no console do Login with Amazon (LWA) —
+        // usado pra trocar/renovar tokens (api.amazon.com/auth/o2/token).
+        // Diferente do "App ID" abaixo, que identifica o app SP-API em si
+        // (usado só no link de autorização).
+        'lwa_client_id' => env('AMAZON_LWA_CLIENT_ID'),
+        'lwa_client_secret' => env('AMAZON_LWA_CLIENT_SECRET'),
+        // amzn1.sp.solution.xxx — App ID do app SP-API (Seller Central >
+        // Develop Apps), usado como application_id no link de autorização
+        // (fluxo OAuth completo, ver AmazonAuthService::getAuthorizationUrl()).
+        'app_id' => env('AMAZON_APP_ID'),
+        'redirect_uri' => env('AMAZON_REDIRECT_URI'),
+        // Apps SP-API privados (não publicados na loja de apps) não
+        // precisam do redirect OAuth: o próprio vendedor gera um refresh
+        // token direto no Seller Central (Partner Network > Develop Apps >
+        // Autorizar) e cola no admin — ver
+        // AmazonAuthService::connectWithRefreshToken(). Esse valor aqui é
+        // só uma conveniência pra bootstrap via .env (o mesmo token colado
+        // manualmente fica persistido em marketplace_accounts depois).
+        'bootstrap_refresh_token' => env('AMAZON_REFRESH_TOKEN'),
+        'bootstrap_seller_id' => env('AMAZON_SELLER_ID'),
+        // Brasil fica na região "NA" pra fins de endpoint da SP-API (mesmo
+        // host base de US/CA/MX), apesar do marketplace em si ser regional.
+        'marketplace_id' => env('AMAZON_MARKETPLACE_ID', 'A2Q3Y263D00KWC'), // Amazon.com.br
+        'region' => env('AMAZON_REGION', 'na'),
+        'sandbox' => (bool) env('AMAZON_SANDBOX', true),
+        'sp_api_base_url' => env(
+            'AMAZON_SP_API_BASE_URL',
+            (bool) env('AMAZON_SANDBOX', true)
+                ? 'https://sandbox.sellingpartnerapi-na.amazon.com'
+                : 'https://sellingpartnerapi-na.amazon.com',
+        ),
+        // Host do link de autorização (fluxo OAuth completo) — .com.br pra
+        // vendedor brasileiro logar direto na conta certa. "version=beta" é
+        // exigido enquanto o app estiver em estado "Draft" no Seller
+        // Central (self-testing antes de publicar).
+        'auth_base_url' => env('AMAZON_AUTH_BASE_URL', 'https://sellercentral.amazon.com.br'),
+        'auth_draft_mode' => (bool) env('AMAZON_AUTH_DRAFT_MODE', true),
+    ],
+
 ];

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
@@ -53,6 +54,14 @@ Route::prefix('shopee')->name('api.shopee.')->group(function () {
     // rota (só POST) devolvia 405 e a Shopee mostrava "callback_url is
     // invalid" mesmo com tudo certo do lado de cá.
     Route::match(['get', 'head'], '/webhook', fn () => response()->json(['status' => 'ok']))->name('webhook.verify');
+});
+
+Route::prefix('amazon')->name('api.amazon.')->middleware(['web', 'auth', 'admin'])->group(function () {
+    // OAuth completo — só é o caminho real se o app SP-API vier a ser
+    // publicado; enquanto for privado, a conexão de verdade acontece via
+    // token colado manualmente (ver IntegrationController::connectAmazon()).
+    Route::get('/auth', [AmazonController::class, 'redirectToAuth'])->name('auth');
+    Route::get('/callback', [AmazonController::class, 'callback'])->name('callback');
 });
 
 // Chamado pelo agente local de impressão (fora deste servidor) — token fixo,

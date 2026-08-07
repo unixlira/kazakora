@@ -36,6 +36,22 @@ const disconnect = async (integration) => {
         router.delete(`/admin/integracoes/${integration.channel}`, { preserveScroll: true });
     }
 };
+
+// Amazon: app privado (não publicado na loja de apps) não usa o redirect
+// OAuth — o vendedor gera o refresh token direto no Seller Central
+// (Partner Network > Develop Apps > Autorizar) e cola aqui.
+const showAmazonForm = ref(false);
+const amazonForm = ref({ refresh_token: '', seller_id: '' });
+const connectingAmazon = ref(false);
+
+const connectAmazon = () => {
+    connectingAmazon.value = true;
+    router.post('/admin/integracoes/amazon/conectar', amazonForm.value, {
+        preserveScroll: true,
+        onFinish: () => { connectingAmazon.value = false; },
+        onSuccess: () => { showAmazonForm.value = false; amazonForm.value = { refresh_token: '', seller_id: '' }; },
+    });
+};
 </script>
 
 <template>
@@ -96,7 +112,32 @@ const disconnect = async (integration) => {
                 </div>
 
                 <div class="mt-4">
-                    <a v-if="!integration.connected && integration.available" :href="integration.connectHref"
+                    <template v-if="!integration.connected && integration.available && integration.manualConnect">
+                        <button type="button" class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"
+                            @click="showAmazonForm = !showAmazonForm">
+                            {{ showAmazonForm ? 'Cancelar' : 'Conectar com refresh token' }}
+                        </button>
+                        <form v-if="showAmazonForm" class="mt-3 space-y-2" @submit.prevent="connectAmazon">
+                            <div>
+                                <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Refresh token (Seller Central &gt; Autorizar)</label>
+                                <input v-model="amazonForm.refresh_token" type="text" required
+                                    class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" />
+                            </div>
+                            <div>
+                                <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Selling Partner ID (opcional)</label>
+                                <input v-model="amazonForm.seller_id" type="text"
+                                    class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" />
+                            </div>
+                            <button type="submit" :disabled="connectingAmazon"
+                                class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
+                                {{ connectingAmazon ? 'Conectando...' : 'Confirmar conexão' }}
+                            </button>
+                            <a href="/api/amazon/auth" class="block text-center text-xs text-primary hover:underline">
+                                ou autorizar via OAuth (apps publicados)
+                            </a>
+                        </form>
+                    </template>
+                    <a v-else-if="!integration.connected && integration.available" :href="integration.connectHref"
                         class="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
                         Conectar
                     </a>

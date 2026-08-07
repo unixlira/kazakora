@@ -31,3 +31,4 @@ Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 // varre o histórico inteiro a cada execução.
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
+Schedule::command('orders:sync-amazon')->hourly();

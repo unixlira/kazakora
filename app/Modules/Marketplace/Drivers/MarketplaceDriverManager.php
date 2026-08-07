@@ -14,6 +14,7 @@ class MarketplaceDriverManager
         MarketplaceAccount::CHANNEL_MERCADO_LIVRE => MercadoLivreDriver::class,
         MarketplaceAccount::CHANNEL_SHOPEE => ShopeeDriver::class,
         MarketplaceAccount::CHANNEL_TIKTOK_SHOP => TikTokShopDriver::class,
+        MarketplaceAccount::CHANNEL_AMAZON => AmazonDriver::class,
     ];
 
     public function driver(string $channel): MarketplaceChannelDriver

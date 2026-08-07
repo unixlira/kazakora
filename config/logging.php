@@ -163,6 +163,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'amazon' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/amazon.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

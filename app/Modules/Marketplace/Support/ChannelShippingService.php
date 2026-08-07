@@ -53,10 +53,10 @@ class ChannelShippingService
 
         // Dispara o retry orientado a evento assim que o envio existe do
         // lado do canal — não espera o próximo webhook nem um ciclo de
-        // polling. Mercado Livre e Shopee têm fetchLabel() real
-        // implementado; TikTok/Amazon/Shein ainda são stubs — disparar lá
-        // só geraria falha garantida após 4h de tentativas inúteis.
-        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE], true)) {
+        // polling. Mercado Livre, Shopee e Amazon têm fetchLabel() real
+        // implementado; TikTok/Shein ainda são stubs — disparar lá só
+        // geraria falha garantida após 4h de tentativas inúteis.
+        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
             CheckShipmentLabelJob::dispatch($shipment->id)->afterCommit();
         }
 

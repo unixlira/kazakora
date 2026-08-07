@@ -2,8 +2,11 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import { usePermissions } from '@/Shared/usePermissions';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { h, reactive } from 'vue';
+
+const { can } = usePermissions();
 
 const props = defineProps({
     orders: {
@@ -158,6 +161,8 @@ const columns = [
             :data="props.orders"
             search-placeholder="Buscar pedido..."
             empty-message="Nenhum pedido encontrado."
+            :create-label="can('pedidos.edit') ? 'Adicionar pedido manualmente' : null"
+            :create-href="can('pedidos.edit') ? '/admin/pedidos/criar' : null"
         />
     </AdminLayout>
 </template>

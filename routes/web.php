@@ -17,6 +17,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\ManualLabelController;
+use App\Modules\Admin\Http\Controllers\ManualOrderController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreFullPrintController;
 use App\Modules\Admin\Http\Controllers\OrderImportController;
 use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
@@ -220,6 +221,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::delete('produtos/{product}/canais/{channel}', [ProductChannelController::class, 'destroy'])->name('produtos.canais.excluir');
 
     Route::get('pedidos', [AdminOrderController::class, 'index'])->name('pedidos.listar');
+    Route::get('pedidos/criar', [ManualOrderController::class, 'create'])
+        ->name('pedidos.criar')
+        ->middleware('permission:pedidos.edit');
+    Route::post('pedidos/criar', [ManualOrderController::class, 'store'])
+        ->name('pedidos.criar.armazenar')
+        ->middleware('permission:pedidos.edit');
     Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')

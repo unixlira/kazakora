@@ -168,15 +168,26 @@ class InvoiceService
 
         // 100 = autorizada; 110/301/302 = denegada; qualquer outro = rejeitada
         if ($cStat === '100') {
+            // Achado real 2026-08-07: o XML gravado depois de autorizada
+            // era o mesmo signedXml de antes (só o NFe assinado, sem o
+            // protocolo de autorização) — a Shopee rejeitava o upload
+            // ("Please upload a valid Invoice XML file.") porque isso não é
+            // o documento fiscal completo. O padrão (e o que qualquer
+            // consumidor externo espera) é o "nfeProc": NFe + protNFe da
+            // SEFAZ combinados num XML só — Complements::toAuthorize() é o
+            // helper da própria sped-nfe pra montar isso, não precisa
+            // construir na mão.
+            $nfeProcXml = \NFePHP\NFe\Complements::toAuthorize($signedXml, $response);
+
             $invoice->update([
                 'status' => Invoice::STATUS_AUTHORIZED,
                 'protocolo_autorizacao' => (string) $infProt->nProt,
                 'autorizada_em' => now(),
             ]);
-            Storage::disk('local')->put($invoice->xml_path, $signedXml);
+            Storage::disk('local')->put($invoice->xml_path, $nfeProcXml);
 
             $danfePath = "invoices/{$invoice->order_id}/danfe-{$invoice->chave_acesso}.pdf";
-            Storage::disk('local')->put($danfePath, $this->danfeService->generate($signedXml));
+            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml));
             $invoice->update(['danfe_path' => $danfePath]);
         } elseif (in_array($cStat, ['110', '301', '302'], true)) {
             $invoice->update(['status' => Invoice::STATUS_DENIED, 'motivo_rejeicao' => "{$cStat} - {$xMotivo}"]);

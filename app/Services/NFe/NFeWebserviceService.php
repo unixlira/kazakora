@@ -48,6 +48,17 @@ class NFeWebserviceService
     }
 
     /**
+     * Consulta direta por chave — usado pra reconstruir o nfeProc (NFe +
+     * protocolo) de uma nota já autorizada quando não guardamos a resposta
+     * original da SEFAZ (achado real 2026-08-07, corrigindo pra sempre
+     * guardar o nfeProc daqui pra frente em signAndSend()).
+     */
+    public function consultarChave(string $chave, Certificate $certificate): string
+    {
+        return $this->toolsFactory->make($certificate)->sefazConsultaChave($chave);
+    }
+
+    /**
      * Etapa 5: evento de cancelamento (RecepcaoEvento4). sped-nfe expõe um
      * wrapper dedicado (sefazCancela) em cima do sefazEvento genérico.
      */

@@ -106,13 +106,23 @@ class DashboardAgentController extends Controller
             ->groupBy('origin')
             ->pluck('total', 'origin');
 
-        // Mesma definição de "devolução" usada em metrics() — pedido com ao
-        // menos um Payment estornado (não existe integração real com
-        // devolução física/reclamação de nenhum marketplace ainda).
+        // Achado real 2026-08-07 ("card de devolução não está ok, tem 1 no
+        // meli"): essa definição só olhava Payment estornado (Stripe/Mercado
+        // Pago) — pedido importado de canal externo NUNCA tem Payment local
+        // (paga por fora, na própria Shopee/ML), então uma devolução/
+        // reclamação real no Mercado Livre (MarketplaceClaim, já rastreado
+        // de verdade em /admin/integracoes/mercado-livre/devolucoes) nunca
+        // batia aqui. Une as duas fontes reais de "devolução" que o sistema
+        // tem — pagamento estornado (loja própria) OU claim do canal
+        // (marketplace) — em vez de só uma.
         $returnsMonthByChannel = Order::query()
-            ->whereHas('payments', function ($query) use ($monthStart) {
-                $query->where('status', Payment::STATUS_REFUNDED)
-                    ->where('updated_at', '>=', $monthStart);
+            ->where(function ($query) use ($monthStart) {
+                $query->whereHas('payments', function ($query) use ($monthStart) {
+                    $query->where('status', Payment::STATUS_REFUNDED)
+                        ->where('updated_at', '>=', $monthStart);
+                })->orWhereHas('marketplaceClaims', function ($query) use ($monthStart) {
+                    $query->where('claim_created_at', '>=', $monthStart);
+                });
             })
             ->selectRaw('origin, COUNT(*) as total')
             ->groupBy('origin')
@@ -197,21 +207,30 @@ class DashboardAgentController extends Controller
             ->where('updated_at', '>=', $today)
             ->count();
 
-        // "Reembolsadas"/"devoluções" vem do status do Payment, não existe
-        // status de devolução física no Order em si (nenhum marketplace tem
-        // integração de reclamação/devolução real aqui ainda) — contamos
-        // pedidos distintos com pelo menos um pagamento estornado.
+        // Achado real 2026-08-07 — ver comentário equivalente em
+        // channels(): "devolução"/"reembolso" precisa contar tanto Payment
+        // estornado (loja própria) quanto MarketplaceClaim (canal externo,
+        // ex: Mercado Livre) — só Payment nunca pegava devolução real de
+        // marketplace, já que esses pedidos não têm Payment local nenhum.
         $refundedToday = Order::query()
-            ->whereHas('payments', function ($query) use ($today) {
-                $query->where('status', Payment::STATUS_REFUNDED)
-                    ->where('updated_at', '>=', $today);
+            ->where(function ($query) use ($today) {
+                $query->whereHas('payments', function ($query) use ($today) {
+                    $query->where('status', Payment::STATUS_REFUNDED)
+                        ->where('updated_at', '>=', $today);
+                })->orWhereHas('marketplaceClaims', function ($query) use ($today) {
+                    $query->where('claim_created_at', '>=', $today);
+                });
             })
             ->count();
 
         $returnsMonth = Order::query()
-            ->whereHas('payments', function ($query) use ($monthStart) {
-                $query->where('status', Payment::STATUS_REFUNDED)
-                    ->where('updated_at', '>=', $monthStart);
+            ->where(function ($query) use ($monthStart) {
+                $query->whereHas('payments', function ($query) use ($monthStart) {
+                    $query->where('status', Payment::STATUS_REFUNDED)
+                        ->where('updated_at', '>=', $monthStart);
+                })->orWhereHas('marketplaceClaims', function ($query) use ($monthStart) {
+                    $query->where('claim_created_at', '>=', $monthStart);
+                });
             })
             ->count();
 

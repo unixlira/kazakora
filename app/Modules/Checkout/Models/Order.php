@@ -102,6 +102,11 @@ class Order extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function marketplaceClaims(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Marketplace\Models\MarketplaceClaim::class);
+    }
+
     public function invoice(): HasOne
     {
         return $this->hasOne(Invoice::class);

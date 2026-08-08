@@ -164,6 +164,7 @@ class OrderImportService
                     ->where('external_id', $item['external_id'])
                     ->first();
                 $product = $listing?->product;
+                $autoImported = false;
 
                 // Item de um anúncio que nunca foi trazido pro catálogo
                 // local (feito direto no canal, fora do Kazakora) — tenta
@@ -171,12 +172,17 @@ class OrderImportService
                 // inteiro sem produto, o que travava a NF-e/etiqueta pra
                 // sempre (o canal recusa liberar o envio sem nota válida,
                 // e sem produto local não tem como emitir nota nenhuma).
-                // Entra como rascunho sem dados fiscais — ver
+                // Entra como rascunho, com dados fiscais quando o canal já
+                // tem isso preenchido — ver
                 // MarketplaceChannelDriver::autoImportProduct(). Canais sem
                 // essa capacidade (ainda) implementada devolvem null, igual
-                // ao comportamento anterior.
+                // ao comportamento anterior. Passa a quantidade desta
+                // própria venda pro driver poder somar de volta ao estoque
+                // "atual" que ele buscar no canal — ver comentário lá:
+                // sem isso, a baixa abaixo contaria esta venda 2x.
                 if (! $product) {
-                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id']);
+                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity']);
+                    $autoImported = (bool) $product;
 
                     if ($product) {
                         Log::info('marketplace.order_import.product_auto_imported', [
@@ -210,11 +216,10 @@ class OrderImportService
                     continue;
                 }
 
-                if ($listing === null) {
-                    // Acabou de ser criado pelo autoImportProduct() acima —
-                    // avisa o admin na hora, não só quando a nota falhar lá
+                if ($autoImported) {
+                    // Avisa o admin na hora, não só quando a nota falhar lá
                     // na frente (esse aviso genérico não deixa óbvio que é
-                    // um produto novo precisando de dados fiscais).
+                    // um produto novo precisando de revisão manual).
                     $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
 
                     if ($admins->isNotEmpty()) {

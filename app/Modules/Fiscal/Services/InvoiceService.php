@@ -75,6 +75,23 @@ class InvoiceService
 
         $invoice = $order->invoice ?? $this->createPendingInvoice($order);
 
+        // Achado real 2026-08-08 (pedido #188): a nota ficou pendente com
+        // um XML montado a partir de dado fiscal incompleto (retorno de um
+        // canal sem CST de PIS/COFINS preenchido); consertar o cadastro do
+        // produto e mandar tentar de novo (ProductFiscalController) não
+        // adiantava nada — createPendingInvoice() só roda a primeira vez
+        // por pedido (de propósito, pra nunca pular número de NF-e), então
+        // toda retentativa seguinte reaproveitava o MESMO XML antigo, já
+        // gravado em disco, sem nunca reconstruir com o dado corrigido.
+        // Enquanto ainda está pending (nunca chegou a ser assinada/enviada
+        // — status muda pra 'signed' assim que signAndSend() começa),
+        // reconstruir com o mesmo número já reservado é seguro: a chave
+        // pode mudar (tem componente aleatório), mas como a SEFAZ nunca viu
+        // essa chave antiga, não sobra nada pra invalidar.
+        if ($invoice->status === Invoice::STATUS_PENDING) {
+            $invoice = $this->rebuildPendingInvoice($invoice, $order);
+        }
+
         if (! $this->certificateService->isConfigured()) {
             Log::channel('stripe')->info('nfe.issue.blocked_no_certificate', ['order_id' => $order->id, 'invoice_id' => $invoice->id]);
 
@@ -82,6 +99,27 @@ class InvoiceService
         }
 
         $this->signAndSend($invoice);
+
+        return $invoice->fresh();
+    }
+
+    /**
+     * Reconstrói o XML de uma nota que reservou número mas nunca chegou a
+     * ser assinada/enviada (ver comentário em issue()) — mesmo número,
+     * possivelmente chave nova (tem componente aleatório no XML da
+     * biblioteca), arquivo antigo sobrescrito.
+     */
+    private function rebuildPendingInvoice(Invoice $invoice, Order $order): Invoice
+    {
+        ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $invoice->numero);
+
+        if ($invoice->xml_path && $invoice->chave_acesso !== $chave) {
+            Storage::disk('local')->delete($invoice->xml_path);
+        }
+
+        $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
+        Storage::disk('local')->put($xmlPath, $xml);
+        $invoice->update(['chave_acesso' => $chave, 'xml_path' => $xmlPath]);
 
         return $invoice->fresh();
     }

@@ -27,12 +27,20 @@ interface MarketplaceChannelDriver
      * por OrderImportService quando um pedido chega com um item sem
      * `product_channel_listings` correspondente, pra não deixar o pedido
      * inteiro sem NF-e/etiqueta só porque o catálogo local nunca ficou
-     * sabendo desse anúncio. Entra sempre como rascunho, sem dados fiscais
-     * (isso nunca pode ser inventado). Canais sem essa capacidade (ainda)
-     * implementada devolvem null — mesmo comportamento de "sem produto
-     * vinculado" que já existia antes, não é regressão.
+     * sabendo desse anúncio. Entra sempre como rascunho — dados fiscais só
+     * quando o canal já tiver isso preenchido de verdade (nunca inventado).
+     * Canais sem essa capacidade (ainda) implementada devolvem null — mesmo
+     * comportamento de "sem produto vinculado" que já existia antes, não é
+     * regressão.
+     *
+     * $quantitySold: quantidade desta própria venda, que OrderImportService
+     * ainda vai debitar do estoque logo em seguida (fluxo normal, igual pra
+     * qualquer produto). Se o driver conseguir puxar o estoque "atual" real
+     * do canal, esse número já reflete esta venda — soma $quantitySold de
+     * volta antes de gravar, pra a baixa seguinte não contar a mesma venda
+     * 2x. Ignorado por canais que não puxam estoque no auto-import.
      */
-    public function autoImportProduct(string $externalId): ?Product;
+    public function autoImportProduct(string $externalId, int $quantitySold = 0): ?Product;
 
     /**
      * Take the listing down from the marketplace. Most marketplaces don't

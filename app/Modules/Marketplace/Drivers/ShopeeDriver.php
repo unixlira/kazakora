@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Drivers;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -102,7 +103,21 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * decide o que fazer (OrderImportService deixa o pedido sem produto
      * vinculado igual já fazia antes, só não trava o import).
      *
-     * @return ?array{external_id: string, name: string, price: ?float}
+     * Pede o máximo de campo útil que dá numa chamada só (achado real
+     * 2026-08-08, pedido #188: a versão anterior só pedia o básico
+     * nome/preço, achando por cautela que o resto — principalmente
+     * `tax_info` — "a Shopee não manda isso". Errado: ela manda sim quando
+     * o vendedor já preencheu no Seller Center, só não vem por padrão sem
+     * pedir explicitamente). `weight`/`dimension` e imagens ficam de fora
+     * de propósito, não por falta de pedir: `weight` volta sem unidade
+     * confirmada (kg vs g ambíguo pro schema documentado) e um valor
+     * errado ali estraga cotação de frete real silenciosamente — pior que
+     * deixar em branco (o formulário de Logística já lista esses 4 campos
+     * como obrigatórios, então a lacuna fica visível); imagens exigem
+     * baixar+re-hospedar arquivo de verdade, fora do escopo de "puxar
+     * dados do item", tratar como feature própria se for pedida depois.
+     *
+     * @return ?array{external_id: string, name: string, price: ?float, description: ?string, stock: ?int, tax_info: ?array<string, mixed>}
      */
     public function fetchItemDetail(string $externalId): ?array
     {
@@ -111,6 +126,8 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         try {
             $base = $this->client->get('/api/v2/product/get_item_base_info', [
                 'item_id_list' => $externalId,
+                'need_tax_info' => 'true',
+                'response_optional_fields' => 'tax_info,description,stock_info_v2',
             ]);
         } catch (ShopeeException $exception) {
             Log::channel('shopee')->warning('shopee.item_detail.lookup_failed', [
@@ -133,6 +150,11 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'price' => isset($item['price_info'][0]['current_price'])
                 ? (float) $item['price_info'][0]['current_price']
                 : null,
+            'description' => $item['description'] ?? null,
+            'stock' => isset($item['stock_info_v2']['summary_info']['total_available_stock'])
+                ? (int) $item['stock_info_v2']['summary_info']['total_available_stock']
+                : null,
+            'tax_info' => $item['tax_info'] ?? null,
         ];
     }
 
@@ -142,18 +164,21 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * nunca foi trazido pro catálogo (feito direto na Shopee, fora do
      * Kazakora; ShopeeProductImportService::import() só vincula anúncios a
      * produtos locais JÁ existentes por similaridade de nome, não cria
-     * nenhum). Entra como rascunho (is_active=false, estoque 0, sem dados
-     * fiscais) — nunca inventa NCM/CFOP/CSOSN, isso é fiscal de verdade e
-     * só quem opera a loja pode preencher depois pelo admin (ver
-     * ProductAutoImportedNotification). Nome/preço vêm direto da Shopee via
-     * fetchItemDetail(), nunca fabricados.
+     * nenhum). Entra sempre como rascunho (is_active=false — preço/categoria
+     * ainda precisam de revisão manual). Os dados fiscais (NCM/CFOP/CSOSN
+     * etc.) vêm do `tax_info` da Shopee quando o vendedor já preencheu isso
+     * lá (ver fetchItemDetail()) — é dado real que o próprio usuário já
+     * cadastrou pra emitir nota, não uma invenção; só fica sem dados
+     * fiscais mesmo (e soma o aviso pra revisão manual, ver
+     * ProductAutoImportedNotification) se a Shopee não tiver NCM preenchido
+     * pra esse anúncio.
      *
      * Retorna null (sem lançar) se a Shopee não devolver o item — quem
      * chama já sabia lidar com "sem produto vinculado" antes disso existir,
      * um retorno null só mantém esse mesmo comportamento em vez de travar
      * o pedido inteiro.
      */
-    public function autoImportProduct(string $externalId): ?Product
+    public function autoImportProduct(string $externalId, int $quantitySold = 0): ?Product
     {
         $item = $this->fetchItemDetail($externalId);
 
@@ -171,12 +196,23 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             $slug = $slugBase.'-'.(++$suffix);
         }
 
+        // $item['stock'] é o disponível ATUAL na Shopee (já líquido desta
+        // própria venda, que acabou de acontecer lá) — soma $quantitySold
+        // de volta antes de gravar, porque OrderImportService ainda vai
+        // debitar essa mesma quantidade logo em seguida (fluxo normal, sem
+        // caso especial); sem isso a venda seria contada 2x. Sem estoque
+        // pra puxar (Shopee não devolveu), fica 0 e a baixa seguinte deixa
+        // negativo/clampado, disparando OversellDetectedNotification
+        // sozinho — mesma rede de segurança de sempre.
+        $initialStock = $item['stock'] !== null ? max(0, $item['stock'] + $quantitySold) : 0;
+
         $product = Product::create([
             'sku' => $sku,
             'name' => $item['name'],
             'slug' => $slug,
+            'description' => $item['description'] ?: null,
             'price' => $item['price'],
-            'stock' => 0,
+            'stock' => $initialStock,
             'is_active' => false,
         ]);
 
@@ -189,7 +225,50 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'last_synced_at' => now(),
         ]);
 
+        $this->importFiscalData($product, $item['tax_info'] ?? null);
+
         return $product;
+    }
+
+    /**
+     * @param  ?array<string, mixed>  $taxInfo
+     */
+    private function importFiscalData(Product $product, ?array $taxInfo): void
+    {
+        $ncm = trim((string) ($taxInfo['ncm'] ?? ''));
+
+        // Sem NCM não tem nota fiscal — os outros campos sozinhos não
+        // servem pra nada (mesma checagem que NFeXmlBuilderService faria).
+        if ($ncm === '') {
+            return;
+        }
+
+        // Achado real 2026-08-08 (pedido #188): a Shopee às vezes deixa
+        // pis_cofins_cst vazio no tax_info mesmo com NCM/CFOP/CSOSN
+        // preenchidos, e NFeXmlBuilderService rejeita um XML com PIS/COFINS
+        // sem CST nenhum. A loja é MEI (confirmado pelo usuário) — MEI não
+        // destaca PIS/COFINS por item, fica coberto pelo DAS fixo mensal —
+        // então "08" (Operação sem Incidência da Contribuição) é o CST
+        // correto pra esse regime, não um palpite genérico; só entra como
+        // fallback quando a Shopee não mandou nada.
+        $pisCofinsCst = trim((string) ($taxInfo['pis_cofins_cst'] ?? '')) ?: '08';
+
+        ProductFiscalData::query()->updateOrCreate(['product_id' => $product->id], [
+            'ncm' => $ncm,
+            'origem' => (int) ($taxInfo['origin'] ?? 0),
+            'cfop' => (string) ($taxInfo['same_state_cfop'] ?? ''),
+            'cfop_outros_estados' => (string) ($taxInfo['diff_state_cfop'] ?? ($taxInfo['same_state_cfop'] ?? '')),
+            'icms_situacao_tributaria' => (string) ($taxInfo['csosn'] ?? ''),
+            'unidade_tributavel' => (string) ($taxInfo['measure_unit'] ?? 'UN'),
+            'pis_situacao_tributaria' => $pisCofinsCst,
+            'cofins_situacao_tributaria' => $pisCofinsCst,
+            'cest' => trim((string) ($taxInfo['cest'] ?? '')) ?: null,
+            'tipo_operacao' => is_numeric($taxInfo['operation_type'] ?? null) ? (int) $taxInfo['operation_type'] : null,
+            'recopi_numero' => trim((string) ($taxInfo['recopi_num'] ?? '')) ?: null,
+            'ex_tipi' => trim((string) ($taxInfo['ex_tipi'] ?? '')) ?: null,
+            'fci_numero' => trim((string) ($taxInfo['fci_num'] ?? '')) ?: null,
+            'informacoes_adicionais' => trim((string) ($taxInfo['additional_info'] ?? '')) ?: null,
+        ]);
     }
 
     public function publishProduct(Product $product, ProductChannelListing $listing): string

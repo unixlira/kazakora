@@ -377,6 +377,15 @@ class OrderImportService
      * Só troca vazio/mascarado por preenchido/desmascarado, nunca o
      * contrário — um pedido que já tem dado bom nunca regride.
      *
+     * Bug real 2026-08-08 (pedido do próprio usuário: "maioria sem
+     * contato"): esta função nunca tocava em shipping_email, e só
+     * reconhecia telefone "incompleto" quando já vinha com `*` — um
+     * pedido que nasceu com buyer_phone nulo (por isso gravado como o
+     * literal "Não informado" em createOrder()) ficava preso nesse
+     * estado pra sempre, mesmo que um webhook seguinte trouxesse o
+     * telefone real. E-mail e telefone agora seguem o mesmo padrão de
+     * documento/nome: só atualiza de vazio/mascarado pra preenchido.
+     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
@@ -397,9 +406,17 @@ class OrderImportService
         }
 
         $newPhone = (string) ($data['buyer_phone'] ?? '');
+        $existingPhone = (string) $existing->shipping_phone;
+        $existingPhoneMissing = $existingPhone === '' || $existingPhone === 'Não informado' || str_contains($existingPhone, '*');
 
-        if ($newPhone !== '' && ! str_contains($newPhone, '*') && str_contains((string) $existing->shipping_phone, '*')) {
+        if ($newPhone !== '' && ! str_contains($newPhone, '*') && $existingPhoneMissing) {
             $fields['shipping_phone'] = $newPhone;
+        }
+
+        $newEmail = (string) ($data['buyer_email'] ?? '');
+
+        if ($newEmail !== '' && empty($existing->shipping_email)) {
+            $fields['shipping_email'] = $newEmail;
         }
 
         return $fields;
@@ -428,6 +445,44 @@ class OrderImportService
             return;
         }
 
+        $this->fetchAndApplyBuyerFieldUpdates($order);
+    }
+
+    /**
+     * Mesma ideia de refreshBuyerInfo(), mas com um gatilho mais amplo —
+     * também considera telefone/e-mail ausentes, não só documento/nome.
+     * Deliberadamente **não** é chamada no caminho síncrono de emissão de
+     * nota (refreshBuyerInfo() continua enxuta pra isso, é o requisito
+     * bloqueante de verdade) — usada pelo comando de backfill
+     * `orders:refresh-contato` pra tentar completar o cadastro de
+     * clientes já existentes sem esperar um webhook futuro reprocessar o
+     * pedido.
+     *
+     * @return bool true se algum campo foi realmente atualizado.
+     */
+    public function refreshContactInfo(Order $order): bool
+    {
+        if ($order->origin === Order::ORIGIN_STORE) {
+            return false;
+        }
+
+        $existingPhone = (string) $order->shipping_phone;
+        $phoneMissing = $existingPhone === '' || $existingPhone === 'Não informado' || str_contains($existingPhone, '*');
+
+        $needsRefresh = empty($order->buyer_document)
+            || str_contains((string) $order->shipping_name, '*')
+            || empty($order->shipping_email)
+            || $phoneMissing;
+
+        if (! $needsRefresh) {
+            return false;
+        }
+
+        return $this->fetchAndApplyBuyerFieldUpdates($order);
+    }
+
+    private function fetchAndApplyBuyerFieldUpdates(Order $order): bool
+    {
         try {
             $data = $this->manager->driver($order->origin)->importOrder($order->external_order_id);
         } catch (\Throwable $exception) {
@@ -437,7 +492,7 @@ class OrderImportService
                 'error' => $exception->getMessage(),
             ]);
 
-            return;
+            return false;
         }
 
         $fields = $this->resolveBuyerFieldUpdates($order, $data);
@@ -445,6 +500,8 @@ class OrderImportService
         if ($fields) {
             $order->update($fields);
         }
+
+        return (bool) $fields;
     }
 
     private function syncStatus(Order $order, string $newStatus): Order

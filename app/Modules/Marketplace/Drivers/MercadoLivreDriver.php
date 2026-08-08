@@ -178,7 +178,11 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // por privacidade. Guardado do mesmo jeito porque ainda serve
             // pra contato via esse relay.
             'buyer_email' => $buyer['email'] ?? null,
-            'buyer_phone' => $buyer['phone']['number'] ?? null,
+            // buyer.phone.number vem vazio na prática pra pedido com
+            // Mercado Envios 2 (LGPD) — ver comentário em
+            // resolveShippingAddress() sobre o fallback receiver_phone,
+            // que só existe (e mesmo assim ofuscado) pra Mercado Envios 1.
+            'buyer_phone' => $buyer['phone']['number'] ?? $address['phone'] ?? null,
             // alternative_phone é o único campo que a ML separa do telefone
             // principal — preenchido só quando o comprador informa um
             // segundo número; não é literalmente "o WhatsApp dele", é o
@@ -320,8 +324,16 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * frete gerenciado pelo ML com endereço estruturado (ex: retirada em
      * loja), e um campo faltando não pode derrubar a importação do pedido.
      *
+     * `receiver_phone` (confirmado contra a doc oficial de Shipments) só
+     * existe pra pedido com Mercado Envios 1 (modo antigo) e ainda assim
+     * vem ofuscado — não é um substituto de verdade pro telefone real,
+     * mas serve de fallback quando `buyer.phone.number` (o campo que
+     * `importOrder()` usa como fonte principal) vem vazio, o que é o caso
+     * comum hoje (Mercado Envios 2, que não expõe telefone nenhum no
+     * objeto do comprador por LGPD).
+     *
      * @param  array<string, mixed>  $shipping
-     * @return array{zip: string, street: string, number: string, complement: ?string, neighborhood: string, city: string, state: string}
+     * @return array{zip: string, street: string, number: string, complement: ?string, neighborhood: string, city: string, state: string, phone: ?string}
      */
     private function resolveShippingAddress(array $shipping): array
     {
@@ -333,6 +345,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'neighborhood' => 'Não informado',
             'city' => 'Não informado',
             'state' => 'NA',
+            'phone' => null,
         ];
 
         $shipmentId = $shipping['id'] ?? null;
@@ -341,7 +354,8 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             return $fallback;
         }
 
-        $receiver = $this->shipments->getShipment((string) $shipmentId)['receiver_address'] ?? [];
+        $shipment = $this->shipments->getShipment((string) $shipmentId);
+        $receiver = $shipment['receiver_address'] ?? [];
 
         if (empty($receiver)) {
             return $fallback;
@@ -357,6 +371,10 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // orders.shipping_state é varchar(2) — o state.id do ML vem
             // como "BR-SP" (prefixo de país + UF), então só a UF interessa.
             'state' => strtoupper(substr((string) ($receiver['state']['id'] ?? ''), -2)) ?: $fallback['state'],
+            // Campo pode vir tanto no nível do shipment quanto dentro de
+            // receiver_address dependendo do formato de resposta — a doc
+            // oficial não é explícita sobre isso, então tenta os dois.
+            'phone' => $shipment['receiver_phone'] ?? $receiver['receiver_phone'] ?? null,
         ];
     }
 

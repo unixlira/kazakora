@@ -110,10 +110,27 @@ class OrderImportService
                 throw $exception;
             }
 
+            // BUG REAL 2026-08-08 encontrado por causa disto: nem toda
+            // QueryException 23000 dentro de createOrder() é essa corrida
+            // (ex: um NOT NULL de outra tabela gravada na mesma
+            // transação, como product_fiscal_data.tipo_operacao —
+            // ver ShopeeDriver::importFiscalData()). Antes, firstOrFail()
+            // MASCARAVA esse erro completamente diferente como
+            // "ModelNotFoundException: No query results for model Order",
+            // fazendo o pedido inteiro sumir sem log nenhum do problema
+            // real. Confirma que o pedido REALMENTE existe (corrida de
+            // verdade) antes de tratar como sucesso — se não existir, era
+            // outra coisa, relança a exceção original pra aparecer no
+            // shopee.log/failed_jobs com a mensagem real, útil de
+            // debugar, em vez de uma pista falsa.
             $order = Order::query()
                 ->where('origin', $channel)
                 ->where('external_order_id', $data['external_order_id'])
-                ->firstOrFail();
+                ->first();
+
+            if (! $order) {
+                throw $exception;
+            }
 
             return $this->syncStatus($order, $data['status']);
         }

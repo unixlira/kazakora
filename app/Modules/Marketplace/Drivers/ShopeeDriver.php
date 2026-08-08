@@ -263,7 +263,21 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'pis_situacao_tributaria' => $pisCofinsCst,
             'cofins_situacao_tributaria' => $pisCofinsCst,
             'cest' => trim((string) ($taxInfo['cest'] ?? '')) ?: null,
-            'tipo_operacao' => is_numeric($taxInfo['operation_type'] ?? null) ? (int) $taxInfo['operation_type'] : null,
+            // BUG REAL 2026-08-08 (venda travada, pedido nunca nem chegou a
+            // ser criado): product_fiscal_data.tipo_operacao é NOT NULL
+            // (default 1 na migration) — mandar null explícito aqui vence o
+            // default da coluna, e o INSERT inteiro falhava com "Column
+            // 'tipo_operacao' cannot be null" sempre que a Shopee não
+            // mandava operation_type. Como isso roda DENTRO da mesma
+            // transação de OrderImportService::createOrder() (autoImport
+            // de produto acontece no meio do processamento do pedido), o
+            // erro derrubava o pedido INTEIRO — nada era criado (Order,
+            // OrderItem, Product, tudo), e o retry do webhook sempre caía
+            // no branch de "corrida de duplicidade" (firstOrFail não achava
+            // nada, porque o pedido nunca existiu de verdade), mascarando
+            // o erro real como ModelNotFoundException. 1 é o mesmo default
+            // que a coluna já usa — nunca manda null.
+            'tipo_operacao' => is_numeric($taxInfo['operation_type'] ?? null) ? (int) $taxInfo['operation_type'] : 1,
             'recopi_numero' => trim((string) ($taxInfo['recopi_num'] ?? '')) ?: null,
             'ex_tipi' => trim((string) ($taxInfo['ex_tipi'] ?? '')) ?: null,
             'fci_numero' => trim((string) ($taxInfo['fci_num'] ?? '')) ?: null,

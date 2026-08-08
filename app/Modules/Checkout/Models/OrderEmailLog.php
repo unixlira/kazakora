@@ -11,6 +11,12 @@ class OrderEmailLog extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    // Achado real 2026-08-08: pedido de canal sem e-mail nenhum do
+    // comprador (a Shopee nunca manda esse dado, por exemplo) não é uma
+    // falha técnica pra tentar de novo — não existe pra quem mandar, ponto.
+    // Ver SendOrderReceiptEmailJob::handle().
+    public const STATUS_SKIPPED = 'skipped';
+
     public $timestamps = false;
 
     protected $fillable = [

@@ -63,8 +63,34 @@ class SendOrderReceiptEmailJob implements ShouldQueue, ShouldBeUnique
             && $order->invoice->danfe_path
             && Storage::disk('local')->exists($order->invoice->danfe_path);
 
+        // Achado real 2026-08-08 (pedido #189, mesma investigação da
+        // correção de CPF): pedido de marketplace nunca tem Order::user
+        // (user_id fica null nesse fluxo) — Mail::to($order->user) mandava
+        // "null" pro Symfony, que rejeita com "must have a To/Cc/Bcc
+        // header". Isso derrubava o e-mail de recibo de TODO pedido
+        // Shopee (ela nunca manda buyer_email — ver
+        // ShopeeDriver::importOrder()), sempre esgotando as 3 tentativas
+        // sem nunca poder dar certo, só poluindo failed_jobs. Usa
+        // shipping_email (é onde o e-mail do canal, quando existe, já é
+        // gravado — ver OrderImportService::createOrder()) como
+        // alternativa a um user local.
+        $recipient = $order->user?->email ?: $order->shipping_email;
+
+        if (! $recipient) {
+            OrderEmailLog::create([
+                'order_id' => $order->id,
+                'mailable' => 'order_confirmation',
+                'attempt' => $this->attempts(),
+                'status' => OrderEmailLog::STATUS_SKIPPED,
+                'invoice_attached' => $invoiceAttached,
+                'error_message' => 'Pedido sem e-mail de comprador disponível (canal não forneceu) — recibo não enviado, não é uma falha pra tentar de novo.',
+            ]);
+
+            return;
+        }
+
         try {
-            Mail::to($order->user)->send(new OrderConfirmation($order));
+            Mail::to($recipient)->send(new OrderConfirmation($order));
 
             OrderEmailLog::create([
                 'order_id' => $order->id,

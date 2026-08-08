@@ -47,6 +47,12 @@ class ChannelShippingService
             'shipping_method' => $result['shipping_method'],
             'status' => ChannelShipment::STATUS_CONFIRMED,
             'confirmed_at' => now(),
+            // Achado real 2026-08-08 (pedido #189): uma tentativa anterior
+            // que falhou grava error_message; sem limpar aqui, uma
+            // tentativa seguinte que dá certo deixava esse texto de erro
+            // velho pra sempre na tela do pedido, mesmo com status
+            // "confirmed" — parecia um problema que já tinha sido resolvido.
+            'error_message' => null,
         ]);
 
         $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_SUCCESS, "Método: {$result['shipping_method']}");

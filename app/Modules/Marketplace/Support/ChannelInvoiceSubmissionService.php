@@ -8,6 +8,7 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -68,12 +69,13 @@ class ChannelInvoiceSubmissionService
         }
 
         $sent = $result['status'] === 'sent';
+        $errorMessage = $result['response']['error'] ?? 'Canal rejeitou o envio da nota.';
 
         $submission->update([
             'status' => $sent ? ChannelInvoiceSubmission::STATUS_SENT : ChannelInvoiceSubmission::STATUS_ERROR,
             'external_reference' => $result['external_reference'],
             'response_payload' => $result['response'],
-            'error_message' => $sent ? null : ($result['response']['error'] ?? 'Canal rejeitou o envio da nota.'),
+            'error_message' => $sent ? null : $errorMessage,
             'submitted_at' => now(),
             'responded_at' => now(),
         ]);
@@ -82,13 +84,34 @@ class ChannelInvoiceSubmissionService
             $order,
             OrderFulfillmentEvent::STEP_INVOICE_SUBMITTED,
             $sent ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
-            $sent ? 'Nota enviada ao canal' : ($result['response']['error'] ?? 'Canal rejeitou o envio da nota.'),
+            $sent ? 'Nota enviada ao canal' : $errorMessage,
         );
 
         if ($sent) {
             ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
+
+            return $submission;
         }
 
-        return $submission;
+        // BUG REAL 2026-08-08 (pedido #203, venda que nunca imprimiu):
+        // driver()->submitInvoice() nunca lança exceção pra um erro do
+        // CANAL (só pra falha técnica de rede/certificado — ver
+        // ShopeeDriver::submitInvoice(), que captura ShopeeException e
+        // devolve status=error em vez de deixar subir) — de propósito,
+        // pra poder registrar a resposta real do canal aqui. Mas isso
+        // significava que SubmitInvoiceToChannelJob::handle() NUNCA via
+        // uma exceção, então terminava "com sucesso" do ponto de vista do
+        // Laravel mesmo quando a Shopee rejeitou — o retry/backoff do job
+        // nunca chegava a rodar uma segunda vez. Confirmado ao vivo: a
+        // Shopee rejeitou "This order cannot accept invoices yet" no
+        // primeiro envio (segundos depois do pedido pago) e aceitou de
+        // bandeja chamando o EXATO MESMO código ~50min depois — um atraso
+        // de propagação interna do lado da Shopee, não um erro
+        // permanente. Sem uma segunda tentativa de verdade, o pedido
+        // ficava preso pra sempre em "nota fiscal não enviada" (e por
+        // consequência sem confirmar envio, sem etiqueta, sem impressão)
+        // até alguém notar e reenviar manualmente. Lança aqui pra
+        // finalmente acionar o retry/backoff real do job.
+        throw new RuntimeException($errorMessage);
     }
 }

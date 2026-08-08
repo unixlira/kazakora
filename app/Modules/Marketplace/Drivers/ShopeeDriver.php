@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Drivers;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Shopee\Exceptions\ShopeeException;
@@ -89,6 +90,106 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         }
 
         return $result;
+    }
+
+    /**
+     * Mesma chamada base de fetchOwnItems(), só que pra 1 item_id — usado
+     * quando um pedido chega com um item ainda não vinculado a nenhum
+     * produto local (anúncio feito direto na Shopee, nunca trazido pro
+     * Kazakora) e precisa dos dados reais pra importar na hora, sem
+     * esperar o próximo `php artisan shopee:import-products` manual. Não
+     * lança exceção — item sumido/erro de rede vira null, quem chama
+     * decide o que fazer (OrderImportService deixa o pedido sem produto
+     * vinculado igual já fazia antes, só não trava o import).
+     *
+     * @return ?array{external_id: string, name: string, price: ?float}
+     */
+    public function fetchItemDetail(string $externalId): ?array
+    {
+        $this->ensureConfigured();
+
+        try {
+            $base = $this->client->get('/api/v2/product/get_item_base_info', [
+                'item_id_list' => $externalId,
+            ]);
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.item_detail.lookup_failed', [
+                'external_id' => $externalId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $item = $base['response']['item_list'][0] ?? null;
+
+        if (! $item) {
+            return null;
+        }
+
+        return [
+            'external_id' => (string) $item['item_id'],
+            'name' => (string) ($item['item_name'] ?? ''),
+            'price' => isset($item['price_info'][0]['current_price'])
+                ? (float) $item['price_info'][0]['current_price']
+                : null,
+        ];
+    }
+
+    /**
+     * Cria um produto local do zero a partir de 1 item da Shopee — chamado
+     * por OrderImportService quando um pedido chega pra um anúncio que
+     * nunca foi trazido pro catálogo (feito direto na Shopee, fora do
+     * Kazakora; ShopeeProductImportService::import() só vincula anúncios a
+     * produtos locais JÁ existentes por similaridade de nome, não cria
+     * nenhum). Entra como rascunho (is_active=false, estoque 0, sem dados
+     * fiscais) — nunca inventa NCM/CFOP/CSOSN, isso é fiscal de verdade e
+     * só quem opera a loja pode preencher depois pelo admin (ver
+     * ProductAutoImportedNotification). Nome/preço vêm direto da Shopee via
+     * fetchItemDetail(), nunca fabricados.
+     *
+     * Retorna null (sem lançar) se a Shopee não devolver o item — quem
+     * chama já sabia lidar com "sem produto vinculado" antes disso existir,
+     * um retorno null só mantém esse mesmo comportamento em vez de travar
+     * o pedido inteiro.
+     */
+    public function autoImportProduct(string $externalId): ?Product
+    {
+        $item = $this->fetchItemDetail($externalId);
+
+        if (! $item || $item['name'] === '' || $item['price'] === null) {
+            return null;
+        }
+
+        $sku = 'SHOPEE-'.$externalId;
+        $sku = Product::where('sku', $sku)->exists() ? $sku.'-'.Str::random(4) : $sku;
+
+        $slugBase = Str::slug($item['name']);
+        $slug = $slugBase;
+        $suffix = 1;
+        while (Product::where('slug', $slug)->exists()) {
+            $slug = $slugBase.'-'.(++$suffix);
+        }
+
+        $product = Product::create([
+            'sku' => $sku,
+            'name' => $item['name'],
+            'slug' => $slug,
+            'price' => $item['price'],
+            'stock' => 0,
+            'is_active' => false,
+        ]);
+
+        ProductChannelListing::query()->create([
+            'product_id' => $product->id,
+            'channel' => MarketplaceAccount::CHANNEL_SHOPEE,
+            'is_enabled' => true,
+            'status' => ProductChannelListing::STATUS_PUBLISHED,
+            'external_id' => $externalId,
+            'last_synced_at' => now(),
+        ]);
+
+        return $product;
     }
 
     public function publishProduct(Product $product, ProductChannelListing $listing): string
@@ -419,6 +520,33 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     public function confirmShipping(Order $order): array
     {
         $this->ensureConfigured();
+
+        // Achado real 2026-08-08 (pedido #188): a Shopee exige a NF-e já
+        // enviada pra liberar o envio de verdade — confirmado no próprio
+        // texto que ela devolve quando isso falta ("...flagged as invalid
+        // by SEFAZ. Correction is required to release the shipment"), que
+        // o código antigo tratava como "ship_order redundante" igual às 3
+        // vendas que motivaram aquela heurística (ver comentário abaixo),
+        // silenciando o erro real e deixando CheckShipmentLabelJob tentando
+        // buscar uma etiqueta que nunca ia existir por até 4h sem avisar
+        // ninguém. Checar isso ANTES de chamar ship_order evita depender de
+        // reconhecer o texto exato do erro da Shopee (o mesmo tipo de
+        // heurística frágil que já deu errado uma vez, ver #183 abaixo) —
+        // é uma regra de negócio já confirmada, não um palpite sobre a
+        // mensagem de erro. ChannelShippingService::confirm() já sabe
+        // tratar essa exceção (marca o shipment como erro e NÃO dispara
+        // CheckShipmentLabelJob) e ConfirmChannelShippingJob já tem retry
+        // de até ~3h com backoff crescente — janela suficiente pra nota
+        // fiscal terminar de processar em paralelo.
+        $invoiceSubmitted = ChannelInvoiceSubmission::query()
+            ->where('order_id', $order->id)
+            ->where('channel', $this->channel())
+            ->where('status', ChannelInvoiceSubmission::STATUS_SENT)
+            ->exists();
+
+        if (! $invoiceSubmitted) {
+            throw new RuntimeException("Shopee exige a nota fiscal enviada antes de liberar o envio do pedido #{$order->id}, e ela ainda não foi enviada ao canal.");
+        }
 
         $carrier = $this->resolveShippingCarrier($order);
 

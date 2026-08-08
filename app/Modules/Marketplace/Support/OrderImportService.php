@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Support;
 
+use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
@@ -14,9 +15,11 @@ use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Notifications\ProductAutoImportedNotification;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * Canal-agnóstico de propósito: só fala com MarketplaceChannelDriver
@@ -162,6 +165,29 @@ class OrderImportService
                     ->first();
                 $product = $listing?->product;
 
+                // Item de um anúncio que nunca foi trazido pro catálogo
+                // local (feito direto no canal, fora do Kazakora) — tenta
+                // importar automaticamente em vez de deixar o pedido
+                // inteiro sem produto, o que travava a NF-e/etiqueta pra
+                // sempre (o canal recusa liberar o envio sem nota válida,
+                // e sem produto local não tem como emitir nota nenhuma).
+                // Entra como rascunho sem dados fiscais — ver
+                // MarketplaceChannelDriver::autoImportProduct(). Canais sem
+                // essa capacidade (ainda) implementada devolvem null, igual
+                // ao comportamento anterior.
+                if (! $product) {
+                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id']);
+
+                    if ($product) {
+                        Log::info('marketplace.order_import.product_auto_imported', [
+                            'channel' => $channel,
+                            'external_order_id' => $data['external_order_id'],
+                            'item_external_id' => $item['external_id'],
+                            'product_id' => $product->id,
+                        ]);
+                    }
+                }
+
                 $order->items()->create([
                     'product_id' => $product?->id,
                     'product_name' => $product?->name
@@ -182,6 +208,18 @@ class OrderImportService
                     $unmappedItems[] = $item['external_id'];
 
                     continue;
+                }
+
+                if ($listing === null) {
+                    // Acabou de ser criado pelo autoImportProduct() acima —
+                    // avisa o admin na hora, não só quando a nota falhar lá
+                    // na frente (esse aviso genérico não deixa óbvio que é
+                    // um produto novo precisando de dados fiscais).
+                    $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+                    if ($admins->isNotEmpty()) {
+                        Notification::send($admins, new ProductAutoImportedNotification($product, $order));
+                    }
                 }
 
                 $this->stock->adjust(

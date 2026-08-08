@@ -22,6 +22,19 @@ interface MarketplaceChannelDriver
     public function updateStock(Product $product, ProductChannelListing $listing): void;
 
     /**
+     * Tenta criar um produto local do zero a partir de um item ainda não
+     * vinculado (anúncio feito direto no canal, fora do Kazakora) — chamado
+     * por OrderImportService quando um pedido chega com um item sem
+     * `product_channel_listings` correspondente, pra não deixar o pedido
+     * inteiro sem NF-e/etiqueta só porque o catálogo local nunca ficou
+     * sabendo desse anúncio. Entra sempre como rascunho, sem dados fiscais
+     * (isso nunca pode ser inventado). Canais sem essa capacidade (ainda)
+     * implementada devolvem null — mesmo comportamento de "sem produto
+     * vinculado" que já existia antes, não é regressão.
+     */
+    public function autoImportProduct(string $externalId): ?Product;
+
+    /**
      * Take the listing down from the marketplace. Most marketplaces don't
      * support a true delete once a listing has ever gone live (order/review
      * history has to be preserved) — this closes/deactivates it instead.

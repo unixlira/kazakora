@@ -2,13 +2,17 @@
 
 namespace App\Modules\Marketplace\Jobs;
 
+use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Support\ChannelShippingService;
+use App\Notifications\LabelUnavailableNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 class ConfirmChannelShippingJob implements ShouldQueue
 {
@@ -37,5 +41,31 @@ class ConfirmChannelShippingJob implements ShouldQueue
         $order = Order::findOrFail($this->orderId);
 
         $service->confirm($order);
+    }
+
+    /**
+     * ChannelShippingService::confirm() já marca o ChannelShipment como
+     * erro a cada tentativa (ver seu próprio catch) — isso só fecha o
+     * buraco de visibilidade: sem esse método, esgotar as ~3h de retry sem
+     * sucesso (ex: nota fiscal nunca sai por falta de dado, ver
+     * ShopeeDriver::confirmShipping()) ficava só registrado em
+     * failed_jobs, sem avisar ninguém — achado real 2026-08-08 revisando
+     * uma fila de dezenas de falhas silenciosas acumuladas. Reaproveita
+     * LabelUnavailableNotification (mesma ideia: envio/etiqueta que nunca
+     * saiu do canal) em vez de criar uma notificação nova só pra isso.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $order = Order::find($this->orderId);
+
+        if (! $order) {
+            return;
+        }
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new LabelUnavailableNotification($order, $exception?->getMessage() ?? 'Erro desconhecido ao confirmar o envio no canal.'));
+        }
     }
 }

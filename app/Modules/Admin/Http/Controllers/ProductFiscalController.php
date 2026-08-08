@@ -4,6 +4,9 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Fiscal\Models\Invoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,6 +45,27 @@ class ProductFiscalController extends Controller
 
         $product->fiscalData()->updateOrCreate(['product_id' => $product->id], $validated);
 
+        $this->retryStuckInvoices($product);
+
         return back()->with('success', 'Dados fiscais atualizados com sucesso.');
+    }
+
+    /**
+     * Reprocessa a nota de qualquer pedido que tinha esse produto e ainda
+     * não tem NF-e autorizada/externa — cobre tanto o caso comum (falha
+     * anterior por "produto sem dados fiscais", agora resolvida) quanto um
+     * pedido que nem chegou a tentar ainda (produto acabou de ser
+     * cadastrado/auto-importado). Idempotente: GenerateInvoiceJob é
+     * ShouldBeUnique por pedido, então redisparar um pedido que já tem uma
+     * emissão rodando não duplica nada.
+     */
+    private function retryStuckInvoices(Product $product): void
+    {
+        Order::query()
+            ->whereHas('items', fn ($query) => $query->where('product_id', $product->id))
+            ->whereDoesntHave('invoice', fn ($query) => $query->whereIn('status', [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL]))
+            ->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
+            ->pluck('id')
+            ->each(fn (int $orderId) => GenerateInvoiceJob::dispatch($orderId));
     }
 }

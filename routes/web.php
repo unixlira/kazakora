@@ -17,6 +17,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\ManualLabelController;
+use App\Modules\Admin\Http\Controllers\CustomerController;
 use App\Modules\Admin\Http\Controllers\ManualOrderController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreFullPrintController;
 use App\Modules\Admin\Http\Controllers\OrderImportController;
@@ -247,6 +248,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('notas-fiscais', [InvoiceController::class, 'index'])
         ->name('notas-fiscais.listar')
         ->middleware('permission:pedidos.view');
+
+    Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
+    Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');
 
     Route::get('empresa', [CompanyController::class, 'edit'])->name('empresa.editar');
     Route::put('empresa', [CompanyController::class, 'update'])->name('empresa.atualizar');

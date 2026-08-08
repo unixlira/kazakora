@@ -90,6 +90,12 @@ class OrderImportService
                 $existing->update($changed);
             }
 
+            $buyerFields = $this->resolveBuyerFieldUpdates($existing, $data);
+
+            if ($buyerFields) {
+                $existing->update($buyerFields);
+            }
+
             return $this->syncStatus($existing, $data['status']);
         }
 
@@ -337,6 +343,91 @@ class OrderImportService
         }
 
         return $newRank < $currentRank;
+    }
+
+    /**
+     * Acha real 2026-08-08 (pedido #189): a Shopee mascara o nome do
+     * comprador ("E******a") e simplesmente OMITE buyer_cpf_id em
+     * get_order_detail() até o pedido avançar pra um status pago/pronto
+     * pra envio — confirmado ao vivo, o mesmo order_sn consultado de novo
+     * minutos depois já veio com nome completo e CPF reais. Se o webhook
+     * que criou o pedido chegou ANTES disso acontecer, buyer_document
+     * ficava vazio e shipping_name mascarado PRA SEMPRE (nada reconsultava
+     * depois), e GenerateInvoiceJob falhava sem parar com "não foi
+     * possível identificar o CPF/CNPJ do comprador" até esgotar as 3
+     * tentativas — mesmo a Shopee já tendo o dado real disponível.
+     *
+     * Só troca vazio/mascarado por preenchido/desmascarado, nunca o
+     * contrário — um pedido que já tem dado bom nunca regride.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function resolveBuyerFieldUpdates(Order $existing, array $data): array
+    {
+        $fields = [];
+
+        if (($existing->buyer_document === null || $existing->buyer_document === '') && ! empty($data['buyer_document'])) {
+            $fields['buyer_document'] = $data['buyer_document'];
+        }
+
+        $newName = (string) ($data['buyer_name'] ?? '');
+        $nameLooksMasked = str_contains($newName, '*');
+        $existingNameLooksMasked = str_contains((string) $existing->shipping_name, '*');
+
+        if ($newName !== '' && ! $nameLooksMasked && (empty($existing->shipping_name) || $existingNameLooksMasked)) {
+            $fields['shipping_name'] = $newName;
+        }
+
+        $newPhone = (string) ($data['buyer_phone'] ?? '');
+
+        if ($newPhone !== '' && ! str_contains($newPhone, '*') && str_contains((string) $existing->shipping_phone, '*')) {
+            $fields['shipping_phone'] = $newPhone;
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Busca ativa (não espera um webhook futuro reprocessar o pedido) —
+     * chamada por GenerateInvoiceJob antes de tentar emitir a nota, quando
+     * o pedido ainda está sem documento/nome real. Ver
+     * resolveBuyerFieldUpdates() acima pro porquê disso acontecer.
+     * Silenciosa em qualquer erro (canal fora do ar, driver sem
+     * importOrder de verdade implementado etc.) — quem chama já sabe lidar
+     * com "documento ainda ausente" normalmente (a validação da
+     * NFeXmlBuilderService), isso é só uma tentativa extra de recuperar o
+     * dado antes de deixar a emissão falhar.
+     */
+    public function refreshBuyerInfo(Order $order): void
+    {
+        if ($order->origin === Order::ORIGIN_STORE) {
+            return;
+        }
+
+        $needsRefresh = empty($order->buyer_document) || str_contains((string) $order->shipping_name, '*');
+
+        if (! $needsRefresh) {
+            return;
+        }
+
+        try {
+            $data = $this->manager->driver($order->origin)->importOrder($order->external_order_id);
+        } catch (\Throwable $exception) {
+            Log::warning('marketplace.order_import.buyer_info_refresh_failed', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return;
+        }
+
+        $fields = $this->resolveBuyerFieldUpdates($order, $data);
+
+        if ($fields) {
+            $order->update($fields);
+        }
     }
 
     private function syncStatus(Order $order, string $newStatus): Order

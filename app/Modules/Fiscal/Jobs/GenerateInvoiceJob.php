@@ -11,6 +11,7 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -73,9 +74,20 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         return [60, 300, 900];
     }
 
-    public function handle(InvoiceService $invoices, OrderFulfillmentTimeline $timeline): void
+    public function handle(InvoiceService $invoices, OrderFulfillmentTimeline $timeline, OrderImportService $orderImport): void
     {
         $order = Order::findOrFail($this->orderId);
+
+        // Achado real 2026-08-08 (pedido #189) — ver comentário completo em
+        // OrderImportService::refreshBuyerInfo(): a Shopee mascara nome e
+        // omite CPF do comprador até o pedido avançar de status, então o
+        // dado gravado na importação pode estar incompleto mesmo quando o
+        // canal já tem o dado real disponível agora. Tenta buscar de novo
+        // ANTES de montar o XML, em vez de só falhar 3 vezes com o mesmo
+        // erro ("não foi possível identificar o CPF/CNPJ do comprador")
+        // esperando um webhook futuro consertar sozinho.
+        $orderImport->refreshBuyerInfo($order);
+        $order->refresh();
 
         try {
             $invoice = $invoices->issue($order);

@@ -6,6 +6,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use Throwable;
 
@@ -17,6 +18,18 @@ use Throwable;
  * Pipeline de nota fiscal, independente do pipeline de envio/etiqueta (que
  * dispara direto na importação do pedido — ver OrderImportService): sucesso
  * ou falha aqui não confirma nem bloqueia o frete, só afeta a nota em si.
+ *
+ * Achado real 2026-08-08 (pedido #188): na Shopee, ConfirmChannelShippingJob
+ * costuma rodar ANTES da nota terminar de processar e "termina" (mesmo sem
+ * ship_order ter sido aceito de verdade — ver
+ * ShopeeDriver::confirmShipping()) sem re-tentar sozinho depois que a nota
+ * finalmente sai. Reprocessar a nota fiscal manualmente (fiscal preenchido
+ * tarde, ex: produto auto-importado — ver ProductFiscalController) não
+ * adiantava nada sozinho: precisa ALGUÉM re-chamar a confirmação de envio
+ * depois. Disparar aqui, assim que o canal aceita a nota de verdade, fecha
+ * o loop inteiro sem precisar de intervenção manual — idempotente pros
+ * canais que já confirmaram o envio antes (ML/Amazon, cujo confirmShipping
+ * só CONSULTA a decisão já tomada, nunca refaz nada).
  */
 class ChannelInvoiceSubmissionService
 {
@@ -71,6 +84,10 @@ class ChannelInvoiceSubmissionService
             $sent ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
             $sent ? 'Nota enviada ao canal' : ($result['response']['error'] ?? 'Canal rejeitou o envio da nota.'),
         );
+
+        if ($sent) {
+            ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
+        }
 
         return $submission;
     }

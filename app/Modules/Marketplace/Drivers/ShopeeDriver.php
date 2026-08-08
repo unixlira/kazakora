@@ -643,9 +643,35 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         $carrier = $this->resolveShippingCarrier($order);
 
-        $params = $this->client->get('/api/v2/logistics/get_shipping_parameter', [
-            'order_sn' => $order->external_order_id,
-        ]);
+        // BUG REAL 2026-08-08 (pedido #200): confirmShipping() pode ser
+        // chamado mais de uma vez pro mesmo pedido de propósito (retry do
+        // próprio job + o gatilho novo de "reconfirma assim que a nota é
+        // aceita", ver commit 831521b) — isso é intencional (idempotente
+        // por design, ship_order redundante já é tolerado logo abaixo).
+        // Mas get_shipping_parameter (chamada ANTES de ship_order) não
+        // tinha essa tolerância: numa segunda chamada, depois que o envio
+        // já estava totalmente arranjado, a Shopee rejeitava com "Package
+        // ... not eligible for rescheduling" — isso não é try/catch'd, o
+        // erro subia inteiro, ChannelShippingService::confirm() marcava o
+        // shipment como 'error' (sobrescrevendo o 'confirmed' que já
+        // existia de verdade), mesmo o envio já estando 100% arranjado do
+        // lado da Shopee. Mesma tolerância do ship_order abaixo: se essa
+        // consulta falhar, segue sem escolha de branch (a Shopee decide
+        // sozinha, mesmo comportamento de quando branch_list vem vazio,
+        // ver comentário de 2026-08-07 logo abaixo) em vez de travar tudo.
+        try {
+            $params = $this->client->get('/api/v2/logistics/get_shipping_parameter', [
+                'order_sn' => $order->external_order_id,
+            ]);
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->info('shopee.get_shipping_parameter.rejected_likely_already_done', [
+                'order_id' => $order->id,
+                'order_sn' => $order->external_order_id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            $params = [];
+        }
 
         $branchId = $params['response']['info_needed']['dropoff']['branch_list'][0]['branch_id'] ?? null;
 

@@ -2,12 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Models\User;
+use App\Modules\Marketplace\Models\ChannelWebhookLog;
+use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Shopee\Webhooks\WebhookHandler;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Notification;
+use Throwable;
 
 /**
  * Fica na fila "default" de propósito — o mesmo bug real já encontrado com
@@ -36,5 +41,25 @@ class ProcessShopeeWebhook implements ShouldQueue
     public function handle(WebhookHandler $handler): void
     {
         $handler->handle($this->payload, $this->webhookLogId);
+    }
+
+    /**
+     * Chamado quando as $tries esgotam de verdade — ver
+     * WebhookImportFailedNotification pro porquê disso existir agora
+     * (achado real 2026-08-08: uma venda real sumiu sem avisar ninguém).
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $orderSn = $this->payload['data']['ordersn']
+            ?? $this->payload['data']['order_sn']
+            ?? $this->payload['ordersn']
+            ?? $this->payload['order_sn']
+            ?? null;
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new WebhookImportFailedNotification('shopee', $orderSn, $exception?->getMessage() ?? 'Erro desconhecido'));
+        }
     }
 }

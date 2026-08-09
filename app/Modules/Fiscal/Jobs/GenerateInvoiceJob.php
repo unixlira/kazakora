@@ -126,8 +126,13 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             // do pipeline de nota fiscal, não afeta envio/etiqueta — esses
             // já disparam direto na importação do pedido, ver
             // OrderImportService). Pedido do site (origin=loja) não passa
-            // por canal nenhum, não tem o que enviar aqui.
-            if ($invoice->status === Invoice::STATUS_AUTHORIZED && $order->origin !== Order::ORIGIN_STORE) {
+            // por canal nenhum, não tem o que enviar aqui — e pedido de
+            // emissão manual avulsa (origin=nota_fiscal_avulsa, 2026-08-09)
+            // também não: sem isso, o job tentava resolver um driver de
+            // marketplace pra um "canal" que não existe, falhava 6 vezes em
+            // ~3h e disparava um alerta de erro pros admins do nada.
+            if ($invoice->status === Invoice::STATUS_AUTHORIZED
+                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE], true)) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
             }
         } catch (ValidatorException $exception) {

@@ -235,15 +235,35 @@ class InvoiceService
     }
 
     /**
-     * Etapa 5. Só cancela se a nota estiver autorizada e ainda dentro do
-     * prazo de 24h da autorização.
+     * Etapa 5, pedido de um Order do sistema. Mantido com essa assinatura
+     * (não recebe Invoice direto) pra não mexer nos dois chamadores já
+     * existentes/testados em produção (InvoiceController, OrderController)
+     * — só delega pro core em cancelInvoice() logo abaixo, que também serve
+     * nota órfã trazida da sincronização SEFAZ (sem Order, ver
+     * NFeDistribuicaoService/InvoiceController::cancelStandalone()).
      */
     public function cancel(Order $order, string $motivo): Invoice
     {
-        $invoice = $order->invoice;
+        $order->loadMissing('invoice');
 
-        if (! $invoice || $invoice->status !== Invoice::STATUS_AUTHORIZED) {
+        if (! $order->invoice) {
             throw new RuntimeException('Não há uma NF-e autorizada para este pedido.');
+        }
+
+        return $this->cancelInvoice($order->invoice, $motivo);
+    }
+
+    /**
+     * Core do cancelamento (Etapa 5) — só cancela se a nota estiver
+     * autorizada e ainda dentro do prazo de 24h da autorização. Funciona
+     * tanto pra Invoice ligada a um Order (fluxo normal) quanto pra Invoice
+     * órfã (origem='sefaz', sem order_id — trazida pela sincronização de
+     * Distribuição DFe), já que nada aqui depende de Order.
+     */
+    public function cancelInvoice(Invoice $invoice, string $motivo): Invoice
+    {
+        if ($invoice->status !== Invoice::STATUS_AUTHORIZED) {
+            throw new RuntimeException('Não há uma NF-e autorizada para cancelar.');
         }
 
         if ($invoice->autorizada_em?->diffInHours(now()) >= 24) {

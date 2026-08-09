@@ -47,6 +47,16 @@ class Order extends Model
 
     public const ORIGIN_SHEIN = MarketplaceAccount::CHANNEL_SHEIN;
 
+    // Pedido explícito 2026-08-09: emissão manual de nota fiscal (produto
+    // ou serviço avulso) pelo novo menu /admin/notas-fiscais/emitir — não é
+    // uma venda de canal nem do site, é só um jeito de ter um Order pra
+    // pendurar a Invoice (a arquitetura inteira de NFe já é Order-based).
+    // Não entra em nenhum dos switches/mapas de canal de marketplace
+    // existentes (comporta-se como um canal desconhecido neles, igual
+    // ORIGIN_STORE hoje em qualquer lugar que só trata canal de
+    // marketplace de verdade).
+    public const ORIGIN_MANUAL_INVOICE = 'nota_fiscal_avulsa';
+
     protected $fillable = [
         'user_id',
         'status',

@@ -3,6 +3,7 @@
 namespace App\Services\NFe;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Company;
 use Illuminate\Support\Str;
 use NFePHP\NFe\Make;
@@ -30,11 +31,31 @@ class NFeXmlBuilderService
             throw new RuntimeException('Pedido sem itens — não é possível montar a NF-e.');
         }
 
+        // Pedido explícito 2026-08-09: item pode ser um produto real do
+        // catálogo (fiscalData já cadastrado) OU um item digitado na hora na
+        // emissão manual (produto fora do catálogo ou serviço avulso — a
+        // empresa tem 2 CNAEs) — nesse segundo caso os dados fiscais vêm das
+        // colunas próprias do OrderItem em vez de product->fiscalData. Ver
+        // resolveFiscalData().
         foreach ($order->items as $item) {
-            if (! $item->product?->fiscalData) {
+            if (! $item->product && ! $item->ncm) {
+                throw new RuntimeException("Item \"{$item->product_name}\" não tem dados fiscais — nem produto do catálogo vinculado, nem NCM/CFOP preenchidos manualmente.");
+            }
+
+            if ($item->product && ! $item->product->fiscalData) {
                 throw new RuntimeException("Produto \"{$item->product_name}\" não tem dados fiscais cadastrados.");
             }
         }
+
+        // Nota fiscal é uma coisa só (natOp/finNFe únicos pro documento
+        // inteiro) — se TODOS os itens forem serviço, descreve a operação
+        // como prestação de serviço; havendo qualquer produto (mesmo
+        // misturado com serviço), mantém "venda de mercadoria" como já era.
+        // Aviso real de negócio, não travado no código: NF-e modelo 55 é
+        // formalmente pra mercadoria — prestação de serviço "pura" costuma
+        // exigir NFS-e (municipal, sistema totalmente separado, não
+        // implementado aqui). Fica a critério de quem emite.
+        $allServices = $order->items->every(fn ($item) => $item->item_type === OrderItem::TYPE_SERVICE);
 
         $make = new Make();
 
@@ -48,7 +69,7 @@ class NFeXmlBuilderService
 
         $ide = new stdClass();
         $ide->cUF = $cUF;
-        $ide->natOp = 'Venda de mercadoria';
+        $ide->natOp = $allServices ? 'Prestação de serviço' : 'Venda de mercadoria';
         $ide->mod = 55;
         $ide->serie = config('nfe.serie');
         $ide->nNF = $numero;
@@ -202,7 +223,7 @@ class NFeXmlBuilderService
 
         foreach ($order->items as $index => $item) {
             $n = $index + 1;
-            $fiscal = $item->product->fiscalData;
+            $fiscal = $this->resolveFiscalData($item);
             $cfop = $order->shipping_state === $company->state ? $fiscal->cfop : $fiscal->cfop_outros_estados;
 
             if ($n === $itemsCount) {
@@ -217,7 +238,10 @@ class NFeXmlBuilderService
 
             $prod = new stdClass();
             $prod->item = $n;
-            $prod->cProd = $item->product->sku;
+            // Item digitado na hora não tem SKU de catálogo — "SERV-{id}"
+            // como código interno, só precisa ser único/estável, a SEFAZ não
+            // valida contra nada externo.
+            $prod->cProd = $item->product?->sku ?? "SERV-{$item->id}";
             $prod->cEAN = $fiscal->gtin ?: 'SEM GTIN';
             $prod->xProd = $item->product_name;
             $prod->NCM = $fiscal->ncm;
@@ -343,6 +367,50 @@ class NFeXmlBuilderService
         return [
             'xml' => $xml,
             'chave' => $make->getChave(),
+        ];
+    }
+
+    /**
+     * Unifica as duas fontes possíveis de dados fiscais por item: produto
+     * real do catálogo (ProductFiscalData, já validado/estável) ou as
+     * colunas manuais do próprio OrderItem (item digitado na emissão manual
+     * — produto fora do catálogo ou serviço avulso). Devolve sempre o mesmo
+     * formato pra quem chama não precisar saber a origem.
+     */
+    private function resolveFiscalData(OrderItem $item): stdClass
+    {
+        if ($item->product) {
+            return (object) [
+                'ncm' => $item->product->fiscalData->ncm,
+                'cest' => $item->product->fiscalData->cest,
+                'cfop' => $item->product->fiscalData->cfop,
+                'cfop_outros_estados' => $item->product->fiscalData->cfop_outros_estados,
+                'origem' => $item->product->fiscalData->origem,
+                'gtin' => $item->product->fiscalData->gtin,
+                'unidade_tributavel' => $item->product->fiscalData->unidade_tributavel,
+                'icms_situacao_tributaria' => $item->product->fiscalData->icms_situacao_tributaria,
+                'pis_situacao_tributaria' => $item->product->fiscalData->pis_situacao_tributaria,
+                'pis_aliquota' => $item->product->fiscalData->pis_aliquota,
+                'cofins_situacao_tributaria' => $item->product->fiscalData->cofins_situacao_tributaria,
+                'cofins_aliquota' => $item->product->fiscalData->cofins_aliquota,
+                'percentual_aproximado_tributos' => $item->product->fiscalData->percentual_aproximado_tributos,
+            ];
+        }
+
+        return (object) [
+            'ncm' => $item->ncm,
+            'cest' => $item->cest,
+            'cfop' => $item->cfop,
+            'cfop_outros_estados' => $item->cfop_outros_estados ?: $item->cfop,
+            'origem' => $item->origem_mercadoria ?? 0,
+            'gtin' => $item->gtin,
+            'unidade_tributavel' => $item->unidade_tributavel ?: 'UN',
+            'icms_situacao_tributaria' => $item->icms_situacao_tributaria,
+            'pis_situacao_tributaria' => $item->pis_situacao_tributaria,
+            'pis_aliquota' => $item->pis_aliquota,
+            'cofins_situacao_tributaria' => $item->cofins_situacao_tributaria,
+            'cofins_aliquota' => $item->cofins_aliquota,
+            'percentual_aproximado_tributos' => $item->percentual_aproximado_tributos,
         ];
     }
 }

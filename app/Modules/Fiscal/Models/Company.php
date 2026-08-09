@@ -25,6 +25,7 @@ class Company extends Model
         'logo_path',
         'certificate_path',
         'certificate_password',
+        'nfe_ultimo_nsu',
         'phone',
         'email',
         'zip',

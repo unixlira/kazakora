@@ -35,8 +35,21 @@ class Invoice extends Model
 
     public const AMBIENTE_HOMOLOGACAO = 'homologacao';
 
+    // 'pedido' = fluxo normal, sempre tem order_id (automático ao pagar, ou
+    // emissão manual pra um Order existente). 'sefaz' = trazida pela
+    // sincronização de Distribuição DFe (ver NFeDistribuicaoService), sem
+    // Order local correspondente — destinatário fica em destinatario_nome/
+    // destinatario_documento em vez de vir de order.shipping_name/user.
+    public const ORIGEM_PEDIDO = 'pedido';
+
+    public const ORIGEM_SEFAZ = 'sefaz';
+
     protected $fillable = [
         'order_id',
+        'origem',
+        'destinatario_nome',
+        'destinatario_documento',
+        'nsu',
         'status',
         'ambiente',
         'serie',

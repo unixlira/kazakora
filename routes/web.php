@@ -15,6 +15,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreSalesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
+use App\Modules\Admin\Http\Controllers\InvoiceManualController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\ManualLabelController;
 use App\Modules\Admin\Http\Controllers\CustomerController;
@@ -253,6 +254,27 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('notas-fiscais', [InvoiceController::class, 'index'])
         ->name('notas-fiscais.listar')
         ->middleware('permission:pedidos.view');
+    Route::get('notas-fiscais/emitir', [InvoiceManualController::class, 'create'])
+        ->name('notas-fiscais.emitir')
+        ->middleware('permission:pedidos.edit');
+    Route::post('notas-fiscais/emitir', [InvoiceManualController::class, 'store'])
+        ->name('notas-fiscais.emitir.armazenar')
+        ->middleware('permission:pedidos.edit');
+    Route::post('notas-fiscais/sincronizar', [InvoiceController::class, 'syncSefaz'])
+        ->name('notas-fiscais.sincronizar')
+        ->middleware('permission:pedidos.edit');
+    Route::get('notas-fiscais/{invoice}', [InvoiceController::class, 'show'])
+        ->name('notas-fiscais.exibir')
+        ->middleware('permission:pedidos.view');
+    Route::get('notas-fiscais/{invoice}/danfe', [InvoiceController::class, 'danfeForInvoice'])
+        ->name('notas-fiscais.danfe')
+        ->middleware('permission:pedidos.view');
+    Route::get('notas-fiscais/{invoice}/xml', [InvoiceController::class, 'xmlForInvoice'])
+        ->name('notas-fiscais.xml')
+        ->middleware('permission:pedidos.view');
+    Route::post('notas-fiscais/{invoice}/cancelar', [InvoiceController::class, 'cancelInvoice'])
+        ->name('notas-fiscais.cancelar')
+        ->middleware('permission:pedidos.edit');
 
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');

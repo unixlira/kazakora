@@ -29,6 +29,7 @@ class NFeXmlBuilderServiceFreeformItemTest extends TestCase
         return Company::create([
             'razao_social' => 'KazaKora Comércio Ltda',
             'cnpj' => '12.345.678/0001-99',
+            'inscricao_estadual' => '158.571.233.113',
             'regime_tributario' => Company::REGIME_SIMPLES_NACIONAL,
             'city' => 'São Paulo',
             'state' => 'SP',

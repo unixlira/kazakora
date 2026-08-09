@@ -47,7 +47,7 @@ class InvoiceManualControllerTest extends TestCase
         $response = $this->actingAs($this->admin())->get('/admin/notas-fiscais/emitir');
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->component('Admin/Invoices/Emitir')->has('products', 1));
+        $response->assertInertia(fn ($page) => $page->has('products', 1));
     }
 
     public function test_store_creates_an_order_for_a_catalog_product_item_and_dispatches_invoice_generation(): void

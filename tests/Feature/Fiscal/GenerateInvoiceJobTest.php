@@ -8,7 +8,11 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Contracts\Queue\Job as QueueJobContract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,6 +63,20 @@ class GenerateInvoiceJobTest extends TestCase
         return $queueJob;
     }
 
+    /**
+     * handle() ganhou esse 3º parâmetro em 64bcf17 (2026-08-08, correção do
+     * pedido #189) — refreshBuyerInfo() só importa pro caso de canal
+     * externo com dado mascarado, fora do escopo do que estes testes
+     * verificam, então um mock genérico "não faz nada" basta.
+     */
+    private function fakeOrderImportService(): OrderImportService
+    {
+        $orderImport = Mockery::mock(OrderImportService::class);
+        $orderImport->shouldReceive('refreshBuyerInfo')->andReturnNull();
+
+        return $orderImport;
+    }
+
     public function test_handle_logs_success_and_dispatches_email_job_when_invoice_is_authorized(): void
     {
         Queue::fake();
@@ -68,7 +86,7 @@ class GenerateInvoiceJobTest extends TestCase
         $invoices = Mockery::mock(InvoiceService::class);
         $invoices->shouldReceive('issue')->once()->andReturn($invoice);
 
-        (new GenerateInvoiceJob($order->id))->handle($invoices);
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
 
         $this->assertDatabaseHas('invoice_generation_logs', [
             'order_id' => $order->id,
@@ -89,7 +107,7 @@ class GenerateInvoiceJobTest extends TestCase
         $invoices = Mockery::mock(InvoiceService::class);
         $invoices->shouldReceive('issue')->once()->andReturn($invoice);
 
-        (new GenerateInvoiceJob($order->id))->handle($invoices, new \App\Modules\Checkout\Support\OrderFulfillmentTimeline());
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
 
         $this->assertDatabaseHas('invoice_generation_logs', [
             'order_id' => $order->id,
@@ -102,8 +120,8 @@ class GenerateInvoiceJobTest extends TestCase
         // nossa (não existe uma de verdade). Confirmação de envio/etiqueta
         // não é mais responsabilidade deste job — dispara direto na
         // importação do pedido (OrderImportService), em paralelo com a nota.
-        Queue::assertNotPushed(\App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob::class);
-        Queue::assertNotPushed(\App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob::class);
+        Queue::assertNotPushed(ConfirmChannelShippingJob::class);
+        Queue::assertNotPushed(SubmitInvoiceToChannelJob::class);
         Queue::assertPushed(SendOrderReceiptEmailJob::class);
     }
 
@@ -116,7 +134,7 @@ class GenerateInvoiceJobTest extends TestCase
         $invoices = Mockery::mock(InvoiceService::class);
         $invoices->shouldReceive('issue')->once()->andReturn($invoice);
 
-        (new GenerateInvoiceJob($order->id))->handle($invoices);
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
 
         $this->assertDatabaseHas('invoice_generation_logs', [
             'order_id' => $order->id,
@@ -140,7 +158,7 @@ class GenerateInvoiceJobTest extends TestCase
         $invoices = Mockery::mock(InvoiceService::class);
         $invoices->shouldReceive('issue')->once()->andReturn($invoice);
 
-        (new GenerateInvoiceJob($order->id))->handle($invoices);
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
 
         $this->assertDatabaseHas('invoice_generation_logs', [
             'order_id' => $order->id,
@@ -165,7 +183,7 @@ class GenerateInvoiceJobTest extends TestCase
 
         $thrown = null;
         try {
-            $job->handle($invoices);
+            $job->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
         } catch (Throwable $exception) {
             $thrown = $exception;
         }
@@ -193,7 +211,7 @@ class GenerateInvoiceJobTest extends TestCase
         $job->setJob($this->fakeQueueJobWithAttempts(3)); // == $job->tries
 
         try {
-            $job->handle($invoices);
+            $job->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
         } catch (Throwable) {
             // esperado — quem decide chamar failed() depois é o worker real, não handle()
         }

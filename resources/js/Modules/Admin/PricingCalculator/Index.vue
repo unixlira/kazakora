@@ -209,11 +209,11 @@ const setOverride = (key, value) => {
         </div>
 
         <p v-if="!hasCost" class="mt-6 text-center text-sm text-slate-400">
-            Informe o preço de custo acima para ver o preço sugerido em cada marketplace.
+            Informe o preço de custo acima — os cards abaixo calculam o preço sugerido em cada marketplace assim que você digitar.
         </p>
 
         <!-- Cards por marketplace -->
-        <div v-else class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <div
                 v-for="{ marketplace, result } in results"
                 :key="marketplace.key"
@@ -230,7 +230,14 @@ const setOverride = (key, value) => {
                 <div class="p-5">
                     <div class="flex items-center gap-2">
                         <span class="flex h-9 w-9 items-center justify-center rounded-full text-base" :style="{ background: marketplace.theme.chipBg }">
-                            <i :class="marketplace.icon"></i>
+                            <svg
+                                v-if="marketplace.logoSvg"
+                                :viewBox="marketplace.logoSvg.viewBox"
+                                class="h-4 w-4"
+                                fill="currentColor"
+                                xmlns="http://www.w3.org/2000/svg"
+                            ><path :d="marketplace.logoSvg.path" /></svg>
+                            <i v-else :class="marketplace.icon"></i>
                         </span>
                         <div class="min-w-0">
                             <p class="truncate text-sm font-bold">{{ marketplace.label }}</p>
@@ -246,7 +253,13 @@ const setOverride = (key, value) => {
                         Estimativa
                     </span>
 
-                    <template v-if="result.invalid">
+                    <template v-if="!hasCost">
+                        <p class="mt-5 text-[11px] uppercase tracking-wide opacity-70">Venda por</p>
+                        <p class="text-3xl font-extrabold leading-tight opacity-40">{{ formatPrice(0) }}</p>
+                        <p class="mt-4 text-xs opacity-60">Informe o custo acima pra calcular este canal.</p>
+                    </template>
+
+                    <template v-else-if="result.invalid">
                         <p class="mt-6 text-sm font-medium opacity-90">
                             Margem + taxas ultrapassam 100% do preço — reduza a margem desejada para calcular este canal.
                         </p>

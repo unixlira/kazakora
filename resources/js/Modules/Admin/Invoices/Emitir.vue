@@ -5,7 +5,7 @@ import FieldTooltip from '@/Shared/Components/FieldTooltip.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { maskCpfCnpj, maskPhone } from '@/Shared/useMasks';
 import { ORIGEM_OPTIONS, CSOSN_OPTIONS, PIS_COFINS_CST_OPTIONS, UNIDADE_MEDIDA_OPTIONS } from '@/Shared/fiscalOptions';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -134,7 +134,10 @@ const submit = () => {
     <Head title="Emitir Nota Fiscal" />
 
     <AdminLayout>
-        <h1 class="mb-1 text-2xl font-bold">Emitir Nota Fiscal</h1>
+        <Link href="/admin/notas-fiscais" class="text-sm text-slate-400 hover:text-primary">
+            <i class="fas fa-arrow-left mr-1"></i> Notas Fiscais
+        </Link>
+        <h1 class="mb-1 mt-1 text-2xl font-bold">Emitir Nota Fiscal</h1>
         <p class="mb-4 text-sm text-slate-500">
             Emissão manual — cada item pode ser um produto real do catálogo (dados fiscais já cadastrados) ou um item
             digitado na hora (produto fora do catálogo ou serviço avulso, preenchendo NCM/CFOP/CSOSN/CST manualmente).
@@ -409,11 +412,15 @@ const submit = () => {
                 <p class="mt-1 text-xl font-bold">{{ formatPrice(total) }}</p>
             </div>
 
-            <div>
+            <div class="flex gap-2">
                 <button type="submit" :disabled="form.processing || form.items.length === 0"
                     class="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">
                     Emitir nota fiscal
                 </button>
+                <Link href="/admin/notas-fiscais"
+                    class="rounded border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]">
+                    Cancelar
+                </Link>
             </div>
         </form>
     </AdminLayout>

@@ -32,3 +32,10 @@ Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
+
+// Gasto real com anúncio (Shopee Ads + Mercado Ads) pro painel de lucro
+// líquido — pedido explícito 2026-08-09. Cedo o suficiente pra já estar
+// pronto quando o admin abrir o dashboard financeiro de manhã; janela de
+// 3 dias (padrão do comando) corrige sozinha o número parcial do dia
+// anterior, que a Shopee ainda ajusta por umas horas depois da virada.
+Schedule::command('ads:sync-spend')->dailyAt('06:00');

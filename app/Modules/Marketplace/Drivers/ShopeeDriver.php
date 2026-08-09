@@ -436,6 +436,20 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         // recalculamos aqui, nunca confiamos em total_amount pra isso.
         $total = round($itemsSubtotal + $shippingCost, 2);
 
+        // Pedido explícito 2026-08-09: taxa real da Shopee (comissão +
+        // taxa de serviço) pro painel de lucro líquido — confirmado ao vivo
+        // contra v2.payment.get_escrow_detail (pedido real 260810009CGXBN:
+        // commission_fee=8.82, service_fee=4.98). O escrow só fecha depois
+        // que a Shopee processa o pedido — pedido recém-criado (READY_TO_
+        // SHIP) pode não ter isso pronto ainda, e como este método roda de
+        // novo a cada sync horário (ver SyncShopeeOrders), uma falha aqui
+        // não é definitiva: só tenta de novo na próxima passada. Nunca
+        // inventa um valor — sem key 'marketplace_fee' no retorno, o
+        // OrderImportService simplesmente não grava OrderChannelFee ainda
+        // pra este pedido (mesmo padrão que os outros campos "quando
+        // disponível" deste driver).
+        $marketplaceFee = $this->resolveMarketplaceFee((string) ($order['order_sn'] ?? $externalOrderId));
+
         return [
             'external_order_id' => (string) ($order['order_sn'] ?? $externalOrderId),
             'status' => $this->mapOrderStatus((string) ($order['order_status'] ?? '')),
@@ -465,7 +479,33 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 ? \Illuminate\Support\Carbon::createFromTimestamp((int) $order['create_time'])
                 : null,
             'items' => $items,
+            ...($marketplaceFee !== null ? ['marketplace_fee' => $marketplaceFee] : []),
         ];
+    }
+
+    /**
+     * `commission_fee` + `service_fee` do escrow — os dois valores que a
+     * Shopee de fato desconta do vendedor por usar a plataforma (frete e
+     * promoções são componentes separados, não entram aqui). Retorna null
+     * (nunca 0.0) quando o escrow ainda não fechou ou a chamada falha —
+     * distinção importante pro chamador saber "sem dado" de "taxa zero".
+     */
+    private function resolveMarketplaceFee(string $orderSn): ?float
+    {
+        try {
+            $response = $this->client->get('/api/v2/payment/get_escrow_detail', ['order_sn' => $orderSn]);
+            $income = $response['response']['order_income'] ?? null;
+
+            if (! $income || ! isset($income['commission_fee'], $income['service_fee'])) {
+                return null;
+            }
+
+            return round((float) $income['commission_fee'] + (float) $income['service_fee'], 2);
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.escrow_detail.lookup_failed', ['order_sn' => $orderSn, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
     }
 
     /**

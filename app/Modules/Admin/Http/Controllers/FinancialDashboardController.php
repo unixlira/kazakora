@@ -31,24 +31,28 @@ class FinancialDashboardController extends Controller
         // (receita − custo de produto − taxa de marketplace − anúncio),
         // separado do "profitMonth" acima (que é fluxo de caixa manual,
         // conceito diferente — entrada/saída lançada à mão).
-        $salesRevenueMonth = (float) Order::query()
+        // round() em cada soma: SUM de coluna decimal via PDO/SQLite pode
+        // voltar com erro de ponto flutuante binário (ex.: 10.20 + 5.10 =
+        // 15.299999999999999) — arredonda na fonte pra nunca vazar isso
+        // pro dashboard nem pra conta de lucro líquido abaixo.
+        $salesRevenueMonth = round((float) Order::query()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
-            ->sum('total');
+            ->sum('total'), 2);
 
-        $productCostMonth = (float) Order::query()
+        $productCostMonth = round((float) Order::query()
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $startOfMonth)
             ->join('order_items', 'order_items.order_id', '=', 'orders.id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as total')
-            ->value('total');
+            ->value('total'), 2);
 
-        $marketplaceFeeMonth = (float) OrderChannelFee::query()
+        $marketplaceFeeMonth = round((float) OrderChannelFee::query()
             ->where('computed_at', '>=', $startOfMonth)
-            ->sum('fee_amount');
+            ->sum('fee_amount'), 2);
 
-        $adSpendMonth = (float) ChannelAdSpend::query()->where('date', '>=', $startOfMonth)->sum('spend');
+        $adSpendMonth = round((float) ChannelAdSpend::query()->where('date', '>=', $startOfMonth)->sum('spend'), 2);
 
         $productsWithCost = Product::query()->where('is_active', true)->whereNotNull('cost_price')->count();
         $productsActive = Product::query()->where('is_active', true)->count();
@@ -66,7 +70,7 @@ class FinancialDashboardController extends Controller
                 'productCostMonth' => $productCostMonth,
                 'marketplaceFeeMonth' => $marketplaceFeeMonth,
                 'adSpendMonth' => $adSpendMonth,
-                'netProfitMonth' => $salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth,
+                'netProfitMonth' => round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth, 2),
                 // Sinaliza dado incompleto em vez de deixar o número
                 // parecer preciso quando não é — pedido explícito
                 // 2026-08-09 (nenhum produto tem custo cadastrado hoje).
@@ -95,8 +99,8 @@ class FinancialDashboardController extends Controller
                 'impressions' => (int) $row->impressions,
                 'clicks' => (int) $row->clicks,
                 'attributedOrders' => (int) $row->attributed_orders,
-                'attributedGmv' => (float) $row->attributed_gmv,
-                'spend' => (float) $row->spend,
+                'attributedGmv' => round((float) $row->attributed_gmv, 2),
+                'spend' => round((float) $row->spend, 2),
             ])
             ->values()
             ->all();

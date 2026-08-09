@@ -13,6 +13,12 @@ use Tests\TestCase;
 /**
  * Pedido explícito 2026-08-09: lucro líquido de vendas = receita − custo de
  * produto − taxa de marketplace − gasto com anúncio.
+ *
+ * Valores de teste usam centavos fracionários de propósito (nunca um total
+ * "redondo" tipo 100.0) — Inertia serializa um PHP float sem casas
+ * decimais como inteiro no JSON (json_encode(100.0) === "100"), e a
+ * comparação ->where() do teste é estrita (===): comparar contra o literal
+ * 100.0 quebraria com "100 is identical to 100.0" mesmo com a conta certa.
  */
 class FinancialDashboardNetProfitTest extends TestCase
 {
@@ -43,37 +49,37 @@ class FinancialDashboardNetProfitTest extends TestCase
 
     public function test_net_profit_subtracts_product_cost_marketplace_fee_and_ad_spend_from_revenue(): void
     {
-        $product = Product::factory()->create(['price' => 100, 'cost_price' => 40]);
+        $product = Product::factory()->create(['price' => 60.375, 'cost_price' => 40.25]);
 
-        $order = $this->makeOrder(['total' => 100]);
+        $order = $this->makeOrder(['total' => 120.75]);
         $order->items()->create([
             'product_id' => $product->id,
             'product_name' => $product->name,
-            'product_price' => 100,
-            'quantity' => 2, // custo total = 2 * 40 = 80
-            'subtotal' => 100,
+            'product_price' => 60.375,
+            'quantity' => 2, // custo total = 2 * 40.25 = 80.50
+            'subtotal' => 120.75,
         ]);
 
         OrderChannelFee::create([
             'order_id' => $order->id,
             'channel' => 'mercado_livre',
-            'gross_amount' => 100,
-            'fee_amount' => 15,
+            'gross_amount' => 120.75,
+            'fee_amount' => 15.30,
             'computed_at' => now(),
         ]);
 
-        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'shopee', 'spend' => 10]);
-        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 5]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'shopee', 'spend' => 10.20]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 5.10]);
 
         $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.salesRevenueMonth', 100.0)
-            ->where('netProfit.productCostMonth', 80.0)
-            ->where('netProfit.marketplaceFeeMonth', 15.0)
-            ->where('netProfit.adSpendMonth', 15.0)
-            ->where('netProfit.netProfitMonth', -10.0)); // 100 - 80 - 15 - 15
+            ->where('netProfit.salesRevenueMonth', 120.75)
+            ->where('netProfit.productCostMonth', 80.5)
+            ->where('netProfit.marketplaceFeeMonth', 15.3)
+            ->where('netProfit.adSpendMonth', 15.3)
+            ->where('netProfit.netProfitMonth', 9.65)); // 120.75 - 80.50 - 15.30 - 15.30
     }
 
     public function test_net_profit_flags_when_no_active_product_has_a_cost_price_yet(): void
@@ -87,7 +93,7 @@ class FinancialDashboardNetProfitTest extends TestCase
         $response->assertInertia(fn ($page) => $page
             ->where('netProfit.productsWithCost', 0)
             ->where('netProfit.productsActive', 2)
-            ->where('netProfit.productCostMonth', 0.0));
+            ->where('netProfit.productCostMonth', 0));
     }
 
     public function test_order_items_without_a_linked_product_do_not_break_the_cost_calculation(): void
@@ -107,6 +113,6 @@ class FinancialDashboardNetProfitTest extends TestCase
         $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
 
         $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('netProfit.productCostMonth', 0.0));
+        $response->assertInertia(fn ($page) => $page->where('netProfit.productCostMonth', 0));
     }
 }

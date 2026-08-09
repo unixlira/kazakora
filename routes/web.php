@@ -23,6 +23,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreFullPrintController;
 use App\Modules\Admin\Http\Controllers\OrderImportController;
 use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
+use App\Modules\Admin\Http\Controllers\PricingCalculatorController;
 use App\Modules\Admin\Http\Controllers\PrintJobController;
 use App\Modules\Admin\Http\Controllers\PrintTestController;
 use App\Modules\Admin\Http\Controllers\WebhookLogController;
@@ -180,6 +181,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::get('concorrencia', [CompetitorAnalysisController::class, 'index'])
         ->name('concorrencia.listar')
+        ->middleware('permission:cadastros.view');
+
+    Route::get('precificacao', [PricingCalculatorController::class, 'index'])
+        ->name('precificacao.calculadora')
         ->middleware('permission:cadastros.view');
 
     Route::resource('fornecedores', SupplierController::class)->except('show')

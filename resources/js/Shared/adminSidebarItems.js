@@ -22,6 +22,7 @@ export const sidebarSections = [
         heading: 'Cadastros',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', color: 'text-info', permission: 'cadastros.view' },
+            { label: 'Calculadora de Preços', href: '/admin/precificacao', icon: 'fas fa-calculator', color: 'text-success', permission: 'cadastros.view' },
             { label: 'Análise de Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', color: 'text-info', permission: 'cadastros.view' },
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-tags', color: 'text-secondary', permission: 'cadastros.view' },
             { label: 'Banners', href: '/admin/banners', icon: 'fas fa-images', color: 'text-info', permission: 'cadastros.view' },

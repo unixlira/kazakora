@@ -102,7 +102,14 @@ watch(
                     <i class="fas fa-leaf me-2"></i> KazaKora Admin
                 </Link>
 
-                <div class="h-auto flex-1 items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
+                <!-- Bug real reportado 2026-08-09: esse painel não tinha
+                largura própria — virava mais um item dentro do
+                "flex flex-wrap justify-between" do cabeçalho (linha acima,
+                hambúrguer + logo) em vez de cair pra uma linha nova abaixo
+                dele. w-full/basis-full força quebra de linha garantida no
+                mobile (flex-wrap só quebra linha quando o item não cabe; um
+                item de 100% de largura nunca cabe ao lado de outro). -->
+                <div class="h-auto w-full basis-full items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:w-auto md:flex-1 md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
                     :class="collapseShow">
                     <div v-for="section in visibleSections" :key="section.heading" class="mb-4">
                         <h6 v-if="!sidebarCollapsed" class="mb-2 block pt-1 text-xs font-bold uppercase tracking-wide text-slate-400">

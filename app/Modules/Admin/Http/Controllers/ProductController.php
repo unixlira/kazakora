@@ -185,6 +185,7 @@ class ProductController extends Controller
             'color' => ['nullable', 'string', 'max:100'],
             'variation' => ['nullable', 'string', 'max:100'],
             'price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],

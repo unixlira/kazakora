@@ -46,6 +46,11 @@ const columns = [
         cell: ({ row }) => formatPrice(row.original.price),
     },
     {
+        accessorKey: 'cost_price',
+        header: 'Preço de custo',
+        cell: ({ row }) => (row.original.cost_price != null ? formatPrice(row.original.cost_price) : '—'),
+    },
+    {
         accessorKey: 'stock',
         header: 'Estoque',
         cell: ({ row }) => h('span', { class: row.original.stock <= 5 ? 'text-error font-medium' : '' }, row.original.stock),

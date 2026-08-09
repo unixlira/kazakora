@@ -190,6 +190,21 @@ watch(
             </div>
 
             <div>
+                <label for="cost_price" class="block text-sm font-medium">Preço de custo (R$)</label>
+                <input
+                    id="cost_price"
+                    v-model="form.cost_price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Opcional"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <p class="mt-1 text-xs text-gray-400">Uso interno (margem/relatórios) — não aparece na loja.</p>
+                <InputError :message="form.errors.cost_price" />
+            </div>
+
+            <div>
                 <label for="stock" class="block text-sm font-medium">Estoque</label>
                 <input
                     id="stock"

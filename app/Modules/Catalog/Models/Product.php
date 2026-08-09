@@ -31,6 +31,7 @@ class Product extends Model
         'video_path',
         'video_duration_seconds',
         'price',
+        'cost_price',
         'discount_percentage',
         'discount_amount',
         'stock',
@@ -45,6 +46,7 @@ class Product extends Model
     {
         return [
             'price' => 'decimal:2',
+            'cost_price' => 'decimal:2',
             'discount_percentage' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'stock' => 'integer',

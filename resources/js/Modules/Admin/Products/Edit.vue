@@ -56,6 +56,7 @@ const form = useForm({
     variation: props.product.variation ?? '',
     description: props.product.description ?? '',
     price: props.product.price,
+    cost_price: props.product.cost_price ?? '',
     discount_percentage: props.product.discount_percentage,
     discount_amount: props.product.discount_amount,
     stock: props.product.stock,

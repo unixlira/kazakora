@@ -20,6 +20,19 @@ class ShopeeAdsService
     }
 
     /**
+     * Saldo atual de anúncio — confirmado ao vivo (get_total_balance,
+     * 2026-08-09). É só o saldo de AGORA, a Shopee não expõe extrato de
+     * recarga consultável (testado via get_wallet_transaction_list: traz
+     * transação de venda real, nenhuma de recarga de ads).
+     */
+    public function currentBalance(): float
+    {
+        $response = $this->client->get('/api/v2/ads/get_total_balance');
+
+        return (float) ($response['response']['total_balance'] ?? 0);
+    }
+
+    /**
      * @return array<int, array{date: string, impressions: int, clicks: int, attributed_orders: int, attributed_gmv: float, spend: float}>
      */
     public function dailyPerformance(Carbon $from, Carbon $to): array

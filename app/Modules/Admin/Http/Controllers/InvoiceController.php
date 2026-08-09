@@ -21,8 +21,11 @@ class InvoiceController extends Controller
 {
     public function index(): Response
     {
+        // Sem eager-load de order.user aqui — a coluna "Cliente" saiu da
+        // listagem (pedido explícito 2026-08-09, fica só na tela de view),
+        // então só precisa do essencial pra pintar a plataforma colorida.
         $invoices = Invoice::query()
-            ->with(['order:id,user_id,origin,external_order_id,total', 'order.user:id,name,email'])
+            ->with('order:id,origin,external_order_id')
             ->latest('created_at')
             ->get();
 

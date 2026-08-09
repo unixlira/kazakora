@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
+import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -36,12 +37,17 @@ const originLabels = {
     nota_fiscal_avulsa: 'Emissão manual',
 };
 
-const showCancelForm = ref(false);
+const showCancelModal = ref(false);
 const cancelForm = useForm({ motivo: '' });
+const openCancelModal = () => {
+    cancelForm.reset();
+    cancelForm.clearErrors();
+    showCancelModal.value = true;
+};
 const cancelInvoice = () => {
     cancelForm.post(`/admin/notas-fiscais/${props.invoice.id}/cancelar`, {
         onSuccess: () => {
-            showCancelForm.value = false;
+            showCancelModal.value = false;
             cancelForm.reset();
         },
     });
@@ -161,42 +167,12 @@ const cancelInvoice = () => {
                 <Can permission="pedidos.edit">
                     <div v-if="invoice.can_cancel" class="mt-4 border-t border-[var(--surface-border)] pt-4">
                         <button
-                            v-if="!showCancelForm"
                             type="button"
                             class="w-full rounded-lg border border-error px-3 py-2 text-sm font-medium text-error hover:bg-error/10"
-                            @click="showCancelForm = true"
+                            @click="openCancelModal"
                         >
                             Cancelar nota
                         </button>
-
-                        <form v-else class="space-y-2" @submit.prevent="cancelInvoice">
-                            <label for="motivo_cancelamento" class="block text-sm font-medium">Motivo do cancelamento (mín. 15 caracteres)</label>
-                            <textarea
-                                id="motivo_cancelamento"
-                                v-model="cancelForm.motivo"
-                                rows="3"
-                                minlength="15"
-                                required
-                                class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
-                            ></textarea>
-                            <p v-if="cancelForm.errors.motivo" class="text-xs text-error">{{ cancelForm.errors.motivo }}</p>
-                            <div class="flex gap-2">
-                                <button
-                                    type="submit"
-                                    :disabled="cancelForm.processing"
-                                    class="flex-1 rounded-lg bg-error px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    Confirmar — envia à SEFAZ
-                                </button>
-                                <button
-                                    type="button"
-                                    class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]"
-                                    @click="showCancelForm = false; cancelForm.reset(); cancelForm.clearErrors();"
-                                >
-                                    Voltar
-                                </button>
-                            </div>
-                        </form>
                     </div>
                     <p v-else-if="invoice.status === 'authorized'" class="mt-4 border-t border-[var(--surface-border)] pt-4 text-xs text-slate-400">
                         Prazo de 24h pra cancelamento já expirou.
@@ -204,5 +180,32 @@ const cancelInvoice = () => {
                 </Can>
             </div>
         </div>
+
+        <ConfirmModal
+            :open="showCancelModal"
+            title="Cancelar nota fiscal"
+            confirm-label="Confirmar cancelamento"
+            danger
+            :loading="cancelForm.processing"
+            :confirm-disabled="cancelForm.motivo.trim().length < 15"
+            @close="showCancelModal = false"
+            @confirm="cancelInvoice"
+        >
+            <p class="text-sm text-slate-500">
+                O cancelamento é enviado direto pra SEFAZ e não pode ser desfeito. Tem certeza que quer cancelar a nota
+                <strong>{{ invoice.numero }}/{{ invoice.serie }}</strong>?
+            </p>
+
+            <label for="motivo_cancelamento" class="mt-4 block text-sm font-medium">Motivo do cancelamento (mín. 15 caracteres)</label>
+            <textarea
+                id="motivo_cancelamento"
+                v-model="cancelForm.motivo"
+                rows="3"
+                minlength="15"
+                required
+                class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
+            ></textarea>
+            <p v-if="cancelForm.errors.motivo" class="mt-1 text-xs text-error">{{ cancelForm.errors.motivo }}</p>
+        </ConfirmModal>
     </AdminLayout>
 </template>

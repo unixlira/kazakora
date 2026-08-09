@@ -29,10 +29,25 @@ class PrintAgentController extends Controller
 {
     public function index(): JsonResponse
     {
+        // sale_id = orders.external_order_id (id de venda do próprio canal,
+        // ex.: order_sn da Shopee) — pedido explícito 2026-08-09: nome do
+        // arquivo arquivado localmente usa tracking_code quando existir,
+        // caindo pra sale_id (nunca nulo pra pedido de canal) em vez do
+        // feio "pedido-{id interno}" antigo. É por isso que precisa vir
+        // aqui, não só order_id.
         $jobs = PrintJob::query()
             ->where('status', PrintJob::STATUS_QUEUED)
+            ->with('order:id,external_order_id')
             ->oldest()
-            ->get(['id', 'order_id', 'channel', 'tracking_code', 'created_at']);
+            ->get(['id', 'order_id', 'channel', 'tracking_code', 'created_at'])
+            ->map(fn (PrintJob $job) => [
+                'id' => $job->id,
+                'order_id' => $job->order_id,
+                'channel' => $job->channel,
+                'tracking_code' => $job->tracking_code,
+                'sale_id' => $job->order?->external_order_id,
+                'created_at' => $job->created_at,
+            ]);
 
         return response()->json(['jobs' => $jobs]);
     }

@@ -65,11 +65,24 @@ class InvoiceService
 
         if ($order->invoice && in_array($order->invoice->status, [
             Invoice::STATUS_AUTHORIZED,
-            Invoice::STATUS_REJECTED,
             Invoice::STATUS_DENIED,
         ], true)) {
-            // Já existe uma resposta definitiva da SEFAZ (ou já foi
-            // autorizada) — idempotente, não há nada novo a fazer.
+            // Só AUTHORIZED e DENIED são resposta definitiva de verdade.
+            // AUTHORIZED: já emitida, reemitir duplicaria a nota.
+            // DENIED (cStat 110/301/302 — normalmente irregularidade de
+            // CNPJ/IE do emissor): SEFAZ queima esse número, reenviar o
+            // mesmo dado nunca muda o resultado — precisa de intervenção
+            // manual (regularizar cadastro), não de retry automático.
+            //
+            // BUG REAL 2026-08-10 (pedido #215): REJECTED estava nesse
+            // mesmo grupo até aqui — mas rejeição (qualquer outro cStat,
+            // ex: 778 "NCM inexistente") é um erro de DADO, corrigível: a
+            // SEFAZ nunca chegou a registrar essa chave, o número
+            // reservado nunca foi consumido de verdade. Tratar como
+            // terminal fazia o retry que já existe em
+            // ProductFiscalController::retryStuckInvoices() (corrigir o
+            // cadastro do produto e redisparar) nunca ter efeito nenhum —
+            // ficava rejeitada pra sempre mesmo depois do dado corrigido.
             return $order->invoice;
         }
 
@@ -84,11 +97,13 @@ class InvoiceService
         // toda retentativa seguinte reaproveitava o MESMO XML antigo, já
         // gravado em disco, sem nunca reconstruir com o dado corrigido.
         // Enquanto ainda está pending (nunca chegou a ser assinada/enviada
-        // — status muda pra 'signed' assim que signAndSend() começa),
-        // reconstruir com o mesmo número já reservado é seguro: a chave
-        // pode mudar (tem componente aleatório), mas como a SEFAZ nunca viu
-        // essa chave antiga, não sobra nada pra invalidar.
-        if ($invoice->status === Invoice::STATUS_PENDING) {
+        // — status muda pra 'signed' assim que signAndSend() começa) OU já
+        // foi rejeitada (SEFAZ nunca registrou essa chave de verdade, ver
+        // comentário acima), reconstruir com o mesmo número já reservado é
+        // seguro: a chave pode mudar (tem componente aleatório), mas como
+        // a SEFAZ nunca autorizou a chave antiga, não sobra nada pra
+        // invalidar.
+        if (in_array($invoice->status, [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED], true)) {
             $invoice = $this->rebuildPendingInvoice($invoice, $order);
         }
 
@@ -221,6 +236,12 @@ class InvoiceService
                 'status' => Invoice::STATUS_AUTHORIZED,
                 'protocolo_autorizacao' => (string) $infProt->nProt,
                 'autorizada_em' => now(),
+                // Limpa o motivo de uma rejeição anterior, se essa nota já
+                // tinha sido tentada e falhado antes de agora autorizar —
+                // mesma classe de bug (mensagem de erro velha sobrevivendo
+                // a um sucesso posterior) já achada e corrigida em
+                // ChannelShippingService::confirm() 2026-08-08.
+                'motivo_rejeicao' => null,
             ]);
             Storage::disk('local')->put($invoice->xml_path, $nfeProcXml);
 

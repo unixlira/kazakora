@@ -31,10 +31,14 @@ class FinancialDashboardController extends Controller
         $incomeMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_INCOME)->where('entry_date', '>=', $startOfMonth)->sum('amount');
         $expenseMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_EXPENSE)->where('entry_date', '>=', $startOfMonth)->sum('amount');
 
-        // Pedido explícito 2026-08-09: lucro líquido de vendas de verdade
-        // (receita − custo de produto − taxa de marketplace − anúncio) — é
-        // o valor usado tanto no card "Lucro no Mês" do resumo quanto no
-        // detalhamento "Lucro Líquido de Vendas" abaixo, mesma conta.
+        // Pedido explícito 2026-08-09/10: lucro líquido de vendas de verdade
+        // (receita − custo de produto − anúncio) — é o valor usado tanto no
+        // card "Lucro no Mês" do resumo quanto no detalhamento "Lucro
+        // Líquido de Vendas" abaixo, mesma conta. Taxa de marketplace
+        // continua calculada e mostrada à parte (informativo), mas NÃO
+        // entra na conta do lucro líquido — pedido explícito do usuário
+        // 2026-08-10: "o lucro liquido é realmente só o que sobra do
+        // desconto do material, do ads".
         // round() em cada soma: SUM de coluna decimal via PDO/SQLite pode
         // voltar com erro de ponto flutuante binário (ex.: 10.20 + 5.10 =
         // 15.299999999999999) — arredonda na fonte pra nunca vazar isso
@@ -61,7 +65,13 @@ class FinancialDashboardController extends Controller
         $productsWithCost = Product::query()->where('is_active', true)->whereNotNull('cost_price')->count();
         $productsActive = Product::query()->where('is_active', true)->count();
 
-        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth, 2);
+        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $adSpendMonth, 2);
+
+        // Pedido explícito 2026-08-10: "faturamento liquido é o valor bruto
+        // menos ads" — métrica distinta de lucro líquido (que também abate
+        // o custo do material). Vai no lugar do card "Entradas no Mês", que
+        // antes mostrava só o CashFlowEntry lançado à mão.
+        $netRevenueMonth = round($salesRevenueMonth - $adSpendMonth, 2);
 
         // Pedido explícito 2026-08-09: cards do topo invertidos — 1º
         // faturamento bruto desde o primeiro dia, 2º lucro líquido também
@@ -76,10 +86,17 @@ class FinancialDashboardController extends Controller
             ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as total')
             ->value('total'), 2);
 
-        $marketplaceFeeAllTime = round((float) OrderChannelFee::query()->sum('fee_amount'), 2);
         $adSpendAllTime = round((float) ChannelAdSpend::query()->sum('spend'), 2);
 
-        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime, 2);
+        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $adSpendAllTime, 2);
+
+        // Valor de estoque — pedido explícito 2026-08-10: soma de todos os
+        // produtos pelo valor pago (cost_price) vezes a quantidade em
+        // estoque. Produto sem custo cadastrado ainda conta como 0 aqui
+        // (mesmo aviso de dado incompleto que já existe pro resto da tela).
+        $stockValue = round((float) Product::query()
+            ->selectRaw('COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0) as total')
+            ->value('total'), 2);
 
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'summary' => [
@@ -91,8 +108,8 @@ class FinancialDashboardController extends Controller
                 // incomeMonth-expenseMonth (fluxo de caixa lançado à mão,
                 // um conceito totalmente diferente de "a loja tá dando
                 // lucro"). Agora é o mesmo netProfitMonth calculado abaixo
-                // (receita real − custo − taxa − anúncio), pra ser
-                // literalmente a métrica de "tá dando lucro ou não".
+                // (receita real − custo − anúncio), pra ser literalmente a
+                // métrica de "tá dando lucro ou não".
                 'profitMonth' => $netProfitMonth,
                 'salesRevenue' => (float) Order::query()->whereNot('status', Order::STATUS_CANCELLED)->sum('total'),
                 // Faturamento bruto/líquido desde o primeiro dia — pedido
@@ -100,6 +117,8 @@ class FinancialDashboardController extends Controller
                 'grossRevenueAllTime' => $salesRevenueAllTime,
                 'netProfitAllTime' => $netProfitAllTime,
                 'grossRevenueMonth' => $salesRevenueMonth,
+                'netRevenueMonth' => $netRevenueMonth,
+                'stockValue' => $stockValue,
             ],
             // Saldo disponível pra saque nas plataformas — pedido explícito
             // 2026-08-09. Confirmado ao vivo: a Shopee tem isso de verdade

@@ -11,8 +11,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Pedido explícito 2026-08-09: lucro líquido de vendas = receita − custo de
- * produto − taxa de marketplace − gasto com anúncio.
+ * Pedido explícito 2026-08-09/10: lucro líquido de vendas = receita − custo
+ * de produto − gasto com anúncio. Taxa de marketplace é calculada e exposta
+ * à parte (informativo), mas não entra nessa conta — pedido explícito do
+ * usuário 2026-08-10: "o lucro liquido é realmente só o que sobra do
+ * desconto do material, do ads".
  *
  * Valores de teste usam centavos fracionários de propósito (nunca um total
  * "redondo" tipo 100.0) — Inertia serializa um PHP float sem casas
@@ -47,7 +50,7 @@ class FinancialDashboardNetProfitTest extends TestCase
         ], $attributes));
     }
 
-    public function test_net_profit_subtracts_product_cost_marketplace_fee_and_ad_spend_from_revenue(): void
+    public function test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue(): void
     {
         $product = Product::factory()->create(['price' => 60.375, 'cost_price' => 40.25]);
 
@@ -77,24 +80,42 @@ class FinancialDashboardNetProfitTest extends TestCase
         $response->assertInertia(fn ($page) => $page
             ->where('netProfit.salesRevenueMonth', 120.75)
             ->where('netProfit.productCostMonth', 80.5)
+            // Taxa de marketplace continua calculada/exposta (informativo),
+            // mas não entra mais na conta do lucro líquido.
             ->where('netProfit.marketplaceFeeMonth', 15.3)
             ->where('netProfit.adSpendMonth', 15.3)
-            ->where('netProfit.netProfitMonth', 9.65) // 120.75 - 80.50 - 15.30 - 15.30
+            ->where('netProfit.netProfitMonth', 24.95) // 120.75 - 80.50 - 15.30 (sem taxa)
             // Pedido explícito 2026-08-09: "lucro no mês sendo só o
             // líquido" — o card de resumo usa o mesmo valor calculado
             // aqui, não mais o saldo de fluxo de caixa manual.
-            ->where('summary.profitMonth', 9.65)
+            ->where('summary.profitMonth', 24.95)
             // Cards invertidos (pedido explícito 2026-08-09): bruto/líquido
             // desde o primeiro dia — só há esse 1 pedido no teste, então
             // "desde o início" bate com "no mês".
             ->where('summary.grossRevenueAllTime', 120.75)
-            ->where('summary.netProfitAllTime', 9.65)
+            ->where('summary.netProfitAllTime', 24.95)
             ->where('summary.grossRevenueMonth', 120.75)
+            // Pedido explícito 2026-08-10: faturamento líquido = bruto -
+            // ads (sem abater custo do material) — vai no card "Entradas
+            // no Mês".
+            ->where('summary.netRevenueMonth', 105.45) // 120.75 - 15.30
             // Mercado Livre sempre indisponível hoje (API pede escopo de
             // pagamentos que o app não tem); Shopee null porque não há
             // MarketplaceAccount conectada neste teste.
             ->where('walletBalances.mercado_livre', null)
             ->where('walletBalances.shopee', null));
+    }
+
+    public function test_stock_value_sums_cost_price_times_stock_across_all_products(): void
+    {
+        Product::factory()->create(['cost_price' => 10.50, 'stock' => 4]); // 42.00
+        Product::factory()->create(['cost_price' => 5.25, 'stock' => 2]); // 10.50
+        Product::factory()->create(['cost_price' => null, 'stock' => 100]); // conta como 0, não quebra
+
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page->where('summary.stockValue', 52.5));
     }
 
     public function test_net_profit_flags_when_no_active_product_has_a_cost_price_yet(): void

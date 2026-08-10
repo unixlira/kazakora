@@ -76,17 +76,23 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
     <AdminLayout>
         <h1 class="mb-4 text-2xl font-bold">Financeiro</h1>
 
-        <!-- Pedido explícito 2026-08-09: cards invertidos — bruto/líquido
+        <!-- Pedido explícito 2026-08-09/10: cards invertidos — bruto/líquido
              desde o primeiro dia primeiro, depois os mesmos dois recortados
-             pro mês corrente. Saldo atual e entradas no mês seguem no fim;
-             saídas no mês foi removido. -->
+             pro mês corrente. "Entradas no Mês" virou faturamento líquido
+             (bruto - ads) em vez do fluxo de caixa lançado à mão — lucro
+             líquido do mês já abate o custo do material também, é uma
+             conta diferente. Saldo atual segue no fim; saídas no mês foi
+             removido. -->
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <CardStats stat-subtitle="FATURAMENTO BRUTO (desde o início)" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-bag-shopping" variant="info" />
             <CardStats stat-subtitle="LUCRO LÍQUIDO (desde o início)" :stat-title="formatPrice(summary.netProfitAllTime)" stat-icon-name="fas fa-chart-line" :variant="netProfitAllTimeVariant" />
             <CardStats stat-subtitle="FATURAMENTO BRUTO DO MÊS" :stat-title="formatPrice(summary.grossRevenueMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
-            <CardStats stat-subtitle="FATURAMENTO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
-            <CardStats stat-subtitle="ENTRADAS NO MÊS" :stat-title="formatPrice(summary.incomeMonth)" stat-icon-name="fas fa-hand-holding-dollar" variant="secondary" />
+            <CardStats stat-subtitle="LUCRO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
+            <CardStats stat-subtitle="FATURAMENTO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.netRevenueMonth)" stat-icon-name="fas fa-hand-holding-dollar" variant="secondary" />
             <CardStats stat-subtitle="SALDO ATUAL (fluxo de caixa)" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
+            <!-- Pedido explícito 2026-08-10: soma de todos os produtos por
+                 custo x quantidade em estoque — capital parado em mercadoria. -->
+            <CardStats stat-subtitle="VALOR DE ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
         </div>
 
         <!-- Saldo disponível pra saque nas plataformas — pedido explícito 2026-08-09 -->
@@ -125,17 +131,16 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
             </div>
         </div>
 
-        <!-- Lucro líquido de vendas — pedido explícito 2026-08-09 -->
+        <!-- Lucro líquido de vendas — pedido explícito 2026-08-09/10 -->
         <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro no Mês é calculado</h2>
         <p class="mb-4 text-sm text-slate-500">
-            Receita das vendas menos custo do produto, taxa de marketplace e gasto com anúncio — é a mesma conta do card
-            "Lucro no Mês" lá em cima, detalhada passo a passo aqui.
+            Receita das vendas menos custo do produto e gasto com anúncio — é a mesma conta do card "Lucro no Mês" lá em
+            cima, detalhada passo a passo aqui. Taxa de marketplace não entra nessa conta (só o material e o anúncio).
         </p>
 
-        <div class="mb-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="mb-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="RECEITA DE VENDAS" :stat-title="formatPrice(netProfit.salesRevenueMonth)" stat-icon-name="fas fa-sack-dollar" variant="success" />
             <CardStats stat-subtitle="CUSTO DE PRODUTO" :stat-title="formatPrice(netProfit.productCostMonth)" stat-icon-name="fas fa-box" variant="secondary" />
-            <CardStats stat-subtitle="TAXA DE MARKETPLACE" :stat-title="formatPrice(netProfit.marketplaceFeeMonth)" stat-icon-name="fas fa-percent" variant="warning" />
             <CardStats stat-subtitle="GASTO COM ANÚNCIO" :stat-title="formatPrice(netProfit.adSpendMonth)" stat-icon-name="fas fa-bullhorn" variant="error" />
             <CardStats stat-subtitle="LUCRO LÍQUIDO" :stat-title="formatPrice(netProfit.netProfitMonth)" stat-icon-name="fas fa-chart-line" variant="primary" />
         </div>
@@ -155,11 +160,6 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 "Custo de produto" está subestimado até completar o cadastro.
             </span>
         </p>
-        <p class="mb-8 text-xs text-slate-400">
-            Taxa de marketplace rastreada de verdade só pra Mercado Livre e Shopee — pedidos de outros canais, ou de antes
-            de 09/08, podem não estar contados aqui.
-        </p>
-
         <!-- Gasto com anúncio por canal -->
         <h2 class="mb-3 text-xl font-bold">Gasto com Anúncio</h2>
 

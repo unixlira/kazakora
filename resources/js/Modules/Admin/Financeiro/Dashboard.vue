@@ -64,6 +64,16 @@ const totalAdSpend14Days = computed(() => props.adSpendSeries.reduce((sum, item)
 
 const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
 
+// Soma dos saldos disponíveis pra saque nas duas plataformas — pedido
+// explícito 2026-08-10. Se qualquer uma vier indisponível, a soma também
+// fica indisponível (não dá pra somar um número real com "não sei").
+const totalWalletBalance = computed(() => {
+    const { shopee, mercado_livre: mercadoLivre } = props.walletBalances;
+    return shopee !== null && shopee !== undefined && mercadoLivre !== null && mercadoLivre !== undefined
+        ? shopee + mercadoLivre
+        : null;
+});
+
 // "métrica pra saber se tá dando lucro" (pedido explícito 2026-08-09) —
 // cor muda na hora: verde quando positivo, vermelho quando negativo.
 const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success' : 'error'));
@@ -81,30 +91,31 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
              pro mês corrente. "Entradas no Mês" virou faturamento líquido
              (bruto - ads) em vez do fluxo de caixa lançado à mão — lucro
              líquido do mês já abate o custo do material também, é uma
-             conta diferente. Saldo atual segue no fim; saídas no mês foi
-             removido. -->
+             conta diferente. "Saldo atual" saiu daqui (mudou pra a linha
+             de saldos de plataforma logo abaixo, pedido explícito
+             2026-08-10) — valor de estoque assume o lugar dele. -->
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <CardStats stat-subtitle="FATURAMENTO BRUTO (desde o início)" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-bag-shopping" variant="info" />
             <CardStats stat-subtitle="LUCRO LÍQUIDO (desde o início)" :stat-title="formatPrice(summary.netProfitAllTime)" stat-icon-name="fas fa-chart-line" :variant="netProfitAllTimeVariant" />
             <CardStats stat-subtitle="FATURAMENTO BRUTO DO MÊS" :stat-title="formatPrice(summary.grossRevenueMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
             <CardStats stat-subtitle="LUCRO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
             <CardStats stat-subtitle="FATURAMENTO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.netRevenueMonth)" stat-icon-name="fas fa-hand-holding-dollar" variant="secondary" />
-            <CardStats stat-subtitle="SALDO ATUAL (fluxo de caixa)" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
             <!-- Pedido explícito 2026-08-10: soma de todos os produtos por
                  custo x quantidade em estoque — capital parado em mercadoria. -->
             <CardStats stat-subtitle="VALOR DE ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
         </div>
 
-        <!-- Saldo disponível pra saque nas plataformas — pedido explícito 2026-08-09 -->
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <!-- Saldo disponível pra saque nas plataformas + soma + saldo atual
+             do fluxo de caixa, lado a lado — pedido explícito 2026-08-09/10 -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.shopee.color, background: hexToRgba(CHANNEL_STYLES.shopee.color, 0.12) }">
                         <i class="fas fa-wallet"></i>
                     </span>
-                    <div>
-                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível pra saque — Shopee</p>
-                        <p class="mt-0.5 text-2xl font-bold">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Shopee</p>
+                        <p class="mt-0.5 truncate text-2xl font-bold">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
                     </div>
                 </div>
             </div>
@@ -113,9 +124,31 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.mercado_livre.color, background: hexToRgba(CHANNEL_STYLES.mercado_livre.color, 0.12) }">
                         <i class="fas fa-wallet"></i>
                     </span>
-                    <div>
-                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível pra saque — Mercado Livre</p>
-                        <p class="mt-0.5 text-2xl font-bold">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Mercado Livre</p>
+                        <p class="mt-0.5 truncate text-2xl font-bold">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lightsecondary text-secondary">
+                        <i class="fas fa-layer-group"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Soma Shopee + Mercado Livre</p>
+                        <p class="mt-0.5 truncate text-2xl font-bold">{{ totalWalletBalance !== null ? formatPrice(totalWalletBalance) : 'Indisponível' }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lightprimary text-primary">
+                        <i class="fas fa-scale-balanced"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo atual (fluxo de caixa)</p>
+                        <p class="mt-0.5 truncate text-2xl font-bold">{{ formatPrice(summary.balance) }}</p>
                     </div>
                 </div>
             </div>

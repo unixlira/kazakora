@@ -9,6 +9,7 @@ const tabs = [
     { label: 'Tipos de envio', href: '/admin/integracoes/mercado-livre/envios' },
     { label: 'Devoluções', href: '/admin/integracoes/mercado-livre/devolucoes' },
     { label: 'Impressão Full', href: '/admin/integracoes/mercado-livre/impressao-full' },
+    { label: 'Custo Flex', href: '/admin/integracoes/mercado-livre/flex' },
 ];
 
 const isActive = (href) => page.url.startsWith(href);

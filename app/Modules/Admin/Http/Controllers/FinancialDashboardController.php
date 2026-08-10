@@ -10,6 +10,7 @@ use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\ChannelWalletBalance;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Support\FlexDeliveryService;
 use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -20,10 +21,19 @@ class FinancialDashboardController extends Controller
 {
     private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
-    public function index(ShopeeWalletService $shopeeWallet): Response
+    public function index(ShopeeWalletService $shopeeWallet, FlexDeliveryService $flexDelivery): Response
     {
         $startOfMonth = Carbon::today()->startOfMonth();
         $start14 = Carbon::today()->subDays(13);
+
+        // Custo do Mercado Envios Flex (R$/entrega, ver FlexDeliveryService)
+        // abate o lucro líquido — pedido explícito 2026-08-10, mesmo dia em
+        // que a tela de controle do Flex foi criada. "Desde o início" varre
+        // uma janela ampla o bastante pra cobrir qualquer envio real já
+        // registrado (a loja não existe antes de 2026) em vez de tentar
+        // achar a data exata do primeiro pedido.
+        $flexCostMonth = $flexDelivery->summaryForPeriod($startOfMonth, Carbon::today())['total'];
+        $flexCostAllTime = $flexDelivery->summaryForPeriod(Carbon::create(2026, 1, 1), Carbon::today())['total'];
 
         $incomeMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_INCOME)->where('entry_date', '>=', $startOfMonth)->sum('amount');
         $expenseMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_EXPENSE)->where('entry_date', '>=', $startOfMonth)->sum('amount');
@@ -62,7 +72,7 @@ class FinancialDashboardController extends Controller
         $productsWithCost = Product::query()->where('is_active', true)->whereNotNull('cost_price')->count();
         $productsActive = Product::query()->where('is_active', true)->count();
 
-        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $adSpendMonth, 2);
+        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $adSpendMonth - $flexCostMonth, 2);
 
         // Pedido explícito 2026-08-10: "faturamento liquido é o valor bruto
         // menos ads" — métrica distinta de lucro líquido (que também abate
@@ -85,7 +95,7 @@ class FinancialDashboardController extends Controller
 
         $adSpendAllTime = round((float) ChannelAdSpend::query()->sum('spend'), 2);
 
-        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $adSpendAllTime, 2);
+        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $adSpendAllTime - $flexCostAllTime, 2);
 
         // Valor de estoque — pedido explícito 2026-08-10: soma de todos os
         // produtos pelo valor pago (cost_price) vezes a quantidade em
@@ -129,6 +139,9 @@ class FinancialDashboardController extends Controller
                 'productCostMonth' => $productCostMonth,
                 'marketplaceFeeMonth' => $marketplaceFeeMonth,
                 'adSpendMonth' => $adSpendMonth,
+                // Custo do Mercado Envios Flex do mês — pedido explícito
+                // 2026-08-10, ver FlexDeliveryService.
+                'flexCostMonth' => $flexCostMonth,
                 'netProfitMonth' => $netProfitMonth,
                 // Sinaliza dado incompleto em vez de deixar o número
                 // parecer preciso quando não é — pedido explícito

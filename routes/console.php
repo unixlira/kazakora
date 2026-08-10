@@ -47,3 +47,11 @@ Schedule::command('ads:sync-spend')->dailyAt('06:00');
 // um relativamente fresco — rodando só 1x/dia o saldo ficaria "velho" a
 // maior parte do tempo.
 Schedule::command('ads:sync-wallet-balance')->hourly();
+
+// Fechamento quinzenal do Mercado Envios Flex — pedido explícito
+// 2026-08-10. Roda todo dia (o comando mesmo decide se hoje é dia de
+// fechar, dia 15 ou fim do mês — ver CheckFlexBillingCycle) em vez de
+// tentar agendar direto pro "último dia do mês" (Schedule não tem esse
+// helper nativo, e um cron fixo em "30" erraria fevereiro e os meses de
+// 31 dias).
+Schedule::command('flex:check-billing-cycle')->dailyAt('07:00');

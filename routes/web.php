@@ -12,6 +12,7 @@ use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
+use App\Modules\Admin\Http\Controllers\MercadoLivreFlexController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreSalesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
@@ -370,6 +371,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('integracoes/mercado-livre/impressao-full', [MercadoLivreFullPrintController::class, 'create'])->name('integracoes.mercado-livre.impressao-full');
         Route::post('integracoes/mercado-livre/impressao-full', [MercadoLivreFullPrintController::class, 'store'])->name('integracoes.mercado-livre.impressao-full.armazenar');
+
+        Route::get('integracoes/mercado-livre/flex', [MercadoLivreFlexController::class, 'index'])->name('integracoes.mercado-livre.flex');
+        Route::put('integracoes/mercado-livre/flex', [MercadoLivreFlexController::class, 'update'])->name('integracoes.mercado-livre.flex.atualizar');
 
         Route::get('integracoes/teste-impressao', [PrintTestController::class, 'index'])->name('integracoes.teste-impressao');
         Route::post('integracoes/teste-impressao', [PrintTestController::class, 'store'])->name('integracoes.teste-impressao.armazenar');

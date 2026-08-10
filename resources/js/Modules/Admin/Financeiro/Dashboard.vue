@@ -2,7 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 const props = defineProps({
@@ -179,6 +179,10 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 <span class="text-slate-500 dark:text-slate-400">(–) Custo de Produto</span>
                 <span class="font-semibold text-error">{{ formatPrice(netProfit.productCostMonth) }}</span>
             </div>
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">(–) Custo Flex (Mercado Livre)</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.flexCostMonth) }}</span>
+            </div>
             <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">
                 <span class="font-bold">(=) Lucro Líquido do Mês</span>
                 <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }}</span>
@@ -187,6 +191,9 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
             <p class="mt-3 border-t border-dashed border-[var(--surface-border)] pt-3 text-xs text-slate-400">
                 Taxa de marketplace do mês (informativo — não entra nessa conta): {{ formatPrice(netProfit.marketplaceFeeMonth) }}
             </p>
+            <Link href="/admin/integracoes/mercado-livre/flex" class="mt-2 block text-xs text-primary hover:underline">
+                Ver detalhes do custo Flex →
+            </Link>
         </div>
 
         <p v-if="!hasCostData" class="mb-6 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-400">

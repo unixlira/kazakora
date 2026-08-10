@@ -166,4 +166,10 @@ return [
         'auth_draft_mode' => (bool) env('AMAZON_AUTH_DRAFT_MODE', true),
     ],
 
+    // Pra quem manda o e-mail de fechamento quinzenal do Mercado Envios
+    // Flex — pedido explícito 2026-08-10, ver CheckFlexBillingCycle.
+    'mercado_livre_flex' => [
+        'billing_email' => env('FLEX_BILLING_EMAIL', 'joserobertolira@gmail.com'),
+    ],
+
 ];

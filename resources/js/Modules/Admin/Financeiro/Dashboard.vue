@@ -87,20 +87,21 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
     <AdminLayout>
         <h1 class="mb-4 text-2xl font-bold">Financeiro</h1>
 
-        <!-- Pedido explícito 2026-08-09/10: cards invertidos — bruto/líquido
-             desde o primeiro dia primeiro, depois os mesmos dois recortados
-             pro mês corrente. "Entradas no Mês" virou faturamento líquido
-             (bruto - ads) em vez do fluxo de caixa lançado à mão — lucro
-             líquido do mês já abate o custo do material também, é uma
-             conta diferente. "Saldo atual" saiu daqui (mudou pra a linha
-             de saldos de plataforma logo abaixo, pedido explícito
-             2026-08-10) — valor de estoque assume o lugar dele. -->
+        <!-- Reorganizado 2026-08-10 (usuário achou os cards confusos: nomes
+             parecidos "Bruto"/"Líquido"/"Líquido do Mês" difíceis de
+             distinguir, "Receita de Vendas"/"Lucro Líquido" repetindo os
+             mesmos valores lá embaixo, tudo solto sem agrupamento). Regra
+             adotada: cada valor aparece em UM lugar só. Esta seção é só a
+             visão geral (desde o início + do mês corrente); "Faturamento
+             Líquido do Mês" saiu daqui — ele já é um passo intermediário
+             do cálculo, mora só na seção "Como o Lucro é calculado" mais
+             abaixo, não faz sentido repetir como card solto aqui. -->
+        <h2 class="mb-3 text-xl font-bold">Visão Geral</h2>
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <CardStats stat-subtitle="FATURAMENTO BRUTO (desde o início)" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-bag-shopping" variant="info" />
             <CardStats stat-subtitle="LUCRO LÍQUIDO (desde o início)" :stat-title="formatPrice(summary.netProfitAllTime)" stat-icon-name="fas fa-chart-line" :variant="netProfitAllTimeVariant" />
             <CardStats stat-subtitle="FATURAMENTO BRUTO DO MÊS" :stat-title="formatPrice(summary.grossRevenueMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
             <CardStats stat-subtitle="LUCRO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
-            <CardStats stat-subtitle="FATURAMENTO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.netRevenueMonth)" stat-icon-name="fas fa-hand-holding-dollar" variant="secondary" />
             <!-- Pedido explícito 2026-08-10: soma de todos os produtos por
                  custo x quantidade em estoque — capital parado em mercadoria. -->
             <CardStats stat-subtitle="VALOR DE ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
@@ -111,6 +112,7 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
              mais fluxo de caixa lançado à mão, é literalmente a soma do que
              está disponível em cada plataforma, direto no card, sem um
              card de "soma" separado. -->
+        <h2 class="mb-3 text-xl font-bold">Saldo em Conta</h2>
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <div class="flex items-center gap-3">
@@ -157,18 +159,41 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
             </div>
         </div>
 
-        <!-- Lucro líquido de vendas — pedido explícito 2026-08-09/10 -->
-        <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro no Mês é calculado</h2>
-        <p class="mb-4 text-sm text-slate-500">
-            Receita das vendas menos custo do produto e gasto com anúncio — é a mesma conta do card "Lucro no Mês" lá em
-            cima, detalhada passo a passo aqui. Taxa de marketplace não entra nessa conta (só o material e o anúncio).
-        </p>
+        <!-- Reorganizado 2026-08-10 — trocado o grid de 4 cards (que
+             repetia "Receita de Vendas"/"Lucro Líquido" já mostrados na
+             Visão Geral) por um extrato de único painel, em passos, na
+             ordem real da conta: Bruto → (–) Ads → Líquido do Mês → (–)
+             Custo → Lucro Líquido. Isso também resolve a confusão entre
+             "Faturamento Líquido do Mês" e "Lucro Líquido do Mês": aqui
+             fica claro que um é passo intermediário do outro, não duas
+             coisas soltas parecidas. -->
+        <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro Líquido do Mês é calculado</h2>
 
-        <div class="mb-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <CardStats stat-subtitle="RECEITA DE VENDAS" :stat-title="formatPrice(netProfit.salesRevenueMonth)" stat-icon-name="fas fa-sack-dollar" variant="success" />
-            <CardStats stat-subtitle="CUSTO DE PRODUTO" :stat-title="formatPrice(netProfit.productCostMonth)" stat-icon-name="fas fa-box" variant="secondary" />
-            <CardStats stat-subtitle="GASTO COM ANÚNCIO" :stat-title="formatPrice(netProfit.adSpendMonth)" stat-icon-name="fas fa-bullhorn" variant="error" />
-            <CardStats stat-subtitle="LUCRO LÍQUIDO" :stat-title="formatPrice(netProfit.netProfitMonth)" stat-icon-name="fas fa-chart-line" variant="primary" />
+        <div class="mb-3 max-w-xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">Faturamento Bruto do Mês</span>
+                <span class="font-semibold">{{ formatPrice(netProfit.salesRevenueMonth) }}</span>
+            </div>
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">(–) Gasto com Anúncio</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.adSpendMonth) }}</span>
+            </div>
+            <div class="flex items-center justify-between border-t border-[var(--surface-border)] py-2 text-sm">
+                <span class="font-medium">(=) Faturamento Líquido do Mês</span>
+                <span class="font-semibold">{{ formatPrice(summary.netRevenueMonth) }}</span>
+            </div>
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">(–) Custo de Produto</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.productCostMonth) }}</span>
+            </div>
+            <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">
+                <span class="font-bold">(=) Lucro Líquido do Mês</span>
+                <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }}</span>
+            </div>
+
+            <p class="mt-3 border-t border-dashed border-[var(--surface-border)] pt-3 text-xs text-slate-400">
+                Taxa de marketplace do mês (informativo — não entra nessa conta): {{ formatPrice(netProfit.marketplaceFeeMonth) }}
+            </p>
         </div>
 
         <p v-if="!hasCostData" class="mb-6 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-400">

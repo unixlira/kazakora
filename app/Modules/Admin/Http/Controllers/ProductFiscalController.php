@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Services\Fiscal\NcmValidatorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -22,10 +23,21 @@ class ProductFiscalController extends Controller
         '70', '71', '72', '73', '74', '75', '98', '99',
     ];
 
-    public function update(Request $request, Product $product): RedirectResponse
+    public function update(Request $request, Product $product, NcmValidatorService $ncmValidator): RedirectResponse
     {
         $validated = $request->validate([
-            'ncm' => ['required', 'string', 'max:8'],
+            // BUG REAL 2026-08-10: um NCM com formato válido (8 dígitos)
+            // mas inexistente de verdade (84248999 em vez de 84248990)
+            // passava direto aqui e só quebrava dias depois, na emissão da
+            // nota de uma venda real já paga. Confere contra a tabela
+            // oficial da Receita Federal agora, no cadastro — ver
+            // NcmValidatorService pro porquê do "não bloqueia se a fonte
+            // externa estiver fora do ar".
+            'ncm' => ['required', 'string', 'max:8', function ($attribute, $value, $fail) use ($ncmValidator) {
+                if (! $ncmValidator->isValid($value)) {
+                    $fail('Esse NCM não existe na tabela oficial da Receita Federal — confira os 8 dígitos.');
+                }
+            }],
             'origem' => ['required', 'integer', 'between:0,8'],
             'cfop' => ['required', 'string', 'max:4'],
             'icms_situacao_tributaria' => ['required', 'string', Rule::in(self::CSOSN_OPTIONS)],

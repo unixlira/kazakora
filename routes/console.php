@@ -39,3 +39,11 @@ Schedule::command('orders:sync-amazon')->hourly();
 // 3 dias (padrão do comando) corrige sozinha o número parcial do dia
 // anterior, que a Shopee ainda ajusta por umas horas depois da virada.
 Schedule::command('ads:sync-spend')->dailyAt('06:00');
+
+// Saldo disponível pra saque do Mercado Pago — pedido explícito
+// 2026-08-09/10. Roda de hora em hora (não diário como o de cima): o
+// relatório da própria Mercado Pago leva ~15-20min pra ficar pronto depois
+// de pedido, então precisa de várias janelas ao longo do dia pra sempre ter
+// um relativamente fresco — rodando só 1x/dia o saldo ficaria "velho" a
+// maior parte do tempo.
+Schedule::command('ads:sync-wallet-balance')->hourly();

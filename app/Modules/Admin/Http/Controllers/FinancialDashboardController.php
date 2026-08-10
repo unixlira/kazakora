@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
+use App\Modules\Marketplace\Models\ChannelWalletBalance;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Services\Shopee\ShopeeWalletService;
@@ -108,7 +109,7 @@ class FinancialDashboardController extends Controller
     }
 
     /**
-     * @return array<string, float|null>
+     * @return array{shopee: float|null, mercado_livre: float|null, mercado_livre_as_of: string|null}
      */
     private function walletBalances(ShopeeWalletService $shopeeWallet): array
     {
@@ -125,13 +126,16 @@ class FinancialDashboardController extends Controller
             }
         }
 
+        // Mercado Pago não tem "saldo agora" — só relatório assíncrono
+        // (~15-20min pra ficar pronto, ver MercadoPagoWalletService).
+        // ads:sync-wallet-balance já deixa isso pré-calculado aqui; não dá
+        // pra consultar ao vivo numa requisição de página normal.
+        $mlBalance = ChannelWalletBalance::query()->where('channel', 'mercado_livre')->first();
+
         return [
             'shopee' => $shopee,
-            // Sempre null hoje — API do Mercado Livre devolveu "forbidden"
-            // pro saldo da conta Mercado Pago (falta escopo de pagamentos
-            // no app, ver comentário acima). Campo já existe pro front não
-            // precisar mudar quando isso for resolvido.
-            'mercado_livre' => null,
+            'mercado_livre' => $mlBalance?->balance !== null ? (float) $mlBalance->balance : null,
+            'mercado_livre_as_of' => $mlBalance?->balance_as_of?->toDateTimeString(),
         ];
     }
 

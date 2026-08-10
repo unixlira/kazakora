@@ -96,15 +96,17 @@ const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success'
                     </div>
                 </div>
             </div>
-            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm opacity-70">
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.mercado_livre.color, background: hexToRgba(CHANNEL_STYLES.mercado_livre.color, 0.12) }">
                         <i class="fas fa-wallet"></i>
                     </span>
                     <div>
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível pra saque — Mercado Livre</p>
-                        <p class="mt-0.5 text-lg font-semibold text-slate-400">Indisponível</p>
-                        <p class="text-xs text-slate-400">API pede permissão de pagamentos que o app ainda não tem</p>
+                        <p class="mt-0.5 text-2xl font-bold">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
+                        <p v-if="walletBalances.mercado_livre_as_of" class="text-xs text-slate-400">
+                            Referente a {{ new Date(walletBalances.mercado_livre_as_of.replace(' ', 'T')).toLocaleString('pt-BR') }} — relatório da Mercado Pago, não é ao vivo
+                        </p>
                     </div>
                 </div>
             </div>

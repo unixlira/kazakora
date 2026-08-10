@@ -56,6 +56,17 @@ return [
         'public_key' => env('MERCADOPAGO_PUBLIC_KEY'),
         'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
         'api_base_url' => env('MERCADOPAGO_API_BASE_URL', 'https://api.mercadopago.com'),
+        // App próprio criado no painel de desenvolvedor do Mercado Pago
+        // (developers.mercadopago.com.br — separado do app do Mercado
+        // Livre, mesmo sendo a mesma empresa) — pedido explícito
+        // 2026-08-09, pra tentar acessar saldo de conta que o app do ML
+        // não libera (ver ShopeeWalletService/FinancialDashboardController,
+        // "walletBalances.mercado_livre"). "ID do aplicativo" e "Chave
+        // secreta" do painel deles = client_id/client_secret aqui.
+        'client_id' => env('MERCADOPAGO_CLIENT_ID'),
+        'client_secret' => env('MERCADOPAGO_CLIENT_SECRET'),
+        'redirect_uri' => env('MERCADOPAGO_REDIRECT_URI', env('APP_URL').'/api/mercadopago/callback'),
+        'auth_url' => env('MERCADOPAGO_AUTH_URL', 'https://auth.mercadopago.com.br/authorization'),
     ],
 
     'melhorenvio' => [

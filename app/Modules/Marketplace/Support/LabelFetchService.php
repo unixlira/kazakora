@@ -92,23 +92,25 @@ class LabelFetchService
 
         $isPdf = str_starts_with($contents, '%PDF-');
 
-        // Sobrepõe a lista de produtos na etiqueta, igual já validado
-        // manualmente na tela de teste de impressão — só é possível pra
-        // etiqueta em PDF; se o overlay falhar por qualquer motivo, ainda
-        // imprime a etiqueta crua em vez de travar o pedido por causa disso.
-        if ($isPdf) {
-            try {
-                $productNames = $shipment->order->items->map(function ($item) {
-                    return $item->quantity > 1
-                        ? "{$item->quantity}x {$item->product_name}"
-                        : $item->product_name;
-                })->all();
-
-                $contents = $this->processor->overlayProductList($contents, $productNames);
-            } catch (Throwable $exception) {
-                Log::warning('marketplace.label_fetch.overlay_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
-            }
-        }
+        // Sobreposição da lista de produtos na etiqueta DESATIVADA — pedido
+        // explícito 2026-08-09 ("remover o nome do produto da etiqueta").
+        // Descomentar o bloco abaixo pra reativar no futuro, se precisar —
+        // continua funcionando igual, só é possível pra etiqueta em PDF; se
+        // o overlay falhar por qualquer motivo, ainda imprime a etiqueta
+        // crua em vez de travar o pedido por causa disso.
+        // if ($isPdf) {
+        //     try {
+        //         $productNames = $shipment->order->items->map(function ($item) {
+        //             return $item->quantity > 1
+        //                 ? "{$item->quantity}x {$item->product_name}"
+        //                 : $item->product_name;
+        //         })->all();
+        //
+        //         $contents = $this->processor->overlayProductList($contents, $productNames);
+        //     } catch (Throwable $exception) {
+        //         Log::warning('marketplace.label_fetch.overlay_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
+        //     }
+        // }
 
         $extension = $isPdf ? 'pdf' : 'bin';
         $path = "labels/{$shipment->order_id}/etiqueta-{$shipment->id}.{$extension}";

@@ -105,15 +105,19 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
             <!-- Pedido explícito 2026-08-10: soma de todos os produtos por
                  custo x quantidade em estoque — capital parado em mercadoria. -->
             <CardStats stat-subtitle="VALOR DE ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
+            <!-- Pedido explícito 2026-08-10: "Saldo Atual" saiu da linha de
+                 saldo por plataforma e veio pra cá, do lado de Valor de
+                 Estoque — e o rótulo perdeu o "(Shopee + Mercado Livre)"
+                 (o detalhamento por plataforma já está na seção "Saldo em
+                 Conta" logo abaixo, não precisa repetir no nome do card). -->
+            <CardStats stat-subtitle="SALDO ATUAL" :stat-title="totalWalletBalance !== null ? formatPrice(totalWalletBalance) : 'Indisponível'" stat-icon-name="fas fa-scale-balanced" variant="primary" />
         </div>
 
-        <!-- Saldo disponível pra saque nas plataformas + Saldo Atual (a soma
-             das duas) — pedido explícito 2026-08-10: "saldo atual" não é
-             mais fluxo de caixa lançado à mão, é literalmente a soma do que
-             está disponível em cada plataforma, direto no card, sem um
-             card de "soma" separado. -->
+        <!-- Saldo disponível pra saque em cada plataforma — a soma das duas
+             (Saldo Atual) mudou pra Visão Geral, pedido explícito
+             2026-08-10. -->
         <h2 class="mb-3 text-xl font-bold">Saldo em Conta</h2>
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.shopee.color, background: hexToRgba(CHANNEL_STYLES.shopee.color, 0.12) }">
@@ -133,17 +137,6 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                     <div class="min-w-0">
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Mercado Livre</p>
                         <p class="mt-0.5 truncate text-2xl font-bold">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lightprimary text-primary">
-                        <i class="fas fa-scale-balanced"></i>
-                    </span>
-                    <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo Atual (Shopee + Mercado Livre)</p>
-                        <p class="mt-0.5 truncate text-2xl font-bold">{{ totalWalletBalance !== null ? formatPrice(totalWalletBalance) : 'Indisponível' }}</p>
                     </div>
                 </div>
             </div>

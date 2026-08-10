@@ -82,7 +82,15 @@ class MercadoLivreFlexController extends Controller
                     ->orWhere('id', $orderSearch),
             ))
             ->with([
-                'order:id,external_order_id,shipping_name,shipping_street,shipping_number,shipping_neighborhood,shipping_city,shipping_state,shipping_zip,total',
+                // Order::created_at aqui já É a data real do pedido
+                // informada pela própria Mercado Livre, não a data de
+                // importação — OrderImportService::importNormalized()
+                // força created_at pro "placed_at" que o driver devolve
+                // (MercadoLivreDriver::importOrder(), vem de date_created
+                // da API), justamente pra nunca mostrar a data errada.
+                // "placed_at" NÃO é uma coluna própria — não existe no
+                // schema, essa é a razão de ser desse ajuste.
+                'order:id,external_order_id,shipping_name,shipping_street,shipping_number,shipping_neighborhood,shipping_city,shipping_state,shipping_zip,total,created_at',
                 'order.items:id,order_id,product_name,quantity',
             ])
             ->orderByDesc(DB::raw('COALESCE(confirmed_at, created_at)'))
@@ -98,7 +106,7 @@ class MercadoLivreFlexController extends Controller
                     'quantity' => $item->quantity,
                 ])->all() ?? [],
                 'total' => $shipment->order ? (float) $shipment->order->total : null,
-                'confirmedAt' => $shipment->confirmed_at ?? $shipment->created_at,
+                'orderPlacedAt' => $shipment->order?->created_at ?? $shipment->confirmed_at ?? $shipment->created_at,
             ])
             ->values()
             ->all();

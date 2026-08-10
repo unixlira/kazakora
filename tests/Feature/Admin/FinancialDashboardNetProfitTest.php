@@ -79,7 +79,16 @@ class FinancialDashboardNetProfitTest extends TestCase
             ->where('netProfit.productCostMonth', 80.5)
             ->where('netProfit.marketplaceFeeMonth', 15.3)
             ->where('netProfit.adSpendMonth', 15.3)
-            ->where('netProfit.netProfitMonth', 9.65)); // 120.75 - 80.50 - 15.30 - 15.30
+            ->where('netProfit.netProfitMonth', 9.65) // 120.75 - 80.50 - 15.30 - 15.30
+            // Pedido explícito 2026-08-09: "lucro no mês sendo só o
+            // líquido" — o card de resumo usa o mesmo valor calculado
+            // aqui, não mais o saldo de fluxo de caixa manual.
+            ->where('summary.profitMonth', 9.65)
+            // Mercado Livre sempre indisponível hoje (API pede escopo de
+            // pagamentos que o app não tem); Shopee null porque não há
+            // MarketplaceAccount conectada neste teste.
+            ->where('walletBalances.mercado_livre', null)
+            ->where('walletBalances.shopee', null));
     }
 
     public function test_net_profit_flags_when_no_active_product_has_a_cost_price_yet(): void

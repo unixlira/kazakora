@@ -8,6 +8,7 @@ import { computed } from 'vue';
 const props = defineProps({
     summary: { type: Object, required: true },
     netProfit: { type: Object, required: true },
+    walletBalances: { type: Object, default: () => ({}) },
     adSpendByChannel: { type: Array, default: () => [] },
     adSpendSeries: { type: Array, default: () => [] },
     cashFlowSeries: { type: Array, default: () => [] },
@@ -62,6 +63,10 @@ const adSpendChartData = computed(() => ({
 const totalAdSpend14Days = computed(() => props.adSpendSeries.reduce((sum, item) => sum + item.shopee + item.mercado_livre, 0));
 
 const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
+
+// "métrica pra saber se tá dando lucro" (pedido explícito 2026-08-09) —
+// cor muda na hora: verde quando positivo, vermelho quando negativo.
+const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success' : 'error'));
 </script>
 
 <template>
@@ -71,11 +76,38 @@ const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
         <h1 class="mb-4 text-2xl font-bold">Dashboard Financeiro</h1>
 
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <CardStats stat-subtitle="SALDO ATUAL" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
+            <CardStats stat-subtitle="SALDO ATUAL (fluxo de caixa)" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
             <CardStats stat-subtitle="ENTRADAS NO MÊS" :stat-title="formatPrice(summary.incomeMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
             <CardStats stat-subtitle="SAÍDAS NO MÊS" :stat-title="formatPrice(summary.expenseMonth)" stat-icon-name="fas fa-arrow-trend-down" variant="error" />
-            <CardStats stat-subtitle="LUCRO NO MÊS (fluxo de caixa)" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" variant="warning" />
+            <CardStats stat-subtitle="LUCRO NO MÊS (líquido)" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
             <CardStats stat-subtitle="FATURAMENTO EM VENDAS" :stat-title="formatPrice(summary.salesRevenue)" stat-icon-name="fas fa-bag-shopping" variant="info" />
+        </div>
+
+        <!-- Saldo disponível pra saque nas plataformas — pedido explícito 2026-08-09 -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.shopee.color, background: hexToRgba(CHANNEL_STYLES.shopee.color, 0.12) }">
+                        <i class="fas fa-wallet"></i>
+                    </span>
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível pra saque — Shopee</p>
+                        <p class="mt-0.5 text-2xl font-bold">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm opacity-70">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.mercado_livre.color, background: hexToRgba(CHANNEL_STYLES.mercado_livre.color, 0.12) }">
+                        <i class="fas fa-wallet"></i>
+                    </span>
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível pra saque — Mercado Livre</p>
+                        <p class="mt-0.5 text-lg font-semibold text-slate-400">Indisponível</p>
+                        <p class="text-xs text-slate-400">API pede permissão de pagamentos que o app ainda não tem</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
@@ -89,10 +121,10 @@ const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
         </div>
 
         <!-- Lucro líquido de vendas — pedido explícito 2026-08-09 -->
-        <h2 class="mb-3 mt-8 text-xl font-bold">Lucro Líquido de Vendas (mês atual)</h2>
+        <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro no Mês é calculado</h2>
         <p class="mb-4 text-sm text-slate-500">
-            Receita das vendas menos custo do produto, taxa de marketplace e gasto com anúncio — diferente do "Lucro no mês"
-            acima, que é só o que foi lançado manualmente no Fluxo de Caixa.
+            Receita das vendas menos custo do produto, taxa de marketplace e gasto com anúncio — é a mesma conta do card
+            "Lucro no Mês" lá em cima, detalhada passo a passo aqui.
         </p>
 
         <div class="mb-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">

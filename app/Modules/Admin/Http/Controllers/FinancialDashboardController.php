@@ -7,16 +7,19 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class FinancialDashboardController extends Controller
 {
     private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
-    public function index(): Response
+    public function index(ShopeeWalletService $shopeeWallet): Response
     {
         $startOfMonth = Carbon::today()->startOfMonth();
         $start14 = Carbon::today()->subDays(13);
@@ -28,9 +31,9 @@ class FinancialDashboardController extends Controller
         $expenseMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_EXPENSE)->where('entry_date', '>=', $startOfMonth)->sum('amount');
 
         // Pedido explícito 2026-08-09: lucro líquido de vendas de verdade
-        // (receita − custo de produto − taxa de marketplace − anúncio),
-        // separado do "profitMonth" acima (que é fluxo de caixa manual,
-        // conceito diferente — entrada/saída lançada à mão).
+        // (receita − custo de produto − taxa de marketplace − anúncio) — é
+        // o valor usado tanto no card "Lucro no Mês" do resumo quanto no
+        // detalhamento "Lucro Líquido de Vendas" abaixo, mesma conta.
         // round() em cada soma: SUM de coluna decimal via PDO/SQLite pode
         // voltar com erro de ponto flutuante binário (ex.: 10.20 + 5.10 =
         // 15.299999999999999) — arredonda na fonte pra nunca vazar isso
@@ -57,20 +60,37 @@ class FinancialDashboardController extends Controller
         $productsWithCost = Product::query()->where('is_active', true)->whereNotNull('cost_price')->count();
         $productsActive = Product::query()->where('is_active', true)->count();
 
+        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth, 2);
+
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'summary' => [
                 'balance' => $incomeAllTime - $expenseAllTime,
                 'incomeMonth' => $incomeMonth,
                 'expenseMonth' => $expenseMonth,
-                'profitMonth' => $incomeMonth - $expenseMonth,
+                // Pedido explícito 2026-08-09: "o lucro no mês sendo só o
+                // líquido" — antes disso, este card mostrava
+                // incomeMonth-expenseMonth (fluxo de caixa lançado à mão,
+                // um conceito totalmente diferente de "a loja tá dando
+                // lucro"). Agora é o mesmo netProfitMonth calculado abaixo
+                // (receita real − custo − taxa − anúncio), pra ser
+                // literalmente a métrica de "tá dando lucro ou não".
+                'profitMonth' => $netProfitMonth,
                 'salesRevenue' => (float) Order::query()->whereNot('status', Order::STATUS_CANCELLED)->sum('total'),
             ],
+            // Saldo disponível pra saque nas plataformas — pedido explícito
+            // 2026-08-09. Confirmado ao vivo: a Shopee tem isso de verdade
+            // (current_balance no extrato da carteira). O Mercado Livre
+            // devolveu "forbidden" consultando o saldo da conta Mercado
+            // Pago — precisa de escopo de pagamentos que o app não tem
+            // hoje, não um bug local; fica null (indisponível) até isso
+            // ser resolvido do lado do cadastro do app na Mercado Livre.
+            'walletBalances' => $this->walletBalances($shopeeWallet),
             'netProfit' => [
                 'salesRevenueMonth' => $salesRevenueMonth,
                 'productCostMonth' => $productCostMonth,
                 'marketplaceFeeMonth' => $marketplaceFeeMonth,
                 'adSpendMonth' => $adSpendMonth,
-                'netProfitMonth' => round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth, 2),
+                'netProfitMonth' => $netProfitMonth,
                 // Sinaliza dado incompleto em vez de deixar o número
                 // parecer preciso quando não é — pedido explícito
                 // 2026-08-09 (nenhum produto tem custo cadastrado hoje).
@@ -85,6 +105,34 @@ class FinancialDashboardController extends Controller
             'adSpendSeries' => $this->adSpendSeries($start14),
             'cashFlowSeries' => $this->cashFlowSeries($start14),
         ]);
+    }
+
+    /**
+     * @return array<string, float|null>
+     */
+    private function walletBalances(ShopeeWalletService $shopeeWallet): array
+    {
+        $shopeeConnected = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first()?->isConnected();
+        $shopee = null;
+
+        if ($shopeeConnected) {
+            try {
+                $shopee = $shopeeWallet->currentBalance();
+            } catch (Throwable) {
+                // Best-effort — o dashboard não pode ficar indisponível só
+                // porque a consulta de saldo ao vivo falhou.
+                $shopee = null;
+            }
+        }
+
+        return [
+            'shopee' => $shopee,
+            // Sempre null hoje — API do Mercado Livre devolveu "forbidden"
+            // pro saldo da conta Mercado Pago (falta escopo de pagamentos
+            // no app, ver comentário acima). Campo já existe pro front não
+            // precisar mudar quando isso for resolvido.
+            'mercado_livre' => null,
+        ];
     }
 
     private function adSpendByChannel(Carbon $startOfMonth): array

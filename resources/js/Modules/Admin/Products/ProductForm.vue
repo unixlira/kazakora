@@ -65,6 +65,33 @@ watch(
         }, 600);
     },
 );
+
+// Pedido explícito 2026-08-10: na edição, o SKU passa a poder ser digitado
+// à mão (antes era travado pra sempre — ver ProductController::update(),
+// também ajustado) + um botão do lado que gera uma sugestão nova a partir
+// dos campos atuais, reaproveitando o mesmo endpoint de prévia (não grava
+// nada sozinho, só preenche o campo — quem confirma é o "Salvar" normal do
+// formulário, igual qualquer outro campo editado).
+const regeneratingSku = ref(false);
+
+const regenerateSku = async () => {
+    regeneratingSku.value = true;
+
+    const result = await previewSku({
+        category_id: props.form.category_id,
+        name: props.form.name,
+        brand: props.form.brand,
+        model: props.form.model,
+        color: props.form.color,
+        variation: props.form.variation,
+    });
+
+    if (result) {
+        props.form.sku = result.toUpperCase();
+    }
+
+    regeneratingSku.value = false;
+};
 </script>
 
 <template>
@@ -143,7 +170,30 @@ watch(
 
         <div v-if="form.sku !== undefined">
             <label for="sku" class="block text-sm font-medium">SKU</label>
-            <div class="relative mt-1">
+
+            <!-- Edição: campo editável + botão que gera uma sugestão nova
+                 do lado. Criação: continua travado, só mostrando a prévia
+                 automática (comportamento de sempre, sem alteração). -->
+            <div v-if="hadSkuOnLoad" class="mt-1 flex gap-2">
+                <input
+                    id="sku"
+                    v-model="form.sku"
+                    type="text"
+                    class="w-full rounded border border-gray-300 px-3 py-2 uppercase"
+                    @input="form.sku = form.sku.toUpperCase()"
+                >
+                <button
+                    type="button"
+                    :disabled="regeneratingSku"
+                    class="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Gerar um novo SKU automaticamente a partir dos campos acima"
+                    @click="regenerateSku"
+                >
+                    <i class="fas fa-arrows-rotate" :class="{ 'fa-spin': regeneratingSku }"></i>
+                    Gerar novo
+                </button>
+            </div>
+            <div v-else class="relative mt-1">
                 <input
                     id="sku"
                     name="sku"
@@ -154,9 +204,12 @@ watch(
                 >
                 <i v-if="skuLoading" class="fas fa-spinner fa-spin absolute right-3 top-1/2 -translate-y-1/2 text-warning-emphasis"></i>
             </div>
+
             <p class="mt-1 text-xs text-gray-400">
-                Gerado automaticamente a partir de categoria, nome, marca, modelo, cor e variação, em caixa alta. Não pode ser editado.
+                <template v-if="hadSkuOnLoad">Pode editar livremente ou clicar em "Gerar novo" pra sugerir outro a partir dos campos acima.</template>
+                <template v-else>Gerado automaticamente a partir de categoria, nome, marca, modelo, cor e variação, em caixa alta.</template>
             </p>
+            <InputError :message="form.errors.sku" />
         </div>
 
         <div>

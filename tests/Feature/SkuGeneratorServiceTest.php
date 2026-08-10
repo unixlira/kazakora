@@ -167,6 +167,52 @@ class SkuGeneratorServiceTest extends TestCase
         $this->assertSame('Camiseta Básica Renovada', $product->name);
     }
 
+    /**
+     * BUG REAL 2026-08-10 (pedido explícito): SKU até aqui era travado pra
+     * sempre depois de criado — passa a poder ser editado à mão na tela de
+     * edição (campo + botão "Gerar novo" no front, mas quem grava é este
+     * update() normal).
+     */
+    public function test_updating_a_product_with_an_explicit_sku_changes_it(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $product = Product::factory()->create(['sku' => 'MOD-CAM-PRE-P-0001']);
+
+        $response = $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
+            'name' => $product->name,
+            'sku' => 'sku-editado-a-mao',
+            'category_id' => $product->category_id,
+            'price' => $product->price,
+            'stock' => $product->stock,
+            'is_active' => true,
+        ]);
+
+        $response->assertRedirect();
+
+        // Sempre em caixa alta, mesmo que digitado em minúsculo — mesma
+        // convenção do gerador automático.
+        $this->assertSame('SKU-EDITADO-A-MAO', $product->fresh()->sku);
+    }
+
+    public function test_updating_a_product_rejects_a_sku_already_used_by_another_product(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        Product::factory()->create(['sku' => 'JA-EXISTE-0001']);
+        $product = Product::factory()->create(['sku' => 'MOD-CAM-PRE-P-0001']);
+
+        $response = $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
+            'name' => $product->name,
+            'sku' => 'JA-EXISTE-0001',
+            'category_id' => $product->category_id,
+            'price' => $product->price,
+            'stock' => $product->stock,
+            'is_active' => true,
+        ]);
+
+        $response->assertSessionHasErrors('sku');
+        $this->assertSame('MOD-CAM-PRE-P-0001', $product->fresh()->sku);
+    }
+
     private function createProduct(string $sku): Product
     {
         return Product::factory()->create(['sku' => $sku]);

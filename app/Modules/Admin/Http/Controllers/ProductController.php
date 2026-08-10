@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -107,19 +108,42 @@ class ProductController extends Controller
         $newStock = $validated['stock'];
         unset($validated['stock']);
 
+        // Validado à parte do resto (não no validated() compartilhado com
+        // store()): lá o campo é sempre sobrescrito por
+        // createWithGeneratedSku() e ignorado, então uma checagem de
+        // unicidade ali só arriscaria rejeitar por engano um valor de
+        // prévia que colidiu com um SKU real criado por outra requisição
+        // enquanto o usuário digitava — algo que o próprio
+        // createWithGeneratedSku() já resolve sozinho, gerando outro.
+        // Aqui em update() é o valor de verdade que será salvo, então a
+        // checagem de unicidade importa de verdade.
+        $validated['sku'] = $request->validate([
+            'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($product->id)],
+        ])['sku'];
+
         if ($validated['name'] !== $product->name) {
             $validated['slug'] = $this->uniqueSlug($validated['name'], $product->id);
         }
 
-        // The SKU is generated once at creation and never touched again by a
-        // regular update — only backfilled here if a legacy row somehow has
-        // none, per the "never recreate an existing SKU" rule.
-        if (blank($product->sku)) {
-            $category = $validated['category_id']
-                ? Category::query()->find($validated['category_id'])
-                : null;
+        // Pedido explícito 2026-08-10: SKU passa a ser editável na tela de
+        // edição (campo + botão "Gerar novo" que só sugere um valor no
+        // front, via previewSku() — quem grava de verdade é este update()
+        // normal). Um envio em branco NUNCA apaga o SKU existente (só
+        // preenche automaticamente se o produto de fato não tinha nenhum
+        // ainda, legado) — o usuário limpar o campo sem querer não pode
+        // resultar num produto sem SKU.
+        if (blank($validated['sku'] ?? null)) {
+            if (blank($product->sku)) {
+                $category = $validated['category_id']
+                    ? Category::query()->find($validated['category_id'])
+                    : null;
 
-            $validated['sku'] = $this->skuGenerator->generate($this->skuPayload($validated, $category?->name));
+                $validated['sku'] = $this->skuGenerator->generate($this->skuPayload($validated, $category?->name));
+            } else {
+                unset($validated['sku']);
+            }
+        } else {
+            $validated['sku'] = strtoupper(trim($validated['sku']));
         }
 
         $product->update($validated);

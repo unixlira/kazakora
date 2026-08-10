@@ -295,9 +295,21 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             return ['ready' => false, 'contents' => null, 'content_type' => null];
         }
 
+        // BUG REAL 2026-08-10 (etiqueta não saía na impressora térmica,
+        // "impressora parada" — nada acontecia, sem erro nenhum registrado):
+        // response_type=pdf devolve a folha A4 padrão do Mercado Livre (2
+        // páginas — aviso "declare sua venda" + etiqueta em tamanho de
+        // corte pra impressora comum), nunca pensada pra bobina térmica
+        // 4x6". A KazaKora-Printer aceitava o job (por isso "printed" sem
+        // erro no servidor) mas não fazia nada com um PDF em A4. Trocado
+        // pra response_type=zpl2 (confirmado na doc oficial do ML: devolve
+        // um ZIP com um PDF da PLP + um TXT com o ZPL de verdade pra
+        // impressora Zebra/térmica) — mesmo formato que a Shopee já
+        // devolve, reaproveita o mesmo pipeline de unzip+conversão em
+        // LabelFetchService.
         $label = $this->client->getBinary('shipment_labels', [
             'shipment_ids' => $shipmentId,
-            'response_type' => 'pdf',
+            'response_type' => 'zpl2',
         ]);
 
         return ['ready' => true, 'contents' => $label['contents'], 'content_type' => $label['content_type']];

@@ -11,9 +11,11 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Tests\TestCase;
+use ZipArchive;
 
 class LabelFetchServiceTest extends TestCase
 {
@@ -116,5 +118,87 @@ class LabelFetchServiceTest extends TestCase
         app(LabelFetchService::class)->attempt($shipment->fresh());
 
         $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+    }
+
+    /**
+     * BUG REAL 2026-08-10 — cobertura de regressão. O zip do
+     * response_type=zpl2 do Mercado Livre (MercadoLivreDriver::fetchLabel())
+     * vem com DOIS arquivos: um PDF da PLP (não é a etiqueta térmica, é uma
+     * folha A4 — foi esse PDF sendo mandado direto pra impressora que
+     * causava "impressora parada, nada sai") e um .txt com o ZPL de
+     * verdade. Precisa achar o .txt certo, não o primeiro entry do zip.
+     */
+    public function test_attempt_picks_the_zpl_txt_entry_not_the_plp_pdf_from_a_multi_file_zip(): void
+    {
+        Storage::fake('local');
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        $shipment = $this->makeShipment();
+
+        $zip = self::buildZip([
+            'plp.pdf' => "%PDF-1.4\nconteúdo irrelevante, não é a etiqueta\n%%EOF",
+            'thermal_zpl_shipping_label.txt' => "^XA^FO50,50^A0N,50,50^FDTeste^FS^XZ",
+        ]);
+
+        $this->mockDriver(['ready' => true, 'contents' => $zip, 'content_type' => 'application/force-download']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $fresh = $shipment->fresh();
+        $labelContents = Storage::disk('local')->get($fresh->label_path);
+
+        // Se tivesse pego o PDF errado (índice 0 do zip), isso teria virado
+        // a PLP crua em vez de passar pela conversão ZPL->PDF do Labelary.
+        $this->assertStringStartsWith('%PDF-', $labelContents);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.labelary.com'));
+    }
+
+    private static function buildZip(array $files): string
+    {
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_zip_').'.zip';
+
+        $zip = new ZipArchive();
+        $zip->open($tempPath, ZipArchive::CREATE);
+
+        foreach ($files as $name => $contents) {
+            $zip->addFromString($name, $contents);
+        }
+
+        $zip->close();
+
+        $bytes = file_get_contents($tempPath);
+        unlink($tempPath);
+
+        return $bytes;
+    }
+
+    private static function minimalPdf(): string
+    {
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 4 0 R >>',
+            4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+        ];
+
+        $body = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $id => $content) {
+            $offsets[$id] = strlen($body);
+            $body .= "{$id} 0 obj\n{$content}\nendobj\n";
+        }
+
+        $xrefOffset = strlen($body);
+        $body .= "xref\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+
+        foreach ($objects as $id => $content) {
+            $body .= sprintf("%010d 00000 n \n", $offsets[$id]);
+        }
+
+        $body .= "trailer\n<< /Size ".(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF";
+
+        return $body;
     }
 }

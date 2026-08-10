@@ -180,6 +180,14 @@ class LabelFetchService
      * (thermal_zpl_shipping_label.txt, confirmado ao vivo) — pega o
      * primeiro/único entry em vez de fixar esse nome exato, que pode variar
      * por conta/idioma sem aviso.
+     *
+     * O zip do Mercado Livre (response_type=zpl2, ver MercadoLivreDriver::
+     * fetchLabel(), bug real 2026-08-10) já vem com DOIS arquivos — um PDF
+     * da PLP (não é a etiqueta) e um .txt com o ZPL de verdade — então não
+     * dá mais pra assumir "primeiro entry = certo" como antes. Procura
+     * primeiro por um entry .txt contendo "^XA" (assinatura real de ZPL);
+     * só cai pro índice 0 se não achar nenhum .txt (mantém o comportamento
+     * antigo intacto pro zip de arquivo único da Shopee).
      */
     private function extractZplFromZip(string $zipContents): string
     {
@@ -190,14 +198,30 @@ class LabelFetchService
             $zip = new ZipArchive();
 
             if ($zip->open($tempZipPath) !== true) {
-                throw new RuntimeException('Não foi possível abrir o zip da etiqueta da Shopee.');
+                throw new RuntimeException('Não foi possível abrir o zip da etiqueta.');
             }
 
             if ($zip->numFiles < 1) {
-                throw new RuntimeException('Zip da etiqueta da Shopee veio vazio.');
+                throw new RuntimeException('Zip da etiqueta veio vazio.');
             }
 
-            $entryName = $zip->getNameIndex(0);
+            $entryName = null;
+
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $candidateName = $zip->getNameIndex($i);
+
+                if (str_ends_with(strtolower($candidateName), '.txt')) {
+                    $candidateContents = $zip->getFromName($candidateName);
+
+                    if ($candidateContents !== false && str_contains($candidateContents, '^XA')) {
+                        $entryName = $candidateName;
+
+                        break;
+                    }
+                }
+            }
+
+            $entryName ??= $zip->getNameIndex(0);
             $extracted = $zip->getFromName($entryName);
             $zip->close();
 

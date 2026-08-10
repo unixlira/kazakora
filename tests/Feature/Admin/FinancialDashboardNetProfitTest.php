@@ -84,6 +84,12 @@ class FinancialDashboardNetProfitTest extends TestCase
             // líquido" — o card de resumo usa o mesmo valor calculado
             // aqui, não mais o saldo de fluxo de caixa manual.
             ->where('summary.profitMonth', 9.65)
+            // Cards invertidos (pedido explícito 2026-08-09): bruto/líquido
+            // desde o primeiro dia — só há esse 1 pedido no teste, então
+            // "desde o início" bate com "no mês".
+            ->where('summary.grossRevenueAllTime', 120.75)
+            ->where('summary.netProfitAllTime', 9.65)
+            ->where('summary.grossRevenueMonth', 120.75)
             // Mercado Livre sempre indisponível hoje (API pede escopo de
             // pagamentos que o app não tem); Shopee null porque não há
             // MarketplaceAccount conectada neste teste.

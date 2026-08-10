@@ -67,6 +67,7 @@ const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
 // "métrica pra saber se tá dando lucro" (pedido explícito 2026-08-09) —
 // cor muda na hora: verde quando positivo, vermelho quando negativo.
 const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success' : 'error'));
+const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >= 0 ? 'success' : 'error'));
 </script>
 
 <template>
@@ -75,12 +76,17 @@ const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success'
     <AdminLayout>
         <h1 class="mb-4 text-2xl font-bold">Dashboard Financeiro</h1>
 
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <!-- Pedido explícito 2026-08-09: cards invertidos — bruto/líquido
+             desde o primeiro dia primeiro, depois os mesmos dois recortados
+             pro mês corrente. Saldo atual e entradas no mês seguem no fim;
+             saídas no mês foi removido. -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <CardStats stat-subtitle="FATURAMENTO BRUTO (desde o início)" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-bag-shopping" variant="info" />
+            <CardStats stat-subtitle="LUCRO LÍQUIDO (desde o início)" :stat-title="formatPrice(summary.netProfitAllTime)" stat-icon-name="fas fa-chart-line" :variant="netProfitAllTimeVariant" />
+            <CardStats stat-subtitle="FATURAMENTO BRUTO DO MÊS" :stat-title="formatPrice(summary.grossRevenueMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
+            <CardStats stat-subtitle="FATURAMENTO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
+            <CardStats stat-subtitle="ENTRADAS NO MÊS" :stat-title="formatPrice(summary.incomeMonth)" stat-icon-name="fas fa-hand-holding-dollar" variant="secondary" />
             <CardStats stat-subtitle="SALDO ATUAL (fluxo de caixa)" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
-            <CardStats stat-subtitle="ENTRADAS NO MÊS" :stat-title="formatPrice(summary.incomeMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
-            <CardStats stat-subtitle="SAÍDAS NO MÊS" :stat-title="formatPrice(summary.expenseMonth)" stat-icon-name="fas fa-arrow-trend-down" variant="error" />
-            <CardStats stat-subtitle="LUCRO NO MÊS (líquido)" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
-            <CardStats stat-subtitle="FATURAMENTO EM VENDAS" :stat-title="formatPrice(summary.salesRevenue)" stat-icon-name="fas fa-bag-shopping" variant="info" />
         </div>
 
         <!-- Saldo disponível pra saque nas plataformas — pedido explícito 2026-08-09 -->
@@ -104,9 +110,6 @@ const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success'
                     <div>
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível pra saque — Mercado Livre</p>
                         <p class="mt-0.5 text-2xl font-bold">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
-                        <p v-if="walletBalances.mercado_livre_as_of" class="text-xs text-slate-400">
-                            Referente a {{ new Date(walletBalances.mercado_livre_as_of.replace(' ', 'T')).toLocaleString('pt-BR') }} — relatório da Mercado Pago, não é ao vivo
-                        </p>
                     </div>
                 </div>
             </div>

@@ -63,6 +63,24 @@ class FinancialDashboardController extends Controller
 
         $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth, 2);
 
+        // Pedido explícito 2026-08-09: cards do topo invertidos — 1º
+        // faturamento bruto desde o primeiro dia, 2º lucro líquido também
+        // desde o primeiro dia (mesma conta do mês, sem o filtro de data),
+        // atualiza sozinho assim que custo de produto for cadastrado.
+        $salesRevenueAllTime = round((float) Order::query()->whereIn('status', self::REVENUE_STATUSES)->sum('total'), 2);
+
+        $productCostAllTime = round((float) Order::query()
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->join('products', 'products.id', '=', 'order_items.product_id')
+            ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as total')
+            ->value('total'), 2);
+
+        $marketplaceFeeAllTime = round((float) OrderChannelFee::query()->sum('fee_amount'), 2);
+        $adSpendAllTime = round((float) ChannelAdSpend::query()->sum('spend'), 2);
+
+        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime, 2);
+
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'summary' => [
                 'balance' => $incomeAllTime - $expenseAllTime,
@@ -77,6 +95,11 @@ class FinancialDashboardController extends Controller
                 // literalmente a métrica de "tá dando lucro ou não".
                 'profitMonth' => $netProfitMonth,
                 'salesRevenue' => (float) Order::query()->whereNot('status', Order::STATUS_CANCELLED)->sum('total'),
+                // Faturamento bruto/líquido desde o primeiro dia — pedido
+                // explícito 2026-08-09 (cards do topo invertidos).
+                'grossRevenueAllTime' => $salesRevenueAllTime,
+                'netProfitAllTime' => $netProfitAllTime,
+                'grossRevenueMonth' => $salesRevenueMonth,
             ],
             // Saldo disponível pra saque nas plataformas — pedido explícito
             // 2026-08-09. Confirmado ao vivo: a Shopee tem isso de verdade

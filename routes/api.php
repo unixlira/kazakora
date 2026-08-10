@@ -17,11 +17,13 @@ Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name
 // Idem, pro Mercado Pago — assinatura HMAC verificada dentro do controller.
 Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('api.mercadopago.webhook');
 
-// O painel do Mercado Pago testa se a URL de callback existe com um GET
-// simples antes de liberar a configuração — mesmo caso já resolvido pra
-// Shopee logo abaixo (webhook.verify). Sem isso, o teste deles dá erro
-// mesmo com a integração certa do nosso lado.
+// O painel do Mercado Pago testa se a URL de callback/webhook existe com um
+// GET simples antes de liberar a configuração — mesmo caso já resolvido pra
+// Shopee logo abaixo (webhook.verify). Sem isso, o teste deles dá erro mesmo
+// com a integração certa do nosso lado (a rota POST acima sozinha devolvia
+// 405 pro teste GET deles).
 Route::match(['get', 'head'], '/mercadopago/callback', fn () => response()->json(['status' => 'ok']))->name('api.mercadopago.callback');
+Route::match(['get', 'head'], '/mercadopago/webhook', fn () => response()->json(['status' => 'ok']))->name('api.mercadopago.webhook.verify');
 
 Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
     // OAuth is initiated/completed by a logged-in admin's browser, so it

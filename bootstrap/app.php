@@ -4,7 +4,9 @@ use App\Http\Middleware\AuthenticatePrintAgent;
 use App\Http\Middleware\EnsureHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
+use App\Http\Middleware\ExpireStaleSession;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\PreventBrowserCaching;
 use App\Http\Middleware\TrackSiteVisit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -26,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             TrackSiteVisit::class,
+            PreventBrowserCaching::class,
+            ExpireStaleSession::class,
         ]);
 
         $middleware->alias([

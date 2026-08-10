@@ -12,7 +12,7 @@ export const sidebarSections = [
     {
         heading: 'Gestão',
         items: [
-            { label: 'Dashboard Financeiro', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', color: 'text-primary', permission: 'financeiro.view' },
+            { label: 'Financeiro', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', color: 'text-primary', permission: 'financeiro.view' },
             { label: 'Fluxo de Caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', color: 'text-success', permission: 'financeiro.view' },
             { label: 'Recargas de Anúncio', href: '/admin/anuncios/recargas', icon: 'fas fa-bullhorn', color: 'text-warning', permission: 'financeiro.view' },
             { label: 'Relatórios', href: '/admin/relatorios', icon: 'fas fa-file-lines', color: 'text-info', permission: 'relatorios.view' },

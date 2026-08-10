@@ -71,10 +71,10 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
 </script>
 
 <template>
-    <Head title="Dashboard Financeiro" />
+    <Head title="Financeiro" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Dashboard Financeiro</h1>
+        <h1 class="mb-4 text-2xl font-bold">Financeiro</h1>
 
         <!-- Pedido explícito 2026-08-09: cards invertidos — bruto/líquido
              desde o primeiro dia primeiro, depois os mesmos dois recortados

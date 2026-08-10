@@ -25,9 +25,6 @@ class FinancialDashboardController extends Controller
         $startOfMonth = Carbon::today()->startOfMonth();
         $start14 = Carbon::today()->subDays(13);
 
-        $incomeAllTime = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_INCOME)->sum('amount');
-        $expenseAllTime = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_EXPENSE)->sum('amount');
-
         $incomeMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_INCOME)->where('entry_date', '>=', $startOfMonth)->sum('amount');
         $expenseMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_EXPENSE)->where('entry_date', '>=', $startOfMonth)->sum('amount');
 
@@ -100,7 +97,6 @@ class FinancialDashboardController extends Controller
 
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'summary' => [
-                'balance' => $incomeAllTime - $expenseAllTime,
                 'incomeMonth' => $incomeMonth,
                 'expenseMonth' => $expenseMonth,
                 // Pedido explícito 2026-08-09: "o lucro no mês sendo só o

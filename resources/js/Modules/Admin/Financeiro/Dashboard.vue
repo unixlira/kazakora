@@ -64,9 +64,10 @@ const totalAdSpend14Days = computed(() => props.adSpendSeries.reduce((sum, item)
 
 const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
 
-// Soma dos saldos disponíveis pra saque nas duas plataformas — pedido
-// explícito 2026-08-10. Se qualquer uma vier indisponível, a soma também
-// fica indisponível (não dá pra somar um número real com "não sei").
+// "Saldo Atual" = soma dos saldos disponíveis nas duas plataformas —
+// pedido explícito 2026-08-10 (deixou de ser fluxo de caixa lançado à
+// mão). Se qualquer uma vier indisponível, o total também fica
+// indisponível (não dá pra somar um número real com "não sei").
 const totalWalletBalance = computed(() => {
     const { shopee, mercado_livre: mercadoLivre } = props.walletBalances;
     return shopee !== null && shopee !== undefined && mercadoLivre !== null && mercadoLivre !== undefined
@@ -105,9 +106,12 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
             <CardStats stat-subtitle="VALOR DE ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
         </div>
 
-        <!-- Saldo disponível pra saque nas plataformas + soma + saldo atual
-             do fluxo de caixa, lado a lado — pedido explícito 2026-08-09/10 -->
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <!-- Saldo disponível pra saque nas plataformas + Saldo Atual (a soma
+             das duas) — pedido explícito 2026-08-10: "saldo atual" não é
+             mais fluxo de caixa lançado à mão, é literalmente a soma do que
+             está disponível em cada plataforma, direto no card, sem um
+             card de "soma" separado. -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full" :style="{ color: CHANNEL_STYLES.shopee.color, background: hexToRgba(CHANNEL_STYLES.shopee.color, 0.12) }">
@@ -132,23 +136,12 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
             </div>
             <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                 <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lightsecondary text-secondary">
-                        <i class="fas fa-layer-group"></i>
-                    </span>
-                    <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-wide text-slate-400">Soma Shopee + Mercado Livre</p>
-                        <p class="mt-0.5 truncate text-2xl font-bold">{{ totalWalletBalance !== null ? formatPrice(totalWalletBalance) : 'Indisponível' }}</p>
-                    </div>
-                </div>
-            </div>
-            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-lightprimary text-primary">
                         <i class="fas fa-scale-balanced"></i>
                     </span>
                     <div class="min-w-0">
-                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo atual (fluxo de caixa)</p>
-                        <p class="mt-0.5 truncate text-2xl font-bold">{{ formatPrice(summary.balance) }}</p>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">Saldo Atual (Shopee + Mercado Livre)</p>
+                        <p class="mt-0.5 truncate text-2xl font-bold">{{ totalWalletBalance !== null ? formatPrice(totalWalletBalance) : 'Indisponível' }}</p>
                     </div>
                 </div>
             </div>

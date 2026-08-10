@@ -291,7 +291,15 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $shipmentId = $this->resolveShipmentId($order);
         $shipment = $this->shipments->getShipment($shipmentId);
 
-        if (($shipment['status'] ?? null) !== 'ready_to_ship' || ($shipment['substatus'] ?? null) !== 'ready_to_print') {
+        // BUG REAL 2026-08-10, achado ao tentar reprocessar o pedido #214
+        // manualmente logo depois do fix acima: o próprio Mercado Livre
+        // vira o substatus de "ready_to_print" pra "printed" assim que
+        // shipment_labels é chamado UMA vez, mesmo que o download tenha
+        // sido só uma verificação/reprocessamento (nunca voltamos a "não
+        // pronta"). Exigir estritamente "ready_to_print" travava qualquer
+        // reimpressão/reprocessamento depois da primeira tentativa — a
+        // etiqueta continua válida e disponível em "printed" também.
+        if (($shipment['status'] ?? null) !== 'ready_to_ship' || ! in_array($shipment['substatus'] ?? null, ['ready_to_print', 'printed'], true)) {
             return ['ready' => false, 'contents' => null, 'content_type' => null];
         }
 

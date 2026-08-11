@@ -46,5 +46,11 @@
         <env name="SHOPEE_REDIRECT_URL" value="http://localhost/api/shopee/callback"/>
         <env name="SHOPEE_API_BASE_URL" value="https://partner.test-stable.shopeemobile.com"/>
         <env name="PRINT_AGENT_TOKEN" value="test-print-agent-token"/>
+        <env name="CORREIOS_NUMERO_USUARIO" value=""/>
+        <env name="CORREIOS_CODIGO_ACESSO" value=""/>
+        <env name="CORREIOS_CONTRATO" value=""/>
+        <env name="CORREIOS_CARTAO_POSTAGEM" value=""/>
+        <env name="CORREIOS_TOKEN_BASE_URL" value="https://apihom.correios.com.br/token"/>
+        <env name="CORREIOS_API_BASE_URL" value="https://apihom.correios.com.br/prepostagem"/>
     </php>
 </phpunit>

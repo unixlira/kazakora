@@ -42,6 +42,7 @@ export const sidebarSections = [
             { label: 'Ordens de Serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', color: 'text-secondary', permission: 'operacional.view' },
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', color: 'text-success', permission: 'operacional.view' },
             { label: 'Logística', href: '/admin/logistica', icon: 'fas fa-truck', color: 'text-primary', permission: 'operacional.view' },
+            { label: 'Correios', href: '/admin/correios', icon: 'fas fa-qrcode', color: 'text-secondary', permission: 'operacional.view' },
         ],
     },
     {

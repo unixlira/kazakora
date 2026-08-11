@@ -82,6 +82,16 @@ return [
         'token' => env('PRINT_AGENT_TOKEN'),
     ],
 
+    'correios' => [
+        'numero_usuario' => env('CORREIOS_NUMERO_USUARIO'),
+        'codigo_acesso' => env('CORREIOS_CODIGO_ACESSO'),
+        'contrato' => env('CORREIOS_CONTRATO'),
+        'cartao_postagem' => env('CORREIOS_CARTAO_POSTAGEM'),
+        'dr' => env('CORREIOS_DR'),
+        'token_base_url' => env('CORREIOS_TOKEN_BASE_URL', 'https://api.correios.com.br/token'),
+        'api_base_url' => env('CORREIOS_API_BASE_URL', 'https://api.correios.com.br/prepostagem'),
+    ],
+
     'shopee' => [
         // Credenciais atuais são de teste/sandbox (SHOPEE_TEST_*, confirmado
         // pelo próprio nome) — pareiam com o host test-stable, não o de

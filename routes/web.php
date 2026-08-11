@@ -7,6 +7,7 @@ use App\Modules\Admin\Http\Controllers\CashFlowController;
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\CompanyController;
 use App\Modules\Admin\Http\Controllers\CompetitorAnalysisController;
+use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
@@ -388,6 +389,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('importar-pedido', [OrderImportController::class, 'create'])->name('importar-pedido.nova');
         Route::post('importar-pedido', [OrderImportController::class, 'store'])->name('importar-pedido.armazenar');
+
+        Route::middleware('permission:operacional.view')->group(function () {
+            Route::get('correios', [CorreiosController::class, 'index'])->name('correios.listar');
+            Route::get('correios/nova', [CorreiosController::class, 'create'])->name('correios.nova');
+            Route::get('correios/buscar-pedido', [CorreiosController::class, 'buscarPedido'])->name('correios.buscar-pedido');
+            Route::get('correios/{correio}', [CorreiosController::class, 'show'])->name('correios.ver');
+        });
+        Route::post('correios', [CorreiosController::class, 'store'])->name('correios.armazenar')->middleware('permission:operacional.create');
+        Route::delete('correios/{correio}', [CorreiosController::class, 'destroy'])->name('correios.excluir')->middleware('permission:operacional.delete');
 
         Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');
         Route::post('etiquetas-manuais', [ManualLabelController::class, 'store'])->name('etiquetas-manuais.armazenar');

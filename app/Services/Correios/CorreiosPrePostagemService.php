@@ -64,6 +64,12 @@ class CorreiosPrePostagemService
             'destinatario' => $this->buildDestinatario($input['customer'], $input['address']),
             'codigoServico' => $input['service_code'],
             'pesoInformado' => (string) $input['weight_grams'],
+            // Obrigatório no schema real (confirmado em
+            // apihom.correios.com.br/prepostagem/v3/api-docs, campo estava
+            // faltando até 2026-08-11) — "1" = objeto permitido no fluxo
+            // postal. Loja só vende produtos lícitos, então é sempre "1"
+            // aqui, não um campo que o usuário preenche na tela.
+            'cienteObjetoNaoProibido' => '1',
             'itensDeclaracaoConteudo' => collect($input['content_items'])->map(fn (array $item) => [
                 'conteudo' => $item['conteudo'],
                 'quantidade' => (string) $item['quantidade'],

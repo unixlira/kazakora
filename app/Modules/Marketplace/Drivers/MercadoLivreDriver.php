@@ -211,11 +211,16 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * Envia o XML da NF-e assinada pro Mercado Livre. Endpoint documentado
      * pra Flex/Turbo/ME1/Drop Off — a doc em inglês desse mesmo endpoint diz
      * "não disponível pro Brasil" enquanto a doc em português o documenta
-     * especificamente pra vendedores brasileiros; **não confirmado ao vivo**
-     * (bloqueado pelo certificado NF-e sem senha correta — nenhuma nota real
-     * foi autorizada ainda pra testar isso de ponta a ponta). Usa
-     * external_order_id como pack_id, conforme a própria doc do ML orienta
-     * quando o pack_id não está disponível separadamente.
+     * especificamente pra vendedores brasileiros.
+     *
+     * BUG REAL 2026-08-12 (pedido #243): usar external_order_id direto como
+     * pack_id só funciona quando o pedido NÃO pertence a um pack de
+     * verdade — confirmado ao vivo que o Mercado Livre rejeita com 400
+     * "order_belong_pack" quando o pedido tem `pack_id` próprio (comprador
+     * levou mais de um pedido junto no mesmo envio, tag `pack_order` no
+     * order). Busca o order real pra pegar o `pack_id` de verdade e só cai
+     * pro external_order_id quando o pedido não tem pack (pack_id
+     * ausente/null — a maioria dos pedidos avulsos).
      */
     public function submitInvoice(Order $order, Invoice $invoice): array
     {
@@ -228,9 +233,12 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $xml = Storage::disk('local')->get($invoice->xml_path);
         $filename = "nfe-{$invoice->chave_acesso}.xml";
 
+        $mlOrder = $this->client->get("orders/{$order->external_order_id}");
+        $packId = $mlOrder['pack_id'] ?? null;
+
         try {
             $response = $this->client->postMultipart(
-                "packs/{$order->external_order_id}/fiscal_documents",
+                'packs/'.($packId ?: $order->external_order_id).'/fiscal_documents',
                 [],
                 ['contents' => $xml, 'filename' => $filename],
                 'fiscal_document',

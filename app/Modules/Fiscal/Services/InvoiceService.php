@@ -41,27 +41,13 @@ class InvoiceService
     {
         $order->loadMissing('invoice');
 
-        // Mercado Livre emite a própria NF-e pro vendedor (confirmado ao
-        // vivo 2026-08-02 — chave de acesso real, mesmo CNPJ/CPF do
-        // pedido, DANFE com o texto/layout deles, não o nosso). Tentar
-        // emitir aqui também duplicaria a nota fiscal da mesma venda —
-        // problema real de conformidade, não só redundância. Se outro
-        // canal também tiver emissão própria confirmada, adicionar aqui.
-        if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
-            return $order->invoice ?? Invoice::create([
-                'order_id' => $order->id,
-                'status' => Invoice::STATUS_EXTERNAL,
-                'ambiente' => config('nfe.ambiente'),
-                // Série 0 nunca é usada pra número real de NF-e (config
-                // nfe.serie começa em 1) — reservada só pra essas linhas
-                // "não emitimos, o canal emitiu". numero=order_id garante
-                // unicidade sem precisar reservar sequência real (índice
-                // único é (serie, numero, ambiente)).
-                'serie' => 0,
-                'numero' => $order->id,
-                'valor_total' => $order->total,
-            ]);
-        }
+        // Até 2026-08-12, Mercado Livre era tratado como "emite a própria
+        // NF-e pro vendedor" (confirmado ao vivo em 2026-08-02 — chave de
+        // acesso real, mesmo CNPJ/CPF do pedido, DANFE deles) e Kazakora
+        // pulava a emissão própria pra não duplicar. Mudança explícita do
+        // usuário 2026-08-12: emitir por aqui também pro Mercado Livre,
+        // mesmo esquema já usado pra Shopee — ver Invoice::STATUS_EXTERNAL
+        // pro histórico de pedidos antigos que ainda usam esse status.
 
         if ($order->invoice && in_array($order->invoice->status, [
             Invoice::STATUS_AUTHORIZED,
@@ -86,7 +72,16 @@ class InvoiceService
             return $order->invoice;
         }
 
-        $invoice = $order->invoice ?? $this->createPendingInvoice($order);
+        // Pedido antigo que ficou marcado como STATUS_EXTERNAL (Mercado
+        // Livre, antes da mudança 2026-08-12 acima) nunca teve XML/numero
+        // real reservado — trata como se não existisse nenhuma nota ainda,
+        // mas reaproveitando a MESMA linha (order_id é unique) em vez de
+        // tentar criar uma nova, que violaria a constraint.
+        if ($order->invoice && $order->invoice->status === Invoice::STATUS_EXTERNAL) {
+            $invoice = $this->convertExternalToPending($order->invoice, $order);
+        } else {
+            $invoice = $order->invoice ?? $this->createPendingInvoice($order);
+        }
 
         // Achado real 2026-08-08 (pedido #188): a nota ficou pendente com
         // um XML montado a partir de dado fiscal incompleto (retorno de um
@@ -191,6 +186,44 @@ class InvoiceService
 
             return $existing;
         }
+    }
+
+    /**
+     * Converte uma linha antiga marcada STATUS_EXTERNAL (serie=0,
+     * numero=order_id — nunca era uma NF-e real, ver comentário em
+     * issue()) numa nota pendente de verdade: reserva um numero real na
+     * série configurada e monta o XML, igual createPendingInvoice(), mas
+     * fazendo UPDATE na mesma linha em vez de criar outra (order_id é
+     * unique).
+     */
+    private function convertExternalToPending(Invoice $invoice, Order $order): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $order) {
+            $localMax = Invoice::query()
+                ->where('serie', config('nfe.serie'))
+                ->where('ambiente', config('nfe.ambiente'))
+                ->lockForUpdate()
+                ->max('numero') ?? 0;
+
+            $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
+
+            ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
+
+            $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
+            Storage::disk('local')->put($xmlPath, $xml);
+
+            $invoice->update([
+                'status' => Invoice::STATUS_PENDING,
+                'ambiente' => config('nfe.ambiente'),
+                'serie' => config('nfe.serie'),
+                'numero' => $numero,
+                'valor_total' => $order->total,
+                'chave_acesso' => $chave,
+                'xml_path' => $xmlPath,
+            ]);
+
+            return $invoice->fresh();
+        });
     }
 
     private function signAndSend(Invoice $invoice): void

@@ -405,7 +405,7 @@ class DashboardAgentController extends Controller
         $orders = Order::query()
             ->where('status', Order::STATUS_PAID)
             ->where('created_at', '>=', $today)
-            ->with('items:id,order_id,product_name,quantity')
+            ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
             ->withSum('items as units_count', 'quantity')
             // orderByDesc('id') em vez de latest()/created_at: dois pedidos
             // pagos a poucos segundos de distância (ex: 2 vendas quase
@@ -427,6 +427,7 @@ class DashboardAgentController extends Controller
             'products' => $order->items->map(fn ($item) => [
                 'name' => $item->product_name,
                 'quantity' => $item->quantity,
+                'sku' => $item->product?->sku,
             ]),
             'created_at' => $order->created_at,
         ]);

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\User;
+use App\Modules\Marketplace\Jobs\PokeShopeeLabelChecksJob;
 use App\Modules\Marketplace\Models\ChannelWebhookLog;
 use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Shopee\Webhooks\WebhookHandler;
@@ -41,6 +42,11 @@ class ProcessShopeeWebhook implements ShouldQueue
     public function handle(WebhookHandler $handler): void
     {
         $handler->handle($this->payload, $this->webhookLogId);
+
+        // "Empurrão" pra qualquer etiqueta Shopee ainda pendente reagir na
+        // hora em vez de esperar o próximo minuto do cron — ver
+        // PokeShopeeLabelChecksJob (mesmo padrão já usado pro Mercado Livre).
+        PokeShopeeLabelChecksJob::dispatch();
     }
 
     /**

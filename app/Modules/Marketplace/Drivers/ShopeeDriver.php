@@ -844,9 +844,27 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             // pronto ainda" pra esse ciclo, deixa o retry natural do
             // CheckShipmentLabelJob (5s) consultar de novo em seguida, sem
             // criar duas vezes.
-            $this->client->post('/api/v2/logistics/create_shipping_document', [
-                'order_list' => [['order_sn' => $order->external_order_id]],
-            ]);
+            //
+            // BUG REAL 2026-08-12 (pedido #247): esse create_shipping_document
+            // também pode ser rejeitado pela Shopee (confirmado ao vivo:
+            // "common.batch_api_all_failed" / "tracking_number_invalid" —
+            // o rastreio ainda não tinha sido atribuído nesse instante,
+            // condição transitória, não permanente). Sem try/catch aqui,
+            // essa segunda chamada propagava um ShopeeException cru pra
+            // fora de fetchLabel(), em vez do "não pronto ainda" limpo que
+            // o resto do pipeline já sabe tratar — o retry natural do
+            // CheckShipmentLabelJob ainda acontecia (Throwable genérico não
+            // impede o backoff do Laravel), só com um erro mais confuso nos
+            // logs/failed_jobs no meio do caminho. Trata igual: se a
+            // criação também falhar, ainda é "não pronto", não um erro
+            // definitivo.
+            try {
+                $this->client->post('/api/v2/logistics/create_shipping_document', [
+                    'order_list' => [['order_sn' => $order->external_order_id]],
+                ]);
+            } catch (ShopeeException) {
+                // Ignorado de propósito — ver comentário acima.
+            }
 
             return ['ready' => false, 'contents' => null, 'content_type' => null];
         }

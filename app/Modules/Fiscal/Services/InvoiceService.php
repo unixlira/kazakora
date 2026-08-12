@@ -41,13 +41,23 @@ class InvoiceService
     {
         $order->loadMissing('invoice');
 
-        // Até 2026-08-12, Mercado Livre era tratado como "emite a própria
-        // NF-e pro vendedor" (confirmado ao vivo em 2026-08-02 — chave de
-        // acesso real, mesmo CNPJ/CPF do pedido, DANFE deles) e Kazakora
-        // pulava a emissão própria pra não duplicar. Mudança explícita do
-        // usuário 2026-08-12: emitir por aqui também pro Mercado Livre,
-        // mesmo esquema já usado pra Shopee — ver Invoice::STATUS_EXTERNAL
-        // pro histórico de pedidos antigos que ainda usam esse status.
+        // Mercado Livre emite a própria NF-e pro vendedor (confirmado ao
+        // vivo 2026-08-02 — chave de acesso real, mesmo CNPJ/CPF do
+        // pedido, DANFE deles) — e a própria API confirmou isso de novo
+        // 2026-08-12 ("Access denied, you must use the biller of
+        // MercadoLibre" ao tentar enviar nota nossa pro pedido #243).
+        // Tentar emitir aqui também duplicaria a nota fiscal da mesma
+        // venda — problema real de conformidade, não só redundância.
+        if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
+            return $order->invoice ?? Invoice::create([
+                'order_id' => $order->id,
+                'status' => Invoice::STATUS_EXTERNAL,
+                'ambiente' => config('nfe.ambiente'),
+                'serie' => 0,
+                'numero' => $order->id,
+                'valor_total' => $order->total,
+            ]);
+        }
 
         if ($order->invoice && in_array($order->invoice->status, [
             Invoice::STATUS_AUTHORIZED,

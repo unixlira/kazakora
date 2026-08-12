@@ -31,9 +31,15 @@ class PokeMercadoLivreLabelChecksJob implements ShouldQueue
 
     public function handle(): void
     {
+        // Mesmo limite de 4h adicionado no equivalente da Shopee
+        // (PokeShopeeLabelChecksJob) depois de um incidente real 2026-08-12
+        // — sem isso, um envio antigo parado em CONFIRMED por qualquer
+        // motivo esquecido seria reprocessado (e potencialmente reimpresso)
+        // a cada webhook novo que chegasse, mesmo semanas depois.
         ChannelShipment::query()
             ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
             ->where('status', ChannelShipment::STATUS_CONFIRMED)
+            ->where('created_at', '>=', now()->subHours(4))
             ->pluck('id')
             ->each(fn (int $id) => CheckShipmentLabelJob::dispatch($id));
     }

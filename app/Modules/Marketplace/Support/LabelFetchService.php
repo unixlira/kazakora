@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Support;
 
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
@@ -38,6 +39,25 @@ class LabelFetchService
     public function attempt(ChannelShipment $shipment): bool
     {
         if (! $shipment->order) {
+            return false;
+        }
+
+        // TRAVA REAL 2026-08-12 (incidente): um "empurrão" de checagem
+        // disparado por webhook reprocessou 10 pedidos antigos já
+        // completed/shipped/cancelled (parados em status não-final do
+        // shipment por outro motivo qualquer, às vezes há semanas) e
+        // reimprimiu etiquetas físicas reais desnecessárias — uma delas
+        // pra um pedido CANCELADO. Etiqueta só faz sentido enquanto o
+        // pedido ainda está esperando ser embalado/enviado; nunca gerar
+        // (e nunca criar PrintJob) fora disso, não importa o que chamou
+        // attempt() ou porque o shipment ainda não tinha status final.
+        if ($shipment->order->status !== Order::STATUS_PAID) {
+            Log::info('marketplace.label_fetch.skipped_order_not_paid', [
+                'shipment_id' => $shipment->id,
+                'order_id' => $shipment->order_id,
+                'order_status' => $shipment->order->status,
+            ]);
+
             return false;
         }
 

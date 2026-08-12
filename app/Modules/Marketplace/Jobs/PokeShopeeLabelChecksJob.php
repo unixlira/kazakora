@@ -41,9 +41,20 @@ class PokeShopeeLabelChecksJob implements ShouldQueue
 
     public function handle(): void
     {
+        // BUG REAL 2026-08-12 (achado na hora, mesmo dia): sem limite de
+        // tempo, isso pegava TODO envio Shopee sem etiqueta desde sempre —
+        // inclusive pedidos antigos já resolvidos por outro caminho (label
+        // manual, cancelamento, etc.) que ficaram parados em STATUS_ERROR
+        // há semanas. Reimprimiu 10 etiquetas físicas reais e desnecessárias
+        // de pedidos antigos assim que isso foi ao ar. Escopo agora: só
+        // envios criados nas últimas 4h (mesma janela de retry do próprio
+        // CheckShipmentLabelJob) — um envio mais velho que isso já teve
+        // tempo de sobra pra resolver sozinho ou já foi tratado manualmente,
+        // não deve ser reprocessado só porque outro webhook qualquer chegou.
         ChannelShipment::query()
             ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
             ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
+            ->where('created_at', '>=', now()->subHours(4))
             ->pluck('id')
             ->each(fn (int $id) => CheckShipmentLabelJob::dispatch($id));
     }

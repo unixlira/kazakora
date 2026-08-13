@@ -56,4 +56,17 @@ class Company extends Model
     {
         return filled($this->certificate_path);
     }
+
+    /**
+     * Mesmo bug/fix de Address::setStateAttribute() — NFeXmlBuilderService
+     * compara `$order->shipping_state === $company->state` (exata,
+     * sensível a maiúscula/minúscula) pra decidir CFOP/idDest. Os dois
+     * lados da comparação precisam estar normalizados, senão o fix do
+     * endereço do cliente sozinho não garante nada se a UF da própria
+     * empresa (cadastrada uma vez em /admin/empresa) ficou minúscula.
+     */
+    public function setStateAttribute(?string $value): void
+    {
+        $this->attributes['state'] = $value !== null ? strtoupper(trim($value)) : null;
+    }
 }

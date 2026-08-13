@@ -91,6 +91,17 @@ const onCepInput = async (event) => {
     }
 };
 
+// BUG REAL 2026-08-13: "uppercase" na classe era só CSS (text-transform) —
+// v-model gravava exatamente o que foi digitado, então digitar por cima do
+// preenchimento automático do CEP podia deixar "sp" minúsculo no banco.
+// NFeXmlBuilderService compara esse valor com o do endereço do pedido via
+// "===" pra decidir CFOP/idDest — mesmo bug e mesmo fix do checkout (ver
+// Checkout/Delivery.vue e Address::setStateAttribute/Company::
+// setStateAttribute, defesa em profundidade no model).
+const onStateInput = (event) => {
+    form.state = event.target.value.toUpperCase().slice(0, 2);
+};
+
 const submit = () => {
     // PHP só faz parse de corpo multipart/form-data (upload de arquivo) em
     // requisições POST de verdade — um PUT real com multipart chega vazio
@@ -227,7 +238,7 @@ const submit = () => {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-600">UF</label>
-                    <input v-model="form.state" type="text" maxlength="2" class="mt-1 w-full rounded border border-slate-300 px-3 py-2 uppercase">
+                    <input :value="form.state" type="text" maxlength="2" class="mt-1 w-full rounded border border-slate-300 px-3 py-2 uppercase" @input="onStateInput">
                 </div>
             </div>
 

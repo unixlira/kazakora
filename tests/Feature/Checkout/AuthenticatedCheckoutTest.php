@@ -72,4 +72,53 @@ class AuthenticatedCheckoutTest extends TestCase
 
         $this->assertDatabaseCount('addresses', 1);
     }
+
+    /**
+     * BUG REAL 2026-08-13: o campo UF do formulário só ficava maiúsculo NA
+     * TELA (CSS puro) — o valor de verdade enviado era o que o usuário
+     * digitou. "sp" minúsculo fazia NFeXmlBuilderService comparar errado
+     * contra a UF da empresa (===, sensível a caixa) e tratar uma venda
+     * dentro do estado como interestadual, CFOP errado na nota fiscal.
+     * Cobre também um caminho que não tinha nenhum teste antes: usuário
+     * autenticado cadastrando um endereço NOVO durante o checkout (só
+     * "reaproveitar endereço salvo" era testado).
+     */
+    public function test_new_address_created_during_checkout_normalizes_state_to_uppercase(): void
+    {
+        Mail::fake();
+        $this->mockStripe();
+
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $product = Product::factory()->create(['price' => 100, 'stock' => 10, 'is_active' => true]);
+        $shippingMethod = ShippingMethod::factory()->create(['price' => 10, 'is_active' => true]);
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+
+        $this->actingAs($user)->post('/finalizacao/entrega', [
+            'shipping_method_id' => $shippingMethod->id,
+            'new_address' => [
+                'recipient_name' => $user->name,
+                'phone' => '11999999999',
+                'zip' => '01000-000',
+                'street' => 'Rua Nova',
+                'number' => '20',
+                'neighborhood' => 'Centro',
+                'city' => 'São Paulo',
+                // minúsculo de propósito — é exatamente o que o bug deixava
+                // passar direto pro banco antes da correção.
+                'state' => 'sp',
+            ],
+        ])->assertRedirect(route('finalizacao.pagamento'));
+
+        $this->actingAs($user)->post('/finalizacao/pagamento', [
+            'payment_method' => 'card',
+            'terms_accepted' => true,
+        ]);
+
+        $this->assertDatabaseHas('addresses', ['user_id' => $user->id, 'state' => 'SP']);
+
+        $order = Order::where('user_id', $user->id)->first();
+        $this->assertNotNull($order);
+        $this->assertSame('SP', $order->shipping_state);
+    }
 }

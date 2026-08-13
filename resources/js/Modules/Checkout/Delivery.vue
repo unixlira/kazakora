@@ -119,6 +119,20 @@ const onGuestCpfInput = (event) => {
     form.guest.cpf = maskCpf(event.target.value);
 };
 
+// BUG REAL 2026-08-13: o campo UF só ficava maiúsculo NA TELA por causa da
+// classe Tailwind "uppercase" (puro CSS, text-transform) — v-model gravava
+// exatamente o que foi digitado, então "sp" minúsculo ia pro backend do
+// jeito que foi digitado (só o preenchimento automático via CEP, que já
+// vem maiúsculo do ViaCEP, escapava disso). NFeXmlBuilderService compara
+// esse valor com o do estado da empresa via "===" pra decidir CFOP —
+// virava uma venda dentro do estado sendo tratada como interestadual.
+// Corrigido aqui (mesmo padrão de :value + @input já usado no CEP/CPF
+// acima) e também no model (Address::setStateAttribute, defesa em
+// profundidade pra qualquer caminho de escrita futuro).
+const onStateInput = (event) => {
+    form.new_address.state = event.target.value.toUpperCase().slice(0, 2);
+};
+
 const selectExistingAddress = (address) => {
     form.address_id = address.id;
     useNewAddress.value = false;
@@ -296,7 +310,7 @@ const submit = () => {
                                 </div>
                                 <div>
                                     <label class="text-sm font-medium">UF</label>
-                                    <input v-model="form.new_address.state" type="text" maxlength="2" required class="uppercase" :class="inputClass">
+                                    <input :value="form.new_address.state" type="text" maxlength="2" required class="uppercase" :class="inputClass" @input="onStateInput">
                                     <InputError :message="form.errors['new_address.state']" />
                                 </div>
                             </div>

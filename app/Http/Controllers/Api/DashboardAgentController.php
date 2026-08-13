@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
@@ -393,18 +395,36 @@ class DashboardAgentController extends Controller
      * 2026-08-06: 2 cards em destaque (mais recente + penúltimo) + lista com
      * scroll pro resto, tudo em ordem decrescente. Mesmo conceito da fila
      * já usada em Modules\Admin\Http\Controllers\PrintJobController::index()
-     * (pedido pago, ainda não embalado/enviado — sai da lista assim que sai
-     * de "paid"), mas com um filtro A MAIS que a versão do admin não tem:
-     * só pedidos de HOJE, pedido explícito do usuário pra esse fluxo
-     * específico (a versão web mantém todos os pendentes, sem esse corte).
+     * (pedido pago, ainda não embalado/enviado), mas com 2 filtros A MAIS
+     * que a versão do admin não tem: só pedidos de HOJE (pedido explícito do
+     * usuário pra esse fluxo específico, a versão web mantém todos os
+     * pendentes sem esse corte) e whereNull('packed_at') — sai da lista
+     * assim que o operador aperta "Em preparação" no card (ver
+     * packOrder() abaixo), não só quando o canal confirma o envio. Antes
+     * dependia só de status != paid (embalagem == pedido já saiu, uma
+     * suposição que nunca teve um botão de verdade por trás).
+     *
+     * created_at aqui é a data REAL da venda no canal (placed_at, ver
+     * OrderImportService::createOrder()), não a hora que o webhook chegou
+     * no nosso servidor — normalizada pro timezone do app em cada driver
+     * (MercadoLivreDriver/AmazonDriver/ShopeeDriver) antes de virar
+     * created_at, senão o corte "só hoje" abaixo (que compara contra
+     * now(), sempre no timezone do app) fica errado perto da virada do
+     * dia sempre que o canal manda a data num timezone diferente do nosso
+     * (achado real 2026-08-13: Carbon::createFromTimestamp() do
+     * ShopeeDriver ficava em UTC, 3h à frente de São Paulo — pedido feito
+     * ontem à noite virava "hoje de madrugada" no banco e vazava pra fila
+     * de hoje mesmo sem ser de hoje de verdade).
      */
     public function queue(): JsonResponse
     {
         $today = now()->startOfDay();
+        $tomorrow = $today->clone()->addDay();
 
         $orders = Order::query()
             ->where('status', Order::STATUS_PAID)
-            ->where('created_at', '>=', $today)
+            ->whereNull('packed_at')
+            ->whereBetween('created_at', [$today, $tomorrow])
             ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
             ->withSum('items as units_count', 'quantity')
             // orderByDesc('id') em vez de latest()/created_at: dois pedidos
@@ -433,6 +453,36 @@ class DashboardAgentController extends Controller
         ]);
 
         return response()->json(['queue' => $result]);
+    }
+
+    /**
+     * Botão "Em preparação" -> "Embalado" do card, no KoraSync — marca o
+     * pedido como embalado (packed_at) sem tocar em orders.status, que
+     * continua sendo só a visão do canal sobre o pedido (ver comentário da
+     * migration 2026_08_13_150000). Idempotente de propósito: reenviar o
+     * clique (ex.: duplo clique acidental, ou um retry de rede depois de um
+     * timeout que já tinha ido pro servidor) não deve estourar erro, só
+     * confirmar o estado já embalado — o operador só precisa saber que o
+     * pedido saiu da fila.
+     */
+    public function packOrder(Order $order): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID) {
+            return response()->json(['message' => 'Pedido não está pago — nada pra embalar.'], 409);
+        }
+
+        if ($order->packed_at === null) {
+            $order->forceFill(['packed_at' => now()])->save();
+
+            app(OrderFulfillmentTimeline::class)->record(
+                $order,
+                OrderFulfillmentEvent::STEP_ORDER_PACKED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                'Pedido marcado como embalado no KoraSync',
+            );
+        }
+
+        return response()->json(['packed_at' => $order->packed_at]);
     }
 
     /**

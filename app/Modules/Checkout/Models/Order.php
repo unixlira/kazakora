@@ -65,6 +65,7 @@ class Order extends Model
         'buyer_document',
         'disputed_at',
         'stock_restored_at',
+        'packed_at',
         'shipping_method_id',
         'shipping_carrier_name',
         'shipping_name',
@@ -94,6 +95,7 @@ class Order extends Model
             'total' => 'decimal:2',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',
+            'packed_at' => 'datetime',
         ];
     }
 

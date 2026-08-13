@@ -475,8 +475,21 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             // da venda na Shopee (unix timestamp, campo base do
             // get_order_detail), usado como created_at real do pedido em vez
             // de now() no backfill.
+            //
+            // Segundo argumento (timezone) NÃO é opcional na prática: achado
+            // real 2026-08-13, Carbon::createFromTimestamp() (Carbon 3, ver
+            // Traits\Timestamp) só converte pro timezone padrão do PHP
+            // quando você passa um — sem ele, o objeto fica em UTC e é
+            // gravado assim (Eloquent formata na timezone que o Carbon já
+            // tem, nunca converte sozinho), 3h à FRENTE da hora real de São
+            // Paulo. Resultado ao vivo: pedido feito ontem à noite virava
+            // "hoje de madrugada" no banco e vazava pra fila "só hoje" do
+            // KoraSync (DashboardAgentController::queue()) — provavelmente a
+            // origem real dos pedidos de outro dia aparecendo na fila,
+            // já que Shopee é canal ativo (ao contrário do Amazon, ainda em
+            // sandbox).
             'placed_at' => isset($order['create_time'])
-                ? \Illuminate\Support\Carbon::createFromTimestamp((int) $order['create_time'])
+                ? \Illuminate\Support\Carbon::createFromTimestamp((int) $order['create_time'], config('app.timezone'))
                 : null,
             'items' => $items,
             ...($marketplaceFee !== null ? ['marketplace_fee' => $marketplaceFee] : []),

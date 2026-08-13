@@ -202,7 +202,21 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // 2026-08-06: pedidos de meses atrás sendo importados hoje
             // ficavam marcados como "vendidos hoje", inflando os cards de
             // faturamento do dia/mês).
-            'placed_at' => \Illuminate\Support\Carbon::parse($order->date_created),
+            //
+            // ->setTimezone(): date_created vem com offset fixo da própria
+            // API do ML (ex.: "...-04:00"), não o nosso app.timezone
+            // (America/Sao_Paulo, -03:00). Carbon::parse() de uma string com
+            // offset explícito MANTÉM esse offset no objeto — não converte
+            // pro timezone padrão do PHP. Sem normalizar aqui, o forceFill em
+            // OrderImportService grava os dígitos de -04:00 direto no banco
+            // como se já fossem hora de São Paulo (Eloquent formata a data
+            // no timezone que o objeto Carbon já tem, nunca converte
+            // sozinho) — created_at fica 1h ATRASADO em relação à hora real
+            // de SP. Achado real 2026-08-13: pedido feito de madrugada
+            // (00h-01h de SP) ficava gravado ainda no dia anterior, e por
+            // tabela sumia da fila "só hoje" do KoraSync
+            // (DashboardAgentController::queue()) em vez de aparecer nela.
+            'placed_at' => \Illuminate\Support\Carbon::parse($order->date_created)->setTimezone(config('app.timezone')),
             'items' => $items,
         ];
     }

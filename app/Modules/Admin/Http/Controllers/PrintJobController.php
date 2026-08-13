@@ -80,10 +80,15 @@ class PrintJobController extends Controller
             ->pluck('total', 'origin');
 
         // Fila de expedição: pedido pago que ainda não foi enviado — assim
-        // que sai de "paid" (enviado/cancelado), some da tela, porque já
-        // foi embalado (ou não vai mais ser). Ordem decrescente = mais
-        // recente primeiro, igual pedido do usuário. orderByDesc('id') em
-        // vez de latest()/created_at: dois pedidos pagos no mesmo segundo
+        // que sai de "paid" (enviado/cancelado) OU é marcado como embalado
+        // pelo botão "Em preparação" do KoraSync (packed_at, pedido
+        // explícito 2026-08-13 — ver DashboardAgentController::packOrder()),
+        // some da tela. whereNull('packed_at') aqui de propósito: as duas
+        // telas (esta e o app nativo) leem a mesma fila, um pedido embalado
+        // no KoraSync não pode continuar aparecendo aqui como se ainda
+        // precisasse ser separado. Ordem decrescente = mais recente
+        // primeiro, igual pedido do usuário. orderByDesc('id') em vez de
+        // latest()/created_at: dois pedidos pagos no mesmo segundo
         // (granularidade do datetime do MySQL) empatam em created_at e
         // ORDER BY created_at DESC sozinho não garante desempate — bug real
         // encontrado 2026-08-06 escrevendo o endpoint equivalente do
@@ -92,6 +97,7 @@ class PrintJobController extends Controller
         // ordem cronológica exata, sem empate possível.
         $queue = Order::query()
             ->where('status', Order::STATUS_PAID)
+            ->whereNull('packed_at')
             ->with('items:id,order_id,product_name,quantity')
             ->withSum('items as units_count', 'quantity')
             ->orderByDesc('id')

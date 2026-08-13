@@ -146,7 +146,19 @@ class AmazonDriver extends AbstractMarketplaceDriver
             'shipping_city' => $address['city'] ?? 'Não informado',
             'shipping_state' => $address['state'] ?? 'NA',
             'external_shipment_id' => null,
-            'placed_at' => isset($order['PurchaseDate']) ? \Illuminate\Support\Carbon::parse($order['PurchaseDate']) : null,
+            // ->setTimezone(): PurchaseDate vem sempre em UTC ("...Z", SP-API
+            // nunca manda outro offset) — 3h à FRENTE de São Paulo
+            // (-03:00). Carbon::parse() de uma string com "Z" fixa o objeto
+            // em UTC e não converte sozinho pro timezone padrão do PHP; sem
+            // ->setTimezone() aqui, OrderImportService::createOrder()
+            // grava os dígitos de UTC direto como se já fossem hora de SP
+            // (Eloquent formata no timezone que o Carbon já tem) —
+            // created_at fica 3h ADIANTADO da hora real de SP. Mesma classe
+            // de bug do MercadoLivreDriver (ver comentário lá), só que na
+            // direção oposta: aqui um pedido feito ontem à noite (hora de
+            // SP) pode virar "hoje de madrugada" no banco e vazar pra fila
+            // "só hoje" do KoraSync (DashboardAgentController::queue()).
+            'placed_at' => isset($order['PurchaseDate']) ? \Illuminate\Support\Carbon::parse($order['PurchaseDate'])->setTimezone(config('app.timezone')) : null,
             'items' => $items,
         ];
     }

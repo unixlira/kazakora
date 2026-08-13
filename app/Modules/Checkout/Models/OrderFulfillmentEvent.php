@@ -21,6 +21,10 @@ class OrderFulfillmentEvent extends Model
 
     public const STEP_LABEL_PRINTED = 'label_printed';
 
+    // Pedido explícito 2026-08-13: botão "Em preparação" -> "Embalado" no
+    // KoraSync (ver Order::packed_at / DashboardAgentController::packOrder).
+    public const STEP_ORDER_PACKED = 'order_packed';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_SUCCESS = 'success';

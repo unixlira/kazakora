@@ -249,4 +249,67 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertSame($older->id, $queue[1]['id']);
         $this->assertSame(1, $queue[1]['units_count']);
     }
+
+    public function test_queue_excludes_orders_already_marked_as_packed(): void
+    {
+        $pending = $this->makeOrder(['external_order_id' => 'PENDING-1']);
+        $packed = $this->makeOrder(['external_order_id' => 'PACKED-1']);
+        $packed->forceFill(['packed_at' => now()])->save();
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = $response->json('queue');
+
+        $this->assertCount(1, $queue);
+        $this->assertSame($pending->id, $queue[0]['id']);
+    }
+
+    public function test_pack_order_marks_it_packed_and_removes_it_from_the_queue(): void
+    {
+        $order = $this->makeOrder(['external_order_id' => 'ML-1']);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack");
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('packed_at'));
+
+        $order->refresh();
+        $this->assertNotNull($order->packed_at);
+        // status é a visão do canal sobre o pedido (paid/shipped/...) —
+        // embalar não mexe nela, ver comentário da migration.
+        $this->assertSame(Order::STATUS_PAID, $order->status);
+
+        $queue = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/queue')
+            ->json('queue');
+
+        $this->assertCount(0, $queue);
+    }
+
+    public function test_pack_order_is_idempotent_on_a_second_call(): void
+    {
+        $order = $this->makeOrder();
+
+        $this->withHeaders($this->authHeaders())->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack")->assertOk();
+        $firstPackedAt = $order->refresh()->packed_at;
+
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack")
+            ->assertOk();
+
+        $this->assertTrue($firstPackedAt->equalTo($order->refresh()->packed_at));
+    }
+
+    public function test_pack_order_rejects_an_order_that_is_not_paid(): void
+    {
+        $order = $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT]);
+
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack")
+            ->assertStatus(409);
+
+        $this->assertNull($order->refresh()->packed_at);
+    }
 }

@@ -395,14 +395,19 @@ class DashboardAgentController extends Controller
      * 2026-08-06: 2 cards em destaque (mais recente + penúltimo) + lista com
      * scroll pro resto, tudo em ordem decrescente. Mesmo conceito da fila
      * já usada em Modules\Admin\Http\Controllers\PrintJobController::index()
-     * (pedido pago, ainda não embalado/enviado), mas com 2 filtros A MAIS
-     * que a versão do admin não tem: só pedidos de HOJE (pedido explícito do
+     * (pedido pago, ainda não embalado/enviado), com 1 filtro A MAIS que a
+     * versão do admin não tem: só pedidos de HOJE (pedido explícito do
      * usuário pra esse fluxo específico, a versão web mantém todos os
-     * pendentes sem esse corte) e whereNull('packed_at') — sai da lista
-     * assim que o operador aperta "Em preparação" no card (ver
-     * packOrder() abaixo), não só quando o canal confirma o envio. Antes
-     * dependia só de status != paid (embalagem == pedido já saiu, uma
-     * suposição que nunca teve um botão de verdade por trás).
+     * pendentes sem esse corte).
+     *
+     * packed_at (pedido explícito 2026-08-13, revisado no mesmo dia): NÃO
+     * tira o pedido da lista — só o card muda de cor/texto pra "Embalado"
+     * (ver OrderQueueCardViewModel no KoraSync). Primeira versão desse botão
+     * escondia o pedido assim que embalava (whereNull('packed_at') aqui),
+     * mas o usuário quer continuar vendo a lista inteira do dia como
+     * conferência visual, não perder o pedido de vista assim que aperta o
+     * botão — packed_at agora só viaja no payload (campo abaixo) pro app
+     * decidir a cor, nunca filtra a query.
      *
      * created_at aqui é a data REAL da venda no canal (placed_at, ver
      * OrderImportService::createOrder()), não a hora que o webhook chegou
@@ -423,7 +428,6 @@ class DashboardAgentController extends Controller
 
         $orders = Order::query()
             ->where('status', Order::STATUS_PAID)
-            ->whereNull('packed_at')
             ->whereBetween('created_at', [$today, $tomorrow])
             ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
             ->withSum('items as units_count', 'quantity')
@@ -444,6 +448,7 @@ class DashboardAgentController extends Controller
             'channel' => $order->origin,
             'customer_name' => $order->shipping_name,
             'units_count' => (int) $order->units_count,
+            'packed_at' => $order->packed_at,
             'products' => $order->items->map(fn ($item) => [
                 'name' => $item->product_name,
                 'quantity' => $item->quantity,

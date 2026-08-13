@@ -250,8 +250,11 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertSame(1, $queue[1]['units_count']);
     }
 
-    public function test_queue_excludes_orders_already_marked_as_packed(): void
+    public function test_queue_still_includes_packed_orders_flagged_via_packed_at(): void
     {
+        // Pedido explícito 2026-08-13: embalar NÃO tira o pedido da lista —
+        // o app só troca a cor/texto do botão pra "Embalado" usando este
+        // campo, a query continua trazendo todo pedido pago de hoje.
         $pending = $this->makeOrder(['external_order_id' => 'PENDING-1']);
         $packed = $this->makeOrder(['external_order_id' => 'PACKED-1']);
         $packed->forceFill(['packed_at' => now()])->save();
@@ -259,13 +262,14 @@ class DashboardAgentControllerTest extends TestCase
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
 
         $response->assertOk();
-        $queue = $response->json('queue');
+        $queue = collect($response->json('queue'))->keyBy('id');
 
-        $this->assertCount(1, $queue);
-        $this->assertSame($pending->id, $queue[0]['id']);
+        $this->assertCount(2, $queue);
+        $this->assertNull($queue[$pending->id]['packed_at']);
+        $this->assertNotNull($queue[$packed->id]['packed_at']);
     }
 
-    public function test_pack_order_marks_it_packed_and_removes_it_from_the_queue(): void
+    public function test_pack_order_marks_it_packed_without_removing_it_from_the_queue(): void
     {
         $order = $this->makeOrder(['external_order_id' => 'ML-1']);
 
@@ -285,7 +289,9 @@ class DashboardAgentControllerTest extends TestCase
             ->getJson('/api/print-agent/dashboard/queue')
             ->json('queue');
 
-        $this->assertCount(0, $queue);
+        $this->assertCount(1, $queue);
+        $this->assertSame($order->id, $queue[0]['id']);
+        $this->assertNotNull($queue[0]['packed_at']);
     }
 
     public function test_pack_order_is_idempotent_on_a_second_call(): void

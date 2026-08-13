@@ -110,9 +110,21 @@ const updateStatus = () => {
 const canIssue = () => !props.order.invoice || props.order.invoice.status !== 'authorized';
 const canCancel = () => props.order.invoice?.status === 'authorized';
 
+// Só faz sentido reenviar uma nota já autorizada, e só pra pedido de
+// marketplace de verdade — "loja" (venda direto no site) e
+// "nota_fiscal_avulsa" (emissão manual sem canal, ver InvoiceManualController)
+// não têm nenhum canal esperando a nota do outro lado.
+const canResubmitToChannel = () =>
+    props.order.invoice?.status === 'authorized' && !['loja', 'nota_fiscal_avulsa'].includes(props.order.origin);
+
 const issueForm = useForm({});
 const issueInvoice = () => {
     issueForm.post(`/admin/pedidos/${props.order.id}/nota/emitir`);
+};
+
+const resubmitForm = useForm({});
+const resubmitToChannel = () => {
+    resubmitForm.post(`/admin/pedidos/${props.order.id}/nota/reenviar-canal`);
 };
 
 const showCancelForm = ref(false);
@@ -220,6 +232,17 @@ const cancelInvoice = () => {
                                 @click="showCancelForm = true"
                             >
                                 Cancelar nota
+                            </button>
+                            <button
+                                v-if="canResubmitToChannel()"
+                                type="button"
+                                :disabled="resubmitForm.processing"
+                                title="A nota já é enviada automaticamente assim que sai — use isso só se o canal (Shopee/ML) travou esperando ela, ex.: envio automático falhou ou a nota foi reemitida depois"
+                                class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="resubmitToChannel"
+                            >
+                                <i class="fas fa-rotate" :class="{ 'animate-spin': resubmitForm.processing }"></i>
+                                Reenviar nota pro canal
                             </button>
                         </div>
 

@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Marketplace\Support\ChannelInvoiceSubmissionService;
 use App\Services\NFe\NFeCertificateNotConfiguredException;
 use App\Services\NFe\NFeDistribuicaoService;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
+use Throwable;
 
 class InvoiceController extends Controller
 {
@@ -97,6 +99,39 @@ class InvoiceController extends Controller
             'Content-Type' => 'application/xml',
             'Content-Disposition' => "attachment; filename=\"nfe-pedido-{$order->id}.xml\"",
         ]);
+    }
+
+    /**
+     * Botão "Reenviar nota pro canal" (Admin/Orders/Show) — pedido explícito
+     * 2026-08-13: um pedido Shopee travado levou o usuário a emitir a nota
+     * manualmente por aqui, e não existia um jeito de reempurrar o ENVIO da
+     * nota já autorizada pro canal na hora — só o automático
+     * (SubmitInvoiceToChannelJob), que tem backoff de até ~3h e meia (ver
+     * comentário lá) antes de desistir e avisar os admins. Reaproveita o
+     * MESMO serviço que o job usa (ChannelInvoiceSubmissionService::submit(),
+     * já idempotente: se o canal já aceitou, não refaz nada) — só chama
+     * síncrono aqui, pro admin ver o resultado na hora em vez de esperar um
+     * retry automático.
+     */
+    public function resubmitToChannel(Order $order, ChannelInvoiceSubmissionService $service): RedirectResponse
+    {
+        $order->loadMissing('invoice');
+
+        if (! $order->invoice || $order->invoice->status !== Invoice::STATUS_AUTHORIZED) {
+            return back()->with('error', 'Só é possível reenviar ao canal uma nota fiscal já autorizada.');
+        }
+
+        if (in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE], true)) {
+            return back()->with('error', 'Este pedido não é de um canal de marketplace — não há canal pra reenviar a nota.');
+        }
+
+        try {
+            $service->submit($order);
+
+            return back()->with('success', 'Nota fiscal reenviada ao canal com sucesso.');
+        } catch (Throwable $exception) {
+            return back()->with('error', "O canal recusou o reenvio da nota: {$exception->getMessage()}");
+        }
     }
 
     public function cancel(Request $request, Order $order, InvoiceService $invoices): RedirectResponse

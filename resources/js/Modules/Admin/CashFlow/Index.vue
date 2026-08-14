@@ -112,6 +112,25 @@ const saveFee = (orderId, rawValue) => {
     });
 };
 
+// Pago ao fornecedor editável direto na tabela — mesmo pedido explícito
+// 2026-08-14. O valor digitado é o custo total daquela linha (já
+// ×quantidade); o backend grava de volta como custo unitário no produto
+// (updateItemCost), então passa a valer pra qualquer venda futura dele
+// também — igual a editar o custo em /admin/produtos.
+const savingCostItemId = ref(null);
+
+const saveCost = (itemId, rawValue) => {
+    const productCost = parseFloat(String(rawValue).replace(',', '.'));
+    if (Number.isNaN(productCost) || productCost < 0) return;
+
+    savingCostItemId.value = itemId;
+    router.put(`/admin/fluxo-de-caixa/vendas/item/${itemId}/custo`, { product_cost: productCost }, {
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => { savingCostItemId.value = null; },
+    });
+};
+
 const destroy = async (entry) => {
     if (await confirmDelete({ title: `Remover o lançamento "${entry.description}"?` })) {
         router.delete(`/admin/fluxo-de-caixa/${entry.id}`);
@@ -155,7 +174,28 @@ const salesColumns = [
         ]),
     },
     { accessorKey: 'platform', header: 'Plataforma' },
-    { accessorKey: 'product_cost', header: 'Pago ao fornecedor', cell: ({ row }) => h('span', { class: 'text-slate-500' }, formatPrice(row.original.product_cost)) },
+    {
+        accessorKey: 'product_cost',
+        header: 'Pago ao fornecedor',
+        cell: ({ row }) => (row.original.cost_editable
+            ? h('input', {
+                type: 'number',
+                step: '0.01',
+                min: '0',
+                class: `w-24 rounded-lg border px-2 py-1 text-sm ${row.original.has_cost ? 'border-[var(--surface-border)] text-slate-500' : 'border-amber-400 text-amber-500'}`,
+                value: row.original.product_cost,
+                disabled: savingCostItemId.value === row.original.item_id,
+                title: row.original.has_cost ? 'Custo cadastrado — edite e aperte Enter pra corrigir' : 'Produto sem custo cadastrado — digite o valor e aperte Enter',
+                onKeydown: (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.target.blur();
+                        saveCost(row.original.item_id, event.target.value);
+                    }
+                },
+            })
+            : h('span', { class: 'text-slate-500', title: 'Item sem produto cadastrado — custo não pode ser editado aqui' }, formatPrice(row.original.product_cost))),
+    },
     {
         accessorKey: 'platform_fee',
         header: 'Comissão da plataforma',

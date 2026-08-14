@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Cadastros\Models\CostCenter;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
@@ -129,9 +130,14 @@ class CashFlowController extends Controller
                     return [
                         'date' => $order->created_at->toDateString(),
                         'order_id' => $order->id,
+                        'item_id' => $item->id,
                         'product_name' => $item->product_name,
                         'product_cost' => $productCost,
                         'has_cost' => $item->product?->cost_price !== null,
+                        // Sem produto local mapeado (item de nota fiscal
+                        // manual, ex.) não tem onde gravar custo — front
+                        // desabilita a edição nesse caso.
+                        'cost_editable' => $item->product_id !== null,
                         'platform_fee' => $itemFee,
                         'has_fee_data' => $hasFeeData,
                         'platform' => self::CHANNEL_LABELS[$order->origin] ?? ucfirst(str_replace('_', ' ', $order->origin)),
@@ -170,6 +176,33 @@ class CashFlowController extends Controller
         );
 
         return back()->with('success', 'Comissão atualizada.');
+    }
+
+    /**
+     * Custo do fornecedor editado à mão na tabela de "Lucro por Venda" —
+     * mesmo pedido explícito 2026-08-14 da comissão editável, agora pro
+     * "Pago ao fornecedor". O valor digitado é o custo TOTAL daquela
+     * linha (já ×quantidade, é o que aparece na tela) — grava de volta
+     * como cost_price UNITÁRIO no produto (÷quantidade), porque custo é
+     * atributo do produto, não do pedido: passa a valer pra essa venda e
+     * pra qualquer venda futura do mesmo produto, igual a cadastrar o
+     * custo em /admin/produtos.
+     */
+    public function updateItemCost(Request $request, OrderItem $orderItem): RedirectResponse
+    {
+        $validated = $request->validate([
+            'product_cost' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        if ($orderItem->product === null || $orderItem->quantity < 1) {
+            return back()->with('error', 'Esse item não tem produto cadastrado pra gravar o custo.');
+        }
+
+        $orderItem->product->update([
+            'cost_price' => round($validated['product_cost'] / $orderItem->quantity, 2),
+        ]);
+
+        return back()->with('success', 'Custo do fornecedor atualizado.');
     }
 
     public function store(Request $request): RedirectResponse

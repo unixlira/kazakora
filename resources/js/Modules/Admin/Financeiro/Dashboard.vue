@@ -179,6 +179,16 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 <span class="text-slate-500 dark:text-slate-400">(–) Custo de Produto</span>
                 <span class="font-semibold text-error">{{ formatPrice(netProfit.productCostMonth) }}</span>
             </div>
+            <!-- Pedido explícito 2026-08-14: taxa do marketplace (comissão
+                 real Shopee/ML) passou a entrar na conta — antes ficava só
+                 informativa (nota de rodapé, "não entra nessa conta") por
+                 um pedido de 2026-08-10, mas o usuário reconsiderou: é um
+                 custo real (~12-20% da receita), não faz sentido de fora.
+                 Agora é uma linha normal do extrato, igual as outras. -->
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">(–) Taxa de Marketplace (Shopee/ML)</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.marketplaceFeeMonth) }}</span>
+            </div>
             <div class="flex items-center justify-between py-1.5 text-sm">
                 <span class="text-slate-500 dark:text-slate-400">(–) Custo Flex (Mercado Livre)</span>
                 <span class="font-semibold text-error">{{ formatPrice(netProfit.flexCostMonth) }}</span>
@@ -188,10 +198,7 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }}</span>
             </div>
 
-            <p class="mt-3 border-t border-dashed border-[var(--surface-border)] pt-3 text-xs text-slate-400">
-                Taxa de marketplace do mês (informativo — não entra nessa conta): {{ formatPrice(netProfit.marketplaceFeeMonth) }}
-            </p>
-            <Link href="/admin/integracoes/mercado-livre/flex" class="mt-2 block text-xs text-primary hover:underline">
+            <Link href="/admin/integracoes/mercado-livre/flex" class="mt-3 block border-t border-dashed border-[var(--surface-border)] pt-3 text-xs text-primary hover:underline">
                 Ver detalhes do custo Flex →
             </Link>
         </div>

@@ -38,14 +38,17 @@ class FinancialDashboardController extends Controller
         $incomeMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_INCOME)->where('entry_date', '>=', $startOfMonth)->sum('amount');
         $expenseMonth = (float) CashFlowEntry::query()->where('type', CashFlowEntry::TYPE_EXPENSE)->where('entry_date', '>=', $startOfMonth)->sum('amount');
 
-        // Pedido explícito 2026-08-09/10: lucro líquido de vendas de verdade
-        // (receita − custo de produto − anúncio) — é o valor usado tanto no
-        // card "Lucro no Mês" do resumo quanto no detalhamento "Lucro
-        // Líquido de Vendas" abaixo, mesma conta. Taxa de marketplace
-        // continua calculada e mostrada à parte (informativo), mas NÃO
-        // entra na conta do lucro líquido — pedido explícito do usuário
-        // 2026-08-10: "o lucro liquido é realmente só o que sobra do
-        // desconto do material, do ads".
+        // Pedido explícito 2026-08-09/10/14: lucro líquido de vendas de
+        // verdade (receita − custo de produto − taxa de marketplace −
+        // anúncio − Flex) — é o valor usado tanto no card "Lucro no Mês"
+        // do resumo quanto no detalhamento "Lucro Líquido de Vendas"
+        // abaixo, mesma conta. Taxa de marketplace ficou de fora dessa
+        // conta entre 2026-08-10 e 2026-08-14 (pedido explícito da época:
+        // "o lucro liquido é realmente só o que sobra do desconto do
+        // material, do ads") — reconsiderado em 2026-08-14 (achado real
+        // auditando o dashboard: 57 pedidos Shopee sem taxa nenhuma
+        // registrada inflavam o número mostrado) e voltou a entrar, é um
+        // custo real (~12-20% da receita).
         // round() em cada soma: SUM de coluna decimal via PDO/SQLite pode
         // voltar com erro de ponto flutuante binário (ex.: 10.20 + 5.10 =
         // 15.299999999999999) — arredonda na fonte pra nunca vazar isso
@@ -63,16 +66,33 @@ class FinancialDashboardController extends Controller
             ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as total')
             ->value('total'), 2);
 
+        // BUG REAL 2026-08-14: filtrava por computed_at (quando a taxa foi
+        // CALCULADA/gravada no nosso banco) em vez da data do PEDIDO — os
+        // dois só coincidem por acaso quando a taxa é gravada na hora
+        // (fluxo normal). Um backfill retroativo (ver
+        // BackfillShopeeOrderFeesCommand, criado no mesmo dia pra fechar a
+        // lacuna de 57 pedidos Shopee de antes de 2026-08-09 sem taxa
+        // nenhuma) grava computed_at=agora pra pedidos de dias/semanas
+        // atrás — com o filtro antigo, toda essa taxa recém-preenchida
+        // "pularia" pro mês em que o backfill rodou, nunca pro mês real da
+        // venda. Junta com orders e filtra pela data do pedido, igual
+        // productCostMonth/salesRevenueMonth logo acima.
         $marketplaceFeeMonth = round((float) OrderChannelFee::query()
-            ->where('computed_at', '>=', $startOfMonth)
-            ->sum('fee_amount'), 2);
+            ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+            ->where('orders.created_at', '>=', $startOfMonth)
+            ->sum('order_channel_fees.fee_amount'), 2);
 
         $adSpendMonth = round((float) ChannelAdSpend::query()->where('date', '>=', $startOfMonth)->sum('spend'), 2);
 
         $productsWithCost = Product::query()->where('is_active', true)->whereNotNull('cost_price')->count();
         $productsActive = Product::query()->where('is_active', true)->count();
 
-        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $adSpendMonth - $flexCostMonth, 2);
+        // Pedido explícito 2026-08-14: taxa do marketplace (comissão real
+        // Shopee/ML) agora entra na conta do lucro líquido — antes ficava
+        // só "informativa" (pedido de 2026-08-10 pra excluir), mas é um
+        // custo real (~12-20% da receita) e o usuário confirmou que
+        // precisa estar aqui pro número refletir o dinheiro de verdade.
+        $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth - $flexCostMonth, 2);
 
         // Pedido explícito 2026-08-10: "faturamento liquido é o valor bruto
         // menos ads" — métrica distinta de lucro líquido (que também abate
@@ -93,9 +113,11 @@ class FinancialDashboardController extends Controller
             ->selectRaw('COALESCE(SUM(order_items.quantity * products.cost_price), 0) as total')
             ->value('total'), 2);
 
+        $marketplaceFeeAllTime = round((float) OrderChannelFee::query()->sum('fee_amount'), 2);
+
         $adSpendAllTime = round((float) ChannelAdSpend::query()->sum('spend'), 2);
 
-        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $adSpendAllTime - $flexCostAllTime, 2);
+        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime, 2);
 
         // Valor de estoque — pedido explícito 2026-08-10: soma de todos os
         // produtos pelo valor pago (cost_price) vezes a quantidade em

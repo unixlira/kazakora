@@ -502,8 +502,17 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * promoções são componentes separados, não entram aqui). Retorna null
      * (nunca 0.0) quando o escrow ainda não fechou ou a chamada falha —
      * distinção importante pro chamador saber "sem dado" de "taxa zero".
+     *
+     * Público (era privado) desde 2026-08-14 — pedido explícito do
+     * usuário auditando o dashboard financeiro: achado real que 57
+     * pedidos Shopee (integração de taxa real só entrou em 2026-08-09,
+     * ver OrderImportService) nunca tiveram taxa gravada, inflando o
+     * lucro líquido mostrado. O escrow continua disponível pra pedido
+     * antigo já liquidado (confirmado ao vivo) — reaproveitado por
+     * BackfillShopeeOrderFeesCommand pra buscar a taxa real retroativa em
+     * vez de estimar.
      */
-    private function resolveMarketplaceFee(string $orderSn): ?float
+    public function resolveMarketplaceFee(string $orderSn): ?float
     {
         try {
             $response = $this->client->get('/api/v2/payment/get_escrow_detail', ['order_sn' => $orderSn]);

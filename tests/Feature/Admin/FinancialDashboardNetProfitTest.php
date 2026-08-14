@@ -11,11 +11,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Pedido explícito 2026-08-09/10: lucro líquido de vendas = receita − custo
- * de produto − gasto com anúncio. Taxa de marketplace é calculada e exposta
- * à parte (informativo), mas não entra nessa conta — pedido explícito do
- * usuário 2026-08-10: "o lucro liquido é realmente só o que sobra do
- * desconto do material, do ads".
+ * Pedido explícito 2026-08-09/10/14: lucro líquido de vendas = receita −
+ * custo de produto − taxa de marketplace − gasto com anúncio − custo Flex.
+ * A taxa de marketplace ficou de fora da conta entre 2026-08-10 e
+ * 2026-08-14 (pedido explícito da época: "o lucro liquido é realmente só o
+ * que sobra do desconto do material, do ads") — reconsiderado em
+ * 2026-08-14 (achado real auditando o dashboard: 57 pedidos Shopee sem
+ * taxa nenhuma registrada inflavam o número) e voltou a entrar, porque é
+ * um custo real (~12-20% da receita).
  *
  * Valores de teste usam centavos fracionários de propósito (nunca um total
  * "redondo" tipo 100.0) — Inertia serializa um PHP float sem casas
@@ -80,20 +83,20 @@ class FinancialDashboardNetProfitTest extends TestCase
         $response->assertInertia(fn ($page) => $page
             ->where('netProfit.salesRevenueMonth', 120.75)
             ->where('netProfit.productCostMonth', 80.5)
-            // Taxa de marketplace continua calculada/exposta (informativo),
-            // mas não entra mais na conta do lucro líquido.
+            // Pedido explícito 2026-08-14: taxa de marketplace agora entra
+            // na conta do lucro líquido.
             ->where('netProfit.marketplaceFeeMonth', 15.3)
             ->where('netProfit.adSpendMonth', 15.3)
-            ->where('netProfit.netProfitMonth', 24.95) // 120.75 - 80.50 - 15.30 (sem taxa)
+            ->where('netProfit.netProfitMonth', 9.65) // 120.75 - 80.50 - 15.30 (taxa) - 15.30 (ads)
             // Pedido explícito 2026-08-09: "lucro no mês sendo só o
             // líquido" — o card de resumo usa o mesmo valor calculado
             // aqui, não mais o saldo de fluxo de caixa manual.
-            ->where('summary.profitMonth', 24.95)
+            ->where('summary.profitMonth', 9.65)
             // Cards invertidos (pedido explícito 2026-08-09): bruto/líquido
             // desde o primeiro dia — só há esse 1 pedido no teste, então
             // "desde o início" bate com "no mês".
             ->where('summary.grossRevenueAllTime', 120.75)
-            ->where('summary.netProfitAllTime', 24.95)
+            ->where('summary.netProfitAllTime', 9.65)
             ->where('summary.grossRevenueMonth', 120.75)
             // Pedido explícito 2026-08-10: faturamento líquido = bruto -
             // ads (sem abater custo do material) — vai no card "Entradas
@@ -104,6 +107,43 @@ class FinancialDashboardNetProfitTest extends TestCase
             // MarketplaceAccount conectada neste teste.
             ->where('walletBalances.mercado_livre', null)
             ->where('walletBalances.shopee', null));
+    }
+
+    /**
+     * BUG REAL 2026-08-14: marketplaceFeeMonth filtrava por computed_at
+     * (quando a taxa foi gravada no nosso banco) em vez da data do
+     * PEDIDO — um backfill retroativo (ver BackfillShopeeOrderFeesCommand)
+     * grava computed_at=agora pra pedido de semanas atrás, e com o filtro
+     * antigo essa taxa "pulava" pro mês do backfill em vez de ficar no mês
+     * real da venda. Aqui simula exatamente isso: pedido de MÊS PASSADO
+     * com taxa gravada (computed_at) HOJE.
+     */
+    public function test_marketplace_fee_is_attributed_to_the_orders_month_not_when_it_was_backfilled(): void
+    {
+        // Valores fracionários de propósito (ver docblock da classe) —
+        // 100.75 - 18.30 = 82.45, nunca um total redondo tipo 100.0/82.0.
+        $lastMonthOrder = $this->makeOrder(['total' => 100.75]);
+        $lastMonthOrder->forceFill(['created_at' => now()->subMonthNoOverflow()])->save();
+
+        OrderChannelFee::create([
+            'order_id' => $lastMonthOrder->id,
+            'channel' => 'shopee',
+            'gross_amount' => 100.75,
+            // Backfill rodando HOJE pra um pedido do mês passado.
+            'fee_amount' => 18.30,
+            'computed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('netProfit.marketplaceFeeMonth', 0)
+            ->where('netProfit.netProfitMonth', 0)
+            // Mas continua contando "desde o início" (sem filtro de data):
+            // 100.75 de receita - 18.30 de taxa, sem custo de
+            // produto/ads/flex nesse pedido.
+            ->where('summary.netProfitAllTime', 82.45));
     }
 
     public function test_stock_value_sums_cost_price_times_stock_across_all_products(): void

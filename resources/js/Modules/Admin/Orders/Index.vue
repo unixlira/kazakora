@@ -28,6 +28,7 @@ const channelBadge = {
     mercado_livre: { color: 'pending', label: 'Mercado Livre' },
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
+    amazon: { color: '#146EB4', label: 'Amazon' },
 };
 
 const filterState = reactive({ origin: props.filters.origin ?? '' });

@@ -42,7 +42,7 @@ const ORIGIN_STYLES = {
     loja: { label: 'Loja', color: '#1B3A5C' },
     mercado_livre: { label: 'Mercado Livre', color: '#2968C8' },
     shopee: { label: 'Shopee', color: '#EE4D2D' },
-    amazon: { label: 'Amazon', color: '#FF9900' },
+    amazon: { label: 'Amazon', color: '#146EB4' },
     tiktok_shop: { label: 'TikTok Shop', color: '#FE2C55' },
     shein: { label: 'Shein', color: '#000000' },
     nota_fiscal_avulsa: { label: 'Emissão manual', color: '#7C3AED' },

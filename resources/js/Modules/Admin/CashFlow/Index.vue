@@ -77,15 +77,40 @@ const applyPreset = (preset) => {
     applySalesRange();
 };
 
+// Filtro por plataforma — pedido explícito 2026-08-14.
+const platformFilter = ref('');
+const availablePlatforms = computed(() => [...new Set(props.sales.map((sale) => sale.platform))].sort());
+const filteredSales = computed(() => (platformFilter.value ? props.sales.filter((sale) => sale.platform === platformFilter.value) : props.sales));
+
 // Totais da listagem de vendas — soma sempre calculada no front, mesmo
 // vazia (0,00), pra nunca deixar a área em branco sem explicação. Pedido
-// explícito 2026-08-14: "se não tiver dado colocar 0,00".
-const salesTotals = computed(() => props.sales.reduce((acc, sale) => {
+// explícito 2026-08-14: "se não tiver dado colocar 0,00". Segue o filtro de
+// plataforma acima, pra bater com o que está na tabela.
+const salesTotals = computed(() => filteredSales.value.reduce((acc, sale) => {
     acc.cost += sale.product_cost;
     acc.fee += sale.platform_fee;
     acc.netProfit += sale.net_profit;
     return acc;
 }, { cost: 0, fee: 0, netProfit: 0 }));
+
+// Comissão editável direto na tabela — pedido explícito 2026-08-14: "editavel
+// na propria tabela o valor de comissao ... clicar no enter ai ele atualiza".
+// Grava (CashFlowController::updateSaleFee) e deixa o Inertia recarregar
+// 'sales' já recalculado no servidor (rateio entre itens do mesmo pedido,
+// has_fee_data, lucro líquido) — não tenta recalcular isso no front.
+const savingFeeOrderId = ref(null);
+
+const saveFee = (orderId, rawValue) => {
+    const feeAmount = parseFloat(String(rawValue).replace(',', '.'));
+    if (Number.isNaN(feeAmount) || feeAmount < 0) return;
+
+    savingFeeOrderId.value = orderId;
+    router.put(`/admin/fluxo-de-caixa/vendas/${orderId}/comissao`, { fee_amount: feeAmount }, {
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => { savingFeeOrderId.value = null; },
+    });
+};
 
 const destroy = async (entry) => {
     if (await confirmDelete({ title: `Remover o lançamento "${entry.description}"?` })) {
@@ -134,9 +159,22 @@ const salesColumns = [
     {
         accessorKey: 'platform_fee',
         header: 'Comissão da plataforma',
-        cell: ({ row }) => (row.original.has_fee_data
-            ? h('span', { class: 'text-slate-500' }, formatPrice(row.original.platform_fee))
-            : h('span', { class: 'text-xs text-amber-500', title: 'A plataforma ainda não informou a taxa real desse pedido — não é que a comissão seja zero, é dado que falta' }, '— sem dado')),
+        cell: ({ row }) => h('input', {
+            type: 'number',
+            step: '0.01',
+            min: '0',
+            class: `w-24 rounded-lg border px-2 py-1 text-sm ${row.original.has_fee_data ? 'border-[var(--surface-border)] text-slate-500' : 'border-amber-400 text-amber-500'}`,
+            value: row.original.platform_fee,
+            disabled: savingFeeOrderId.value === row.original.order_id,
+            title: row.original.has_fee_data ? 'Comissão registrada — edite e aperte Enter pra corrigir' : 'A plataforma ainda não informou a taxa real desse pedido — digite o valor e aperte Enter',
+            onKeydown: (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.target.blur();
+                    saveFee(row.original.order_id, event.target.value);
+                }
+            },
+        }),
     },
     {
         accessorKey: 'net_profit',
@@ -228,6 +266,13 @@ const salesColumns = [
             <button type="button" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis" @click="applySalesRange">
                 Filtrar
             </button>
+            <div>
+                <label class="block text-xs font-medium text-slate-400">Plataforma</label>
+                <select v-model="platformFilter" class="mt-1 rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
+                    <option value="">Todas</option>
+                    <option v-for="platform in availablePlatforms" :key="platform" :value="platform">{{ platform }}</option>
+                </select>
+            </div>
             <div class="ml-auto flex gap-2">
                 <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--surface-muted)]" @click="applyPreset('all')">Tudo</button>
                 <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--surface-muted)]" @click="applyPreset('thisMonth')">Mês atual</button>
@@ -244,7 +289,7 @@ const salesColumns = [
 
         <DataTable
             :columns="salesColumns"
-            :data="props.sales"
+            :data="filteredSales"
             search-placeholder="Buscar produto ou plataforma..."
             empty-message="Nenhuma venda no período."
         />

@@ -307,6 +307,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     });
     Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
     Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');
+    Route::put('fluxo-de-caixa/vendas/{order}/comissao', [CashFlowController::class, 'updateSaleFee'])->name('fluxo-de-caixa.vendas.comissao')->middleware('permission:financeiro.edit');
     Route::delete('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'destroy'])->name('fluxo-de-caixa.excluir')->middleware('permission:financeiro.delete');
     Route::post('anuncios/recargas', [AdsRechargeController::class, 'store'])->name('anuncios.recargas.armazenar')->middleware('permission:financeiro.create');
     Route::delete('anuncios/recargas/{ads_recharge}', [AdsRechargeController::class, 'destroy'])->name('anuncios.recargas.excluir')->middleware('permission:financeiro.delete');

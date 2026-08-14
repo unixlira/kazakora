@@ -7,6 +7,7 @@ use App\Modules\Cadastros\Models\CostCenter;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\OrderChannelFee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -140,6 +141,35 @@ class CashFlowController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Comissão digitada à mão na própria tabela de "Lucro por Venda" —
+     * pedido explícito 2026-08-14, pro caso comum de o canal não ter
+     * devolvido a taxa real (ver has_fee_data em salesBreakdown()). Grava
+     * como OrderChannelFee normal (source=manual) — assim que salvo, a
+     * linha some do estado "sem dado" igual a qualquer taxa vinda da API.
+     * Editar a comissão de um pedido com mais de um produto afeta o
+     * pedido inteiro (a taxa é por pedido, não por item — mesmo rateio
+     * proporcional de salesBreakdown() é reaplicado no próximo carregamento).
+     */
+    public function updateSaleFee(Request $request, Order $order): RedirectResponse
+    {
+        $validated = $request->validate([
+            'fee_amount' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        OrderChannelFee::query()->updateOrCreate(
+            ['order_id' => $order->id, 'channel' => $order->origin],
+            [
+                'gross_amount' => $order->subtotal,
+                'fee_amount' => $validated['fee_amount'],
+                'source' => OrderChannelFee::SOURCE_MANUAL,
+                'computed_at' => now(),
+            ],
+        );
+
+        return back()->with('success', 'Comissão atualizada.');
     }
 
     public function store(Request $request): RedirectResponse

@@ -8,6 +8,8 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Notifications\OrderStatusUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -114,6 +116,40 @@ class OrderController extends Controller
         $response = back()->with('success', 'Status do pedido atualizado.');
 
         return $warnings ? $response->with('warning', implode(' ', $warnings)) : $response;
+    }
+
+    /**
+     * Botão "Verificar etiqueta agora" (Admin/Orders/Show) — pedido explícito
+     * 2026-08-13: usuário voltando repetidas vezes pedindo pra destravar
+     * etiqueta de pedido parado (Shopee, depois Mercado Livre) porque não
+     * tinha nenhum jeito de checar/forçar isso sozinho pelo painel — só via
+     * intervenção manual direto no servidor. Reaproveita o MESMO serviço
+     * que CheckShipmentLabelJob usa nos bastidores (LabelFetchService::
+     * attempt(), seguro pra chamar quantas vezes quiser: se o canal ainda
+     * não liberou, só devolve "não pronta" sem side-effect nenhum; se já
+     * tem PrintJob, o firstOrCreate() de dentro de attempt() não duplica).
+     * Chama síncrono, direto do clique, pro usuário ver o resultado real na
+     * hora — a mesma pergunta "por que não imprimiu" agora tem resposta
+     * própria na tela, sem precisar pedir pra alguém investigar no servidor.
+     */
+    public function checkLabel(Order $order): RedirectResponse
+    {
+        $order->loadMissing('channelShipment');
+        $shipment = $order->channelShipment;
+
+        if (! $shipment) {
+            return back()->with('error', 'Este pedido não tem envio de canal registrado — nada pra verificar.');
+        }
+
+        if (in_array($shipment->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
+            return back()->with('success', 'A etiqueta já está pronta — o KoraSync já deve ter imprimido ou vai imprimir no próximo ciclo.');
+        }
+
+        $ready = app(LabelFetchService::class)->attempt($shipment);
+
+        return $ready
+            ? back()->with('success', 'Etiqueta ficou pronta agora — o KoraSync já pode imprimir.')
+            : back()->with('error', "O {$shipment->channel} ainda não liberou a etiqueta desse envio. Isso é decidido do lado do canal (Shopee/Mercado Livre), não é algo que dá pra forçar — o sistema continua tentando sozinho automaticamente.");
     }
 
     /**

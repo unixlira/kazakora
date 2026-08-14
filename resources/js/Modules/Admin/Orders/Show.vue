@@ -90,6 +90,18 @@ const channelBadge = {
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
 };
 
+// Status do ENVIO no canal (Shopee/Mercado Livre) — não confundir com
+// order.status (esse aqui é sobre a etiqueta especificamente: confirmada,
+// mas etiqueta ainda não liberada pelo canal / já pronta / já baixada /
+// deu erro depois de ~4h tentando). Pedido explícito 2026-08-13.
+const shipmentBadge = {
+    pending: { color: 'pending', label: 'Aguardando confirmação' },
+    confirmed: { color: 'in_progress', label: 'Aguardando etiqueta do canal' },
+    label_ready: { color: 'completed', label: 'Etiqueta pronta' },
+    label_downloaded: { color: 'completed', label: 'Etiqueta baixada' },
+    error: { color: 'cancelled', label: 'Canal não liberou a etiqueta' },
+};
+
 const LOGISTIC_TYPE_LABELS = {
     self_service: 'Flex',
     drop_off: 'Agência / Correios',
@@ -125,6 +137,14 @@ const issueInvoice = () => {
 const resubmitForm = useForm({});
 const resubmitToChannel = () => {
     resubmitForm.post(`/admin/pedidos/${props.order.id}/nota/reenviar-canal`);
+};
+
+const canCheckLabel = () =>
+    props.order.channel_shipment && !['label_ready', 'label_downloaded'].includes(props.order.channel_shipment.status);
+
+const checkLabelForm = useForm({});
+const checkLabel = () => {
+    checkLabelForm.post(`/admin/pedidos/${props.order.id}/verificar-etiqueta`);
 };
 
 const showCancelForm = ref(false);
@@ -186,6 +206,41 @@ const cancelInvoice = () => {
                         {{ order.shipping_neighborhood }} - {{ order.shipping_city }}/{{ order.shipping_state }}<br>
                         CEP {{ order.shipping_zip }}
                     </p>
+
+                    <!-- Status da ETIQUETA no canal (pedido explícito
+                         2026-08-13) — antes disso não tinha jeito de ver
+                         nem forçar isso pelo painel, só via intervenção
+                         manual direto no servidor. Só aparece pra pedido de
+                         marketplace de verdade (channel_shipment só existe
+                         pra Shopee/ML, nunca pra venda direta no site). -->
+                    <div v-if="order.channel_shipment" class="mt-4 border-t border-[var(--surface-border)] pt-3">
+                        <div class="flex flex-wrap items-center gap-3 text-sm">
+                            <span class="text-slate-500">Etiqueta:</span>
+                            <StatusBadge
+                                :status="shipmentBadge[order.channel_shipment.status]?.color ?? order.channel_shipment.status"
+                                :label="shipmentBadge[order.channel_shipment.status]?.label ?? order.channel_shipment.status"
+                            />
+                            <span v-if="order.channel_shipment.tracking_code" class="font-mono text-xs text-slate-500">
+                                Rastreio: {{ order.channel_shipment.tracking_code }}
+                            </span>
+                        </div>
+                        <p v-if="order.channel_shipment.error_message" class="mt-2 text-sm text-error">
+                            {{ order.channel_shipment.error_message }}
+                        </p>
+                        <Can permission="pedidos.edit">
+                            <button
+                                v-if="canCheckLabel()"
+                                type="button"
+                                :disabled="checkLabelForm.processing"
+                                title="Consulta o canal (Shopee/ML) agora mesmo e grava a etiqueta se já estiver liberada — o mesmo que o sistema já tenta sozinho automaticamente, só que na hora"
+                                class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="checkLabel"
+                            >
+                                <i class="fas fa-rotate" :class="{ 'animate-spin': checkLabelForm.processing }"></i>
+                                Verificar etiqueta agora
+                            </button>
+                        </Can>
+                    </div>
                 </div>
 
                 <div class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">

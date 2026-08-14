@@ -241,6 +241,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')
         ->middleware('permission:pedidos.edit');
+    Route::post('pedidos/{order}/verificar-etiqueta', [AdminOrderController::class, 'checkLabel'])
+        ->name('pedidos.verificar-etiqueta')
+        ->middleware('permission:pedidos.edit');
     Route::post('pedidos/{order}/nota/emitir', [InvoiceController::class, 'issue'])
         ->name('pedidos.nota.emitir')
         ->middleware('permission:pedidos.edit');

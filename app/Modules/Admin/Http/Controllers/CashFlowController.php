@@ -101,10 +101,18 @@ class CashFlowController extends Controller
             ->latest('created_at')
             ->get()
             ->flatMap(function (Order $order) {
+                // Sem OrderChannelFee (canal não devolveu a taxa real, ou
+                // pedido anterior à integração), a comissão é DESCONHECIDA —
+                // nunca 0. Mesmo critério já usado em
+                // MercadoLivreSalesController: inventar 0 aqui esconderia a
+                // taxa de verdade e inflaria o lucro líquido mostrado.
+                // Achado real 2026-08-14: era exatamente isso que fazia a
+                // comissão do Mercado Livre "sumir" nesta listagem.
+                $hasFeeData = $order->channelFee !== null;
                 $fee = (float) ($order->channelFee?->fee_amount ?? 0);
                 $orderSubtotal = (float) $order->subtotal;
 
-                return $order->items->map(function ($item) use ($order, $fee, $orderSubtotal) {
+                return $order->items->map(function ($item) use ($order, $fee, $hasFeeData, $orderSubtotal) {
                     $itemSubtotal = (float) $item->subtotal;
                     // Comissão da plataforma é lançada por pedido, não por
                     // item — rateia proporcionalmente ao valor de cada
@@ -112,7 +120,10 @@ class CashFlowController extends Controller
                     $itemFee = $orderSubtotal > 0 ? round($fee * ($itemSubtotal / $orderSubtotal), 2) : 0.0;
                     $costPrice = (float) ($item->product?->cost_price ?? 0);
                     $productCost = round($costPrice * $item->quantity, 2);
-                    $netProfit = round($itemSubtotal - $productCost - $itemFee, 2);
+                    // Lucro líquido sem dado de comissão não desconta taxa
+                    // nenhuma — mostrado como incompleto no front (mesmo
+                    // aviso do "sem custo"), não como se a taxa fosse zero.
+                    $netProfit = round($itemSubtotal - $productCost - ($hasFeeData ? $itemFee : 0), 2);
 
                     return [
                         'date' => $order->created_at->toDateString(),
@@ -121,6 +132,7 @@ class CashFlowController extends Controller
                         'product_cost' => $productCost,
                         'has_cost' => $item->product?->cost_price !== null,
                         'platform_fee' => $itemFee,
+                        'has_fee_data' => $hasFeeData,
                         'platform' => self::CHANNEL_LABELS[$order->origin] ?? ucfirst(str_replace('_', ' ', $order->origin)),
                         'net_profit' => $netProfit,
                     ];

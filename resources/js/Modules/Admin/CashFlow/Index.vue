@@ -131,11 +131,22 @@ const salesColumns = [
     },
     { accessorKey: 'platform', header: 'Plataforma' },
     { accessorKey: 'product_cost', header: 'Pago ao fornecedor', cell: ({ row }) => h('span', { class: 'text-slate-500' }, formatPrice(row.original.product_cost)) },
-    { accessorKey: 'platform_fee', header: 'Comissão da plataforma', cell: ({ row }) => h('span', { class: 'text-slate-500' }, formatPrice(row.original.platform_fee)) },
+    {
+        accessorKey: 'platform_fee',
+        header: 'Comissão da plataforma',
+        cell: ({ row }) => (row.original.has_fee_data
+            ? h('span', { class: 'text-slate-500' }, formatPrice(row.original.platform_fee))
+            : h('span', { class: 'text-xs text-amber-500', title: 'A plataforma ainda não informou a taxa real desse pedido — não é que a comissão seja zero, é dado que falta' }, '— sem dado')),
+    },
     {
         accessorKey: 'net_profit',
         header: 'Lucro líquido',
-        cell: ({ row }) => h('span', { class: row.original.net_profit >= 0 ? 'text-success font-semibold' : 'text-error font-semibold' }, formatPrice(row.original.net_profit)),
+        cell: ({ row }) => h('div', {}, [
+            h('span', { class: row.original.net_profit >= 0 ? 'text-success font-semibold' : 'text-error font-semibold' }, formatPrice(row.original.net_profit)),
+            !row.original.has_fee_data
+                ? h('span', { class: 'ml-2 text-xs text-amber-500', title: 'Calculado sem descontar comissão — dado ainda não disponível' }, '⚠ incompleto')
+                : null,
+        ]),
     },
 ];
 </script>

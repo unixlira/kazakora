@@ -18,6 +18,11 @@ class OrderItem extends Model
         'product_price',
         'quantity',
         'subtotal',
+        // Custo manual da linha, só usado quando product_id é nulo (sem
+        // produto local pra editar cost_price) — ver migration
+        // add_manual_cost_price_to_order_items_table e
+        // CashFlowController::updateItemCost().
+        'manual_cost_price',
         // Fiscal manual — só usados quando product_id é nulo (item digitado
         // na hora na emissão manual de nota, ver NFeXmlBuilderService).
         'item_type',
@@ -42,6 +47,7 @@ class OrderItem extends Model
             'product_price' => 'decimal:2',
             'quantity' => 'integer',
             'subtotal' => 'decimal:2',
+            'manual_cost_price' => 'decimal:2',
             'origem_mercadoria' => 'integer',
             'pis_aliquota' => 'decimal:2',
             'cofins_aliquota' => 'decimal:2',

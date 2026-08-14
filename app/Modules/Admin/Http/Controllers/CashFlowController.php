@@ -120,8 +120,21 @@ class CashFlowController extends Controller
                     // item — rateia proporcionalmente ao valor de cada
                     // item quando o pedido tem mais de um produto.
                     $itemFee = $orderSubtotal > 0 ? round($fee * ($itemSubtotal / $orderSubtotal), 2) : 0.0;
-                    $costPrice = (float) ($item->product?->cost_price ?? 0);
-                    $productCost = round($costPrice * $item->quantity, 2);
+                    // Item com produto local mapeado: custo vem do
+                    // cadastro do produto (cost_price × quantidade). Sem
+                    // produto (venda de anúncio nunca trazido pro
+                    // catálogo — autoImportProduct() falhou/não suportado)
+                    // não tem onde buscar isso, usa o valor digitado à mão
+                    // direto na linha (manual_cost_price, já é o total,
+                    // sem quantidade envolvida). Pedido explícito
+                    // 2026-08-14: "editar os que está sem custo também".
+                    if ($item->product) {
+                        $hasCost = $item->product->cost_price !== null;
+                        $productCost = round((float) ($item->product->cost_price ?? 0) * $item->quantity, 2);
+                    } else {
+                        $hasCost = $item->manual_cost_price !== null;
+                        $productCost = (float) ($item->manual_cost_price ?? 0);
+                    }
                     // Lucro líquido sem dado de comissão não desconta taxa
                     // nenhuma — mostrado como incompleto no front (mesmo
                     // aviso do "sem custo"), não como se a taxa fosse zero.
@@ -133,11 +146,7 @@ class CashFlowController extends Controller
                         'item_id' => $item->id,
                         'product_name' => $item->product_name,
                         'product_cost' => $productCost,
-                        'has_cost' => $item->product?->cost_price !== null,
-                        // Sem produto local mapeado (item de nota fiscal
-                        // manual, ex.) não tem onde gravar custo — front
-                        // desabilita a edição nesse caso.
-                        'cost_editable' => $item->product_id !== null,
+                        'has_cost' => $hasCost,
                         'platform_fee' => $itemFee,
                         'has_fee_data' => $hasFeeData,
                         'platform' => self::CHANNEL_LABELS[$order->origin] ?? ucfirst(str_replace('_', ' ', $order->origin)),
@@ -181,12 +190,18 @@ class CashFlowController extends Controller
     /**
      * Custo do fornecedor editado à mão na tabela de "Lucro por Venda" —
      * mesmo pedido explícito 2026-08-14 da comissão editável, agora pro
-     * "Pago ao fornecedor". O valor digitado é o custo TOTAL daquela
-     * linha (já ×quantidade, é o que aparece na tela) — grava de volta
-     * como cost_price UNITÁRIO no produto (÷quantidade), porque custo é
-     * atributo do produto, não do pedido: passa a valer pra essa venda e
-     * pra qualquer venda futura do mesmo produto, igual a cadastrar o
-     * custo em /admin/produtos.
+     * "Pago ao fornecedor" (incluindo linha "sem custo": pedido explícito
+     * "editar os que está sem custo também"). O valor digitado é o custo
+     * TOTAL daquela linha (já ×quantidade, é o que aparece na tela).
+     *
+     * Item com produto local mapeado: grava como cost_price UNITÁRIO no
+     * produto (÷quantidade) — custo é atributo do produto, não do
+     * pedido, então passa a valer pra essa venda e qualquer venda futura
+     * do mesmo produto, igual a cadastrar em /admin/produtos.
+     *
+     * Item SEM produto mapeado (venda de anúncio nunca trazido pro
+     * catálogo): não existe Product pra editar, grava o total direto no
+     * próprio item (manual_cost_price) — vale só pra essa venda.
      */
     public function updateItemCost(Request $request, OrderItem $orderItem): RedirectResponse
     {
@@ -194,13 +209,17 @@ class CashFlowController extends Controller
             'product_cost' => ['required', 'numeric', 'min:0'],
         ]);
 
-        if ($orderItem->product === null || $orderItem->quantity < 1) {
-            return back()->with('error', 'Esse item não tem produto cadastrado pra gravar o custo.');
-        }
+        if ($orderItem->product) {
+            if ($orderItem->quantity < 1) {
+                return back()->with('error', 'Quantidade inválida nesse item, não dá pra calcular o custo unitário.');
+            }
 
-        $orderItem->product->update([
-            'cost_price' => round($validated['product_cost'] / $orderItem->quantity, 2),
-        ]);
+            $orderItem->product->update([
+                'cost_price' => round($validated['product_cost'] / $orderItem->quantity, 2),
+            ]);
+        } else {
+            $orderItem->update(['manual_cost_price' => $validated['product_cost']]);
+        }
 
         return back()->with('success', 'Custo do fornecedor atualizado.');
     }

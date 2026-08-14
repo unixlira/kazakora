@@ -177,24 +177,22 @@ const salesColumns = [
     {
         accessorKey: 'product_cost',
         header: 'Pago ao fornecedor',
-        cell: ({ row }) => (row.original.cost_editable
-            ? h('input', {
-                type: 'number',
-                step: '0.01',
-                min: '0',
-                class: `w-24 rounded-lg border px-2 py-1 text-sm ${row.original.has_cost ? 'border-[var(--surface-border)] text-slate-500' : 'border-amber-400 text-amber-500'}`,
-                value: row.original.product_cost,
-                disabled: savingCostItemId.value === row.original.item_id,
-                title: row.original.has_cost ? 'Custo cadastrado — edite e aperte Enter pra corrigir' : 'Produto sem custo cadastrado — digite o valor e aperte Enter',
-                onKeydown: (event) => {
-                    if (event.key === 'Enter') {
-                        event.preventDefault();
-                        event.target.blur();
-                        saveCost(row.original.item_id, event.target.value);
-                    }
-                },
-            })
-            : h('span', { class: 'text-slate-500', title: 'Item sem produto cadastrado — custo não pode ser editado aqui' }, formatPrice(row.original.product_cost))),
+        cell: ({ row }) => h('input', {
+            type: 'number',
+            step: '0.01',
+            min: '0',
+            class: `w-24 rounded-lg border px-2 py-1 text-sm ${row.original.has_cost ? 'border-[var(--surface-border)] text-slate-500' : 'border-amber-400 text-amber-500'}`,
+            value: row.original.product_cost,
+            disabled: savingCostItemId.value === row.original.item_id,
+            title: row.original.has_cost ? 'Custo cadastrado — edite e aperte Enter pra corrigir' : 'Sem custo cadastrado — digite o valor e aperte Enter',
+            onKeydown: (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.target.blur();
+                    saveCost(row.original.item_id, event.target.value);
+                }
+            },
+        }),
     },
     {
         accessorKey: 'platform_fee',

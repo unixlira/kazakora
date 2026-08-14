@@ -498,20 +498,31 @@ class DashboardAgentController extends Controller
      * e ChannelShippingService::confirm()). Sem essa lista visível, o
      * pedido fica parado em "aguardando etiqueta" que parece exatamente
      * igual a um pedido travado de verdade — ninguém no time consegue
-     * distinguir os dois só olhando o KoraSync. Mostra todo envio ainda
-     * não embalado com scheduled_for preenchido, mesmo os já vencidos (aí
-     * é hora de prestar atenção de verdade: o canal disse que ia liberar
-     * e não liberou), ordenado pela data mais próxima primeiro.
+     * distinguir os dois só olhando o KoraSync. Mostra todo envio com
+     * scheduled_for preenchido enquanto o CANAL ainda não liberou a
+     * etiqueta de verdade (status), mesmo os já vencidos (aí é hora de
+     * prestar atenção de verdade: o canal disse que ia liberar e não
+     * liberou), ordenado pela data mais próxima primeiro.
+     *
+     * BUG REAL 2026-08-14, corrigido no mesmo dia: a primeira versão
+     * também excluía pedido já embalado (order.packed_at), copiando o
+     * filtro de queue() sem pensar — mas embalar (packed_at, botão "Em
+     * preparação" do KoraSync) é sobre o operador ter preparado a caixa
+     * fisicamente, sem relação nenhuma com o canal ter liberado a
+     * etiqueta. Confirmado ao vivo no próprio pedido #278: já estava
+     * "embalado" havia horas e a etiqueta continuava tão agendada quanto
+     * antes — escondê-lo da lista era exatamente o oposto do que devia
+     * acontecer (ainda NÃO PODE sair, mesmo com a caixa pronta).
      */
     public function scheduledShipments(): JsonResponse
     {
         $shipments = ChannelShipment::query()
             ->whereNotNull('scheduled_for')
             ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
-            ->with(['order:id,external_order_id,origin,shipping_name,packed_at', 'order.items:id,order_id,product_name,quantity'])
+            ->with(['order:id,external_order_id,origin,shipping_name', 'order.items:id,order_id,product_name,quantity'])
             ->orderBy('scheduled_for')
             ->get()
-            ->filter(fn (ChannelShipment $shipment) => $shipment->order && $shipment->order->packed_at === null)
+            ->filter(fn (ChannelShipment $shipment) => $shipment->order !== null)
             ->values();
 
         $result = $shipments->map(fn (ChannelShipment $shipment) => [

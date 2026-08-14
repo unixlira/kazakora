@@ -35,10 +35,16 @@ class NotifyScheduledShipmentsCommand extends Command
 
     public function handle(): int
     {
+        // BUG REAL 2026-08-14, corrigido no mesmo dia: filtrar por
+        // order.packed_at aqui excluiria um envio já "embalado" no
+        // KoraSync mesmo com o canal ainda sem liberar a etiqueta de
+        // verdade — embalar é sobre a caixa estar pronta, não sobre a
+        // etiqueta existir (ver mesmo comentário em
+        // DashboardAgentController::scheduledShipments()).
         $shipments = ChannelShipment::query()
             ->whereNotNull('scheduled_for')
             ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
-            ->whereHas('order', fn ($query) => $query->whereNull('packed_at'))
+            ->whereHas('order')
             ->orderBy('scheduled_for')
             ->get();
 

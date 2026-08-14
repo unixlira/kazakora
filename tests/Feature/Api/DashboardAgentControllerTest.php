@@ -348,17 +348,22 @@ class DashboardAgentControllerTest extends TestCase
             'scheduled_for' => now()->subDay(),
         ]);
 
-        // Não deve aparecer: já embalado (mesmo com scheduled_for futuro —
-        // não precisa mais de alerta nenhum, já foi resolvido) e etiqueta
-        // já pronta (saiu da janela de "aguardando", nem que o canal tenha
-        // mandado scheduled_for em algum momento).
-        $packed = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-3']);
-        $packed->forceFill(['packed_at' => now()])->save();
+        // Continua aparecendo mesmo já "embalado" (packed_at) — achado real
+        // no próprio pedido #278: embalar é sobre a caixa estar pronta,
+        // sem relação com o canal ter liberado a etiqueta de verdade.
+        // Confirmado ao vivo (estava embalado havia horas e a etiqueta
+        // continuava tão agendada quanto antes).
+        $packedButStillScheduled = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-3']);
+        $packedButStillScheduled->forceFill(['packed_at' => now()])->save();
         ChannelShipment::create([
-            'order_id' => $packed->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'order_id' => $packedButStillScheduled->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_CONFIRMED,
             'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(3),
         ]);
 
+        // Não deve aparecer: etiqueta já pronta (saiu da janela de
+        // "aguardando", nem que o canal tenha mandado scheduled_for em
+        // algum momento — o problema que essa lista existe pra sinalizar
+        // já não existe mais).
         $labelReady = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-4']);
         ChannelShipment::create([
             'order_id' => $labelReady->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_LABEL_READY,
@@ -370,12 +375,14 @@ class DashboardAgentControllerTest extends TestCase
         $response->assertOk();
         $result = collect($response->json('scheduled_shipments'))->keyBy('order_id');
 
-        $this->assertCount(2, $result);
+        $this->assertCount(3, $result);
+        $this->assertArrayNotHasKey($labelReady->id, $result);
 
         $this->assertSame('Cliente Agendado', $result[$scheduled->id]['customer_name']);
         $this->assertFalse($result[$scheduled->id]['is_overdue']);
         $this->assertCount(1, $result[$scheduled->id]['products']);
 
         $this->assertTrue($result[$overdue->id]['is_overdue']);
+        $this->assertArrayHasKey($packedButStillScheduled->id, $result);
     }
 }

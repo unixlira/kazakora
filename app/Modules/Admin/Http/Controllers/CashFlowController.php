@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cadastros\Models\CostCenter;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
@@ -45,6 +46,15 @@ class CashFlowController extends Controller
                 'balance' => $income - $expense,
                 'income' => $income,
                 'expense' => $expense,
+                // Valor em estoque = soma de todo produto pelo custo pago
+                // no fornecedor × quantidade em estoque — mesma conta já
+                // usada no Painel Financeiro (FinancialDashboardController).
+                // Produto sem custo cadastrado conta como 0 aqui (mesmo
+                // aviso de dado incompleto do resto da tela). Pedido
+                // explícito 2026-08-14.
+                'stockValue' => round((float) Product::query()
+                    ->selectRaw('COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0) as total')
+                    ->value('total'), 2),
             ],
             // Listagem de lucro por venda — pedido explícito 2026-08-14:
             // data do pedido, produto, custo pago no fornecedor, comissão

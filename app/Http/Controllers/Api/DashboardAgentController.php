@@ -491,6 +491,50 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * Envios AGENDADOS pelo canal (pedido explícito 2026-08-14, achado ao
+     * vivo no pedido #278) — venda de Coleta/Places do Mercado Livre em que
+     * o próprio canal decidiu só liberar a etiqueta perto de uma data
+     * futura (scheduled_for, ver MercadoLivreDriver::extractScheduledFor()
+     * e ChannelShippingService::confirm()). Sem essa lista visível, o
+     * pedido fica parado em "aguardando etiqueta" que parece exatamente
+     * igual a um pedido travado de verdade — ninguém no time consegue
+     * distinguir os dois só olhando o KoraSync. Mostra todo envio ainda
+     * não embalado com scheduled_for preenchido, mesmo os já vencidos (aí
+     * é hora de prestar atenção de verdade: o canal disse que ia liberar
+     * e não liberou), ordenado pela data mais próxima primeiro.
+     */
+    public function scheduledShipments(): JsonResponse
+    {
+        $shipments = ChannelShipment::query()
+            ->whereNotNull('scheduled_for')
+            ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
+            ->with(['order:id,external_order_id,origin,shipping_name,packed_at', 'order.items:id,order_id,product_name,quantity'])
+            ->orderBy('scheduled_for')
+            ->get()
+            ->filter(fn (ChannelShipment $shipment) => $shipment->order && $shipment->order->packed_at === null)
+            ->values();
+
+        $result = $shipments->map(fn (ChannelShipment $shipment) => [
+            'order_id' => $shipment->order_id,
+            'external_order_id' => $shipment->order->external_order_id,
+            'channel' => $shipment->channel,
+            'customer_name' => $shipment->order->shipping_name,
+            'shipping_method' => $shipment->shipping_method,
+            'scheduled_for' => $shipment->scheduled_for,
+            // Pra já vir pronto pro KoraSync destacar visualmente quem já
+            // passou da data prometida sem liberar — não é o mesmo alerta
+            // que "vai liberar em breve".
+            'is_overdue' => $shipment->scheduled_for->isPast(),
+            'products' => $shipment->order->items->map(fn ($item) => [
+                'name' => $item->product_name,
+                'quantity' => $item->quantity,
+            ]),
+        ]);
+
+        return response()->json(['scheduled_shipments' => $result]);
+    }
+
+    /**
      * Texto diário das Testemunhas de Jeová — só leitura do que já foi
      * salvo pelo comando agendado (App\Console\Commands\FetchDailyText,
      * roda a cada 12h). Não busca ao vivo aqui: esse endpoint precisa

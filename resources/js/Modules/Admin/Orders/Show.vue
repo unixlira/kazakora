@@ -60,6 +60,7 @@ const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const formatDateTime = (value) => new Date(value).toLocaleString('pt-BR');
+const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
 
 const invoiceBadge = {
     pending: { color: 'pending', label: 'Pendente' },
@@ -100,6 +101,27 @@ const shipmentBadge = {
     label_ready: { color: 'completed', label: 'Etiqueta pronta' },
     label_downloaded: { color: 'completed', label: 'Etiqueta baixada' },
     error: { color: 'cancelled', label: 'Canal não liberou a etiqueta' },
+};
+
+// Venda AGENDADA pelo canal (pedido explícito 2026-08-14, achado no
+// pedido #278 — Coleta/Places do Mercado Livre com etiqueta liberada só
+// perto de uma data futura, scheduled_for). Sem isso na tela, "aguardando
+// etiqueta do canal" parece exatamente igual a um pedido travado de
+// verdade — substitui o badge genérico por um específico enquanto ainda
+// não passou da data e o pedido ainda não embalou.
+const shipmentDisplay = () => {
+    const shipment = props.order.channel_shipment;
+    const scheduled = shipment?.scheduled_for && !['label_ready', 'label_downloaded'].includes(shipment.status);
+
+    if (!scheduled) {
+        return shipmentBadge[shipment?.status] ?? { color: shipment?.status, label: shipment?.status };
+    }
+
+    const isOverdue = new Date(shipment.scheduled_for) < new Date();
+
+    return isOverdue
+        ? { color: 'cancelled', label: `Agendada pra ${formatDate(shipment.scheduled_for)} — já passou e não liberou` }
+        : { color: 'pending', label: `Venda agendada — etiqueta só sai perto de ${formatDate(shipment.scheduled_for)}` };
 };
 
 const LOGISTIC_TYPE_LABELS = {
@@ -216,14 +238,15 @@ const cancelInvoice = () => {
                     <div v-if="order.channel_shipment" class="mt-4 border-t border-[var(--surface-border)] pt-3">
                         <div class="flex flex-wrap items-center gap-3 text-sm">
                             <span class="text-slate-500">Etiqueta:</span>
-                            <StatusBadge
-                                :status="shipmentBadge[order.channel_shipment.status]?.color ?? order.channel_shipment.status"
-                                :label="shipmentBadge[order.channel_shipment.status]?.label ?? order.channel_shipment.status"
-                            />
+                            <StatusBadge :status="shipmentDisplay().color" :label="shipmentDisplay().label" />
                             <span v-if="order.channel_shipment.tracking_code" class="font-mono text-xs text-slate-500">
                                 Rastreio: {{ order.channel_shipment.tracking_code }}
                             </span>
                         </div>
+                        <p v-if="order.channel_shipment.scheduled_for" class="mt-2 text-xs text-slate-400">
+                            O próprio {{ channelBadge[order.channel_shipment.channel]?.label ?? order.channel_shipment.channel }} decidiu agendar essa entrega —
+                            não é um problema do nosso lado, é assim mesmo pra esse tipo de envio (Coleta/Places).
+                        </p>
                         <p v-if="order.channel_shipment.error_message" class="mt-2 text-sm text-error">
                             {{ order.channel_shipment.error_message }}
                         </p>

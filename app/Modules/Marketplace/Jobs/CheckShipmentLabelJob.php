@@ -61,9 +61,22 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
         return (string) $this->shipmentId;
     }
 
+    /**
+     * BUG REAL 2026-08-14: antes disso usava um valor FIXO (RETRY_WINDOW_
+     * HOURS * 3600), mas $deadline pode vir bem mais longe que 4h agora
+     * (venda agendada — ver ChannelShippingService::confirm(), que passa
+     * um deadline de até 24h depois da data agendada pelo canal, e ainda
+     * atrasa o dispatch em si com ->delay()). Uma trava de unicidade mais
+     * curta que o deadline real expirava antes do job terminar de
+     * verdade, e um novo gatilho (webhook, poke job) conseguia empilhar
+     * outra instância concorrente do mesmo shipment. Calcula a partir do
+     * deadline de verdade desta instância, nunca da constante.
+     */
     public function uniqueFor(): int
     {
-        return self::RETRY_WINDOW_HOURS * 3600 + 300;
+        $secondsUntilDeadline = $this->deadline->getTimestamp() - CarbonImmutable::now()->getTimestamp();
+
+        return max(300, $secondsUntilDeadline) + 300;
     }
 
     public function retryUntil(): CarbonImmutable
@@ -101,7 +114,14 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
             return; // ficou pronta em algum retry concorrente antes do failed() rodar
         }
 
-        $message = 'Etiqueta não ficou disponível no Mercado Livre após '.self::RETRY_WINDOW_HOURS.'h de tentativas.';
+        // BUG REAL 2026-08-14: mensagem fixa em "4h" (RETRY_WINDOW_HOURS)
+        // ficou errada assim que $deadline passou a poder ser bem maior
+        // (venda agendada, ver ChannelShippingService::confirm() — até 24h
+        // DEPOIS da data que o canal prometeu). Calcula a partir do
+        // deadline de verdade desta instância.
+        $message = $shipment->scheduled_for
+            ? "Venda agendada pro canal liberar em {$shipment->scheduled_for->format('d/m/Y')}, mas passaram-se 24h depois disso sem a etiqueta aparecer — vale checar direto no canal."
+            : 'Etiqueta não ficou disponível no Mercado Livre após '.self::RETRY_WINDOW_HOURS.'h de tentativas.';
 
         $shipment->update(['status' => ChannelShipment::STATUS_ERROR, 'error_message' => $message]);
 

@@ -297,7 +297,32 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'tracking_code' => $shipment['tracking_number'] ?? null,
             'shipping_method' => $logisticType,
             'status' => $shipment['status'] ?? 'unknown',
+            'scheduled_for' => $this->extractScheduledFor($shipment),
         ];
+    }
+
+    /**
+     * BUG REAL 2026-08-14 (pedido #278, achado ao vivo): envio
+     * `logistic_type=xd_drop_off` (Coleta/Places) pode vir com
+     * `shipping_option.buffering.date` no futuro — o Mercado Livre decidiu
+     * de propósito só liberar a etiqueta perto dessa data (não é a etiqueta
+     * "travada", é uma venda agendada de verdade). Sem isso, CheckShipmentLabelJob
+     * achava que era um problema e martelava a API por até 4h antes de
+     * desistir. Só conta como "agendado" se a data vier e ainda estiver no
+     * futuro — um buffering já vencido não é um agendamento pendente, é só
+     * metadado velho do canal.
+     */
+    private function extractScheduledFor(array $shipment): ?\Illuminate\Support\Carbon
+    {
+        $bufferingDate = $shipment['shipping_option']['buffering']['date'] ?? null;
+
+        if (! $bufferingDate) {
+            return null;
+        }
+
+        $date = \Illuminate\Support\Carbon::parse($bufferingDate);
+
+        return $date->isFuture() ? $date : null;
     }
 
     /**

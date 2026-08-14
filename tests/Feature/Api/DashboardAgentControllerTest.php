@@ -318,4 +318,64 @@ class DashboardAgentControllerTest extends TestCase
 
         $this->assertNull($order->refresh()->packed_at);
     }
+
+    /**
+     * Pedido explícito 2026-08-14 (achado real no pedido #278): venda de
+     * Coleta/Places do Mercado Livre com etiqueta liberada só perto de uma
+     * data futura decidida pelo canal (scheduled_for) — sem essa lista,
+     * ficava indistinguível de um pedido travado de verdade.
+     */
+    public function test_scheduled_shipments_lists_orders_with_a_future_scheduled_for(): void
+    {
+        $scheduled = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-1', 'shipping_name' => 'Cliente Agendado']);
+        $scheduled->items()->create(['product_name' => 'Produto A', 'product_price' => 50, 'quantity' => 2, 'subtotal' => 100]);
+        ChannelShipment::create([
+            'order_id' => $scheduled->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off',
+            'confirmed_at' => now(),
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $overdue = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-2', 'shipping_name' => 'Cliente Atrasado']);
+        ChannelShipment::create([
+            'order_id' => $overdue->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off',
+            'confirmed_at' => now()->subDays(2),
+            'scheduled_for' => now()->subDay(),
+        ]);
+
+        // Não deve aparecer: já embalado (mesmo com scheduled_for futuro —
+        // não precisa mais de alerta nenhum, já foi resolvido) e etiqueta
+        // já pronta (saiu da janela de "aguardando", nem que o canal tenha
+        // mandado scheduled_for em algum momento).
+        $packed = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-3']);
+        $packed->forceFill(['packed_at' => now()])->save();
+        ChannelShipment::create([
+            'order_id' => $packed->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $labelReady = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-4']);
+        ChannelShipment::create([
+            'order_id' => $labelReady->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_LABEL_READY,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/scheduled-shipments');
+
+        $response->assertOk();
+        $result = collect($response->json('scheduled_shipments'))->keyBy('order_id');
+
+        $this->assertCount(2, $result);
+
+        $this->assertSame('Cliente Agendado', $result[$scheduled->id]['customer_name']);
+        $this->assertFalse($result[$scheduled->id]['is_overdue']);
+        $this->assertCount(1, $result[$scheduled->id]['products']);
+
+        $this->assertTrue($result[$overdue->id]['is_overdue']);
+    }
 }

@@ -55,3 +55,11 @@ Schedule::command('ads:sync-wallet-balance')->hourly();
 // helper nativo, e um cron fixo em "30" erraria fevereiro e os meses de
 // 31 dias).
 Schedule::command('flex:check-billing-cycle')->dailyAt('07:00');
+
+// Vendas agendadas pelo canal (Coleta/Places do Mercado Livre, etiqueta só
+// liberada perto de uma data futura) — pedido explícito 2026-08-14, depois
+// do pedido #278 (agendado pro dia 17, ninguém do time sabia por que a
+// etiqueta não saía). 2x/dia em horário comercial (8h abrindo o dia, 15h
+// pra pegar quem só chega de tarde) — silencioso quando não há nada a
+// avisar, ver NotifyScheduledShipmentsCommand.
+Schedule::command('marketplace:notify-scheduled-shipments')->twiceDaily(8, 15);

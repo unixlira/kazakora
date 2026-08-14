@@ -87,4 +87,5 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::get('/dashboard/queue', [DashboardAgentController::class, 'queue'])->name('dashboard.queue');
     Route::post('/dashboard/queue/{order}/pack', [DashboardAgentController::class, 'packOrder'])->name('dashboard.queue.pack');
     Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
+    Route::get('/dashboard/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('dashboard.scheduled-shipments');
 });

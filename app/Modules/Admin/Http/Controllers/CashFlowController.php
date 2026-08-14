@@ -4,21 +4,37 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cadastros\Models\CostCenter;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\CashFlowEntry;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CashFlowController extends Controller
 {
-    public function index(): Response
+    private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
+    private const CHANNEL_LABELS = [
+        MarketplaceAccount::CHANNEL_MERCADO_LIVRE => 'Mercado Livre',
+        MarketplaceAccount::CHANNEL_SHOPEE => 'Shopee',
+        MarketplaceAccount::CHANNEL_TIKTOK_SHOP => 'TikTok Shop',
+        MarketplaceAccount::CHANNEL_AMAZON => 'Amazon',
+        MarketplaceAccount::CHANNEL_SHEIN => 'Shein',
+        Order::ORIGIN_STORE => 'Loja própria',
+    ];
+
+    public function index(Request $request): Response
     {
         $entries = CashFlowEntry::query()->with('costCenter:id,name', 'creator:id,name')->latest('entry_date')->get();
 
         $income = (float) $entries->where('type', CashFlowEntry::TYPE_INCOME)->sum('amount');
         $expense = (float) $entries->where('type', CashFlowEntry::TYPE_EXPENSE)->sum('amount');
+
+        [$start, $end] = $this->resolveSalesPeriod($request);
 
         return Inertia::render('Admin/CashFlow/Index', [
             'entries' => $entries,
@@ -28,7 +44,90 @@ class CashFlowController extends Controller
                 'income' => $income,
                 'expense' => $expense,
             ],
+            // Listagem de lucro por venda — pedido explícito 2026-08-14:
+            // data do pedido, produto, custo pago no fornecedor, comissão
+            // da plataforma e lucro líquido linha a linha, pra ficar claro
+            // de onde vem cada real do saldo mostrado acima. Padrão é
+            // "todas as vendas, todos os períodos" (pedido explícito
+            // 2026-08-14: "quero todas vendas todos periodos") — só filtra
+            // se o usuário escolher De/Até na tela.
+            'sales' => $this->salesBreakdown($start, $end),
+            'salesFilter' => [
+                'start' => $start?->toDateString(),
+                'end' => $end?->toDateString(),
+            ],
         ]);
+    }
+
+    /**
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    private function resolveSalesPeriod(Request $request): array
+    {
+        $start = null;
+        $end = null;
+
+        try {
+            $start = $request->filled('start') ? Carbon::parse($request->string('start')->toString())->startOfDay() : null;
+        } catch (\Throwable) {
+            $start = null;
+        }
+
+        try {
+            $end = $request->filled('end') ? Carbon::parse($request->string('end')->toString())->endOfDay() : null;
+        } catch (\Throwable) {
+            $end = null;
+        }
+
+        // Início depois do fim não faz sentido — troca em vez de devolver
+        // uma listagem vazia sem explicação.
+        if ($start && $end && $start->gt($end)) {
+            [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+        }
+
+        return [$start, $end];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function salesBreakdown(?Carbon $start, ?Carbon $end): array
+    {
+        return Order::query()
+            ->whereIn('status', self::REVENUE_STATUSES)
+            ->when($start, fn ($query) => $query->where('created_at', '>=', $start))
+            ->when($end, fn ($query) => $query->where('created_at', '<=', $end))
+            ->with(['items.product:id,cost_price', 'channelFee'])
+            ->latest('created_at')
+            ->get()
+            ->flatMap(function (Order $order) {
+                $fee = (float) ($order->channelFee?->fee_amount ?? 0);
+                $orderSubtotal = (float) $order->subtotal;
+
+                return $order->items->map(function ($item) use ($order, $fee, $orderSubtotal) {
+                    $itemSubtotal = (float) $item->subtotal;
+                    // Comissão da plataforma é lançada por pedido, não por
+                    // item — rateia proporcionalmente ao valor de cada
+                    // item quando o pedido tem mais de um produto.
+                    $itemFee = $orderSubtotal > 0 ? round($fee * ($itemSubtotal / $orderSubtotal), 2) : 0.0;
+                    $costPrice = (float) ($item->product?->cost_price ?? 0);
+                    $productCost = round($costPrice * $item->quantity, 2);
+                    $netProfit = round($itemSubtotal - $productCost - $itemFee, 2);
+
+                    return [
+                        'date' => $order->created_at->toDateString(),
+                        'order_id' => $order->id,
+                        'product_name' => $item->product_name,
+                        'product_cost' => $productCost,
+                        'has_cost' => $item->product?->cost_price !== null,
+                        'platform_fee' => $itemFee,
+                        'platform' => self::CHANNEL_LABELS[$order->origin] ?? ucfirst(str_replace('_', ' ', $order->origin)),
+                        'net_profit' => $netProfit,
+                    ];
+                });
+            })
+            ->values()
+            ->all();
     }
 
     public function store(Request $request): RedirectResponse

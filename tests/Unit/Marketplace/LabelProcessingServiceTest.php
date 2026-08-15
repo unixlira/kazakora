@@ -83,68 +83,65 @@ class LabelProcessingServiceTest extends TestCase
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/labels/4x6/'));
     }
 
-    public function test_declaration_page_handles_several_products_without_crashing(): void
+    public function test_declaration_footer_handles_several_products_without_crashing(): void
     {
-        $tokens = array_map(fn ($i) => "SKU-{$i}|QTD=1", range(1, 9));
+        $tokens = array_map(fn ($i) => "SKU-{$i} | QTD: 01", range(1, 9));
 
-        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), $tokens);
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), $tokens);
 
         $this->assertStringStartsWith('%PDF', $result);
     }
 
-    public function test_declaration_page_handles_empty_product_list_without_crashing(): void
+    public function test_declaration_footer_handles_empty_product_list_without_crashing(): void
     {
-        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), []);
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), []);
 
         $this->assertStringStartsWith('%PDF', $result);
     }
 
-    public function test_declaration_page_converts_accented_text_to_latin1_for_fpdf_core_fonts(): void
+    public function test_declaration_footer_converts_accented_text_to_latin1_for_fpdf_core_fonts(): void
     {
         // As fontes nativas do FPDF (Arial/Helvetica) esperam ISO-8859-1 —
         // sem converter, "ç" (UTF-8: 0xC3 0xA7) sai corrompido na etiqueta
-        // em vez do byte único Latin-1 (0xE7) que o FPDF sabe desenhar. O
-        // próprio cabeçalho fixo ("DECLARAÇÃO DE CONTEÚDO") já tem acento,
-        // não precisa de um token especial pra isso aparecer.
-        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), ['SKU-1|QTD=1']);
+        // em vez do byte único Latin-1 (0xE7) que o FPDF sabe desenhar.
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), ['SKU-ÁÇÃO | QTD: 01']);
 
         $this->assertStringNotContainsString("\xC3\xA7", $result);
         $this->assertStringContainsString("\xE7", $result);
     }
 
-    public function test_declaration_page_shows_the_header_and_instruction(): void
+    public function test_declaration_footer_shows_the_sku_and_quantity_token(): void
     {
-        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), ['SKU-1|QTD=2']);
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), ['SKU-1 | QTD: 02']);
 
-        $this->assertStringContainsString('antes de embalar', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 02', $result);
     }
 
     /**
-     * Pedido explícito 2026-08-15: SKU|QTD=N por produto, vírgula separando
-     * quando o pedido tem mais de um item.
+     * Pedido explícito 2026-08-15: SKU | QTD: NN por produto, vírgula
+     * separando quando o pedido tem mais de um item.
      */
-    public function test_declaration_page_joins_multiple_products_with_a_comma(): void
+    public function test_declaration_footer_joins_multiple_products_with_a_comma(): void
     {
-        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), ['SKU-1|QTD=2', 'SKU-2|QTD=1']);
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), ['SKU-1 | QTD: 02', 'SKU-2 | QTD: 01']);
 
-        $this->assertStringContainsString('SKU-1|QTD=2, SKU-2|QTD=1', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 02, SKU-2 | QTD: 01', $result);
     }
 
     /**
-     * BUG REAL 2026-08-15 (pedido #307): a versão anterior desenhava a
-     * declaração POR CIMA da própria etiqueta (overlay), assumindo uma área
-     * vazia que nem sempre existe no layout real de uma etiqueta de canal
-     * (colidiu com o rodapé "DANFE SIMPLIFICADO" de uma etiqueta Shopee
-     * real, saiu ilegível). Reescrito pra sempre acrescentar uma página
-     * NOVA em vez de desenhar em cima — este teste é a garantia de que
-     * isso nunca mais volta a ser um overlay: o PDF de saída tem que ter
-     * mais páginas que o original, nunca o mesmo número.
+     * BUG REAL 2026-08-15 (pedido #307): overlay colidiu com o rodapé
+     * "DANFE SIMPLIFICADO" real de uma etiqueta Shopee -> virou página
+     * extra -> pedido explícito do usuário voltou atrás (página extra
+     * desperdiça uma etiqueta térmica inteira por pedido). De volta a
+     * overlay na MESMA página — este teste é a garantia de que a etiqueta
+     * continua sendo 1 página só, nunca 2 (o desperdício de papel que
+     * motivou a reversão).
      */
-    public function test_declaration_page_is_appended_never_drawn_over_the_original_page(): void
+    public function test_declaration_footer_never_creates_a_second_page(): void
     {
-        $result = (new LabelProcessingService)->appendDeclarationPage(
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(
             self::minimalPdf(), // 1 página
-            array_map(fn ($i) => "SKU-{$i}|QTD=1", range(1, 9))
+            array_map(fn ($i) => "SKU-{$i} | QTD: 01", range(1, 9))
         );
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
@@ -152,7 +149,7 @@ class LabelProcessingServiceTest extends TestCase
 
         try {
             $pageCount = (new Fpdi)->setSourceFile($tempPath);
-            $this->assertSame(2, $pageCount); // 1 original + 1 de declaração
+            $this->assertSame(1, $pageCount);
         } finally {
             @unlink($tempPath);
         }
@@ -161,21 +158,22 @@ class LabelProcessingServiceTest extends TestCase
     /**
      * Etiqueta de lote com múltiplos volumes (ex.: Mercado Envios Full,
      * histórico real desse pipeline) pode ter mais de uma página de
-     * origem — todas têm que sobreviver intactas, com a declaração vindo
-     * só depois da última.
+     * origem — todas têm que sobreviver, cada uma com a mesma faixa de
+     * declaração no rodapé (todo volume pertence ao mesmo pedido), sem
+     * nenhuma página extra.
      */
-    public function test_declaration_page_preserves_every_original_page_of_a_multi_page_label(): void
+    public function test_declaration_footer_preserves_every_original_page_of_a_multi_page_label(): void
     {
         $twoPagePdf = self::minimalTwoPagePdf();
 
-        $result = (new LabelProcessingService)->appendDeclarationPage($twoPagePdf, ['SKU-1|QTD=1']);
+        $result = (new LabelProcessingService)->overlayDeclarationFooter($twoPagePdf, ['SKU-1 | QTD: 01']);
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $result);
 
         try {
             $pageCount = (new Fpdi)->setSourceFile($tempPath);
-            $this->assertSame(3, $pageCount); // 2 originais + 1 de declaração
+            $this->assertSame(2, $pageCount); // as 2 originais, sem página extra
         } finally {
             @unlink($tempPath);
         }

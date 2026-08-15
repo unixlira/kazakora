@@ -8,10 +8,12 @@ use setasign\Fpdi\Fpdi;
 
 /**
  * Processamento de etiqueta — converte ZPL pra PDF quando o canal exige
- * (Shopee) e acrescenta a declaração de conteúdo (SKU + quantidade) como
- * página extra no fim do PDF antes de mandar pro PrintJob. Usado tanto pelo
- * fluxo automático (LabelFetchService::attempt(), Shopee/TikTok) quanto pela
- * tela de teste de impressão (Admin/Integracoes/TesteImpressao).
+ * (Shopee) e sobrepõe a declaração de conteúdo (SKU + quantidade) numa
+ * faixa fina no rodapé da própria etiqueta antes de mandar pro PrintJob —
+ * uma etiqueta por pedido, nunca duas (ver overlayDeclarationFooter() pro
+ * histórico de por que não é mais página extra). Usado tanto pelo fluxo
+ * automático (LabelFetchService::attempt(), Shopee/TikTok) quanto pela tela
+ * de teste de impressão (Admin/Integracoes/TesteImpressao).
  */
 class LabelProcessingService
 {
@@ -76,31 +78,35 @@ class LabelProcessingService
     }
 
     /**
-     * Acrescenta a declaração de conteúdo como uma PÁGINA NOVA no fim do
-     * PDF (mesmo tamanho da etiqueta térmica, 10x15cm/4x6"), nunca
-     * desenhando por cima da etiqueta original.
+     * Sobrepõe a declaração de conteúdo (SKU|QTD por produto) numa faixa
+     * fina colada na borda inferior da PRÓPRIA etiqueta — de volta pro
+     * rodapé, mesmo lugar do trecho comentado original (ver histórico:
+     * desativado em 8a5032d, reativado com overlay em 7a9208b, trocado pra
+     * página extra em ad19796 depois do pedido #307 sair com a faixa em
+     * cima do rodapé "DANFE SIMPLIFICADO" da etiqueta). Voltou a ser
+     * overlay por pedido explícito 2026-08-15 — a página extra desperdiça
+     * uma etiqueta térmica inteira por pedido (custo real de papel), e o
+     * texto agora é bem mais curto (só SKU, sem nome do produto), o que
+     * reduz — mas não elimina — o risco de colidir com algo que já exista
+     * na borda inferior de uma etiqueta real.
      *
-     * BUG REAL 2026-08-15 (pedido #307, achado direto na etiqueta física
-     * impressa): a versão anterior desenhava a declaração como uma faixa
-     * sobreposta na borda inferior da MESMA página, assumindo que aquela
-     * área ficava sempre vazia — só que o layout real desse pedido Shopee
-     * já tem um rodapé "DANFE SIMPLIFICADO" com o próprio código de barras
-     * bem colado na borda inferior, e a faixa saiu direto em cima dele
-     * (ilegível), com o texto ainda vazando pra fora da página pela
-     * direita. Não dá pra confiar em heurística de "área vazia" numa
-     * etiqueta real cujo layout varia por conta/transportadora — a única
-     * garantia de nunca sobrepor nada é nunca desenhar na mesma página.
-     * Uma página extra no fim custa uma etiqueta a mais de papel térmico,
-     * mas nunca estraga a etiqueta de envio em si.
+     * IMPORTANTE (limite conhecido, não escondido): em etiquetas Shopee que
+     * já trazem o rodapé "DANFE SIMPLIFICADO" (referência à NF-e, com o
+     * próprio código de barras pequeno) colado na borda inferior — como a
+     * do pedido #307 — esta faixa ainda pode ficar próxima ou por cima
+     * desse rodapé auxiliar. NÃO fica em cima do código de barras PRINCIPAL
+     * de rastreio (esse fica bem mais acima na etiqueta, sempre livre) —
+     * só o código de barras pequeno do DANFE simplificado, que a
+     * transportadora não escaneia no fluxo normal, é quem corre esse risco.
      *
      * Existe pra reduzir erro de quantidade errada enviada (causa real de
      * vários pedidos errados na implantação inicial) — quem embala confere
      * a etiqueta impressa contra o pedido físico antes de fechar a caixa,
      * em vez de confiar de cabeça na tela do sistema.
      *
-     * @param  array<int, string>  $declarationTokens  já formatados pelo chamador (ex.: "SKU123|QTD=2"), um por produto
+     * @param  array<int, string>  $declarationTokens  já formatados pelo chamador (ex.: "SKU123 | QTD: 02"), um por produto
      */
-    public function appendDeclarationPage(string $pdfBytes, array $declarationTokens): string
+    public function overlayDeclarationFooter(string $pdfBytes, array $declarationTokens): string
     {
         $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
         file_put_contents($tempPdfPath, $pdfBytes);
@@ -108,17 +114,17 @@ class LabelProcessingService
         try {
             $pdf = new Fpdi();
             $pageCount = $pdf->setSourceFile($tempPdfPath);
+            $pdf->SetAutoPageBreak(false);
 
-            // Reimporta TODAS as páginas originais sem tocar em nada nelas
-            // (etiqueta de lote com múltiplos volumes pode vir com mais de
-            // uma página, ver histórico do Mercado Envios Full) — cada uma
-            // vira uma página idêntica no PDF de saída.
-            $lastSize = null;
+            $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
 
+            // Reimporta TODAS as páginas originais (etiqueta de lote com
+            // múltiplos volumes pode vir com mais de uma, ver histórico do
+            // Mercado Envios Full) e sobrepõe a mesma faixa em cada uma —
+            // todo volume pertence ao mesmo pedido.
             for ($i = 1; $i <= $pageCount; $i++) {
                 $templateId = $pdf->importPage($i);
                 $size = $pdf->getTemplateSize($templateId);
-                $lastSize = $size;
 
                 $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
 
@@ -129,48 +135,50 @@ class LabelProcessingService
                 // página não muda, só a posição do conteúdo original nela.
                 $leftMarginMm = $i === 1 ? 10 * (25.4 / 96) : 0; // 10px a 96dpi ≈ 2.65mm
                 $pdf->useTemplate($templateId, $leftMarginMm, 0);
+
+                $this->drawDeclarationFooter($pdf, $size, $line);
             }
-
-            // Página nova, em branco, do mesmo tamanho da etiqueta — só a
-            // declaração vive aqui, nunca em cima de nada da etiqueta real.
-            $pdf->AddPage($lastSize['orientation'], [$lastSize['width'], $lastSize['height']]);
-            $pdf->SetAutoPageBreak(true, 6); // se a lista for enorme, continua em mais uma página em vez de vazar/cortar texto
-
-            $marginSide = 6; // mm
-            $contentWidth = $lastSize['width'] - (2 * $marginSide);
-
-            $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetXY($marginSide, 6);
-            $pdf->SetFont('Arial', 'B', 10);
-            $pdf->MultiCell($contentWidth, 5, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO'), 0, 'C');
-
-            $pdf->SetX($marginSide);
-            $pdf->SetFont('Arial', '', 7);
-            $pdf->MultiCell($contentWidth, 4, $this->toLatin1('Conferir SKU e quantidade antes de embalar'), 0, 'C');
-
-            $pdf->Ln(2);
-            $pdf->SetDrawColor(0, 0, 0);
-            $pdf->SetLineWidth(0.3);
-            $pdf->Line($marginSide, $pdf->GetY(), $lastSize['width'] - $marginSide, $pdf->GetY());
-            $pdf->Ln(3);
-
-            // "SKU123|QTD=2, SKU456|QTD=1" — pedido explícito 2026-08-15
-            // (SKU em vez do nome do produto: mais curto, sem risco de
-            // vazar da página, e é o que quem confere o pedido físico
-            // realmente usa pra bater com a etiqueta do produto no
-            // estoque). MultiCell quebra linha sozinho se não couber numa
-            // só — nunca corta/vaza como o Cell de largura fixa da versão
-            // anterior cortava.
-            $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
-
-            $pdf->SetX($marginSide);
-            $pdf->SetFont('Arial', 'B', 13);
-            $pdf->MultiCell($contentWidth, 6, $this->toLatin1($line), 0, 'C');
 
             return $pdf->Output('S');
         } finally {
             @unlink($tempPdfPath);
         }
+    }
+
+    /**
+     * Faixa fina e curta de propósito (reserva altura fixa pra até 2
+     * linhas, ~10mm no total incluindo margem/linha separadora) — o texto
+     * é só "SKU | QTD: NN" por produto, nunca o nome, então cabe numa
+     * fração do espaço que a versão anterior (nome completo) precisava.
+     * Mais de ~2 linhas de conteúdo (pedido com muitos produtos
+     * diferentes) desenha além da faixa reservada; com AutoPageBreak
+     * desligado isso só sai cortado pela borda da própria página, nunca
+     * cria página nova nem quebra o restante da etiqueta — degradação
+     * aceitável pro caso raro, não um crash.
+     */
+    private function drawDeclarationFooter(Fpdi $pdf, array $size, string $line): void
+    {
+        $marginSide = 6; // mm
+        $marginBottom = 1.5; // mm
+        $fontSize = 9;
+        $lineHeight = $fontSize * 0.42; // ~3.8mm
+        $reservedLines = 2;
+        $gapAboveText = 1.2; // mm entre a linha separadora e o texto
+
+        $contentWidth = $size['width'] - (2 * $marginSide);
+        $textHeight = $reservedLines * $lineHeight;
+
+        $lineY = $size['height'] - $marginBottom - $gapAboveText - $textHeight;
+        $textTop = $lineY + $gapAboveText;
+
+        $pdf->SetDrawColor(0, 0, 0);
+        $pdf->SetLineWidth(0.3);
+        $pdf->Line($marginSide, $lineY, $size['width'] - $marginSide, $lineY);
+
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetXY($marginSide, $textTop);
+        $pdf->SetFont('Arial', 'B', $fontSize);
+        $pdf->MultiCell($contentWidth, $lineHeight, $this->toLatin1($line), 0, 'C');
     }
 
     /**

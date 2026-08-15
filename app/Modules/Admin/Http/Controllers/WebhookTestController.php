@@ -107,16 +107,17 @@ class WebhookTestController extends Controller
         $pdf->Cell(0, 8, mb_convert_encoding('Destinatario: '.$order->shipping_name, 'ISO-8859-1', 'UTF-8'), 0, 1);
         $rawPdf = $pdf->Output('S');
 
-        // Mesmo formato do fluxo real (LabelFetchService::attempt()) — SKU|QTD=N,
-        // pedido explícito 2026-08-15.
+        // Mesmo formato do fluxo real (LabelFetchService::attempt()) —
+        // "SKU | QTD: NN", pedido explícito 2026-08-15.
         $order->loadMissing('items.product');
         $declarationTokens = $order->items->map(function ($item) {
             $sku = $item->product?->sku ?: $item->product_name;
+            $quantity = str_pad((string) $item->quantity, 2, '0', STR_PAD_LEFT);
 
-            return "{$sku}|QTD={$item->quantity}";
+            return "{$sku} | QTD: {$quantity}";
         })->all();
 
-        $finalPdf = $processor->appendDeclarationPage($rawPdf, $declarationTokens);
+        $finalPdf = $processor->overlayDeclarationFooter($rawPdf, $declarationTokens);
 
         $path = "labels/{$order->id}/etiqueta-teste-webhook-".now()->timestamp.'.pdf';
         Storage::disk('local')->put($path, $finalPdf);

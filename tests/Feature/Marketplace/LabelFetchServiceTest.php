@@ -155,13 +155,14 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Escopo pedido 2026-08-15: a declaração de conteúdo (SKU|QTD=N, em
-     * página extra — nunca sobreposta, ver BUG REAL pedido #307 no
-     * LabelProcessingService) só entra pra Shopee/TikTok, canal onde o
-     * problema real de quantidade errada enviada apareceu — Mercado Livre
-     * continua recebendo a etiqueta crua do canal, intacta.
+     * Escopo pedido 2026-08-15: a declaração de conteúdo ("SKU | QTD: NN",
+     * sobreposta no rodapé da MESMA etiqueta — ver histórico completo no
+     * docblock de LabelProcessingService::overlayDeclarationFooter()) só
+     * entra pra Shopee/TikTok, canal onde o problema real de quantidade
+     * errada enviada apareceu — Mercado Livre continua recebendo a
+     * etiqueta crua do canal, intacta.
      */
-    public function test_attempt_adds_the_declaration_page_for_shopee(): void
+    public function test_attempt_adds_the_declaration_footer_for_shopee(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
@@ -175,15 +176,15 @@ class LabelFetchServiceTest extends TestCase
         // O item de makeShipment() não tem product_id (sem SKU cadastrado),
         // então cai no fallback pro nome do produto — mesmo comportamento
         // de LabelFetchService::attempt() pra item sem produto local.
-        $this->assertStringContainsString('Produto teste|QTD=1', $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
 
-        // Página extra, nunca sobreposição — ver teste dedicado em
-        // LabelProcessingServiceTest pro caso multi-página.
+        // Sobreposição na mesma página, NUNCA página extra (desperdício de
+        // papel térmico) — pedido explícito 2026-08-15.
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $labelContents);
 
         try {
-            $this->assertSame(2, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
         } finally {
             @unlink($tempPath);
         }
@@ -203,7 +204,7 @@ class LabelFetchServiceTest extends TestCase
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertStringContainsString('ORG-KIT-BEGE-0001|QTD=3', $labelContents);
+        $this->assertStringContainsString('ORG-KIT-BEGE-0001 | QTD: 03', $labelContents);
     }
 
     public function test_attempt_does_not_touch_the_label_for_mercado_livre(): void

@@ -129,31 +129,34 @@ class LabelFetchService
         // Reativado 2026-08-15, pedido explícito — mas só pra Shopee/TikTok
         // Shop (CHANNELS_WITH_DECLARATION abaixo), não geral como antes de
         // 8a5032d: motivo real é reduzir erro de QUANTIDADE errada enviada
-        // (vários casos na implantação inicial), acrescentando uma
-        // "declaração de conteúdo" (SKU|QTD=N) como página extra no fim da
-        // própria etiqueta térmica 10x15, pra quem embala conferir antes de
-        // fechar a caixa — sem depender de olhar outra tela.
+        // (vários casos na implantação inicial), sobrepondo uma "declaração
+        // de conteúdo" (SKU | QTD: NN) numa faixa fina no rodapé da própria
+        // etiqueta térmica 10x15, pra quem embala conferir antes de fechar
+        // a caixa — sem depender de olhar outra tela.
         //
-        // REFEITO 2026-08-15 (BUG REAL, pedido #307): a primeira versão
-        // desenhava por cima da etiqueta (overlayProductList, texto+nome do
-        // produto) e colidiu com o rodapé "DANFE SIMPLIFICADO" real dessa
-        // etiqueta Shopee, saindo ilegível e vazando da página. Trocado por
-        // appendDeclarationPage() (página nova, nunca desenha em cima de
-        // nada) + formato SKU|QTD=N em vez do nome do produto (mais curto,
-        // e é o dado que bate com a etiqueta do produto no estoque — pedido
-        // explícito do usuário). Vírgula separa produtos quando o pedido
-        // tem mais de um. Só é possível pra etiqueta em PDF; se isso falhar
-        // por qualquer motivo, ainda imprime a etiqueta crua em vez de
-        // travar o pedido por causa disso.
+        // HISTÓRICO (mesmo dia, 2026-08-15): overlay original colidiu com o
+        // rodapé "DANFE SIMPLIFICADO" real da etiqueta do pedido #307
+        // (achado na etiqueta física impressa) -> trocado por página extra
+        // (appendDeclarationPage) pra nunca mais colidir -> pedido explícito
+        // do usuário voltou atrás: página extra imprime 2 etiquetas físicas
+        // por pedido, desperdício real de papel térmico. De volta a overlay
+        // (overlayDeclarationFooter), agora só com SKU (sem nome do
+        // produto, bem mais curto, reduz — não elimina — o risco de
+        // colisão; ver docblock do método pro limite conhecido). Vírgula
+        // separa produtos quando o pedido tem mais de um. Só é possível pra
+        // etiqueta em PDF; se isso falhar por qualquer motivo, ainda
+        // imprime a etiqueta crua em vez de travar o pedido por causa
+        // disso.
         if ($isPdf && in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true)) {
             try {
                 $declarationTokens = $shipment->order->items->map(function ($item) {
                     $sku = $item->product?->sku ?: $item->product_name;
+                    $quantity = str_pad((string) $item->quantity, 2, '0', STR_PAD_LEFT);
 
-                    return "{$sku}|QTD={$item->quantity}";
+                    return "{$sku} | QTD: {$quantity}";
                 })->all();
 
-                $contents = $this->processor->appendDeclarationPage($contents, $declarationTokens);
+                $contents = $this->processor->overlayDeclarationFooter($contents, $declarationTokens);
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

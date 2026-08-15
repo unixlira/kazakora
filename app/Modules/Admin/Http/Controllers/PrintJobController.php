@@ -117,8 +117,11 @@ class PrintJobController extends Controller
 
         return Inertia::render('Admin/Impressoes/Index', [
             'stats' => [
-                'revenueMonth' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->where('created_at', '>=', $startOfMonth)->sum('total'),
-                'revenueToday' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->whereDate('created_at', $today)->sum('total'),
+                // subtotal, não total — 'total' inclui frete (não é receita
+                // do vendedor), ver comentário em
+                // FinancialDashboardController::index().
+                'revenueMonth' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->where('created_at', '>=', $startOfMonth)->sum('subtotal'),
+                'revenueToday' => (float) Order::query()->whereIn('status', self::PAID_STATUSES)->whereDate('created_at', $today)->sum('subtotal'),
                 'ordersTotal' => Order::query()->count(),
             ],
             'channelCounts' => collect(self::CHANNEL_QUEUE_ORDER)->map(fn ($channel) => [

@@ -174,25 +174,34 @@ class DashboardAgentController extends Controller
         $prevMonthStart = $monthStart->copy()->subMonthNoOverflow();
         $prevMonthToDate = $prevMonthStart->copy()->addDays($now->day - 1)->endOfDay();
 
+        // BUG REAL 2026-08-15 (achado investigando reclamação real do
+        // usuário — pedido #305 Shopee: R$44,99 no Seller Center, R$58,24
+        // aqui no dashboard do KoraSync): 'total' = subtotal + frete
+        // (shipping_cost) — correto pro VALOR DA NOTA FISCAL (SEFAZ exige,
+        // ver ShopeeDriver::importOrder()), mas o frete pago pelo
+        // comprador/Shopee ao transportador nunca é receita do vendedor.
+        // 'subtotal' é o valor real dos produtos, o mesmo que aparece no
+        // Seller Center do canal — ver comentário completo em
+        // FinancialDashboardController::index().
         $revenueToday = (float) Order::query()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('total');
+            ->sum('subtotal');
 
         $revenueYesterday = (float) Order::query()
             ->whereBetween('created_at', [$yesterday, $today])
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('total');
+            ->sum('subtotal');
 
         $revenueMonth = (float) Order::query()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('total');
+            ->sum('subtotal');
 
         $revenueMonthPrev = (float) Order::query()
             ->whereBetween('created_at', [$prevMonthStart, $prevMonthToDate])
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('total');
+            ->sum('subtotal');
 
         $salesToday = Order::query()
             ->where('created_at', '>=', $today)

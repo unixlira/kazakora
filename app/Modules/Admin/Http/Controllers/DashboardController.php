@@ -39,10 +39,23 @@ class DashboardController extends Controller
                 // desde o início. Escopado pro mês corrente, mesma definição
                 // que o KoraSync (DashboardAgentController::metrics()) já
                 // usava certo pra "revenue_month".
+                //
+                // BUG REAL 2026-08-15 (achado investigando reclamação real
+                // do usuário — pedido #305 Shopee: R$44,99 no Seller Center,
+                // R$58,24 registrado aqui): 'total' = subtotal + frete
+                // (shipping_cost), correto pro VALOR DA NOTA FISCAL (exigido
+                // pela SEFAZ, ver ShopeeDriver::importOrder()), mas o frete
+                // pago pelo comprador/Shopee ao transportador nunca é receita
+                // do vendedor — sem custo de frete equivalente subtraído em
+                // lugar nenhum, ele inflava "faturamento" (e lucro) igual em
+                // todo pedido com frete. CashFlowController já fazia certo
+                // (gross_amount = subtotal); troquei 'total' por 'subtotal'
+                // aqui e em todo outro lugar que soma "receita/faturamento"
+                // pra bater com a definição já correta do Fluxo de Caixa.
                 'revenue' => (float) Order::query()
                     ->where('created_at', '>=', $startOfMonth)
                     ->whereIn('status', self::PAID_STATUSES)
-                    ->sum('total'),
+                    ->sum('subtotal'),
                 'productsCount' => Product::query()->where('is_active', true)->count(),
                 'lowStockCount' => Product::query()->where('stock', '<=', 5)->count(),
                 // "Visita" = IP diferente, não pageview — um mesmo visitante
@@ -56,7 +69,7 @@ class DashboardController extends Controller
                 'revenueToday' => (float) Order::query()
                     ->whereDate('created_at', $today)
                     ->whereIn('status', self::PAID_STATUSES)
-                    ->sum('total'),
+                    ->sum('subtotal'),
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
                     ->where('created_at', '>=', $startOfMonth)
@@ -96,8 +109,10 @@ class DashboardController extends Controller
     /** @return array<int, array{origin: string, total: float}> */
     private function revenueByChannel(): array
     {
+        // subtotal, não total — ver comentário em index() sobre frete não
+        // ser receita do vendedor.
         return Order::query()
-            ->selectRaw('origin, SUM(total) as total')
+            ->selectRaw('origin, SUM(subtotal) as total')
             ->whereIn('status', self::PAID_STATUSES)
             ->groupBy('origin')
             ->get()
@@ -153,8 +168,10 @@ class DashboardController extends Controller
     {
         $start = Carbon::today()->subMonths(3);
 
+        // subtotal, não total — ver comentário em index() sobre frete não
+        // ser receita do vendedor.
         $rows = Order::query()
-            ->selectRaw('DATE(created_at) as date, SUM(total) as total')
+            ->selectRaw('DATE(created_at) as date, SUM(subtotal) as total')
             ->whereNot('status', Order::STATUS_CANCELLED)
             ->where('created_at', '>=', $start)
             ->groupBy('date')

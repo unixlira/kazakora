@@ -92,7 +92,10 @@ class DashboardAgentControllerTest extends TestCase
 
     public function test_metrics_reports_todays_revenue_sales_cancellations_refunds_and_cart_items(): void
     {
-        $mlOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'total' => 150, 'origin' => Order::ORIGIN_MERCADO_LIVRE]);
+        // subtotal igual a total em todos os pedidos deste teste (sem
+        // frete) — revenue_today soma 'subtotal', não 'total' (que inclui
+        // frete e não é receita do vendedor, ver comentário no controller).
+        $mlOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'subtotal' => 150, 'total' => 150, 'origin' => Order::ORIGIN_MERCADO_LIVRE]);
         OrderChannelFee::create([
             'order_id' => $mlOrder->id,
             'channel' => Order::ORIGIN_MERCADO_LIVRE,
@@ -101,11 +104,11 @@ class DashboardAgentControllerTest extends TestCase
             'source' => OrderChannelFee::SOURCE_API,
             'computed_at' => now(),
         ]);
-        $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'total' => 50]);
-        $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'total' => 30]);
-        $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'total' => 999]);
+        $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'subtotal' => 50, 'total' => 50]);
+        $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'subtotal' => 30, 'total' => 30]);
+        $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'subtotal' => 999, 'total' => 999]);
 
-        $refundedOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'total' => 80]);
+        $refundedOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'subtotal' => 80, 'total' => 80]);
         Payment::create([
             'order_id' => $refundedOrder->id,
             'provider' => Payment::PROVIDER_MERCADOPAGO,
@@ -131,6 +134,31 @@ class DashboardAgentControllerTest extends TestCase
             // OrderChannelFee, então entram sem desconto nenhum.
             'net_profit_today' => 260.0,
         ]);
+    }
+
+    /**
+     * BUG REAL 2026-08-15 — cobertura de regressão. Pedido #305 Shopee real:
+     * subtotal 44.99, shipping_cost 13.25, total 58.24 (subtotal+frete,
+     * correto pro valor da nota fiscal — ver ShopeeDriver::importOrder()).
+     * O dashboard do KoraSync mostrava 58.24 como "faturado hoje", mas o
+     * Seller Center da Shopee (e o dinheiro que realmente cai pro
+     * vendedor) mostra 44.99 — o frete pago ao transportador nunca foi
+     * receita do vendedor. revenue_today tem que somar subtotal, não total.
+     */
+    public function test_metrics_revenue_excludes_shipping_cost_paid_to_the_carrier(): void
+    {
+        $this->makeOrder([
+            'status' => Order::STATUS_PAID,
+            'origin' => Order::ORIGIN_SHOPEE,
+            'subtotal' => 44.99,
+            'shipping_cost' => 13.25,
+            'total' => 58.24,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/metrics');
+
+        $response->assertOk();
+        $response->assertJson(['revenue_today' => 44.99]);
     }
 
     public function test_channel_orders_returns_404_for_an_unknown_channel(): void

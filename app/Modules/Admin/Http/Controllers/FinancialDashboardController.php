@@ -53,10 +53,21 @@ class FinancialDashboardController extends Controller
         // voltar com erro de ponto flutuante binário (ex.: 10.20 + 5.10 =
         // 15.299999999999999) — arredonda na fonte pra nunca vazar isso
         // pro dashboard nem pra conta de lucro líquido abaixo.
+        // BUG REAL 2026-08-15 (achado investigando reclamação real do
+        // usuário — pedido #305 Shopee: R$44,99 no Seller Center, R$58,24
+        // aqui): 'total' = subtotal + frete (shipping_cost) — correto pro
+        // VALOR DA NOTA FISCAL (SEFAZ exige, ver ShopeeDriver::
+        // importOrder()), mas o frete pago pelo comprador/Shopee ao
+        // transportador nunca é receita do vendedor, e netProfitMonth logo
+        // abaixo não tinha NENHUM custo de frete equivalente subtraído —
+        // então o frete simplesmente inflava receita E lucro em todo pedido
+        // com frete, desde que essas métricas existem (2026-08-09).
+        // CashFlowController já fazia certo (gross_amount = subtotal);
+        // troquei 'total' por 'subtotal' aqui pra bater com essa definição.
         $salesRevenueMonth = round((float) Order::query()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
-            ->sum('total'), 2);
+            ->sum('subtotal'), 2);
 
         $productCostMonth = round((float) Order::query()
             ->whereIn('orders.status', self::REVENUE_STATUSES)
@@ -104,7 +115,7 @@ class FinancialDashboardController extends Controller
         // faturamento bruto desde o primeiro dia, 2º lucro líquido também
         // desde o primeiro dia (mesma conta do mês, sem o filtro de data),
         // atualiza sozinho assim que custo de produto for cadastrado.
-        $salesRevenueAllTime = round((float) Order::query()->whereIn('status', self::REVENUE_STATUSES)->sum('total'), 2);
+        $salesRevenueAllTime = round((float) Order::query()->whereIn('status', self::REVENUE_STATUSES)->sum('subtotal'), 2);
 
         $productCostAllTime = round((float) Order::query()
             ->whereIn('orders.status', self::REVENUE_STATUSES)
@@ -139,7 +150,7 @@ class FinancialDashboardController extends Controller
                 // (receita real − custo − anúncio), pra ser literalmente a
                 // métrica de "tá dando lucro ou não".
                 'profitMonth' => $netProfitMonth,
-                'salesRevenue' => (float) Order::query()->whereNot('status', Order::STATUS_CANCELLED)->sum('total'),
+                'salesRevenue' => (float) Order::query()->whereNot('status', Order::STATUS_CANCELLED)->sum('subtotal'),
                 // Faturamento bruto/líquido desde o primeiro dia — pedido
                 // explícito 2026-08-09 (cards do topo invertidos).
                 'grossRevenueAllTime' => $salesRevenueAllTime,

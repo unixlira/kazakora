@@ -43,7 +43,10 @@ class ReportController extends Controller
             'topProducts' => $topProducts,
             'summary' => [
                 'ordersCount' => (clone $orders)->count(),
-                'revenue' => (float) (clone $orders)->sum('total'),
+                // subtotal, não total — 'total' inclui frete (não é receita
+                // do vendedor), ver comentário em
+                // FinancialDashboardController::index().
+                'revenue' => (float) (clone $orders)->sum('subtotal'),
             ],
         ]);
     }

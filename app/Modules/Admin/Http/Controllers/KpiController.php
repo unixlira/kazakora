@@ -22,8 +22,10 @@ class KpiController extends Controller
         $validOrders = Order::query()->whereNot('status', Order::STATUS_CANCELLED);
         $validOrdersMonth = (clone $ordersMonth)->whereNot('status', Order::STATUS_CANCELLED);
 
+        // subtotal, não total — 'total' inclui frete (não é receita do
+        // vendedor), ver comentário em FinancialDashboardController::index().
         $averageTicket = (clone $validOrders)->count() > 0
-            ? (float) (clone $validOrders)->sum('total') / (clone $validOrders)->count()
+            ? (float) (clone $validOrders)->sum('subtotal') / (clone $validOrders)->count()
             : 0.0;
 
         // IP diferente, não visitor_id (cookie) — mesma definição de

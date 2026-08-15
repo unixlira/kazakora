@@ -95,6 +95,19 @@ class FinancialDashboardController extends Controller
 
         $adSpendMonth = round((float) ChannelAdSpend::query()->where('date', '>=', $startOfMonth)->sum('spend'), 2);
 
+        // Pedido explícito 2026-08-15: frete continua fora da conta de
+        // faturamento/lucro (é pago pelo comprador/canal à transportadora,
+        // nunca chega no vendedor — ver comentário em $salesRevenueMonth
+        // acima), mas o usuário quer o valor visível/rastreável mesmo assim
+        // — puramente informativo, nunca subtraído nem somado em nenhuma
+        // conta de lucro. O dado em si já vive em orders.shipping_cost
+        // desde sempre (ShopeeDriver::importOrder()); isso só soma pra
+        // exibição.
+        $shippingCostMonth = round((float) Order::query()
+            ->whereIn('status', self::REVENUE_STATUSES)
+            ->where('created_at', '>=', $startOfMonth)
+            ->sum('shipping_cost'), 2);
+
         $productsWithCost = Product::query()->where('is_active', true)->whereNotNull('cost_price')->count();
         $productsActive = Product::query()->where('is_active', true)->count();
 
@@ -176,6 +189,11 @@ class FinancialDashboardController extends Controller
                 // 2026-08-10, ver FlexDeliveryService.
                 'flexCostMonth' => $flexCostMonth,
                 'netProfitMonth' => $netProfitMonth,
+                // Informativo — pedido explícito 2026-08-15. NÃO entra em
+                // nenhuma soma/subtração do extrato (nem custo, nem
+                // receita): é o frete que o comprador/canal pagou à
+                // transportadora, dinheiro que nunca passa pelo vendedor.
+                'shippingCostMonth' => $shippingCostMonth,
                 // Sinaliza dado incompleto em vez de deixar o número
                 // parecer preciso quando não é — pedido explícito
                 // 2026-08-09 (nenhum produto tem custo cadastrado hoje).

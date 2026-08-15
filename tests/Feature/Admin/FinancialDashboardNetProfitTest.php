@@ -57,7 +57,7 @@ class FinancialDashboardNetProfitTest extends TestCase
     {
         $product = Product::factory()->create(['price' => 60.375, 'cost_price' => 40.25]);
 
-        $order = $this->makeOrder(['total' => 120.75]);
+        $order = $this->makeOrder(['subtotal' => 120.75, 'total' => 120.75]);
         $order->items()->create([
             'product_id' => $product->id,
             'product_name' => $product->name,
@@ -122,7 +122,7 @@ class FinancialDashboardNetProfitTest extends TestCase
     {
         // Valores fracionários de propósito (ver docblock da classe) —
         // 100.75 - 18.30 = 82.45, nunca um total redondo tipo 100.0/82.0.
-        $lastMonthOrder = $this->makeOrder(['total' => 100.75]);
+        $lastMonthOrder = $this->makeOrder(['subtotal' => 100.75, 'total' => 100.75]);
         $lastMonthOrder->forceFill(['created_at' => now()->subMonthNoOverflow()])->save();
 
         OrderChannelFee::create([
@@ -144,6 +144,27 @@ class FinancialDashboardNetProfitTest extends TestCase
             // 100.75 de receita - 18.30 de taxa, sem custo de
             // produto/ads/flex nesse pedido.
             ->where('summary.netProfitAllTime', 82.45));
+    }
+
+    /**
+     * Pedido explícito 2026-08-15 (achado investigando reclamação real do
+     * usuário — pedido #305 Shopee: R$44,99 no Seller Center vs R$58,24 no
+     * dashboard): frete é informativo (visível, atrelado ao pedido) mas
+     * nunca entra em salesRevenueMonth/netProfitMonth — quem cobra/paga o
+     * frete é o canal (Shopee Xpress etc.), nunca o vendedor.
+     */
+    public function test_shipping_cost_is_informational_and_never_affects_revenue_or_profit(): void
+    {
+        $this->makeOrder(['subtotal' => 44.99, 'shipping_cost' => 13.25, 'total' => 58.24]);
+
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('netProfit.shippingCostMonth', 13.25)
+            ->where('netProfit.salesRevenueMonth', 44.99)
+            ->where('netProfit.netProfitMonth', 44.99)
+            ->where('summary.grossRevenueMonth', 44.99));
     }
 
     public function test_stock_value_sums_cost_price_times_stock_across_all_products(): void
@@ -177,7 +198,7 @@ class FinancialDashboardNetProfitTest extends TestCase
         // Item de emissão manual de nota (serviço avulso, sem product_id) —
         // não pode quebrar a query de custo nem contar como custo zero
         // indevido pra um produto real.
-        $order = $this->makeOrder(['total' => 50]);
+        $order = $this->makeOrder(['subtotal' => 50, 'total' => 50]);
         $order->items()->create([
             'product_id' => null,
             'product_name' => 'Serviço avulso',

@@ -167,6 +167,14 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 <span class="text-slate-500 dark:text-slate-400">Faturamento Bruto do Mês</span>
                 <span class="font-semibold">{{ formatPrice(netProfit.salesRevenueMonth) }}</span>
             </div>
+            <!-- Pedido explícito 2026-08-15: frete não é receita nem custo
+                 do vendedor (quem cobra/paga a transportadora é o canal —
+                 Shopee Xpress etc.), então fica fora da conta de cima pra
+                 baixo — mas visível, pra quem quiser conferir. -->
+            <div class="flex items-center justify-between py-1.5 text-sm text-slate-400 dark:text-slate-500">
+                <span>Frete do Mês (informativo — não afeta o lucro)</span>
+                <span class="font-medium">{{ formatPrice(netProfit.shippingCostMonth) }}</span>
+            </div>
             <div class="flex items-center justify-between py-1.5 text-sm">
                 <span class="text-slate-500 dark:text-slate-400">(–) Gasto com Anúncio</span>
                 <span class="font-semibold text-error">{{ formatPrice(netProfit.adSpendMonth) }}</span>

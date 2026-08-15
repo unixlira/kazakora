@@ -38,27 +38,13 @@ const disconnect = async (integration) => {
     }
 };
 
-// Amazon: app privado (não publicado na loja de apps) não usa o redirect
-// OAuth — o vendedor gera o refresh token direto no Seller Central
-// (Partner Network > Develop Apps > Autorizar) e cola aqui. Quando o .env já
-// tem client_id/secret+refresh token (integration.envConfigured), o card
-// mostra um botão de 1 clique em vez do formulário — connectAmazon() no
-// backend já sabe cair pro .env quando o form vem vazio (pedido explícito do
-// usuário 2026-08-07: "deve carregar essas informações do env").
-const showAmazonForm = ref(false);
-const amazonForm = ref({ refresh_token: '', seller_id: '' });
-const connectingAmazon = ref(false);
-
-const connectAmazon = (payload = amazonForm.value) => {
-    connectingAmazon.value = true;
-    router.post('/admin/integracoes/amazon/conectar', payload, {
-        preserveScroll: true,
-        onFinish: () => { connectingAmazon.value = false; },
-        onSuccess: () => { showAmazonForm.value = false; amazonForm.value = { refresh_token: '', seller_id: '' }; },
-    });
-};
-
-const connectAmazonFromEnv = () => connectAmazon({ refresh_token: '', seller_id: '' });
+// Achado real 2026-08-15: Amazon usava um formulário próprio (colar
+// refresh token gerado manualmente no Seller Central) porque o app estava
+// em Draft — agora que AMAZON_AUTH_DRAFT_MODE é false em produção, ele cai
+// no mesmo caminho simples de Mercado Livre/Shopee (connectHref = link de
+// redirect OAuth, ver template abaixo), sem formulário nenhum: um clique
+// manda pra Amazon, a Amazon manda de volta já conectado. Pedido explícito
+// do usuário: "remove os inputs... só clica no botão".
 </script>
 
 <template>
@@ -119,60 +105,7 @@ const connectAmazonFromEnv = () => connectAmazon({ refresh_token: '', seller_id:
                 </div>
 
                 <div class="mt-4">
-                    <template v-if="!integration.connected && integration.available && integration.manualConnect && integration.envConfigured">
-                        <button type="button" :disabled="connectingAmazon"
-                            class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50"
-                            @click="connectAmazonFromEnv">
-                            {{ connectingAmazon ? 'Conectando...' : 'Conectar (usar .env)' }}
-                        </button>
-                        <p class="mt-1.5 text-center text-xs text-slate-400">Client ID/Secret e refresh token já configurados no .env.</p>
-                        <button type="button" class="mt-2 block w-full text-center text-xs text-slate-400 hover:text-primary hover:underline"
-                            @click="showAmazonForm = !showAmazonForm">
-                            {{ showAmazonForm ? 'Cancelar' : 'usar outro refresh token' }}
-                        </button>
-                        <form v-if="showAmazonForm" class="mt-3 space-y-2" @submit.prevent="connectAmazon()">
-                            <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Refresh token (Seller Central &gt; Autorizar)</label>
-                                <input v-model="amazonForm.refresh_token" type="text" required
-                                    class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" />
-                            </div>
-                            <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Selling Partner ID (opcional)</label>
-                                <input v-model="amazonForm.seller_id" type="text"
-                                    class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" />
-                            </div>
-                            <button type="submit" :disabled="connectingAmazon"
-                                class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
-                                {{ connectingAmazon ? 'Conectando...' : 'Confirmar conexão' }}
-                            </button>
-                        </form>
-                    </template>
-                    <template v-else-if="!integration.connected && integration.available && integration.manualConnect">
-                        <button type="button" class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"
-                            @click="showAmazonForm = !showAmazonForm">
-                            {{ showAmazonForm ? 'Cancelar' : 'Conectar com refresh token' }}
-                        </button>
-                        <form v-if="showAmazonForm" class="mt-3 space-y-2" @submit.prevent="connectAmazon()">
-                            <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Refresh token (Seller Central &gt; Autorizar)</label>
-                                <input v-model="amazonForm.refresh_token" type="text" required
-                                    class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" />
-                            </div>
-                            <div>
-                                <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Selling Partner ID (opcional)</label>
-                                <input v-model="amazonForm.seller_id" type="text"
-                                    class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" />
-                            </div>
-                            <button type="submit" :disabled="connectingAmazon"
-                                class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
-                                {{ connectingAmazon ? 'Conectando...' : 'Confirmar conexão' }}
-                            </button>
-                            <a href="/api/amazon/auth" class="block text-center text-xs text-primary hover:underline">
-                                ou autorizar via OAuth (apps publicados)
-                            </a>
-                        </form>
-                    </template>
-                    <a v-else-if="!integration.connected && integration.available" :href="integration.connectHref"
+                    <a v-if="!integration.connected && integration.available" :href="integration.connectHref"
                         class="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
                         Conectar
                     </a>

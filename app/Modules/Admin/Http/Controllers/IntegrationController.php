@@ -41,15 +41,20 @@ class IntegrationController extends Controller
             'connectHref' => null,
             'available' => false,
         ],
+        // Achado real 2026-08-15: até aqui o card só mostrava o formulário
+        // de colar refresh token manual (self-authorization, ver
+        // connectAmazon() abaixo) — mas AMAZON_AUTH_DRAFT_MODE já está
+        // false em produção (app publicado), então o redirect OAuth padrão
+        // funciona igual ao Mercado Livre/Shopee: connectHref sozinho já
+        // basta, sem formulário nenhum. Pedido explícito do usuário: "só
+        // clica no botão, a URL completa é montada" — é exatamente o que
+        // AmazonController::redirectToAuth() já fazia, só não estava
+        // exposto porque 'manualConnect' desviava pro formulário.
         MarketplaceAccount::CHANNEL_AMAZON => [
             'name' => 'Amazon',
             'description' => 'Importação de pedidos e etiqueta via Fulfillment por Comerciante (MFN). Envio de nota fiscal e publicação de produto ainda não implementados — endpoint SP-API real pra NF-e de pedido não-FBA não confirmado na documentação pública.',
             'icon' => 'fab fa-amazon',
             'connectHref' => '/api/amazon/auth',
-            // Apps privados (não publicados) não usam o redirect OAuth — o
-            // vendedor gera o refresh token direto no Seller Central e cola
-            // aqui (ver connectAmazon() abaixo).
-            'manualConnect' => true,
             'available' => true,
         ],
     ];
@@ -81,19 +86,6 @@ class IntegrationController extends Controller
                 'connected' => $account?->isConnected() ?? false,
                 'connectedAt' => $account?->connected_at,
                 'accountLabel' => $channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE ? $mercadoLivreToken?->ml_nickname : $account?->seller_id,
-                'manualConnect' => $meta['manualConnect'] ?? false,
-                // Amazon: quando o .env já tem client_id/secret + o refresh
-                // token de self-authorization, o card conecta com 1 clique
-                // em vez de pedir pra colar o token nos campos de novo
-                // (pedido explícito do usuário 2026-08-07 — "deve carregar
-                // essas informações do env"). connectAmazon() usa esses
-                // mesmos valores de config como fallback quando o form vem
-                // vazio.
-                'envConfigured' => $channel === MarketplaceAccount::CHANNEL_AMAZON
-                    ? filled(config('services.amazon.lwa_client_id'))
-                        && filled(config('services.amazon.lwa_client_secret'))
-                        && filled(config('services.amazon.bootstrap_refresh_token'))
-                    : false,
             ];
         })->values();
 
@@ -147,19 +139,17 @@ class IntegrationController extends Controller
     }
 
     /**
-     * Self-authorization: apps SP-API privados (não publicados na loja de
-     * apps) deixam o próprio vendedor gerar um refresh token direto no
-     * Seller Central (Partner Network > Develop Apps > Autorizar), sem
-     * precisar do redirect OAuth completo (ver AmazonController, usado só
-     * se/quando o app for publicado). AmazonAuthService::connectWithRefreshToken()
-     * valida o token contra a API de verdade antes de persistir.
-     *
-     * Campos do form são opcionais: quando vêm vazios (botão "Conectar
-     * (usar .env)" do card, sem form nenhum), cai pro que já está no .env
-     * (AMAZON_REFRESH_TOKEN/AMAZON_SELLER_ID) — mesmo valor que o card já
-     * usa pra decidir se mostra esse atalho (`envConfigured`, ver index()).
-     * Colar manualmente continua funcionando do mesmo jeito, tem prioridade
-     * sobre o .env quando os dois existem.
+     * Self-authorization: rota de reserva pra apps SP-API ainda em Draft
+     * (não publicados), onde o vendedor gera um refresh token direto no
+     * Seller Central (Partner Network > Develop Apps > Autorizar) e cola
+     * na mão, sem o redirect OAuth completo. Achado real 2026-08-15: o
+     * card não usa mais este caminho por padrão (AMAZON_AUTH_DRAFT_MODE já
+     * é false em produção, o redirect OAuth de AmazonController funciona
+     * normal, mesmo padrão do Mercado Livre/Shopee) — este endpoint fica
+     * só como via manual de emergência (chamado direto via POST), não tem
+     * botão nenhum na UI apontando pra cá. AmazonAuthService::
+     * connectWithRefreshToken() valida o token contra a API de verdade
+     * antes de persistir.
      */
     public function connectAmazon(Request $request): RedirectResponse
     {

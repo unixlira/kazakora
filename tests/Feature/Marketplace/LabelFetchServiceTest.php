@@ -155,12 +155,13 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Escopo pedido 2026-08-15: a declaração de conteúdo (SKU + quantidade
-     * no rodapé da etiqueta) só entra pra Shopee/TikTok, canal onde o
+     * Escopo pedido 2026-08-15: a declaração de conteúdo (SKU|QTD=N, em
+     * página extra — nunca sobreposta, ver BUG REAL pedido #307 no
+     * LabelProcessingService) só entra pra Shopee/TikTok, canal onde o
      * problema real de quantidade errada enviada apareceu — Mercado Livre
-     * continua recebendo a etiqueta crua do canal, sem sobreposição nenhuma.
+     * continua recebendo a etiqueta crua do canal, intacta.
      */
-    public function test_attempt_adds_the_declaration_overlay_for_shopee(): void
+    public function test_attempt_adds_the_declaration_page_for_shopee(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
@@ -171,7 +172,38 @@ class LabelFetchServiceTest extends TestCase
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertStringContainsString('CONFERIR QTD ANTES DE EMBALAR', $labelContents);
+        // O item de makeShipment() não tem product_id (sem SKU cadastrado),
+        // então cai no fallback pro nome do produto — mesmo comportamento
+        // de LabelFetchService::attempt() pra item sem produto local.
+        $this->assertStringContainsString('Produto teste|QTD=1', $labelContents);
+
+        // Página extra, nunca sobreposição — ver teste dedicado em
+        // LabelProcessingServiceTest pro caso multi-página.
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $labelContents);
+
+        try {
+            $this->assertSame(2, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    public function test_attempt_uses_the_product_sku_when_one_is_linked(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['sku' => 'ORG-KIT-BEGE-0001']);
+        $shipment->order->items()->first()->update(['product_id' => $product->id, 'quantity' => 3]);
+
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertStringContainsString('ORG-KIT-BEGE-0001|QTD=3', $labelContents);
     }
 
     public function test_attempt_does_not_touch_the_label_for_mercado_livre(): void

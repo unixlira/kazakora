@@ -7,28 +7,17 @@ use RuntimeException;
 use setasign\Fpdi\Fpdi;
 
 /**
- * Processamento de etiqueta pra tela de teste de impressão
- * (Admin/Integracoes/TesteImpressao) — converte ZPL pra PDF quando o canal
- * exige (Shopee) e sobrepõe a lista de produtos do pedido em negrito antes
- * de mandar pro PrintJob. Serviço isolado de propósito: usado só pela tela
- * de teste hoje, mas é candidato natural a reaproveitar quando o fluxo
- * automático (PollChannelShippingLabels) também precisar dessa sobreposição.
+ * Processamento de etiqueta — converte ZPL pra PDF quando o canal exige
+ * (Shopee) e acrescenta a declaração de conteúdo (SKU + quantidade) como
+ * página extra no fim do PDF antes de mandar pro PrintJob. Usado tanto pelo
+ * fluxo automático (LabelFetchService::attempt(), Shopee/TikTok) quanto pela
+ * tela de teste de impressão (Admin/Integracoes/TesteImpressao).
  */
 class LabelProcessingService
 {
     /** Dots por mm assumido pro ZPL da Shopee — impressoras térmicas de etiqueta de marketplace usam quase sempre 203dpi. */
     private const DENSITY_DPMM = 8;
 
-    /**
-     * Teto pra faixa de declaração de conteúdo — nunca deixa ela comer mais
-     * que 40% da etiqueta térmica (10x15cm real, ver
-     * LabelProcessingService::extractLabelSizeInInches()), não importa
-     * quantos itens o pedido tenha. Sem esse teto, um pedido com muitos
-     * itens diferentes cresceria a faixa pra cima até invadir código de
-     * barras/endereço — exatamente o bug que os commits a7a595d/d7ac233 já
-     * corrigiram uma vez pro caso comum; isso cobre o caso extremo.
-     */
-    private const MAX_BAND_HEIGHT_RATIO = 0.40;
 
     /**
      * Zebra (ZPL) não tem conversor nativo em PHP — delega pra API pública
@@ -87,140 +76,101 @@ class LabelProcessingService
     }
 
     /**
-     * Adiciona a declaração de conteúdo (cabeçalho + lista de produtos,
-     * quantidade em destaque) no rodapé da etiqueta, abaixo de uma linha
-     * separadora, sem tocar em mais nada da etiqueta original (FPDI importa
-     * a página como template e só desenha por cima — nenhum retângulo de
-     * fundo é pintado, então nada da etiqueta original é apagado, mesmo que
-     * a faixa calculada não fique exatamente onde deveria).
+     * Acrescenta a declaração de conteúdo como uma PÁGINA NOVA no fim do
+     * PDF (mesmo tamanho da etiqueta térmica, 10x15cm/4x6"), nunca
+     * desenhando por cima da etiqueta original.
      *
-     * Existe pra separador reduzir erro de quantidade errada enviada (causa
-     * real de vários pedidos errados na implantação inicial) — quem embala
-     * confere a etiqueta impressa contra o pedido físico antes de fechar a
-     * caixa, em vez de confiar de cabeça na tela do sistema.
+     * BUG REAL 2026-08-15 (pedido #307, achado direto na etiqueta física
+     * impressa): a versão anterior desenhava a declaração como uma faixa
+     * sobreposta na borda inferior da MESMA página, assumindo que aquela
+     * área ficava sempre vazia — só que o layout real desse pedido Shopee
+     * já tem um rodapé "DANFE SIMPLIFICADO" com o próprio código de barras
+     * bem colado na borda inferior, e a faixa saiu direto em cima dele
+     * (ilegível), com o texto ainda vazando pra fora da página pela
+     * direita. Não dá pra confiar em heurística de "área vazia" numa
+     * etiqueta real cujo layout varia por conta/transportadora — a única
+     * garantia de nunca sobrepor nada é nunca desenhar na mesma página.
+     * Uma página extra no fim custa uma etiqueta a mais de papel térmico,
+     * mas nunca estraga a etiqueta de envio em si.
      *
-     * Fica sempre colada na borda inferior, com fonte pequena (mesma ordem
-     * de grandeza do DANFE simplificado, não do texto principal da
-     * etiqueta) — se a lista tiver mais de 6 produtos, reduz a fonte e
-     * divide em colunas (grid) pra não crescer verticalmente e invadir a
-     * área do código de barras/QR/endereço, que ficam sempre acima dessa
-     * faixa; ver MAX_BAND_HEIGHT_RATIO/fitDeclarationLayout() pro teto que
-     * garante isso mesmo em pedidos com muitos itens diferentes (trunca a
-     * lista com um "+N itens" em vez de estourar a faixa).
+     * Existe pra reduzir erro de quantidade errada enviada (causa real de
+     * vários pedidos errados na implantação inicial) — quem embala confere
+     * a etiqueta impressa contra o pedido físico antes de fechar a caixa,
+     * em vez de confiar de cabeça na tela do sistema.
      *
-     * @param  array<int, string>  $productNames  já formatadas pelo chamador (ex.: "2x SKU123 — Nome do produto")
+     * @param  array<int, string>  $declarationTokens  já formatados pelo chamador (ex.: "SKU123|QTD=2"), um por produto
      */
-    public function overlayProductList(string $pdfBytes, array $productNames): string
+    public function appendDeclarationPage(string $pdfBytes, array $declarationTokens): string
     {
         $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
         file_put_contents($tempPdfPath, $pdfBytes);
 
         try {
             $pdf = new Fpdi();
-            $pdf->setSourceFile($tempPdfPath);
-            $templateId = $pdf->importPage(1);
-            $size = $pdf->getTemplateSize($templateId);
+            $pageCount = $pdf->setSourceFile($tempPdfPath);
 
-            // Sem isso, a margem padrão de quebra automática do FPDF (2cm)
-            // manda o conteúdo colado no rodapé pra uma SEGUNDA página em
-            // vez de desenhar na etiqueta atual — foi por isso que o nome
-            // do produto saiu numa "etiqueta" separada.
-            $pdf->SetAutoPageBreak(false);
+            // Reimporta TODAS as páginas originais sem tocar em nada nelas
+            // (etiqueta de lote com múltiplos volumes pode vir com mais de
+            // uma página, ver histórico do Mercado Envios Full) — cada uma
+            // vira uma página idêntica no PDF de saída.
+            $lastSize = null;
 
-            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            for ($i = 1; $i <= $pageCount; $i++) {
+                $templateId = $pdf->importPage($i);
+                $size = $pdf->getTemplateSize($templateId);
+                $lastSize = $size;
 
-            // Desloca a etiqueta original inteira ~10px pra direita — ela vinha
-            // colada na borda esquerda cortando o "Destinatário" impresso ali,
-            // enquanto sobrava espaço em branco do lado direito. Área da
-            // página não muda (mesma largura/altura), só a posição do
-            // conteúdo original dentro dela.
-            $leftMarginMm = 10 * (25.4 / 96); // 10px a 96dpi ≈ 2.65mm
-            $pdf->useTemplate($templateId, $leftMarginMm, 0);
+                $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
 
-            $names = $productNames !== [] ? $productNames : ['(sem produtos)'];
+                // Desloca só a PRIMEIRA página ~10px pra direita — ela vinha
+                // colada na borda esquerda cortando o "Destinatário"
+                // impresso ali, enquanto sobrava espaço em branco do lado
+                // direito (achado real, etiquetas anteriores). Área da
+                // página não muda, só a posição do conteúdo original nela.
+                $leftMarginMm = $i === 1 ? 10 * (25.4 / 96) : 0; // 10px a 96dpi ≈ 2.65mm
+                $pdf->useTemplate($templateId, $leftMarginMm, 0);
+            }
 
-            $marginSide = 6; // mm — mais folga que antes: 3mm cortava o "Destinatário" impresso perto da borda esquerda
-            $marginBottom = 2; // mm
-            $lineGap = 1.5; // mm entre a linha separadora e o texto
-            $headerHeight = 3; // mm — linha do título "DECLARAÇÃO DE CONTEÚDO"
+            // Página nova, em branco, do mesmo tamanho da etiqueta — só a
+            // declaração vive aqui, nunca em cima de nada da etiqueta real.
+            $pdf->AddPage($lastSize['orientation'], [$lastSize['width'], $lastSize['height']]);
+            $pdf->SetAutoPageBreak(true, 6); // se a lista for enorme, continua em mais uma página em vez de vazar/cortar texto
 
-            $maxBandHeight = $size['height'] * self::MAX_BAND_HEIGHT_RATIO;
-            $maxListHeight = max(0.0, $maxBandHeight - $headerHeight - $lineGap - 1);
-            [$columns, $fontSize, $names] = $this->fitDeclarationLayout($names, $maxListHeight);
-
-            $lineHeight = $fontSize * 0.42; // mm — compacto, do tamanho do texto miúdo do DANFE simplificado
-            $itemsPerColumn = (int) ceil(count($names) / $columns);
-            $listHeight = $itemsPerColumn * $lineHeight;
-            $bandHeight = $headerHeight + $lineGap + $listHeight + 1;
-
-            $bandTop = $size['height'] - $marginBottom - $bandHeight;
-            $lineY = $bandTop + $headerHeight;
-            $textTop = $lineY + $lineGap;
+            $marginSide = 6; // mm
+            $contentWidth = $lastSize['width'] - (2 * $marginSide);
 
             $pdf->SetTextColor(0, 0, 0);
-            $pdf->SetFont('Arial', 'B', 6);
-            $pdf->SetXY($marginSide, $bandTop);
-            $pdf->Cell($size['width'] - (2 * $marginSide), $headerHeight, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO — CONFERIR QTD ANTES DE EMBALAR'), 0, 0, 'C');
+            $pdf->SetXY($marginSide, 6);
+            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->MultiCell($contentWidth, 5, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO'), 0, 'C');
 
+            $pdf->SetX($marginSide);
+            $pdf->SetFont('Arial', '', 7);
+            $pdf->MultiCell($contentWidth, 4, $this->toLatin1('Conferir SKU e quantidade antes de embalar'), 0, 'C');
+
+            $pdf->Ln(2);
             $pdf->SetDrawColor(0, 0, 0);
             $pdf->SetLineWidth(0.3);
-            $pdf->Line($marginSide, $lineY, $size['width'] - $marginSide, $lineY);
+            $pdf->Line($marginSide, $pdf->GetY(), $lastSize['width'] - $marginSide, $pdf->GetY());
+            $pdf->Ln(3);
 
-            $pdf->SetFont('Arial', 'B', $fontSize);
+            // "SKU123|QTD=2, SKU456|QTD=1" — pedido explícito 2026-08-15
+            // (SKU em vez do nome do produto: mais curto, sem risco de
+            // vazar da página, e é o que quem confere o pedido físico
+            // realmente usa pra bater com a etiqueta do produto no
+            // estoque). MultiCell quebra linha sozinho se não couber numa
+            // só — nunca corta/vaza como o Cell de largura fixa da versão
+            // anterior cortava.
+            $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
 
-            $columnWidth = ($size['width'] - (2 * $marginSide)) / $columns;
-
-            foreach ($names as $index => $name) {
-                $column = (int) floor($index / $itemsPerColumn);
-                $row = $index % $itemsPerColumn;
-
-                $pdf->SetXY($marginSide + ($column * $columnWidth), $textTop + ($row * $lineHeight));
-                $pdf->Cell($columnWidth - 1, $lineHeight, $this->toLatin1($name), 0, 0, 'C');
-            }
+            $pdf->SetX($marginSide);
+            $pdf->SetFont('Arial', 'B', 13);
+            $pdf->MultiCell($contentWidth, 6, $this->toLatin1($line), 0, 'C');
 
             return $pdf->Output('S');
         } finally {
             @unlink($tempPdfPath);
         }
-    }
-
-    /**
-     * Decide colunas + tamanho de fonte pra lista de produtos caber em
-     * $maxListHeight (já descontado cabeçalho/linha/margens pelo chamador).
-     * Tenta 1 coluna/8pt, depois 2/7pt, depois 3/6pt; se nem assim couber
-     * (pedido com muitos itens diferentes), trunca a lista e acrescenta um
-     * resumo "+N itens" — nunca deixa a faixa estourar o teto e invadir o
-     * resto da etiqueta.
-     *
-     * @param  array<int, string>  $names
-     * @return array{0: int, 1: int, 2: array<int, string>}
-     */
-    private function fitDeclarationLayout(array $names, float $maxListHeight): array
-    {
-        $layouts = [[1, 8], [2, 7], [3, 6]];
-
-        foreach ($layouts as [$columns, $fontSize]) {
-            $lineHeight = $fontSize * 0.42;
-            $itemsPerColumn = (int) ceil(count($names) / $columns);
-
-            $isLastLayout = $columns === 3;
-
-            if (($itemsPerColumn * $lineHeight) <= $maxListHeight || $isLastLayout) {
-                $maxItemsPerColumn = max(1, (int) floor($maxListHeight / $lineHeight));
-                $maxItems = $maxItemsPerColumn * $columns;
-
-                if (count($names) > $maxItems) {
-                    $shown = array_slice($names, 0, max(1, $maxItems - 1));
-                    $hidden = count($names) - count($shown);
-                    $shown[] = "+{$hidden} ".($hidden === 1 ? 'item' : 'itens');
-                    $names = $shown;
-                }
-
-                return [$columns, $fontSize, $names];
-            }
-        }
-
-        return [3, 6, $names]; // inalcançável — o loop acima sempre retorna no último layout
     }
 
     /**

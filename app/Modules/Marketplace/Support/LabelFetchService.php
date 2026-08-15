@@ -127,31 +127,35 @@ class LabelFetchService
         $isPdf = str_starts_with($contents, '%PDF-');
 
         // Reativado 2026-08-15, pedido explícito — mas só pra Shopee/TikTok
-        // Shop (channelsWithDeclaration abaixo), não geral como antes de
-        // 8a5032d: motivo real é reduzir erro de QUANTIDADE errada
-        // enviada (vários casos na implantação inicial), imprimindo uma
-        // "declaração de conteúdo" com SKU + quantidade em destaque no
-        // rodapé da própria etiqueta térmica 10x15, pra quem embala
-        // conferir antes de fechar a caixa — sem depender de olhar outra
-        // tela. Só é possível pra etiqueta em PDF; se o overlay falhar por
-        // qualquer motivo, ainda imprime a etiqueta crua em vez de travar
-        // o pedido por causa disso (ver LabelProcessingService::
-        // overlayProductList() pro teto de altura que garante que a faixa
-        // nunca invade o resto da etiqueta).
+        // Shop (CHANNELS_WITH_DECLARATION abaixo), não geral como antes de
+        // 8a5032d: motivo real é reduzir erro de QUANTIDADE errada enviada
+        // (vários casos na implantação inicial), acrescentando uma
+        // "declaração de conteúdo" (SKU|QTD=N) como página extra no fim da
+        // própria etiqueta térmica 10x15, pra quem embala conferir antes de
+        // fechar a caixa — sem depender de olhar outra tela.
+        //
+        // REFEITO 2026-08-15 (BUG REAL, pedido #307): a primeira versão
+        // desenhava por cima da etiqueta (overlayProductList, texto+nome do
+        // produto) e colidiu com o rodapé "DANFE SIMPLIFICADO" real dessa
+        // etiqueta Shopee, saindo ilegível e vazando da página. Trocado por
+        // appendDeclarationPage() (página nova, nunca desenha em cima de
+        // nada) + formato SKU|QTD=N em vez do nome do produto (mais curto,
+        // e é o dado que bate com a etiqueta do produto no estoque — pedido
+        // explícito do usuário). Vírgula separa produtos quando o pedido
+        // tem mais de um. Só é possível pra etiqueta em PDF; se isso falhar
+        // por qualquer motivo, ainda imprime a etiqueta crua em vez de
+        // travar o pedido por causa disso.
         if ($isPdf && in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true)) {
             try {
-                $productLines = $shipment->order->items->map(function ($item) {
-                    $sku = $item->product?->sku;
-                    $label = $sku ? "{$sku} — {$item->product_name}" : $item->product_name;
+                $declarationTokens = $shipment->order->items->map(function ($item) {
+                    $sku = $item->product?->sku ?: $item->product_name;
 
-                    return $item->quantity > 1
-                        ? "{$item->quantity}x {$label}"
-                        : $label;
+                    return "{$sku}|QTD={$item->quantity}";
                 })->all();
 
-                $contents = $this->processor->overlayProductList($contents, $productLines);
+                $contents = $this->processor->appendDeclarationPage($contents, $declarationTokens);
             } catch (Throwable $exception) {
-                Log::warning('marketplace.label_fetch.overlay_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
+                Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }
         }
 

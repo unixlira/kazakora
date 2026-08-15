@@ -83,71 +83,68 @@ class LabelProcessingServiceTest extends TestCase
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/labels/4x6/'));
     }
 
-    /**
-     * Colunas/fonte agora vêm de fitDeclarationLayout() (orçamento de altura,
-     * não mais uma regra fixa "mais de 6 = 2 colunas") — este teste só
-     * garante que uma lista de tamanho médio continua saindo um PDF válido;
-     * ver test_overlay_truncates_extremely_long_product_lists_instead_of_growing_the_band_forever
-     * pra cobertura do teto de altura em si.
-     */
-    public function test_overlay_handles_a_medium_sized_product_list(): void
+    public function test_declaration_page_handles_several_products_without_crashing(): void
     {
-        $names = array_map(fn ($i) => "Produto {$i}", range(1, 9));
+        $tokens = array_map(fn ($i) => "SKU-{$i}|QTD=1", range(1, 9));
 
-        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), $names);
+        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), $tokens);
 
         $this->assertStringStartsWith('%PDF', $result);
     }
 
-    public function test_overlay_handles_empty_product_list_without_crashing(): void
+    public function test_declaration_page_handles_empty_product_list_without_crashing(): void
     {
-        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), []);
+        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), []);
 
         $this->assertStringStartsWith('%PDF', $result);
     }
 
-    public function test_overlay_converts_accented_product_names_to_latin1_for_fpdf_core_fonts(): void
+    public function test_declaration_page_converts_accented_text_to_latin1_for_fpdf_core_fonts(): void
     {
         // As fontes nativas do FPDF (Arial/Helvetica) esperam ISO-8859-1 —
         // sem converter, "ç" (UTF-8: 0xC3 0xA7) sai corrompido na etiqueta
-        // em vez do byte único Latin-1 (0xE7) que o FPDF sabe desenhar.
-        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), ['Café com Açúcar']);
+        // em vez do byte único Latin-1 (0xE7) que o FPDF sabe desenhar. O
+        // próprio cabeçalho fixo ("DECLARAÇÃO DE CONTEÚDO") já tem acento,
+        // não precisa de um token especial pra isso aparecer.
+        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), ['SKU-1|QTD=1']);
 
         $this->assertStringNotContainsString("\xC3\xA7", $result);
         $this->assertStringContainsString("\xE7", $result);
     }
 
-    public function test_overlay_adds_a_declaration_header_above_the_product_list(): void
+    public function test_declaration_page_shows_the_header_and_instruction(): void
     {
-        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), ['2x Produto teste']);
+        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), ['SKU-1|QTD=2']);
 
-        $this->assertStringContainsString('CONFERIR QTD ANTES DE EMBALAR', $result);
+        $this->assertStringContainsString('antes de embalar', $result);
     }
 
     /**
-     * Teto de altura (MAX_BAND_HEIGHT_RATIO): mesmo um pedido com dezenas de
-     * itens diferentes não pode empurrar a faixa de declaração pra cima até
-     * invadir o resto da etiqueta — a lista trunca com um resumo "+N itens"
-     * em vez de crescer sem limite.
+     * Pedido explícito 2026-08-15: SKU|QTD=N por produto, vírgula separando
+     * quando o pedido tem mais de um item.
      */
-    public function test_overlay_truncates_extremely_long_product_lists_instead_of_growing_the_band_forever(): void
+    public function test_declaration_page_joins_multiple_products_with_a_comma(): void
     {
-        $names = array_map(fn ($i) => "Produto {$i}", range(1, 100));
+        $result = (new LabelProcessingService)->appendDeclarationPage(self::minimalPdf(), ['SKU-1|QTD=2', 'SKU-2|QTD=1']);
 
-        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), $names);
-
-        $this->assertStringStartsWith('%PDF', $result);
-        $this->assertStringContainsString('itens', $result);
+        $this->assertStringContainsString('SKU-1|QTD=2, SKU-2|QTD=1', $result);
     }
 
-    public function test_overlay_never_creates_a_second_page(): void
+    /**
+     * BUG REAL 2026-08-15 (pedido #307): a versão anterior desenhava a
+     * declaração POR CIMA da própria etiqueta (overlay), assumindo uma área
+     * vazia que nem sempre existe no layout real de uma etiqueta de canal
+     * (colidiu com o rodapé "DANFE SIMPLIFICADO" de uma etiqueta Shopee
+     * real, saiu ilegível). Reescrito pra sempre acrescentar uma página
+     * NOVA em vez de desenhar em cima — este teste é a garantia de que
+     * isso nunca mais volta a ser um overlay: o PDF de saída tem que ter
+     * mais páginas que o original, nunca o mesmo número.
+     */
+    public function test_declaration_page_is_appended_never_drawn_over_the_original_page(): void
     {
-        // A margem padrão de quebra automática do FPDF (2cm) já causou isso
-        // uma vez: conteúdo colado no rodapé virava página 2 em vez de
-        // desenhar na etiqueta atual — o produto "sumia" pra outra etiqueta.
-        $result = (new LabelProcessingService)->overlayProductList(
-            self::minimalPdf(),
-            array_map(fn ($i) => "Produto {$i}", range(1, 9))
+        $result = (new LabelProcessingService)->appendDeclarationPage(
+            self::minimalPdf(), // 1 página
+            array_map(fn ($i) => "SKU-{$i}|QTD=1", range(1, 9))
         );
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
@@ -155,9 +152,65 @@ class LabelProcessingServiceTest extends TestCase
 
         try {
             $pageCount = (new Fpdi)->setSourceFile($tempPath);
-            $this->assertSame(1, $pageCount);
+            $this->assertSame(2, $pageCount); // 1 original + 1 de declaração
         } finally {
             @unlink($tempPath);
         }
+    }
+
+    /**
+     * Etiqueta de lote com múltiplos volumes (ex.: Mercado Envios Full,
+     * histórico real desse pipeline) pode ter mais de uma página de
+     * origem — todas têm que sobreviver intactas, com a declaração vindo
+     * só depois da última.
+     */
+    public function test_declaration_page_preserves_every_original_page_of_a_multi_page_label(): void
+    {
+        $twoPagePdf = self::minimalTwoPagePdf();
+
+        $result = (new LabelProcessingService)->appendDeclarationPage($twoPagePdf, ['SKU-1|QTD=1']);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $pageCount = (new Fpdi)->setSourceFile($tempPath);
+            $this->assertSame(3, $pageCount); // 2 originais + 1 de declaração
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    private static function minimalTwoPagePdf(): string
+    {
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 4 0 R >>',
+            4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+            5 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 6 0 R >>',
+            6 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $num => $body) {
+            $offsets[$num] = strlen($pdf);
+            $pdf .= "{$num} 0 obj\n{$body}\nendobj\n";
+        }
+
+        $xrefStart = strlen($pdf);
+        $count = count($objects) + 1;
+
+        $xref = "xref\n0 {$count}\n0000000000 65535 f \n";
+        foreach ($objects as $num => $body) {
+            $xref .= sprintf("%010d 00000 n \n", $offsets[$num]);
+        }
+
+        $pdf .= $xref;
+        $pdf .= "trailer\n<< /Size {$count} /Root 1 0 R >>\nstartxref\n{$xrefStart}\n%%EOF";
+
+        return $pdf;
     }
 }

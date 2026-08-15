@@ -20,7 +20,7 @@ use Throwable;
 /**
  * Tela exclusivamente de teste — Admin/Integracoes/TesteImpressao — pra
  * validar manualmente o processamento de etiqueta (ZPL->PDF pra Shopee,
- * sobreposição da lista de produtos em negrito) antes de automatizar esse
+ * declaração de conteúdo SKU|QTD em página extra) antes de automatizar esse
  * fluxo. O agente local (KoraSync) não muda: continua só consumindo
  * PrintJob da fila normal, exatamente como já faz hoje.
  */
@@ -83,10 +83,14 @@ class PrintTestController extends Controller
         }
 
         $order = Order::query()->findOrFail($validated['order_id']);
-        $productNames = Product::query()
+        // Mesmo formato SKU|QTD=N do fluxo real (LabelFetchService::attempt()) —
+        // pedido explícito 2026-08-15. QTD=1 fixo aqui: esta tela escolhe
+        // produtos avulsos do catálogo, não itens de um pedido de verdade.
+        $declarationTokens = Product::query()
             ->whereIn('id', $validated['product_ids'])
             ->orderBy('name')
-            ->pluck('name')
+            ->pluck('sku')
+            ->map(fn ($sku) => "{$sku}|QTD=1")
             ->all();
 
         try {
@@ -94,7 +98,7 @@ class PrintTestController extends Controller
                 ? $processor->convertZplToPdf($request->file('file')->get())
                 : $request->file('file')->get();
 
-            $finalPdf = $processor->overlayProductList($pdfBytes, $productNames);
+            $finalPdf = $processor->appendDeclarationPage($pdfBytes, $declarationTokens);
         } catch (Throwable $exception) {
             report($exception);
 

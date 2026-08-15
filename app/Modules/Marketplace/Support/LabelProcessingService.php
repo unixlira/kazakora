@@ -20,6 +20,17 @@ class LabelProcessingService
     private const DENSITY_DPMM = 8;
 
     /**
+     * Teto pra faixa de declaração de conteúdo — nunca deixa ela comer mais
+     * que 40% da etiqueta térmica (10x15cm real, ver
+     * LabelProcessingService::extractLabelSizeInInches()), não importa
+     * quantos itens o pedido tenha. Sem esse teto, um pedido com muitos
+     * itens diferentes cresceria a faixa pra cima até invadir código de
+     * barras/endereço — exatamente o bug que os commits a7a595d/d7ac233 já
+     * corrigiram uma vez pro caso comum; isso cobre o caso extremo.
+     */
+    private const MAX_BAND_HEIGHT_RATIO = 0.40;
+
+    /**
      * Zebra (ZPL) não tem conversor nativo em PHP — delega pra API pública
      * da Labelary (gratuita, sem autenticação).
      *
@@ -76,21 +87,28 @@ class LabelProcessingService
     }
 
     /**
-     * Adiciona a lista de produtos no rodapé da etiqueta, abaixo de uma
-     * linha separadora, sem tocar em mais nada da etiqueta original (FPDI
-     * importa a página como template e só desenha por cima — nenhum
-     * retângulo de fundo é pintado, então nada da etiqueta original é
-     * apagado, mesmo que a faixa calculada não fique exatamente onde
-     * deveria).
+     * Adiciona a declaração de conteúdo (cabeçalho + lista de produtos,
+     * quantidade em destaque) no rodapé da etiqueta, abaixo de uma linha
+     * separadora, sem tocar em mais nada da etiqueta original (FPDI importa
+     * a página como template e só desenha por cima — nenhum retângulo de
+     * fundo é pintado, então nada da etiqueta original é apagado, mesmo que
+     * a faixa calculada não fique exatamente onde deveria).
      *
-     * Fica sempre colada na borda inferior, com fonte pequena (mesma
-     * ordem de grandeza do DANFE simplificado, não do texto principal da
+     * Existe pra separador reduzir erro de quantidade errada enviada (causa
+     * real de vários pedidos errados na implantação inicial) — quem embala
+     * confere a etiqueta impressa contra o pedido físico antes de fechar a
+     * caixa, em vez de confiar de cabeça na tela do sistema.
+     *
+     * Fica sempre colada na borda inferior, com fonte pequena (mesma ordem
+     * de grandeza do DANFE simplificado, não do texto principal da
      * etiqueta) — se a lista tiver mais de 6 produtos, reduz a fonte e
-     * divide em duas colunas (grid) pra não crescer verticalmente e
-     * invadir a área do código de barras/QR/endereço, que ficam sempre
-     * acima dessa faixa.
+     * divide em colunas (grid) pra não crescer verticalmente e invadir a
+     * área do código de barras/QR/endereço, que ficam sempre acima dessa
+     * faixa; ver MAX_BAND_HEIGHT_RATIO/fitDeclarationLayout() pro teto que
+     * garante isso mesmo em pedidos com muitos itens diferentes (trunca a
+     * lista com um "+N itens" em vez de estourar a faixa).
      *
-     * @param  array<int, string>  $productNames
+     * @param  array<int, string>  $productNames  já formatadas pelo chamador (ex.: "2x SKU123 — Nome do produto")
      */
     public function overlayProductList(string $pdfBytes, array $productNames): string
     {
@@ -120,24 +138,34 @@ class LabelProcessingService
             $pdf->useTemplate($templateId, $leftMarginMm, 0);
 
             $names = $productNames !== [] ? $productNames : ['(sem produtos)'];
-            $columns = count($names) > 6 ? 2 : 1;
-            $fontSize = $columns > 1 ? 6 : 7;
-            $lineHeight = $fontSize * 0.42; // mm — compacto, do tamanho do texto miúdo do DANFE simplificado
 
             $marginSide = 6; // mm — mais folga que antes: 3mm cortava o "Destinatário" impresso perto da borda esquerda
             $marginBottom = 2; // mm
             $lineGap = 1.5; // mm entre a linha separadora e o texto
+            $headerHeight = 3; // mm — linha do título "DECLARAÇÃO DE CONTEÚDO"
 
+            $maxBandHeight = $size['height'] * self::MAX_BAND_HEIGHT_RATIO;
+            $maxListHeight = max(0.0, $maxBandHeight - $headerHeight - $lineGap - 1);
+            [$columns, $fontSize, $names] = $this->fitDeclarationLayout($names, $maxListHeight);
+
+            $lineHeight = $fontSize * 0.42; // mm — compacto, do tamanho do texto miúdo do DANFE simplificado
             $itemsPerColumn = (int) ceil(count($names) / $columns);
-            $bandHeight = ($itemsPerColumn * $lineHeight) + $lineGap + 1;
-            $lineY = $size['height'] - $marginBottom - $bandHeight;
+            $listHeight = $itemsPerColumn * $lineHeight;
+            $bandHeight = $headerHeight + $lineGap + $listHeight + 1;
+
+            $bandTop = $size['height'] - $marginBottom - $bandHeight;
+            $lineY = $bandTop + $headerHeight;
             $textTop = $lineY + $lineGap;
+
+            $pdf->SetTextColor(0, 0, 0);
+            $pdf->SetFont('Arial', 'B', 6);
+            $pdf->SetXY($marginSide, $bandTop);
+            $pdf->Cell($size['width'] - (2 * $marginSide), $headerHeight, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO — CONFERIR QTD ANTES DE EMBALAR'), 0, 0, 'C');
 
             $pdf->SetDrawColor(0, 0, 0);
             $pdf->SetLineWidth(0.3);
             $pdf->Line($marginSide, $lineY, $size['width'] - $marginSide, $lineY);
 
-            $pdf->SetTextColor(0, 0, 0);
             $pdf->SetFont('Arial', 'B', $fontSize);
 
             $columnWidth = ($size['width'] - (2 * $marginSide)) / $columns;
@@ -154,6 +182,45 @@ class LabelProcessingService
         } finally {
             @unlink($tempPdfPath);
         }
+    }
+
+    /**
+     * Decide colunas + tamanho de fonte pra lista de produtos caber em
+     * $maxListHeight (já descontado cabeçalho/linha/margens pelo chamador).
+     * Tenta 1 coluna/8pt, depois 2/7pt, depois 3/6pt; se nem assim couber
+     * (pedido com muitos itens diferentes), trunca a lista e acrescenta um
+     * resumo "+N itens" — nunca deixa a faixa estourar o teto e invadir o
+     * resto da etiqueta.
+     *
+     * @param  array<int, string>  $names
+     * @return array{0: int, 1: int, 2: array<int, string>}
+     */
+    private function fitDeclarationLayout(array $names, float $maxListHeight): array
+    {
+        $layouts = [[1, 8], [2, 7], [3, 6]];
+
+        foreach ($layouts as [$columns, $fontSize]) {
+            $lineHeight = $fontSize * 0.42;
+            $itemsPerColumn = (int) ceil(count($names) / $columns);
+
+            $isLastLayout = $columns === 3;
+
+            if (($itemsPerColumn * $lineHeight) <= $maxListHeight || $isLastLayout) {
+                $maxItemsPerColumn = max(1, (int) floor($maxListHeight / $lineHeight));
+                $maxItems = $maxItemsPerColumn * $columns;
+
+                if (count($names) > $maxItems) {
+                    $shown = array_slice($names, 0, max(1, $maxItems - 1));
+                    $hidden = count($names) - count($shown);
+                    $shown[] = "+{$hidden} ".($hidden === 1 ? 'item' : 'itens');
+                    $names = $shown;
+                }
+
+                return [$columns, $fontSize, $names];
+            }
+        }
+
+        return [3, 6, $names]; // inalcançável — o loop acima sempre retorna no último layout
     }
 
     /**

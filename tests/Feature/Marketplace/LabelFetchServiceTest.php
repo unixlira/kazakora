@@ -21,7 +21,7 @@ class LabelFetchServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeShipment(): ChannelShipment
+    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE): ChannelShipment
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
@@ -51,7 +51,7 @@ class LabelFetchServiceTest extends TestCase
 
         return ChannelShipment::create([
             'order_id' => $order->id,
-            'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'channel' => $channel,
             'external_shipment_id' => 'SHIP-1',
             'shipping_method' => 'self_service',
             'status' => ChannelShipment::STATUS_CONFIRMED,
@@ -59,13 +59,13 @@ class LabelFetchServiceTest extends TestCase
         ]);
     }
 
-    private function mockDriver(array $fetchLabelResult): void
+    private function mockDriver(array $fetchLabelResult, string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE): void
     {
         $driver = Mockery::mock(MarketplaceChannelDriver::class);
         $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
 
         $manager = Mockery::mock(MarketplaceDriverManager::class);
-        $manager->shouldReceive('driver')->with(MarketplaceAccount::CHANNEL_MERCADO_LIVRE)->once()->andReturn($driver);
+        $manager->shouldReceive('driver')->with($channel)->once()->andReturn($driver);
 
         $this->app->instance(MarketplaceDriverManager::class, $manager);
     }
@@ -152,6 +152,41 @@ class LabelFetchServiceTest extends TestCase
         // a PLP crua em vez de passar pela conversão ZPL->PDF do Labelary.
         $this->assertStringStartsWith('%PDF-', $labelContents);
         Http::assertSent(fn ($request) => str_contains($request->url(), 'api.labelary.com'));
+    }
+
+    /**
+     * Escopo pedido 2026-08-15: a declaração de conteúdo (SKU + quantidade
+     * no rodapé da etiqueta) só entra pra Shopee/TikTok, canal onde o
+     * problema real de quantidade errada enviada apareceu — Mercado Livre
+     * continua recebendo a etiqueta crua do canal, sem sobreposição nenhuma.
+     */
+    public function test_attempt_adds_the_declaration_overlay_for_shopee(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertStringContainsString('CONFERIR QTD ANTES DE EMBALAR', $labelContents);
+    }
+
+    public function test_attempt_does_not_touch_the_label_for_mercado_livre(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        $rawPdf = self::minimalPdf();
+        $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertSame($rawPdf, $labelContents);
     }
 
     private static function buildZip(array $files): string

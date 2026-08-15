@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +25,19 @@ use ZipArchive;
  */
 class LabelFetchService
 {
+    /**
+     * Canais que recebem a declaração de conteúdo sobreposta na etiqueta —
+     * pedido explícito 2026-08-15, escopo restrito a Shopee/TikTok (não
+     * Mercado Livre, que não teve o mesmo problema de quantidade errada
+     * relatado). TikTok Shop ainda não tem fetchLabel() implementado (ver
+     * TikTokShopDriver — integração pendente de credencial de parceiro),
+     * então isso fica pronto e sem efeito prático até esse driver existir.
+     */
+    private const CHANNELS_WITH_DECLARATION = [
+        MarketplaceAccount::CHANNEL_SHOPEE,
+        MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+    ];
+
     public function __construct(
         private readonly MarketplaceDriverManager $manager,
         private readonly OrderFulfillmentTimeline $timeline,
@@ -112,25 +126,34 @@ class LabelFetchService
 
         $isPdf = str_starts_with($contents, '%PDF-');
 
-        // Sobreposição da lista de produtos na etiqueta DESATIVADA — pedido
-        // explícito 2026-08-09 ("remover o nome do produto da etiqueta").
-        // Descomentar o bloco abaixo pra reativar no futuro, se precisar —
-        // continua funcionando igual, só é possível pra etiqueta em PDF; se
-        // o overlay falhar por qualquer motivo, ainda imprime a etiqueta
-        // crua em vez de travar o pedido por causa disso.
-        // if ($isPdf) {
-        //     try {
-        //         $productNames = $shipment->order->items->map(function ($item) {
-        //             return $item->quantity > 1
-        //                 ? "{$item->quantity}x {$item->product_name}"
-        //                 : $item->product_name;
-        //         })->all();
-        //
-        //         $contents = $this->processor->overlayProductList($contents, $productNames);
-        //     } catch (Throwable $exception) {
-        //         Log::warning('marketplace.label_fetch.overlay_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
-        //     }
-        // }
+        // Reativado 2026-08-15, pedido explícito — mas só pra Shopee/TikTok
+        // Shop (channelsWithDeclaration abaixo), não geral como antes de
+        // 8a5032d: motivo real é reduzir erro de QUANTIDADE errada
+        // enviada (vários casos na implantação inicial), imprimindo uma
+        // "declaração de conteúdo" com SKU + quantidade em destaque no
+        // rodapé da própria etiqueta térmica 10x15, pra quem embala
+        // conferir antes de fechar a caixa — sem depender de olhar outra
+        // tela. Só é possível pra etiqueta em PDF; se o overlay falhar por
+        // qualquer motivo, ainda imprime a etiqueta crua em vez de travar
+        // o pedido por causa disso (ver LabelProcessingService::
+        // overlayProductList() pro teto de altura que garante que a faixa
+        // nunca invade o resto da etiqueta).
+        if ($isPdf && in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true)) {
+            try {
+                $productLines = $shipment->order->items->map(function ($item) {
+                    $sku = $item->product?->sku;
+                    $label = $sku ? "{$sku} — {$item->product_name}" : $item->product_name;
+
+                    return $item->quantity > 1
+                        ? "{$item->quantity}x {$label}"
+                        : $label;
+                })->all();
+
+                $contents = $this->processor->overlayProductList($contents, $productLines);
+            } catch (Throwable $exception) {
+                Log::warning('marketplace.label_fetch.overlay_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
+            }
+        }
 
         $extension = $isPdf ? 'pdf' : 'bin';
         $path = "labels/{$shipment->order_id}/etiqueta-{$shipment->id}.{$extension}";

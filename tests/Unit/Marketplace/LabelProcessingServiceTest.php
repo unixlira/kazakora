@@ -83,7 +83,14 @@ class LabelProcessingServiceTest extends TestCase
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/labels/4x6/'));
     }
 
-    public function test_overlay_switches_to_two_column_grid_for_more_than_six_products(): void
+    /**
+     * Colunas/fonte agora vêm de fitDeclarationLayout() (orçamento de altura,
+     * não mais uma regra fixa "mais de 6 = 2 colunas") — este teste só
+     * garante que uma lista de tamanho médio continua saindo um PDF válido;
+     * ver test_overlay_truncates_extremely_long_product_lists_instead_of_growing_the_band_forever
+     * pra cobertura do teto de altura em si.
+     */
+    public function test_overlay_handles_a_medium_sized_product_list(): void
     {
         $names = array_map(fn ($i) => "Produto {$i}", range(1, 9));
 
@@ -108,6 +115,29 @@ class LabelProcessingServiceTest extends TestCase
 
         $this->assertStringNotContainsString("\xC3\xA7", $result);
         $this->assertStringContainsString("\xE7", $result);
+    }
+
+    public function test_overlay_adds_a_declaration_header_above_the_product_list(): void
+    {
+        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), ['2x Produto teste']);
+
+        $this->assertStringContainsString('CONFERIR QTD ANTES DE EMBALAR', $result);
+    }
+
+    /**
+     * Teto de altura (MAX_BAND_HEIGHT_RATIO): mesmo um pedido com dezenas de
+     * itens diferentes não pode empurrar a faixa de declaração pra cima até
+     * invadir o resto da etiqueta — a lista trunca com um resumo "+N itens"
+     * em vez de crescer sem limite.
+     */
+    public function test_overlay_truncates_extremely_long_product_lists_instead_of_growing_the_band_forever(): void
+    {
+        $names = array_map(fn ($i) => "Produto {$i}", range(1, 100));
+
+        $result = (new LabelProcessingService)->overlayProductList(self::minimalPdf(), $names);
+
+        $this->assertStringStartsWith('%PDF', $result);
+        $this->assertStringContainsString('itens', $result);
     }
 
     public function test_overlay_never_creates_a_second_page(): void

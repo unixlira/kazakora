@@ -469,6 +469,16 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         return [
             'external_order_id' => (string) ($order['order_sn'] ?? $externalOrderId),
             'status' => $this->mapOrderStatus((string) ($order['order_status'] ?? '')),
+            // Status BRUTO da Shopee, sem passar por mapOrderStatus() —
+            // achado real 2026-08-15: TO_RETURN (devolução de verdade,
+            // produto já enviado) colapsa pro mesmo Order::STATUS_CANCELLED
+            // genérico (decisão certa pro ciclo de vida do pedido, ver
+            // comentário em mapOrderStatus()), mas isso sozinho deixava o
+            // card "Devoluções do mês" cego pra qualquer devolução da
+            // Shopee — repassado pra OrderImportService poder registrar
+            // isso separadamente (ver recordReturnClaimIfNeeded()) sem
+            // duplicar/mexer no mapeamento de status em si.
+            'channel_status' => (string) ($order['order_status'] ?? ''),
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => round($shippingCost, 2),
             'total' => round($total, 2),

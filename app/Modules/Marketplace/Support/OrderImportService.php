@@ -13,6 +13,7 @@ use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceClaim;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Notifications\ProductAutoImportedNotification;
@@ -96,7 +97,7 @@ class OrderImportService
                 $existing->update($buyerFields);
             }
 
-            return $this->syncStatus($existing, $data['status']);
+            return $this->syncStatus($existing, $data['status'], $data['channel_status'] ?? null);
         }
 
         try {
@@ -132,7 +133,7 @@ class OrderImportService
                 throw $exception;
             }
 
-            return $this->syncStatus($order, $data['status']);
+            return $this->syncStatus($order, $data['status'], $data['channel_status'] ?? null);
         }
     }
 
@@ -327,6 +328,8 @@ class OrderImportService
 
                 GenerateInvoiceJob::dispatch($order->id)->afterCommit();
             }
+
+            $this->recordReturnClaimIfNeeded($order, $data['channel_status'] ?? null);
 
             return $order;
         });
@@ -524,9 +527,17 @@ class OrderImportService
         return (bool) $fields;
     }
 
-    private function syncStatus(Order $order, string $newStatus): Order
+    private function syncStatus(Order $order, string $newStatus, ?string $channelStatus = null): Order
     {
         if ($order->status === $newStatus) {
+            // Mesmo sem mudança no status MAPEADO, o bruto pode ter virado
+            // TO_RETURN só agora (webhook de devolução chega depois do de
+            // cancelamento, os dois mapeiam pra STATUS_CANCELLED — ver
+            // ShopeeDriver::mapOrderStatus()) — sem este check aqui, esse
+            // caso nunca passaria do early-return acima e a devolução real
+            // nunca seria registrada.
+            $this->recordReturnClaimIfNeeded($order, $channelStatus);
+
             return $order;
         }
 
@@ -557,6 +568,44 @@ class OrderImportService
             GenerateInvoiceJob::dispatch($order->id);
         }
 
+        $this->recordReturnClaimIfNeeded($order, $channelStatus);
+
         return $order;
+    }
+
+    /**
+     * Achado real 2026-08-15: a Shopee tem um status de devolução de
+     * verdade (TO_RETURN — produto já enviado, comprador devolvendo), mas
+     * ShopeeDriver::mapOrderStatus() já colapsa isso pro mesmo
+     * Order::STATUS_CANCELLED genérico de "cancelou antes de enviar" —
+     * decisão CERTA pro ciclo de vida do pedido (reposição de estoque,
+     * notificações etc. tratam os dois igual, não tem por que separar
+     * ali). O problema real era outro: o card "Devoluções do mês"
+     * (DashboardAgentController::metrics()) só enxergava MarketplaceClaim,
+     * populado até então SÓ pelo Mercado Livre (MercadoLivreClaimsController)
+     * — Shopee tinha 15 pedidos cancelados no mês e ZERO apareciam como
+     * devolução, porque nada gravava claim nenhum pra esse canal. Em vez
+     * de inventar um conceito novo, reaproveita a mesma tabela/query que
+     * já existia pro ML — o card volta a enxergar devolução real de
+     * qualquer canal que informe isso via channel_status.
+     * updateOrCreate por (order_id, channel, type) é de propósito
+     * idempotente: um resync de webhook não duplica a mesma devolução.
+     */
+    private function recordReturnClaimIfNeeded(Order $order, ?string $channelStatus): void
+    {
+        if ($channelStatus !== 'TO_RETURN') {
+            return;
+        }
+
+        MarketplaceClaim::query()->updateOrCreate(
+            ['order_id' => $order->id, 'channel' => $order->origin, 'type' => 'return'],
+            [
+                'external_claim_id' => $order->external_order_id,
+                'stage' => 'to_return',
+                'status' => 'to_return',
+                'claim_created_at' => now(),
+                'claim_updated_at' => now(),
+            ]
+        );
     }
 }

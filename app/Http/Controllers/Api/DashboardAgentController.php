@@ -13,6 +13,7 @@ use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Marketplace\Support\OrderImageArchiveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -467,6 +468,32 @@ class DashboardAgentController extends Controller
         ]);
 
         return response()->json(['queue' => $result]);
+    }
+
+    /**
+     * Foto do produto pro card em destaque do KoraSync (pedido explícito
+     * 2026-08-15) — a mesma imagem já publicada nos marketplaces (ver
+     * OrderImageArchiveService). 404 quando o pedido não tem produto/imagem
+     * pra mostrar — esperado (item avulso sem produto local, produto sem
+     * foto cadastrada), não é erro; o cliente (KoraSync) trata como "sem
+     * imagem", mesmo padrão já usado em GET jobs/{id}/archive.
+     *
+     * Cache-Control longo: a imagem arquivada nunca muda pro mesmo pedido
+     * (archive() é idempotente, sempre a mesma foto), sem motivo pra
+     * revalidar a cada poll de 2s do KoraSync.
+     */
+    public function queueOrderImage(Order $order, OrderImageArchiveService $images): mixed
+    {
+        $bytes = $images->bytes($order);
+
+        if ($bytes === null) {
+            throw new NotFoundHttpException('Pedido sem imagem de produto disponível.');
+        }
+
+        return response($bytes, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 
     /**

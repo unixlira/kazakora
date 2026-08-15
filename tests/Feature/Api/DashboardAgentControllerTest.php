@@ -11,6 +11,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DashboardAgentControllerTest extends TestCase
@@ -320,6 +321,62 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertCount(1, $queue);
         $this->assertSame($order->id, $queue[0]['id']);
         $this->assertNotNull($queue[0]['packed_at']);
+    }
+
+    /**
+     * Pedido explícito 2026-08-15: foto do produto pro card do KoraSync —
+     * a mesma imagem local usada pra publicar nos marketplaces (ver
+     * OrderImageArchiveService), servida como PNG, e arquivada em disco na
+     * hierarquia Ano/Mês/Dia/Canal/id_pedido.png.
+     */
+    public function test_queue_order_image_returns_the_products_primary_image_as_png(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+
+        $product = \App\Modules\Catalog\Models\Product::factory()->create();
+        \App\Modules\Catalog\Models\ProductImage::create([
+            'product_id' => $product->id,
+            'path' => 'products/'.$product->id.'/secondary.jpg',
+            'position' => 1,
+            'is_primary' => false,
+        ]);
+        $primary = \App\Modules\Catalog\Models\ProductImage::create([
+            'product_id' => $product->id,
+            'path' => 'products/'.$product->id.'/primary.jpg',
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $fakeJpeg = imagecreate(4, 4);
+        ob_start();
+        imagejpeg($fakeJpeg);
+        Storage::disk('public')->put($primary->path, ob_get_clean());
+        imagedestroy($fakeJpeg);
+
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+        $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->get("/api/print-agent/dashboard/queue/{$order->id}/image");
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'image/png');
+        $this->assertStringStartsWith("\x89PNG", $response->getContent());
+
+        $expectedPath = sprintf('order-images/%s/%s/%s/shopee/%d.png', $order->created_at->format('Y'), $order->created_at->format('m'), $order->created_at->format('d'), $order->id);
+        Storage::disk('local')->assertExists($expectedPath);
+    }
+
+    public function test_queue_order_image_returns_404_when_the_order_has_no_product_image(): void
+    {
+        $order = $this->makeOrder();
+        // Item sem product_id — emissão manual/serviço avulso, sem foto pra mostrar.
+        $order->items()->create(['product_id' => null, 'product_name' => 'Serviço avulso', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $this->withHeaders($this->authHeaders())
+            ->get("/api/print-agent/dashboard/queue/{$order->id}/image")
+            ->assertNotFound();
     }
 
     public function test_pack_order_is_idempotent_on_a_second_call(): void

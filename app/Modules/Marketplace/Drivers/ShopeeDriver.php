@@ -463,13 +463,25 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             // nota, nunca liberava etiqueta na Shopee (achado real
             // 2026-08-06, ver comentário em response_optional_fields acima).
             'buyer_document' => isset($order['buyer_cpf_id']) ? preg_replace('/\D/', '', (string) $order['buyer_cpf_id']) : null,
-            'shipping_zip' => $address['zipcode'] ?? '00000000',
-            'shipping_street' => $address['full_address'] ?? 'Não informado',
+            // BUG REAL 2026-08-15 (pedido #370): `??` só cai no fallback
+            // quando a chave é null/ausente — a Shopee mandou 'district'
+            // como STRING VAZIA (não ausente) pra esse pedido, então
+            // "Não informado" nunca entrava, shipping_neighborhood ficava
+            // realmente vazio, e a NF-e rejeitava na hora de montar o XML
+            // ("Preenchimento Obrigatório! [xBairro]") — pedido nunca
+            // conseguia nota nem etiqueta. Trocado pra `(?? '') ?:` nos
+            // campos de endereço — vazio E ausente caem no mesmo fallback
+            // agora (só `?:` sozinho geraria warning de índice ausente
+            // quando a chave nem existe, por isso o `?? ''` antes) — mesma
+            // classe de bug já vista aqui antes (telefone mascarado,
+            // buyer_cpf_id ausente).
+            'shipping_zip' => ($address['zipcode'] ?? '') ?: '00000000',
+            'shipping_street' => ($address['full_address'] ?? '') ?: 'Não informado',
             'shipping_number' => 'S/N',
             'shipping_complement' => null,
-            'shipping_neighborhood' => $address['district'] ?? 'Não informado',
-            'shipping_city' => $address['city'] ?? 'Não informado',
-            'shipping_state' => $this->extractState($address['state'] ?? 'NA'),
+            'shipping_neighborhood' => ($address['district'] ?? '') ?: 'Não informado',
+            'shipping_city' => ($address['city'] ?? '') ?: 'Não informado',
+            'shipping_state' => $this->extractState(($address['state'] ?? '') ?: 'NA'),
             'external_shipment_id' => null,
             // Mesmo motivo do MercadoLivreDriver — create_time é a data real
             // da venda na Shopee (unix timestamp, campo base do

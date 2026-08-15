@@ -178,7 +178,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * um retorno null só mantém esse mesmo comportamento em vez de travar
      * o pedido inteiro.
      */
-    public function autoImportProduct(string $externalId, int $quantitySold = 0): ?Product
+    public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
         $item = $this->fetchItemDetail($externalId);
 
@@ -222,6 +222,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'is_enabled' => true,
             'status' => ProductChannelListing::STATUS_PUBLISHED,
             'external_id' => $externalId,
+            'external_model_id' => $externalModelId,
             'last_synced_at' => now(),
         ]);
 
@@ -415,8 +416,23 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 ? trim("{$itemName} - {$modelName}")
                 : ($itemName ?: null);
 
+            // Achado real 2026-08-15 (Ring Light 8" vs 10", pedido #376):
+            // item_id é o anúncio INTEIRO — quando ele tem variação de
+            // verdade, a Shopee manda model_id/model_sku por item do
+            // PEDIDO (não por anúncio), únicos por variação. Sem isso,
+            // qualquer anúncio com variação sempre resolvia pro mesmo
+            // produto local (o que por acaso tinha o listing cadastrado),
+            // não importa qual variação o cliente realmente comprou —
+            // errava SKU, imagem e (mais grave) baixava estoque do produto
+            // errado. "0" é o valor da Shopee pra "sem variação de
+            // verdade" (mesmo padrão de model_name="-"), tratado como null
+            // pra não criar um external_model_id falso em produto sem
+            // variação nenhuma.
+            $modelId = (string) ($item['model_id'] ?? '0');
+
             $items[] = [
                 'external_id' => $externalItemId,
+                'external_model_id' => $modelId !== '' && $modelId !== '0' ? $modelId : null,
                 'external_name' => $externalName,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,

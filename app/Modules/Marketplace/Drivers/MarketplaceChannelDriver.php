@@ -39,8 +39,13 @@ interface MarketplaceChannelDriver
      * do canal, esse número já reflete esta venda — soma $quantitySold de
      * volta antes de gravar, pra a baixa seguinte não contar a mesma venda
      * 2x. Ignorado por canais que não puxam estoque no auto-import.
+     *
+     * $externalModelId: variação específica dentro do anúncio (ver
+     * importOrder(), items[].external_model_id) — quando presente, o
+     * listing criado pra este produto novo já nasce vinculado à variação
+     * certa, não ao anúncio inteiro. Null pra canais/itens sem variação.
      */
-    public function autoImportProduct(string $externalId, int $quantitySold = 0): ?Product;
+    public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product;
 
     /**
      * Take the listing down from the marketplace. Most marketplaces don't

@@ -22,6 +22,7 @@ class ProductChannelListing extends Model
         'is_enabled',
         'status',
         'external_id',
+        'external_model_id',
         'attributes',
         'last_synced_at',
         'last_error',

@@ -18,7 +18,7 @@ abstract class AbstractMarketplaceDriver implements MarketplaceChannelDriver
      * por enquanto — ver ShopeeDriver::autoImportProduct()). Mesmo
      * comportamento de "sem produto vinculado" que já existia.
      */
-    public function autoImportProduct(string $externalId, int $quantitySold = 0): ?Product
+    public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
         return null;
     }

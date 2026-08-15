@@ -182,10 +182,30 @@ class OrderImportService
             $unmappedItems = [];
 
             foreach ($data['items'] as $item) {
-                $listing = ProductChannelListing::query()
+                // Achado real 2026-08-15 (Ring Light 8" vs 10", pedido
+                // #376): um anúncio com variação (ver
+                // ShopeeDriver::importOrder(), items[].external_model_id)
+                // pode ter VÁRIOS listings locais pro mesmo external_id, um
+                // por variação — casa pela variação exata primeiro. Sem
+                // model_id no item (canal/produto sem variação) ou sem
+                // nenhum listing pra essa variação específica ainda
+                // cadastrado, cai pro listing "genérico" do anúncio
+                // (external_model_id null) — mesmo comportamento de sempre,
+                // sem regressão pro que já funcionava.
+                $listingQuery = ProductChannelListing::query()
                     ->where('channel', $channel)
-                    ->where('external_id', $item['external_id'])
-                    ->first();
+                    ->where('external_id', $item['external_id']);
+
+                $externalModelId = $item['external_model_id'] ?? null;
+
+                $listing = $externalModelId
+                    ? (clone $listingQuery)->where('external_model_id', $externalModelId)->first()
+                    : null;
+
+                if (! $listing) {
+                    $listing = (clone $listingQuery)->whereNull('external_model_id')->first();
+                }
+
                 $product = $listing?->product;
                 $autoImported = false;
 
@@ -204,7 +224,7 @@ class OrderImportService
                 // "atual" que ele buscar no canal — ver comentário lá:
                 // sem isso, a baixa abaixo contaria esta venda 2x.
                 if (! $product) {
-                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity']);
+                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity'], $externalModelId);
                     $autoImported = (bool) $product;
 
                     if ($product) {

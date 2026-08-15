@@ -214,14 +214,21 @@ class DashboardAgentController extends Controller
             ->whereIn('status', self::PAID_STATUSES)
             ->sum('subtotal');
 
+        // Achado real 2026-08-15: "Pedidos hoje" mostrava 17 quando o
+        // usuário contava 18 pedidos recebidos no dia — a diferença era 1
+        // pedido cancelado (Shopee UNPAID). Ao contrário de faturamento
+        // (onde um pedido cancelado corretamente NÃO deve contar, ver
+        // $revenueToday acima), "pedidos hoje" é sobre quantos pedidos
+        // CHEGARAM no dia, não quantos foram pagos — mesmo critério "todo
+        // pedido do dia, qualquer status" já decidido pra fila do
+        // KoraSync (queue(), pedido explícito 2026-08-15). Por isso não usa
+        // PAID_STATUSES aqui, de propósito.
         $salesToday = Order::query()
             ->where('created_at', '>=', $today)
-            ->whereIn('status', self::PAID_STATUSES)
             ->count();
 
         $salesYesterday = Order::query()
             ->whereBetween('created_at', [$yesterday, $today])
-            ->whereIn('status', self::PAID_STATUSES)
             ->count();
 
         $cancelledToday = Order::query()
@@ -476,7 +483,18 @@ class DashboardAgentController extends Controller
             'id' => $order->id,
             'external_order_id' => $order->external_order_id,
             'channel' => $order->origin,
-            'customer_name' => $order->shipping_name,
+            // Achado real 2026-08-15 (pedido #371): a própria Shopee manda
+            // o nome do comprador mascarado com asterisco
+            // ("S******o") pra pedido cancelado/não pago — confirmado ao
+            // vivo contra a API deles, não é bug nosso nem dado perdido no
+            // nosso lado, o nome de verdade simplesmente não existe mais
+            // na resposta. Troca só na EXIBIÇÃO desta fila (não mexe em
+            // shipping_name, que fica intacto pra qualquer outro uso —
+            // NF-e, histórico etc.) por um texto que não confunde o
+            // operador achando que é o nome real truncado.
+            'customer_name' => str_contains($order->shipping_name, '*')
+                ? 'Cliente (dados ocultados pelo canal)'
+                : $order->shipping_name,
             'units_count' => (int) $order->units_count,
             'packed_at' => $order->packed_at,
             'status' => $order->status,

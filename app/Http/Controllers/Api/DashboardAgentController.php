@@ -43,6 +43,16 @@ class DashboardAgentController extends Controller
         Order::ORIGIN_SHEIN,
     ];
 
+    /** Rótulo pt-BR do status pro payload de queue() — mesmo texto de Admin\DashboardController::STATUS_LABELS, duplicado aqui de propósito (DTO simples do KoraSync, não vale acoplar os dois a um enum/trait compartilhado por 6 valores fixos). */
+    private const STATUS_LABELS = [
+        Order::STATUS_PENDING => 'Pendente',
+        Order::STATUS_AWAITING_PAYMENT => 'Aguardando pagamento',
+        Order::STATUS_PAID => 'Pago',
+        Order::STATUS_SHIPPED => 'Enviado',
+        Order::STATUS_COMPLETED => 'Concluído',
+        Order::STATUS_CANCELLED => 'Cancelado',
+    ];
+
     public function channels(): JsonResponse
     {
         $today = now()->startOfDay();
@@ -402,7 +412,7 @@ class DashboardAgentController extends Controller
 
     /**
      * Fila de expedição do dia pro KoraSync (app nativo) — pedido explícito
-     * 2026-08-06: 2 cards em destaque (mais recente + penúltimo) + lista com
+     * 2026-08-06: cards em destaque (3 desde 2026-08-15, eram 2) + lista com
      * scroll pro resto, tudo em ordem decrescente. Mesmo conceito da fila
      * já usada em Modules\Admin\Http\Controllers\PrintJobController::index()
      * (pedido pago, ainda não embalado/enviado), com 1 filtro A MAIS que a
@@ -430,6 +440,17 @@ class DashboardAgentController extends Controller
      * ShopeeDriver ficava em UTC, 3h à frente de São Paulo — pedido feito
      * ontem à noite virava "hoje de madrugada" no banco e vazava pra fila
      * de hoje mesmo sem ser de hoje de verdade).
+     *
+     * Pedido explícito 2026-08-15: "quero todos os pedidos aparecendo no
+     * KoraSync hoje" — confirmado via AskUserQuestion que é literal,
+     * qualquer status, não só "pago" (que era o filtro original, pensado
+     * só pra fila de EXPEDIÇÃO — pedido esperando ser preparado). Filtro de
+     * status removido, mantém só a data (hoje). 'status'/'status_label'
+     * agora vão no payload pra quem exibe (KoraSync) poder diferenciar
+     * visualmente um pedido acionável (pago, precisa embalar) de um que só
+     * está passando por aqui pra registro (já enviado, cancelado,
+     * aguardando pagamento) — packOrder() já rejeitava (409) tentar
+     * embalar pedido não-pago antes disso, esse guard continua valendo.
      */
     public function queue(): JsonResponse
     {
@@ -437,7 +458,6 @@ class DashboardAgentController extends Controller
         $tomorrow = $today->clone()->addDay();
 
         $orders = Order::query()
-            ->where('status', Order::STATUS_PAID)
             ->whereBetween('created_at', [$today, $tomorrow])
             ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
             ->withSum('items as units_count', 'quantity')
@@ -459,6 +479,8 @@ class DashboardAgentController extends Controller
             'customer_name' => $order->shipping_name,
             'units_count' => (int) $order->units_count,
             'packed_at' => $order->packed_at,
+            'status' => $order->status,
+            'status_label' => self::STATUS_LABELS[$order->status] ?? $order->status,
             'products' => $order->items->map(fn ($item) => [
                 'name' => $item->product_name,
                 'quantity' => $item->quantity,

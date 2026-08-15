@@ -236,7 +236,7 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertNull($orders[0]['shipping_method']);
     }
 
-    public function test_queue_returns_only_todays_paid_orders_in_descending_order_with_all_products(): void
+    public function test_queue_returns_todays_orders_of_any_status_in_descending_order_with_all_products(): void
     {
         $older = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1', 'shipping_name' => 'Cliente Antigo']);
         $older->items()->create(['product_name' => 'Produto A', 'product_price' => 50, 'quantity' => 1, 'subtotal' => 50]);
@@ -248,35 +248,44 @@ class DashboardAgentControllerTest extends TestCase
         $newest->items()->create(['product_name' => 'Produto B', 'product_price' => 30, 'quantity' => 2, 'subtotal' => 60]);
         $newest->items()->create(['product_name' => 'Produto C', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
 
-        // Não deve aparecer: pedido de ontem (filtro "só hoje", exclusivo
-        // desse endpoint) e pedido de hoje mas já enviado (não é mais fila
-        // de expedição). created_at não está em Order::$fillable, então
-        // nem create() nem update() conseguem setá-lo — só forceFill()
-        // ignora esse limite de propósito (bug real encontrado escrevendo
-        // este teste: o ->update(['created_at' => ...]) que
-        // PrintJobControllerTest usa também não funciona de verdade, só
-        // nunca quebrou nenhuma asserção lá porque aquele teste não
-        // depende de cruzar a virada do dia).
+        // Pedido explícito 2026-08-15 ("quero todos os pedidos aparecendo
+        // hoje"): já enviado TEM que aparecer agora — só status foi
+        // removido do filtro, a data continua exclusiva desse endpoint.
+        $shipped = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'SHIPPED-1']);
+
+        // Não deve aparecer: pedido de ONTEM, único filtro que resta.
+        // created_at não está em Order::$fillable, então nem create() nem
+        // update() conseguem setá-lo — só forceFill() ignora esse limite
+        // de propósito (bug real encontrado escrevendo este teste: o
+        // ->update(['created_at' => ...]) que PrintJobControllerTest usa
+        // também não funciona de verdade, só nunca quebrou nenhuma
+        // asserção lá porque aquele teste não depende de cruzar a virada
+        // do dia).
         $yesterday = $this->makeOrder();
         $yesterday->forceFill(['created_at' => now()->subDay()])->save();
-        $this->makeOrder(['status' => Order::STATUS_SHIPPED]);
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
 
         $response->assertOk();
         $queue = $response->json('queue');
 
-        $this->assertCount(2, $queue);
+        $this->assertCount(3, $queue);
 
-        $this->assertSame($newest->id, $queue[0]['id']);
-        $this->assertSame('SHP-2', $queue[0]['external_order_id']);
-        $this->assertSame(Order::ORIGIN_SHOPEE, $queue[0]['channel']);
-        $this->assertSame('Cliente Novo', $queue[0]['customer_name']);
-        $this->assertSame(3, $queue[0]['units_count']);
-        $this->assertCount(2, $queue[0]['products']);
+        $this->assertSame($shipped->id, $queue[0]['id']);
+        $this->assertSame(Order::STATUS_SHIPPED, $queue[0]['status']);
+        $this->assertSame('Enviado', $queue[0]['status_label']);
 
-        $this->assertSame($older->id, $queue[1]['id']);
-        $this->assertSame(1, $queue[1]['units_count']);
+        $this->assertSame($newest->id, $queue[1]['id']);
+        $this->assertSame('SHP-2', $queue[1]['external_order_id']);
+        $this->assertSame(Order::ORIGIN_SHOPEE, $queue[1]['channel']);
+        $this->assertSame('Cliente Novo', $queue[1]['customer_name']);
+        $this->assertSame(3, $queue[1]['units_count']);
+        $this->assertCount(2, $queue[1]['products']);
+        $this->assertSame(Order::STATUS_PAID, $queue[1]['status']);
+        $this->assertSame('Pago', $queue[1]['status_label']);
+
+        $this->assertSame($older->id, $queue[2]['id']);
+        $this->assertSame(1, $queue[2]['units_count']);
     }
 
     public function test_queue_still_includes_packed_orders_flagged_via_packed_at(): void

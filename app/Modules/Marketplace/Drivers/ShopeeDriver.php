@@ -94,6 +94,43 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
+     * SKU real cadastrado na Shopee (`item_sku`, campo padrão do
+     * get_item_base_info, não precisa de response_optional_fields) pra um
+     * lote de item_id — usado por ShopeeImportMissingProducts pra detectar
+     * quando 2 anúncios diferentes são o MESMO produto físico (achado real
+     * 2026-08-16: a loja tem 6 pares de anúncio com SKU idêntico, um deles
+     * já vinculado a um produto local em cada par) e não criar um segundo
+     * produto local pro que já existe. Devolve só os ids que realmente têm
+     * SKU preenchido — Shopee permite item sem SKU (vem `""`), esses ficam
+     * de fora do mapa em vez de virar uma chave com valor vazio.
+     *
+     * @param  array<int, string>  $externalIds
+     * @return array<string, string> external_id => sku
+     */
+    public function fetchItemSkus(array $externalIds): array
+    {
+        $this->ensureConfigured();
+
+        $skus = [];
+
+        foreach (array_chunk($externalIds, 50) as $chunk) {
+            $base = $this->client->get('/api/v2/product/get_item_base_info', [
+                'item_id_list' => implode(',', $chunk),
+            ]);
+
+            foreach ($base['response']['item_list'] ?? [] as $item) {
+                $sku = trim((string) ($item['item_sku'] ?? ''));
+
+                if ($sku !== '' && isset($item['item_id'])) {
+                    $skus[(string) $item['item_id']] = $sku;
+                }
+            }
+        }
+
+        return $skus;
+    }
+
+    /**
      * Mesma chamada base de fetchOwnItems(), só que pra 1 item_id — usado
      * quando um pedido chega com um item ainda não vinculado a nenhum
      * produto local (anúncio feito direto na Shopee, nunca trazido pro

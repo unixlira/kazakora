@@ -6,6 +6,7 @@ import { useClickOutside } from '@/Shared/useClickOutside';
 import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { sidebarSections } from '@/Shared/adminSidebarItems';
+import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
@@ -34,10 +35,24 @@ const sidebarCollapsed = ref(false);
 useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
 useClickOutside(notifMenuRef, () => (notifMenuOpen.value = false));
 
-const markNotificationRead = (item) => {
+// Pedido explícito 2026-08-16: clicar num aviso do dropdown marca como
+// lida (some da sineta, ver notificationsFor() no backend — só mostra não
+// lidas agora) E abre a tela com todas listadas, não só marca inline.
+const openNotification = (item) => {
+    notifMenuOpen.value = false;
+
     if (!item.read) {
         router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
     }
+
+    router.visit('/notificacoes');
+};
+
+// Botão de excluir (pedido explícito 2026-08-16) — some de vez, não some
+// só da sineta como o mark-read. @click.stop pro clique não borbulhar pro
+// botão do item inteiro (que abriria a tela de notificações).
+const removeNotification = (item) => {
+    router.delete(`/notificacoes/${item.id}`, { preserveScroll: true, preserveState: true });
 };
 
 const markAllNotificationsRead = () => {
@@ -226,20 +241,33 @@ watch(
                                     </button>
                                 </div>
 
+                                <!-- Só mostra não lidas (ver notificationsFor() no backend) —
+                                pedido explícito 2026-08-16: "quando visualizadas não aparecem
+                                na barra". -->
                                 <p v-if="notifications.length === 0" class="px-4 py-6 text-center text-sm text-slate-400">
-                                    Nenhuma notificação por aqui ainda.
+                                    Nenhuma notificação nova.
                                 </p>
 
-                                <button v-for="item in notifications" :key="item.id" type="button"
-                                    class="flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-[var(--surface-muted)]"
-                                    :class="{ 'bg-lightprimary': !item.read }"
-                                    @click="markNotificationRead(item)">
-                                    <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-primary'"></span>
-                                    <span>
-                                        <span class="block text-slate-700 dark:text-slate-200">{{ item.message }}</span>
-                                        <span class="text-xs text-slate-400">{{ item.createdAt }}</span>
-                                    </span>
-                                </button>
+                                <div v-for="item in notifications" :key="item.id"
+                                    class="group flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-[var(--surface-muted)]">
+                                    <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" @click="openNotification(item)">
+                                        <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                                        <span class="min-w-0">
+                                            <span class="block text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+                                            <span class="text-xs text-slate-400">{{ item.createdAt }}</span>
+                                        </span>
+                                    </button>
+                                    <button type="button" title="Excluir"
+                                        class="shrink-0 rounded-full p-1.5 text-slate-300 opacity-0 hover:bg-error/10 hover:text-error group-hover:opacity-100"
+                                        @click.stop="removeNotification(item)">
+                                        <i class="fas fa-xmark text-xs"></i>
+                                    </button>
+                                </div>
+
+                                <Link href="/notificacoes" class="block px-4 py-2 text-center text-xs font-medium text-primary hover:underline"
+                                    @click="notifMenuOpen = false">
+                                    Ver todas
+                                </Link>
                             </div>
                         </div>
 
@@ -284,5 +312,7 @@ watch(
                 </div>
             </footer>
         </div>
+
+        <LowStockAlertModal />
     </div>
 </template>

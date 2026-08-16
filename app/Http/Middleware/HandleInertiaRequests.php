@@ -6,6 +6,7 @@ use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Favorite;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use App\Notifications\LabelUnavailableNotification;
+use App\Notifications\LowStockNotification;
 use App\Notifications\OversellDetectedNotification;
 use App\Notifications\PrintJobFailedNotification;
 use App\Support\Rbac\Permissions;
@@ -30,6 +31,7 @@ class HandleInertiaRequests extends Middleware
         LabelUnavailableNotification::class,
         PrintJobFailedNotification::class,
         OversellDetectedNotification::class,
+        LowStockNotification::class,
     ];
 
     /**
@@ -77,6 +79,10 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
                 'warning' => $request->session()->get('warning'),
+                // Estoque baixo no login (pedido explícito 2026-08-16) —
+                // ver AuthenticatedSessionController::store() e
+                // LowStockAlertModal.vue.
+                'lowStockProducts' => $request->session()->get('lowStockProducts'),
             ],
         ];
     }
@@ -111,7 +117,12 @@ class HandleInertiaRequests extends Middleware
 
         return [
             'unreadCount' => $scope($user->notifications())->whereNull('read_at')->count(),
-            'items' => $scope($user->notifications())->latest()->limit(8)->get()->map(fn ($notification) => [
+            // Pedido explícito 2026-08-16: "quando são visualizadas elas
+            // não aparecem na barra de notificação" — a sineta/dropdown só
+            // mostra as NÃO lidas agora (antes mostrava as últimas 8
+            // independente de lida ou não). A lista completa (lida +
+            // não lida) mora na tela /notificacoes, ver NotificationController::index().
+            'items' => $scope($user->notifications())->whereNull('read_at')->latest()->limit(8)->get()->map(fn ($notification) => [
                 'id' => $notification->id,
                 'message' => $notification->data['message'] ?? '',
                 // 'body'/'link' só existem em PromotionalNotification por

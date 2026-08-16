@@ -117,8 +117,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/configuracoes', [SettingsController::class, 'edit'])->name('configuracoes.editar');
 
+    Route::get('/notificacoes', [NotificationController::class, 'index'])->name('notificacoes.listar');
     Route::post('/notificacoes/{notification}/lida', [NotificationController::class, 'markRead'])->name('notificacoes.lida');
     Route::post('/notificacoes/ler-todas', [NotificationController::class, 'markAllRead'])->name('notificacoes.ler-todas');
+    Route::delete('/notificacoes/{notification}', [NotificationController::class, 'destroy'])->name('notificacoes.excluir');
 });
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(function () {

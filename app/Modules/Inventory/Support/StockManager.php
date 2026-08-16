@@ -5,7 +5,6 @@ namespace App\Modules\Inventory\Support;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
-use App\Modules\Marketplace\Jobs\SyncProductStockToChannels;
 use App\Notifications\OversellDetectedNotification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
@@ -53,7 +52,15 @@ class StockManager
             return $movement;
         });
 
-        SyncProductStockToChannels::dispatch($product)->afterCommit();
+        // Achado real 2026-08-16, pedido explícito do usuário: o estoque
+        // dos anúncios nos marketplaces é MANTIDO ALTO DE PROPÓSITO (número
+        // fake, maior que o real) pra ajudar no algoritmo de cada canal —
+        // um dispatch de SyncProductStockToChannels rodava aqui em TODO
+        // adjust() (venda, ajuste manual, devolução, qualquer coisa que
+        // mexesse no estoque, não só venda) e sobrescrevia esse número fake
+        // pelo estoque real, na hora. Removido de propósito — o estoque
+        // LOCAL continua sendo debitado normalmente (é isso que este método
+        // faz acima), só não empurra mais pra fora pra nenhum canal.
 
         // Concorrência entre canais (duas vendas quase simultâneas em canais
         // diferentes pro mesmo produto) pode pedir mais do que existe —

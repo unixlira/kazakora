@@ -1048,6 +1048,18 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                     'comment' => trim((string) ($comment['comment'] ?? '')) ?: null,
                     'reviewer_name' => trim((string) ($comment['buyer_username'] ?? '')) ?: 'Cliente Shopee',
                     'images' => array_values(array_filter((array) ($comment['media']['image_url_list'] ?? []))),
+                    // Achado real 2026-08-16: um item_id só (anúncio inteiro)
+                    // pode ter mais de um produto local vinculado quando tem
+                    // variação de verdade (ver external_model_id em
+                    // product_channel_listings, mesmo caso do Ring Light
+                    // 8"/10" já documentado em ShopeeDriver::importOrder()).
+                    // As avaliações da Shopee são por ITEM, não por
+                    // variação — model_id_list diz quais variações a compra
+                    // que gerou o comentário incluía, usado por
+                    // ReviewImportService::resolveProductId() pra rotear a
+                    // avaliação pro produto local certo em vez de sempre
+                    // cair no último processado.
+                    'model_ids' => array_map('strval', (array) ($comment['model_id_list'] ?? [])),
                     'created_at' => isset($comment['create_time'])
                         ? \Illuminate\Support\Carbon::createFromTimestamp((int) $comment['create_time'], config('app.timezone'))
                         : null,

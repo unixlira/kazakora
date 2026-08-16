@@ -129,12 +129,20 @@ interface MarketplaceChannelDriver
      * ver AbstractMarketplaceDriver::fetchReviews() pro default. Quem
      * chama já sabe pular esse canal e seguir pro próximo.
      *
+     * `model_ids` (quando o canal distinguir variação): ids da variação
+     * específica que a compra por trás da avaliação incluía — usado por
+     * ReviewImportService pra rotear a avaliação pro produto local certo
+     * quando o mesmo external_id (anúncio) está vinculado a mais de um
+     * produto local (uma variação por produto). Lista vazia quando o
+     * canal não distingue variação nessa resposta.
+     *
      * @return array<int, array{
      *     external_id: string,
      *     rating: int,
      *     comment: ?string,
      *     reviewer_name: string,
      *     images: array<int, string>,
+     *     model_ids: array<int, string>,
      *     created_at: ?\Illuminate\Support\Carbon,
      * }>
      */

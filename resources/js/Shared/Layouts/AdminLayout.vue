@@ -65,6 +65,16 @@ const activeItem = computed(() => {
 
 const logout = () => router.post('/sair');
 
+// Pedido explícito 2026-08-15: botão de voltar visível em toda tela do
+// admin, sem atrapalhar o layout de nenhuma página — colocado só uma vez
+// aqui no layout compartilhado (não em cada tela) em vez de duplicado.
+// history.back() de propósito, não um Link fixo pra "/admin" — Inertia usa
+// pushState nos visits normais, então o histórico do navegador já reflete
+// a navegação real dentro do admin; volta pra tela anterior de verdade,
+// não sempre pro dashboard. Escondido na própria raiz (/admin) porque não
+// há "tela anterior" que faça sentido voltar a partir dali.
+const goBack = () => window.history.back();
+
 watch(
     () => page.props.flash,
     (flash) => {
@@ -166,11 +176,24 @@ watch(
             <!-- Topbar -->
             <nav class="sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
                 <div class="mx-auto flex w-full flex-wrap items-center justify-between gap-4 md:flex-nowrap md:px-4">
-                    <!-- Breadcrumb -->
-                    <div class="hidden items-center gap-2 text-sm lg:flex">
-                        <span class="text-slate-400">Painel</span>
-                        <i v-if="activeItem" class="fas fa-chevron-right text-[10px] text-slate-300"></i>
-                        <span v-if="activeItem" class="font-semibold">{{ activeItem.label }}</span>
+                    <div class="flex items-center gap-2">
+                        <!-- Voltar (pedido explícito 2026-08-15) — sempre
+                        visível (não escondido em telas pequenas, diferente
+                        do breadcrumb ao lado), mesmo estilo circular dos
+                        outros botões da topbar. Some só na raiz do admin,
+                        onde "voltar" não teria destino nenhum. -->
+                        <button v-if="page.url !== '/admin'" type="button"
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
+                            title="Voltar" @click="goBack">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+
+                        <!-- Breadcrumb -->
+                        <div class="hidden items-center gap-2 text-sm lg:flex">
+                            <span class="text-slate-400">Painel</span>
+                            <i v-if="activeItem" class="fas fa-chevron-right text-[10px] text-slate-300"></i>
+                            <span v-if="activeItem" class="font-semibold">{{ activeItem.label }}</span>
+                        </div>
                     </div>
 
                     <!-- Search (visual only for now) -->

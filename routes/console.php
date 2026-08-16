@@ -63,3 +63,9 @@ Schedule::command('flex:check-billing-cycle')->dailyAt('07:00');
 // pra pegar quem só chega de tarde) — silencioso quando não há nada a
 // avisar, ver NotifyScheduledShipmentsCommand.
 Schedule::command('marketplace:notify-scheduled-shipments')->twiceDaily(8, 15);
+
+// Avaliações (nota/comentário/imagens/nome do comprador) de todos os
+// marketplaces conectados — pedido explícito 2026-08-16. Diário (não
+// precisa de tempo real como pedido/etiqueta) num horário fora dos outros
+// crons já agendados, pra não competir por chamada de API na mesma janela.
+Schedule::command('reviews:sync')->dailyAt('05:15');

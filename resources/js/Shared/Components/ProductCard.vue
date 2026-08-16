@@ -2,6 +2,7 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
+import StarRating from '@/Shared/Components/StarRating.vue';
 import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
 const props = defineProps({
@@ -28,7 +29,6 @@ const props = defineProps({
 });
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
-const filledStars = computed(() => Math.round(ratingAvg.value));
 
 const secondImage = computed(() => {
     const images = props.product.images ?? [];
@@ -95,10 +95,7 @@ const submitReview = () => {
                 <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-semibold" :class="product.has_discount ? 'text-store-accent' : ''">{{ formatPrice(product.final_price) }}</span>
-                    <div class="flex items-center gap-0.5">
-                        <i v-for="star in 5" :key="star" class="text-[11px]"
-                            :class="star <= filledStars ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
-                    </div>
+                    <StarRating :value="ratingAvg" />
                 </div>
                 <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
             </div>

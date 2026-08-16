@@ -95,7 +95,7 @@ class CatalogController extends Controller
 
         $reviews = Review::query()
             ->where('product_id', $product->id)
-            ->with('user:id,name')
+            ->with(['user:id,name', 'images'])
             ->latest()
             ->get();
 

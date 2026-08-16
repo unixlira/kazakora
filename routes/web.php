@@ -40,6 +40,7 @@ use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
 use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
 use App\Modules\Admin\Http\Controllers\ReportController;
+use App\Modules\Admin\Http\Controllers\ReviewController as AdminReviewController;
 use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
@@ -168,6 +169,19 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             'destroy' => 'banners.excluir',
         ])
         ->middlewareFor('store', 'permission:cadastros.create')
+        ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
+        ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    Route::resource('avaliacoes', AdminReviewController::class)->only(['index', 'show', 'edit', 'update', 'destroy'])
+        ->parameters(['avaliacoes' => 'review'])
+        ->names([
+            'index' => 'avaliacoes.listar',
+            'show' => 'avaliacoes.exibir',
+            'edit' => 'avaliacoes.editar',
+            'update' => 'avaliacoes.atualizar',
+            'destroy' => 'avaliacoes.excluir',
+        ])
+        ->middlewareFor(['index', 'show'], 'permission:cadastros.view')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
 

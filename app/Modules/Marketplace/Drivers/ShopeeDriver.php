@@ -286,6 +286,62 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         ]);
     }
 
+    /**
+     * Fotos e vídeo cadastrados no anúncio da Shopee — pedido explícito
+     * 2026-08-16: importar pro catálogo local os produtos que ainda não
+     * têm nenhuma foto/vídeo próprio (ver App\Console\Commands\
+     * ImportShopeeProductMedia). Mesma chamada base de fetchItemDetail(),
+     * pedindo os campos opcionais `image`/`video_info` em vez de
+     * `tax_info,description,stock_info_v2` — a Shopee só devolve o que for
+     * pedido explicitamente em response_optional_fields.
+     *
+     * video_info vem como lista (Shopee permite mais de um vídeo por
+     * anúncio em algumas contas) — usa só o primeiro, já que Product só
+     * tem 1 vídeo (video_path). Não lança exceção: item sem mídia, ou
+     * chamada com erro, vira listas vazias — quem chama decide se isso é
+     * "nada a importar" ou tenta de novo depois.
+     *
+     * @return array{images: array<int, string>, video: ?array{url: string, duration: ?int}}
+     */
+    public function fetchItemMedia(string $externalId): array
+    {
+        $this->ensureConfigured();
+
+        try {
+            $base = $this->client->get('/api/v2/product/get_item_base_info', [
+                'item_id_list' => $externalId,
+                'response_optional_fields' => 'image,video_info',
+            ]);
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.item_media.lookup_failed', [
+                'external_id' => $externalId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return ['images' => [], 'video' => null];
+        }
+
+        $item = $base['response']['item_list'][0] ?? null;
+
+        if (! $item) {
+            return ['images' => [], 'video' => null];
+        }
+
+        $images = array_values(array_filter((array) ($item['image']['image_url_list'] ?? [])));
+
+        $video = null;
+        $videoInfo = $item['video_info'][0] ?? null;
+
+        if ($videoInfo && ! empty($videoInfo['video_url'])) {
+            $video = [
+                'url' => (string) $videoInfo['video_url'],
+                'duration' => isset($videoInfo['duration']) ? (int) $videoInfo['duration'] : null,
+            ];
+        }
+
+        return ['images' => $images, 'video' => $video];
+    }
+
     public function publishProduct(Product $product, ProductChannelListing $listing): string
     {
         $this->ensureConfigured();
@@ -941,5 +997,67 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         ]);
 
         return ['ready' => true, 'contents' => $label['contents'], 'content_type' => $label['content_type']];
+    }
+
+    /**
+     * `v2.product.get_comment` — nota (rating_star, 1-5), comentário, nome
+     * do comprador (buyer_username, já vem mascarado pela própria Shopee
+     * quando aplicável — não é mascaramento nosso) e mídia anexada
+     * (media.image_url_list/video_url_list) por item_id. Paginação por
+     * cursor, mesmo padrão de listOrderSns() (more/next_cursor).
+     *
+     * Uma falha de rede numa página no meio da varredura devolve o que já
+     * foi coletado até ali em vez de derrubar tudo — a próxima execução do
+     * cron (reviews:sync) completa o resto; melhor um resultado parcial
+     * hoje do que nada até a próxima falha não acontecer de novo.
+     */
+    public function fetchReviews(string $externalId): array
+    {
+        $this->ensureConfigured();
+
+        $reviews = [];
+        $cursor = '';
+
+        do {
+            try {
+                $page = $this->client->get('/api/v2/product/get_comment', array_filter([
+                    'item_id' => $externalId,
+                    'cursor' => $cursor,
+                    'page_size' => 100,
+                ], fn ($value) => $value !== ''));
+            } catch (ShopeeException $exception) {
+                Log::channel('shopee')->warning('shopee.get_comment.failed', [
+                    'external_id' => $externalId,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                break;
+            }
+
+            foreach ($page['response']['item_comment_list'] ?? [] as $comment) {
+                $commentId = (string) ($comment['comment_id'] ?? '');
+                $rating = (int) ($comment['rating_star'] ?? 0);
+
+                if ($commentId === '' || $rating < 1 || $rating > 5) {
+                    continue;
+                }
+
+                $reviews[] = [
+                    'external_id' => $commentId,
+                    'rating' => $rating,
+                    'comment' => trim((string) ($comment['comment'] ?? '')) ?: null,
+                    'reviewer_name' => trim((string) ($comment['buyer_username'] ?? '')) ?: 'Cliente Shopee',
+                    'images' => array_values(array_filter((array) ($comment['media']['image_url_list'] ?? []))),
+                    'created_at' => isset($comment['create_time'])
+                        ? \Illuminate\Support\Carbon::createFromTimestamp((int) $comment['create_time'], config('app.timezone'))
+                        : null,
+                ];
+            }
+
+            $more = (bool) ($page['response']['more'] ?? false);
+            $cursor = (string) ($page['response']['next_cursor'] ?? '');
+        } while ($more && $cursor !== '');
+
+        return $reviews;
     }
 }

@@ -116,4 +116,27 @@ interface MarketplaceChannelDriver
      * @return array{ready: bool, contents: ?string, content_type: ?string}
      */
     public function fetchLabel(Order $order): array;
+
+    /**
+     * Busca as avaliações (nota, comentário, nome do comprador e imagens
+     * anexadas, quando o canal devolver) de um anúncio já publicado —
+     * usado por ReviewImportService, que roda pra TODOS os canais
+     * conectados sem precisar saber o formato de cada API. Pura consulta,
+     * nunca escreve nada no canal.
+     *
+     * Canais sem essa capacidade ainda implementada lançam
+     * RuntimeException, mesmo padrão de publishProduct()/importOrder() —
+     * ver AbstractMarketplaceDriver::fetchReviews() pro default. Quem
+     * chama já sabe pular esse canal e seguir pro próximo.
+     *
+     * @return array<int, array{
+     *     external_id: string,
+     *     rating: int,
+     *     comment: ?string,
+     *     reviewer_name: string,
+     *     images: array<int, string>,
+     *     created_at: ?\Illuminate\Support\Carbon,
+     * }>
+     */
+    public function fetchReviews(string $externalId): array;
 }

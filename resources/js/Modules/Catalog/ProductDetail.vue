@@ -663,11 +663,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <article v-for="review in reviews" :key="review.id"
                         class="flex gap-4 rounded-2xl border border-store-border bg-store-bg-raised p-5 shadow-sm">
                         <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-store-accent/10 font-display text-sm font-semibold text-store-accent">
-                            {{ (review.user?.name ?? 'C').charAt(0).toUpperCase() }}
+                            {{ review.reviewer_display_name.charAt(0).toUpperCase() }}
                         </span>
                         <div class="min-w-0 flex-1">
                             <div class="flex flex-wrap items-center justify-between gap-2">
-                                <span class="font-medium text-store-fg">{{ review.user?.name ?? 'Cliente KazaKora' }}</span>
+                                <span class="font-medium text-store-fg">{{ review.reviewer_display_name }}</span>
                                 <span class="text-xs text-store-fg-faint">{{ formatDate(review.created_at) }}</span>
                             </div>
                             <div class="mt-1 flex items-center gap-0.5">
@@ -675,6 +675,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     :class="star <= review.rating ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
                             </div>
                             <p v-if="review.comment" class="mt-2 text-sm leading-relaxed text-store-fg-muted">{{ review.comment }}</p>
+                            <div v-if="review.images?.length" class="mt-3 flex flex-wrap gap-2">
+                                <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
+                                    <img :src="image.image_url" alt="" class="h-16 w-16 rounded-lg border border-store-border object-cover">
+                                </a>
+                            </div>
                         </div>
                     </article>
                 </div>

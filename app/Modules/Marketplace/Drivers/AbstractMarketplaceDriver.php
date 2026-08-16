@@ -23,6 +23,18 @@ abstract class AbstractMarketplaceDriver implements MarketplaceChannelDriver
         return null;
     }
 
+    /**
+     * Default: canal ainda sem busca de avaliações implementada (só a
+     * Shopee tem, por enquanto — ver ShopeeDriver::fetchReviews()).
+     * Lançar, e não devolver [], porque ReviewImportService precisa
+     * distinguir "canal não suporta ainda" (pula o canal inteiro) de
+     * "suporta mas esse produto não tem avaliação nenhuma" ([] real).
+     */
+    public function fetchReviews(string $externalId): array
+    {
+        throw new \RuntimeException("Importação de avaliações via {$this->channel()} ainda não implementada.");
+    }
+
     protected function account(): ?MarketplaceAccount
     {
         return MarketplaceAccount::query()->where('channel', $this->channel())->first();

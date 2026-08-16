@@ -155,6 +155,39 @@ const shippingCost = computed(() => {
     return method ? Number(method.price) : 0;
 });
 
+// BUG REAL 2026-08-16 (reporte do usuário: "o botão continuar fica
+// habilitado" mesmo sem endereço escolhido/preenchido): o botão só olhava
+// pra disponibilidade de frete, nunca pro endereço em si — como não existe
+// um <form> nativo aqui (o clique chama submit() direto via JS), os
+// atributos "required" dos campos nunca validam nada de verdade (só HTML5
+// form submit dispara isso, e este botão é type="button"). Endereço
+// existente selecionado conta como válido pelo id; endereço novo só conta
+// quando os campos realmente obrigatórios (mesmos exigidos no backend,
+// ver CheckoutController::storeDelivery()) estão preenchidos.
+const hasValidAddress = computed(() => {
+    if (! useNewAddress.value) {
+        return !! form.address_id;
+    }
+
+    const a = form.new_address;
+    return !! (a.recipient_name?.trim() && a.phone?.trim() && a.zip?.replace(/\D/g, '').length === 8
+        && a.street?.trim() && a.number?.trim() && a.neighborhood?.trim() && a.city?.trim() && a.state?.trim().length === 2);
+});
+
+// Mesmo motivo do endereço acima — dados do convidado (nome/e-mail/CPF)
+// nunca eram checados no front antes de habilitar o botão, só no backend
+// (que rejeita e manda de volta pra esta mesma tela, perdendo o que foi
+// digitado). `guest` só existe (não-null) quando não há usuário logado.
+const hasValidGuestInfo = computed(() => {
+    if (! form.guest) {
+        return true;
+    }
+
+    return !! (form.guest.name?.trim() && form.guest.email?.trim() && form.guest.cpf?.replace(/\D/g, '').length >= 11);
+});
+
+const canContinue = computed(() => hasValidAddress.value && hasValidGuestInfo.value);
+
 const finalTotal = computed(() => props.total + shippingCost.value);
 
 const submit = () => {
@@ -341,8 +374,14 @@ const submit = () => {
                         <p v-else class="text-sm text-store-fg-muted">Informe um CEP válido para ver as opções de envio.</p>
                     </div>
 
-                    <div class="mt-6 flex justify-end">
-                        <button type="button" :disabled="form.processing || availableOptions.length === 0"
+                    <div class="mt-6 flex flex-col items-end gap-2">
+                        <p v-if="!hasValidAddress" class="text-xs text-store-fg-muted">
+                            {{ useNewAddress ? 'Preencha o endereço de entrega para continuar.' : 'Escolha um endereço para continuar.' }}
+                        </p>
+                        <p v-else-if="!hasValidGuestInfo" class="text-xs text-store-fg-muted">
+                            Preencha seus dados (nome, e-mail e CPF) para continuar.
+                        </p>
+                        <button type="button" :disabled="form.processing || availableOptions.length === 0 || !canContinue"
                             class="rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                             @click="submit">
                             Continuar

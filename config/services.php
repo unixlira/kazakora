@@ -90,6 +90,8 @@ return [
         'dr' => env('CORREIOS_DR'),
         'token_base_url' => env('CORREIOS_TOKEN_BASE_URL', 'https://api.correios.com.br/token'),
         'api_base_url' => env('CORREIOS_API_BASE_URL', 'https://api.correios.com.br/prepostagem'),
+        'preco_base_url' => env('CORREIOS_PRECO_BASE_URL', 'https://api.correios.com.br/preco'),
+        'prazo_base_url' => env('CORREIOS_PRAZO_BASE_URL', 'https://api.correios.com.br/prazo'),
     ],
 
     'shopee' => [

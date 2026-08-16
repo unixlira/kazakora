@@ -113,13 +113,14 @@ class CheckoutController extends Controller
             'shipping_method_id' => [
                 'required',
                 function ($attribute, $value, $fail): void {
-                    // IDs de cotação ao vivo (Melhor Envio, prefixo "me:")
-                    // são confirmados depois — se o front não mandou os
-                    // detalhes junto (shipping_quote), o backend reconsulta
-                    // a API sozinho logo abaixo, em vez de recusar aqui.
-                    // Só um ID estático (numérico, de shipping_methods)
-                    // precisa já existir de verdade nesse ponto.
-                    if (! str_starts_with((string) $value, 'me:') && ! ShippingMethod::whereKey($value)->exists()) {
+                    // IDs de cotação ao vivo (Melhor Envio "me:", Correios
+                    // "correios:") são confirmados depois — se o front não
+                    // mandou os detalhes junto (shipping_quote), o backend
+                    // reconsulta a API sozinho logo abaixo, em vez de
+                    // recusar aqui. Só um ID estático (numérico, de
+                    // shipping_methods) precisa já existir de verdade nesse
+                    // ponto.
+                    if (! $this->isLiveQuoteId((string) $value) && ! ShippingMethod::whereKey($value)->exists()) {
                         $fail('Forma de envio inválida.');
                     }
                 },
@@ -170,7 +171,7 @@ class CheckoutController extends Controller
         // mandou (ou mandou incompleto) o shipping_quote — por qualquer
         // motivo do lado do navegador — recotamos aqui em vez de recusar.
         // Não depende de o front nunca dessincronizar os dois campos.
-        if (str_starts_with((string) $data['shipping_method_id'], 'me:') && empty($data['shipping_quote'])) {
+        if ($this->isLiveQuoteId((string) $data['shipping_method_id']) && empty($data['shipping_quote'])) {
             $zip = $data['new_address']['zip'] ?? ($address ?? null)?->zip;
             $quotes = $zip ? $this->freight->quote($this->cart->items(), $zip) : [];
             $match = collect($quotes)->firstWhere('id', $data['shipping_method_id']);
@@ -938,6 +939,16 @@ class CheckoutController extends Controller
             'carrier_name' => $shippingMethod->name,
             'cost' => (float) $shippingMethod->price,
         ];
+    }
+
+    /**
+     * IDs de cotação ao vivo (não de uma linha estática de shipping_methods)
+     * — "me:" da Melhor Envio, "correios:" da API dos Correios (ver
+     * FreightQuoteService/CorreiosFreightQuoteService).
+     */
+    private function isLiveQuoteId(string $value): bool
+    {
+        return str_starts_with($value, 'me:') || str_starts_with($value, 'correios:');
     }
 
     private function sortMethodsSafely(array $methods): array

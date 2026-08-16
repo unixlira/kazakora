@@ -9,16 +9,20 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Cota frete real via Melhor Envio pro carrinho atual. Nunca lança — retorna
- * lista vazia sempre que a cotação não é possível (token não configurado,
- * empresa sem CEP cadastrado, algum produto do carrinho sem peso/dimensões,
- * ou falha da API) — o checkout cai de volta pras formas de envio estáticas
- * (ShippingMethod) nesse caso, nunca trava a compra.
+ * Cota frete real pro carrinho atual — Melhor Envio e Correios (ver
+ * CorreiosFreightQuoteService), combinados numa lista só. Nunca lança —
+ * cada fonte devolve [] sempre que a cotação não é possível pra ela (sem
+ * token configurado, empresa sem CEP, produto sem peso/dimensões, API
+ * fora do ar) sem afetar a outra; se as duas vierem vazias, o checkout cai
+ * de volta pras formas de envio estáticas (ShippingMethod), nunca trava a
+ * compra.
  */
 class FreightQuoteService
 {
-    public function __construct(private readonly MelhorEnvioClient $client)
-    {
+    public function __construct(
+        private readonly MelhorEnvioClient $client,
+        private readonly CorreiosFreightQuoteService $correios,
+    ) {
     }
 
     /**
@@ -26,6 +30,22 @@ class FreightQuoteService
      * @return array<int, array{id: string, name: string, carrier_name: string, price: float, estimated_days: int}>
      */
     public function quote(Collection $cartItems, string $destinationZip): array
+    {
+        $quotes = [
+            ...$this->quoteMelhorEnvio($cartItems, $destinationZip),
+            ...$this->correios->quote($cartItems, $destinationZip),
+        ];
+
+        usort($quotes, fn ($a, $b) => $a['price'] <=> $b['price']);
+
+        return $quotes;
+    }
+
+    /**
+     * @param  Collection<int, array{product: \App\Modules\Catalog\Models\Product, quantity: int}>  $cartItems
+     * @return array<int, array{id: string, name: string, carrier_name: string, price: float, estimated_days: int}>
+     */
+    private function quoteMelhorEnvio(Collection $cartItems, string $destinationZip): array
     {
         if (! $this->client->isConfigured()) {
             return [];

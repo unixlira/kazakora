@@ -253,7 +253,9 @@ class DashboardAgentControllerTest extends TestCase
         // removido do filtro, a data continua exclusiva desse endpoint.
         $shipped = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'SHIPPED-1']);
 
-        // Não deve aparecer: pedido de ONTEM, único filtro que resta.
+        // Não deve aparecer: pedido de ONTEM já enviado (nem hoje, nem
+        // "pago ainda não embalado" — ver teste dedicado abaixo pra esse
+        // segundo caso, corrigido em 2026-08-17).
         // created_at não está em Order::$fillable, então nem create() nem
         // update() conseguem setá-lo — só forceFill() ignora esse limite
         // de propósito (bug real encontrado escrevendo este teste: o
@@ -261,7 +263,7 @@ class DashboardAgentControllerTest extends TestCase
         // também não funciona de verdade, só nunca quebrou nenhuma
         // asserção lá porque aquele teste não depende de cruzar a virada
         // do dia).
-        $yesterday = $this->makeOrder();
+        $yesterday = $this->makeOrder(['status' => Order::STATUS_SHIPPED]);
         $yesterday->forceFill(['created_at' => now()->subDay()])->save();
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
@@ -286,6 +288,36 @@ class DashboardAgentControllerTest extends TestCase
 
         $this->assertSame($older->id, $queue[2]['id']);
         $this->assertSame(1, $queue[2]['units_count']);
+    }
+
+    public function test_queue_keeps_showing_a_paid_order_from_yesterday_until_it_is_packed(): void
+    {
+        // Bug real relatado 2026-08-17: pedido pago ONTEM e ainda não
+        // embalado sumia da fila na virada do dia, mesmo continuando "em
+        // preparação" de verdade — o corte "só hoje" (pedido explícito
+        // 2026-08-15) não previa esse caso. Fix: pedido pago sem
+        // packed_at continua aparecendo, não importa a data.
+        $unpackedYesterday = $this->makeOrder(['external_order_id' => 'YESTERDAY-UNPACKED']);
+        $unpackedYesterday->forceFill(['created_at' => now()->subDay()])->save();
+
+        // Continua sumindo assim que for embalado, mesmo sendo de ontem.
+        $packedYesterday = $this->makeOrder(['external_order_id' => 'YESTERDAY-PACKED']);
+        $packedYesterday->forceFill(['created_at' => now()->subDay(), 'packed_at' => now()->subDay()])->save();
+
+        // Continua sumindo se deixou de estar pago (enviado), mesmo sem
+        // packed_at, mesmo sendo de ontem.
+        $shippedYesterday = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'YESTERDAY-SHIPPED']);
+        $shippedYesterday->forceFill(['created_at' => now()->subDay()])->save();
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($queue->has($unpackedYesterday->id));
+        $this->assertNull($queue[$unpackedYesterday->id]['packed_at']);
+        $this->assertFalse($queue->has($packedYesterday->id));
+        $this->assertFalse($queue->has($shippedYesterday->id));
     }
 
     public function test_queue_still_includes_packed_orders_flagged_via_packed_at(): void

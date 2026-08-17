@@ -458,6 +458,19 @@ class DashboardAgentController extends Controller
      * está passando por aqui pra registro (já enviado, cancelado,
      * aguardando pagamento) — packOrder() já rejeitava (409) tentar
      * embalar pedido não-pago antes disso, esse guard continua valendo.
+     *
+     * BUG REAL 2026-08-17, corrigido no mesmo dia: o corte "só hoje" acima
+     * tem um efeito colateral não percebido em 2026-08-15 — um pedido pago
+     * ontem e ainda não embalado (packed_at nulo) simplesmente cai fora da
+     * janela [hoje, amanhã) na virada do dia e desaparece da fila, mesmo
+     * continuando "em preparação" de verdade (usuário relatou pedidos de
+     * ontem que sobraram pra embalar hoje e sumiram). O painel web
+     * (PrintJobController::index()) nunca teve esse problema porque não
+     * filtra por data, só por status=paid. Fix: a fila agora é "pedidos de
+     * hoje (qualquer status, como já era)" OU "qualquer pedido pago ainda
+     * não embalado, não importa o dia" — um pedido de ontem some da fila
+     * assim que for embalado ou deixar de estar pago (enviado/cancelado),
+     * nunca sozinho pela data.
      */
     public function queue(): JsonResponse
     {
@@ -465,7 +478,13 @@ class DashboardAgentController extends Controller
         $tomorrow = $today->clone()->addDay();
 
         $orders = Order::query()
-            ->whereBetween('created_at', [$today, $tomorrow])
+            ->where(function ($query) use ($today, $tomorrow) {
+                $query->whereBetween('created_at', [$today, $tomorrow])
+                    ->orWhere(function ($query) {
+                        $query->where('status', Order::STATUS_PAID)
+                            ->whereNull('packed_at');
+                    });
+            })
             ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
             ->withSum('items as units_count', 'quantity')
             // orderByDesc('id') em vez de latest()/created_at: dois pedidos

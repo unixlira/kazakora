@@ -464,27 +464,24 @@ class DashboardAgentController extends Controller
      * ontem e ainda não embalado (packed_at nulo) simplesmente cai fora da
      * janela [hoje, amanhã) na virada do dia e desaparece da fila, mesmo
      * continuando "em preparação" de verdade (usuário relatou pedidos de
-     * ontem que sobraram pra embalar hoje e sumiram). O painel web
-     * (PrintJobController::index()) nunca teve esse problema porque não
-     * filtra por data, só por status=paid. Fix: a fila agora é "pedidos de
-     * hoje (qualquer status, como já era)" OU "qualquer pedido pago ainda
-     * não embalado, não importa o dia" — um pedido de ontem some da fila
-     * assim que for embalado ou deixar de estar pago (enviado/cancelado),
-     * nunca sozinho pela data.
+     * ontem que sobraram pra embalar hoje e sumiram). Primeira correção
+     * tentou "pago sem packed_at, sem limite de data" — mas isso trouxe de
+     * volta um represamento de 32 pedidos pagos há semanas nunca embalados
+     * (não é o cenário que o usuário quer ver todo dia), então foi revertida
+     * a favor de um corte simples e explícito: **ontem + hoje**, qualquer
+     * status, sem exceção pra pedido mais antigo. O painel web
+     * (PrintJobController::index()) continua sem corte de data nenhum — é o
+     * lugar certo pra ver um represamento antigo de verdade, se um dia
+     * existir.
      */
     public function queue(): JsonResponse
     {
         $today = now()->startOfDay();
+        $yesterday = $today->clone()->subDay();
         $tomorrow = $today->clone()->addDay();
 
         $orders = Order::query()
-            ->where(function ($query) use ($today, $tomorrow) {
-                $query->whereBetween('created_at', [$today, $tomorrow])
-                    ->orWhere(function ($query) {
-                        $query->where('status', Order::STATUS_PAID)
-                            ->whereNull('packed_at');
-                    });
-            })
+            ->whereBetween('created_at', [$yesterday, $tomorrow])
             ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
             ->withSum('items as units_count', 'quantity')
             // orderByDesc('id') em vez de latest()/created_at: dois pedidos

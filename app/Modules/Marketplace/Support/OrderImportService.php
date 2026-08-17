@@ -527,7 +527,21 @@ class OrderImportService
         return (bool) $fields;
     }
 
-    private function syncStatus(Order $order, string $newStatus, ?string $channelStatus = null): Order
+    /**
+     * Público desde 2026-08-17 (era private) — passou a ser chamado também
+     * de fora do fluxo de import "pedido completo" (App\Services\
+     * MercadoLivre\Services\ShipmentService::processWebhook(), ver
+     * comentário lá). Motivo: no Mercado Livre, ao contrário da Shopee,
+     * o status de nível PEDIDO nunca vira "shipped"/"delivered" — essa
+     * informação só existe no sub-recurso SHIPMENT (MercadoLivreDriver::
+     * mapOrderStatus() só sabe mapear paid/cancelled/invalid, de
+     * propósito, porque é só isso que o campo `order.status` do ML
+     * realmente assume). Continua sendo o único lugar que decide status,
+     * com a mesma trava de regressão (isStaleStatus()) pra qualquer
+     * chamador — canal-agnóstico de propósito, não é código exclusivo do
+     * Mercado Livre.
+     */
+    public function syncStatus(Order $order, string $newStatus, ?string $channelStatus = null): Order
     {
         if ($order->status === $newStatus) {
             // Mesmo sem mudança no status MAPEADO, o bruto pode ter virado

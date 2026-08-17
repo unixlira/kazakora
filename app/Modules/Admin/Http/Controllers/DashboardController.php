@@ -102,16 +102,29 @@ class DashboardController extends Controller
             'orderStatusBreakdown' => $this->orderStatusBreakdown(),
             'visitsSeries' => $this->visitsSeries(),
             'revenueSeries' => $this->revenueSeries(),
-            'revenueByChannel' => $this->revenueByChannel(),
+            'revenueByChannel' => $this->revenueByChannel($startOfMonth),
         ]);
     }
 
-    /** @return array<int, array{origin: string, total: float}> */
-    private function revenueByChannel(): array
+    /**
+     * BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+     * verificando o painel inteiro): esta consulta nunca teve filtro de
+     * data — somava TODO pedido pago desde o início da loja, enquanto
+     * 'stats.revenue' ao lado (mesma tela, mesmo rótulo "Faturamento") já
+     * era escopado pro mês corrente desde a correção de 2026-08-06 (ver
+     * comentário em index()). Resultado visível: a soma "por canal" dava
+     * maior que o total do mês (ex: R$12.871 de soma por canal contra
+     * R$9.673 de "faturamento" no mesmo carregamento da tela) — parecia
+     * quebrado porque, sem essa correção, literalmente não batia.
+     *
+     * @return array<int, array{origin: string, total: float}>
+     */
+    private function revenueByChannel(Carbon $startOfMonth): array
     {
         // subtotal, não total — ver comentário em index() sobre frete não
         // ser receita do vendedor.
         return Order::query()
+            ->where('created_at', '>=', $startOfMonth)
             ->selectRaw('origin, SUM(subtotal) as total')
             ->whereIn('status', self::PAID_STATUSES)
             ->groupBy('origin')

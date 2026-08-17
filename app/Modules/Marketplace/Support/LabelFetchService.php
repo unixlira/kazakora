@@ -32,6 +32,14 @@ class LabelFetchService
      * relatado). TikTok Shop ainda não tem fetchLabel() implementado (ver
      * TikTokShopDriver — integração pendente de credencial de parceiro),
      * então isso fica pronto e sem efeito prático até esse driver existir.
+     *
+     * EXCEÇÃO explícita 2026-08-17: um envio com entrega programada
+     * (scheduled_for preenchido, ver ChannelShipment/extractScheduledFor())
+     * recebe a mesma declaração de SKU MESMO fora desses canais (na
+     * prática, hoje só Mercado Livre agenda) — a venda saiu dias antes da
+     * etiqueta, então o reforço de conferência vale tanto quanto pro caso
+     * Shopee original. Ver uso de $isScheduled logo abaixo, não altera esta
+     * constante.
      */
     private const CHANNELS_WITH_DECLARATION = [
         MarketplaceAccount::CHANNEL_SHOPEE,
@@ -147,7 +155,19 @@ class LabelFetchService
         // etiqueta em PDF; se isso falhar por qualquer motivo, ainda
         // imprime a etiqueta crua em vez de travar o pedido por causa
         // disso.
-        if ($isPdf && in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true)) {
+        //
+        // Pedido explícito 2026-08-17: entrega programada (scheduled_for)
+        // entra na declaração mesmo fora de CHANNELS_WITH_DECLARATION (ver
+        // comentário da constante) — a venda saiu, mas a etiqueta só sai
+        // perto da data agendada, o que já é motivo suficiente pra reforçar
+        // a conferência. Ganha também uma 2ª linha exclusiva desse caso,
+        // "Pedido agendado dia dd/mm/yyyy | Pedido nº X", pra quem embala
+        // identificar de cara que aquele pedido específico é um agendado
+        // (útil sobretudo quando a etiqueta só libera dias depois da venda,
+        // fácil de esquecer o contexto).
+        $isScheduled = $shipment->scheduled_for !== null;
+
+        if ($isPdf && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
             try {
                 $declarationTokens = $shipment->order->items->map(function ($item) {
                     $sku = $item->product?->sku ?: $item->product_name;
@@ -156,7 +176,11 @@ class LabelFetchService
                     return "{$sku} | QTD: {$quantity}";
                 })->all();
 
-                $contents = $this->processor->overlayDeclarationFooter($contents, $declarationTokens);
+                $scheduledLine = $isScheduled
+                    ? sprintf('Pedido agendado dia %s | Pedido nº %d', $shipment->scheduled_for->format('d/m/Y'), $shipment->order_id)
+                    : null;
+
+                $contents = $this->processor->overlayDeclarationFooter($contents, $declarationTokens, $scheduledLine);
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

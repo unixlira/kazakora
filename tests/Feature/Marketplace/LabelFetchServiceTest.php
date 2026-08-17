@@ -21,7 +21,7 @@ class LabelFetchServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE): ChannelShipment
+    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE, ?\Illuminate\Support\Carbon $scheduledFor = null): ChannelShipment
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
@@ -56,6 +56,7 @@ class LabelFetchServiceTest extends TestCase
             'shipping_method' => 'self_service',
             'status' => ChannelShipment::STATUS_CONFIRMED,
             'confirmed_at' => now(),
+            'scheduled_for' => $scheduledFor,
         ]);
     }
 
@@ -220,6 +221,45 @@ class LabelFetchServiceTest extends TestCase
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
         $this->assertSame($rawPdf, $labelContents);
+    }
+
+    /**
+     * Pedido explícito 2026-08-17: entrega programada (Mercado Livre
+     * "Coleta/Places" agendado, scheduled_for preenchido) É a exceção ao
+     * teste acima — a venda saiu dias antes da etiqueta, então recebe a
+     * mesma declaração de SKU do caso Shopee/TikTok MAIS uma 2ª linha só
+     * dela ("Pedido agendado dia dd/mm/yyyy | Pedido nº X"), pra quem
+     * embala identificar de cara que aquele pedido é um agendado.
+     */
+    public function test_attempt_adds_the_scheduled_declaration_for_a_scheduled_mercado_livre_shipment(): void
+    {
+        Storage::fake('local');
+        $scheduledFor = now()->addDays(3)->setTime(0, 0);
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $scheduledFor);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        // "nº" tem "º" (ordinal), que sai convertido pro Latin-1 do FPDF —
+        // checa o texto ao redor da data/nº sem depender do byte exato do
+        // símbolo.
+        $this->assertStringContainsString('Pedido agendado dia '.$scheduledFor->format('d/m/Y'), $labelContents);
+        $this->assertStringContainsString((string) $shipment->order_id, $labelContents);
+
+        // Sobreposição na mesma página, nunca página extra — mesma garantia
+        // já exigida pro caso Shopee.
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $labelContents);
+
+        try {
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+        } finally {
+            @unlink($tempPath);
+        }
     }
 
     private static function buildZip(array $files): string

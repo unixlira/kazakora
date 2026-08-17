@@ -105,8 +105,16 @@ class LabelProcessingService
      * em vez de confiar de cabeça na tela do sistema.
      *
      * @param  array<int, string>  $declarationTokens  já formatados pelo chamador (ex.: "SKU123 | QTD: 02"), um por produto
+     * @param  string|null  $scheduledLine  pedido explícito 2026-08-17 —
+     *         2ª linha opcional, abaixo da declaração de SKU, só pra venda
+     *         com entrega programada ("Pedido agendado dia dd/mm/yyyy |
+     *         Pedido nº X"). Existe porque a venda já saiu mas a etiqueta
+     *         real só é liberada perto da data agendada — sem essa linha
+     *         impressa junto, não dá pra saber olhando a etiqueta (quando
+     *         ela finalmente sai) que aquele pedido específico é um caso
+     *         agendado, informação que ajuda a conferência do operador.
      */
-    public function overlayDeclarationFooter(string $pdfBytes, array $declarationTokens): string
+    public function overlayDeclarationFooter(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null): string
     {
         $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
         file_put_contents($tempPdfPath, $pdfBytes);
@@ -136,7 +144,7 @@ class LabelProcessingService
                 $leftMarginMm = $i === 1 ? 10 * (25.4 / 96) : 0; // 10px a 96dpi ≈ 2.65mm
                 $pdf->useTemplate($templateId, $leftMarginMm, 0);
 
-                $this->drawDeclarationFooter($pdf, $size, $line);
+                $this->drawDeclarationFooter($pdf, $size, $line, $scheduledLine);
             }
 
             return $pdf->Output('S');
@@ -155,18 +163,25 @@ class LabelProcessingService
      * desligado isso só sai cortado pela borda da própria página, nunca
      * cria página nova nem quebra o restante da etiqueta — degradação
      * aceitável pro caso raro, não um crash.
+     *
+     * $scheduledLine (pedido explícito 2026-08-17) reserva mais 1 linha
+     * logo abaixo da declaração de SKU — mesma fonte/estilo, só reservada
+     * separadamente pra não competir por espaço com o wrap da linha de
+     * SKU (que pode ocupar até 2 linhas sozinha num pedido com vários
+     * produtos).
      */
-    private function drawDeclarationFooter(Fpdi $pdf, array $size, string $line): void
+    private function drawDeclarationFooter(Fpdi $pdf, array $size, string $line, ?string $scheduledLine = null): void
     {
         $marginSide = 6; // mm
         $marginBottom = 1.5; // mm
         $fontSize = 9;
         $lineHeight = $fontSize * 0.42; // ~3.8mm
-        $reservedLines = 2;
+        $skuReservedLines = 2;
         $gapAboveText = 1.2; // mm entre a linha separadora e o texto
 
         $contentWidth = $size['width'] - (2 * $marginSide);
-        $textHeight = $reservedLines * $lineHeight;
+        $totalReservedLines = $skuReservedLines + ($scheduledLine !== null ? 1 : 0);
+        $textHeight = $totalReservedLines * $lineHeight;
 
         $lineY = $size['height'] - $marginBottom - $gapAboveText - $textHeight;
         $textTop = $lineY + $gapAboveText;
@@ -179,6 +194,12 @@ class LabelProcessingService
         $pdf->SetXY($marginSide, $textTop);
         $pdf->SetFont('Arial', 'B', $fontSize);
         $pdf->MultiCell($contentWidth, $lineHeight, $this->toLatin1($line), 0, 'C');
+
+        if ($scheduledLine !== null) {
+            $pdf->SetXY($marginSide, $textTop + ($skuReservedLines * $lineHeight));
+            $pdf->SetFont('Arial', 'B', $fontSize);
+            $pdf->MultiCell($contentWidth, $lineHeight, $this->toLatin1($scheduledLine), 0, 'C');
+        }
     }
 
     /**

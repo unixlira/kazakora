@@ -179,6 +179,49 @@ class LabelProcessingServiceTest extends TestCase
         }
     }
 
+    /**
+     * Pedido explícito 2026-08-17: 3º parâmetro opcional de
+     * overlayDeclarationFooter() — 2ª linha exclusiva de venda com entrega
+     * programada, abaixo da linha de SKU, sem quebrar o comportamento
+     * default (null) já coberto pelos testes acima.
+     */
+    public function test_declaration_footer_shows_the_scheduled_line_below_the_sku_line(): void
+    {
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(
+            self::minimalPdf(),
+            ['SKU-1 | QTD: 01'],
+            'Pedido agendado dia 20/08/2026 | Pedido no 305',
+        );
+
+        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
+        $this->assertStringContainsString('Pedido agendado dia 20/08/2026', $result);
+        $this->assertStringContainsString('305', $result);
+    }
+
+    /**
+     * Mesma garantia dos testes de página única já existentes — a linha
+     * extra é reservada dentro da MESMA faixa de rodapé, nunca cria página
+     * nova.
+     */
+    public function test_declaration_footer_with_scheduled_line_never_creates_a_second_page(): void
+    {
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(
+            self::minimalPdf(),
+            ['SKU-1 | QTD: 01'],
+            'Pedido agendado dia 20/08/2026 | Pedido no 305',
+        );
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $pageCount = (new Fpdi)->setSourceFile($tempPath);
+            $this->assertSame(1, $pageCount);
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
     private static function minimalTwoPagePdf(): string
     {
         $objects = [

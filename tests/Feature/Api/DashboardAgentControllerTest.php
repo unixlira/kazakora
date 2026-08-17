@@ -328,6 +328,72 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertFalse($queue->has($twoDaysAgo->id));
     }
 
+    /**
+     * Pedido explícito 2026-08-17: venda com entrega programada (Mercado
+     * Livre) entra na fila do DIA AGENDADO, não do dia da venda — a venda
+     * pode ter saído há semanas, mas o canal só libera a etiqueta perto da
+     * data agendada, e é nesse dia que o operador precisa vê-la. Payload
+     * ganha 'scheduled_for'/'label_ready' pro app decidir o 3º estado do
+     * botão ("Sem Etiqueta").
+     */
+    public function test_queue_includes_a_scheduled_order_on_its_scheduled_day_regardless_of_when_it_was_sold(): void
+    {
+        $scheduledForToday = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-TODAY']);
+        $scheduledForToday->forceFill(['created_at' => now()->subWeeks(2)])->save();
+        ChannelShipment::create([
+            'order_id' => $scheduledForToday->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now()->subWeeks(2),
+            'scheduled_for' => now(),
+        ]);
+
+        // Continua fora: agendado pra depois de amanhã, ainda não chegou o
+        // dia — mesma janela que já vale pra created_at.
+        $scheduledForFuture = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-FUTURE']);
+        $scheduledForFuture->forceFill(['created_at' => now()->subWeeks(2)])->save();
+        ChannelShipment::create([
+            'order_id' => $scheduledForFuture->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now()->subWeeks(2),
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($queue->has($scheduledForToday->id));
+        $this->assertNotNull($queue[$scheduledForToday->id]['scheduled_for']);
+        $this->assertFalse($queue[$scheduledForToday->id]['label_ready']);
+        $this->assertFalse($queue->has($scheduledForFuture->id));
+    }
+
+    public function test_queue_marks_label_ready_true_once_the_channel_releases_the_scheduled_label(): void
+    {
+        $order = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-READY']);
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'scheduled_for' => now(),
+            'label_ready_at' => now(),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($queue[$order->id]['label_ready']);
+    }
+
     public function test_queue_still_includes_packed_orders_flagged_via_packed_at(): void
     {
         // Pedido explícito 2026-08-13: embalar NÃO tira o pedido da lista —

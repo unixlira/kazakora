@@ -473,6 +473,21 @@ class DashboardAgentController extends Controller
      * (PrintJobController::index()) continua sem corte de data nenhum — é o
      * lugar certo pra ver um represamento antigo de verdade, se um dia
      * existir.
+     *
+     * Pedido explícito 2026-08-17: venda com entrega programada (Mercado
+     * Livre "Coleta/Places" agendado, ver MercadoLivreDriver::
+     * extractScheduledFor(), ChannelShipment.scheduled_for) precisa entrar
+     * na fila do DIA AGENDADO, não do dia da venda — a venda pode ter
+     * saído dias antes, mas o canal só libera a etiqueta perto da data
+     * agendada, e é nesse dia que o operador precisa ver o pedido pra se
+     * organizar (mesmo raciocínio de "controle" que já motivava
+     * scheduledShipments(), só que dentro da fila principal também). Union
+     * via orWhereHas: pedido de hoje/ontem (created_at, como já era) OU
+     * pedido com envio agendado pra ontem/hoje (scheduled_for),
+     * independente de quando a venda em si aconteceu. 'scheduled_for'/
+     * 'label_ready' no payload (abaixo) alimentam o 3º estado do botão do
+     * KoraSync ("Sem Etiqueta") — ver OrderQueueCardViewModel.
+     * IsAwaitingLabel no app nativo.
      */
     public function queue(): JsonResponse
     {
@@ -481,8 +496,17 @@ class DashboardAgentController extends Controller
         $tomorrow = $today->clone()->addDay();
 
         $orders = Order::query()
-            ->whereBetween('created_at', [$yesterday, $tomorrow])
-            ->with(['items:id,order_id,product_id,product_name,quantity', 'items.product:id,sku'])
+            ->where(function ($query) use ($yesterday, $tomorrow) {
+                $query->whereBetween('created_at', [$yesterday, $tomorrow])
+                    ->orWhereHas('channelShipment', function ($query) use ($yesterday, $tomorrow) {
+                        $query->whereBetween('scheduled_for', [$yesterday, $tomorrow]);
+                    });
+            })
+            ->with([
+                'items:id,order_id,product_id,product_name,quantity',
+                'items.product:id,sku',
+                'channelShipment:id,order_id,status,scheduled_for',
+            ])
             ->withSum('items as units_count', 'quantity')
             // orderByDesc('id') em vez de latest()/created_at: dois pedidos
             // pagos a poucos segundos de distância (ex: 2 vendas quase
@@ -521,6 +545,19 @@ class DashboardAgentController extends Controller
                 'sku' => $item->product?->sku,
             ]),
             'created_at' => $order->created_at,
+            // Null pra pedido normal (sem entrega programada). Presente ⇒
+            // KoraSync trata como "venda agendada" — 3º estado do botão
+            // (ver OrderQueueCardViewModel.IsAwaitingLabel).
+            'scheduled_for' => $order->channelShipment?->scheduled_for,
+            // Só relevante quando scheduled_for não é null: true quando o
+            // canal já liberou a etiqueta de verdade (mesmos 2 status
+            // "prontos" usados em scheduledShipments()), false enquanto o
+            // pedido está preparado mas ainda esperando o canal liberar.
+            'label_ready' => in_array(
+                $order->channelShipment?->status,
+                [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED],
+                true,
+            ),
         ]);
 
         return response()->json(['queue' => $result]);

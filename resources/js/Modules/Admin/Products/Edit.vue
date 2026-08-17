@@ -59,7 +59,11 @@ const form = useForm({
     cost_price: props.product.cost_price ?? '',
     discount_percentage: props.product.discount_percentage,
     discount_amount: props.product.discount_amount,
+    // stock aqui é só EXIBIÇÃO ("Estoque atual: X" no ProductForm) — quem
+    // muda o estoque de verdade é stock_adjustment (0 = não mexe), ver
+    // BUG REAL 2026-08-17 no ProductController::update().
     stock: props.product.stock,
+    stock_adjustment: 0,
     is_active: props.product.is_active,
     is_featured: props.product.is_featured,
     is_new_release: props.product.is_new_release,
@@ -100,7 +104,7 @@ const activeTab = ref('geral');
             </div>
 
             <div class="mt-6">
-                <ProductForm v-if="activeTab === 'geral'" :form="form" :categories="categories"
+                <ProductForm v-if="activeTab === 'geral'" :form="form" :categories="categories" :is-edit="true"
                     submit-label="Salvar alterações" @submit="submit" />
 
                 <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />

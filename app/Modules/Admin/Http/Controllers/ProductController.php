@@ -102,11 +102,32 @@ class ProductController extends Controller
         ]);
     }
 
+    /**
+     * BUG REAL 2026-08-17 ("atualizando produtos... alterando o número de
+     * estoque sem querer"): o campo Estoque desta tela mandava um valor
+     * ABSOLUTO pré-carregado quando a página abriu — se uma venda de
+     * verdade descontasse o estoque enquanto a tela ficava aberta (edição
+     * de foto/preço/descrição demorada, ou aba esquecida aberta), salvar
+     * o formulário sobrescrevia o estoque real pelo valor antigo da tela,
+     * gerando um "ajuste manual" enorme e não intencional (achados reais
+     * ao vivo: -51, -167, -182, -240 unidades numa tacada só, mesmo dia
+     * de vendas reais registradas pro mesmo produto). Nenhum valor
+     * "congelado" na tela pode voltar a ser tratado como estado atual do
+     * estoque.
+     *
+     * Fix: o campo agora manda um AJUSTE (stock_adjustment, +/-, default
+     * 0) em vez de um valor absoluto — campo não tocado = 0 = nenhuma
+     * mudança, sempre, não importa há quanto tempo a página foi
+     * carregada. Aplicado direto sobre o estoque ATUAL do banco (ver
+     * abaixo), nunca contra um valor antigo comparado aqui.
+     */
     public function update(Request $request, Product $product): RedirectResponse
     {
-        $validated = $this->validated($request, $product->id);
-        $newStock = $validated['stock'];
-        unset($validated['stock']);
+        $validated = $this->validated($request, $product->id, includeStock: false);
+
+        $adjustment = (int) ($request->validate([
+            'stock_adjustment' => ['nullable', 'integer'],
+        ])['stock_adjustment'] ?? 0);
 
         // Validado à parte do resto (não no validated() compartilhado com
         // store()): lá o campo é sempre sobrescrito por
@@ -148,10 +169,12 @@ class ProductController extends Controller
 
         $product->update($validated);
 
-        $delta = $newStock - $product->stock;
-
-        if ($delta !== 0) {
-            $this->stock->adjust($product, $delta, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
+        // $product->stock aqui já é o valor ATUAL do banco (route model
+        // binding busca fresco no início desta requisição, e $validated
+        // não inclui 'stock' — update() acima não o toca) — soma direto
+        // sobre ele, nunca contra um valor absoluto vindo do front.
+        if ($adjustment !== 0) {
+            $this->stock->adjust($product, $adjustment, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
         }
 
         return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.');
@@ -198,9 +221,15 @@ class ProductController extends Controller
         ];
     }
 
-    private function validated(Request $request, ?int $ignoreId = null): array
+    /**
+     * $includeStock=false pro fluxo de update() desde 2026-08-17 (ver
+     * comentário completo em update()) — o estoque na edição passou a ser
+     * um AJUSTE separado (stock_adjustment), não mais um valor absoluto
+     * validado/aplicado aqui junto com o resto do formulário.
+     */
+    private function validated(Request $request, ?int $ignoreId = null, bool $includeStock = true): array
     {
-        return $request->validate([
+        $rules = [
             'category_id' => ['nullable', 'exists:categories,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -212,11 +241,16 @@ class ProductController extends Controller
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
-            'stock' => ['required', 'integer', 'min:0'],
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
-        ]);
+        ];
+
+        if ($includeStock) {
+            $rules['stock'] = ['required', 'integer', 'min:0'];
+        }
+
+        return $request->validate($rules);
     }
 
     private function uniqueSlug(string $name, ?int $ignoreId = null): string

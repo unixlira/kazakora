@@ -16,6 +16,19 @@ const props = defineProps({
         type: String,
         default: 'Salvar',
     },
+    // BUG REAL 2026-08-17: na edição, o campo Estoque mandava um valor
+    // ABSOLUTO pré-carregado quando a página abriu — se uma venda real
+    // descontasse o estoque enquanto a tela ficava aberta, salvar
+    // sobrescrevia o estoque real pelo valor antigo da tela (achados
+    // reais: -51/-167/-182/-240 unidades numa tacada só). isEdit troca o
+    // campo por um AJUSTE explícito (+/-, default 0) só na edição — não
+    // tocar nele nunca muda o estoque, não importa há quanto tempo a
+    // página está aberta. Criação continua com o valor absoluto normal
+    // (produto novo, sem estoque concorrente pra proteger).
+    isEdit: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['submit']);
@@ -257,7 +270,25 @@ const regenerateSku = async () => {
                 <InputError :message="form.errors.cost_price" />
             </div>
 
-            <div>
+            <div v-if="isEdit">
+                <label for="stock_adjustment" class="block text-sm font-medium">
+                    Estoque atual: {{ form.stock }} — Ajustar (+/-)
+                </label>
+                <input
+                    id="stock_adjustment"
+                    v-model.number="form.stock_adjustment"
+                    type="number"
+                    step="1"
+                    placeholder="0"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <p class="mt-1 text-xs text-gray-400">
+                    Deixe 0 pra não mexer no estoque. Some (ex: 5) ou subtraia (ex: -3) — nunca digite o total final, senão uma venda que chegar
+                    entre você abrir esta tela e salvar seria desfeita por engano.
+                </p>
+                <InputError :message="form.errors.stock_adjustment" />
+            </div>
+            <div v-else>
                 <label for="stock" class="block text-sm font-medium">Estoque</label>
                 <input
                     id="stock"

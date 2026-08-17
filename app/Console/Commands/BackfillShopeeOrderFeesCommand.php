@@ -54,10 +54,17 @@ class BackfillShopeeOrderFeesCommand extends Command
                 continue;
             }
 
+            // BUG REAL 2026-08-17 ("as métricas não estão funcionando"):
+            // gross_amount usava order->total (subtotal + frete) —
+            // inconsistente com CashFlowController::updateSaleFee() (mesma
+            // taxa, lançamento manual, já usava subtotal) e com
+            // OrderImportService::createOrder() (mesmo bug, corrigido no
+            // mesmo commit). OrderChannelFee::netAmount() vinha inflado
+            // pelo frete pra todo pedido que passou por este backfill.
             OrderChannelFee::query()->updateOrCreate(
                 ['order_id' => $order->id, 'channel' => 'shopee'],
                 [
-                    'gross_amount' => $order->total,
+                    'gross_amount' => $order->subtotal,
                     'fee_amount' => $fee,
                     'source' => OrderChannelFee::SOURCE_API,
                     'computed_at' => now(),

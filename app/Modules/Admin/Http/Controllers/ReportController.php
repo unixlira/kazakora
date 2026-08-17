@@ -21,8 +21,17 @@ class ReportController extends Controller
             ->whereNot('status', Order::STATUS_CANCELLED)
             ->whereBetween('created_at', [$from, $to]);
 
+        // BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+        // varrendo todo painel de métricas atrás do mesmo tipo de bug já
+        // corrigido no dashboard admin): SUM(total) inclui frete
+        // (shipping_cost), que nunca é receita do vendedor — 'summary.
+        // revenue' logo abaixo, mesma tela, já usava subtotal desde
+        // sempre. Somar a coluna "Faturamento" dessa tabela dia a dia
+        // dava mais que o card "FATURAMENTO NO PERÍODO" sempre que houvia
+        // pedido com frete, mesma inconsistência visível do dashboard
+        // admin (ver DashboardController::revenueByChannel()).
         $salesByDay = (clone $orders)
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(total) as revenue')
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as orders_count, SUM(subtotal) as revenue')
             ->groupBy('date')
             ->orderBy('date')
             ->get();

@@ -183,9 +183,19 @@ class DashboardController extends Controller
 
         // subtotal, não total — ver comentário em index() sobre frete não
         // ser receita do vendedor.
+        //
+        // BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+        // varrendo todo painel atrás do mesmo tipo de bug já corrigido em
+        // revenueByChannel()): whereNot(CANCELLED) inclui pending/
+        // awaiting_payment — dinheiro que o cliente nem chegou a pagar —
+        // enquanto 'stats.revenue' na mesma tela só conta
+        // PAID_STATUSES (pago/enviado/concluído). Somar as barras do
+        // gráfico "Faturamento diário" do mês corrente dava mais que o
+        // card "Faturamento" ao lado. Mesmo critério de PAID_STATUSES
+        // usado em todo outro lugar que soma faturamento nesta tela.
         $rows = Order::query()
             ->selectRaw('DATE(created_at) as date, SUM(subtotal) as total')
-            ->whereNot('status', Order::STATUS_CANCELLED)
+            ->whereIn('status', self::PAID_STATUSES)
             ->where('created_at', '>=', $start)
             ->groupBy('date')
             ->pluck('total', 'date')

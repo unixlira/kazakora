@@ -162,6 +162,35 @@ class DashboardAgentControllerTest extends TestCase
         $response->assertJson(['revenue_today' => 44.99]);
     }
 
+    /**
+     * BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+     * varrendo todo painel atrás do mesmo bug já corrigido em metrics()
+     * acima 2 dias antes): channels() somava SUM(total) por canal — o
+     * mesmo problema do frete, só que num lugar diferente do mesmo
+     * endpoint. O card por canal (revenue_today/revenue_month) fica na
+     * MESMA tela do KoraSync que os cards de topo (vindos de metrics(),
+     * já corretos) — somar os cards por canal dava mais que o card de
+     * topo sempre que houvesse pedido com frete.
+     */
+    public function test_channels_revenue_excludes_shipping_cost_paid_to_the_carrier(): void
+    {
+        $this->makeOrder([
+            'status' => Order::STATUS_PAID,
+            'origin' => Order::ORIGIN_SHOPEE,
+            'subtotal' => 44.99,
+            'shipping_cost' => 13.25,
+            'total' => 58.24,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/channels');
+
+        $response->assertOk();
+        $channel = collect($response->json('channels'))->firstWhere('channel', Order::ORIGIN_SHOPEE);
+
+        $this->assertSame(44.99, $channel['revenue_today']);
+        $this->assertSame(44.99, $channel['revenue_month']);
+    }
+
     public function test_channel_orders_returns_404_for_an_unknown_channel(): void
     {
         $this->withHeaders($this->authHeaders())

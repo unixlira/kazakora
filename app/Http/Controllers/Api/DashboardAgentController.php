@@ -91,17 +91,31 @@ class DashboardAgentController extends Controller
         // Uma query agrupada por métrica em vez de uma por canal — 6 canais
         // × várias métricas em query separada viraria N+1 real, pesado pra
         // um endpoint que o KoraSync consulta a cada poucos segundos.
+        //
+        // BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+        // varrendo todo painel de métricas do sistema atrás do mesmo tipo
+        // de bug já corrigido no dashboard admin): SUM(total) aqui inclui
+        // frete (shipping_cost), que nunca é receita do vendedor — mesma
+        // causa raiz já documentada em metrics() logo abaixo (que já usa
+        // sum('subtotal') corretamente) e no dashboard admin, ver
+        // DashboardController::index(). Os cards por canal do KoraSync
+        // (RevenueMonth/RevenueToday de ChannelStatusDto) ficavam visíveis
+        // ao lado dos cards de topo (RevenueMonth/RevenueToday de
+        // DashboardMetricsDto, vindos de metrics()) na MESMA tela — somar
+        // os cards por canal dava mais que o card de topo sempre que
+        // houvesse pedido com frete, mesma inconsistência visível do
+        // dashboard admin.
         $revenueMonthByChannel = Order::query()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, SUM(total) as total')
+            ->selectRaw('origin, SUM(subtotal) as total')
             ->groupBy('origin')
             ->pluck('total', 'origin');
 
         $revenueTodayByChannel = Order::query()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, SUM(total) as total')
+            ->selectRaw('origin, SUM(subtotal) as total')
             ->groupBy('origin')
             ->pluck('total', 'origin');
 

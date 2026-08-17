@@ -296,11 +296,23 @@ class OrderImportService
             // Nem todo driver retorna 'marketplace_fee' hoje (Shopee/TikTok
             // ainda são stubs sem integração real) — só grava quando o dado é
             // real, nunca inventa um valor pra canal sem essa informação.
+            //
+            // BUG REAL 2026-08-17 ("as métricas não estão funcionando",
+            // achado varrendo todo painel atrás do mesmo tipo de bug já
+            // corrigido em 2026-08-15): gross_amount usava $data['total']
+            // (= Order.total = subtotal + frete) — CashFlowController::
+            // updateSaleFee() (lançamento manual da mesma taxa) já usava
+            // subtotal corretamente, então OrderChannelFee::netAmount()
+            // (gross_amount - fee_amount) vinha inflado pelo frete em todo
+            // pedido com taxa vinda da API (o caminho automático, a
+            // maioria dos pedidos reais), mas correto nos poucos editados
+            // à mão — inconsistência silenciosa dependendo de qual
+            // caminho gravou a taxa daquele pedido específico.
             if (array_key_exists('marketplace_fee', $data)) {
                 OrderChannelFee::query()->updateOrCreate(
                     ['order_id' => $order->id, 'channel' => $channel],
                     [
-                        'gross_amount' => $data['total'],
+                        'gross_amount' => $data['subtotal'],
                         'fee_amount' => $data['marketplace_fee'],
                         'source' => OrderChannelFee::SOURCE_API,
                         'computed_at' => now(),

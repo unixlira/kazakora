@@ -130,8 +130,24 @@ class CatalogController extends Controller
 
         $relatedIds = $relatedProducts->pluck('id');
 
+        // Pedido explícito 2026-08-17 (variações de produto, estilo
+        // Shopee/Mercado Livre): outras variações do mesmo grupo, só as
+        // ATIVAS (uma variação despublicada/desativada não pode aparecer
+        // como opção clicável pro cliente) — inclui foto principal e
+        // preço pra já dar pra montar o seletor sem outra viagem ao
+        // banco. Vazio quando o produto não tem variação nenhuma
+        // (variantGroupIds() sempre inclui o próprio id, então filtra
+        // fora com o where('id','!=')).
+        $variations = Product::query()
+            ->whereIn('id', $product->variantGroupIds())
+            ->where('id', '!=', $product->id)
+            ->where('is_active', true)
+            ->with(['images' => fn ($query) => $query->where('is_primary', true)->limit(1)])
+            ->get(['id', 'name', 'slug', 'variation', 'price', 'stock']);
+
         return Inertia::render('Catalog/ProductDetail', [
             'product' => $product,
+            'variations' => $variations,
             'reviews' => $reviews,
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
@@ -140,7 +156,13 @@ class CatalogController extends Controller
             'isFavorite' => $user
                 ? Favorite::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,
-            'canReview' => $user ? in_array($product->id, $this->reviewableProductIds($request), true) : false,
+            // Pedido explícito 2026-08-17 (variações de produto): comprou
+            // a variação "10 Polegadas" tem que poder avaliar a variação
+            // "8 Polegadas" da mesma página de produto — mesmo item
+            // físico, só variação diferente. variantGroupIds() inclui o
+            // próprio id quando o produto não tem variação nenhuma
+            // (comportamento de sempre, sem regressão).
+            'canReview' => $user ? (bool) array_intersect($product->variantGroupIds(), $this->reviewableProductIds($request)) : false,
             'hasReviewed' => $user
                 ? Review::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,
@@ -148,8 +170,15 @@ class CatalogController extends Controller
             'relatedFavoriteIds' => $user
                 ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
+            // Mesmo raciocínio do canReview acima: um "relacionado" pode
+            // ser justamente uma variação irmã do produto atual (mesma
+            // categoria) — comprou uma variação, pode avaliar a outra.
             'relatedReviewableIds' => $user
-                ? array_values(array_intersect($this->reviewableProductIds($request), $relatedIds->all()))
+                ? $relatedProducts
+                    ->filter(fn (Product $related) => array_intersect($related->variantGroupIds(), $this->reviewableProductIds($request)))
+                    ->pluck('id')
+                    ->values()
+                    ->all()
                 : [],
             'relatedReviewedIds' => $user
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')

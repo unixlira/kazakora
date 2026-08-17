@@ -9,6 +9,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     product: { type: Object, required: true },
+    // Outras variações do mesmo item físico (tamanho, voltagem...),
+    // estilo Shopee/Mercado Livre — pedido explícito 2026-08-17.
+    variations: { type: Array, default: () => [] },
     reviews: { type: Array, default: () => [] },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
@@ -415,6 +418,27 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <span v-if="reviewsCount">({{ reviewsCount }} avaliação{{ reviewsCount === 1 ? '' : 'ões' }})</span>
                             </span>
                         </div>
+                    </div>
+
+                    <!-- Seletor de variação (tamanho, voltagem...) — pedido
+                         explícito 2026-08-17, estilo Shopee/Mercado Livre.
+                         Clicar numa variação diferente navega pra página
+                         própria dela (Inertia Link, troca de página
+                         inteira) — cada variação já tem suas próprias
+                         fotos/preço/estoque funcionando normalmente, só
+                         faltava o link visível entre elas. -->
+                    <div v-if="variations.length" class="flex flex-wrap items-center gap-2">
+                        <span class="text-sm font-medium text-store-fg-muted">Variação:</span>
+                        <span class="rounded-full bg-store-accent px-4 py-1.5 text-sm font-medium text-store-accent-contrast">
+                            {{ product.variation || product.name }}
+                        </span>
+                        <Link v-for="variant in variations" :key="variant.id" :href="`/produtos/${variant.slug}`"
+                            class="rounded-full border px-4 py-1.5 text-sm font-medium no-underline transition-colors"
+                            :class="variant.stock > 0
+                                ? 'border-store-border-strong text-store-fg-muted hover:border-store-fg'
+                                : 'border-store-border-strong text-store-fg-faint line-through opacity-60'">
+                            {{ variant.variation || variant.name }}
+                        </Link>
                     </div>
 
                     <!-- Flags coloridas -->

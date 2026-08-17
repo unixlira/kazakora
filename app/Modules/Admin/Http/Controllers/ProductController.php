@@ -31,14 +31,29 @@ class ProductController extends Controller
     public function index(): Response
     {
         return Inertia::render('Admin/Products/Index', [
-            'products' => Product::query()->with('category:id,name')->latest()->get(),
+            // withCount('children') pro front poder mostrar "N variações"
+            // na linha do pai e recolher os filhos por padrão (pedido
+            // explícito 2026-08-17, variações de produto) — sem isso a
+            // listagem fica com 3 linhas soltas sem relação visível
+            // nenhuma pro mesmo caso que motivou a feature (Ring Light
+            // 8"/10" como 2 produtos desconectados).
+            'products' => Product::query()->with(['category:id,name', 'parent:id,name'])->withCount('children')->latest()->get(),
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
+        // Colunas além de id/name: pré-preenchem a variação nova
+        // (Create.vue) com o que faz sentido herdar do pai — categoria,
+        // marca, modelo e descrição costumam ser idênticos entre
+        // variações; cor/preço/estoque não (ficam em branco de propósito).
+        $parent = $request->integer('parent_product_id')
+            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description'])
+            : null;
+
         return Inertia::render('Admin/Products/Create', [
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
+            'parent' => $parent,
         ]);
     }
 
@@ -75,6 +90,17 @@ class ProductController extends Controller
     {
         $validated = $this->validated($request);
 
+        // Pedido explícito 2026-08-17 (variações de produto): cadastro de
+        // uma variação nova reusa a tela de criação inteira (Create.vue
+        // com ?parent_product_id= na URL) — só precisa aceitar e gravar
+        // esse vínculo, nenhuma outra mudança no fluxo (SKU/slug/estoque
+        // continuam gerados exatamente como pra um produto standalone).
+        // ignoreId nulo de propósito: parent_product_id só existe em
+        // store() (create), nunca teria outro produto pra ignorar aqui.
+        $validated['parent_product_id'] = $request->validate([
+            'parent_product_id' => ['nullable', 'integer', Rule::exists('products', 'id')],
+        ])['parent_product_id'] ?? null;
+
         $validated['slug'] = $this->uniqueSlug($validated['name']);
 
         $category = $validated['category_id']
@@ -90,6 +116,39 @@ class ProductController extends Controller
 
     public function edit(Product $product): Response
     {
+        // Pedido explícito 2026-08-17 (variações de produto): aba
+        // "Variações" precisa saber se este produto É uma variação (pai +
+        // IRMÃOS, não os próprios filhos dele — árvore é de só 2 níveis,
+        // attachVariation() já garante que um filho nunca tem filho) ou
+        // se É um pai/standalone (filhos, se houver). Reusa
+        // Product::images() já existente pra miniatura de cada
+        // variação/irmão — mesma relação de sempre, sem tabela nova.
+        // 'orphans' só carrega quando faz sentido oferecer "vincular
+        // produto existente" (produto sem filhos e sem pai — não dá pra
+        // vincular uma variação já vinculada em outro lugar, nem virar
+        // filho de um produto que já é ele mesmo filho de outro).
+        $siblingsQuery = fn () => Product::query()
+            ->where('parent_product_id', $product->parent_product_id ?? $product->id)
+            ->whereKeyNot($product->id)
+            ->with('images:id,product_id,path,is_primary')
+            ->get(['id', 'name', 'sku', 'variation', 'stock']);
+
+        $variationsPayload = [
+            'parent' => $product->parent()->select(['id', 'name', 'sku'])->first(),
+            'siblings' => $siblingsQuery(),
+        ];
+
+        $orphans = [];
+
+        if (! $product->parent_product_id && $product->children()->doesntExist()) {
+            $orphans = Product::query()
+                ->whereKeyNot($product->id)
+                ->whereNull('parent_product_id')
+                ->whereDoesntHave('children')
+                ->orderBy('name')
+                ->get(['id', 'name', 'sku']);
+        }
+
         return Inertia::render('Admin/Products/Edit', [
             'product' => $product,
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
@@ -99,6 +158,8 @@ class ProductController extends Controller
             'channelListings' => $product->channelListings,
             'stockMovements' => $product->stockMovements()->latest()->limit(10)->get(),
             'quantityDiscounts' => $product->quantityDiscounts,
+            'variations' => $variationsPayload,
+            'linkableOrphans' => $orphans,
         ]);
     }
 
@@ -185,6 +246,48 @@ class ProductController extends Controller
         $product->delete();
 
         return back()->with('success', 'Produto removido com sucesso.');
+    }
+
+    /**
+     * Vincula um produto EXISTENTE e órfão (sem pai, sem filho) como
+     * variação deste — pedido explícito 2026-08-17, resolve o caso real
+     * que motivou a feature: um 2º anúncio Shopee duplicado pro mesmo item
+     * físico gerou um produto novo desconectado (sem foto, SKU parecido
+     * mas diferente) em vez de virar variação do já existente. Guard
+     * contra árvore de 2 níveis (variação de variação) — o alvo não pode
+     * já ter pai nem já ter filho, e não pode ser o próprio produto.
+     */
+    public function attachVariation(Request $request, Product $product): RedirectResponse
+    {
+        $validated = $request->validate([
+            'variation_product_id' => ['required', 'integer', Rule::exists('products', 'id')],
+        ]);
+
+        $variation = Product::query()->findOrFail($validated['variation_product_id']);
+
+        if ($variation->is($product) || $product->parent_product_id) {
+            return back()->with('error', 'Não é possível vincular esse produto como variação.');
+        }
+
+        if ($variation->parent_product_id || $variation->children()->exists()) {
+            return back()->with('error', 'Esse produto já faz parte de outro grupo de variações.');
+        }
+
+        $variation->update(['parent_product_id' => $product->id]);
+
+        return back()->with('success', "\"{$variation->name}\" vinculado como variação de \"{$product->name}\".");
+    }
+
+    /**
+     * Desfaz o vínculo — a variação volta a ser um produto standalone
+     * comum (nada nela muda além do parent_product_id, ela já tinha
+     * SKU/estoque/fotos próprios o tempo todo).
+     */
+    public function detachVariation(Product $product): RedirectResponse
+    {
+        $product->update(['parent_product_id' => null]);
+
+        return back()->with('success', "\"{$product->name}\" desvinculado — voltou a ser um produto independente.");
     }
 
     /**

@@ -20,6 +20,7 @@ class Product extends Model
 
     protected $fillable = [
         'category_id',
+        'parent_product_id',
         'sku',
         'name',
         'slug',
@@ -45,6 +46,7 @@ class Product extends Model
     protected function casts(): array
     {
         return [
+            'parent_product_id' => 'integer',
             'price' => 'decimal:2',
             'cost_price' => 'decimal:2',
             'discount_percentage' => 'decimal:2',
@@ -83,6 +85,49 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * Pedido explícito 2026-08-17 (variações de produto, estilo Shopee/
+     * Mercado Livre): auto-referência em vez de tabela separada — cada
+     * variação continua sendo um Product completo (SKU/estoque/fotos/
+     * dados fiscais/canais próprios, tudo já existente), só ganha um
+     * vínculo pro "pai". parent_product_id null = produto standalone OU
+     * pai de variações (indistinguível de propósito — "pai sem filhos
+     * ainda" é o mesmo estado que "nunca teve variação").
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'parent_product_id');
+    }
+
+    public function children(): HasMany
+    {
+        return $this->hasMany(Product::class, 'parent_product_id');
+    }
+
+    /**
+     * IDs de todo o grupo de variações (o produto em si + irmãos), sempre
+     * incluindo o próprio ID mesmo sem variação nenhuma — pensado pra
+     * substituir direto todo `where('product_id', $product->id)` que
+     * decide "é o mesmo produto" (avaliação, favorito): uma compra da
+     * variação "10 Polegadas" precisa contar como elegível pra avaliar a
+     * variação "8 Polegadas" do mesmo item físico.
+     *
+     * @return array<int, int>
+     */
+    public function variantGroupIds(): array
+    {
+        $parentId = $this->parent_product_id ?? $this->id;
+
+        if ($parentId === $this->id) {
+            return [$this->id, ...$this->children()->pluck('id')->all()];
+        }
+
+        return [
+            $parentId,
+            ...static::query()->where('parent_product_id', $parentId)->pluck('id')->all(),
+        ];
     }
 
     public function images(): HasMany

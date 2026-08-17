@@ -235,6 +235,38 @@ class OrderImportService
                             'item_external_id' => $item['external_id'],
                             'product_id' => $product->id,
                         ]);
+
+                        // Pedido explícito 2026-08-17 (variações de
+                        // produto, achado ao vivo investigando o pedido
+                        // 260817JCXFKP1R): esta é uma variação NOVA de um
+                        // anúncio que já tínhamos (outro model_id do mesmo
+                        // external_id já mapeado — o caso real do Ring
+                        // Light 8"/10", pedido #376) — nasce já vinculada
+                        // como variação do produto existente, em vez de
+                        // ficar solta esperando alguém perceber e vincular
+                        // manualmente depois. Não cobre o caso de um 2º
+                        // anúncio DUPLICADO com external_id diferente pro
+                        // mesmo item físico (ex: produto #80) — isso é uma
+                        // duplicata do lado de fora, no próprio canal, sem
+                        // como detectar com segurança aqui; a ferramenta
+                        // "vincular produto existente" (ProductController::
+                        // attachVariation()) resolve esse caso na mão.
+                        // Só faz sentido comparar model_id quando ESTE
+                        // item de fato tem um (anúncio sem variação
+                        // nenhuma não tem irmão pra procurar).
+                        $siblingProduct = $externalModelId !== null
+                            ? (clone $listingQuery)
+                                ->whereNotNull('external_model_id')
+                                ->where('external_model_id', '!=', $externalModelId)
+                                ->first()
+                                ?->product
+                            : null;
+
+                        if ($siblingProduct && ! $siblingProduct->parent_product_id && $siblingProduct->children()->doesntExist()) {
+                            $product->update(['parent_product_id' => $siblingProduct->id]);
+                        } elseif ($siblingProduct?->parent_product_id) {
+                            $product->update(['parent_product_id' => $siblingProduct->parent_product_id]);
+                        }
                     }
                 }
 

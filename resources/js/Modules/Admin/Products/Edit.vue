@@ -8,6 +8,7 @@ import ImagesManager from '@/Modules/Admin/Products/ImagesManager.vue';
 import VideoManager from '@/Modules/Admin/Products/VideoManager.vue';
 import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
 import StockHistory from '@/Modules/Admin/Products/StockHistory.vue';
+import VariationsManager from '@/Modules/Admin/Products/VariationsManager.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -44,6 +45,14 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    variations: {
+        type: Object,
+        default: () => ({ parent: null, siblings: [] }),
+    },
+    linkableOrphans: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const form = useForm({
@@ -75,6 +84,7 @@ const submit = () => {
 
 const tabs = [
     { key: 'geral', label: 'Geral' },
+    { key: 'variacoes', label: 'Variações' },
     { key: 'fiscal', label: 'Dados fiscais' },
     { key: 'logistica', label: 'Logística' },
     { key: 'desconto-quantidade', label: 'Desconto por quantidade' },
@@ -100,12 +110,19 @@ const activeTab = ref('geral');
                     :class="activeTab === tab.key ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:bg-slate-100'"
                     @click="activeTab = tab.key">
                     {{ tab.label }}
+                    <span v-if="tab.key === 'variacoes' && variations.siblings.length"
+                        class="ml-1 rounded-full bg-white/20 px-1.5 text-xs" :class="activeTab === tab.key ? '' : 'bg-emerald-100 text-emerald-700'">
+                        {{ variations.siblings.length }}
+                    </span>
                 </button>
             </div>
 
             <div class="mt-6">
                 <ProductForm v-if="activeTab === 'geral'" :form="form" :categories="categories" :is-edit="true"
                     submit-label="Salvar alterações" @submit="submit" />
+
+                <VariationsManager v-else-if="activeTab === 'variacoes'" :product="product" :variations="variations"
+                    :linkable-orphans="linkableOrphans" />
 
                 <FiscalForm v-else-if="activeTab === 'fiscal'" :product="product" :fiscal-data="fiscalData" />
 

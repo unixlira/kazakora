@@ -29,10 +29,23 @@ const columns = [
     {
         accessorKey: 'name',
         header: 'Produto',
+        // Pedido explícito 2026-08-17 (variações de produto): antes disso
+        // 2 variações do mesmo item físico apareciam como 2 linhas soltas
+        // sem relação visível nenhuma (caso real: Ring Light 8"/10" e uma
+        // 3ª duplicata desconectada) — não esconde nenhuma linha da busca
+        // (search por nome/SKU continua achando qualquer variação), só
+        // deixa o vínculo visível.
         cell: ({ row }) =>
             h('div', [
                 h('p', { class: 'font-medium' }, row.original.name),
-                h('p', { class: 'text-xs text-slate-400' }, row.original.sku),
+                h('p', { class: 'text-xs text-slate-400' }, [
+                    row.original.sku,
+                    row.original.parent
+                        ? h('span', { class: 'ml-1.5 text-blue-500' }, `· Variação de ${row.original.parent.name}`)
+                        : row.original.children_count
+                            ? h('span', { class: 'ml-1.5 text-emerald-600' }, `· ${row.original.children_count} variação(ões)`)
+                            : null,
+                ]),
             ]),
     },
     {

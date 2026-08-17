@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Notifications\WebhookImportFailedNotification;
 use App\Services\MercadoLivre\Webhooks\WebhookHandler;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -13,7 +14,19 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
 
-class ProcessMercadoLivreWebhook implements ShouldQueue
+/**
+ * ShouldBeUnique por resource desde 2026-08-17 — mesma corrida real
+ * encontrada e corrigida no equivalente da Shopee (ver ProcessShopeeWebhook):
+ * o canal pode reentregar o mesmo webhook mais de uma vez em segundos, e
+ * duas execuções concorrentes do mesmo import (mesmo pedido/shipment) podem
+ * passar por um check-então-create de qualquer efeito colateral (produto
+ * auto-importado, etc.) antes de qualquer uma commitar, estourando uma
+ * constraint única. Trava aqui fecha a corrida na origem — a 2ª entrega
+ * enquanto a 1ª ainda está processando/retentando simplesmente não
+ * redespacha (silencioso, sem erro), e uma mudança real posterior ainda
+ * chega por um webhook seguinte ou pelos pokes/polling já existentes.
+ */
+class ProcessMercadoLivreWebhook implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -28,6 +41,17 @@ class ProcessMercadoLivreWebhook implements ShouldQueue
     public function __construct(public readonly array $payload, public readonly int $webhookLogId)
     {
         $this->onQueue(config('mercadolivre.queue'));
+    }
+
+    public function uniqueId(): string
+    {
+        return (string) ($this->payload['resource'] ?? $this->webhookLogId);
+    }
+
+    /** Cobre tries+backoff (10+30+60=100s) com folga pro import real rodar. */
+    public function uniqueFor(): int
+    {
+        return 180;
     }
 
     public function handle(WebhookHandler $handler): void

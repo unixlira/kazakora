@@ -13,13 +13,17 @@ use Tests\TestCase;
 
 /**
  * BUG REAL 2026-08-17 (pedido 260817JCXFKP1R, Fernando Prado, nunca
- * importado): ShopeeDriver::autoImportProduct() fazia `exists()`-então-
- * `create()` pro SKU "SHOPEE-{item_id}" — TOCTOU real. A Shopee reentregou
- * o mesmo webhook 2x em 11s, as 2 execuções concorrentes passaram no
- * `exists()` antes de qualquer uma comitar, e a segunda estourou
- * "Duplicate entry ... for key products_sku_unique", derrubando o import
- * inteiro (o pedido nunca chegou a existir no banco). Fix: retry limitado
- * reagindo à própria constraint, nunca a um pré-check racy.
+ * importado): duas causas encontradas na mesma investigação.
+ * (1) ShopeeDriver::autoImportProduct() fazia `exists()`-então-`create()`
+ * pro SKU/slug — TOCTOU real, a Shopee reentregou o mesmo webhook 2x em
+ * 11s e a 2ª execução concorrente estourou a constraint única.
+ * (2) A causa de verdade DESSE pedido específico: o Product #46 pra esse
+ * item Shopee já tinha sido auto-importado antes e foi EXCLUÍDO (soft
+ * delete, Product usa SoftDeletes) — a linha continua ocupando sku/slug na
+ * constraint do MySQL, invisível pro `exists()` (o scope do SoftDeletes
+ * filtra trashed), mas bem real pro `create()`, que sempre falhava. Fix:
+ * nunca mais pré-check, só reage à constraint (sku OU slug) e regenera os
+ * dois juntos com sufixo aleatório.
  */
 class AutoImportProductSkuRaceTest extends TestCase
 {
@@ -53,26 +57,7 @@ class AutoImportProductSkuRaceTest extends TestCase
         ];
     }
 
-    public function test_auto_import_regenerates_the_sku_when_the_clean_one_collides_for_real(): void
-    {
-        $this->connectShopee();
-        Http::fake(['*/api/v2/product/get_item_base_info*' => Http::response($this->fakeItemDetail())]);
-
-        // Simula a corrida: outra execução concorrente já comitou o
-        // Product com o SKU limpo um instante antes desta chegar no
-        // create() — não é um `exists()` prévio, é a constraint real que
-        // esta chamada precisa sobreviver.
-        Product::factory()->create(['sku' => 'SHOPEE-58265922084']);
-
-        $product = app(ShopeeDriver::class)->autoImportProduct('58265922084', 1);
-
-        $this->assertNotNull($product);
-        $this->assertNotSame('SHOPEE-58265922084', $product->sku);
-        $this->assertStringStartsWith('SHOPEE-58265922084-', $product->sku);
-        $this->assertSame('Ring Light 8" Completo', $product->name);
-    }
-
-    public function test_auto_import_uses_the_clean_sku_when_there_is_no_collision(): void
+    public function test_auto_import_uses_the_clean_sku_and_slug_when_there_is_no_collision(): void
     {
         $this->connectShopee();
         Http::fake(['*/api/v2/product/get_item_base_info*' => Http::response($this->fakeItemDetail())]);
@@ -80,6 +65,49 @@ class AutoImportProductSkuRaceTest extends TestCase
         $product = app(ShopeeDriver::class)->autoImportProduct('58265922084', 1);
 
         $this->assertSame('SHOPEE-58265922084', $product->sku);
+        $this->assertSame('ring-light-8-completo', $product->slug);
+    }
+
+    public function test_auto_import_regenerates_sku_and_slug_together_when_they_collide_for_real(): void
+    {
+        $this->connectShopee();
+        Http::fake(['*/api/v2/product/get_item_base_info*' => Http::response($this->fakeItemDetail())]);
+
+        // Simula a corrida: outra execução concorrente já comitou o
+        // Product com o SKU/slug limpos um instante antes desta chegar no
+        // create() — não é um `exists()` prévio, é a constraint real que
+        // esta chamada precisa sobreviver.
+        Product::factory()->create(['sku' => 'SHOPEE-58265922084', 'slug' => 'ring-light-8-completo']);
+
+        $product = app(ShopeeDriver::class)->autoImportProduct('58265922084', 1);
+
+        $this->assertNotNull($product);
+        $this->assertStringStartsWith('SHOPEE-58265922084-', $product->sku);
+        $this->assertStringStartsWith('ring-light-8-completo-', $product->slug);
+        $this->assertSame('Ring Light 8" Completo', $product->name);
+    }
+
+    /**
+     * O caso real que travou o pedido 260817JCXFKP1R: o produto colidente
+     * não é um duplicado "vivo" comum — é uma exclusão deliberada (soft
+     * delete) que `Product::where(...)->exists()` nunca via, mas que ainda
+     * segura o slot na constraint única. Confirma que o fix não tenta
+     * restaurar/reaproveitar o produto excluído — sempre cria um novo.
+     */
+    public function test_auto_import_creates_a_new_product_when_the_colliding_one_was_soft_deleted(): void
+    {
+        $this->connectShopee();
+        Http::fake(['*/api/v2/product/get_item_base_info*' => Http::response($this->fakeItemDetail())]);
+
+        $deleted = Product::factory()->create(['sku' => 'SHOPEE-58265922084', 'slug' => 'ring-light-8-completo']);
+        $deleted->delete();
+
+        $product = app(ShopeeDriver::class)->autoImportProduct('58265922084', 1);
+
+        $this->assertNotNull($product);
+        $this->assertNotSame($deleted->id, $product->id);
+        $this->assertStringStartsWith('SHOPEE-58265922084-', $product->sku);
+        $this->assertTrue($deleted->fresh()->trashed(), 'o produto excluído continua excluído, nunca é restaurado');
     }
 
     public function test_auto_import_still_throws_a_real_unrelated_database_error_instead_of_retrying_forever(): void
@@ -88,9 +116,9 @@ class AutoImportProductSkuRaceTest extends TestCase
         Http::fake(['*/api/v2/product/get_item_base_info*' => Http::response($this->fakeItemDetail())]);
 
         // Derruba uma coluna usada no insert pra forçar um erro de banco
-        // genuíno, sem nenhuma relação com products_sku_unique — não pode
-        // ser engolido pelo retry (que só existe pra colisão de SKU), tem
-        // que subir de verdade já na 1ª tentativa.
+        // genuíno, sem nenhuma relação com products_sku_unique/slug_unique
+        // — não pode ser engolido pelo retry, tem que subir de verdade já
+        // na 1ª tentativa.
         Schema::table('products', fn ($table) => $table->dropColumn('description'));
 
         $this->expectException(QueryException::class);

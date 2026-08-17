@@ -225,13 +225,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         }
 
         $sku = 'SHOPEE-'.$externalId;
-
         $slugBase = Str::slug($item['name']);
-        $slug = $slugBase;
-        $suffix = 1;
-        while (Product::where('slug', $slug)->exists()) {
-            $slug = $slugBase.'-'.(++$suffix);
-        }
 
         // $item['stock'] é o disponível ATUAL na Shopee (já líquido desta
         // própria venda, que acabou de acontecer lá) — soma $quantitySold
@@ -243,30 +237,34 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         // sozinho — mesma rede de segurança de sempre.
         $initialStock = $item['stock'] !== null ? max(0, $item['stock'] + $quantitySold) : 0;
 
-        // BUG REAL 2026-08-17 (pedido 260817JCXFKP1R, nunca importado —
-        // "Duplicate entry 'SHOPEE-58265922084' for key
-        // products_sku_unique"): o `exists()`-então-`create()` de antes é
-        // TOCTOU — a Shopee reentregou o mesmo webhook 2x em 11s, as duas
-        // execuções concorrentes passaram no `exists()` (nenhuma via a
-        // outra ainda) antes de qualquer uma comitar o INSERT, e a segunda
-        // estourou a constraint. Não é exclusivo de webhook duplicado: 2
-        // pedidos DIFERENTES vendendo o mesmo item Shopee nunca antes
-        // catalogado quase ao mesmo tempo caem na mesma corrida. Mesmo
-        // padrão já usado pra corrida real em constraint única em
-        // InvoiceService::createPendingInvoice() — tenta o SKU limpo
-        // primeiro, só regenera com sufixo se colidir de verdade (nunca
-        // reaproveita silenciosamente o Product de outra execução, sempre
-        // um SKU novo válido).
+        // BUG REAL 2026-08-17 (pedido 260817JCXFKP1R, Fernando Prado, nunca
+        // importado): a causa de verdade não era só a corrida do webhook
+        // duplicado (isso também existia, ver ProcessShopeeWebhook) — é que
+        // o Product #46 pra esse exato item Shopee (SKU SHOPEE-58265922084)
+        // já tinha sido auto-importado antes e foi EXCLUÍDO (soft delete,
+        // Product usa SoftDeletes) em 2026-08-16. A linha soft-deletada
+        // continua ocupando sku/slug na constraint única do MySQL —
+        // invisível pra `Product::where(...)->exists()` (o scope do
+        // SoftDeletes filtra trashed por padrão), mas bem real pro
+        // `Product::create()`, que sempre falhava. O `while(exists())` de
+        // antes pro slug tinha o mesmo ponto cego, e ainda era um
+        // `exists()`-então-`create()` TOCTOU (a Shopee reentregou o mesmo
+        // webhook 2x em 11s, ambas as execuções passaram no `exists()`
+        // antes de qualquer uma comitar). Fix: nunca mais um pré-check —
+        // reage à constraint de verdade (sku OU slug) e regenera os dois
+        // juntos com um sufixo aleatório, quantas vezes for preciso. Nunca
+        // reaproveita/restaura o Product antigo (às vezes uma exclusão foi
+        // deliberada) — sempre um SKU e slug novos e válidos.
         $product = null;
 
         for ($attempt = 1; $attempt <= 5; $attempt++) {
-            $candidateSku = $attempt === 1 ? $sku : $sku.'-'.Str::random(4);
+            $suffix = $attempt === 1 ? '' : '-'.Str::random(4);
 
             try {
                 $product = Product::create([
-                    'sku' => $candidateSku,
+                    'sku' => $sku.$suffix,
                     'name' => $item['name'],
-                    'slug' => $slug,
+                    'slug' => $slugBase.$suffix,
                     'description' => $item['description'] ?: null,
                     'price' => $item['price'],
                     'stock' => $initialStock,
@@ -275,7 +273,10 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
                 break;
             } catch (QueryException $exception) {
-                if ($attempt === 5 || ! str_contains($exception->getMessage(), 'products_sku_unique')) {
+                $isUniqueCollision = str_contains($exception->getMessage(), 'products_sku_unique')
+                    || str_contains($exception->getMessage(), 'products_slug_unique');
+
+                if ($attempt === 5 || ! $isUniqueCollision) {
                     throw $exception;
                 }
             }

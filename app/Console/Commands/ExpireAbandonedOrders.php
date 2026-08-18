@@ -22,7 +22,27 @@ class ExpireAbandonedOrders extends Command
 
     public function handle(OrderPaymentFinalizer $finalizer): int
     {
+        // BUG REAL 2026-08-18 (pedido #476, Shopee 260819PQEFC0TQ, cancelado
+        // por engano com estoque restaurado enquanto o pagamento já estava
+        // confirmado no canal): esta varredura foi desenhada só pro checkout
+        // da própria loja (ver janela do Pix/cartão no comentário de
+        // ABANDONED_AFTER_MINUTES acima) mas rodava pra QUALQUER pedido,
+        // marketplace incluso. Pedido de canal tem `created_at` forçado pro
+        // `placed_at` REAL da venda (ver OrderImportService::createOrder())
+        // — não o instante em que o Kazakora recebeu o webhook —, então os
+        // 30 min começam a contar antes mesmo do pedido existir aqui. Um
+        // atraso normal de confirmação de pagamento no canal (Pix mais
+        // lento, fila do ProcessShopeeWebhook, redelivery) é o bastante pra
+        // estourar a janela: a varredura cancelava e devolvia estoque de um
+        // pedido que segundos depois chegava como "paid"/"READY_TO_SHIP" —
+        // aí descartado como "webhook fora de ordem" (OrderImportService::
+        // syncStatus()/isStaleStatus()), sem reverter o cancelamento
+        // indevido. Pedido de canal nunca fica "esquecido" de verdade: o
+        // próprio marketplace manda o status real via webhook/backfill
+        // horário (ver orders:sync-shopee), então essa varredura não tem
+        // motivo pra existir fora do checkout direto da loja.
         $candidates = Order::query()
+            ->where('origin', Order::ORIGIN_STORE)
             ->whereIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
             ->where('created_at', '<=', now()->subMinutes(self::ABANDONED_AFTER_MINUTES))
             ->get();

@@ -14,7 +14,10 @@ use App\Services\MercadoLivre\MercadoLivreClient;
 use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
 use App\Services\MercadoLivre\Services\ShipmentService;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -110,6 +113,128 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         $this->ensureConfigured();
 
         $this->products->closeItem($listing->external_id);
+    }
+
+    /**
+     * Dados reais de 1 anúncio direto na API (GET /items/{id}) — usado por
+     * autoImportProduct() quando um pedido chega pra um item ainda sem
+     * produto local vinculado. Não lança: item sumido/erro de rede vira
+     * null, quem chama decide o que fazer (mesmo contrato de
+     * ShopeeDriver::fetchItemDetail()).
+     *
+     * `available_quantity` já é o estoque ATUAL no Mercado Livre — igual à
+     * Shopee, já vem líquido desta própria venda (o ML debita na hora que o
+     * pedido é pago), então quem chama precisa somar $quantitySold de volta
+     * antes de gravar.
+     *
+     * `description` não vem no payload de /items/{id} (endpoint separado,
+     * /items/{id}/description, que a Shopee não exige mas o ML sim) —
+     * deixado de fora de propósito em vez de arriscar um valor errado; o
+     * produto nasce sem descrição, igual já acontece hoje pra publicação
+     * manual quando o vendedor não preenche nada.
+     *
+     * Sem `tax_info` equivalente ao da Shopee: a API do ML não expõe
+     * NCM/CFOP/CSOSN por anúncio (confirmado — nenhum endpoint documentado
+     * devolve isso), então o produto auto-importado do ML sempre nasce sem
+     * ProductFiscalData, precisando de preenchimento manual antes da
+     * primeira nota — mesmo estado que a Shopee já deixa quando o vendedor
+     * não cadastrou tax_info lá.
+     *
+     * @return ?array{external_id: string, name: string, price: ?float, stock: ?int}
+     */
+    private function fetchItemDetail(string $externalId): ?array
+    {
+        $this->ensureConfigured();
+
+        try {
+            $item = $this->client->get("items/{$externalId}");
+        } catch (MercadoLivreException $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.item_detail.lookup_failed', [
+                'external_id' => $externalId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        if (empty($item['id'])) {
+            return null;
+        }
+
+        return [
+            'external_id' => (string) $item['id'],
+            'name' => (string) ($item['title'] ?? ''),
+            'price' => isset($item['price']) ? (float) $item['price'] : null,
+            'stock' => isset($item['available_quantity']) ? (int) $item['available_quantity'] : null,
+        ];
+    }
+
+    /**
+     * Cria um produto local do zero a partir de 1 item do Mercado Livre —
+     * chamado por OrderImportService quando um pedido chega pra um anúncio
+     * que nunca foi trazido pro catálogo (feito direto no painel do ML,
+     * fora do Kazakora, ou publicado antes dessa integração existir).
+     * Mesmo comportamento da Shopee (ver ShopeeDriver::autoImportProduct())
+     * — entra sempre como rascunho (is_active=false, sem dados fiscais);
+     * antes desse método existir, esse caso ficava com product_id null pra
+     * sempre (pedido, etiqueta e NF-e sem SKU nenhum).
+     *
+     * Retorna null (sem lançar) se o ML não devolver o item — quem chama já
+     * sabia lidar com "sem produto vinculado" antes disso existir.
+     */
+    public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
+    {
+        $item = $this->fetchItemDetail($externalId);
+
+        if (! $item || $item['name'] === '' || $item['price'] === null) {
+            return null;
+        }
+
+        $sku = 'ML-'.$externalId;
+        $slugBase = Str::slug($item['name']);
+        $initialStock = $item['stock'] !== null ? max(0, $item['stock'] + $quantitySold) : 0;
+
+        // Mesmo fix de corrida/soft-delete da Shopee (ver comentário em
+        // ShopeeDriver::autoImportProduct(), BUG REAL 2026-08-17): nunca um
+        // pré-check exists()-então-create() — reage à constraint de verdade
+        // (sku OU slug) e regenera os dois com sufixo aleatório até vingar.
+        $product = null;
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $suffix = $attempt === 1 ? '' : '-'.Str::random(4);
+
+            try {
+                $product = Product::create([
+                    'sku' => $sku.$suffix,
+                    'name' => $item['name'],
+                    'slug' => $slugBase.$suffix,
+                    'price' => $item['price'],
+                    'stock' => $initialStock,
+                    'is_active' => false,
+                ]);
+
+                break;
+            } catch (QueryException $exception) {
+                $isUniqueCollision = str_contains($exception->getMessage(), 'products_sku_unique')
+                    || str_contains($exception->getMessage(), 'products_slug_unique');
+
+                if ($attempt === 5 || ! $isUniqueCollision) {
+                    throw $exception;
+                }
+            }
+        }
+
+        ProductChannelListing::query()->create([
+            'product_id' => $product->id,
+            'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'is_enabled' => true,
+            'status' => ProductChannelListing::STATUS_PUBLISHED,
+            'external_id' => $externalId,
+            'external_model_id' => $externalModelId,
+            'last_synced_at' => now(),
+        ]);
+
+        return $product;
     }
 
     public function importOrder(string $externalOrderId): array

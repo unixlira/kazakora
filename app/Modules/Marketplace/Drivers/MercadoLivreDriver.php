@@ -85,13 +85,22 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // the item grouped under a "product family" instead — ML then
             // derives the title from family_name + attributes itself, which
             // is why title must be omitted (sending both is also rejected).
+            //
+            // BUG REAL 2026-08-19 (importação da "Bike Spinning" da Shopee,
+            // nome real do anúncio com 119 caracteres): ML rejeita
+            // family_name com 400 "item.family_name.length_invalid" acima
+            // de 60 caracteres — limite que nunca foi tratado aqui. Produto
+            // com nome copiado de outro canal (Shopee permite título bem
+            // mais longo) sempre batia nisso pra qualquer categoria que
+            // exigisse family_name. Corta pro limite real da ML — melhor um
+            // nome truncado do que a publicação inteira falhar.
             $retryDto = new ProductDTO(
                 category_id: $categoryId,
                 price: (float) $product->final_price,
                 available_quantity: $product->stock,
                 description: $product->description,
                 pictures: $pictures,
-                family_name: $product->name,
+                family_name: Str::limit($product->name, 60, ''),
                 attributes: $attributes,
             );
 

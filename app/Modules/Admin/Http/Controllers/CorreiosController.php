@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Services\Correios\CorreiosPrePostagemService;
 use App\Services\Correios\Exceptions\CorreiosException;
@@ -44,8 +45,10 @@ class CorreiosController extends Controller
         ['value' => '03220', 'label' => 'SEDEX (contrato)'],
     ];
 
-    public function __construct(private readonly CorreiosPrePostagemService $service)
-    {
+    public function __construct(
+        private readonly CorreiosPrePostagemService $service,
+        private readonly CorreiosFreightQuoteService $freightQuote,
+    ) {
     }
 
     public function index(Request $request): Response
@@ -267,6 +270,21 @@ class CorreiosController extends Controller
             $record->qr_payload = $record->codigo_objeto ?: $record->correios_id;
             $record->raw_response = $result;
             $record->error_message = null;
+            // A API de pré-postagem não devolve preço (pago/pesado na
+            // agência) — cota à parte via API de Preço, mesma
+            // credencial/produto do checkout. Nunca lança; fica null se a
+            // cotação falhar, não trava a criação da pré-postagem por causa
+            // disso.
+            $record->postage_price = $this->freightQuote->priceFor(
+                $record->service_code,
+                $record->zip,
+                $record->weight_grams,
+                $record->dimension_format,
+                $record->dimension_height ? (float) $record->dimension_height : null,
+                $record->dimension_width ? (float) $record->dimension_width : null,
+                $record->dimension_length ? (float) $record->dimension_length : null,
+                $record->dimension_diameter ? (float) $record->dimension_diameter : null,
+            );
             $record->save();
 
             return redirect()->route('admin.correios.ver', $record)->with('success', $successMessage);
@@ -310,6 +328,7 @@ class CorreiosController extends Controller
             'externalOrderId' => $item->external_order_id,
             'orderId' => $item->order_id,
             'serviceLabel' => $item->service_label,
+            'postagePrice' => $item->postage_price !== null ? (float) $item->postage_price : null,
             'status' => $item->status,
             'codigoObjeto' => $item->codigo_objeto,
             'createdAt' => $item->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),

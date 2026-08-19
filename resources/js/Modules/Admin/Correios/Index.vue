@@ -75,6 +75,7 @@ const destroy = async (item) => {
                         <th class="px-4 py-3">Cliente</th>
                         <th class="px-4 py-3">Onde comprou</th>
                         <th class="px-4 py-3">Serviço</th>
+                        <th class="px-4 py-3">Valor</th>
                         <th class="px-4 py-3">Status</th>
                         <th class="px-4 py-3">Gerado em</th>
                         <th class="px-4 py-3">Ações</th>
@@ -88,6 +89,7 @@ const destroy = async (item) => {
                             <span v-if="item.externalOrderId" class="block text-xs text-slate-400">{{ item.externalOrderId }}</span>
                         </td>
                         <td class="px-4 py-3">{{ item.serviceLabel ?? '—' }}</td>
+                        <td class="px-4 py-3">{{ item.postagePrice != null ? `R$ ${item.postagePrice.toFixed(2)}` : '—' }}</td>
                         <td class="px-4 py-3">
                             <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
                                 :class="STATUS_META[item.status]?.color ?? 'bg-slate-100 text-slate-700'">
@@ -105,7 +107,7 @@ const destroy = async (item) => {
                     </tr>
 
                     <tr v-if="props.items.data.length === 0">
-                        <td colspan="6" class="px-4 py-10 text-center text-slate-400">
+                        <td colspan="7" class="px-4 py-10 text-center text-slate-400">
                             Nenhuma pré-postagem gerada nesse mês{{ filters.pedido ? ' pra essa busca' : '' }}.
                         </td>
                     </tr>

@@ -67,6 +67,10 @@ const printLabel = () => window.print();
                         <dt class="text-slate-500">Serviço</dt>
                         <dd>{{ item.serviceLabel }}</dd>
                     </div>
+                    <div v-if="item.postagePrice != null" class="flex justify-between gap-4">
+                        <dt class="text-slate-500">Valor da postagem</dt>
+                        <dd>R$ {{ item.postagePrice.toFixed(2) }}</dd>
+                    </div>
                     <div class="flex justify-between gap-4">
                         <dt class="text-slate-500">Peso</dt>
                         <dd>{{ item.weightGrams }} g</dd>

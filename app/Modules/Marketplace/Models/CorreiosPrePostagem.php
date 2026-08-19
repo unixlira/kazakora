@@ -33,6 +33,7 @@ class CorreiosPrePostagem extends Model
         'state',
         'service_code',
         'service_label',
+        'postage_price',
         'weight_grams',
         'dimension_format',
         'dimension_height',

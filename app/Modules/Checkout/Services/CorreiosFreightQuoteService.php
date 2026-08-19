@@ -43,6 +43,80 @@ class CorreiosFreightQuoteService
     }
 
     /**
+     * Cota o valor real de uma pré-postagem específica já montada (usado
+     * por CorreiosController pra preencher a coluna "Valor da postagem" —
+     * pedido explícito 2026-08-19: a API de pré-postagem não devolve preço
+     * na criação, "modalidadePagamento":2 = pago/pesado na agência, então
+     * o valor mostrado aqui é a cotação real da API de Preço pro mesmo
+     * peso/formato/CEP declarados, não necessariamente o que vai ser
+     * cobrado no balcão). tpObjeto usa o mesmo código de
+     * codigoFormatoObjetoInformado (1 envelope/2 caixa/3 rolo) — confirmado
+     * contra produção 2026-08-19 que tpObjeto=1 (envelope) nem exige
+     * dimensões, só peso.
+     *
+     * Nunca lança — null se não der pra cotar (mesma postura do resto da
+     * classe).
+     */
+    public function priceFor(string $serviceCode, string $toZip, int $weightGrams, string $dimensionFormat, ?float $height, ?float $width, ?float $length, ?float $diameter): ?float
+    {
+        $fromZip = Company::query()->first()?->zip;
+
+        if (! $fromZip) {
+            return null;
+        }
+
+        try {
+            $token = $this->tokenService->tokenForPrecoPrazo();
+        } catch (Throwable $exception) {
+            Log::channel('correios')->warning('correios.postage_price.token_failed', ['message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        $parametro = [
+            'coProduto' => $serviceCode,
+            'nuRequisicao' => $serviceCode,
+            'cepOrigem' => $this->digitsOnly($fromZip),
+            'cepDestino' => $this->digitsOnly($toZip),
+            'psObjeto' => (string) $weightGrams,
+            'tpObjeto' => $dimensionFormat,
+        ];
+
+        if ($dimensionFormat === '2' && $height && $width && $length) {
+            $parametro['comprimento'] = (string) $length;
+            $parametro['largura'] = (string) $width;
+            $parametro['altura'] = (string) $height;
+        } elseif ($dimensionFormat === '3' && $diameter && $length) {
+            $parametro['diametro'] = (string) $diameter;
+            $parametro['comprimento'] = (string) $length;
+        }
+
+        try {
+            $response = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(15)
+                ->post(rtrim((string) config('services.correios.preco_base_url'), '/').'/v1/nacional', [
+                    'idLote' => (string) Str::uuid(),
+                    'parametrosProduto' => [$parametro],
+                ]);
+        } catch (Throwable $exception) {
+            Log::channel('correios')->warning('correios.postage_price.request_failed', ['message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        if ($response->failed()) {
+            Log::channel('correios')->warning('correios.postage_price.failed', ['status' => $response->status(), 'body' => $response->json()]);
+
+            return null;
+        }
+
+        $item = collect((array) $response->json())->first(fn ($row) => is_array($row) && empty($row['txErro']) && isset($row['pcFinal']));
+
+        return $item ? (float) str_replace(',', '.', (string) $item['pcFinal']) : null;
+    }
+
+    /**
      * @param  Collection<int, array{product: \App\Modules\Catalog\Models\Product, quantity: int}>  $cartItems
      * @return array<int, array{id: string, name: string, carrier_name: string, price: float, estimated_days: int}>
      */

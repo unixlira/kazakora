@@ -21,12 +21,12 @@ use Inertia\Response;
  * pré-postagens (QR Code) geradas pela loja, identificadas por
  * cliente + "onde comprou", tela de criação e impressão.
  *
- * Credenciais reais (CNPJ + código de acesso do CWS) já configuradas no
- * .env (local e homolog) em 2026-08-11, mas sem CORREIOS_CONTRATO/
- * CARTAO_POSTAGEM ainda — ver CorreiosTokenService. Enquanto isso,
- * store() ainda funciona e grava a tentativa (sucesso ou erro) no
- * histórico, pra tela já estar pronta assim que a Correios liberar o
- * contrato.
+ * Credenciais reais (CNPJ + código de acesso do CWS) configuradas no .env
+ * (local e homolog) desde 2026-08-11; contrato liberado e
+ * CORREIOS_CONTRATO/CARTAO_POSTAGEM + suas chaves de acesso escopadas
+ * preenchidos em 2026-08-19 — ver CorreiosTokenService. store() grava a
+ * tentativa (sucesso ou erro) no histórico mesmo quando a API recusa, então
+ * nunca fica sem rastro do que foi tentado.
  */
 class CorreiosController extends Controller
 {

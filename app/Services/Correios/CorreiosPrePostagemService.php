@@ -78,7 +78,7 @@ class CorreiosPrePostagemService
             ...$this->buildDimensions($input['dimensions'] ?? []),
         ];
 
-        $token = $this->tokenService->token();
+        $token = $this->tokenService->tokenForPrePostagem();
 
         $response = Http::withToken($token)
             ->acceptJson()

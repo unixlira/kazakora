@@ -49,7 +49,9 @@
         <env name="CORREIOS_NUMERO_USUARIO" value=""/>
         <env name="CORREIOS_CODIGO_ACESSO" value=""/>
         <env name="CORREIOS_CONTRATO" value=""/>
+        <env name="CORREIOS_CODIGO_ACESSO_CONTRATO" value=""/>
         <env name="CORREIOS_CARTAO_POSTAGEM" value=""/>
+        <env name="CORREIOS_CODIGO_ACESSO_CARTAO_POSTAGEM" value=""/>
         <env name="CORREIOS_TOKEN_BASE_URL" value="https://apihom.correios.com.br/token"/>
         <env name="CORREIOS_API_BASE_URL" value="https://apihom.correios.com.br/prepostagem"/>
     </php>

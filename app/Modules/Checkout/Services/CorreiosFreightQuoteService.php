@@ -14,11 +14,14 @@ use Throwable;
  * Cota frete real via API dos Correios (produtos "Preço" e "Prazo",
  * endpoint /v1/nacional de cada um) — pedido explícito 2026-08-16, usuário
  * já tem credencial da API dos Correios e não tem Melhor Envio conectado.
- * Mesma credencial de CorreiosTokenService (já usada pra pré-postagem),
- * mas é um produto de API diferente (path /preco e /prazo, não
- * /prepostagem) — confirmado contra o schema real (OpenAPI publicado em
- * apihom.correios.com.br/preco/v3/api-docs e /prazo/v3/api-docs) antes de
- * implementar, não uma suposição de blog/manual resumido.
+ * Credencial própria (`CorreiosTokenService::tokenForPrecoPrazo()`) —
+ * **diferente** da usada pra pré-postagem: são chaves de acesso escopadas
+ * distintas (uma por vínculo, contrato x cartão de postagem), confirmado
+ * contra a API real em 2026-08-19 (a de contrato dá 200 aqui e 403 em
+ * pré-postagem, e vice-versa). Confirmado também contra o schema real
+ * (OpenAPI publicado em apihom.correios.com.br/preco/v3/api-docs e
+ * /prazo/v3/api-docs) antes de implementar, não uma suposição de blog/manual
+ * resumido.
  *
  * Só cota PAC e SEDEX (03298/03220) — os 2 serviços "encomenda normal"
  * que qualquer contrato cobre; outros códigos (Mini Envios, SEDEX 10/12
@@ -62,7 +65,7 @@ class CorreiosFreightQuoteService
         }
 
         try {
-            $token = $this->tokenService->token();
+            $token = $this->tokenService->tokenForPrecoPrazo();
         } catch (Throwable $exception) {
             Log::channel('correios')->warning('correios.quote.token_failed', ['message' => $exception->getMessage()]);
 

@@ -10,52 +10,94 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Token dos Correios: Basic Auth (numero_usuario/codigo_acesso, gerado em
- * cws.correios.com.br > Gestão de acesso a APIs — NÃO é a senha do Meu
- * Correios) trocado por um Bearer válido por até 24h.
- * @see https://www.correios.com.br/atendimento/developers/manuais/manual-uso-da-api-token
+ * Credencial dos Correios pra chamar as APIs restritas (Preço/Prazo,
+ * Pré-postagem). Dois formatos coexistem, descobertos testando contra a
+ * API real de produção em 2026-08-19 (não documentação secundária):
  *
- * Três variantes de token existem (usuário / contrato / cartão de
- * postagem) — usamos a mais específica disponível na config, porque a
- * pré-postagem real provavelmente exige vínculo de contrato; caímos pro
- * token de usuário simples enquanto CORREIOS_CONTRATO/CARTAO_POSTAGEM
- * ainda não foram preenchidos (aguardando a liberação da Correios).
+ * 1) **Chave de acesso escopada** (painel novo do CWS "Gestão de acesso a
+ *    API", gerada por vínculo — contrato ou cartão de postagem, cada uma
+ *    autorizada só pras APIs marcadas naquele vínculo). Essa chave **já É
+ *    o Bearer final** — usada direto no header `Authorization` das APIs de
+ *    negócio (Preço/Prazo/Pré-postagem), **sem** passar pelo endpoint
+ *    `/token/v1/autentica*` (confirmado: `Http::withBasicAuth` com essa
+ *    chave contra `/token/v1/autentica[/contrato|/cartaopostagem]` sempre
+ *    devolve 401 puro; `Http::withToken` direto na API de negócio funciona
+ *    — 200 real em `/preco/v1/nacional`). `CORREIOS_CODIGO_ACESSO_CONTRATO`
+ *    e `CORREIOS_CODIGO_ACESSO_CARTAO_POSTAGEM` guardam essas chaves.
+ *
+ * 2) **Código de acesso genérico** (o "código de acesso" clássico do Meu
+ *    Correios, `CORREIOS_CODIGO_ACESSO`) — esse sim passa pela troca
+ *    Basic Auth -> Bearer em `/token/v1/autentica`, só que gera um token
+ *    de usuário sem vínculo, que as APIs restritas rejeitam (GTW-012).
+ *    Mantido como fallback de config antiga / dev-local / testes, onde as
+ *    chaves escopadas não estão preenchidas.
+ *
+ * @see https://www.correios.com.br/atendimento/developers/manuais/manual-uso-da-api-token
  */
 class CorreiosTokenService
 {
-    private const CACHE_KEY = 'correios.access_token';
+    private const CACHE_KEY_GENERICO = 'correios.access_token.generico';
 
     public function isConfigured(): bool
     {
-        return filled(config('services.correios.numero_usuario')) && filled(config('services.correios.codigo_acesso'));
+        if (blank(config('services.correios.numero_usuario'))) {
+            return false;
+        }
+
+        return filled(config('services.correios.codigo_acesso'))
+            || filled(config('services.correios.codigo_acesso_contrato'))
+            || filled(config('services.correios.codigo_acesso_cartao_postagem'));
     }
 
-    public function token(): string
+    /**
+     * Token pra cotar frete real (Preço/Prazo) — chave escopada ao contrato.
+     */
+    public function tokenForPrecoPrazo(): string
     {
-        if (! $this->isConfigured()) {
+        $chave = config('services.correios.codigo_acesso_contrato');
+
+        return filled($chave) ? $chave : $this->tokenGenerico();
+    }
+
+    /**
+     * Token pra criar pré-postagem (QR Code) — chave escopada ao cartão de
+     * postagem.
+     */
+    public function tokenForPrePostagem(): string
+    {
+        $chave = config('services.correios.codigo_acesso_cartao_postagem');
+
+        return filled($chave) ? $chave : $this->tokenGenerico();
+    }
+
+    /**
+     * Fallback sem vínculo (troca Basic Auth -> Bearer de verdade em
+     * `/v1/autentica`) — usado só quando nenhuma chave escopada está
+     * preenchida (dev local, testes). Não passa pelas APIs restritas de
+     * verdade, ver docblock da classe.
+     */
+    private function tokenGenerico(): string
+    {
+        $codigoAcesso = config('services.correios.codigo_acesso');
+
+        if (blank(config('services.correios.numero_usuario')) || blank($codigoAcesso)) {
             throw new CorreiosNotConfiguredException(
                 'Credenciais dos Correios não configuradas — defina CORREIOS_NUMERO_USUARIO e CORREIOS_CODIGO_ACESSO no .env.'
             );
         }
 
-        return Cache::remember(self::CACHE_KEY, now()->addHours(23), fn () => $this->fetchToken());
+        return Cache::remember(self::CACHE_KEY_GENERICO, now()->addHours(23), fn () => $this->fetchToken($codigoAcesso));
     }
 
-    private function fetchToken(): string
+    private function fetchToken(string $codigoAcesso): string
     {
-        [$endpoint, $body] = $this->resolveEndpointAndBody();
-
-        $response = Http::withBasicAuth(
-            (string) config('services.correios.numero_usuario'),
-            (string) config('services.correios.codigo_acesso'),
-        )
+        $response = Http::withBasicAuth((string) config('services.correios.numero_usuario'), $codigoAcesso)
             ->acceptJson()
             ->timeout(20)
-            ->post(rtrim((string) config('services.correios.token_base_url'), '/').$endpoint, $body);
+            ->post(rtrim((string) config('services.correios.token_base_url'), '/').'/v1/autentica', []);
 
         if ($response->failed()) {
             Log::channel('correios')->error('correios.token_failed', [
-                'endpoint' => $endpoint,
                 'status' => $response->status(),
                 'body' => $response->json(),
             ]);
@@ -79,38 +121,15 @@ class CorreiosTokenService
             $expiresAt = Carbon::parse($expiraEm)->subMinutes(5);
 
             if ($expiresAt->isFuture()) {
-                Cache::put(self::CACHE_KEY, $token, $expiresAt);
+                Cache::put(self::CACHE_KEY_GENERICO, $token, $expiresAt);
             }
         }
 
         return $token;
     }
 
-    /**
-     * @return array{0: string, 1: array<string, mixed>}
-     */
-    private function resolveEndpointAndBody(): array
-    {
-        $cartaoPostagem = config('services.correios.cartao_postagem');
-        $contrato = config('services.correios.contrato');
-        $dr = config('services.correios.dr');
-
-        if (filled($cartaoPostagem)) {
-            return ['/v1/autentica/cartaopostagem', ['numero' => $cartaoPostagem, 'contrato' => $contrato, 'dr' => $dr]];
-        }
-
-        if (filled($contrato)) {
-            return ['/v1/autentica/contrato', ['numero' => $contrato, 'dr' => $dr]];
-        }
-
-        // Token de usuário — sem vínculo de contrato. Funciona pra
-        // autenticar, mas pode não bastar pra criar pré-postagem de verdade
-        // até CORREIOS_CONTRATO/CARTAO_POSTAGEM serem preenchidos.
-        return ['/v1/autentica', []];
-    }
-
     public function forgetCachedToken(): void
     {
-        Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::CACHE_KEY_GENERICO);
     }
 }

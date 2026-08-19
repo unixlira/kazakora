@@ -85,6 +85,11 @@ return [
     'correios' => [
         'numero_usuario' => env('CORREIOS_NUMERO_USUARIO'),
         'codigo_acesso' => env('CORREIOS_CODIGO_ACESSO'),
+        // Chaves de acesso escopadas por vínculo (ver CorreiosTokenService)
+        // — cada uma gerada separadamente no CWS, não é a mesma chave
+        // genérica acima.
+        'codigo_acesso_contrato' => env('CORREIOS_CODIGO_ACESSO_CONTRATO'),
+        'codigo_acesso_cartao_postagem' => env('CORREIOS_CODIGO_ACESSO_CARTAO_POSTAGEM'),
         'contrato' => env('CORREIOS_CONTRATO'),
         'cartao_postagem' => env('CORREIOS_CARTAO_POSTAGEM'),
         'dr' => env('CORREIOS_DR'),

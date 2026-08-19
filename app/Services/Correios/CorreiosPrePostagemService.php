@@ -129,7 +129,10 @@ class CorreiosPrePostagemService
                 'bairro' => $company->neighborhood,
                 'cidade' => $company->city,
                 'uf' => $company->state,
-                'pais' => 'Brasil',
+                // Sem 'pais' — confirmado em teste real 2026-08-19: mandar
+                // 'pais' => 'Brasil' (ou qualquer valor) faz a API recusar
+                // com "Informação do País remetente não admitida para a
+                // prepostagem" (endereço nacional já é implícito).
             ],
         ];
     }
@@ -157,7 +160,6 @@ class CorreiosPrePostagemService
                 'bairro' => $address['neighborhood'],
                 'cidade' => $address['city'],
                 'uf' => $address['state'],
-                'pais' => 'Brasil',
             ],
         ];
     }
@@ -213,6 +215,18 @@ class CorreiosPrePostagemService
             return [null, null];
         }
 
-        return [substr($digits, 0, 2), substr($digits, 2)];
+        $ddd = substr($digits, 0, 2);
+        $numero = substr($digits, 2);
+
+        // Confirmado em teste real 2026-08-19: o campo 'telefone' só aceita
+        // 8 dígitos — um celular com o 9º dígito (padrão atual, 9 dígitos
+        // após o DDD) é recusado com "Telefone do remetente inválido". Pega
+        // os últimos 8 (descarta o prefixo "9" do celular, mantém o número
+        // real do assinante) em vez de inventar/truncar de outro jeito.
+        if (strlen($numero) > 8) {
+            $numero = substr($numero, -8);
+        }
+
+        return [$ddd, $numero];
     }
 }

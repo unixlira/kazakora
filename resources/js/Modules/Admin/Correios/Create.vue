@@ -55,8 +55,12 @@ const buscarPedido = async () => {
         form.address = { ...data.address };
 
         if (data.items.length) {
+            // `maxlength="60"` no <input> só trava digitação manual — nome de
+            // produto vindo do pedido chega aqui por atribuição direta (JS),
+            // que ignora o atributo, então precisa truncar na mão (mesmo
+            // limite que o backend exige em content_items.*.conteudo).
             form.content_items = data.items.map((item) => ({
-                conteudo: item.conteudo,
+                conteudo: item.conteudo.slice(0, 60),
                 quantidade: item.quantidade,
                 valor: item.valor,
             }));

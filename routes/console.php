@@ -33,6 +33,12 @@ Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
 
+// Rede de segurança pro caso de autoImportProduct() falhar na hora do
+// import (API do canal fora do ar naquele instante) — sem isso o item
+// ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,
+// quase causou embalagem errada no KoraSync — ver RelinkUnmappedMarketplaceItems).
+Schedule::command('marketplace:relink-unmapped-items')->everyThirtyMinutes();
+
 // Gasto real com anúncio (Shopee Ads + Mercado Ads) pro painel de lucro
 // líquido — pedido explícito 2026-08-09. Cedo o suficiente pra já estar
 // pronto quando o admin abrir o dashboard financeiro de manhã; janela de

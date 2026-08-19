@@ -14,6 +14,12 @@ class OrderItem extends Model
 
     protected $fillable = [
         'product_id',
+        // Item id/model id do canal (ML/Shopee) — persistido SEMPRE (item
+        // mapeado ou não), pra dar pra reprocessar depois sem depender de
+        // log. Ver migration add_external_item_id e comando
+        // marketplace:relink-unmapped-items.
+        'external_item_id',
+        'external_model_id',
         'product_name',
         'product_price',
         'quantity',

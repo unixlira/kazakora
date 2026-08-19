@@ -272,6 +272,13 @@ class OrderImportService
 
                 $order->items()->create([
                     'product_id' => $product?->id,
+                    // Persistido sempre (mapeado ou não) — sem isso, um
+                    // item que falhe o auto-import agora fica sem produto
+                    // pra sempre, sem nenhum jeito de tentar de novo depois
+                    // (achado real 2026-08-19, ver migration
+                    // add_external_item_id).
+                    'external_item_id' => $item['external_id'],
+                    'external_model_id' => $externalModelId,
                     'product_name' => $product?->name
                         ?? ($item['external_name'] ?? null)
                         ?? "Item {$item['external_id']} (sem produto local mapeado)",

@@ -7,9 +7,23 @@ import { ref } from 'vue';
 const props = defineProps({
     serviceOptions: { type: Array, required: true },
     configured: { type: Boolean, required: true },
+    // Presente só na tela de edição (/admin/correios/{id}/editar) — reabre
+    // uma tentativa que falhou pra corrigir e tentar de novo, ver
+    // CorreiosController::edit().
+    editing: { type: Object, default: null },
 });
 
-const form = useForm({
+const form = useForm(props.editing ? {
+    order_id: props.editing.orderId,
+    origin: props.editing.origin,
+    external_order_id: props.editing.externalOrderId,
+    customer: { ...props.editing.customer },
+    address: { ...props.editing.address },
+    service_code: props.editing.serviceCode,
+    weight_grams: props.editing.weightGrams,
+    dimensions: { ...props.editing.dimensions },
+    content_items: props.editing.contentItems.map((item) => ({ ...item })),
+} : {
     order_id: null,
     origin: null,
     external_order_id: null,
@@ -81,17 +95,26 @@ const removeItem = (index) => {
 };
 
 const submit = () => {
-    form.post('/admin/correios');
+    if (props.editing) {
+        form.put(`/admin/correios/${props.editing.id}`);
+    } else {
+        form.post('/admin/correios');
+    }
 };
 </script>
 
 <template>
-    <Head title="Gerar QR Code — Correios" />
+    <Head :title="editing ? 'Corrigir e tentar de novo — Correios' : 'Gerar QR Code — Correios'" />
 
     <AdminLayout>
         <div class="mb-6">
-            <h1 class="mb-1 text-2xl font-bold">Gerar QR Code de pré-postagem</h1>
+            <h1 class="mb-1 text-2xl font-bold">{{ editing ? 'Corrigir e tentar de novo' : 'Gerar QR Code de pré-postagem' }}</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">Cria a pré-postagem direto na API dos Correios e gera o QR Code pra levar na agência.</p>
+        </div>
+
+        <div v-if="editing?.errorMessage" class="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300">
+            <i class="fas fa-triangle-exclamation mr-1.5"></i>
+            <strong>Falhou da última vez:</strong> {{ editing.errorMessage }}
         </div>
 
         <div v-if="!configured" class="mb-6 rounded-xl border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
@@ -296,7 +319,7 @@ const submit = () => {
                     <button type="submit" :disabled="form.processing"
                         class="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
                         <i class="fas fa-qrcode mr-1.5"></i>
-                        {{ form.processing ? 'Gerando…' : 'Gerar QR Code' }}
+                        {{ form.processing ? 'Gerando…' : (editing ? 'Tentar de novo' : 'Gerar QR Code') }}
                     </button>
                 </div>
             </form>

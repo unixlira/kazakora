@@ -152,6 +152,66 @@ class CorreiosControllerTest extends TestCase
         $this->assertSame('CEP do destinatário inválido', $record->error_message);
     }
 
+    public function test_edit_shows_form_prefilled_when_status_is_erro(): void
+    {
+        $admin = $this->admin();
+        $record = CorreiosPrePostagem::create($this->recordAttributes(['status' => CorreiosPrePostagem::STATUS_ERRO, 'error_message' => 'CEP inválido']));
+
+        $response = $this->actingAs($admin)->get("/admin/correios/{$record->id}/editar");
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->component('Admin/Correios/Create')
+            ->where('editing.id', $record->id)
+            ->where('editing.customer.name', 'Cliente Teste')
+            ->where('editing.errorMessage', 'CEP inválido'));
+    }
+
+    public function test_edit_redirects_when_status_is_not_erro(): void
+    {
+        $admin = $this->admin();
+        $record = CorreiosPrePostagem::create($this->recordAttributes(['status' => CorreiosPrePostagem::STATUS_GERADA]));
+
+        $response = $this->actingAs($admin)->get("/admin/correios/{$record->id}/editar");
+
+        $response->assertRedirect(route('admin.correios.ver', $record));
+        $response->assertSessionHas('error');
+    }
+
+    public function test_update_retries_and_marks_gerada_on_success(): void
+    {
+        config(['services.correios.numero_usuario' => '65604590000107', 'services.correios.codigo_acesso' => 'token-teste']);
+        $this->makeCompany();
+        $admin = $this->admin();
+        $record = CorreiosPrePostagem::create($this->recordAttributes(['status' => CorreiosPrePostagem::STATUS_ERRO, 'error_message' => 'Erro anterior']));
+
+        Http::fake([
+            '*/token/v1/autentica' => Http::response(['token' => 'bearer-abc'], 201),
+            '*/prepostagem/v1/prepostagens' => Http::response(['id' => '999888', 'codigoObjeto' => 'OA123456789BR'], 201),
+        ]);
+
+        $response = $this->actingAs($admin)->put("/admin/correios/{$record->id}", $this->payload(['customer' => ['name' => 'Maria Corrigida']]));
+
+        $record->refresh();
+        $response->assertRedirect(route('admin.correios.ver', $record));
+        $this->assertSame(1, CorreiosPrePostagem::count());
+        $this->assertSame(CorreiosPrePostagem::STATUS_GERADA, $record->status);
+        $this->assertSame('Maria Corrigida', $record->customer_name);
+        $this->assertNull($record->error_message);
+    }
+
+    public function test_update_redirects_when_status_is_not_erro(): void
+    {
+        $admin = $this->admin();
+        $record = CorreiosPrePostagem::create($this->recordAttributes(['status' => CorreiosPrePostagem::STATUS_GERADA]));
+
+        $response = $this->actingAs($admin)->put("/admin/correios/{$record->id}", $this->payload());
+
+        $response->assertRedirect(route('admin.correios.ver', $record));
+        $response->assertSessionHas('error');
+        $this->assertSame('Cliente Teste', $record->fresh()->customer_name);
+    }
+
     public function test_buscar_pedido_returns_404_json_when_not_found(): void
     {
         $admin = $this->admin();

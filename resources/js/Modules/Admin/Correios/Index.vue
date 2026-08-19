@@ -98,6 +98,7 @@ const destroy = async (item) => {
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2">
                                 <ActionIcon icon="fa-qrcode" label="Ver / imprimir" color="blue" :href="`/admin/correios/${item.id}`" />
+                                <ActionIcon v-if="item.status === 'erro'" icon="fa-pen" label="Corrigir e tentar de novo" color="amber" :href="`/admin/correios/${item.id}/editar`" />
                                 <ActionIcon icon="fa-trash" label="Remover" color="red" @click="destroy(item)" />
                             </div>
                         </td>

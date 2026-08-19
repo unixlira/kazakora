@@ -27,6 +27,11 @@ const printLabel = () => window.print();
                 <i class="fas fa-print mr-1.5"></i>
                 Imprimir
             </button>
+            <Link v-if="item.status === 'erro'" :href="`/admin/correios/${item.id}/editar`"
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                <i class="fas fa-pen mr-1.5"></i>
+                Corrigir e tentar de novo
+            </Link>
         </div>
 
         <div v-if="item.status === 'erro'" class="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300 print:hidden">

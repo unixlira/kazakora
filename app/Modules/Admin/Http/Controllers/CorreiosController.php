@@ -143,7 +143,54 @@ class CorreiosController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $validated = $request->validate($this->validationRules());
+
+        $record = new CorreiosPrePostagem(['created_by' => Auth::id()]);
+        $this->hydrateRecord($record, $validated);
+
+        return $this->attemptCreate($record, $validated, 'Pré-postagem gerada — QR Code pronto pra impressão.');
+    }
+
+    /**
+     * Reabre o formulário pra corrigir e tentar de novo — só faz sentido
+     * pra tentativa que falhou (pedido explícito 2026-08-19: "isso pode
+     * ser editável até gerar o qrcode"). Uma pré-postagem já gerada tem
+     * QR Code/código de rastreio reais emitidos pelos Correios — editar
+     * dali pra frente reabriria um protocolo que já existe do lado deles,
+     * então cai direto pra tela de detalhe em vez de deixar editar.
+     */
+    public function edit(CorreiosPrePostagem $correio): Response|RedirectResponse
+    {
+        if ($correio->status !== CorreiosPrePostagem::STATUS_ERRO) {
+            return redirect()->route('admin.correios.ver', $correio)->with('error', 'Essa pré-postagem já foi gerada — não dá mais pra editar.');
+        }
+
+        return Inertia::render('Admin/Correios/Create', [
+            'serviceOptions' => self::SERVICE_OPTIONS,
+            'configured' => $this->service->isConfigured(),
+            'editing' => $this->presentEditItem($correio),
+        ]);
+    }
+
+    public function update(Request $request, CorreiosPrePostagem $correio): RedirectResponse
+    {
+        if ($correio->status !== CorreiosPrePostagem::STATUS_ERRO) {
+            return redirect()->route('admin.correios.ver', $correio)->with('error', 'Essa pré-postagem já foi gerada — não dá mais pra editar.');
+        }
+
+        $validated = $request->validate($this->validationRules());
+
+        $this->hydrateRecord($correio, $validated);
+
+        return $this->attemptCreate($correio, $validated, 'Pré-postagem gerada — QR Code pronto pra impressão.');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validationRules(): array
+    {
+        return [
             'order_id' => ['nullable', 'integer', 'exists:orders,id'],
             'origin' => ['nullable', 'string'],
             'external_order_id' => ['nullable', 'string'],
@@ -169,13 +216,18 @@ class CorreiosController extends Controller
             'content_items.*.conteudo' => ['required', 'string', 'max:60'],
             'content_items.*.quantidade' => ['required', 'integer', 'min:1'],
             'content_items.*.valor' => ['required', 'numeric', 'min:0.01'],
-        ]);
+        ];
+    }
 
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function hydrateRecord(CorreiosPrePostagem $record, array $validated): void
+    {
         $serviceLabel = collect(self::SERVICE_OPTIONS)->firstWhere('value', $validated['service_code'])['label'] ?? $validated['service_code'];
 
-        $record = new CorreiosPrePostagem([
+        $record->fill([
             'order_id' => $validated['order_id'] ?? null,
-            'created_by' => Auth::id(),
             'origin' => $validated['origin'] ?? null,
             'external_order_id' => $validated['external_order_id'] ?? null,
             'customer_name' => $validated['customer']['name'],
@@ -192,9 +244,20 @@ class CorreiosController extends Controller
             'service_code' => $validated['service_code'],
             'service_label' => $serviceLabel,
             'weight_grams' => $validated['weight_grams'],
+            'dimension_format' => $validated['dimensions']['format'],
+            'dimension_height' => $validated['dimensions']['height'] ?? null,
+            'dimension_width' => $validated['dimensions']['width'] ?? null,
+            'dimension_length' => $validated['dimensions']['length'] ?? null,
+            'dimension_diameter' => $validated['dimensions']['diameter'] ?? null,
             'content_items' => $validated['content_items'],
         ]);
+    }
 
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function attemptCreate(CorreiosPrePostagem $record, array $validated, string $successMessage): RedirectResponse
+    {
         try {
             $result = $this->service->create($validated);
 
@@ -203,9 +266,10 @@ class CorreiosController extends Controller
             $record->codigo_objeto = $result['codigoObjeto'] ?? null;
             $record->qr_payload = $record->codigo_objeto ?: $record->correios_id;
             $record->raw_response = $result;
+            $record->error_message = null;
             $record->save();
 
-            return redirect()->route('admin.correios.ver', $record)->with('success', 'Pré-postagem gerada — QR Code pronto pra impressão.');
+            return redirect()->route('admin.correios.ver', $record)->with('success', $successMessage);
         } catch (CorreiosNotConfiguredException $exception) {
             return back()->withInput()->with('error', $exception->getMessage());
         } catch (CorreiosException $exception) {
@@ -271,6 +335,48 @@ class CorreiosController extends Controller
             'contentItems' => $item->content_items,
             'correiosId' => $item->correios_id,
             'qrPayload' => $item->qr_payload,
+            'errorMessage' => $item->error_message,
+        ];
+    }
+
+    /**
+     * Mesmo shape que o form de Create.vue usa — pra reabrir a tela já
+     * preenchida com o que foi tentado da última vez (ver edit()).
+     *
+     * @return array<string, mixed>
+     */
+    private function presentEditItem(CorreiosPrePostagem $item): array
+    {
+        return [
+            'id' => $item->id,
+            'orderId' => $item->order_id,
+            'origin' => $item->origin,
+            'externalOrderId' => $item->external_order_id,
+            'customer' => [
+                'name' => $item->customer_name,
+                'document' => $item->customer_document,
+                'phone' => $item->customer_phone,
+                'email' => $item->customer_email,
+            ],
+            'address' => [
+                'zip' => $item->zip,
+                'street' => $item->street,
+                'number' => $item->number,
+                'complement' => $item->complement,
+                'neighborhood' => $item->neighborhood,
+                'city' => $item->city,
+                'state' => $item->state,
+            ],
+            'serviceCode' => $item->service_code,
+            'weightGrams' => $item->weight_grams,
+            'dimensions' => [
+                'format' => $item->dimension_format,
+                'height' => $item->dimension_height,
+                'width' => $item->dimension_width,
+                'length' => $item->dimension_length,
+                'diameter' => $item->dimension_diameter,
+            ],
+            'contentItems' => $item->content_items,
             'errorMessage' => $item->error_message,
         ];
     }

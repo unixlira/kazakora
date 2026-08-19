@@ -421,8 +421,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             Route::get('correios/nova', [CorreiosController::class, 'create'])->name('correios.nova');
             Route::get('correios/buscar-pedido', [CorreiosController::class, 'buscarPedido'])->name('correios.buscar-pedido');
             Route::get('correios/{correio}', [CorreiosController::class, 'show'])->name('correios.ver');
+            Route::get('correios/{correio}/editar', [CorreiosController::class, 'edit'])->name('correios.editar');
         });
         Route::post('correios', [CorreiosController::class, 'store'])->name('correios.armazenar')->middleware('permission:operacional.create');
+        Route::put('correios/{correio}', [CorreiosController::class, 'update'])->name('correios.atualizar')->middleware('permission:operacional.create');
         Route::delete('correios/{correio}', [CorreiosController::class, 'destroy'])->name('correios.excluir')->middleware('permission:operacional.delete');
 
         Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');

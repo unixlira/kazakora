@@ -177,50 +177,66 @@ class LabelProcessingService
      * aqui, ainda usado pelas telas manuais de teste): em vez de sobrepor a
      * declaração faixa fina por cima da própria etiqueta (risco real de
      * colisão — foi exatamente isso que atropelou o endereço numa etiqueta
-     * real do Mercado Livre), gera UMA etiqueta física só, dividida ao meio
-     * por uma linha vertical — metade esquerda com a etiqueta original
-     * (só a 1ª página, encolhida mantendo proporção, nunca esticada/
-     * espremida — um código de barras distorcido não escaneia), metade
-     * direita dedicada só à declaração de conteúdo, com espaço de sobra
-     * (nada de faixa fina). Página(s) extra da etiqueta original — ex.: a
-     * DANFE simplificada do Mercado Livre — não vão mais pro papel térmico
-     * físico (decisão explícita do usuário: só a etiqueta de envio importa
-     * pra quem embala; a etiqueta ORIGINAL intacta, com a DANFE, continua
-     * arquivada à parte por LabelFetchService::attempt(), ver raw_label_path).
+     * real do Mercado Livre), gera UMA etiqueta física só (impressora
+     * térmica 10x15), dividida ao meio por uma linha vertical — cada
+     * metade ESTICADA pra preencher 100% do espaço dela (largura E altura,
+     * sem sobrar vazio) — pedido explícito do usuário depois de ver a
+     * 1ª versão (só a largura escalada, mantendo proporção, deixava um
+     * vão vazio enorme embaixo). Distorce um pouco a proporção original —
+     * aceito conscientemente aqui, a alternativa (vão vazio) é pior.
+     *
+     * $rightSide controla o que entra na metade direita:
+     * - 'danfe' (Mercado Livre): a 2ª página original (DANFE simplificada,
+     *   com a chave de acesso) — a declaração de SKU some pra dar lugar a
+     *   isso, mas continua entrando como uma faixa fina no rodapé DESSA
+     *   metade (mesma área "DADOS ADICIONAIS" que já vem vazia na DANFE
+     *   real, sem colidir com nada). Sem 2ª página na origem, cai pro
+     *   comportamento de 'declaration' (nunca quebra).
+     * - 'declaration' (Shopee/TikTok, default): painel só com a
+     *   declaração de conteúdo, sem 2ª página de origem pra mostrar.
+     *
+     * Página(s) além da usada (a 1ª sempre vai pra esquerda, a 2ª só entra
+     * em 'danfe') não vão pro papel físico — a etiqueta ORIGINAL intacta
+     * continua arquivada à parte por LabelFetchService::attempt(), ver
+     * raw_label_path.
      *
      * @param  array<int, string>  $declarationTokens
      */
-    public function composeSideBySideLabel(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null): string
+    public function composeSideBySideLabel(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null, string $rightSide = 'declaration'): string
     {
         $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
         file_put_contents($tempPdfPath, $pdfBytes);
 
         try {
             $pdf = new Fpdi();
-            $pdf->setSourceFile($tempPdfPath);
+            $pageCount = $pdf->setSourceFile($tempPdfPath);
             $pdf->SetAutoPageBreak(false);
 
-            // Só a 1ª página (a etiqueta de envio em si) segue pro papel
-            // físico — ver docblock acima pro motivo de descartar o resto.
-            $templateId = $pdf->importPage(1);
-            $size = $pdf->getTemplateSize($templateId);
+            $leftTemplateId = $pdf->importPage(1);
+            $size = $pdf->getTemplateSize($leftTemplateId);
 
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
 
             $halfWidth = $size['width'] / 2;
 
-            // Só a largura é passada pro useTemplate() — FPDI escala a
-            // altura mantendo a proporção original sozinho (nunca distorce
-            // o conteúdo original, ver docblock). Como a etiqueta é mais
-            // alta que larga, o resultado ocupa só a parte de cima da
-            // metade esquerda — centraliza verticalmente em vez de deixar
-            // colado no topo.
-            $scaledHeight = $size['height'] * ($halfWidth / $size['width']);
-            $topOffset = ($size['height'] - $scaledHeight) / 2;
-            $pdf->useTemplate($templateId, 0, $topOffset, $halfWidth);
+            // Largura E altura passadas juntas — preenche o retângulo
+            // inteiro da metade esquerda, mesmo distorcendo a proporção
+            // original (ver docblock).
+            $pdf->useTemplate($leftTemplateId, 0, 0, $halfWidth, $size['height']);
 
             $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
-            $this->drawDeclarationPanel($pdf, $size, $halfWidth, $line, $scheduledLine);
+
+            if ($rightSide === 'danfe' && $pageCount >= 2) {
+                $rightTemplateId = $pdf->importPage(2);
+                $pdf->useTemplate($rightTemplateId, $halfWidth, 0, $size['width'] - $halfWidth, $size['height']);
+                $this->drawDeclarationBand($pdf, $size, $halfWidth, $line, $scheduledLine);
+            } else {
+                $this->drawDeclarationPanel($pdf, $size, $halfWidth, $line, $scheduledLine);
+            }
+
+            $pdf->SetDrawColor(0, 0, 0);
+            $pdf->SetLineWidth(0.3);
+            $pdf->Line($halfWidth, 2, $halfWidth, $size['height'] - 2);
 
             return $pdf->Output('S');
         } finally {
@@ -229,13 +245,46 @@ class LabelProcessingService
     }
 
     /**
+     * Faixa fina no rodapé da metade direita (usada quando $rightSide é a
+     * DANFE, ver composeSideBySideLabel()) — a mesma área "DADOS
+     * ADICIONAIS" que já vem vazia na DANFE simplificada real do Mercado
+     * Livre, então não colide com o conteúdo dela mesmo esticada.
+     */
+    private function drawDeclarationBand(Fpdi $pdf, array $size, float $halfWidth, string $line, ?string $scheduledLine = null): void
+    {
+        $marginSide = 3; // mm
+        $marginBottom = 2; // mm
+        $fontSize = 7;
+        $lineHeight = $fontSize * 0.42;
+        $reservedLines = 2 + ($scheduledLine !== null ? 1 : 0);
+        $textHeight = $reservedLines * $lineHeight;
+
+        $bandX = $halfWidth + $marginSide;
+        $bandWidth = ($size['width'] - $halfWidth) - (2 * $marginSide);
+        $textTop = $size['height'] - $marginBottom - $textHeight;
+
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetFont('Arial', 'B', $fontSize);
+        $pdf->SetXY($bandX, $textTop);
+        $pdf->MultiCell($bandWidth, $lineHeight, $this->toLatin1(str_replace('-', '- ', $line)), 0, 'C');
+
+        if ($scheduledLine !== null) {
+            $pdf->SetFont('Arial', 'B', $fontSize - 1);
+            $pdf->SetXY($bandX, $textTop + (2 * $lineHeight));
+            $pdf->MultiCell($bandWidth, $lineHeight, $this->toLatin1($scheduledLine), 0, 'C');
+        }
+    }
+
+    /**
      * Painel dedicado (metade direita da etiqueta combinada, ver
-     * composeSideBySideLabel()) — bem mais espaço que a faixa fina do
-     * rodapé antigo (drawDeclarationFooter()), fonte maior, título
-     * "DECLARAÇÃO DE CONTEÚDO" pra deixar claro pra quem embala o que
-     * aquele lado da etiqueta é. Mesma degradação aceitável de sempre com
-     * AutoPageBreak desligado: pedido com muitos produtos que estoure a
-     * altura reservada só corta na borda da página, nunca quebra o resto.
+     * composeSideBySideLabel()) — usado quando não há DANFE de origem
+     * (Shopee/TikTok, ou Mercado Livre sem 2ª página). Bem mais espaço que
+     * a faixa fina do rodapé antigo (drawDeclarationFooter()), fonte
+     * maior, centralizado na altura toda da metade — preenche o espaço em
+     * vez de ficar colado no topo. Mesma degradação aceitável de sempre
+     * com AutoPageBreak desligado: pedido com muitos produtos que estoure
+     * a altura reservada só corta na borda da página, nunca quebra o
+     * resto.
      */
     private function drawDeclarationPanel(Fpdi $pdf, array $size, float $halfWidth, string $line, ?string $scheduledLine = null): void
     {
@@ -243,19 +292,19 @@ class LabelProcessingService
         $panelX = $halfWidth + $marginSide;
         $panelWidth = ($size['width'] - $halfWidth) - (2 * $marginSide);
 
-        $pdf->SetDrawColor(0, 0, 0);
-        $pdf->SetLineWidth(0.3);
-        $pdf->Line($halfWidth, 2, $halfWidth, $size['height'] - 2);
-
         $pdf->SetTextColor(0, 0, 0);
 
-        $y = 8;
-        $pdf->SetFont('Arial', 'B', 8);
-        $pdf->SetXY($panelX, $y);
-        $pdf->MultiCell($panelWidth, 3.5, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO'), 0, 'C');
+        // Centralizado verticalmente na metade inteira (não mais colado no
+        // topo) — bloco de título + SKU + (linha agendada opcional).
+        $blockHeight = 8 + 4.2 * (substr_count($line, ' ') + 3) + ($scheduledLine !== null ? 12 : 0);
+        $y = max(8, ($size['height'] - $blockHeight) / 2);
 
-        $y += 8;
         $pdf->SetFont('Arial', 'B', 10);
+        $pdf->SetXY($panelX, $y);
+        $pdf->MultiCell($panelWidth, 4.5, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO'), 0, 'C');
+
+        $y += 10;
+        $pdf->SetFont('Arial', 'B', 12);
         $pdf->SetXY($panelX, $y);
         // BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste do layout novo):
         // MultiCell só quebra linha em espaço — um SKU inteiro sem espaço
@@ -265,10 +314,10 @@ class LabelProcessingService
         // pra exibição (não altera o SKU de verdade em lugar nenhum) — dá
         // ponto de quebra natural, sai "ORG- DIS- LCK-..." em vez de cortar
         // qualquer letra ao meio.
-        $pdf->MultiCell($panelWidth, 4.2, $this->toLatin1(str_replace('-', '- ', $line)), 0, 'C');
+        $pdf->MultiCell($panelWidth, 5, $this->toLatin1(str_replace('-', '- ', $line)), 0, 'C');
 
         if ($scheduledLine !== null) {
-            $y += 24; // reserva espaço pro wrap da linha de SKU acima antes de começar esta
+            $y += 28; // reserva espaço pro wrap da linha de SKU acima antes de começar esta
             $pdf->SetFont('Arial', 'B', 9);
             $pdf->SetXY($panelX, $y);
             $pdf->MultiCell($panelWidth, 4, $this->toLatin1($scheduledLine), 0, 'C');

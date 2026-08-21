@@ -214,6 +214,11 @@ class LabelFetchServiceTest extends TestCase
      * pra venda agendada, ver teste abaixo). raw_label_path continua
      * guardando a etiqueta original intacta (com a DANFE) à parte — só a
      * versão física impressa (label_path) muda.
+     *
+     * Este teste usa um mock de 1 página só (sem DANFE) — cobre o
+     * fallback pro painel de declaração cheio (composeSideBySideLabel()
+     * com $rightSide='danfe' mas $pageCount<2). O caso real (2 páginas,
+     * DANFE de verdade na direita) é o teste seguinte.
      */
     public function test_attempt_adds_the_declaration_panel_for_mercado_livre(): void
     {
@@ -234,6 +239,41 @@ class LabelFetchServiceTest extends TestCase
         // arquivada à parte, sem passar por nenhum processamento.
         $rawContents = Storage::disk('local')->get($shipment->fresh()->raw_label_path);
         $this->assertSame($rawPdf, $rawContents);
+    }
+
+    /**
+     * BUG REAL 2026-08-21 (feedback do usuário vendo a etiqueta impressa):
+     * a metade direita do Mercado Livre tem que ser a DANFE de verdade (2ª
+     * página original, com a chave de acesso) — não o painel de texto
+     * genérico, que é só o fallback pra quando não existe DANFE nenhuma
+     * (ver teste acima). A etiqueta real do ML sempre vem em 2 páginas —
+     * este é o caso que acontece de verdade em produção.
+     */
+    public function test_attempt_shows_the_real_danfe_page_on_the_right_half_for_mercado_livre(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalTwoPagePdf(), 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        // Declaração ainda entra (faixa fina no rodapé da metade direita,
+        // não o painel cheio) e a etiqueta continua sendo 1 página física
+        // só, mesmo com 2 páginas de origem.
+        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        $this->assertStringNotContainsString('DECLARA', $labelContents, 'não usa o painel cheio quando tem DANFE de verdade');
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $labelContents);
+
+        try {
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+        } finally {
+            @unlink($tempPath);
+        }
     }
 
     /**
@@ -300,6 +340,37 @@ class LabelFetchServiceTest extends TestCase
             2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
             3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 4 0 R >>',
             4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+        ];
+
+        $body = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $id => $content) {
+            $offsets[$id] = strlen($body);
+            $body .= "{$id} 0 obj\n{$content}\nendobj\n";
+        }
+
+        $xrefOffset = strlen($body);
+        $body .= "xref\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+
+        foreach ($objects as $id => $content) {
+            $body .= sprintf("%010d 00000 n \n", $offsets[$id]);
+        }
+
+        $body .= "trailer\n<< /Size ".(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF";
+
+        return $body;
+    }
+
+    private static function minimalTwoPagePdf(): string
+    {
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 4 0 R >>',
+            4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+            5 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 6 0 R >>',
+            6 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
         ];
 
         $body = "%PDF-1.4\n";

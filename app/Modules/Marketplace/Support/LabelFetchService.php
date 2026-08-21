@@ -190,15 +190,21 @@ class LabelFetchService
                     ? sprintf('Pedido agendado dia %s | Pedido nº %d', $shipment->scheduled_for->format('d/m/Y'), $shipment->order_id)
                     : null;
 
-                // Pedido explícito 2026-08-21: etiqueta original + declaração
-                // lado a lado numa etiqueta física só (composeSideBySideLabel()),
-                // não mais sobreposta por cima (overlayDeclarationFooter() —
-                // risco real de colisão, foi o que atropelou o endereço numa
-                // etiqueta real do Mercado Livre). Só a 1ª página da etiqueta
-                // original vai pro papel físico; qualquer página extra (ex.:
-                // a DANFE simplificada do ML) segue arquivada intacta em
-                // raw_label_path, mas não é mais impressa.
-                $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine);
+                // Pedido explícito 2026-08-21: etiqueta original + metade
+                // direita lado a lado numa etiqueta física só
+                // (composeSideBySideLabel()), não mais sobreposta por cima
+                // (overlayDeclarationFooter() — risco real de colisão, foi o
+                // que atropelou o endereço numa etiqueta real do Mercado
+                // Livre). Mercado Livre mostra a DANFE de verdade (2ª página
+                // original, com a chave de acesso) na metade direita — a
+                // declaração de SKU ainda entra, só que como faixa fina no
+                // rodapé dessa metade (área "DADOS ADICIONAIS" que já vem
+                // vazia na DANFE real). Shopee/TikTok (sem 2ª página) mostram
+                // o painel de declaração cheio. Qualquer página além da
+                // usada segue arquivada intacta em raw_label_path.
+                $rightSide = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE ? 'danfe' : 'declaration';
+
+                $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide);
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

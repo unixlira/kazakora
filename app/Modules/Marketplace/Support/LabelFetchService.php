@@ -232,22 +232,38 @@ class LabelFetchService
                 // ($shopeeDeclarationPdf, ver extractShopeeZipContents()).
                 // Documento real já traz os produtos, então NÃO leva a
                 // faixa de SKU/QTD por cima (ver composeSideBySideLabel(),
-                // 'external'). Pedido sem PDF de declaração no zip (nem
-                // todo pedido exige, ex.: valor baixo dispensa) cai pro
-                // painel de declaração desenhado localmente — pedido
-                // explícito do usuário: "se não tiver, gera normal a
-                // etiqueta".
+                // 'external').
+                //
+                // BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste gerada
+                // de verdade, pedido #555): pedido sem PDF de declaração no
+                // zip (nem todo pedido exige, ex.: valor baixo dispensa)
+                // caía pro painel de declaração desenhado localmente — mas
+                // o usuário pediu explicitamente "se não tiver, gera normal
+                // a etiqueta", ou seja, NÃO compor nada nesse caso, deixar
+                // a etiqueta exatamente como a Shopee mandou. $shouldCompose
+                // controla isso — só fica false pra Shopee sem declaração E
+                // sem ser entrega agendada (agendado continua ganhando o
+                // painel com a linha "Pedido agendado", motivo diferente:
+                // identificar o caso agendado, não substituir uma
+                // declaração que não existe).
+                $shouldCompose = true;
                 $rightSide = 'declaration';
                 $rightPdfBytes = null;
 
                 if ($shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE) {
                     $rightSide = 'danfe';
-                } elseif ($shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE && $shopeeDeclarationPdf !== null) {
-                    $rightSide = 'external';
-                    $rightPdfBytes = $shopeeDeclarationPdf;
+                } elseif ($shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE) {
+                    if ($shopeeDeclarationPdf !== null) {
+                        $rightSide = 'external';
+                        $rightPdfBytes = $shopeeDeclarationPdf;
+                    } elseif (! $isScheduled) {
+                        $shouldCompose = false;
+                    }
                 }
 
-                $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide, $rightPdfBytes);
+                if ($shouldCompose) {
+                    $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide, $rightPdfBytes);
+                }
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

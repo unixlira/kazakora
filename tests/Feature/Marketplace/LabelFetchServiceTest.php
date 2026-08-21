@@ -196,14 +196,16 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Nem todo pedido Shopee exige declaração de conteúdo (ex.: valor
-     * baixo dispensa) — zip só com o ZPL, sem PDF nenhum junto, cai pro
-     * painel de declaração desenhado localmente (mesmo fallback de
-     * TikTok/canais sem documento pra mostrar), em vez de travar a
-     * etiqueta. Pedido explícito do usuário: "se não tiver, gera normal a
-     * etiqueta".
+     * BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste gerada de
+     * verdade, pedido #555): nem todo pedido Shopee exige declaração de
+     * conteúdo (ex.: valor baixo dispensa) — zip só com o ZPL, sem PDF
+     * nenhum junto, caía pro painel de declaração desenhado localmente. O
+     * usuário pediu explicitamente "se não tiver, gera normal a etiqueta"
+     * — corrigido pra NÃO compor nada nesse caso, etiqueta sai igual ao
+     * que a Shopee mandou (mesmo comportamento do canal sem declaração
+     * nenhuma no fluxo, ver teste da Shopee "untouched" acima).
      */
-    public function test_attempt_falls_back_to_the_declaration_panel_when_shopee_zip_has_no_declaration_pdf(): void
+    public function test_attempt_generates_the_normal_label_when_shopee_zip_has_no_declaration_pdf(): void
     {
         Storage::fake('local');
         Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
@@ -221,7 +223,10 @@ class LabelFetchServiceTest extends TestCase
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        // Sem composição nenhuma — o resultado é exatamente o PDF que veio
+        // do Labelary (conversão do ZPL), sem painel/declaração desenhada.
+        $this->assertSame(self::minimalPdf(), $labelContents);
+        $this->assertStringNotContainsString('QTD:', $labelContents);
     }
 
     public function test_attempt_uses_the_product_sku_when_one_is_linked(): void

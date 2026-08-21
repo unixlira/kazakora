@@ -13,7 +13,9 @@ use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Notifications\OrderStatusUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -150,6 +152,31 @@ class OrderController extends Controller
         return $ready
             ? back()->with('success', 'Etiqueta ficou pronta agora — o KoraSync já pode imprimir.')
             : back()->with('error', "O {$shipment->channel} ainda não liberou a etiqueta desse envio. Isso é decidido do lado do canal (Shopee/Mercado Livre), não é algo que dá pra forçar — o sistema continua tentando sozinho automaticamente.");
+    }
+
+    /**
+     * Pedido explícito 2026-08-21: reimprimir uma etiqueta já pronta direto
+     * pelo navegador do admin, sem depender do KoraSync — feito no dia em
+     * que o agente local ficou preso (job já visto antes fica pra sempre
+     * marcado localmente, mesmo reaberto no servidor, ver
+     * QueueEngine.SyncFromServerAsync no repo do KoraSync) e nenhum jeito
+     * de reimprimir na hora existia. `inline` (não `attachment`, ver
+     * InvoiceController::danfe()) — abre o PDF direto no visualizador do
+     * navegador, pronto pra Ctrl+P, sem precisar baixar e abrir manual.
+     * Serve o arquivo exatamente como está — não gera nada novo, não
+     * consulta o canal (isso é o que checkLabel() acima já faz).
+     */
+    public function printLabel(Order $order): HttpResponse
+    {
+        $order->loadMissing('channelShipment');
+        $shipment = $order->channelShipment;
+
+        abort_unless($shipment?->label_path && Storage::disk('local')->exists($shipment->label_path), 404, 'Etiqueta ainda não foi baixada pra este pedido.');
+
+        return response(Storage::disk('local')->get($shipment->label_path), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"etiqueta-pedido-{$order->id}.pdf\"",
+        ]);
     }
 
     /**

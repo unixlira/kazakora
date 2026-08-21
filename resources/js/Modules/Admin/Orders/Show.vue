@@ -251,19 +251,35 @@ const cancelInvoice = () => {
                         <p v-if="order.channel_shipment.error_message" class="mt-2 text-sm text-error">
                             {{ order.channel_shipment.error_message }}
                         </p>
-                        <Can permission="pedidos.edit">
-                            <button
-                                v-if="canCheckLabel()"
-                                type="button"
-                                :disabled="checkLabelForm.processing"
-                                title="Consulta o canal (Shopee/ML) agora mesmo e grava a etiqueta se já estiver liberada — o mesmo que o sistema já tenta sozinho automaticamente, só que na hora"
-                                class="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
-                                @click="checkLabel"
+                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                            <Can permission="pedidos.edit">
+                                <button
+                                    v-if="canCheckLabel()"
+                                    type="button"
+                                    :disabled="checkLabelForm.processing"
+                                    title="Consulta o canal (Shopee/ML) agora mesmo e grava a etiqueta se já estiver liberada — o mesmo que o sistema já tenta sozinho automaticamente, só que na hora"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary disabled:cursor-not-allowed disabled:opacity-50"
+                                    @click="checkLabel"
+                                >
+                                    <i class="fas fa-rotate" :class="{ 'animate-spin': checkLabelForm.processing }"></i>
+                                    Verificar etiqueta agora
+                                </button>
+                            </Can>
+                            <!-- Pedido explícito 2026-08-21: reimprimir direto pelo
+                                 navegador, sem depender do KoraSync — abre o PDF já
+                                 pronto (mesmo arquivo que o agente usaria) numa aba
+                                 nova, pronto pra Ctrl+P. Serve pra todo pedido com
+                                 etiqueta já baixada, não só os de hoje. -->
+                            <a
+                                v-if="['label_ready', 'label_downloaded'].includes(order.channel_shipment.status)"
+                                :href="`/admin/pedidos/${order.id}/etiqueta/imprimir`"
+                                target="_blank"
+                                class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary"
                             >
-                                <i class="fas fa-rotate" :class="{ 'animate-spin': checkLabelForm.processing }"></i>
-                                Verificar etiqueta agora
-                            </button>
-                        </Can>
+                                <i class="fas fa-print"></i>
+                                Reimprimir etiqueta
+                            </a>
+                        </div>
                     </div>
                 </div>
 

@@ -262,6 +262,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('pedidos/{order}/verificar-etiqueta', [AdminOrderController::class, 'checkLabel'])
         ->name('pedidos.verificar-etiqueta')
         ->middleware('permission:pedidos.edit');
+    Route::get('pedidos/{order}/etiqueta/imprimir', [AdminOrderController::class, 'printLabel'])
+        ->name('pedidos.etiqueta.imprimir')
+        ->middleware('permission:pedidos.view');
     Route::post('pedidos/{order}/nota/emitir', [InvoiceController::class, 'issue'])
         ->name('pedidos.nota.emitir')
         ->middleware('permission:pedidos.edit');

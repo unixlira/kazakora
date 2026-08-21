@@ -298,16 +298,24 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
+     * Pedido explícito 2026-08-21: reaproveitado por
+     * ShopeeSyncFiscalData (`shopee:sync-fiscal-data`) pra fazer o mesmo
+     * preenchimento em produtos JÁ existentes (não só recém-auto-importados
+     * por autoImportProduct() acima) — mesma regra, mesmo comportamento
+     * testado, só exposto como público e devolvendo se deu certo (tem NCM
+     * na Shopee) pra quem chama poder reportar quais produtos ficaram sem
+     * dado fiscal por falta dele lá na origem.
+     *
      * @param  ?array<string, mixed>  $taxInfo
      */
-    private function importFiscalData(Product $product, ?array $taxInfo): void
+    public function importFiscalData(Product $product, ?array $taxInfo): bool
     {
         $ncm = trim((string) ($taxInfo['ncm'] ?? ''));
 
         // Sem NCM não tem nota fiscal — os outros campos sozinhos não
         // servem pra nada (mesma checagem que NFeXmlBuilderService faria).
         if ($ncm === '') {
-            return;
+            return false;
         }
 
         // Achado real 2026-08-08 (pedido #188): a Shopee às vezes deixa
@@ -350,6 +358,8 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'fci_numero' => trim((string) ($taxInfo['fci_num'] ?? '')) ?: null,
             'informacoes_adicionais' => trim((string) ($taxInfo['additional_info'] ?? '')) ?: null,
         ]);
+
+        return true;
     }
 
     /**

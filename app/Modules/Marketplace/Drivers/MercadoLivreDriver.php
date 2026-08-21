@@ -151,7 +151,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      *
      * @return ?array{external_id: string, name: string, price: ?float, stock: ?int, sku: ?string}
      */
-    private function fetchItemDetail(string $externalId): ?array
+    public function fetchItemDetail(string $externalId): ?array
     {
         $this->ensureConfigured();
 

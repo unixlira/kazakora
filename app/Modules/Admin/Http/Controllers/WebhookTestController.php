@@ -65,6 +65,15 @@ class WebhookTestController extends Controller
             // dispatchShippingConfirmation: false — ver docblock da classe.
             $order = $importService->importNormalized($channel, $data, dispatchShippingConfirmation: false);
 
+            // Defensivo — nenhuma fixture de teste hoje simula status
+            // AWAITING_PAYMENT da Shopee (todas simulam venda paga de
+            // verdade), mas OrderImportService::importNormalized() pode
+            // devolver null nesse caso (ver 2026-08-21) — não deixa isso
+            // virar TypeError se uma fixture futura simular esse status.
+            if (! $order) {
+                return back()->with('error', "Webhook de teste ({$channel}) simulou pagamento pendente — nenhum pedido é criado nesse caso, ver OrderImportService.");
+            }
+
             $this->simulateShippingAndLabel($order, $channel, $data, $timeline, $processor);
         } catch (Throwable $exception) {
             report($exception);

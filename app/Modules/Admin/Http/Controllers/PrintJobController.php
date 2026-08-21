@@ -95,8 +95,19 @@ class PrintJobController extends Controller
         // KoraSync nativo (PrintJobControllerTest::dispatch_queue já
         // reproduzia isso, só nunca tinha sido notado). id crescente é
         // ordem cronológica exata, sem empate possível.
+        // Pedido explícito 2026-08-21: venda do Mercado Livre com entrega
+        // programada pra uma data futura (scheduled_for, ver
+        // MercadoLivreDriver::extractScheduledFor()) não deve aparecer
+        // nessa fila ainda — a etiqueta real só é liberada perto da data
+        // agendada mesmo, então mostrar o pedido aqui dias antes só
+        // confunde quem está separando ("por que não consigo imprimir
+        // isso?"). Some da fila enquanto scheduled_for for uma data futura,
+        // reaparece sozinho no dia (sem precisar de campo/status novo).
         $queue = Order::query()
             ->where('status', Order::STATUS_PAID)
+            ->whereDoesntHave('channelShipment', fn ($query) => $query
+                ->whereNotNull('scheduled_for')
+                ->whereDate('scheduled_for', '>', $today))
             ->with('items:id,order_id,product_name,quantity')
             ->withSum('items as units_count', 'quantity')
             ->orderByDesc('id')

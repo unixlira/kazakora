@@ -11,8 +11,8 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
-use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\MarketplaceClaim;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -40,7 +40,12 @@ class OrderImportService
     ) {
     }
 
-    public function import(string $channel, string $externalOrderId): Order
+    /**
+     * @return Order|null null quando o pedido não foi (e não devia ser)
+     *                     criado — ver importNormalized() pro único caso
+     *                     disso hoje (Shopee com pagamento pendente).
+     */
+    public function import(string $channel, string $externalOrderId): ?Order
     {
         $data = $this->manager->driver($channel)->importOrder($externalOrderId);
 
@@ -55,8 +60,12 @@ class OrderImportService
      * não tem um pedido de verdade em nenhum marketplace pra consultar.
      *
      * @param  array<string, mixed>  $data
+     * @return Order|null null só no caso descrito no bloco logo abaixo do
+     *                     check de $existing (Shopee com pagamento
+     *                     pendente, pedido novo) — em todo outro caso
+     *                     sempre devolve um Order de verdade.
      */
-    public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true): Order
+    public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true): ?Order
     {
         $existing = Order::query()
             ->where('origin', $channel)
@@ -98,6 +107,28 @@ class OrderImportService
             }
 
             return $this->syncStatus($existing, $data['status'], $data['channel_status'] ?? null);
+        }
+
+        // Pedido explícito 2026-08-21: pedido NOVO da Shopee que ainda está
+        // com pagamento pendente (AWAITING_PAYMENT — Pix aguardando
+        // confirmação, cartão em análise etc., ver ShopeeDriver::
+        // mapOrderStatus()) não vira Order nenhum ainda. Motivo real: um
+        // pedido "fantasma" (nunca vai virar venda de verdade se o
+        // pagamento cair) ficava poluindo a lista de Pedidos e a fila de
+        // separação/impressão pra sempre, sem nenhuma venda real por trás.
+        // Quando o pagamento realmente confirmar, a Shopee reentrega o
+        // webhook com o status pago — nenhum $existing é achado (porque
+        // nunca criamos nada agora), então cai em createOrder() normalmente
+        // dessa vez. Só Shopee: Mercado Livre/Amazon continuam criando o
+        // pedido em qualquer status, comportamento não mudou pra eles (o
+        // status "pendente" deles já significa outra coisa no fluxo real).
+        if ($channel === MarketplaceAccount::CHANNEL_SHOPEE && $data['status'] === Order::STATUS_AWAITING_PAYMENT) {
+            Log::info('marketplace.order_import.skipped_pending_payment', [
+                'channel' => $channel,
+                'external_order_id' => $data['external_order_id'],
+            ]);
+
+            return null;
         }
 
         try {
@@ -371,25 +402,37 @@ class OrderImportService
                 );
             }
 
-            // Etiqueta e nota fiscal são dois pipelines paralelos e
-            // independentes a partir daqui — nenhum bloqueia o outro. Antes,
-            // a confirmação de envio só disparava depois que a nota fiscal
-            // era emitida E aceita pelo canal; com o certificado da NF-e
-            // quebrado, isso travava a etiqueta inteira também. Agora a
-            // etiqueta anda sozinha assim que o pedido é pago, e a nota
-            // fiscal segue seu próprio caminho (fila dedicada, ver
-            // GenerateInvoiceJob) sem afetar o envio.
+            // REVERTIDO 2026-08-21, pedido explícito (decisão consciente,
+            // usuário avisado do risco antes de confirmar "todos os
+            // canais"): nota fiscal volta a andar ANTES do envio/etiqueta,
+            // pra QUALQUER canal — não dispara mais ConfirmChannelShippingJob
+            // direto daqui. Quem dispara agora é GenerateInvoiceJob (nota
+            // AUTHORIZED -> SubmitInvoiceToChannelJob -> só depois que o
+            // canal aceita de verdade -> ChannelInvoiceSubmissionService::
+            // submit() dispara ConfirmChannelShippingJob; nota EXTERNAL —
+            // canal já emite a própria, nada a enviar — o próprio
+            // GenerateInvoiceJob dispara direto, ver lá).
+            //
+            // Risco aceito conscientemente (documentado aqui pra não ser
+            // esquecido): isso é EXATAMENTE o comportamento antigo que foi
+            // trocado por este daqui (ver histórico) porque um certificado
+            // de NF-e quebrado travava a etiqueta de TODO pedido de TODO
+            // canal junto com a nota. Voltando a essa ordem, esse mesmo
+            // risco volta a existir — se a emissão de nota parar de
+            // funcionar (certificado vencido, SEFAZ fora do ar por muito
+            // tempo etc.), nenhuma etiqueta de nenhum canal sai enquanto
+            // isso não for resolvido. Trade-off pedido explicitamente pelo
+            // usuário, sabendo disso.
             if ($data['status'] === Order::STATUS_PAID) {
                 // Desligado pela tela de teste de webhook: o pedido fake não
-                // existe de verdade no canal, então confirmar o envio pela
-                // API real (ConfirmChannelShippingJob -> driver real) só
-                // devolveria erro. O controller de teste simula esse trecho
-                // diretamente em vez de disparar o job real.
+                // existe de verdade no canal, então tanto a nota fiscal
+                // quanto a confirmação de envio pela API real só dariam
+                // erro contra um external_order_id que não existe. O
+                // controller de teste simula esse trecho inteiro localmente
+                // em vez de disparar os jobs reais.
                 if ($dispatchShippingConfirmation) {
-                    ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
+                    GenerateInvoiceJob::dispatch($order->id)->afterCommit();
                 }
-
-                GenerateInvoiceJob::dispatch($order->id)->afterCommit();
             }
 
             $this->recordReturnClaimIfNeeded($order, $data['channel_status'] ?? null);
@@ -641,7 +684,9 @@ class OrderImportService
         }
 
         if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
-            ConfirmChannelShippingJob::dispatch($order->id);
+            // Mesma mudança de createOrder() (ver comentário lá) — nota
+            // fiscal primeiro, ConfirmChannelShippingJob não dispara mais
+            // direto daqui.
             GenerateInvoiceJob::dispatch($order->id);
         }
 

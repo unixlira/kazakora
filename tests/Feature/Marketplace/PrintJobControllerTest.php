@@ -4,6 +4,7 @@ namespace Tests\Feature\Marketplace;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -79,6 +80,69 @@ class PrintJobControllerTest extends TestCase
             ->where('queue.0.products.0', '2x Fone Bluetooth')
             ->where('queue.1.id', $older->id)
             ->where('queue.1.unitsCount', 1));
+    }
+
+    /**
+     * Pedido explícito 2026-08-21: venda do Mercado Livre com entrega
+     * programada pra uma data FUTURA não deve aparecer na fila de
+     * separação ainda (a etiqueta real só libera perto da data). Some da
+     * fila enquanto scheduled_for for futuro, reaparece sozinho no dia
+     * (testado abaixo) — sem precisar de status novo nenhum.
+     */
+    public function test_dispatch_queue_hides_a_mercado_livre_order_scheduled_for_a_future_date(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $futureScheduled = $this->makeOrder(Order::STATUS_PAID, 'mercado_livre');
+        $futureScheduled->items()->create(['product_name' => 'Produto agendado', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+        ChannelShipment::create([
+            'order_id' => $futureScheduled->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-FUTURO',
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now(),
+            'scheduled_for' => now()->addDays(3)->startOfDay(),
+        ]);
+
+        $normal = $this->makeOrder(Order::STATUS_PAID, 'mercado_livre');
+        $normal->items()->create(['product_name' => 'Produto normal', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->actingAs($admin)->get('/admin/impressoes');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('queue', 1)
+            ->where('queue.0.id', $normal->id));
+    }
+
+    /**
+     * Mesmo cenário acima, mas com scheduled_for chegando em HOJE (a
+     * etiqueta é liberada perto da data) — reaparece na fila sozinho, sem
+     * precisar de nenhuma ação manual.
+     */
+    public function test_dispatch_queue_shows_a_scheduled_order_once_its_date_arrives(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $scheduledForToday = $this->makeOrder(Order::STATUS_PAID, 'mercado_livre');
+        $scheduledForToday->items()->create(['product_name' => 'Produto do dia', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+        ChannelShipment::create([
+            'order_id' => $scheduledForToday->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-HOJE',
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now(),
+            'scheduled_for' => now()->startOfDay(),
+        ]);
+
+        $response = $this->actingAs($admin)->get('/admin/impressoes');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->has('queue', 1)
+            ->where('queue.0.id', $scheduledForToday->id));
     }
 
     public function test_channel_counts_exclude_shein_and_store_origin(): void

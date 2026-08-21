@@ -69,6 +69,16 @@ class OrderImportController extends Controller
             );
         }
 
+        // Pedido explícito 2026-08-21: Shopee com pagamento ainda pendente
+        // não vira Order nenhum (ver OrderImportService::importNormalized())
+        // — null aqui é esse caso normal, não uma falha.
+        if (! $order) {
+            return back()->withInput()->with(
+                'error',
+                "Esse pedido do {$this->channelLabel($validated['channel'])} ainda está com pagamento pendente — não é importado até o pagamento ser confirmado no canal."
+            );
+        }
+
         // Envio/etiqueta/nota fiscal são disparados de dentro do próprio
         // import() (afterCommit) quando o pedido já vem pago — mesma fila
         // assíncrona que um webhook real usaria, por isso a mensagem avisa

@@ -155,7 +155,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * baixar+re-hospedar arquivo de verdade, fora do escopo de "puxar
      * dados do item", tratar como feature própria se for pedida depois.
      *
-     * @return ?array{external_id: string, name: string, price: ?float, description: ?string, stock: ?int, tax_info: ?array<string, mixed>}
+     * @return ?array{external_id: string, name: string, price: ?float, description: ?string, stock: ?int, tax_info: ?array<string, mixed>, sku: ?string}
      */
     public function fetchItemDetail(string $externalId): ?array
     {
@@ -193,6 +193,15 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 ? (int) $item['stock_info_v2']['summary_info']['total_available_stock']
                 : null,
             'tax_info' => $item['tax_info'] ?? null,
+            // SKU real cadastrado na Shopee (`item_sku`, já vem no
+            // get_item_base_info sem precisar de response_optional_fields —
+            // ver fetchItemSkus()) — usado por autoImportProduct() pra
+            // achar um produto local JÁ existente com esse mesmo SKU antes
+            // de criar um produto novo (achado real 2026-08-21: pedido
+            // criava produto duplicado com SKU sintético "SHOPEE-{id}"
+            // mesmo quando o produto certo, com o SKU de verdade, já
+            // existia — nunca checava isso).
+            'sku' => trim((string) ($item['item_sku'] ?? '')) ?: null,
         ];
     }
 
@@ -215,6 +224,16 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * chama já sabia lidar com "sem produto vinculado" antes disso existir,
      * um retorno null só mantém esse mesmo comportamento em vez de travar
      * o pedido inteiro.
+     *
+     * BUG REAL 2026-08-21: criava produto NOVO (SKU sintético
+     * "SHOPEE-{id}") mesmo quando o produto certo já existia no catálogo
+     * local com o SKU de verdade (`item_sku`) cadastrado — nunca checava
+     * isso antes de criar. Gerava produto duplicado com estoque
+     * desconectado do produto real (a baixa de estoque de uma venda caía
+     * no duplicado, nunca no produto de verdade). Casa pelo SKU real da
+     * Shopee primeiro — só cai pro SKU sintético (cria produto novo mesmo)
+     * quando a Shopee não tem SKU cadastrado pra esse anúncio ou quando não
+     * existe produto local com esse SKU ainda.
      */
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
@@ -222,6 +241,15 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         if (! $item || $item['name'] === '' || $item['price'] === null) {
             return null;
+        }
+
+        if ($item['sku'] && $existing = Product::where('sku', $item['sku'])->first()) {
+            ProductChannelListing::query()->firstOrCreate(
+                ['channel' => MarketplaceAccount::CHANNEL_SHOPEE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
+                ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
+            );
+
+            return $existing;
         }
 
         $sku = 'SHOPEE-'.$externalId;

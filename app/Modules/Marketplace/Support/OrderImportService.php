@@ -254,18 +254,30 @@ class OrderImportService
                         // Só faz sentido comparar model_id quando ESTE
                         // item de fato tem um (anúncio sem variação
                         // nenhuma não tem irmão pra procurar).
-                        $siblingProduct = $externalModelId !== null
-                            ? (clone $listingQuery)
-                                ->whereNotNull('external_model_id')
-                                ->where('external_model_id', '!=', $externalModelId)
-                                ->first()
-                                ?->product
-                            : null;
+                        // Achado real 2026-08-21: autoImportProduct() agora
+                        // pode devolver um produto JÁ EXISTENTE (casado pelo
+                        // SKU real do canal, ver ShopeeDriver/MercadoLivreDriver
+                        // ::autoImportProduct()) em vez de sempre criar um
+                        // novo. Aninhar como variação só faz sentido pra
+                        // produto recém-criado de verdade — `$product` já
+                        // existente casado por SKU é a fonte de verdade mais
+                        // forte que existe, não faz sentido a heurística de
+                        // "irmão" tentar virar isso um filho de outro
+                        // produto por cima.
+                        if ($product->wasRecentlyCreated) {
+                            $siblingProduct = $externalModelId !== null
+                                ? (clone $listingQuery)
+                                    ->whereNotNull('external_model_id')
+                                    ->where('external_model_id', '!=', $externalModelId)
+                                    ->first()
+                                    ?->product
+                                : null;
 
-                        if ($siblingProduct && ! $siblingProduct->parent_product_id && $siblingProduct->children()->doesntExist()) {
-                            $product->update(['parent_product_id' => $siblingProduct->id]);
-                        } elseif ($siblingProduct?->parent_product_id) {
-                            $product->update(['parent_product_id' => $siblingProduct->parent_product_id]);
+                            if ($siblingProduct && ! $siblingProduct->parent_product_id && $siblingProduct->children()->doesntExist()) {
+                                $product->update(['parent_product_id' => $siblingProduct->id]);
+                            } elseif ($siblingProduct?->parent_product_id) {
+                                $product->update(['parent_product_id' => $siblingProduct->parent_product_id]);
+                            }
                         }
                     }
                 }

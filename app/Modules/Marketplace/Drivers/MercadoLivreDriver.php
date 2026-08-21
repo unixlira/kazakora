@@ -149,7 +149,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * primeira nota — mesmo estado que a Shopee já deixa quando o vendedor
      * não cadastrou tax_info lá.
      *
-     * @return ?array{external_id: string, name: string, price: ?float, stock: ?int}
+     * @return ?array{external_id: string, name: string, price: ?float, stock: ?int, sku: ?string}
      */
     private function fetchItemDetail(string $externalId): ?array
     {
@@ -170,11 +170,20 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             return null;
         }
 
+        // SKU real cadastrado no anúncio — confirmado ao vivo 2026-08-21:
+        // NÃO vem no campo `seller_custom_field` (sempre null pra essa
+        // conta), vem dentro de `attributes` com id="SELLER_SKU" (é
+        // literalmente o campo "SKU" que aparece no painel do vendedor).
+        // Usado por autoImportProduct() pra achar um produto local JÁ
+        // existente com esse mesmo SKU antes de criar um produto novo.
+        $sellerSkuAttribute = collect($item['attributes'] ?? [])->firstWhere('id', 'SELLER_SKU');
+
         return [
             'external_id' => (string) $item['id'],
             'name' => (string) ($item['title'] ?? ''),
             'price' => isset($item['price']) ? (float) $item['price'] : null,
             'stock' => isset($item['available_quantity']) ? (int) $item['available_quantity'] : null,
+            'sku' => trim((string) ($sellerSkuAttribute['value_name'] ?? '')) ?: null,
         ];
     }
 
@@ -190,6 +199,16 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      *
      * Retorna null (sem lançar) se o ML não devolver o item — quem chama já
      * sabia lidar com "sem produto vinculado" antes disso existir.
+     *
+     * BUG REAL 2026-08-21: criava produto NOVO (SKU sintético "ML-{id}")
+     * mesmo quando o produto certo já existia no catálogo local com o SKU
+     * de verdade cadastrado (`SELLER_SKU`, ver fetchItemDetail()) — nunca
+     * checava isso antes de criar. Produto duplicado com estoque
+     * desconectado do produto real (a baixa de uma venda caía no
+     * duplicado, nunca no produto de verdade). Casa pelo SKU real do ML
+     * primeiro — só cai pro SKU sintético (cria produto novo mesmo) quando
+     * o anúncio não tem SKU cadastrado ou quando não existe produto local
+     * com esse SKU ainda.
      */
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
@@ -197,6 +216,15 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
         if (! $item || $item['name'] === '' || $item['price'] === null) {
             return null;
+        }
+
+        if ($item['sku'] && $existing = Product::where('sku', $item['sku'])->first()) {
+            ProductChannelListing::query()->firstOrCreate(
+                ['channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
+                ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
+            );
+
+            return $existing;
         }
 
         $sku = 'ML-'.$externalId;

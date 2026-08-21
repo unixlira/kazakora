@@ -41,23 +41,27 @@ class InvoiceService
     {
         $order->loadMissing('invoice');
 
-        // Mercado Livre emite a própria NF-e pro vendedor (confirmado ao
-        // vivo 2026-08-02 — chave de acesso real, mesmo CNPJ/CPF do
-        // pedido, DANFE deles) — e a própria API confirmou isso de novo
-        // 2026-08-12 ("Access denied, you must use the biller of
-        // MercadoLibre" ao tentar enviar nota nossa pro pedido #243).
-        // Tentar emitir aqui também duplicaria a nota fiscal da mesma
-        // venda — problema real de conformidade, não só redundância.
-        if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
-            return $order->invoice ?? Invoice::create([
-                'order_id' => $order->id,
-                'status' => Invoice::STATUS_EXTERNAL,
-                'ambiente' => config('nfe.ambiente'),
-                'serie' => 0,
-                'numero' => $order->id,
-                'valor_total' => $order->total,
-            ]);
-        }
+        // ATÉ 2026-08-21, pedidos do Mercado Livre paravam aqui: a conta
+        // estava configurada pro PRÓPRIO Mercado Livre emitir a NF-e do
+        // vendedor (confirmado ao vivo 2026-08-02 — chave de acesso real,
+        // mesmo CNPJ/CPF do pedido, DANFE deles), e submeter nota nossa em
+        // cima disso era rejeitado pela API ("Access denied, you must use
+        // the biller of MercadoLibre", pedido #243, 2026-08-12) e
+        // duplicaria a nota. O usuário reconfigurou a emissão fiscal da
+        // conta ML pra "emissor próprio" (self-billing) nesse dia — a
+        // API voltou a aceitar `packs/{id}/fiscal_documents` (ver
+        // MercadoLivreDriver::submitInvoice()), confirmado ao vivo nos
+        // pedidos #390/#411/#543, que estavam com o envio travado no
+        // Mercado Livre em substatus=invoice_pending exatamente por nunca
+        // ter recebido nota nenhuma. A partir daqui, pedido do Mercado
+        // Livre segue o MESMO fluxo de emissão real de qualquer outro
+        // canal (Shopee/Amazon já emitiam nota própria normalmente) —
+        // GenerateInvoiceJob já dispara SubmitInvoiceToChannelJob quando
+        // autorizada, pra qualquer origin fora de STORE/MANUAL_INVOICE.
+        // Pedido antigo que ficou com Invoice.status=STATUS_EXTERNAL (da
+        // era anterior a essa mudança) é convertido em pendente de verdade
+        // pelo bloco convertExternalToPending() logo abaixo, reaproveitando
+        // a mesma linha em vez de duplicar.
 
         if ($order->invoice && in_array($order->invoice->status, [
             Invoice::STATUS_AUTHORIZED,
@@ -83,7 +87,7 @@ class InvoiceService
         }
 
         // Pedido antigo que ficou marcado como STATUS_EXTERNAL (Mercado
-        // Livre, antes da mudança 2026-08-12 acima) nunca teve XML/numero
+        // Livre, antes da mudança 2026-08-21 acima) nunca teve XML/numero
         // real reservado — trata como se não existisse nenhuma nota ainda,
         // mas reaproveitando a MESMA linha (order_id é unique) em vez de
         // tentar criar uma nova, que violaria a constraint.

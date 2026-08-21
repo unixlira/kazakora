@@ -10,7 +10,6 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
-use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\InvoiceIssuanceFailedNotification;
@@ -131,29 +130,17 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             // não existe, falhavam 6 vezes em ~3h e disparavam um alerta de
             // erro pros admins do nada.
             //
-            // REVERTIDO 2026-08-21, pedido explícito (ver OrderImportService
-            // pro histórico completo/risco aceito): nota fiscal validada e
-            // enviada ANTES da etiqueta, pra qualquer canal — daqui é que
-            // parte o "depois tentar pegar etiqueta" agora, não mais direto
-            // na importação do pedido.
-            if (! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE], true)) {
-                if ($invoice->status === Invoice::STATUS_AUTHORIZED) {
-                    // Nota nossa, autorizada: envia pro canal via API — só
-                    // DEPOIS que o canal aceitar de verdade (ver
-                    // ChannelInvoiceSubmissionService::submit()) é que a
-                    // confirmação de envio/etiqueta é disparada.
-                    SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
-                } elseif ($invoice->status === Invoice::STATUS_EXTERNAL) {
-                    // Nota emitida pelo próprio canal — nada nosso pra
-                    // enviar (SubmitInvoiceToChannelJob nem faria sentido
-                    // aqui). O canal já sabe da nota própria dele, então a
-                    // "validação de nota antes da etiqueta" já está
-                    // satisfeita — confirma o envio direto.
-                    ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
-                }
-                // Nenhum outro status (PENDING/REJECTED/DENIED) dispara
-                // confirmação de envio — de propósito, ver risco aceito
-                // documentado em OrderImportService::createOrder().
+            // REVERTIDO DE VOLTA 2026-08-21 (mesmo dia — ver
+            // OrderImportService::createOrder() pro histórico completo): a
+            // tentativa de "nota antes do envio" travou uma venda real da
+            // Shopee esperando ~3h a Shopee aceitar a nota antes de sequer
+            // tentar confirmar o envio. Nota nossa autorizada só envia pro
+            // canal via API — não dispara mais confirmação de
+            // envio/etiqueta daqui (isso já dispara direto na importação do
+            // pedido, em paralelo, ver OrderImportService).
+            if ($invoice->status === Invoice::STATUS_AUTHORIZED
+                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE], true)) {
+                SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
             }
         } catch (ValidatorException $exception) {
             // XML inválido localmente (barrado pelo validador do sped-nfe

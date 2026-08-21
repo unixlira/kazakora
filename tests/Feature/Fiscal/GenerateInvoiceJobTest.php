@@ -97,16 +97,7 @@ class GenerateInvoiceJobTest extends TestCase
         Queue::assertPushed(SendOrderReceiptEmailJob::class, fn (SendOrderReceiptEmailJob $job) => $job->orderId === $order->id);
     }
 
-    /**
-     * REVERTIDO 2026-08-21, pedido explícito (ver OrderImportService::
-     * createOrder() pro histórico/risco aceito): ConfirmChannelShippingJob
-     * não dispara mais direto na importação do pedido — a nota fiscal
-     * anda primeiro, e é ESTE job quem dispara a confirmação de envio
-     * depois. Canal EXTERNAL (nota já emitida pelo próprio canal, nada
-     * nosso a submeter) confirma o envio direto, sem esperar
-     * SubmitInvoiceToChannelJob (que nem faria sentido rodar aqui).
-     */
-    public function test_handle_confirms_shipping_directly_when_invoice_is_external(): void
+    public function test_handle_logs_success_and_does_not_submit_invoice_to_channel_when_invoice_is_external(): void
     {
         Queue::fake();
         $order = $this->makeOrder();
@@ -126,33 +117,12 @@ class GenerateInvoiceJobTest extends TestCase
         ]);
 
         // Canal já emitiu a própria nota — não faz sentido submeter nota
-        // nossa (não existe uma de verdade), mas a "validação de nota antes
-        // da etiqueta" já está satisfeita (canal já sabe da nota dele), daí
-        // confirma o envio direto.
-        Queue::assertPushed(ConfirmChannelShippingJob::class, fn (ConfirmChannelShippingJob $job) => $job->orderId === $order->id);
+        // nossa (não existe uma de verdade). Confirmação de envio/etiqueta
+        // não é responsabilidade deste job — dispara direto na importação
+        // do pedido (OrderImportService), em paralelo com a nota.
+        Queue::assertNotPushed(ConfirmChannelShippingJob::class);
         Queue::assertNotPushed(SubmitInvoiceToChannelJob::class);
         Queue::assertPushed(SendOrderReceiptEmailJob::class);
-    }
-
-    /**
-     * Nota nossa autorizada: a confirmação de envio NÃO dispara ainda
-     * aqui — só depois que o canal aceitar a nota de verdade (ver
-     * ChannelInvoiceSubmissionService::submit()).
-     */
-    public function test_handle_does_not_confirm_shipping_yet_when_invoice_still_needs_submitting(): void
-    {
-        Queue::fake();
-        $order = $this->makeOrder();
-        $order->update(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1']);
-        $invoice = Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_AUTHORIZED, 'numero' => 1]);
-
-        $invoices = Mockery::mock(InvoiceService::class);
-        $invoices->shouldReceive('issue')->once()->andReturn($invoice);
-
-        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
-
-        Queue::assertPushed(SubmitInvoiceToChannelJob::class, fn (SubmitInvoiceToChannelJob $job) => $job->orderId === $order->id);
-        Queue::assertNotPushed(ConfirmChannelShippingJob::class);
     }
 
     public function test_handle_logs_a_clear_failed_message_when_blocked_by_missing_certificate(): void

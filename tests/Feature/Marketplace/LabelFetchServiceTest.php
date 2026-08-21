@@ -156,87 +156,49 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Pedido explícito 2026-08-21 (versão final do dia, confirmada pelo
-     * usuário baixando direto do painel da Shopee): o MESMO zip que traz o
-     * ZPL da etiqueta térmica também traz um PDF com a declaração de
-     * conteúdo — sem chamada de API separada nenhuma (ver
-     * LabelFetchService::extractShopeeZipContents()). A declaração vai na
-     * metade direita, sem faixa de SKU/QTD por cima (o documento real já
-     * lista os produtos).
+     * REVERTIDO 2026-08-21 (mesmo dia, 2ª vez — ver docblock de
+     * LabelFetchService::CHANNELS_WITH_DECLARATION pro histórico
+     * completo): composeSideBySideLabel() espremeu o código de barras do
+     * Mercado Livre até ficar ilegível numa etiqueta real, de novo. Volta
+     * a ser overlayDeclarationFooter() — etiqueta da Shopee sai retrato, 1
+     * página só, com a faixa "SKU | QTD" no rodapé da própria etiqueta,
+     * sem dividir nem espremer nada.
      */
-    public function test_attempt_shows_the_real_shopee_declaration_from_the_same_zip(): void
+    public function test_attempt_adds_the_declaration_footer_for_shopee(): void
     {
         Storage::fake('local');
-        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
-
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
-
-        $zip = self::buildZip([
-            'thermal_zpl_shipping_label.txt' => '^XA^FO50,50^A0N,50,50^FDTeste^FS^XZ',
-            'declaration.pdf' => self::minimalPdf(),
-        ]);
-
-        $this->mockDriver(['ready' => true, 'contents' => $zip, 'content_type' => 'application/force-download'], MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertStringNotContainsString('QTD:', $labelContents, 'documento real já traz os produtos, sem faixa sobreposta');
+        // O item de makeShipment() não tem product_id (sem SKU cadastrado),
+        // então cai no fallback pro nome do produto.
+        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
 
+        // Sobreposição na mesma página, NUNCA página extra — pedido
+        // explícito 2026-08-15.
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $labelContents);
 
         try {
-            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath), 'sempre 1 etiqueta física só');
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
         } finally {
             @unlink($tempPath);
         }
     }
 
-    /**
-     * BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste gerada de
-     * verdade, pedido #555): nem todo pedido Shopee exige declaração de
-     * conteúdo (ex.: valor baixo dispensa) — zip só com o ZPL, sem PDF
-     * nenhum junto, caía pro painel de declaração desenhado localmente. O
-     * usuário pediu explicitamente "se não tiver, gera normal a etiqueta"
-     * — corrigido pra NÃO compor nada nesse caso, etiqueta sai igual ao
-     * que a Shopee mandou (mesmo comportamento do canal sem declaração
-     * nenhuma no fluxo, ver teste da Shopee "untouched" acima).
-     */
-    public function test_attempt_generates_the_normal_label_when_shopee_zip_has_no_declaration_pdf(): void
-    {
-        Storage::fake('local');
-        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
-
-        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
-
-        $zip = self::buildZip([
-            'thermal_zpl_shipping_label.txt' => '^XA^FO50,50^A0N,50,50^FDTeste^FS^XZ',
-        ]);
-
-        $this->mockDriver(['ready' => true, 'contents' => $zip, 'content_type' => 'application/force-download'], MarketplaceAccount::CHANNEL_SHOPEE);
-
-        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
-
-        $this->assertTrue($ready);
-        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
-
-        // Sem composição nenhuma — o resultado é exatamente o PDF que veio
-        // do Labelary (conversão do ZPL), sem painel/declaração desenhada.
-        $this->assertSame(self::minimalPdf(), $labelContents);
-        $this->assertStringNotContainsString('QTD:', $labelContents);
-    }
-
     public function test_attempt_uses_the_product_sku_when_one_is_linked(): void
     {
         Storage::fake('local');
-        $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
         $product = \App\Modules\Catalog\Models\Product::factory()->create(['sku' => 'ORG-KIT-BEGE-0001']);
         $shipment->order->items()->first()->update(['product_id' => $product->id, 'quantity' => 3]);
 
-        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf']);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 
@@ -247,19 +209,16 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre): a etiqueta real
-     * dele sempre vem com uma DANFE simplificada numa 2ª página, e a
-     * declaração de conteúdo passou a valer pra esse canal também (não só
-     * pra venda agendada, ver teste abaixo). raw_label_path continua
-     * guardando a etiqueta original intacta (com a DANFE) à parte — só a
-     * versão física impressa (label_path) muda.
-     *
-     * Este teste usa um mock de 1 página só (sem DANFE) — cobre o
-     * fallback pro painel de declaração cheio (composeSideBySideLabel()
-     * com $rightSide='danfe' mas $pageCount<2). O caso real (2 páginas,
-     * DANFE de verdade na direita) é o teste seguinte.
+     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre): até aqui a
+     * etiqueta do ML passava intacta, sem declaração nenhuma — a etiqueta
+     * real dele sempre vem com uma DANFE simplificada numa 2ª página, e a
+     * declaração de conteúdo passou a valer pra esse canal também. Este
+     * teste usa um mock de 1 página só (sem DANFE) — cobre o fallback de
+     * overlayDeclarationFooter(targetPage: 'last') pra página 1 quando não
+     * existe 2ª página (nunca quebra, ver LabelProcessingServiceTest). O
+     * caso real (2 páginas, DANFE de verdade) é o teste seguinte.
      */
-    public function test_attempt_adds_the_declaration_panel_for_mercado_livre(): void
+    public function test_attempt_adds_the_declaration_footer_for_mercado_livre(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(); // canal default: Mercado Livre
@@ -281,35 +240,38 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * BUG REAL 2026-08-21 (feedback do usuário vendo a etiqueta impressa):
-     * a metade direita do Mercado Livre tem que ser a DANFE de verdade (2ª
-     * página original, com a chave de acesso) — não o painel de texto
-     * genérico, que é só o fallback pra quando não existe DANFE nenhuma
-     * (ver teste acima). A etiqueta real do ML sempre vem em 2 páginas —
-     * este é o caso que acontece de verdade em produção.
+     * BUG REAL 2026-08-21 (feedback do usuário vendo a etiqueta física
+     * impressa, 2 vezes seguidas no mesmo dia): a etiqueta real do ML
+     * sempre vem em 2 páginas — a faixa de declaração vai na 2ª (DANFE
+     * simplificada, área "DADOS ADICIONAIS" que já vem vazia), NUNCA na 1ª
+     * (colidiria com o endereço). overlayDeclarationFooter() NUNCA cria
+     * página extra nem funde páginas — as 2 originais continuam intactas,
+     * resultando em 2 folhas físicas por pedido do ML (aceito
+     * conscientemente pelo usuário: código de barras legível > economia
+     * de papel — composeSideBySideLabel(), que forçava 1 página só,
+     * espremia o código de barras até ficar ilegível, motivo real do
+     * revert).
      */
-    public function test_attempt_shows_the_real_danfe_page_on_the_right_half_for_mercado_livre(): void
+    public function test_attempt_targets_the_danfe_page_for_mercado_livre(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(); // canal default: Mercado Livre
-        $this->mockDriver(['ready' => true, 'contents' => self::minimalTwoPagePdf(), 'content_type' => 'application/pdf']);
+        $rawPdf = self::minimalTwoPagePdf();
+        $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        // Declaração ainda entra (faixa fina no rodapé da metade direita,
-        // não o painel cheio) e a etiqueta continua sendo 1 página física
-        // só, mesmo com 2 páginas de origem.
+        $this->assertNotSame($rawPdf, $labelContents);
         $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
-        $this->assertStringNotContainsString('DECLARA', $labelContents, 'não usa o painel cheio quando tem DANFE de verdade');
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $labelContents);
 
         try {
-            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+            $this->assertSame(2, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath), 'as 2 páginas originais continuam — código de barras da 1ª página intacto');
         } finally {
             @unlink($tempPath);
         }

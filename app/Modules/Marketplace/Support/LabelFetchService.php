@@ -34,25 +34,18 @@ class LabelFetchService
      *
      * Mercado Livre ENTROU nessa lista 2026-08-21 (antes só entrava via
      * $isScheduled abaixo) — achado real numa venda de verdade: a etiqueta
-     * dele sempre vem com uma DANFE simplificada numa 2ª página, e a
-     * declaração precisa ir na etiqueta física de qualquer forma, agendada
-     * ou não. Ver LabelProcessingService::composeSideBySideLabel() pro
-     * layout novo (etiqueta original + declaração lado a lado numa única
-     * etiqueta física, em vez de sobrepor por cima) — a 2ª página (DANFE)
-     * não vai mais pro papel térmico, só continua arquivada intacta em
-     * raw_label_path.
+     * dele sempre vem com uma DANFE simplificada numa 2ª página. Passou por
+     * uma tentativa de layout combinado numa página só
+     * (LabelProcessingService::composeSideBySideLabel(), método ainda
+     * existe mas não é mais chamado daqui) — REVERTIDA no mesmo dia, 2
+     * vezes seguidas: espremia o código de barras real até ficar ilegível.
+     * Hoje usa overlayDeclarationFooter(targetPage: 'last') — a etiqueta
+     * original nunca é redimensionada, a faixa de SKU/QTD vai na 2ª página
+     * (DANFE), resultando em 2 folhas físicas por pedido do ML (aceito
+     * conscientemente: código de barras legível > economia de papel).
      *
-     * Shopee saiu e VOLTOU pra essa lista no mesmo dia (histórico real, sem
-     * apagar pra não repetir a volta e meia): tentativa 1 tirou Shopee
-     * daqui achando que a declaração real dela era só um documento externo
-     * ao Kazakora, sem nada a baixar; tentativa 2 tentou uma chamada de API
-     * extra pra buscar separado (chute sem confirmação, removido); versão
-     * final, confirmada pelo usuário: o PRÓPRIO zip que fetchLabel() já
-     * baixa (pro ZPL da etiqueta) vem com um PDF de declaração junto, sem
-     * chamada nenhuma a mais — ver extractShopeeZipContents() mais abaixo.
-     * É um PDF SEPARADO da etiqueta térmica (não uma 2ª página do mesmo
-     * arquivo, como o ML) — por isso usa $rightSide='external' com um 2º
-     * PDF em vez de 'danfe'.
+     * Shopee usa overlayDeclarationFooter(targetPage: 'first', default) —
+     * etiqueta é 1 página só, retrato, faixa no rodapé dela mesma.
      *
      * EXCEÇÃO explícita 2026-08-17: um envio com entrega programada
      * (scheduled_for preenchido, ver ChannelShipment/extractScheduledFor())
@@ -142,21 +135,15 @@ class LabelFetchService
         // LabelProcessingService::convertZplToPdf() (já existia, usado só
         // na tela de teste manual).
         //
-        // Pedido explícito 2026-08-21: pro caso Shopee, esse MESMO zip já
-        // vem com a declaração de conteúdo em PDF junto (confirmado pelo
-        // usuário baixando direto do painel da Shopee) — extrai os dois
-        // juntos aqui em vez de uma chamada de API separada (ver
-        // extractShopeeZipContents() e o histórico removido de
-        // ShopeeDriver::fetchContentDeclaration()).
-        $shopeeDeclarationPdf = null;
-
+        // A extração também sabe pegar um PDF de declaração de conteúdo
+        // que às vezes vem junto no mesmo zip da Shopee (ver
+        // extractShopeeZipContents()) — não usado no fluxo automático
+        // desde a volta pro overlayDeclarationFooter() logo abaixo
+        // (histórico do dia: composeSideBySideLabel() usava isso pra
+        // mostrar a declaração real lado a lado, revertido de volta pro
+        // overlay simples). Fica disponível pra quem quiser reativar.
         if (str_starts_with($contents, "PK\x03\x04")) {
-            $zipResult = $this->extractShopeeZipContents(
-                $contents,
-                alsoExtractDeclarationPdf: $shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE,
-            );
-            $contents = $zipResult['zpl'];
-            $shopeeDeclarationPdf = $zipResult['declaration_pdf'];
+            $contents = $this->extractShopeeZipContents($contents)['zpl'];
         }
 
         // A etiqueta real da Shopee começa com "~DG" (comando ZPL de
@@ -216,54 +203,33 @@ class LabelFetchService
                     ? sprintf('Pedido agendado dia %s | Pedido nº %d', $shipment->scheduled_for->format('d/m/Y'), $shipment->order_id)
                     : null;
 
-                // Pedido explícito 2026-08-21: etiqueta original + metade
-                // direita lado a lado numa etiqueta física só
-                // (composeSideBySideLabel()), não mais sobreposta por cima
-                // (overlayDeclarationFooter() — risco real de colisão, foi o
-                // que atropelou o endereço numa etiqueta real do Mercado
-                // Livre). Mercado Livre mostra a DANFE de verdade (2ª página
-                // original, com a chave de acesso) na metade direita — a
-                // declaração de SKU ainda entra, só que como faixa fina no
-                // rodapé dessa metade (área "DADOS ADICIONAIS" que já vem
-                // vazia na DANFE real).
+                // REVERTIDO 2026-08-21 (mesmo dia, 2ª vez): composeSideBySideLabel()
+                // (etiqueta original + declaração lado a lado numa página
+                // deitada só) espremeu o código de barras do Mercado Livre
+                // até ficar ilegível numa etiqueta física real — de novo,
+                // mesmo depois da correção de largura nativa (ver histórico
+                // completo no docblock de LabelProcessingService::
+                // composeSideBySideLabel(), que continua existindo, só não
+                // é mais chamado daqui). Pedido explícito do usuário: voltar
+                // pro overlayDeclarationFooter() de sempre — NÃO redimensiona
+                // nem divide a etiqueta original nenhum pixel, só desenha uma
+                // faixa fina "SKU | QTD" por cima da própria etiqueta (ou de
+                // uma página extra dela, ver $targetPage), então o código de
+                // barras real nunca é tocado.
                 //
-                // Shopee mostra a declaração de conteúdo REAL dela — vem no
-                // MESMO zip que a etiqueta térmica, extraída ali em cima
-                // ($shopeeDeclarationPdf, ver extractShopeeZipContents()).
-                // Documento real já traz os produtos, então NÃO leva a
-                // faixa de SKU/QTD por cima (ver composeSideBySideLabel(),
-                // 'external').
+                // Shopee (targetPage='first', default): etiqueta é 1 página
+                // só, retrato, a faixa vai no rodapé dela mesma.
                 //
-                // BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste gerada
-                // de verdade, pedido #555): pedido sem PDF de declaração no
-                // zip (nem todo pedido exige, ex.: valor baixo dispensa)
-                // caía pro painel de declaração desenhado localmente — mas
-                // o usuário pediu explicitamente "se não tiver, gera normal
-                // a etiqueta", ou seja, NÃO compor nada nesse caso, deixar
-                // a etiqueta exatamente como a Shopee mandou. $shouldCompose
-                // controla isso — só fica false pra Shopee sem declaração E
-                // sem ser entrega agendada (agendado continua ganhando o
-                // painel com a linha "Pedido agendado", motivo diferente:
-                // identificar o caso agendado, não substituir uma
-                // declaração que não existe).
-                $shouldCompose = true;
-                $rightSide = 'declaration';
-                $rightPdfBytes = null;
+                // Mercado Livre (targetPage='last'): a etiqueta real sempre
+                // vem em 2 páginas (etiqueta + DANFE simplificada) — a faixa
+                // vai na 2ª (área "DADOS ADICIONAIS", que já vem vazia),
+                // NUNCA na 1ª (colidiria com o endereço, achado real
+                // anterior). Resultado físico: 2 folhas de papel por pedido
+                // do ML — aceito conscientemente pelo usuário, prioriza
+                // código de barras legível sobre economia de papel.
+                $targetPage = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE ? 'last' : 'first';
 
-                if ($shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE) {
-                    $rightSide = 'danfe';
-                } elseif ($shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE) {
-                    if ($shopeeDeclarationPdf !== null) {
-                        $rightSide = 'external';
-                        $rightPdfBytes = $shopeeDeclarationPdf;
-                    } elseif (! $isScheduled) {
-                        $shouldCompose = false;
-                    }
-                }
-
-                if ($shouldCompose) {
-                    $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide, $rightPdfBytes);
-                }
+                $contents = $this->processor->overlayDeclarationFooter($contents, $declarationTokens, $scheduledLine, $targetPage);
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

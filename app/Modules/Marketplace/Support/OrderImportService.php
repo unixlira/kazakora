@@ -11,6 +11,7 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\MarketplaceClaim;
@@ -402,37 +403,29 @@ class OrderImportService
                 );
             }
 
-            // REVERTIDO 2026-08-21, pedido explícito (decisão consciente,
-            // usuário avisado do risco antes de confirmar "todos os
-            // canais"): nota fiscal volta a andar ANTES do envio/etiqueta,
-            // pra QUALQUER canal — não dispara mais ConfirmChannelShippingJob
-            // direto daqui. Quem dispara agora é GenerateInvoiceJob (nota
-            // AUTHORIZED -> SubmitInvoiceToChannelJob -> só depois que o
-            // canal aceita de verdade -> ChannelInvoiceSubmissionService::
-            // submit() dispara ConfirmChannelShippingJob; nota EXTERNAL —
-            // canal já emite a própria, nada a enviar — o próprio
-            // GenerateInvoiceJob dispara direto, ver lá).
-            //
-            // Risco aceito conscientemente (documentado aqui pra não ser
-            // esquecido): isso é EXATAMENTE o comportamento antigo que foi
-            // trocado por este daqui (ver histórico) porque um certificado
-            // de NF-e quebrado travava a etiqueta de TODO pedido de TODO
-            // canal junto com a nota. Voltando a essa ordem, esse mesmo
-            // risco volta a existir — se a emissão de nota parar de
-            // funcionar (certificado vencido, SEFAZ fora do ar por muito
-            // tempo etc.), nenhuma etiqueta de nenhum canal sai enquanto
-            // isso não for resolvido. Trade-off pedido explicitamente pelo
-            // usuário, sabendo disso.
+            // REVERTIDO DE VOLTA 2026-08-21 (mesmo dia): a tentativa de
+            // "nota antes do envio" pra todos os canais (ver histórico
+            // removido) travou uma venda real da Shopee esperando a Shopee
+            // aceitar a nota (~3h de demora do lado deles, achado real,
+            // pedido #566) antes de sequer TENTAR confirmar o envio — etiqueta
+            // não saiu automático. Pedido explícito do usuário: voltar ao
+            // modelo paralelo de sempre. Etiqueta e nota fiscal são dois
+            // pipelines paralelos e independentes a partir daqui — nenhum
+            // bloqueia o outro. ConfirmChannelShippingJob tem seu próprio
+            // retry/backoff (~3h) que dá tempo de sobra pra nota fiscal
+            // terminar de processar em paralelo sem travar o envio esperando
+            // por ela.
             if ($data['status'] === Order::STATUS_PAID) {
                 // Desligado pela tela de teste de webhook: o pedido fake não
-                // existe de verdade no canal, então tanto a nota fiscal
-                // quanto a confirmação de envio pela API real só dariam
-                // erro contra um external_order_id que não existe. O
-                // controller de teste simula esse trecho inteiro localmente
-                // em vez de disparar os jobs reais.
+                // existe de verdade no canal, então confirmar o envio pela
+                // API real (ConfirmChannelShippingJob -> driver real) só
+                // devolveria erro. O controller de teste simula esse trecho
+                // diretamente em vez de disparar o job real.
                 if ($dispatchShippingConfirmation) {
-                    GenerateInvoiceJob::dispatch($order->id)->afterCommit();
+                    ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
                 }
+
+                GenerateInvoiceJob::dispatch($order->id)->afterCommit();
             }
 
             $this->recordReturnClaimIfNeeded($order, $data['channel_status'] ?? null);
@@ -684,9 +677,9 @@ class OrderImportService
         }
 
         if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
-            // Mesma mudança de createOrder() (ver comentário lá) — nota
-            // fiscal primeiro, ConfirmChannelShippingJob não dispara mais
-            // direto daqui.
+            // Revertido junto com createOrder() (ver comentário lá) —
+            // volta ao modelo paralelo de sempre.
+            ConfirmChannelShippingJob::dispatch($order->id);
             GenerateInvoiceJob::dispatch($order->id);
         }
 

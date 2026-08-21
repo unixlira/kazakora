@@ -280,6 +280,62 @@ class LabelProcessingServiceTest extends TestCase
         }
     }
 
+    /**
+     * Pedido explícito 2026-08-21: substitui a sobreposição por rodapé no
+     * fluxo automático (ver LabelFetchService) — etiqueta original
+     * encolhida na metade esquerda, declaração na direita, sempre 1
+     * etiqueta física só mesmo que a origem tenha mais páginas (a DANFE
+     * simplificada de uma etiqueta real do Mercado Livre, por exemplo).
+     */
+    public function test_compose_side_by_side_keeps_a_single_physical_page_even_with_a_multi_page_source(): void
+    {
+        $result = (new LabelProcessingService)->composeSideBySideLabel(
+            self::minimalTwoPagePdf(),
+            ['SKU-1 | QTD: 01'],
+        );
+
+        $this->assertStringContainsString('DECLARA', $result); // "DECLARAÇÃO" sai em Latin-1
+        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $pageCount = (new Fpdi)->setSourceFile($tempPath);
+            $this->assertSame(1, $pageCount);
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    public function test_compose_side_by_side_handles_empty_product_list_without_crashing(): void
+    {
+        $result = (new LabelProcessingService)->composeSideBySideLabel(self::minimalPdf(), []);
+
+        $this->assertStringStartsWith('%PDF', $result);
+        $this->assertStringContainsString('(sem produtos)', $result);
+    }
+
+    /**
+     * BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste gerada de
+     * verdade): um SKU sem espaço nenhum (padrão real do
+     * SkuGeneratorService, ex: "ORG-DIS-LCK-ABS-INOX-0001") mais largo que
+     * o painel direito forçava o FPDF a quebrar linha NO MEIO de uma
+     * palavra ("ABS-IN" / "OX-0001"), ilegível — MultiCell só sabe quebrar
+     * em espaço. Insere um espaço depois de cada hífen só pra exibição, dá
+     * ponto de quebra natural sem cortar letra nenhuma ao meio.
+     */
+    public function test_compose_side_by_side_breaks_a_long_hyphenated_sku_at_the_hyphen_not_mid_word(): void
+    {
+        $result = (new LabelProcessingService)->composeSideBySideLabel(
+            self::minimalPdf(),
+            ['ORG-DIS-LCK-ABS-INOX-0001 | QTD: 01'],
+        );
+
+        $this->assertStringNotContainsString('ABS-IN', $result, 'não pode quebrar no meio de "INOX"');
+        $this->assertStringContainsString('ORG-', $result);
+    }
+
     private static function minimalTwoPagePdf(): string
     {
         $objects = [

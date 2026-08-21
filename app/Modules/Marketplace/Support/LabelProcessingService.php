@@ -255,9 +255,17 @@ class LabelProcessingService
         $pdf->MultiCell($panelWidth, 3.5, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO'), 0, 'C');
 
         $y += 8;
-        $pdf->SetFont('Arial', 'B', 11);
+        $pdf->SetFont('Arial', 'B', 10);
         $pdf->SetXY($panelX, $y);
-        $pdf->MultiCell($panelWidth, 4.8, $this->toLatin1($line), 0, 'C');
+        // BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste do layout novo):
+        // MultiCell só quebra linha em espaço — um SKU inteiro sem espaço
+        // (padrão real do SkuGeneratorService, ex: "ORG-DIS-LCK-ABS-INOX-0001")
+        // mais largo que o painel força quebra NO MEIO da palavra ("ABS-IN" /
+        // "OX-0001"), ilegível. Insere um espaço depois de cada hífen só
+        // pra exibição (não altera o SKU de verdade em lugar nenhum) — dá
+        // ponto de quebra natural, sai "ORG- DIS- LCK-..." em vez de cortar
+        // qualquer letra ao meio.
+        $pdf->MultiCell($panelWidth, 4.2, $this->toLatin1(str_replace('-', '- ', $line)), 0, 'C');
 
         if ($scheduledLine !== null) {
             $y += 24; // reserva espaço pro wrap da linha de SKU acima antes de começar esta

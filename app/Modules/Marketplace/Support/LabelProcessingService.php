@@ -196,6 +196,27 @@ class LabelProcessingService
      * normal (não gira) — só o retângulo da página é que fica mais largo
      * que alto.
      *
+     * BUG REAL 2026-08-21 (visto numa etiqueta física do Mercado Livre
+     * impressa de verdade): a metade esquerda era esticada pra encher
+     * EXATAMENTE metade da largura da página nova — isso espremia a
+     * LARGURA da etiqueta original (~25-33% menor que o tamanho real,
+     * dependendo da proporção da etiqueta de origem), e código de barras é
+     * sensível especificamente a isso: a leitura depende da largura de
+     * cada barra, não da altura. Resultado: barras vizinhas colaram umas
+     * nas outras, ilegível pro leitor. Corrigido dando pra metade esquerda
+     * a LARGURA NATIVA da etiqueta original (nenhum fator de escala na
+     * largura, código de barras sai com a largura de barra exatamente
+     * igual ao original) — só a ALTURA é comprimida pra caber na página
+     * (altura não afeta leitura de código de barras, o leitor só precisa
+     * de barra alta o bastante pro feixe cruzar, o que sobra de sobra
+     * mesmo comprimido). Efeito colateral aceito: a metade direita
+     * (DANFE/declaração) fica com menos espaço que antes, já que a
+     * esquerda agora reivindica sua largura real em vez de exatamente
+     * metade — tradeoff certo, o código de barras PEQUENO da DANFE
+     * simplificada não é o que a transportadora escaneia no fluxo normal
+     * (ver drawDeclarationBand()), o código de barras de rastreio real
+     * (esquerda) é que precisa ler sem erro.
+     *
      * $rightSide controla o que entra na metade direita:
      * - 'danfe' (Mercado Livre): a 2ª página original (DANFE simplificada,
      *   com a chave de acesso) — a declaração de SKU some pra dar lugar a
@@ -247,19 +268,24 @@ class LabelProcessingService
             // todo o resto do método e pros helpers de desenho.
             $size = ['width' => $originalSize['height'], 'height' => $originalSize['width']];
 
-            $halfWidth = $size['width'] / 2;
+            // Largura NATIVA da etiqueta original — sem fator de escala
+            // nenhum na largura, código de barras sai com a largura de
+            // barra idêntica à original (ver docblock). Clamp defensivo:
+            // reserva pelo menos 10mm pra metade direita mesmo no caso raro
+            // de uma etiqueta de origem já mais larga que alta (aí a troca
+            // de orientação não sobra tanto espaço quanto o normal).
+            $leftWidth = min($originalSize['width'], $size['width'] - 10);
 
-            // Largura E altura passadas juntas — preenche o retângulo
-            // inteiro da metade esquerda, mesmo distorcendo a proporção
-            // original (ver docblock).
-            $pdf->useTemplate($leftTemplateId, 0, 0, $halfWidth, $size['height']);
+            // Só a ALTURA é esticada/comprimida pra caber na página —
+            // não afeta leitura de código de barras (ver docblock).
+            $pdf->useTemplate($leftTemplateId, 0, 0, $leftWidth, $size['height']);
 
             $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
 
             if ($rightSide === 'danfe' && $pageCount >= 2) {
                 $rightTemplateId = $pdf->importPage(2);
-                $pdf->useTemplate($rightTemplateId, $halfWidth, 0, $size['width'] - $halfWidth, $size['height']);
-                $this->drawDeclarationBand($pdf, $size, $halfWidth, $line, $scheduledLine);
+                $pdf->useTemplate($rightTemplateId, $leftWidth, 0, $size['width'] - $leftWidth, $size['height']);
+                $this->drawDeclarationBand($pdf, $size, $leftWidth, $line, $scheduledLine);
             } elseif ($rightSide === 'external' && $rightPdfBytes !== null) {
                 // 2º arquivo de origem — FPDI suporta múltiplos
                 // setSourceFile() no mesmo documento de saída, cada
@@ -270,16 +296,16 @@ class LabelProcessingService
 
                 $pdf->setSourceFile($tempRightPdfPath);
                 $rightTemplateId = $pdf->importPage(1);
-                $pdf->useTemplate($rightTemplateId, $halfWidth, 0, $size['width'] - $halfWidth, $size['height']);
+                $pdf->useTemplate($rightTemplateId, $leftWidth, 0, $size['width'] - $leftWidth, $size['height']);
                 // Sem faixa de SKU/QTD por cima — o documento real da
                 // Shopee já lista os produtos, ver docblock.
             } else {
-                $this->drawDeclarationPanel($pdf, $size, $halfWidth, $line, $scheduledLine);
+                $this->drawDeclarationPanel($pdf, $size, $leftWidth, $line, $scheduledLine);
             }
 
             $pdf->SetDrawColor(0, 0, 0);
             $pdf->SetLineWidth(0.3);
-            $pdf->Line($halfWidth, 2, $halfWidth, $size['height'] - 2);
+            $pdf->Line($leftWidth, 2, $leftWidth, $size['height'] - 2);
 
             return $pdf->Output('S');
         } finally {

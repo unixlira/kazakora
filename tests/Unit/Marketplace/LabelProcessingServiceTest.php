@@ -317,6 +317,67 @@ class LabelProcessingServiceTest extends TestCase
     }
 
     /**
+     * BUG REAL 2026-08-21 (etiqueta física real do Mercado Livre, achado
+     * pelo usuário): a metade esquerda esticada pra EXATAMENTE metade da
+     * página nova espremia a largura da etiqueta original, colando as
+     * barras do código de rastreio umas nas outras — ilegível. Corrigido
+     * dando a ela a largura NATIVA da etiqueta original (sem escala na
+     * largura, só a altura comprime). Esse teste cobre o clamp defensivo
+     * pro caso raro de uma etiqueta de origem já mais larga que alta (aqui
+     * a troca de orientação 'L' não sobra os ~50% de espaço a mais que o
+     * caso normal, portrait, sobra) — nunca deixa a metade direita com
+     * largura negativa/zero, sempre reserva um mínimo.
+     */
+    public function test_compose_side_by_side_never_crashes_when_the_source_label_is_already_landscape(): void
+    {
+        $landscapeSource = self::minimalLandscapePdf();
+
+        $result = (new LabelProcessingService)->composeSideBySideLabel($landscapeSource, ['SKU-1 | QTD: 01']);
+
+        $this->assertStringStartsWith('%PDF', $result);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $this->assertSame(1, (new Fpdi)->setSourceFile($tempPath));
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    private static function minimalLandscapePdf(): string
+    {
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 432 288] /Resources << >> /Contents 4 0 R >>',
+            4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $num => $body) {
+            $offsets[$num] = strlen($pdf);
+            $pdf .= "{$num} 0 obj\n{$body}\nendobj\n";
+        }
+
+        $xrefStart = strlen($pdf);
+        $count = count($objects) + 1;
+
+        $xref = "xref\n0 {$count}\n0000000000 65535 f \n";
+        foreach ($objects as $num => $body) {
+            $xref .= sprintf("%010d 00000 n \n", $offsets[$num]);
+        }
+
+        $pdf .= $xref;
+        $pdf .= "trailer\n<< /Size {$count} /Root 1 0 R >>\nstartxref\n{$xrefStart}\n%%EOF";
+
+        return $pdf;
+    }
+
+    /**
      * BUG REAL 2026-08-21 (visto na 1ª etiqueta de teste gerada de
      * verdade): um SKU sem espaço nenhum (padrão real do
      * SkuGeneratorService, ex: "ORG-DIS-LCK-ABS-INOX-0001") mais largo que

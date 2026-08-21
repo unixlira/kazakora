@@ -38,29 +38,65 @@ class InvoiceServiceTest extends TestCase
         ], $attributes));
     }
 
-    public function test_issue_skips_emission_for_mercado_livre_orders_and_marks_invoice_as_external(): void
+    /**
+     * Mudança 2026-08-21: pedido do Mercado Livre não fica mais parado num
+     * stub STATUS_EXTERNAL — a conta foi reconfigurada pra emissão própria
+     * (self-billing) e o Mercado Livre voltou a aceitar nota nossa via
+     * `packs/{id}/fiscal_documents` (ver comentário em InvoiceService::issue()).
+     * Segue o mesmo fluxo real de qualquer outro pedido: reserva
+     * número/chave, monta o XML — sem certificado configurado, para em
+     * PENDING (não lança, não faz sentido retry técnico esperar um
+     * certificado aparecer sozinho).
+     */
+    public function test_issue_builds_a_real_pending_invoice_for_mercado_livre_orders(): void
     {
+        Storage::fake('local');
         $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-99']);
+
+        $certificateService = Mockery::mock(NFeCertificateService::class);
+        $certificateService->shouldReceive('isConfigured')->once()->andReturn(false);
+        $this->app->instance(NFeCertificateService::class, $certificateService);
 
         $invoice = app(InvoiceService::class)->issue($order);
 
-        $this->assertSame(Invoice::STATUS_EXTERNAL, $invoice->status);
-        $this->assertNull($invoice->chave_acesso);
+        $this->assertSame(Invoice::STATUS_PENDING, $invoice->status);
+        $this->assertNotNull($invoice->chave_acesso);
         $this->assertDatabaseHas('invoices', [
             'order_id' => $order->id,
-            'status' => Invoice::STATUS_EXTERNAL,
+            'status' => Invoice::STATUS_PENDING,
         ]);
     }
 
-    public function test_issue_is_idempotent_for_mercado_livre_orders_and_does_not_duplicate_the_invoice_row(): void
+    /**
+     * Pedido antigo que ficou com Invoice.status=STATUS_EXTERNAL (gravado
+     * antes da mudança 2026-08-21) é convertido em pendente de verdade na
+     * MESMA linha (order_id é unique) em vez de duplicar — cobre
+     * convertExternalToPending().
+     */
+    public function test_issue_converts_a_legacy_external_invoice_into_a_real_pending_one(): void
     {
+        Storage::fake('local');
         $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-100']);
 
-        $service = app(InvoiceService::class);
-        $first = $service->issue($order);
-        $second = $service->issue($order->fresh());
+        $legacy = Invoice::create([
+            'order_id' => $order->id,
+            'status' => Invoice::STATUS_EXTERNAL,
+            'ambiente' => config('nfe.ambiente'),
+            'serie' => 0,
+            'numero' => $order->id,
+            'valor_total' => $order->total,
+        ]);
 
-        $this->assertSame($first->id, $second->id);
+        $certificateService = Mockery::mock(NFeCertificateService::class);
+        $certificateService->shouldReceive('isConfigured')->once()->andReturn(false);
+        $this->app->instance(NFeCertificateService::class, $certificateService);
+
+        $result = app(InvoiceService::class)->issue($order->fresh());
+
+        $this->assertSame($legacy->id, $result->id);
+        $this->assertSame(Invoice::STATUS_PENDING, $result->status);
+        $this->assertNotSame(0, $result->serie);
+        $this->assertNotNull($result->chave_acesso);
         $this->assertSame(1, Invoice::query()->where('order_id', $order->id)->count());
     }
 

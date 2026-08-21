@@ -9,6 +9,7 @@ use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Notifications\OrderStatusUpdated;
 use Illuminate\Http\RedirectResponse;
@@ -177,6 +178,67 @@ class OrderController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "inline; filename=\"etiqueta-pedido-{$order->id}.pdf\"",
         ]);
+    }
+
+    /**
+     * Botão "Corrigir etiquetas de hoje" (Admin/Orders/Index) — pedido
+     * explícito 2026-08-21, urgente: várias etiquetas de Mercado Livre e
+     * Shopee do dia foram baixadas/marcadas como prontas ENQUANTO o layout
+     * combinado ainda tinha bugs (versão deitada errada, depois desligada
+     * de vez). checkLabel() (ver acima) não resolve isso sozinho — ele nem
+     * tenta de novo quando o shipment já está STATUS_LABEL_READY/
+     * _DOWNLOADED, então essas etiquetas ficavam presas com o PDF antigo
+     * pra sempre. Este botão substitui o comando de tinker manual que seria
+     * necessário: busca de novo no canal (idempotente, mesmo método que
+     * checkLabel() usa) e REGRAVA label_path com o código corrigido, pra
+     * TODOS os envios de Mercado Livre/Shopee com etiqueta pronta HOJE —
+     * depois é só usar "Reimprimir etiqueta" em cada pedido normalmente.
+     * Síncrono de propósito (mesmo racional de checkLabel()): usuário
+     * precisa ver o resultado (quantos corrigiram, quantos falharam) na
+     * hora, sem esperar fila.
+     */
+    public function fixTodaysLabels(): RedirectResponse
+    {
+        $shipments = ChannelShipment::query()
+            ->whereIn('channel', [MarketplaceAccount::CHANNEL_MERCADO_LIVRE, MarketplaceAccount::CHANNEL_SHOPEE])
+            ->whereIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
+            ->whereDate('label_ready_at', today())
+            ->with('order')
+            ->get();
+
+        if ($shipments->isEmpty()) {
+            return back()->with('success', 'Nenhuma etiqueta de hoje pra corrigir — todas já estão com o layout atual, ou nenhuma foi gerada ainda hoje.');
+        }
+
+        $fixed = 0;
+        $failed = [];
+
+        foreach ($shipments as $shipment) {
+            try {
+                if (app(LabelFetchService::class)->attempt($shipment)) {
+                    $fixed++;
+                } else {
+                    $failed[] = $shipment->order_id;
+                }
+            } catch (Throwable $exception) {
+                Log::warning('admin.orders.fix_todays_labels_failed', [
+                    'shipment_id' => $shipment->id,
+                    'order_id' => $shipment->order_id,
+                    'message' => $exception->getMessage(),
+                ]);
+                $failed[] = $shipment->order_id;
+            }
+        }
+
+        $message = "{$fixed} etiqueta(s) corrigida(s) — já pode reimprimir cada pedido normalmente.";
+
+        if ($failed !== []) {
+            $message .= ' Falharam: pedido(s) #'.implode(', #', $failed).' (veja o log pra detalhe).';
+
+            return back()->with('warning', $message);
+        }
+
+        return back()->with('success', $message);
     }
 
     /**

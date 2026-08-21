@@ -6,6 +6,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -41,6 +42,15 @@ class LabelFetchService
      * etiqueta física, em vez de sobrepor por cima) — a 2ª página (DANFE)
      * não vai mais pro papel térmico, só continua arquivada intacta em
      * raw_label_path.
+     *
+     * Shopee saiu e VOLTOU pra essa lista no mesmo dia (histórico real,
+     * sem apagar pra não repetir a volta e meia): tentativa 1 tirou Shopee
+     * daqui achando que a declaração real dela era só um documento externo
+     * ao Kazakora, sem nada a baixar; pedido explícito seguinte corrigiu
+     * isso — a declaração É baixável via API própria da Shopee (ver
+     * ShopeeDriver::fetchContentDeclaration()), só que é um PDF SEPARADO da
+     * etiqueta térmica (não uma 2ª página do mesmo arquivo, como o ML) —
+     * por isso usa $rightSide='external' com um 2º PDF em vez de 'danfe'.
      *
      * EXCEÇÃO explícita 2026-08-17: um envio com entrega programada
      * (scheduled_for preenchido, ver ChannelShipment/extractScheduledFor())
@@ -93,7 +103,12 @@ class LabelFetchService
             return false;
         }
 
-        $label = $this->manager->driver($shipment->channel)->fetchLabel($shipment->order);
+        // Resolvido uma vez só e reaproveitado (ver uso mais abaixo pra
+        // ShopeeDriver::fetchContentDeclaration()) — resolver de novo ali
+        // chamava driver() 2x por tentativa à toa.
+        $driver = $this->manager->driver($shipment->channel);
+
+        $label = $driver->fetchLabel($shipment->order);
 
         if (! $label['ready']) {
             return false;
@@ -199,12 +214,32 @@ class LabelFetchService
                 // original, com a chave de acesso) na metade direita — a
                 // declaração de SKU ainda entra, só que como faixa fina no
                 // rodapé dessa metade (área "DADOS ADICIONAIS" que já vem
-                // vazia na DANFE real). Shopee/TikTok (sem 2ª página) mostram
-                // o painel de declaração cheio. Qualquer página além da
-                // usada segue arquivada intacta em raw_label_path.
-                $rightSide = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE ? 'danfe' : 'declaration';
+                // vazia na DANFE real).
+                //
+                // Shopee mostra a declaração de conteúdo REAL dela, baixada
+                // separada (ShopeeDriver::fetchContentDeclaration() — best
+                // effort, nunca lança, devolve null se falhar). Documento
+                // externo já traz os produtos, então NÃO leva a faixa de
+                // SKU/QTD por cima (ver composeSideBySideLabel(), 'external').
+                // Se o fetch falhar por qualquer motivo, cai pro painel de
+                // declaração desenhado localmente (mesmo fallback de
+                // TikTok/canais sem documento nenhum pra mostrar).
+                $rightSide = 'declaration';
+                $rightPdfBytes = null;
 
-                $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide);
+                if ($shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE) {
+                    $rightSide = 'danfe';
+                } elseif ($shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE) {
+                    if ($driver instanceof ShopeeDriver) {
+                        $rightPdfBytes = $driver->fetchContentDeclaration($shipment->order);
+
+                        if ($rightPdfBytes !== null) {
+                            $rightSide = 'external';
+                        }
+                    }
+                }
+
+                $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide, $rightPdfBytes);
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

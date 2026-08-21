@@ -249,6 +249,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('produtos/{product}/variacoes/desvincular', [ProductController::class, 'detachVariation'])->name('produtos.variacoes.desvincular');
 
     Route::get('pedidos', [AdminOrderController::class, 'index'])->name('pedidos.listar');
+    Route::post('pedidos/corrigir-etiquetas-hoje', [AdminOrderController::class, 'fixTodaysLabels'])
+        ->name('pedidos.corrigir-etiquetas-hoje')
+        ->middleware('permission:pedidos.edit');
     Route::get('pedidos/criar', [ManualOrderController::class, 'create'])
         ->name('pedidos.criar')
         ->middleware('permission:pedidos.edit');

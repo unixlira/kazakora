@@ -1104,6 +1104,58 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     }
 
     /**
+     * Pedido explícito 2026-08-21 (urgente): a "declaração de conteúdo"
+     * real da Shopee — a mesma exigida pelos Correios pra envio não
+     * integrado, com a lista de produtos — é um documento PRÓPRIO da
+     * Shopee, baixado separado da etiqueta térmica em si.
+     * `shipping_document_type=NON_INTEGRATED_INVOICE` no MESMO endpoint
+     * download_shipping_document (só troca o tipo, é o mesmo padrão de
+     * fetchLabel() acima) — valor documentado pra mercados sem logística
+     * integrada (caso do Brasil via Correios), NÃO confirmado ainda contra
+     * a API real da Shopee em produção (sem acesso à documentação oficial
+     * no momento em que isso foi escrito — testar com uma etiqueta real
+     * antes de confiar cegamente).
+     *
+     * Best-effort de propósito: NUNCA lança — qualquer falha (tipo de
+     * documento errado, pedido sem declaração exigida, endpoint
+     * indisponível) devolve null e quem chama cai pro painel de declaração
+     * desenhado localmente (ver LabelFetchService), em vez de travar a
+     * etiqueta inteira por causa de um documento auxiliar.
+     */
+    public function fetchContentDeclaration(Order $order): ?string
+    {
+        $this->ensureConfigured();
+
+        try {
+            $result = $this->client->post('/api/v2/logistics/get_shipping_document_result', [
+                'order_list' => [['order_sn' => $order->external_order_id]],
+            ]);
+
+            $status = $result['response']['result_list'][0]['status'] ?? null;
+
+            if ($status !== 'READY') {
+                return null;
+            }
+
+            $document = $this->client->getBinary('/api/v2/logistics/download_shipping_document', [
+                'order_list' => [['order_sn' => $order->external_order_id]],
+                'shipping_document_type' => 'NON_INTEGRATED_INVOICE',
+            ]);
+
+            $contents = $document['contents'] ?? null;
+
+            return (is_string($contents) && str_starts_with($contents, '%PDF-')) ? $contents : null;
+        } catch (\Throwable $exception) {
+            Log::warning('marketplace.shopee.content_declaration_fetch_failed', [
+                'order_id' => $order->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
      * `v2.product.get_comment` — nota (rating_star, 1-5), comentário, nome
      * do comprador (buyer_username, já vem mascarado pela própria Shopee
      * quando aplicável — não é mascaramento nosso) e mídia anexada

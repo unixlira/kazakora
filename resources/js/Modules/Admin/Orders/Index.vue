@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { h, reactive } from 'vue';
 
 const { can } = usePermissions();
@@ -35,6 +35,19 @@ const filterState = reactive({ origin: props.filters.origin ?? '' });
 
 const applyFilters = () => {
     router.get('/admin/pedidos', filterState, { preserveState: true });
+};
+
+// Botão "Corrigir etiquetas de hoje" — pedido explícito 2026-08-21, urgente
+// (ver OrderController::fixTodaysLabels()): reprocessa toda etiqueta de
+// Mercado Livre/Shopee marcada como pronta HOJE, pra pegar o layout
+// corrigido depois das tentativas com bug de mais cedo no mesmo dia. Não
+// precisa selecionar pedido nenhum — roda pra todos de uma vez.
+const fixLabelsForm = useForm({});
+const fixTodaysLabels = () => {
+    if (!confirm('Isso vai baixar de novo a etiqueta de TODOS os pedidos de Mercado Livre/Shopee prontos hoje e substituir o PDF salvo pelo layout corrigido. Continuar?')) {
+        return;
+    }
+    fixLabelsForm.post('/admin/pedidos/corrigir-etiquetas-hoje');
 };
 
 const formatPrice = (value) =>
@@ -155,6 +168,13 @@ const columns = [
                     </option>
                 </select>
             </div>
+
+            <button v-if="can('pedidos.edit')" type="button" :disabled="fixLabelsForm.processing"
+                @click="fixTodaysLabels"
+                class="rounded-lg border border-amber-500 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 dark:bg-amber-500/10 dark:text-amber-400">
+                <i class="fas fa-rotate" :class="{ 'animate-spin': fixLabelsForm.processing }"></i>
+                Corrigir etiquetas de hoje (ML/Shopee)
+            </button>
         </div>
 
         <DataTable

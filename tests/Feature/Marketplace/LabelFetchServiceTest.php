@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Drivers\MarketplaceChannelDriver;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -66,7 +67,30 @@ class LabelFetchServiceTest extends TestCase
         $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
 
         $manager = Mockery::mock(MarketplaceDriverManager::class);
+        // ->once() de propósito — LabelFetchService::attempt() resolve o
+        // driver UMA vez só e reaproveita (bug real corrigido 2026-08-21:
+        // chamava driver() 2x por tentativa, uma pra etiqueta e outra pra
+        // ShopeeDriver::fetchContentDeclaration()).
         $manager->shouldReceive('driver')->with($channel)->once()->andReturn($driver);
+
+        $this->app->instance(MarketplaceDriverManager::class, $manager);
+    }
+
+    /**
+     * Igual a mockDriver(), mas com um mock CONCRETO de ShopeeDriver (não a
+     * interface MarketplaceChannelDriver) — precisa ser a classe real pro
+     * `instanceof ShopeeDriver` em LabelFetchService::attempt() reconhecer o
+     * driver e chamar fetchContentDeclaration(). $declarationPdf null
+     * simula falha no fetch (best effort, ver ShopeeDriver).
+     */
+    private function mockShopeeDriverWithDeclaration(array $fetchLabelResult, ?string $declarationPdf): void
+    {
+        $driver = Mockery::mock(ShopeeDriver::class);
+        $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
+        $driver->shouldReceive('fetchContentDeclaration')->once()->andReturn($declarationPdf);
+
+        $manager = Mockery::mock(MarketplaceDriverManager::class);
+        $manager->shouldReceive('driver')->with(MarketplaceAccount::CHANNEL_SHOPEE)->once()->andReturn($driver);
 
         $this->app->instance(MarketplaceDriverManager::class, $manager);
     }
@@ -156,47 +180,70 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Escopo original 2026-08-15: a declaração de conteúdo ("SKU | QTD: NN",
-     * ver LabelProcessingService::composeSideBySideLabel()) entra pra
-     * Shopee/TikTok, canal onde o problema real de quantidade errada
-     * enviada apareceu primeiro.
+     * Pedido explícito 2026-08-21 (versão final do dia, seguindo o exemplo
+     * de etiqueta física fornecido pelo usuário): a declaração REAL da
+     * Shopee, baixada separada via ShopeeDriver::fetchContentDeclaration(),
+     * vai na metade direita — sem faixa de SKU/QTD por cima (o documento
+     * real já lista os produtos).
      */
-    public function test_attempt_adds_the_declaration_footer_for_shopee(): void
+    public function test_attempt_shows_the_real_shopee_declaration_on_the_right_half(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
-        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
+        $declarationPdf = self::minimalPdf();
+        $this->mockShopeeDriverWithDeclaration(
+            ['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'],
+            $declarationPdf,
+        );
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        // O item de makeShipment() não tem product_id (sem SKU cadastrado),
-        // então cai no fallback pro nome do produto — mesmo comportamento
-        // de LabelFetchService::attempt() pra item sem produto local.
-        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        $this->assertStringNotContainsString('QTD:', $labelContents, 'documento real já traz os produtos, sem faixa sobreposta');
 
-        // Sobreposição na mesma página, NUNCA página extra (desperdício de
-        // papel térmico) — pedido explícito 2026-08-15.
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $labelContents);
 
         try {
-            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath), 'sempre 1 etiqueta física só');
         } finally {
             @unlink($tempPath);
         }
     }
 
-    public function test_attempt_uses_the_product_sku_when_one_is_linked(): void
+    /**
+     * ShopeeDriver::fetchContentDeclaration() é best-effort (nunca lança) —
+     * quando devolve null (documento não disponível, erro da API etc.),
+     * cai pro painel de declaração desenhado localmente (mesmo fallback de
+     * antes), em vez de travar a etiqueta inteira.
+     */
+    public function test_attempt_falls_back_to_the_declaration_panel_when_shopee_document_fetch_fails(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockShopeeDriverWithDeclaration(
+            ['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'],
+            null,
+        );
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+    }
+
+    public function test_attempt_uses_the_product_sku_when_one_is_linked(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // canal default: Mercado Livre
         $product = \App\Modules\Catalog\Models\Product::factory()->create(['sku' => 'ORG-KIT-BEGE-0001']);
         $shipment->order->items()->first()->update(['product_id' => $product->id, 'quantity' => 3]);
 
-        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf']);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 
@@ -207,9 +254,8 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre): até aqui a
-     * etiqueta do ML passava intacta, sem declaração nenhuma — a etiqueta
-     * real dele sempre vem com uma DANFE simplificada numa 2ª página, e a
+     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre): a etiqueta real
+     * dele sempre vem com uma DANFE simplificada numa 2ª página, e a
      * declaração de conteúdo passou a valer pra esse canal também (não só
      * pra venda agendada, ver teste abaixo). raw_label_path continua
      * guardando a etiqueta original intacta (com a DANFE) à parte — só a

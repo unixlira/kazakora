@@ -185,6 +185,17 @@ class LabelProcessingService
      * vão vazio enorme embaixo). Distorce um pouco a proporção original —
      * aceito conscientemente aqui, a alternativa (vão vazio) é pior.
      *
+     * Layout deitado (paisagem) — pedido explícito 2026-08-21, reafirmado
+     * depois de uma tentativa de reverter pra retrato que também saiu
+     * errada: o formato final PRECISA ser paisagem, não retrato. A página
+     * combinada nasce em orientação 'L' com o tamanho ORIGINAL (retrato) —
+     * o FPDF troca width/height sozinho nesse caso (ver _beginpage() do
+     * FPDF: orientação 'L' usa size[1] como largura e size[0] como altura),
+     * sem precisar calcular nada na mão aqui. A divisão continua
+     * esquerda/direita, texto de cada metade continua na leitura vertical
+     * normal (não gira) — só o retângulo da página é que fica mais largo
+     * que alto.
+     *
      * $rightSide controla o que entra na metade direita:
      * - 'danfe' (Mercado Livre): a 2ª página original (DANFE simplificada,
      *   com a chave de acesso) — a declaração de SKU some pra dar lugar a
@@ -192,20 +203,30 @@ class LabelProcessingService
      *   metade (mesma área "DADOS ADICIONAIS" que já vem vazia na DANFE
      *   real, sem colidir com nada). Sem 2ª página na origem, cai pro
      *   comportamento de 'declaration' (nunca quebra).
-     * - 'declaration' (Shopee/TikTok, default): painel só com a
-     *   declaração de conteúdo, sem 2ª página de origem pra mostrar.
+     * - 'external' (Shopee, pedido explícito 2026-08-21): a declaração de
+     *   conteúdo REAL, baixada separada do servidor da Shopee (ver
+     *   ShopeeDriver::fetchContentDeclaration(), passada aqui em
+     *   $rightPdfBytes — PDF diferente do $pdfBytes principal, por isso
+     *   precisa de um 2º setSourceFile()). Como o documento real da Shopee
+     *   JÁ traz os produtos, NADA é desenhado por cima dele (sem faixa de
+     *   SKU/QTD, ao contrário de 'danfe') — só a página 1 dele, esticada
+     *   igual à esquerda. Sem $rightPdfBytes (fetch falhou), cai pro
+     *   comportamento de 'declaration'.
+     * - 'declaration' (fallback / TikTok): painel só com a declaração de
+     *   conteúdo desenhada localmente, sem PDF de origem pra mostrar.
      *
-     * Página(s) além da usada (a 1ª sempre vai pra esquerda, a 2ª só entra
-     * em 'danfe') não vão pro papel físico — a etiqueta ORIGINAL intacta
-     * continua arquivada à parte por LabelFetchService::attempt(), ver
-     * raw_label_path.
+     * Página(s)/arquivo(s) além dos usados não vão pro papel físico — a
+     * etiqueta ORIGINAL intacta continua arquivada à parte por
+     * LabelFetchService::attempt(), ver raw_label_path.
      *
      * @param  array<int, string>  $declarationTokens
      */
-    public function composeSideBySideLabel(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null, string $rightSide = 'declaration'): string
+    public function composeSideBySideLabel(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null, string $rightSide = 'declaration', ?string $rightPdfBytes = null): string
     {
         $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
         file_put_contents($tempPdfPath, $pdfBytes);
+
+        $tempRightPdfPath = null;
 
         try {
             $pdf = new Fpdi();
@@ -213,9 +234,18 @@ class LabelProcessingService
             $pdf->SetAutoPageBreak(false);
 
             $leftTemplateId = $pdf->importPage(1);
-            $size = $pdf->getTemplateSize($leftTemplateId);
+            $originalSize = $pdf->getTemplateSize($leftTemplateId);
 
-            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            // Orientação forçada 'L' + tamanho original (retrato) passado
+            // como veio — o FPDF troca width/height sozinho nesse caso (ver
+            // docblock acima), então a página final já nasce deitada sem
+            // cálculo manual aqui.
+            $pdf->AddPage('L', [$originalSize['width'], $originalSize['height']]);
+
+            // Página final tem width/height trocados em relação ao PDF de
+            // origem — ver docblock. $size local abaixo já reflete isso pra
+            // todo o resto do método e pros helpers de desenho.
+            $size = ['width' => $originalSize['height'], 'height' => $originalSize['width']];
 
             $halfWidth = $size['width'] / 2;
 
@@ -230,6 +260,19 @@ class LabelProcessingService
                 $rightTemplateId = $pdf->importPage(2);
                 $pdf->useTemplate($rightTemplateId, $halfWidth, 0, $size['width'] - $halfWidth, $size['height']);
                 $this->drawDeclarationBand($pdf, $size, $halfWidth, $line, $scheduledLine);
+            } elseif ($rightSide === 'external' && $rightPdfBytes !== null) {
+                // 2º arquivo de origem — FPDI suporta múltiplos
+                // setSourceFile() no mesmo documento de saída, cada
+                // importPage() seguinte passa a ler do último arquivo
+                // setado.
+                $tempRightPdfPath = tempnam(sys_get_temp_dir(), 'label_right_').'.pdf';
+                file_put_contents($tempRightPdfPath, $rightPdfBytes);
+
+                $pdf->setSourceFile($tempRightPdfPath);
+                $rightTemplateId = $pdf->importPage(1);
+                $pdf->useTemplate($rightTemplateId, $halfWidth, 0, $size['width'] - $halfWidth, $size['height']);
+                // Sem faixa de SKU/QTD por cima — o documento real da
+                // Shopee já lista os produtos, ver docblock.
             } else {
                 $this->drawDeclarationPanel($pdf, $size, $halfWidth, $line, $scheduledLine);
             }
@@ -241,6 +284,10 @@ class LabelProcessingService
             return $pdf->Output('S');
         } finally {
             @unlink($tempPdfPath);
+
+            if ($tempRightPdfPath !== null) {
+                @unlink($tempRightPdfPath);
+            }
         }
     }
 

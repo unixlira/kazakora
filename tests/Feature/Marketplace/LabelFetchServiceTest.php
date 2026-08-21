@@ -156,12 +156,10 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Escopo pedido 2026-08-15: a declaração de conteúdo ("SKU | QTD: NN",
-     * sobreposta no rodapé da MESMA etiqueta — ver histórico completo no
-     * docblock de LabelProcessingService::overlayDeclarationFooter()) só
-     * entra pra Shopee/TikTok, canal onde o problema real de quantidade
-     * errada enviada apareceu — Mercado Livre continua recebendo a
-     * etiqueta crua do canal, intacta.
+     * Escopo original 2026-08-15: a declaração de conteúdo ("SKU | QTD: NN",
+     * ver LabelProcessingService::composeSideBySideLabel()) entra pra
+     * Shopee/TikTok, canal onde o problema real de quantidade errada
+     * enviada apareceu primeiro.
      */
     public function test_attempt_adds_the_declaration_footer_for_shopee(): void
     {
@@ -208,7 +206,16 @@ class LabelFetchServiceTest extends TestCase
         $this->assertStringContainsString('ORG-KIT-BEGE-0001 | QTD: 03', $labelContents);
     }
 
-    public function test_attempt_does_not_touch_the_label_for_mercado_livre(): void
+    /**
+     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre): até aqui a
+     * etiqueta do ML passava intacta, sem declaração nenhuma — a etiqueta
+     * real dele sempre vem com uma DANFE simplificada numa 2ª página, e a
+     * declaração de conteúdo passou a valer pra esse canal também (não só
+     * pra venda agendada, ver teste abaixo). raw_label_path continua
+     * guardando a etiqueta original intacta (com a DANFE) à parte — só a
+     * versão física impressa (label_path) muda.
+     */
+    public function test_attempt_adds_the_declaration_panel_for_mercado_livre(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(); // canal default: Mercado Livre
@@ -220,16 +227,21 @@ class LabelFetchServiceTest extends TestCase
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertSame($rawPdf, $labelContents);
+        $this->assertNotSame($rawPdf, $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+
+        // A etiqueta original intacta (com a eventual DANFE) continua
+        // arquivada à parte, sem passar por nenhum processamento.
+        $rawContents = Storage::disk('local')->get($shipment->fresh()->raw_label_path);
+        $this->assertSame($rawPdf, $rawContents);
     }
 
     /**
      * Pedido explícito 2026-08-17: entrega programada (Mercado Livre
-     * "Coleta/Places" agendado, scheduled_for preenchido) É a exceção ao
-     * teste acima — a venda saiu dias antes da etiqueta, então recebe a
-     * mesma declaração de SKU do caso Shopee/TikTok MAIS uma 2ª linha só
-     * dela ("Pedido agendado dia dd/mm/yyyy | Pedido nº X"), pra quem
-     * embala identificar de cara que aquele pedido é um agendado.
+     * "Coleta/Places" agendado, scheduled_for preenchido) ganha MAIS uma
+     * 2ª linha na declaração ("Pedido agendado dia dd/mm/yyyy | Pedido nº
+     * X"), pra quem embala identificar de cara que aquele pedido é um
+     * agendado.
      */
     public function test_attempt_adds_the_scheduled_declaration_for_a_scheduled_mercado_livre_shipment(): void
     {

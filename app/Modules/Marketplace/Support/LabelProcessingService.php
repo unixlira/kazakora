@@ -113,8 +113,22 @@ class LabelProcessingService
      *         impressa junto, não dá pra saber olhando a etiqueta (quando
      *         ela finalmente sai) que aquele pedido específico é um caso
      *         agendado, informação que ajuda a conferência do operador.
+     * @param  'first'|'last'  $targetPage  BUG REAL 2026-08-21: até aqui a
+     *         faixa era desenhada em TODAS as páginas — funciona pra Shopee
+     *         (etiqueta de 1 página só, sem sobrar espaço nenhum antes),
+     *         mas a etiqueta do Mercado Livre real tem 2 páginas (a etiqueta
+     *         de envio em si, colada até a borda inferior — sem espaço
+     *         livre nenhum, "Complemento"/QR code chegam quase no fim — e
+     *         um DANFE simplificado numa 2ª página, com uma seção "DADOS
+     *         ADICIONAIS" vazia, feita sob medida pra isso) — desenhar a
+     *         faixa na 1ª página do ML atropelava o endereço real, ilegível.
+     *         'first' (Shopee/TikTok, default — só têm 1 página mesmo, sem
+     *         mudança de comportamento) desenha só na 1ª; 'last' (Mercado
+     *         Livre) desenha só na ÚLTIMA — a DANFE simplificada, que tem
+     *         espaço de sobra — mesmo que o PDF só tenha 1 página nesse caso
+     *         (cai pra 1ª automaticamente, nunca quebra).
      */
-    public function overlayDeclarationFooter(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null): string
+    public function overlayDeclarationFooter(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null, string $targetPage = 'first'): string
     {
         $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
         file_put_contents($tempPdfPath, $pdfBytes);
@@ -125,11 +139,13 @@ class LabelProcessingService
             $pdf->SetAutoPageBreak(false);
 
             $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
+            $declarationPageNumber = $targetPage === 'last' ? $pageCount : 1;
 
-            // Reimporta TODAS as páginas originais (etiqueta de lote com
-            // múltiplos volumes pode vir com mais de uma, ver histórico do
-            // Mercado Envios Full) e sobrepõe a mesma faixa em cada uma —
-            // todo volume pertence ao mesmo pedido.
+            // Reimporta TODAS as páginas originais sem alterar nenhuma
+            // (etiqueta de lote com múltiplos volumes pode vir com mais de
+            // uma, ver histórico do Mercado Envios Full; a etiqueta do ML
+            // sempre vem com a DANFE simplificada numa 2ª página) — só a
+            // página escolhida por $targetPage ganha a faixa sobreposta.
             for ($i = 1; $i <= $pageCount; $i++) {
                 $templateId = $pdf->importPage($i);
                 $size = $pdf->getTemplateSize($templateId);
@@ -144,12 +160,110 @@ class LabelProcessingService
                 $leftMarginMm = $i === 1 ? 10 * (25.4 / 96) : 0; // 10px a 96dpi ≈ 2.65mm
                 $pdf->useTemplate($templateId, $leftMarginMm, 0);
 
-                $this->drawDeclarationFooter($pdf, $size, $line, $scheduledLine);
+                if ($i === $declarationPageNumber) {
+                    $this->drawDeclarationFooter($pdf, $size, $line, $scheduledLine);
+                }
             }
 
             return $pdf->Output('S');
         } finally {
             @unlink($tempPdfPath);
+        }
+    }
+
+    /**
+     * Pedido explícito 2026-08-21 (substitui overlayDeclarationFooter() no
+     * fluxo automático, ver LabelFetchService — o método antigo continua
+     * aqui, ainda usado pelas telas manuais de teste): em vez de sobrepor a
+     * declaração faixa fina por cima da própria etiqueta (risco real de
+     * colisão — foi exatamente isso que atropelou o endereço numa etiqueta
+     * real do Mercado Livre), gera UMA etiqueta física só, dividida ao meio
+     * por uma linha vertical — metade esquerda com a etiqueta original
+     * (só a 1ª página, encolhida mantendo proporção, nunca esticada/
+     * espremida — um código de barras distorcido não escaneia), metade
+     * direita dedicada só à declaração de conteúdo, com espaço de sobra
+     * (nada de faixa fina). Página(s) extra da etiqueta original — ex.: a
+     * DANFE simplificada do Mercado Livre — não vão mais pro papel térmico
+     * físico (decisão explícita do usuário: só a etiqueta de envio importa
+     * pra quem embala; a etiqueta ORIGINAL intacta, com a DANFE, continua
+     * arquivada à parte por LabelFetchService::attempt(), ver raw_label_path).
+     *
+     * @param  array<int, string>  $declarationTokens
+     */
+    public function composeSideBySideLabel(string $pdfBytes, array $declarationTokens, ?string $scheduledLine = null): string
+    {
+        $tempPdfPath = tempnam(sys_get_temp_dir(), 'label_source_').'.pdf';
+        file_put_contents($tempPdfPath, $pdfBytes);
+
+        try {
+            $pdf = new Fpdi();
+            $pdf->setSourceFile($tempPdfPath);
+            $pdf->SetAutoPageBreak(false);
+
+            // Só a 1ª página (a etiqueta de envio em si) segue pro papel
+            // físico — ver docblock acima pro motivo de descartar o resto.
+            $templateId = $pdf->importPage(1);
+            $size = $pdf->getTemplateSize($templateId);
+
+            $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+
+            $halfWidth = $size['width'] / 2;
+
+            // Só a largura é passada pro useTemplate() — FPDI escala a
+            // altura mantendo a proporção original sozinho (nunca distorce
+            // o conteúdo original, ver docblock). Como a etiqueta é mais
+            // alta que larga, o resultado ocupa só a parte de cima da
+            // metade esquerda — centraliza verticalmente em vez de deixar
+            // colado no topo.
+            $scaledHeight = $size['height'] * ($halfWidth / $size['width']);
+            $topOffset = ($size['height'] - $scaledHeight) / 2;
+            $pdf->useTemplate($templateId, 0, $topOffset, $halfWidth);
+
+            $line = $declarationTokens !== [] ? implode(', ', $declarationTokens) : '(sem produtos)';
+            $this->drawDeclarationPanel($pdf, $size, $halfWidth, $line, $scheduledLine);
+
+            return $pdf->Output('S');
+        } finally {
+            @unlink($tempPdfPath);
+        }
+    }
+
+    /**
+     * Painel dedicado (metade direita da etiqueta combinada, ver
+     * composeSideBySideLabel()) — bem mais espaço que a faixa fina do
+     * rodapé antigo (drawDeclarationFooter()), fonte maior, título
+     * "DECLARAÇÃO DE CONTEÚDO" pra deixar claro pra quem embala o que
+     * aquele lado da etiqueta é. Mesma degradação aceitável de sempre com
+     * AutoPageBreak desligado: pedido com muitos produtos que estoure a
+     * altura reservada só corta na borda da página, nunca quebra o resto.
+     */
+    private function drawDeclarationPanel(Fpdi $pdf, array $size, float $halfWidth, string $line, ?string $scheduledLine = null): void
+    {
+        $marginSide = 3; // mm
+        $panelX = $halfWidth + $marginSide;
+        $panelWidth = ($size['width'] - $halfWidth) - (2 * $marginSide);
+
+        $pdf->SetDrawColor(0, 0, 0);
+        $pdf->SetLineWidth(0.3);
+        $pdf->Line($halfWidth, 2, $halfWidth, $size['height'] - 2);
+
+        $pdf->SetTextColor(0, 0, 0);
+
+        $y = 8;
+        $pdf->SetFont('Arial', 'B', 8);
+        $pdf->SetXY($panelX, $y);
+        $pdf->MultiCell($panelWidth, 3.5, $this->toLatin1('DECLARAÇÃO DE CONTEÚDO'), 0, 'C');
+
+        $y += 8;
+        $pdf->SetFont('Arial', 'B', 11);
+        $pdf->SetXY($panelX, $y);
+        $pdf->MultiCell($panelWidth, 4.8, $this->toLatin1($line), 0, 'C');
+
+        if ($scheduledLine !== null) {
+            $y += 24; // reserva espaço pro wrap da linha de SKU acima antes de começar esta
+            $pdf->SetFont('Arial', 'B', 9);
+            $pdf->SetXY($panelX, $y);
+            $pdf->MultiCell($panelWidth, 4, $this->toLatin1($scheduledLine), 0, 'C');
         }
     }
 

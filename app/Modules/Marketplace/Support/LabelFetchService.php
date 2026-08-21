@@ -26,17 +26,26 @@ use ZipArchive;
 class LabelFetchService
 {
     /**
-     * Canais que recebem a declaração de conteúdo sobreposta na etiqueta —
-     * pedido explícito 2026-08-15, escopo restrito a Shopee/TikTok (não
-     * Mercado Livre, que não teve o mesmo problema de quantidade errada
-     * relatado). TikTok Shop ainda não tem fetchLabel() implementado (ver
-     * TikTokShopDriver — integração pendente de credencial de parceiro),
-     * então isso fica pronto e sem efeito prático até esse driver existir.
+     * Canais que recebem a declaração de conteúdo na etiqueta — pedido
+     * original 2026-08-15, escopo Shopee/TikTok. TikTok Shop ainda não tem
+     * fetchLabel() implementado (ver TikTokShopDriver — integração
+     * pendente de credencial de parceiro), então isso fica pronto e sem
+     * efeito prático até esse driver existir.
+     *
+     * Mercado Livre ENTROU nessa lista 2026-08-21 (antes só entrava via
+     * $isScheduled abaixo) — achado real numa venda de verdade: a etiqueta
+     * dele sempre vem com uma DANFE simplificada numa 2ª página, e a
+     * declaração precisa ir na etiqueta física de qualquer forma, agendada
+     * ou não. Ver LabelProcessingService::composeSideBySideLabel() pro
+     * layout novo (etiqueta original + declaração lado a lado numa única
+     * etiqueta física, em vez de sobrepor por cima) — a 2ª página (DANFE)
+     * não vai mais pro papel térmico, só continua arquivada intacta em
+     * raw_label_path.
      *
      * EXCEÇÃO explícita 2026-08-17: um envio com entrega programada
      * (scheduled_for preenchido, ver ChannelShipment/extractScheduledFor())
-     * recebe a mesma declaração de SKU MESMO fora desses canais (na
-     * prática, hoje só Mercado Livre agenda) — a venda saiu dias antes da
+     * recebe a mesma declaração de SKU MESMO fora desses canais (hoje só
+     * Amazon ficaria de fora sem isso) — a venda saiu dias antes da
      * etiqueta, então o reforço de conferência vale tanto quanto pro caso
      * Shopee original. Ver uso de $isScheduled logo abaixo, não altera esta
      * constante.
@@ -44,6 +53,7 @@ class LabelFetchService
     private const CHANNELS_WITH_DECLARATION = [
         MarketplaceAccount::CHANNEL_SHOPEE,
         MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+        MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
     ];
 
     public function __construct(
@@ -180,7 +190,15 @@ class LabelFetchService
                     ? sprintf('Pedido agendado dia %s | Pedido nº %d', $shipment->scheduled_for->format('d/m/Y'), $shipment->order_id)
                     : null;
 
-                $contents = $this->processor->overlayDeclarationFooter($contents, $declarationTokens, $scheduledLine);
+                // Pedido explícito 2026-08-21: etiqueta original + declaração
+                // lado a lado numa etiqueta física só (composeSideBySideLabel()),
+                // não mais sobreposta por cima (overlayDeclarationFooter() —
+                // risco real de colisão, foi o que atropelou o endereço numa
+                // etiqueta real do Mercado Livre). Só a 1ª página da etiqueta
+                // original vai pro papel físico; qualquer página extra (ex.:
+                // a DANFE simplificada do ML) segue arquivada intacta em
+                // raw_label_path, mas não é mais impressa.
+                $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine);
             } catch (Throwable $exception) {
                 Log::warning('marketplace.label_fetch.declaration_failed', ['shipment_id' => $shipment->id, 'message' => $exception->getMessage()]);
             }

@@ -158,9 +158,9 @@ class LabelProcessingServiceTest extends TestCase
     /**
      * Etiqueta de lote com múltiplos volumes (ex.: Mercado Envios Full,
      * histórico real desse pipeline) pode ter mais de uma página de
-     * origem — todas têm que sobreviver, cada uma com a mesma faixa de
-     * declaração no rodapé (todo volume pertence ao mesmo pedido), sem
-     * nenhuma página extra.
+     * origem — todas têm que sobreviver intactas (só a página escolhida por
+     * $targetPage ganha a faixa, ver testes abaixo), sem nenhuma página
+     * extra.
      */
     public function test_declaration_footer_preserves_every_original_page_of_a_multi_page_label(): void
     {
@@ -210,6 +210,64 @@ class LabelProcessingServiceTest extends TestCase
             ['SKU-1 | QTD: 01'],
             'Pedido agendado dia 20/08/2026 | Pedido no 305',
         );
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $pageCount = (new Fpdi)->setSourceFile($tempPath);
+            $this->assertSame(1, $pageCount);
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    /**
+     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre, achado numa
+     * venda de verdade): a etiqueta do ML sempre vem em 2 páginas — a
+     * etiqueta de envio (sem espaço livre nenhum na borda inferior,
+     * endereço/QR code chegam quase no fim) e uma DANFE simplificada numa
+     * 2ª página, com uma seção "DADOS ADICIONAIS" vazia. Desenhar a faixa
+     * na 1ª página (comportamento antigo, igual pra todo canal) atropelava
+     * o endereço, ficava ilegível. $targetPage='last' resolve isso —
+     * continua sem criar página extra, só muda ONDE a faixa é desenhada.
+     */
+    public function test_declaration_footer_targets_the_last_page_when_requested(): void
+    {
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(
+            self::minimalTwoPagePdf(),
+            ['SKU-1 | QTD: 01'],
+            targetPage: 'last',
+        );
+
+        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $result);
+
+        try {
+            $pageCount = (new Fpdi)->setSourceFile($tempPath);
+            $this->assertSame(2, $pageCount, 'nunca cria página extra, mesmo mirando a última');
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    /**
+     * Etiqueta de canal sem DANFE simplificada de 2ª página (ex.: teste
+     * manual, ou um formato futuro de 1 página só) com $targetPage='last'
+     * não pode quebrar tentando desenhar numa página inexistente — cai pra
+     * página 1 (a única que existe) automaticamente.
+     */
+    public function test_declaration_footer_falls_back_to_the_only_page_when_target_is_last_but_pdf_has_one_page(): void
+    {
+        $result = (new LabelProcessingService)->overlayDeclarationFooter(
+            self::minimalPdf(),
+            ['SKU-1 | QTD: 01'],
+            targetPage: 'last',
+        );
+
+        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $result);

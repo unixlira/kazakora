@@ -6,7 +6,6 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
-use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -43,14 +42,17 @@ class LabelFetchService
      * não vai mais pro papel térmico, só continua arquivada intacta em
      * raw_label_path.
      *
-     * Shopee saiu e VOLTOU pra essa lista no mesmo dia (histórico real,
-     * sem apagar pra não repetir a volta e meia): tentativa 1 tirou Shopee
+     * Shopee saiu e VOLTOU pra essa lista no mesmo dia (histórico real, sem
+     * apagar pra não repetir a volta e meia): tentativa 1 tirou Shopee
      * daqui achando que a declaração real dela era só um documento externo
-     * ao Kazakora, sem nada a baixar; pedido explícito seguinte corrigiu
-     * isso — a declaração É baixável via API própria da Shopee (ver
-     * ShopeeDriver::fetchContentDeclaration()), só que é um PDF SEPARADO da
-     * etiqueta térmica (não uma 2ª página do mesmo arquivo, como o ML) —
-     * por isso usa $rightSide='external' com um 2º PDF em vez de 'danfe'.
+     * ao Kazakora, sem nada a baixar; tentativa 2 tentou uma chamada de API
+     * extra pra buscar separado (chute sem confirmação, removido); versão
+     * final, confirmada pelo usuário: o PRÓPRIO zip que fetchLabel() já
+     * baixa (pro ZPL da etiqueta) vem com um PDF de declaração junto, sem
+     * chamada nenhuma a mais — ver extractShopeeZipContents() mais abaixo.
+     * É um PDF SEPARADO da etiqueta térmica (não uma 2ª página do mesmo
+     * arquivo, como o ML) — por isso usa $rightSide='external' com um 2º
+     * PDF em vez de 'danfe'.
      *
      * EXCEÇÃO explícita 2026-08-17: um envio com entrega programada
      * (scheduled_for preenchido, ver ChannelShipment/extractScheduledFor())
@@ -103,12 +105,7 @@ class LabelFetchService
             return false;
         }
 
-        // Resolvido uma vez só e reaproveitado (ver uso mais abaixo pra
-        // ShopeeDriver::fetchContentDeclaration()) — resolver de novo ali
-        // chamava driver() 2x por tentativa à toa.
-        $driver = $this->manager->driver($shipment->channel);
-
-        $label = $driver->fetchLabel($shipment->order);
+        $label = $this->manager->driver($shipment->channel)->fetchLabel($shipment->order);
 
         if (! $label['ready']) {
             return false;
@@ -144,8 +141,22 @@ class LabelFetchService
         // primeiro (se for zip), depois converte o ZPL extraído pra PDF via
         // LabelProcessingService::convertZplToPdf() (já existia, usado só
         // na tela de teste manual).
+        //
+        // Pedido explícito 2026-08-21: pro caso Shopee, esse MESMO zip já
+        // vem com a declaração de conteúdo em PDF junto (confirmado pelo
+        // usuário baixando direto do painel da Shopee) — extrai os dois
+        // juntos aqui em vez de uma chamada de API separada (ver
+        // extractShopeeZipContents() e o histórico removido de
+        // ShopeeDriver::fetchContentDeclaration()).
+        $shopeeDeclarationPdf = null;
+
         if (str_starts_with($contents, "PK\x03\x04")) {
-            $contents = $this->extractZplFromZip($contents);
+            $zipResult = $this->extractShopeeZipContents(
+                $contents,
+                alsoExtractDeclarationPdf: $shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE,
+            );
+            $contents = $zipResult['zpl'];
+            $shopeeDeclarationPdf = $zipResult['declaration_pdf'];
         }
 
         // A etiqueta real da Shopee começa com "~DG" (comando ZPL de
@@ -216,27 +227,24 @@ class LabelFetchService
                 // rodapé dessa metade (área "DADOS ADICIONAIS" que já vem
                 // vazia na DANFE real).
                 //
-                // Shopee mostra a declaração de conteúdo REAL dela, baixada
-                // separada (ShopeeDriver::fetchContentDeclaration() — best
-                // effort, nunca lança, devolve null se falhar). Documento
-                // externo já traz os produtos, então NÃO leva a faixa de
-                // SKU/QTD por cima (ver composeSideBySideLabel(), 'external').
-                // Se o fetch falhar por qualquer motivo, cai pro painel de
-                // declaração desenhado localmente (mesmo fallback de
-                // TikTok/canais sem documento nenhum pra mostrar).
+                // Shopee mostra a declaração de conteúdo REAL dela — vem no
+                // MESMO zip que a etiqueta térmica, extraída ali em cima
+                // ($shopeeDeclarationPdf, ver extractShopeeZipContents()).
+                // Documento real já traz os produtos, então NÃO leva a
+                // faixa de SKU/QTD por cima (ver composeSideBySideLabel(),
+                // 'external'). Pedido sem PDF de declaração no zip (nem
+                // todo pedido exige, ex.: valor baixo dispensa) cai pro
+                // painel de declaração desenhado localmente — pedido
+                // explícito do usuário: "se não tiver, gera normal a
+                // etiqueta".
                 $rightSide = 'declaration';
                 $rightPdfBytes = null;
 
                 if ($shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE) {
                     $rightSide = 'danfe';
-                } elseif ($shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE) {
-                    if ($driver instanceof ShopeeDriver) {
-                        $rightPdfBytes = $driver->fetchContentDeclaration($shipment->order);
-
-                        if ($rightPdfBytes !== null) {
-                            $rightSide = 'external';
-                        }
-                    }
+                } elseif ($shipment->channel === MarketplaceAccount::CHANNEL_SHOPEE && $shopeeDeclarationPdf !== null) {
+                    $rightSide = 'external';
+                    $rightPdfBytes = $shopeeDeclarationPdf;
                 }
 
                 $contents = $this->processor->composeSideBySideLabel($contents, $declarationTokens, $scheduledLine, $rightSide, $rightPdfBytes);
@@ -309,20 +317,41 @@ class LabelFetchService
     }
 
     /**
-     * O zip da Shopee tem um único arquivo de verdade dentro
-     * (thermal_zpl_shipping_label.txt, confirmado ao vivo) — pega o
-     * primeiro/único entry em vez de fixar esse nome exato, que pode variar
-     * por conta/idioma sem aviso.
+     * O zip da Shopee costumava trazer um único arquivo de verdade dentro
+     * (thermal_zpl_shipping_label.txt, confirmado ao vivo) — hoje sabemos
+     * que também pode trazer um 2º arquivo, o PDF da declaração de
+     * conteúdo (ver $alsoExtractDeclarationPdf abaixo). Pega o entry do ZPL
+     * procurando pela assinatura, em vez de fixar um nome exato (varia por
+     * conta/idioma) ou assumir "primeiro entry = certo".
      *
      * O zip do Mercado Livre (response_type=zpl2, ver MercadoLivreDriver::
-     * fetchLabel(), bug real 2026-08-10) já vem com DOIS arquivos — um PDF
-     * da PLP (não é a etiqueta) e um .txt com o ZPL de verdade — então não
-     * dá mais pra assumir "primeiro entry = certo" como antes. Procura
-     * primeiro por um entry .txt contendo "^XA" (assinatura real de ZPL);
-     * só cai pro índice 0 se não achar nenhum .txt (mantém o comportamento
-     * antigo intacto pro zip de arquivo único da Shopee).
+     * fetchLabel(), bug real 2026-08-10) também passa por aqui — o zip DELE
+     * vem com um PDF que NÃO é declaração nenhuma, é a PLP (folha de outro
+     * propósito). Procura primeiro por um entry .txt contendo "^XA"
+     * (assinatura real de ZPL); só cai pro índice 0 se não achar nenhum
+     * .txt (mantém o comportamento antigo intacto pro zip de arquivo único
+     * da Shopee).
+     *
+     * $alsoExtractDeclarationPdf (pedido explícito 2026-08-21, corrigindo
+     * um chute anterior no mesmo dia — ver histórico removido de
+     * ShopeeDriver::fetchContentDeclaration()): o zip que a Shopee devolve
+     * pro pedido de etiqueta térmica (download_shipping_document,
+     * THERMAL_AIR_WAYBILL, ver ShopeeDriver::fetchLabel()) já vem com DOIS
+     * arquivos de verdade — o .txt do ZPL E um PDF da declaração de
+     * conteúdo — confirmado pelo usuário baixando direto do painel da
+     * Shopee. Nenhuma chamada de API extra é necessária.
+     *
+     * Fica atrás de um parâmetro (default false) em vez de virar
+     * comportamento sempre-ligado porque este mesmo método também
+     * descompacta o zip do Mercado Livre (response_type=zpl2, achado
+     * 2026-08-10) — o zip DELE vem com um PDF que NÃO é declaração
+     * nenhuma, é a PLP (folha de outro propósito, ver comentário no
+     * chamador). Tratar qualquer PDF achado num zip como "a declaração"
+     * sem essa distinção por canal geraria falso positivo grave pro ML.
+     *
+     * @return array{zpl: string, declaration_pdf: ?string}
      */
-    private function extractZplFromZip(string $zipContents): string
+    private function extractShopeeZipContents(string $zipContents, bool $alsoExtractDeclarationPdf = false): array
     {
         $tempZipPath = tempnam(sys_get_temp_dir(), 'shopee_label_').'.zip';
         file_put_contents($tempZipPath, $zipContents);
@@ -338,31 +367,35 @@ class LabelFetchService
                 throw new RuntimeException('Zip da etiqueta veio vazio.');
             }
 
-            $entryName = null;
+            $zplEntryName = null;
+            $declarationPdf = null;
 
             for ($i = 0; $i < $zip->numFiles; $i++) {
                 $candidateName = $zip->getNameIndex($i);
+                $candidateContents = $zip->getFromName($candidateName);
 
-                if (str_ends_with(strtolower($candidateName), '.txt')) {
-                    $candidateContents = $zip->getFromName($candidateName);
+                if ($candidateContents === false) {
+                    continue;
+                }
 
-                    if ($candidateContents !== false && str_contains($candidateContents, '^XA')) {
-                        $entryName = $candidateName;
+                if ($zplEntryName === null && str_ends_with(strtolower($candidateName), '.txt') && str_contains($candidateContents, '^XA')) {
+                    $zplEntryName = $candidateName;
+                }
 
-                        break;
-                    }
+                if ($alsoExtractDeclarationPdf && $declarationPdf === null && str_starts_with($candidateContents, '%PDF-')) {
+                    $declarationPdf = $candidateContents;
                 }
             }
 
-            $entryName ??= $zip->getNameIndex(0);
-            $extracted = $zip->getFromName($entryName);
+            $zplEntryName ??= $zip->getNameIndex(0);
+            $zpl = $zip->getFromName($zplEntryName);
             $zip->close();
 
-            if ($extracted === false) {
-                throw new RuntimeException("Não foi possível extrair \"{$entryName}\" do zip da etiqueta.");
+            if ($zpl === false) {
+                throw new RuntimeException("Não foi possível extrair \"{$zplEntryName}\" do zip da etiqueta.");
             }
 
-            return $extracted;
+            return ['zpl' => $zpl, 'declaration_pdf' => $declarationPdf];
         } finally {
             @unlink($tempZipPath);
         }

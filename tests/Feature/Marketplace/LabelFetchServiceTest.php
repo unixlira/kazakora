@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Drivers\MarketplaceChannelDriver;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
-use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -67,30 +66,7 @@ class LabelFetchServiceTest extends TestCase
         $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
 
         $manager = Mockery::mock(MarketplaceDriverManager::class);
-        // ->once() de propósito — LabelFetchService::attempt() resolve o
-        // driver UMA vez só e reaproveita (bug real corrigido 2026-08-21:
-        // chamava driver() 2x por tentativa, uma pra etiqueta e outra pra
-        // ShopeeDriver::fetchContentDeclaration()).
         $manager->shouldReceive('driver')->with($channel)->once()->andReturn($driver);
-
-        $this->app->instance(MarketplaceDriverManager::class, $manager);
-    }
-
-    /**
-     * Igual a mockDriver(), mas com um mock CONCRETO de ShopeeDriver (não a
-     * interface MarketplaceChannelDriver) — precisa ser a classe real pro
-     * `instanceof ShopeeDriver` em LabelFetchService::attempt() reconhecer o
-     * driver e chamar fetchContentDeclaration(). $declarationPdf null
-     * simula falha no fetch (best effort, ver ShopeeDriver).
-     */
-    private function mockShopeeDriverWithDeclaration(array $fetchLabelResult, ?string $declarationPdf): void
-    {
-        $driver = Mockery::mock(ShopeeDriver::class);
-        $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
-        $driver->shouldReceive('fetchContentDeclaration')->once()->andReturn($declarationPdf);
-
-        $manager = Mockery::mock(MarketplaceDriverManager::class);
-        $manager->shouldReceive('driver')->with(MarketplaceAccount::CHANNEL_SHOPEE)->once()->andReturn($driver);
 
         $this->app->instance(MarketplaceDriverManager::class, $manager);
     }
@@ -180,21 +156,27 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * Pedido explícito 2026-08-21 (versão final do dia, seguindo o exemplo
-     * de etiqueta física fornecido pelo usuário): a declaração REAL da
-     * Shopee, baixada separada via ShopeeDriver::fetchContentDeclaration(),
-     * vai na metade direita — sem faixa de SKU/QTD por cima (o documento
-     * real já lista os produtos).
+     * Pedido explícito 2026-08-21 (versão final do dia, confirmada pelo
+     * usuário baixando direto do painel da Shopee): o MESMO zip que traz o
+     * ZPL da etiqueta térmica também traz um PDF com a declaração de
+     * conteúdo — sem chamada de API separada nenhuma (ver
+     * LabelFetchService::extractShopeeZipContents()). A declaração vai na
+     * metade direita, sem faixa de SKU/QTD por cima (o documento real já
+     * lista os produtos).
      */
-    public function test_attempt_shows_the_real_shopee_declaration_on_the_right_half(): void
+    public function test_attempt_shows_the_real_shopee_declaration_from_the_same_zip(): void
     {
         Storage::fake('local');
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
-        $declarationPdf = self::minimalPdf();
-        $this->mockShopeeDriverWithDeclaration(
-            ['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'],
-            $declarationPdf,
-        );
+
+        $zip = self::buildZip([
+            'thermal_zpl_shipping_label.txt' => '^XA^FO50,50^A0N,50,50^FDTeste^FS^XZ',
+            'declaration.pdf' => self::minimalPdf(),
+        ]);
+
+        $this->mockDriver(['ready' => true, 'contents' => $zip, 'content_type' => 'application/force-download'], MarketplaceAccount::CHANNEL_SHOPEE);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 
@@ -214,19 +196,25 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * ShopeeDriver::fetchContentDeclaration() é best-effort (nunca lança) —
-     * quando devolve null (documento não disponível, erro da API etc.),
-     * cai pro painel de declaração desenhado localmente (mesmo fallback de
-     * antes), em vez de travar a etiqueta inteira.
+     * Nem todo pedido Shopee exige declaração de conteúdo (ex.: valor
+     * baixo dispensa) — zip só com o ZPL, sem PDF nenhum junto, cai pro
+     * painel de declaração desenhado localmente (mesmo fallback de
+     * TikTok/canais sem documento pra mostrar), em vez de travar a
+     * etiqueta. Pedido explícito do usuário: "se não tiver, gera normal a
+     * etiqueta".
      */
-    public function test_attempt_falls_back_to_the_declaration_panel_when_shopee_document_fetch_fails(): void
+    public function test_attempt_falls_back_to_the_declaration_panel_when_shopee_zip_has_no_declaration_pdf(): void
     {
         Storage::fake('local');
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
-        $this->mockShopeeDriverWithDeclaration(
-            ['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'],
-            null,
-        );
+
+        $zip = self::buildZip([
+            'thermal_zpl_shipping_label.txt' => '^XA^FO50,50^A0N,50,50^FDTeste^FS^XZ',
+        ]);
+
+        $this->mockDriver(['ready' => true, 'contents' => $zip, 'content_type' => 'application/force-download'], MarketplaceAccount::CHANNEL_SHOPEE);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
 

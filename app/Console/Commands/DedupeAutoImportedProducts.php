@@ -173,7 +173,28 @@ class DedupeAutoImportedProducts extends Command
 
             if ($apply) {
                 DB::transaction(function () use ($dup, $canonical) {
-                    ProductChannelListing::where('product_id', $dup->id)->update(['product_id' => $canonical->id]);
+                    // product_channel_listings tem unique(product_id, channel)
+                    // — achado real 2026-08-21 rodando isso pela primeira vez:
+                    // o canônico já tinha SEU PRÓPRIO anúncio nesse mesmo
+                    // canal (era exatamente por ISSO que ele tinha o SKU real
+                    // e o duplicado não). Mover o listing do duplicado por
+                    // cima violaria a constraint. Nesse caso o listing do
+                    // duplicado representa um segundo anúncio genuinamente
+                    // separado no próprio canal (não um erro do Kazakora) —
+                    // só remove o vínculo local (nada é feito no canal em
+                    // si), preservando o listing do canônico intacto.
+                    foreach (ProductChannelListing::where('product_id', $dup->id)->get() as $listing) {
+                        $hasChannelConflict = ProductChannelListing::where('product_id', $canonical->id)
+                            ->where('channel', $listing->channel)
+                            ->exists();
+
+                        if ($hasChannelConflict) {
+                            $listing->delete();
+                        } else {
+                            $listing->update(['product_id' => $canonical->id]);
+                        }
+                    }
+
                     OrderItem::where('product_id', $dup->id)->update(['product_id' => $canonical->id, 'product_name' => $canonical->name]);
                     $dup->delete();
                 });

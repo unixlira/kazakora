@@ -136,10 +136,22 @@ const LOGISTIC_TYPE_LABELS = {
 
 const form = useForm({
     status: props.order.status,
+    origin: props.order.origin,
 });
 
 const updateStatus = () => {
     form.patch(`/admin/pedidos/${props.order.id}`);
+};
+
+// Pedido explícito 2026-08-21 (pedido #559, importado errado como "loja"
+// em vez do canal certo): corrige um erro de seleção na importação, sem
+// disparar nenhum pipeline automático (etiqueta/nota não recomeçam
+// sozinhos só por trocar o canal — ver OrderController::update()).
+const CHANNEL_EDIT_OPTIONS = {
+    loja: 'Site (Kazakora)',
+    mercado_livre: 'Mercado Livre',
+    shopee: 'Shopee',
+    tiktok_shop: 'TikTok Shop',
 };
 
 const canIssue = () => !props.order.invoice || props.order.invoice.status !== 'authorized';
@@ -459,6 +471,16 @@ const cancelInvoice = () => {
                         >
                             <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
                         </select>
+
+                        <label for="origin" class="block pt-2 text-sm font-medium">Canal</label>
+                        <select
+                            id="origin"
+                            v-model="form.origin"
+                            class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
+                        >
+                            <option v-for="(label, channel) in CHANNEL_EDIT_OPTIONS" :key="channel" :value="channel">{{ label }}</option>
+                        </select>
+                        <p class="text-xs text-slate-400">Corrige o canal se o pedido foi importado errado — não gera etiqueta/nota nova sozinho.</p>
 
                         <button
                             type="submit"

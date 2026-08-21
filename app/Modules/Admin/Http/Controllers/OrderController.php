@@ -80,14 +80,47 @@ class OrderController extends Controller
 
     public function update(Request $request, Order $order, InvoiceService $invoices, OrderPaymentFinalizer $finalizer): RedirectResponse
     {
+        // 'origin' opcional (sometimes|nullable) — pedido explícito
+        // 2026-08-21 (pedido #559, importado errado como "loja"/site em vez
+        // do canal certo): corrige um erro de digitação/seleção na hora de
+        // importar, sem mexer em mais nada do pedido. NÃO recria
+        // ChannelShipment/Invoice nem dispara nenhum job automático (esses
+        // só disparam na criação/transição pra pago de verdade, ver
+        // OrderImportService) — é só a correção do dado em si; se o pedido
+        // corrigido precisar do pipeline automático de verdade (etiqueta,
+        // nota), isso é responsabilidade de outra ação (ex.: reimportar).
         $validated = $request->validate([
             'status' => ['required', Rule::in(self::STATUSES)],
+            'origin' => ['sometimes', 'nullable', Rule::in(self::CHANNELS)],
         ]);
 
         $previousStatus = $order->status;
         $statusChanged = $previousStatus !== $validated['status'];
+        $originChanged = array_key_exists('origin', $validated) && $validated['origin'] !== null && $validated['origin'] !== $order->origin;
 
-        $order->update($validated);
+        if ($originChanged) {
+            // Mesma trava única (origin, external_order_id) que
+            // OrderImportService usa pra não duplicar pedido — corrigir o
+            // canal pra um que já tem outro pedido de verdade com esse
+            // mesmo external_order_id seria uma colisão de dados, não uma
+            // correção.
+            $conflict = Order::query()
+                ->where('origin', $validated['origin'])
+                ->where('external_order_id', $order->external_order_id)
+                ->whereKeyNot($order->id)
+                ->exists();
+
+            if ($order->external_order_id && $conflict) {
+                return back()->with('error', 'Já existe outro pedido com esse mesmo ID externo nesse canal — não é possível trocar pra ele.');
+            }
+        }
+
+        // Nunca grava origin=null — 'nullable' na validação acima é só pra
+        // aceitar o campo ausente/vazio sem 422 quando só o status está
+        // sendo trocado (ver template, o mesmo form manda os dois campos
+        // juntos, mas outros chamadores futuros do PATCH podem mandar só
+        // status).
+        $order->update($originChanged ? $validated : ['status' => $validated['status']]);
 
         if ($statusChanged && $order->user) {
             $order->user->notify(new OrderStatusUpdated($order));
@@ -116,7 +149,8 @@ class OrderController extends Controller
             }
         }
 
-        $response = back()->with('success', 'Status do pedido atualizado.');
+        $message = $originChanged ? 'Status e canal do pedido atualizados.' : 'Status do pedido atualizado.';
+        $response = back()->with('success', $message);
 
         return $warnings ? $response->with('warning', implode(' ', $warnings)) : $response;
     }

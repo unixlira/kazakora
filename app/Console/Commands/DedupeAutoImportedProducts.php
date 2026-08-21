@@ -123,6 +123,27 @@ class DedupeAutoImportedProducts extends Command
             $this->info('Nenhuma duplicidade encontrada entre os '.$products->count().' produto(s) com SKU sintético.');
         }
 
+        // Resolve cadeia (ex: #98 funde em #94, que por sua vez funde em
+        // #19 — real, achado nesta mesma varredura) pro id canônico FINAL
+        // antes de aplicar qualquer coisa — sem isso, a ordem de iteração
+        // do array decidiria se a fusão em cadeia funciona (processar
+        // #94->#19 antes de #98->#94 deixaria #98 apontando pra um produto
+        // já soft-deletado, já que Product::find() não vê trashed).
+        foreach ($merges as $dupId => $canonicalId) {
+            $seen = [$dupId => true];
+
+            while (isset($merges[$canonicalId])) {
+                if (isset($seen[$canonicalId])) {
+                    break; // ciclo real (não deveria acontecer) — para de seguir.
+                }
+
+                $seen[$canonicalId] = true;
+                $canonicalId = $merges[$canonicalId];
+            }
+
+            $merges[$dupId] = $canonicalId;
+        }
+
         foreach ($merges as $dupId => $canonicalId) {
             $dup = $products->get($dupId) ?? Product::find($dupId);
             $canonical = Product::find($canonicalId);

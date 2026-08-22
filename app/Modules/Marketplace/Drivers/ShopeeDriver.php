@@ -244,10 +244,31 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         }
 
         if ($item['sku'] && $existing = Product::where('sku', $item['sku'])->first()) {
-            ProductChannelListing::query()->firstOrCreate(
-                ['channel' => MarketplaceAccount::CHANNEL_SHOPEE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
-                ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
-            );
+            // Mesmo bug real 2026-08-22 achado/corrigido em
+            // MercadoLivreDriver::autoImportProduct() — ver o comentário
+            // completo lá. product_channel_listings só permite 1 linha por
+            // (product_id, channel); um segundo anúncio duplicado do mesmo
+            // SKU na Shopee faria o firstOrCreate() abaixo tentar inserir
+            // uma segunda linha e estourar a constraint única, derrubando
+            // o pedido inteiro.
+            $listingExistsForOtherListing = ProductChannelListing::query()
+                ->where('product_id', $existing->id)
+                ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
+                ->where('external_id', '!=', $externalId)
+                ->exists();
+
+            if ($listingExistsForOtherListing) {
+                Log::channel('shopee')->warning('shopee.order_import.duplicate_listing_for_product', [
+                    'product_id' => $existing->id,
+                    'sku' => $item['sku'],
+                    'new_external_id' => $externalId,
+                ]);
+            } else {
+                ProductChannelListing::query()->firstOrCreate(
+                    ['channel' => MarketplaceAccount::CHANNEL_SHOPEE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
+                    ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
+                );
+            }
 
             return $existing;
         }

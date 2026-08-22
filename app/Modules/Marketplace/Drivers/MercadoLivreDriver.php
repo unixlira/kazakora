@@ -219,10 +219,40 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         }
 
         if ($item['sku'] && $existing = Product::where('sku', $item['sku'])->first()) {
-            ProductChannelListing::query()->firstOrCreate(
-                ['channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
-                ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
-            );
+            // BUG REAL 2026-08-22 (pedido Flex real perdido, achado
+            // investigando ao vivo): product_channel_listings só permite 1
+            // linha por (product_id, channel) — ver a migração da tabela.
+            // Quando o produto já tinha uma linha pra este canal (apontando
+            // pra OUTRO external_id — um segundo anúncio duplicado do
+            // mesmo SKU no Mercado Livre, cenário real, não hipotético) o
+            // firstOrCreate() abaixo não achava match pelo NOVO external_id
+            // e tentava INSERIR uma segunda linha, estourando a constraint
+            // única — exceção não tratada que derrubava o
+            // ProcessMercadoLivreWebhook inteiro, então o PEDIDO nunca era
+            // criado (não só a etiqueta/anúncio: a venda inteira sumia).
+            // Sem linha nenhuma pra esse produto+canal ainda, cria normal;
+            // já existindo (pra outro external_id), só loga pra revisão
+            // manual (anúncio duplicado é problema de cadastro no ML, não
+            // deveria travar o pedido) e segue — o que importa pro pedido é
+            // o $product retornado, não a linha de listing em si.
+            $listingExistsForOtherListing = ProductChannelListing::query()
+                ->where('product_id', $existing->id)
+                ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
+                ->where('external_id', '!=', $externalId)
+                ->exists();
+
+            if ($listingExistsForOtherListing) {
+                Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.order_import.duplicate_listing_for_product', [
+                    'product_id' => $existing->id,
+                    'sku' => $item['sku'],
+                    'new_external_id' => $externalId,
+                ]);
+            } else {
+                ProductChannelListing::query()->firstOrCreate(
+                    ['channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
+                    ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
+                );
+            }
 
             return $existing;
         }

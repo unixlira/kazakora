@@ -71,6 +71,13 @@ Route::inertia('/trocas-e-devolucoes', 'Legal/Trocas')->name('legal.trocas');
 Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 
+// Documentação da API pública de parceiros (ver routes/api_v1.php) — página
+// estática (Blade puro, não Inertia/SPA), pública de propósito pra
+// desenvolvedor de integrador externo conseguir consultar sem login. Nunca
+// mostra um token real, só placeholder — o token de cada parceiro é gerado
+// e entregue separadamente (ver Admin\ApiPartnerController::issueToken()).
+Route::view('/api/documentacao', 'api.documentation')->name('api.documentacao');
+
 Route::get('/favoritos', [FavoriteController::class, 'index'])
     ->middleware('auth')
     ->name('favoritos.listar');

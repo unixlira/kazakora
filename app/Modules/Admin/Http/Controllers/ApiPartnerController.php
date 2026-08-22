@@ -33,6 +33,10 @@ class ApiPartnerController extends Controller
                 'name' => $partner->name,
                 'slug' => $partner->slug,
                 'contact_email' => $partner->contact_email,
+                // Nunca o hash em si (nem faria sentido pro admin) — só se
+                // já existe uma senha configurada, pra tela mostrar
+                // "login por senha ativo" sem reexibir/reenviar nada.
+                'has_password' => $partner->password !== null,
                 'abilities' => $partner->abilities ?? [],
                 'rate_limit_per_minute' => $partner->rate_limit_per_minute,
                 'is_active' => $partner->is_active,
@@ -57,6 +61,10 @@ class ApiPartnerController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email', 'max:255'],
+            // Opcional na criação — parceiro pode nascer só com token
+            // estático (fluxo original) e ganhar senha/login JWT depois,
+            // ou vice-versa.
+            'password' => ['nullable', 'string', 'min:8'],
             'abilities' => ['required', 'array', 'min:1'],
             'abilities.*' => [Rule::in(Permissions::ALL)],
             'rate_limit_per_minute' => ['nullable', 'integer', 'min:1', 'max:6000'],
@@ -70,7 +78,7 @@ class ApiPartnerController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        return back()->with('success', "Parceiro \"{$partner->name}\" criado. Gere um token pra ele começar a usar a API.");
+        return back()->with('success', "Parceiro \"{$partner->name}\" criado. Gere um token ou avise o login (\"{$partner->slug}\") pra ele começar a usar a API.");
     }
 
     public function update(Request $request, ApiPartner $apiPartner): RedirectResponse
@@ -78,12 +86,21 @@ class ApiPartnerController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'contact_email' => ['nullable', 'email', 'max:255'],
+            'password' => ['nullable', 'string', 'min:8'],
             'abilities' => ['required', 'array', 'min:1'],
             'abilities.*' => [Rule::in(Permissions::ALL)],
             'rate_limit_per_minute' => ['nullable', 'integer', 'min:1', 'max:6000'],
             'is_active' => ['boolean'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        // Campo deixado em branco no formulário de edição = "não mexer na
+        // senha atual", não "apagar a senha" — sem isso, o cast 'hashed'
+        // hasheia '' e derruba o login por senha de todo mundo toda vez
+        // que o admin salva QUALQUER outra edição no parceiro.
+        if (! filled($validated['password'] ?? null)) {
+            unset($validated['password']);
+        }
 
         $apiPartner->update($validated);
 

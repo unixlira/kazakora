@@ -473,6 +473,57 @@
         de um parceiro não afeta tokens já emitidos.
       </p>
 
+      <h3>Duas formas de conseguir um token</h3>
+      <p>
+        <strong>Token estático</strong> — o time Kazakora gera pelo painel e te entrega direto.
+        Não expira sozinho, só se for revogado manualmente. É o mais simples se sua integração
+        não roda código no lado do parceiro pra automatizar login.
+      </p>
+      <p>
+        <strong>Login usuário/senha</strong> — se o time Kazakora configurou uma senha pra sua
+        integração, você troca usuário/senha por um JWT de curta duração sempre que precisar,
+        sem depender de alguém copiar/colar um token manualmente.
+      </p>
+
+      <div class="endpoint">
+        <div class="endpoint-head">
+          <span class="m m-post">POST</span>
+          <span class="path">/login</span>
+        </div>
+        <div class="endpoint-body">
+          <p>Rota pública — não leva <code>Authorization</code>, é o próprio ponto de entrada.</p>
+          <table class="params">
+            <thead><tr><th>Campo</th><th></th><th>Tipo</th><th>Notas</th></tr></thead>
+            <tbody>
+              <tr><td><code>usuario</code></td><td class="req">obrigatório</td><td>string</td><td>identificador do parceiro, fornecido pelo time Kazakora</td></tr>
+              <tr><td><code>senha</code></td><td class="req">obrigatório</td><td>string</td><td>—</td></tr>
+            </tbody>
+          </table>
+
+          <p class="code-label">Requisição</p>
+          <pre class="code"><span class="p">curl -X POST</span> https://kazakora.devlira.com.br/api/v1/login \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"usuario": "seu-usuario", "senha": "sua-senha"}'</span></pre>
+
+          <p class="code-label">Resposta — <span class="status-chip s2">200</span></p>
+          <pre class="code">{
+  <span class="k">"token"</span><span class="p">:</span> <span class="s">"eyJ0eXAiOi..."</span><span class="p">,</span>
+  <span class="k">"token_type"</span><span class="p">:</span> <span class="s">"Bearer"</span><span class="p">,</span>
+  <span class="k">"expires_in"</span><span class="p">:</span> <span class="n">3600</span><span class="p">,</span>
+  <span class="k">"abilities"</span><span class="p">:</span> [<span class="s">"cadastros.view"</span><span class="p">,</span> <span class="s">"..."</span>]
+}</pre>
+          <p>
+            O <code>token</code> devolvido é usado exatamente como o token estático — no header
+            <code>Authorization: Bearer &lt;token&gt;</code> de toda chamada seguinte — mas
+            <strong>expira em 1 hora</strong> (<code>expires_in</code>, em segundos). Quando expirar,
+            chame <code>/login</code> de novo pra obter um novo. Usuário/senha inválidos, ou
+            usuário sem login por senha configurado, respondem <span class="status-chip s4">401</span>
+            com uma mensagem genérica (não diferencia "usuário não existe" de "senha errada", de
+            propósito).
+          </p>
+        </div>
+      </div>
+
       <p class="code-label">Abilities existentes</p>
       <div class="ability-list">
         <span class="ability-chip">cadastros.view</span>

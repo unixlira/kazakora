@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\OrderController;
@@ -12,12 +13,19 @@ use Illuminate\Support\Facades\Route;
 /*
  * API pública de parceiros externos — pedido explícito 2026-08-21.
  * Incluído a partir de routes/api.php sob o prefixo /api/v1, com
- * auth:sanctum + log.api + throttle:api aplicados no grupo inteiro (ver
- * lá). Cada rota autenticada declara sua(s) ability(ies) via
+ * auth:sanctum,jwt_partner + log.api + throttle:api aplicados no grupo
+ * inteiro (ver lá). Cada rota autenticada declara sua(s) ability(ies) via
  * `abilities:...` (TODAS exigidas) ou `ability:...` (QUALQUER uma) —
  * mesmo vocabulário de permissão do RBAC interno (App\Support\Rbac\
  * Permissions), reaproveitado tal e qual pros tokens de parceiro (ver
  * App\Models\ApiPartner::allowedAbilities()).
+ *
+ * Dois jeitos de autenticar, coexistindo (pedido explícito 2026-08-22):
+ * token estático emitido pelo admin (guard 'sanctum', ver
+ * Admin\ApiPartnerController::issueToken()) OU login usuário/senha ->
+ * JWT de 1h (guard 'jwt_partner', ver AuthController::login() e
+ * AppServiceProvider::boot()). `auth:sanctum,jwt_partner` tenta os dois
+ * guards em ordem — qualquer um que autentique já resolve $request->user().
  *
  * As duas rotas de download (etiqueta/DANFE) ficam FORA do grupo
  * autenticado — usam link assinado temporário (`signed`), não o token do
@@ -32,7 +40,14 @@ Route::get('/pedidos/{order}/nota/danfe', [InvoiceController::class, 'danfe'])
     ->middleware('signed')
     ->name('api.v1.pedidos.nota.danfe');
 
-Route::middleware(['auth:sanctum', 'api.partner.active', 'log.api', 'throttle:api'])->group(function () {
+// Público de propósito — é o próprio ponto de entrada pra quem ainda não
+// tem token. throttle dedicado (não o 'api' por-parceiro, que depende de
+// já estar autenticado) pra dificultar força bruta de senha.
+Route::post('/login', [AuthController::class, 'login'])
+    ->middleware('throttle:10,1')
+    ->name('api.v1.login');
+
+Route::middleware(['auth:sanctum,jwt_partner', 'api.partner.active', 'log.api', 'throttle:api'])->group(function () {
     Route::get('/me', [MeController::class, 'show'])->name('api.v1.me');
 
     Route::middleware('ability:'.Permissions::CADASTROS_VIEW)->group(function () {

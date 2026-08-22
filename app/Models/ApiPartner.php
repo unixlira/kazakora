@@ -26,11 +26,16 @@ class ApiPartner extends Model
         'name',
         'slug',
         'contact_email',
+        'password',
         'abilities',
         'rate_limit_per_minute',
         'is_active',
         'created_by',
         'notes',
+    ];
+
+    protected $hidden = [
+        'password',
     ];
 
     protected function casts(): array
@@ -39,6 +44,10 @@ class ApiPartner extends Model
             'abilities' => 'array',
             'is_active' => 'boolean',
             'last_used_at' => 'datetime',
+            // Mesmo cast nativo do User::casts() — hasheia sozinho na
+            // atribuição (Hash::make manual não é mais necessário), e
+            // detecta um valor já hasheado pra não hashear 2x.
+            'password' => 'hashed',
         ];
     }
 

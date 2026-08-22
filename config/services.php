@@ -189,4 +189,14 @@ return [
         'billing_email' => env('FLEX_BILLING_EMAIL', 'joserobertolira@gmail.com'),
     ],
 
+    // Segredo de assinatura do JWT de login self-service de parceiro de
+    // API (POST /api/v1/login) — pedido explícito 2026-08-22. Dedicado, não
+    // reaproveita APP_KEY: comprometer esse segredo só forja token de
+    // parceiro de API, nunca sessão/cookie da aplicação. Sem valor
+    // setado, App\Support\Jwt\ApiPartnerJwt cai pra APP_KEY (funciona,
+    // mas perde esse isolamento — defina um valor próprio em produção).
+    'api_partner_jwt' => [
+        'secret' => env('API_PARTNER_JWT_SECRET'),
+    ],
+
 ];

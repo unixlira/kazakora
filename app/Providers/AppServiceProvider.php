@@ -2,10 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\ApiPartner;
+use App\Support\Jwt\ApiPartnerJwt;
+use App\Support\Jwt\JwtAccessToken;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -52,13 +56,47 @@ class AppServiceProvider extends ServiceProvider
         // pode ter um teto diferente (rate_limit_per_minute, default 60),
         // pensado pra parceiro maior negociar um limite mais alto sem
         // precisar mexer em código. Sem token válido (nunca deveria
-        // chegar aqui — auth:sanctum roda antes — mas defensivo mesmo
-        // assim), cai pro limite mínimo por IP.
+        // chegar aqui — auth:sanctum,jwt_partner roda antes — mas
+        // defensivo mesmo assim), cai pro limite mínimo por IP.
+        //
+        // Checa os DOIS guards (sanctum e jwt_partner, ver abaixo) — um
+        // parceiro autenticado via JWT não aparece em user('sanctum').
         RateLimiter::for('api', function (Request $request) {
-            $partner = $request->user('sanctum');
+            $partner = $request->user('sanctum') ?? $request->user('jwt_partner');
 
             return Limit::perMinute($partner?->rate_limit_per_minute ?? 30)
                 ->by($partner?->id ? "api-partner:{$partner->id}" : 'api-ip:'.$request->ip());
+        });
+
+        // Guard 'jwt_partner' (pedido explícito 2026-08-22): login
+        // self-service usuário/senha -> JWT, alternativa ao token estático
+        // do Sanctum emitido só pelo admin. Auth::viaRequest() é o jeito
+        // suportado pelo framework de registrar um driver de auth ad hoc
+        // sem escrever uma classe Guard completa. withAccessToken() é o
+        // mesmo mecanismo que o próprio Sanctum documenta pra autenticar
+        // via um token que não é dele (ver App\Support\Jwt\JwtAccessToken)
+        // — é isso que faz o middleware `abilities:`/`ability:` já
+        // existente funcionar sem duplicar checagem nenhuma.
+        Auth::viaRequest('jwt_partner', function (Request $request) {
+            $token = $request->bearerToken();
+
+            if (! $token) {
+                return null;
+            }
+
+            $claims = ApiPartnerJwt::decode($token);
+
+            if (! $claims) {
+                return null;
+            }
+
+            $partner = ApiPartner::find($claims['sub']);
+
+            if (! $partner) {
+                return null;
+            }
+
+            return $partner->withAccessToken(new JwtAccessToken($claims['abilities']));
         });
     }
 }

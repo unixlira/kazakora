@@ -52,6 +52,15 @@ return [
             'driver' => 'sanctum',
             'provider' => null,
         ],
+
+        // Login self-service (usuário/senha -> JWT) de parceiro de API,
+        // pedido explícito 2026-08-22 — alternativa ao token estático
+        // acima. Driver registrado via Auth::viaRequest() em
+        // AppServiceProvider (não é um driver nativo do framework).
+        'jwt_partner' => [
+            'driver' => 'jwt_partner',
+            'provider' => null,
+        ],
     ],
 
     /*

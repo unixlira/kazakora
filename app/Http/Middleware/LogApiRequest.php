@@ -25,9 +25,11 @@ class LogApiRequest
             // $request->user('sanctum') em vez de user() puro — o guard
             // padrão da aplicação é 'web' (ver config/auth.php), e nada
             // nas rotas /api/v1 troca o guard default global, só o
-            // middleware auth:sanctum autentica especificamente contra
-            // esse guard.
-            $partner = $request->user('sanctum');
+            // middleware auth:sanctum,jwt_partner autentica especificamente
+            // contra esses guards. Checa os dois — parceiro logado via
+            // JWT (senha) não aparece em user('sanctum'), ver
+            // AppServiceProvider::boot().
+            $partner = $request->user('sanctum') ?? $request->user('jwt_partner');
 
             ApiRequestLog::create([
                 'api_partner_id' => $partner?->id,

@@ -52,6 +52,7 @@ const copyToken = async () => {
 const createForm = useForm({
     name: '',
     contact_email: '',
+    password: '',
     abilities: [],
     rate_limit_per_minute: 60,
     notes: '',
@@ -72,6 +73,9 @@ const startEditing = (partner) => {
     editForms[partner.id] = useForm({
         name: partner.name,
         contact_email: partner.contact_email ?? '',
+        // Sempre vazio — nunca reexibe a senha atual (só o hash existe no
+        // banco). Em branco = "não mexer" (ver ApiPartnerController::update()).
+        password: '',
         abilities: [...partner.abilities],
         rate_limit_per_minute: partner.rate_limit_per_minute,
         is_active: partner.is_active,
@@ -116,8 +120,9 @@ const hasAnyAbility = computed(() => createForm.abilities.length > 0);
     <AdminLayout>
         <h1 class="mb-1 text-2xl font-bold">API de Parceiros</h1>
         <p class="mb-4 text-sm text-slate-400">
-            Acesso externo ao sistema via API (autenticação Bearer/Sanctum) — cada parceiro só pode fazer o que as abilities dele permitirem.
-            Ver <code class="rounded bg-[var(--surface)] px-1">/api/v1</code>, endpoint <code class="rounded bg-[var(--surface)] px-1">GET /api/v1/me</code> pra autoverificação.
+            Acesso externo ao sistema via API — cada parceiro só pode fazer o que as abilities dele permitirem. Duas formas de autenticar:
+            token estático gerado abaixo, ou login usuário/senha em <code class="rounded bg-[var(--surface)] px-1">POST /api/v1/login</code> (se você definir uma senha) trocado por um JWT de 1h.
+            Ver <code class="rounded bg-[var(--surface)] px-1">/api/documentacao</code>, endpoint <code class="rounded bg-[var(--surface)] px-1">GET /api/v1/me</code> pra autoverificação.
         </p>
 
         <div v-if="revealedToken" class="mb-6 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 dark:bg-amber-500/10">
@@ -152,6 +157,15 @@ const hasAnyAbility = computed(() => createForm.abilities.length > 0);
                     <label class="mb-1 block text-sm font-medium">E-mail de contato (opcional)</label>
                     <input v-model="createForm.contact_email" type="email"
                         class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="mb-1 block text-sm font-medium">Senha de login (opcional)</label>
+                    <input v-model="createForm.password" type="text" minlength="8" placeholder="Deixe em branco pra usar só token estático"
+                        class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
+                    <p class="mt-1 text-xs text-slate-400">
+                        Se definida, o parceiro pode obter um token JWT de 1h em <code class="rounded bg-[var(--surface)] px-1">POST /api/v1/login</code> mandando <code class="rounded bg-[var(--surface)] px-1">usuario</code> = o slug dele (gerado a partir do nome, aparece no card depois de criar) + essa senha.
+                    </p>
+                    <p v-if="createForm.errors.password" class="mt-1 text-xs text-error">{{ createForm.errors.password }}</p>
                 </div>
                 <div>
                     <label class="mb-1 block text-sm font-medium">Limite de requisições/minuto</label>
@@ -194,6 +208,12 @@ const hasAnyAbility = computed(() => createForm.abilities.length > 0);
                         <span v-if="!partner.is_active" class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">Inativo</span>
                     </h3>
                     <p class="text-xs text-slate-400">
+                        usuário (login): <code class="rounded bg-[var(--surface-sunken,theme(colors.slate.100))] px-1">{{ partner.slug }}</code>
+                        <span :class="partner.has_password ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'">
+                            · login por senha {{ partner.has_password ? 'ativo' : 'não configurado' }}
+                        </span>
+                    </p>
+                    <p class="text-xs text-slate-400">
                         {{ partner.contact_email || 'Sem e-mail de contato' }} · {{ partner.rate_limit_per_minute }} req/min ·
                         Último uso: {{ partner.last_used_at || 'nunca' }}
                     </p>
@@ -225,6 +245,9 @@ const hasAnyAbility = computed(() => createForm.abilities.length > 0);
                     <input v-model="editForms[partner.id].name" type="text" placeholder="Nome"
                         class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
                     <input v-model="editForms[partner.id].contact_email" type="email" placeholder="E-mail de contato"
+                        class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
+                    <input v-model="editForms[partner.id].password" type="text" minlength="8"
+                        :placeholder="partner.has_password ? 'Nova senha (deixe em branco pra manter a atual)' : 'Definir senha de login (opcional)'"
                         class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">
                     <input v-model.number="editForms[partner.id].rate_limit_per_minute" type="number" min="1" max="6000" placeholder="Req/min"
                         class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm">

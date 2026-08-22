@@ -52,6 +52,7 @@ export const sidebarSections = [
             { label: 'Empresa', href: '/admin/empresa', icon: 'fas fa-building', color: 'text-success', permission: null },
             { label: 'Pagamentos', href: '/admin/pagamentos', icon: 'fas fa-credit-card', color: 'text-warning', permission: null },
             { label: 'Usuários e Permissões', href: '/admin/usuarios-permissoes', icon: 'fas fa-user-shield', color: 'text-error', permission: 'configuracoes.usuarios' },
+            { label: 'API de Parceiros', href: '/admin/api-parceiros', icon: 'fas fa-key', color: 'text-error', permission: 'configuracoes.usuarios' },
             { label: 'Integrações', href: '/admin/integracoes', icon: 'fas fa-plug', color: 'text-secondary', permission: 'configuracoes.integracoes' },
             { label: 'Impressões', href: '/admin/impressoes', icon: 'fas fa-print', color: 'text-info', permission: 'configuracoes.integracoes' },
             { label: 'Etiquetas Manuais', href: '/admin/etiquetas-manuais/nova', icon: 'fas fa-tags', color: 'text-secondary', permission: 'configuracoes.integracoes' },

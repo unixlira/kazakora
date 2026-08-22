@@ -10,6 +10,7 @@
         "fakerphp/faker": "^1.23",
         "inertiajs/inertia-laravel": "^3.1",
         "laravel/framework": "^13.8",
+        "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "nfephp-org/sped-da": "^1.1",
         "nfephp-org/sped-nfe": "^5.2",

@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -42,6 +45,20 @@ class AppServiceProvider extends ServiceProvider
         // controller.
         Event::listen(function (Login $event): void {
             session(['login_at' => now()->timestamp]);
+        });
+
+        // Pedido explícito 2026-08-21 (API pública pra parceiros
+        // externos): limite POR PARCEIRO, não global — cada ApiPartner
+        // pode ter um teto diferente (rate_limit_per_minute, default 60),
+        // pensado pra parceiro maior negociar um limite mais alto sem
+        // precisar mexer em código. Sem token válido (nunca deveria
+        // chegar aqui — auth:sanctum roda antes — mas defensivo mesmo
+        // assim), cai pro limite mínimo por IP.
+        RateLimiter::for('api', function (Request $request) {
+            $partner = $request->user('sanctum');
+
+            return Limit::perMinute($partner?->rate_limit_per_minute ?? 30)
+                ->by($partner?->id ? "api-partner:{$partner->id}" : 'api-ip:'.$request->ip());
         });
     }
 }

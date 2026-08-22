@@ -42,6 +42,16 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // API pública (parceiros externos, ver App\Models\ApiPartner) —
+        // 'provider' fica null de propósito: o token do Sanctum já sabe
+        // resolver o model autenticado (tokenable_type/tokenable_id são
+        // polimórficos), não precisa de um provider fixo apontando pra um
+        // único model como o guard 'web' aponta pra User.
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => null,
+        ],
     ],
 
     /*

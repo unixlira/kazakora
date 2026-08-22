@@ -1,17 +1,21 @@
 <?php
 
 use App\Http\Middleware\AuthenticatePrintAgent;
+use App\Http\Middleware\EnsureApiPartnerIsActive;
 use App\Http\Middleware\EnsureHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
 use App\Http\Middleware\ExpireStaleSession;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\LogApiRequest;
 use App\Http\Middleware\PreventBrowserCaching;
 use App\Http\Middleware\TrackSiteVisit;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
+use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -37,6 +41,16 @@ return Application::configure(basePath: dirname(__DIR__))
             'staff' => EnsureUserIsStaff::class,
             'permission' => EnsureHasPermission::class,
             'print.agent' => AuthenticatePrintAgent::class,
+            'log.api' => LogApiRequest::class,
+            // Sanctum 4.x parou de registrar esses alias sozinho (era
+            // automático em versões antigas) — confirmado lendo o
+            // SanctumServiceProvider da versão instalada (^4.3). Sem isso,
+            // qualquer rota com `abilities:...` explodia com "Target class
+            // [abilities] does not exist" em vez de simplesmente barrar
+            // quem não tem a ability certa.
+            'abilities' => CheckAbilities::class,
+            'ability' => CheckForAnyAbility::class,
+            'api.partner.active' => EnsureApiPartnerIsActive::class,
         ]);
 
         // The 'api' group has no session/CSRF middleware to begin with, but the

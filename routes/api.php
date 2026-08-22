@@ -90,3 +90,11 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
     Route::get('/dashboard/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('dashboard.scheduled-shipments');
 });
+
+// API pública de parceiros externos — pedido explícito 2026-08-21. Arquivo
+// separado (routes/api_v1.php) só pra não misturar com os webhooks/OAuth
+// de integração acima — versionado via prefixo /v1 desde já, pra uma v2
+// futura (breaking change de contrato) não precisar reescrever nada disso.
+Route::prefix('v1')->group(function () {
+    require __DIR__.'/api_v1.php';
+});

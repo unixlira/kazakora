@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Admin\Http\Controllers\AdsRechargeController;
+use App\Modules\Admin\Http\Controllers\ApiPartnerController;
 use App\Modules\Admin\Http\Controllers\AuditLogController;
 use App\Modules\Admin\Http\Controllers\BannerController;
 use App\Modules\Admin\Http\Controllers\CashFlowController;
@@ -387,6 +388,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
+
+        Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
+        Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');
+        Route::patch('api-parceiros/{api_partner}', [ApiPartnerController::class, 'update'])->name('api-parceiros.atualizar');
+        Route::delete('api-parceiros/{api_partner}', [ApiPartnerController::class, 'destroy'])->name('api-parceiros.excluir');
+        Route::post('api-parceiros/{api_partner}/tokens', [ApiPartnerController::class, 'issueToken'])->name('api-parceiros.tokens.emitir');
+        Route::delete('api-parceiros/{api_partner}/tokens/{token}', [ApiPartnerController::class, 'revokeToken'])->name('api-parceiros.tokens.revogar');
 
         Route::get('integracoes', [IntegrationController::class, 'index'])->name('integracoes.listar');
         Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');

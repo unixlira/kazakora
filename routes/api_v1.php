@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\ProductChannelController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ShipmentController;
 use App\Support\Rbac\Permissions;
@@ -54,6 +55,25 @@ Route::middleware(['auth:sanctum', 'api.partner.active', 'log.api', 'throttle:ap
     Route::post('/produtos/{product}/estoque/ajustar', [ProductController::class, 'adjustStock'])
         ->middleware('abilities:'.Permissions::ESTOQUE_ADJUST)
         ->name('api.v1.produtos.estoque.ajustar');
+
+    // Publicar/sincronizar/encerrar anúncio em marketplace (Mercado Livre,
+    // Shopee, ...) — reaproveita a ability cadastros.edit, mesmo
+    // vocabulário do update() de produto (ver Api\V1\ProductChannelController).
+    Route::get('/produtos/{product}/canais', [ProductChannelController::class, 'index'])
+        ->middleware('ability:'.Permissions::CADASTROS_VIEW)
+        ->name('api.v1.produtos.canais.index');
+
+    Route::put('/produtos/{product}/canais/{channel}', [ProductChannelController::class, 'update'])
+        ->middleware('abilities:'.Permissions::CADASTROS_EDIT)
+        ->name('api.v1.produtos.canais.update');
+
+    Route::post('/produtos/{product}/canais/{channel}/sincronizar', [ProductChannelController::class, 'sync'])
+        ->middleware('abilities:'.Permissions::CADASTROS_EDIT)
+        ->name('api.v1.produtos.canais.sincronizar');
+
+    Route::delete('/produtos/{product}/canais/{channel}', [ProductChannelController::class, 'destroy'])
+        ->middleware('abilities:'.Permissions::CADASTROS_EDIT)
+        ->name('api.v1.produtos.canais.destroy');
 
     Route::middleware('ability:'.Permissions::PEDIDOS_VIEW)->group(function () {
         Route::get('/pedidos', [OrderController::class, 'index'])->name('api.v1.pedidos.index');

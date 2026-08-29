@@ -594,10 +594,23 @@ class DashboardAgentController extends Controller
         // lançada errada, cancelada de propósito pra sumir da fila):
         // CANCELLED saiu de vez da regra de "auditoria do dia" acima — a
         // exclusão explícita abaixo reverte especificamente esse status;
-        // os outros (aguardando pagamento, enviado, concluído) continuam
+        // os outros (aguardando pagamento, enviado, concluído) continuavam
         // exibidos como antes.
+        //
+        // BUG REAL 2026-08-29 (3ª correção — pedido explícito do usuário,
+        // "ajuste no KoraSync/KazaKora": pedido embalado continuava
+        // aparecendo na fila mesmo depois do ponto de coleta escanear o
+        // pacote): SHIPPED/COMPLETED saem da mesma regra de "auditoria do
+        // dia" agora, junto com CANCELLED. O status já É atualizado
+        // corretamente pro canal confirmar a coleta de verdade — ver
+        // ShipmentService::processWebhook() (Mercado Livre) e
+        // ShopeeDriver::mapOrderStatus() (Shopee), os dois já mapeiam
+        // "shipped"/"delivered"/"completed" pro Order real. O que faltava
+        // NÃO era detectar o status (isso já funciona), era a fila parar
+        // de mostrar pedido nesse status "pra auditoria" — decisão
+        // 2026-08-15 revertida especificamente pra esses 2 status agora.
         $displayOnlyOrders = Order::query()
-            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
             ->where(function ($query) {
                 $query->whereNotNull('packed_at')->orWhere('status', '!=', Order::STATUS_PAID);
             })
@@ -916,11 +929,12 @@ class DashboardAgentController extends Controller
         $shipments = ChannelShipment::query()
             ->whereNotNull('scheduled_for')
             ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
-            // Mesma regra do 2º bug real 2026-08-29 em queue(): pedido
-            // cancelado não precisa mais de nenhuma ação (nem aqui, na
-            // aba de agendados do ML) — sem isso, um pedido cancelado com
-            // scheduled_for continuava aparecendo pra sempre nesta lista.
-            ->whereHas('order', fn ($query) => $query->where('status', '!=', Order::STATUS_CANCELLED))
+            // Mesma regra do 2º/3º bug real 2026-08-29 em queue(): pedido
+            // cancelado, enviado ou concluído não precisa mais de nenhuma
+            // ação (nem aqui, na aba de agendados do ML) — sem isso, um
+            // pedido já despachado com scheduled_for continuava aparecendo
+            // pra sempre nesta lista.
+            ->whereHas('order', fn ($query) => $query->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
             ->when(
                 $request->query('channel'),
                 fn ($query, $channel) => $query->where('channel', $channel),

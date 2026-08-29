@@ -669,8 +669,29 @@ class OrderImportService
 
         $wasCancelled = $order->status === Order::STATUS_CANCELLED;
         $wasPaid = $order->status === Order::STATUS_PAID;
+        // Pedido explícito 2026-08-29 ("registrar log quando um pedido
+        // sair da fila por confirmação do marketplace"): captura ANTES do
+        // update — é exatamente a condição que tira o pedido de
+        // DashboardAgentController::queue() (Fila normal do KoraSync).
+        $leavesPreparationQueue = $wasPaid && in_array($newStatus, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
 
         $order->update(['status' => $newStatus]);
+
+        if ($leavesPreparationQueue) {
+            Log::info('marketplace.order_import.left_preparation_queue', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'new_status' => $newStatus,
+                'channel_status' => $channelStatus,
+            ]);
+
+            $this->timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                "Pedido saiu da fila de preparação do KoraSync — {$order->origin} confirmou \"{$newStatus}\" (coleta/despacho real do pacote)."
+            );
+        }
 
         if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled) {
             $this->finalizer->restoreStockIfNeeded($order, 'Pedido cancelado no canal de origem');

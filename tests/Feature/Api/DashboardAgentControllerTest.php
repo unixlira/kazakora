@@ -676,6 +676,55 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertFalse(collect($response->json('scheduled_shipments'))->contains('order_id', $cancelled->id));
     }
 
+    /**
+     * Pedido explícito 2026-08-29 ("ajuste no KoraSync/KazaKora... pedido
+     * embalado continua na fila mesmo depois do ponto de coleta"): o
+     * status já é atualizado corretamente pro canal confirmar a coleta de
+     * verdade (ShipmentService::syncOrderStatusFromShipment pro Mercado
+     * Livre, ShopeeDriver::mapOrderStatus pra Shopee) — o que faltava era
+     * a própria fila parar de mostrar pedido nesse status "pra auditoria"
+     * (decisão antiga de 2026-08-15, revertida agora especificamente pra
+     * SHIPPED/COMPLETED, mesmo padrão já usado pra CANCELLED acima).
+     */
+    public function test_shipped_or_completed_order_does_not_appear_in_the_queue(): void
+    {
+        $shipped = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'SHIPPED-1']);
+        $completed = $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'external_order_id' => 'COMPLETED-1']);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('queue'))->contains('id', $shipped->id));
+        $this->assertFalse(collect($response->json('queue'))->contains('id', $completed->id));
+        $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $shipped->id));
+    }
+
+    /**
+     * Mesmo bug do teste acima, na aba de vendas futuras agendadas do
+     * Mercado Livre — um pedido que o canal já confirmou coletado não
+     * precisa de nenhuma ação, mesmo que tivesse scheduled_for no passado.
+     */
+    public function test_shipped_order_does_not_appear_in_scheduled_shipments(): void
+    {
+        $shipped = $this->makeOrder([
+            'status' => Order::STATUS_SHIPPED,
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-SHIPPED-SCHEDULED',
+        ]);
+
+        ChannelShipment::create([
+            'order_id' => $shipped->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_PENDING,
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/scheduled-shipments');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('scheduled_shipments'))->contains('order_id', $shipped->id));
+    }
+
     public function test_pack_order_marks_it_packed_without_removing_it_from_the_queue(): void
     {
         $order = $this->makeOrder(['external_order_id' => 'ML-1']);

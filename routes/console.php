@@ -33,6 +33,18 @@ Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
 
+// Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
+// "pedido embalado continua na fila mesmo depois do ponto de coleta
+// escanear o pacote... preferir webhook, mas manter verificação periódica
+// como garantia") — orders:sync-mercadolivre acima NÃO cobre isso: ele
+// relê o pedido no nível de PEDIDO, e o Mercado Livre nunca reflete
+// entrega ali (só no sub-recurso shipment, ver ShipmentService::
+// processWebhook()). Rodando mais frequente que a reconciliação geral
+// (30min, não 1h) porque é justamente a garantia contra webhook perdido —
+// só reconsulta pedido ainda "pago" (ChannelShipment com order confirmado
+// no Mercado Livre), consulta rápida e idempotente.
+Schedule::command('orders:poll-mercadolivre-shipment-status')->everyThirtyMinutes();
+
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
 // ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,

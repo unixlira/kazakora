@@ -91,7 +91,27 @@ class ShipmentService
             return;
         }
 
-        $raw = $this->getShipment($shipmentId);
+        $this->syncOrderStatusFromShipment($shipment);
+    }
+
+    /**
+     * Extraído de processWebhook() (pedido explícito 2026-08-29, "manter
+     * uma rotina de verificação periódica como garantia") — mesma consulta
+     * ao shipment real + mapeamento shipped/delivered, agora reaproveitável
+     * por um polling agendado (ver App\Console\Commands\
+     * PollMercadoLivreShipmentStatuses) além do webhook. O Mercado Livre
+     * nunca reflete entrega no pedido em si (só no sub-recurso shipment,
+     * ver comentário completo em processWebhook() acima), então sem essa
+     * rotina de garantia um webhook perdido deixaria o pedido pago pra
+     * sempre, mesmo já entregue de verdade.
+     */
+    public function syncOrderStatusFromShipment(ChannelShipment $shipment): void
+    {
+        if (! $shipment->external_shipment_id || ! $shipment->order) {
+            return;
+        }
+
+        $raw = $this->getShipment($shipment->external_shipment_id);
 
         $newOrderStatus = match ($raw['status'] ?? null) {
             'shipped' => Order::STATUS_SHIPPED,
@@ -100,7 +120,7 @@ class ShipmentService
         };
 
         if ($newOrderStatus !== null) {
-            $this->importer->syncStatus($shipment->order, $newOrderStatus);
+            $this->importer->syncStatus($shipment->order, $newOrderStatus, $raw['status'] ?? null);
         }
     }
 }

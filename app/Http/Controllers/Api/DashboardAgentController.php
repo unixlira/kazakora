@@ -561,6 +561,7 @@ class DashboardAgentController extends Controller
         $today = now()->startOfDay();
         $yesterday = $today->clone()->subDay();
         $tomorrow = $today->clone()->addDay();
+        $monthStart = $today->clone()->startOfMonth();
 
         $relations = [
             'items:id,order_id,product_id,product_name,quantity',
@@ -571,14 +572,26 @@ class DashboardAgentController extends Controller
             'channelShipment:id,order_id,status,scheduled_for',
         ];
 
-        // Pedido já resolvido (embalado ou cancelado) — não entra na conta
-        // de estoque (embalar é físico, já aconteceu; cancelado não
-        // precisa mais de nada), só precisa estar na janela ontem/hoje pra
-        // continuar aparecendo na Fila normal (comportamento inalterado
-        // desde 2026-08-13/-17).
-        $fixedOrders = Order::query()
+        // Pedido que NÃO é "pago e ainda não embalado" — já embalado,
+        // cancelado, aguardando pagamento, ou já enviado/concluído — exibido
+        // como está na Fila normal quando cai na janela ontem/hoje, SEM
+        // entrar na conta de estoque. Pedido explícito 2026-08-15: mostrar
+        // TODO pedido do dia, qualquer status (auditoria do dia, não fila de
+        // separação em si).
+        //
+        // BUG REAL 2026-08-29, relatado pelo usuário ("está aparecendo
+        // vendas antigas já entregues"): a versão anterior usava só "status
+        // != cancelled" pra decidir quem entra na conta de estoque — isso
+        // incluía pedido já ENVIADO/CONCLUÍDO sem packed_at (resolvido antes
+        // desse campo existir, ou por fora do KoraSync), fazendo o sistema
+        // achar que uma venda já entregue há semanas ainda "precisava de
+        // estoque pra separar". Só status PAID representa de verdade "ainda
+        // precisa ser separado" — os outros status (mesmo sem packed_at) já
+        // saíram da mão ou nem foram pagos ainda, não fazem parte da conta
+        // de estoque de jeito nenhum.
+        $displayOnlyOrders = Order::query()
             ->where(function ($query) {
-                $query->whereNotNull('packed_at')->orWhere('status', Order::STATUS_CANCELLED);
+                $query->whereNotNull('packed_at')->orWhere('status', '!=', Order::STATUS_PAID);
             })
             ->where(function ($query) use ($yesterday, $tomorrow) {
                 // Sem entrega agendada — entra pela data normal da venda,
@@ -601,21 +614,39 @@ class DashboardAgentController extends Controller
             ->withSum('items as units_count', 'quantity')
             ->get();
 
-        // Pedido AINDA NÃO resolvido (nem embalado, nem cancelado) — SEM
-        // corte de data aqui, de propósito (BUG REAL 2026-08-29, relatado
-        // pelo usuário: 2 vendas de controle de Xbox da Shopee sem estoque
-        // sumiam da aba "Sem Estoque" porque tinham sido vendidas fora da
-        // janela ontem/hoje). "Sem Estoque" é uma fila de REPOSIÇÃO em
-        // aberto — pode levar dias até repor no fornecedor, não faz
-        // sentido ela "esquecer" um pedido só porque passou de ontem, ao
-        // contrário da Fila normal (que é só o trabalho de hoje, de
-        // propósito, pra não acumular represamento antigo nela — ver bug
-        // 2026-08-17). O corte pra Fila normal é aplicado depois, em PHP
-        // (isInTodayWindow), sobre quem tem estoque OK — sem precisar de
-        // uma 2ª query.
+        // min(início do mês, ontem) — não simplesmente $monthStart: se HOJE
+        // for dia 1º do mês, "ontem" cai no mês anterior, e o carry-over de
+        // pedido pago de ontem ainda não embalado (garantido desde
+        // 2026-08-17, ver isInTodayWindow) não pode quebrar só por causa do
+        // corte mensal novo — ele precisa continuar entrando em
+        // $actionableOrders pra aparecer na Fila normal amanhã de manhã.
+        $actionableSince = $yesterday->lessThan($monthStart) ? $yesterday : $monthStart;
+
+        // SÓ pedido PAGO e ainda não embalado entra na conta de estoque — é
+        // o único status que representa de verdade "precisa separar, tem
+        // que ter produto pra isso" (ver BUG REAL acima). created_at >=
+        // início do mês (pedido explícito 2026-08-29: "sem estoque deve ser
+        // mostrado a partir desse mês em diante") — não é mais "sem limite
+        // nenhum" (1ª correção no mesmo dia, também baseada num relato real,
+        // mas longe demais: a aba é sobre reposição em aberto, não um
+        // arquivo morto de anos). EXCETO pedido com entrega agendada
+        // (scheduled_for) — esse sempre entra na conta de estoque não
+        // importa quando foi vendido (pode ter sido há semanas, ver
+        // MercadoLivreDriver::extractScheduledFor()): o que importa pra ele
+        // é a data de entrega, não a data da venda, e o estoque precisa
+        // ficar reservado pra ele desde já (FIFO de verdade), não só a
+        // partir do dia em que a etiqueta libera. O corte pra Fila normal é
+        // aplicado depois, em PHP (isInTodayWindow), sobre quem tem estoque
+        // OK — sem precisar de uma 2ª query.
         $actionableOrders = Order::query()
+            ->where('status', Order::STATUS_PAID)
             ->whereNull('packed_at')
-            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->where(function ($query) use ($actionableSince) {
+                $query->where('created_at', '>=', $actionableSince)
+                    ->orWhereHas('channelShipment', function ($query) {
+                        $query->whereNotNull('scheduled_for');
+                    });
+            })
             ->with($relations)
             ->withSum('items as units_count', 'quantity')
             ->orderBy('id')
@@ -629,7 +660,7 @@ class DashboardAgentController extends Controller
         // normal (que é só a "vitrine" de hoje).
         $withStockToday = $withStock->filter(fn (Order $order) => $this->isInTodayWindow($order, $yesterday, $tomorrow));
 
-        $normalOrders = $fixedOrders->merge($withStockToday)->sortByDesc('id')->values();
+        $normalOrders = $displayOnlyOrders->merge($withStockToday)->sortByDesc('id')->values();
         $outOfStockOrders = $outOfStock->sortByDesc('id')->values();
 
         $mapper = fn (Order $order) => $this->mapQueueOrder($order, $shortages[$order->id] ?? []);
@@ -646,8 +677,8 @@ class DashboardAgentController extends Controller
     /**
      * "Ontem+hoje" pra exibição normal, OU o dia agendado quando o pedido
      * tem entrega/coleta programada (ver comentário completo em queue(),
-     * seção $fixedOrders, mesma regra replicada aqui em PHP pra reaplicar
-     * sobre $withStock sem precisar de uma 2ª query no banco).
+     * seção $displayOnlyOrders, mesma regra replicada aqui em PHP pra
+     * reaplicar sobre $withStock sem precisar de uma 2ª query no banco).
      */
     private function isInTodayWindow(Order $order, \Carbon\Carbon $yesterday, \Carbon\Carbon $tomorrow): bool
     {
@@ -680,7 +711,7 @@ class DashboardAgentController extends Controller
      * estoque disponível antes — quem vendeu depois é que fica marcado
      * como sem estoque.
      *
-     * @param  \Illuminate\Support\Collection<int, Order>  $actionableOrders  já carregado com items.product:stock (ver queue()), sem pedido embalado/cancelado.
+     * @param  \Illuminate\Support\Collection<int, Order>  $actionableOrders  já carregado com items.product:stock (ver queue()) — só pedido PAID e ainda não embalado, ver comentário completo lá.
      * @return array{0: \Illuminate\Support\Collection<int, Order>, 1: \Illuminate\Support\Collection<int, Order>, 2: array<int, array<int, array{sku: ?string, name: string, missing: int}>>}
      */
     private function partitionByStock(\Illuminate\Support\Collection $actionableOrders): array

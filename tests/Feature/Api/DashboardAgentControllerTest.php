@@ -519,15 +519,27 @@ class DashboardAgentControllerTest extends TestCase
      * (controle de Xbox, Shopee) vendidas fora da janela ontem/hoje
      * sumiam da aba "Sem Estoque" por causa do mesmo corte de data que só
      * faz sentido pra Fila normal ("hoje só") — "Sem Estoque" é uma fila
-     * de reposição em aberto, sem prazo, ao contrário da Fila normal.
+     * de reposição em aberto, mas com limite: a partir do início do mês
+     * corrente (2ª correção no mesmo dia, pedido explícito: "sem estoque
+     * deve ser mostrado a partir desse mês em diante" — a 1ª correção,
+     * "sem limite nenhum", foi longe demais e trazia venda de meses atrás
+     * já enviada/concluída, ver teste abaixo).
      */
-    public function test_out_of_stock_orders_have_no_date_limit_unlike_the_normal_queue(): void
+    public function test_out_of_stock_orders_are_shown_from_the_start_of_the_month_but_not_before(): void
     {
         $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL']);
 
-        $oldOutOfStock = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-OLD']);
-        $oldOutOfStock->forceFill(['created_at' => now()->subDays(10)])->save();
-        $oldOutOfStock->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+        // Início do mês corrente (limite INCLUSIVE) — ainda deve aparecer.
+        $earlyThisMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-EARLY-MONTH']);
+        $earlyThisMonth->forceFill(['created_at' => now()->startOfMonth()])->save();
+        $earlyThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        // 2 dias antes do início do mês (folga de propósito, pra nunca
+        // colidir com o carry-over de "ontem" perto da virada — ver teste
+        // de virada de mês logo abaixo) — não deve aparecer em lugar nenhum.
+        $beforeThisMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-BEFORE-MONTH']);
+        $beforeThisMonth->forceFill(['created_at' => now()->startOfMonth()->subDays(2)])->save();
+        $beforeThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
 
@@ -535,9 +547,65 @@ class DashboardAgentControllerTest extends TestCase
         $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
         $queue = collect($response->json('queue'))->keyBy('id');
 
-        $this->assertTrue($outOfStock->has($oldOutOfStock->id));
-        $this->assertSame('XBOX-CTRL', $outOfStock[$oldOutOfStock->id]['stock_shortage'][0]['sku']);
-        $this->assertFalse($queue->has($oldOutOfStock->id));
+        $this->assertTrue($outOfStock->has($earlyThisMonth->id));
+        $this->assertSame('XBOX-CTRL', $outOfStock[$earlyThisMonth->id]['stock_shortage'][0]['sku']);
+        $this->assertFalse($queue->has($earlyThisMonth->id));
+
+        $this->assertFalse($outOfStock->has($beforeThisMonth->id));
+        $this->assertFalse($queue->has($beforeThisMonth->id));
+    }
+
+    /**
+     * BUG REAL 2026-08-15 (o carry-over de "ontem" — ver isInTodayWindow) +
+     * o corte mensal novo (2026-08-29) não podem se contradizer: se HOJE é
+     * dia 1º do mês, "ontem" cai no mês anterior — um pedido pago de ontem
+     * ainda não embalado precisa continuar entrando na conta de estoque
+     * mesmo assim. Carbon::setTestNow() simula esse instante exato, não dá
+     * pra depender de rodar o teste justo no dia 1º de verdade.
+     */
+    public function test_actionable_orders_still_include_yesterday_when_today_is_the_first_of_the_month(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow('2026-09-01 10:00:00');
+
+        try {
+            $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL-3']);
+
+            $yesterdayLastMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-YESTERDAY-LAST-MONTH']);
+            $yesterdayLastMonth->forceFill(['created_at' => now()->subDay()])->save(); // 2026-08-31
+            $yesterdayLastMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+            $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+            $response->assertOk();
+            $this->assertTrue(collect($response->json('out_of_stock'))->contains('id', $yesterdayLastMonth->id));
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
+    /**
+     * BUG REAL relatado pelo usuário 2026-08-29 ("está aparecendo vendas
+     * antigas já entregues"): a 1ª correção do dia usava "status !=
+     * cancelled" pra decidir quem entra na conta de estoque — isso incluía
+     * pedido já ENVIADO/CONCLUÍDO sem packed_at (resolvido antes desse
+     * campo existir, ou por fora do KoraSync), fazendo o sistema achar que
+     * uma venda já entregue ainda "precisava de estoque". Corrigido pra só
+     * status PAID entrar na conta — os outros (mesmo sem packed_at) não
+     * fazem parte da fila de separação de jeito nenhum, só aparecem como
+     * está na Fila normal (se caírem na janela ontem/hoje).
+     */
+    public function test_out_of_stock_never_includes_an_already_shipped_order_even_without_packed_at(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL-4']);
+
+        $shippedNoPackedAt = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-ALREADY-SHIPPED']);
+        $shippedNoPackedAt->forceFill(['created_at' => now()->startOfMonth()])->save();
+        $shippedNoPackedAt->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $shippedNoPackedAt->id));
     }
 
     /**

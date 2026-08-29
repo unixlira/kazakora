@@ -408,6 +408,38 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertFalse($queue->has($scheduledForFuture->id));
     }
 
+    /**
+     * BUG REAL 2026-08-29 (relatado pelo usuário: venda do Mercado Livre
+     * aparecendo na fila de preparação antes da data agendada) — pedido
+     * vendido HOJE mas com entrega agendada pra semana que vem batia na
+     * condição de created_at (hoje) e entrava na fila mesmo faltando dias
+     * pra etiqueta liberar. Cobertura específica desse cenário (venda de
+     * HOJE + agendamento futuro), diferente do teste acima (venda de
+     * SEMANAS atrás + agendamento futuro) — o bug só aparecia quando
+     * created_at também caía dentro da janela ontem/hoje.
+     */
+    public function test_queue_excludes_a_scheduled_order_sold_today_when_its_scheduled_day_has_not_arrived(): void
+    {
+        $soldTodayScheduledForFuture = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SOLD-TODAY-FUTURE']);
+        ChannelShipment::create([
+            'order_id' => $soldTodayScheduledForFuture->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now(),
+            'scheduled_for' => now()->addDays(5),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+        $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
+
+        $this->assertFalse($queue->has($soldTodayScheduledForFuture->id));
+        $this->assertFalse($outOfStock->has($soldTodayScheduledForFuture->id));
+    }
+
     public function test_queue_marks_label_ready_true_once_the_channel_releases_the_scheduled_label(): void
     {
         $order = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-READY']);
@@ -480,6 +512,32 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertSame(2, $outOfStock[$shortfall->id]['stock_shortage'][0]['missing']);
 
         $this->assertSame(2, $response->json('pending_separation_count'));
+    }
+
+    /**
+     * BUG REAL relatado pelo usuário 2026-08-29: 2 vendas sem estoque
+     * (controle de Xbox, Shopee) vendidas fora da janela ontem/hoje
+     * sumiam da aba "Sem Estoque" por causa do mesmo corte de data que só
+     * faz sentido pra Fila normal ("hoje só") — "Sem Estoque" é uma fila
+     * de reposição em aberto, sem prazo, ao contrário da Fila normal.
+     */
+    public function test_out_of_stock_orders_have_no_date_limit_unlike_the_normal_queue(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL']);
+
+        $oldOutOfStock = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-OLD']);
+        $oldOutOfStock->forceFill(['created_at' => now()->subDays(10)])->save();
+        $oldOutOfStock->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($outOfStock->has($oldOutOfStock->id));
+        $this->assertSame('XBOX-CTRL', $outOfStock[$oldOutOfStock->id]['stock_shortage'][0]['sku']);
+        $this->assertFalse($queue->has($oldOutOfStock->id));
     }
 
     /**

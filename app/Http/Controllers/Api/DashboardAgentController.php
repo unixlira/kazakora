@@ -530,13 +530,23 @@ class DashboardAgentController extends Controller
      * saído dias antes, mas o canal só libera a etiqueta perto da data
      * agendada, e é nesse dia que o operador precisa ver o pedido pra se
      * organizar (mesmo raciocínio de "controle" que já motivava
-     * scheduledShipments(), só que dentro da fila principal também). Union
-     * via orWhereHas: pedido de hoje/ontem (created_at, como já era) OU
-     * pedido com envio agendado pra ontem/hoje (scheduled_for),
-     * independente de quando a venda em si aconteceu. 'scheduled_for'/
-     * 'label_ready' no payload (abaixo) alimentam o 3º estado do botão do
-     * KoraSync ("Sem Etiqueta") — ver OrderQueueCardViewModel.
-     * IsAwaitingLabel no app nativo.
+     * scheduledShipments(), só que dentro da fila principal também).
+     * 'scheduled_for'/'label_ready' no payload (abaixo) alimentam o 3º
+     * estado do botão do KoraSync ("Sem Etiqueta") — ver
+     * OrderQueueCardViewModel.IsAwaitingLabel no app nativo.
+     *
+     * BUG REAL 2026-08-29 (achado no relato do usuário: venda do Mercado
+     * Livre aparecendo na fila de preparação antes da data agendada) — a
+     * condição original era um `orWhereHas` solto: `created_at` hoje/ontem
+     * OU `scheduled_for` hoje/ontem, sem exclusão mútua. Um pedido vendido
+     * HOJE mas com entrega agendada pra semana que vem batia na PRIMEIRA
+     * condição (created_at) e entrava na fila mesmo faltando dias pra
+     * etiqueta liberar — o "OU" nunca teve o efeito pretendido de "entra
+     * pela data agendada QUANDO existe uma", só ampliava o critério.
+     * Corrigido pra mútuo excludente: pedido COM entrega agendada só entra
+     * pela janela de scheduled_for (nunca pela de created_at, não importa
+     * quando foi vendido); pedido SEM entrega agendada continua entrando
+     * pela janela de created_at, como sempre foi.
      *
      * Pedido explícito 2026-08-29 (KoraSync v2.0): a fila de hoje agora se
      * divide em duas abas — "Fila normal" (com estoque, pode separar já) e
@@ -552,53 +562,108 @@ class DashboardAgentController extends Controller
         $yesterday = $today->clone()->subDay();
         $tomorrow = $today->clone()->addDay();
 
-        $orders = Order::query()
+        $relations = [
+            'items:id,order_id,product_id,product_name,quantity',
+            // stock a mais que a versão anterior buscava — é o dado que
+            // partitionByStock() usa pra decidir a aba. SKU continua vindo
+            // junto, pro payload de shortage.
+            'items.product:id,sku,stock',
+            'channelShipment:id,order_id,status,scheduled_for',
+        ];
+
+        // Pedido já resolvido (embalado ou cancelado) — não entra na conta
+        // de estoque (embalar é físico, já aconteceu; cancelado não
+        // precisa mais de nada), só precisa estar na janela ontem/hoje pra
+        // continuar aparecendo na Fila normal (comportamento inalterado
+        // desde 2026-08-13/-17).
+        $fixedOrders = Order::query()
+            ->where(function ($query) {
+                $query->whereNotNull('packed_at')->orWhere('status', Order::STATUS_CANCELLED);
+            })
             ->where(function ($query) use ($yesterday, $tomorrow) {
-                $query->whereBetween('created_at', [$yesterday, $tomorrow])
+                // Sem entrega agendada — entra pela data normal da venda,
+                // como sempre foi.
+                $query->where(function ($query) use ($yesterday, $tomorrow) {
+                    $query->whereBetween('created_at', [$yesterday, $tomorrow])
+                        ->whereDoesntHave('channelShipment', function ($query) {
+                            $query->whereNotNull('scheduled_for');
+                        });
+                })
+                    // Com entrega agendada — só entra no dia agendado,
+                    // NUNCA no dia da venda (BUG REAL 2026-08-29: pedido
+                    // vendido hoje mas agendado pra semana que vem batia
+                    // na condição de created_at e entrava antes da hora).
                     ->orWhereHas('channelShipment', function ($query) use ($yesterday, $tomorrow) {
                         $query->whereBetween('scheduled_for', [$yesterday, $tomorrow]);
                     });
             })
-            ->with([
-                'items:id,order_id,product_id,product_name,quantity',
-                // stock a mais que a versão anterior buscava — é o dado que
-                // partitionByStock() usa pra decidir a aba (ver comentário
-                // lá). SKU continua vindo junto, pro payload de shortage.
-                'items.product:id,sku,stock',
-                'channelShipment:id,order_id,status,scheduled_for',
-            ])
+            ->with($relations)
             ->withSum('items as units_count', 'quantity')
-            // orderByDesc('id') em vez de latest()/created_at: dois pedidos
-            // pagos a poucos segundos de distância (ex: 2 vendas quase
-            // simultâneas em canais diferentes) podem cair no mesmo
-            // segundo de created_at (granularidade do datetime do MySQL),
-            // e ORDER BY created_at DESC sozinho não garante desempate —
-            // achado real testando este endpoint (o mais antigo dos dois
-            // vinha primeiro). id crescente já é uma ordem cronológica
-            // exata e sem empate possível.
-            ->orderByDesc('id')
             ->get();
 
-        [$withStock, $withoutStock, $shortages] = $this->partitionByStock($orders);
+        // Pedido AINDA NÃO resolvido (nem embalado, nem cancelado) — SEM
+        // corte de data aqui, de propósito (BUG REAL 2026-08-29, relatado
+        // pelo usuário: 2 vendas de controle de Xbox da Shopee sem estoque
+        // sumiam da aba "Sem Estoque" porque tinham sido vendidas fora da
+        // janela ontem/hoje). "Sem Estoque" é uma fila de REPOSIÇÃO em
+        // aberto — pode levar dias até repor no fornecedor, não faz
+        // sentido ela "esquecer" um pedido só porque passou de ontem, ao
+        // contrário da Fila normal (que é só o trabalho de hoje, de
+        // propósito, pra não acumular represamento antigo nela — ver bug
+        // 2026-08-17). O corte pra Fila normal é aplicado depois, em PHP
+        // (isInTodayWindow), sobre quem tem estoque OK — sem precisar de
+        // uma 2ª query.
+        $actionableOrders = Order::query()
+            ->whereNull('packed_at')
+            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->with($relations)
+            ->withSum('items as units_count', 'quantity')
+            ->orderBy('id')
+            ->get();
+
+        [$withStock, $outOfStock, $shortages] = $this->partitionByStock($actionableOrders);
+
+        // FIFO calculado sobre TODO o backlog acionável (não só hoje) —
+        // pedido antigo represado sem estoque continua tendo prioridade
+        // real sobre uma reposição futura, mesmo não aparecendo na Fila
+        // normal (que é só a "vitrine" de hoje).
+        $withStockToday = $withStock->filter(fn (Order $order) => $this->isInTodayWindow($order, $yesterday, $tomorrow));
+
+        $normalOrders = $fixedOrders->merge($withStockToday)->sortByDesc('id')->values();
+        $outOfStockOrders = $outOfStock->sortByDesc('id')->values();
 
         $mapper = fn (Order $order) => $this->mapQueueOrder($order, $shortages[$order->id] ?? []);
 
         return response()->json([
-            'queue' => $withStock->map($mapper)->values(),
-            'out_of_stock' => $withoutStock->map($mapper)->values(),
-            'pending_separation_count' => $withStock
-                ->filter(fn (Order $order) => $order->packed_at === null && $order->status !== Order::STATUS_CANCELLED)
-                ->count() + $withoutStock->count(),
+            'queue' => $normalOrders->map($mapper)->values(),
+            'out_of_stock' => $outOfStockOrders->map($mapper)->values(),
+            // Todo o backlog sem estoque conta aqui também (não só o de
+            // hoje) — é trabalho pendente de verdade, só esperando repor.
+            'pending_separation_count' => $withStockToday->count() + $outOfStockOrders->count(),
         ]);
     }
 
     /**
-     * Divide os pedidos ainda não embalados (nem cancelados) entre "tem
-     * estoque pra separar agora" (aba Fila normal) e "sem estoque, precisa
-     * repor no fornecedor antes" (aba Sem Estoque) — pedido explícito
-     * 2026-08-29. Pedido já embalado ou cancelado sempre fica na Fila
-     * normal, sem entrar nessa conta (embalar é físico, já aconteceu;
-     * cancelado não precisa mais de nada).
+     * "Ontem+hoje" pra exibição normal, OU o dia agendado quando o pedido
+     * tem entrega/coleta programada (ver comentário completo em queue(),
+     * seção $fixedOrders, mesma regra replicada aqui em PHP pra reaplicar
+     * sobre $withStock sem precisar de uma 2ª query no banco).
+     */
+    private function isInTodayWindow(Order $order, \Carbon\Carbon $yesterday, \Carbon\Carbon $tomorrow): bool
+    {
+        $scheduledFor = $order->channelShipment?->scheduled_for;
+
+        if ($scheduledFor !== null) {
+            return $scheduledFor->between($yesterday, $tomorrow);
+        }
+
+        return $order->created_at->between($yesterday, $tomorrow);
+    }
+
+    /**
+     * Divide os pedidos AINDA NÃO resolvidos (já filtrados por quem chama —
+     * ver queue()) entre "tem estoque pra separar agora" e "sem estoque,
+     * precisa repor no fornecedor antes" — pedido explícito 2026-08-29.
      *
      * Cálculo em tempo real a partir de Product::stock, SEM nenhum estado
      * novo persistido — é isso que faz a aba trocar sozinha: assim que o
@@ -615,28 +680,17 @@ class DashboardAgentController extends Controller
      * estoque disponível antes — quem vendeu depois é que fica marcado
      * como sem estoque.
      *
-     * @param  \Illuminate\Support\Collection<int, Order>  $orders  já carregado com items.product:stock (ver queue()).
+     * @param  \Illuminate\Support\Collection<int, Order>  $actionableOrders  já carregado com items.product:stock (ver queue()), sem pedido embalado/cancelado.
      * @return array{0: \Illuminate\Support\Collection<int, Order>, 1: \Illuminate\Support\Collection<int, Order>, 2: array<int, array<int, array{sku: ?string, name: string, missing: int}>>}
      */
-    private function partitionByStock(\Illuminate\Support\Collection $orders): array
+    private function partitionByStock(\Illuminate\Support\Collection $actionableOrders): array
     {
-        $fixed = collect();
-        $actionable = collect();
-
-        foreach ($orders as $order) {
-            if ($order->packed_at !== null || $order->status === Order::STATUS_CANCELLED) {
-                $fixed->push($order);
-            } else {
-                $actionable->push($order);
-            }
-        }
-
         $runningStock = [];
         $withStock = collect();
         $withoutStock = collect();
         $shortages = [];
 
-        foreach ($actionable->sortBy('id') as $order) {
+        foreach ($actionableOrders->sortBy('id') as $order) {
             $orderShortage = [];
 
             foreach ($order->items as $item) {
@@ -677,11 +731,7 @@ class DashboardAgentController extends Controller
             }
         }
 
-        return [
-            $fixed->merge($withStock)->sortByDesc('id')->values(),
-            $withoutStock->sortByDesc('id')->values(),
-            $shortages,
-        ];
+        return [$withStock, $withoutStock, $shortages];
     }
 
     /**

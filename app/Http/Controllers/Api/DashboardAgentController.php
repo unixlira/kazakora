@@ -573,10 +573,10 @@ class DashboardAgentController extends Controller
         ];
 
         // Pedido que NÃO é "pago e ainda não embalado" — já embalado,
-        // cancelado, aguardando pagamento, ou já enviado/concluído — exibido
-        // como está na Fila normal quando cai na janela ontem/hoje, SEM
-        // entrar na conta de estoque. Pedido explícito 2026-08-15: mostrar
-        // TODO pedido do dia, qualquer status (auditoria do dia, não fila de
+        // aguardando pagamento, ou já enviado/concluído — exibido como está
+        // na Fila normal quando cai na janela ontem/hoje, SEM entrar na
+        // conta de estoque. Pedido explícito 2026-08-15: mostrar TODO
+        // pedido do dia, qualquer status (auditoria do dia, não fila de
         // separação em si).
         //
         // BUG REAL 2026-08-29, relatado pelo usuário ("está aparecendo
@@ -589,7 +589,15 @@ class DashboardAgentController extends Controller
         // precisa ser separado" — os outros status (mesmo sem packed_at) já
         // saíram da mão ou nem foram pagos ainda, não fazem parte da conta
         // de estoque de jeito nenhum.
+        //
+        // BUG REAL 2026-08-29 (2ª correção no mesmo dia, pedido #913 — venda
+        // lançada errada, cancelada de propósito pra sumir da fila):
+        // CANCELLED saiu de vez da regra de "auditoria do dia" acima — a
+        // exclusão explícita abaixo reverte especificamente esse status;
+        // os outros (aguardando pagamento, enviado, concluído) continuam
+        // exibidos como antes.
         $displayOnlyOrders = Order::query()
+            ->where('status', '!=', Order::STATUS_CANCELLED)
             ->where(function ($query) {
                 $query->whereNotNull('packed_at')->orWhere('status', '!=', Order::STATUS_PAID);
             })
@@ -908,11 +916,16 @@ class DashboardAgentController extends Controller
         $shipments = ChannelShipment::query()
             ->whereNotNull('scheduled_for')
             ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
+            // Mesma regra do 2º bug real 2026-08-29 em queue(): pedido
+            // cancelado não precisa mais de nenhuma ação (nem aqui, na
+            // aba de agendados do ML) — sem isso, um pedido cancelado com
+            // scheduled_for continuava aparecendo pra sempre nesta lista.
+            ->whereHas('order', fn ($query) => $query->where('status', '!=', Order::STATUS_CANCELLED))
             ->when(
                 $request->query('channel'),
                 fn ($query, $channel) => $query->where('channel', $channel),
             )
-            ->with(['order:id,external_order_id,origin,shipping_name', 'order.items:id,order_id,product_name,quantity'])
+            ->with(['order:id,external_order_id,origin,shipping_name,created_at', 'order.items:id,order_id,product_name,quantity'])
             ->orderBy('scheduled_for')
             ->get()
             ->filter(fn (ChannelShipment $shipment) => $shipment->order !== null)
@@ -925,6 +938,11 @@ class DashboardAgentController extends Controller
             'customer_name' => $shipment->order->shipping_name,
             'shipping_method' => $shipment->shipping_method,
             'scheduled_for' => $shipment->scheduled_for,
+            // Data real da venda (pedido explícito 2026-08-29: "Data do
+            // Pedido... Criado:", pro card da aba Mercado Livre no
+            // KoraSync) — mesmo campo já exposto em queue() (ver
+            // mapQueueOrder), só que essa aba nunca tinha exposto antes.
+            'created_at' => $shipment->order->created_at,
             // Pra já vir pronto pro KoraSync destacar visualmente quem já
             // passou da data prometida sem liberar — não é o mesmo alerta
             // que "vai liberar em breve".

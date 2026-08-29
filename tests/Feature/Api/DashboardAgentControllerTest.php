@@ -631,6 +631,51 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertFalse(collect($after->json('out_of_stock'))->contains('id', $order->id));
     }
 
+    /**
+     * BUG REAL 2026-08-29, relatado pelo usuário (pedido #913 — venda
+     * lançada errada, cancelada de propósito pra sumir da fila): antes
+     * dessa correção, CANCELLED caía na mesma regra de "auditoria do dia"
+     * que enviado/concluído/aguardando pagamento e continuava aparecendo
+     * na Fila normal mesmo depois de cancelado.
+     */
+    public function test_cancelled_order_does_not_appear_in_the_queue_even_within_todays_window(): void
+    {
+        $cancelled = $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'external_order_id' => 'CANCELLED-913']);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('queue'))->contains('id', $cancelled->id));
+        $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $cancelled->id));
+    }
+
+    /**
+     * Mesmo bug do teste acima, só que na aba de "vendas futuras agendadas"
+     * do Mercado Livre (scheduledShipments()) — um pedido com scheduled_for
+     * que foi cancelado não precisa de nenhuma ação, não devia continuar
+     * aparecendo aqui pra sempre.
+     */
+    public function test_cancelled_order_does_not_appear_in_scheduled_shipments(): void
+    {
+        $cancelled = $this->makeOrder([
+            'status' => Order::STATUS_CANCELLED,
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-CANCELLED-SCHEDULED',
+        ]);
+
+        ChannelShipment::create([
+            'order_id' => $cancelled->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_PENDING,
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/scheduled-shipments');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('scheduled_shipments'))->contains('order_id', $cancelled->id));
+    }
+
     public function test_pack_order_marks_it_packed_without_removing_it_from_the_queue(): void
     {
         $order = $this->makeOrder(['external_order_id' => 'ML-1']);

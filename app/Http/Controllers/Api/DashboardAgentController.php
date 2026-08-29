@@ -303,9 +303,41 @@ class DashboardAgentController extends Controller
 
         $netProfitToday = $revenueToday - $marketplaceFeesToday;
 
+        // "Cancelamentos e devoluções do mês" do KoraSync v2.0 (pedido
+        // explícito 2026-08-29) — soma cancelamento (canal cancelou o
+        // pedido) com devolução/reclamação já contada em $returnsMonth
+        // acima. Duas contagens de naturezas diferentes juntas de propósito
+        // (é o card único "Cancelamentos e devoluções do mês" do layout
+        // novo), não reaproveita $cancelledToday (que é só HOJE).
+        $cancelledMonth = Order::query()
+            ->where('status', Order::STATUS_CANCELLED)
+            ->where('updated_at', '>=', $monthStart)
+            ->count();
+
+        // "Separados"/"Enviados" do card META DO DIA (pedido explícito
+        // 2026-08-29) — embalado hoje (packed_at, ver packOrder()) e
+        // etiqueta impressa hoje (mesma métrica já usada em
+        // channels()::printedTodayByChannel, aqui somada entre todos os
+        // canais pra um único número). Nenhum dos dois depende da janela
+        // ontem/hoje de queue() — conta o dia inteiro, independente de
+        // quando o pedido em si foi vendido.
+        $packedToday = Order::query()
+            ->where('packed_at', '>=', $today)
+            ->count();
+
+        $printedToday = PrintJob::query()
+            ->where('status', PrintJob::STATUS_PRINTED)
+            ->where('printed_at', '>=', $today)
+            ->count();
+
         return response()->json([
             'revenue_today' => $revenueToday,
             'sales_today' => $salesToday,
+            // Bruto (sem filtro de status), pra dar pra calcular
+            // "vendas de hoje / ontem" no META DO DIA do KoraSync (mesma
+            // base de $salesToday acima, sem PAID_STATUSES) — antes só a
+            // variação percentual viajava, não os dois números crus.
+            'sales_yesterday' => $salesYesterday,
             'cancelled_today' => $cancelledToday,
             'refunded_today' => $refundedToday,
             'cart_items_count' => $cartItemsCount,
@@ -315,6 +347,9 @@ class DashboardAgentController extends Controller
             'revenue_today_variation_pct' => $this->variationPct($revenueToday, $revenueYesterday),
             'sales_today_variation_pct' => $this->variationPct($salesToday, $salesYesterday),
             'returns_month' => $returnsMonth,
+            'cancellations_and_returns_month' => $cancelledMonth + $returnsMonth,
+            'packed_today' => $packedToday,
+            'shipped_today' => $printedToday,
             'month_label' => $now->translatedFormat('F'),
             'today_label' => $now->format('d/m/Y'),
         ]);
@@ -502,6 +537,14 @@ class DashboardAgentController extends Controller
      * 'label_ready' no payload (abaixo) alimentam o 3º estado do botão do
      * KoraSync ("Sem Etiqueta") — ver OrderQueueCardViewModel.
      * IsAwaitingLabel no app nativo.
+     *
+     * Pedido explícito 2026-08-29 (KoraSync v2.0): a fila de hoje agora se
+     * divide em duas abas — "Fila normal" (com estoque, pode separar já) e
+     * "Sem estoque" (falta produto, precisa repor no fornecedor antes de
+     * poder embalar) — ver partitionByStock() logo abaixo pra como a
+     * divisão é calculada. 'pending_separation_count' é o total ainda por
+     * separar (soma das duas abas, exceto pedido já embalado/cancelado) —
+     * alimenta o card "Pendentes de separação" do META DO DIA.
      */
     public function queue(): JsonResponse
     {
@@ -518,7 +561,10 @@ class DashboardAgentController extends Controller
             })
             ->with([
                 'items:id,order_id,product_id,product_name,quantity',
-                'items.product:id,sku',
+                // stock a mais que a versão anterior buscava — é o dado que
+                // partitionByStock() usa pra decidir a aba (ver comentário
+                // lá). SKU continua vindo junto, pro payload de shortage.
+                'items.product:id,sku,stock',
                 'channelShipment:id,order_id,status,scheduled_for',
             ])
             ->withSum('items as units_count', 'quantity')
@@ -533,7 +579,118 @@ class DashboardAgentController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $result = $orders->map(fn (Order $order) => [
+        [$withStock, $withoutStock, $shortages] = $this->partitionByStock($orders);
+
+        $mapper = fn (Order $order) => $this->mapQueueOrder($order, $shortages[$order->id] ?? []);
+
+        return response()->json([
+            'queue' => $withStock->map($mapper)->values(),
+            'out_of_stock' => $withoutStock->map($mapper)->values(),
+            'pending_separation_count' => $withStock
+                ->filter(fn (Order $order) => $order->packed_at === null && $order->status !== Order::STATUS_CANCELLED)
+                ->count() + $withoutStock->count(),
+        ]);
+    }
+
+    /**
+     * Divide os pedidos ainda não embalados (nem cancelados) entre "tem
+     * estoque pra separar agora" (aba Fila normal) e "sem estoque, precisa
+     * repor no fornecedor antes" (aba Sem Estoque) — pedido explícito
+     * 2026-08-29. Pedido já embalado ou cancelado sempre fica na Fila
+     * normal, sem entrar nessa conta (embalar é físico, já aconteceu;
+     * cancelado não precisa mais de nada).
+     *
+     * Cálculo em tempo real a partir de Product::stock, SEM nenhum estado
+     * novo persistido — é isso que faz a aba trocar sozinha: assim que o
+     * estoque do produto for reposto (StockManager::adjust, reposição
+     * manual no admin), o próximo poll do KoraSync (2s, ver
+     * DashboardPoller) já recalcula do zero e o pedido sobe pra Fila
+     * normal; e se o estoque cair de novo enquanto ele ainda está lá
+     * (outro pedido consumiu, ajuste manual pra baixo etc), ele volta
+     * sozinho pra Sem Estoque no poll seguinte — nunca precisa de uma ação
+     * manual de "mover" o pedido entre as abas.
+     *
+     * FIFO por id crescente (pedido mais antigo primeiro): com estoque
+     * insuficiente pra atender todo mundo, quem vendeu primeiro consome o
+     * estoque disponível antes — quem vendeu depois é que fica marcado
+     * como sem estoque.
+     *
+     * @param  \Illuminate\Support\Collection<int, Order>  $orders  já carregado com items.product:stock (ver queue()).
+     * @return array{0: \Illuminate\Support\Collection<int, Order>, 1: \Illuminate\Support\Collection<int, Order>, 2: array<int, array<int, array{sku: ?string, name: string, missing: int}>>}
+     */
+    private function partitionByStock(\Illuminate\Support\Collection $orders): array
+    {
+        $fixed = collect();
+        $actionable = collect();
+
+        foreach ($orders as $order) {
+            if ($order->packed_at !== null || $order->status === Order::STATUS_CANCELLED) {
+                $fixed->push($order);
+            } else {
+                $actionable->push($order);
+            }
+        }
+
+        $runningStock = [];
+        $withStock = collect();
+        $withoutStock = collect();
+        $shortages = [];
+
+        foreach ($actionable->sortBy('id') as $order) {
+            $orderShortage = [];
+
+            foreach ($order->items as $item) {
+                $productId = $item->product_id;
+
+                // Item avulso sem produto local cadastrado (sem cost_price,
+                // sem estoque pra controlar) nunca vira "sem estoque" por
+                // falta de cadastro — não é esse o problema que essa aba
+                // resolve.
+                if ($productId === null) {
+                    continue;
+                }
+
+                if (! array_key_exists($productId, $runningStock)) {
+                    $runningStock[$productId] = (int) ($item->product?->stock ?? 0);
+                }
+
+                if ($runningStock[$productId] < $item->quantity) {
+                    $orderShortage[] = [
+                        'sku' => $item->product?->sku,
+                        'name' => $item->product_name,
+                        'missing' => $item->quantity - $runningStock[$productId],
+                    ];
+                }
+            }
+
+            if ($orderShortage === []) {
+                foreach ($order->items as $item) {
+                    if ($item->product_id !== null) {
+                        $runningStock[$item->product_id] -= $item->quantity;
+                    }
+                }
+
+                $withStock->push($order);
+            } else {
+                $withoutStock->push($order);
+                $shortages[$order->id] = $orderShortage;
+            }
+        }
+
+        return [
+            $fixed->merge($withStock)->sortByDesc('id')->values(),
+            $withoutStock->sortByDesc('id')->values(),
+            $shortages,
+        ];
+    }
+
+    /**
+     * @param  array<int, array{sku: ?string, name: string, missing: int}>  $stockShortage  vazio pra pedido com estoque OK — ver partitionByStock().
+     * @return array<string, mixed>
+     */
+    private function mapQueueOrder(Order $order, array $stockShortage): array
+    {
+        return [
             'id' => $order->id,
             'external_order_id' => $order->external_order_id,
             'channel' => $order->origin,
@@ -572,9 +729,11 @@ class DashboardAgentController extends Controller
                 [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED],
                 true,
             ),
-        ]);
-
-        return response()->json(['queue' => $result]);
+            // Vazio pra pedido com estoque OK — presente ⇒ KoraSync mostra
+            // "falta Nx SKU" no card da aba Sem Estoque (pedido explícito
+            // 2026-08-29, ver partitionByStock()).
+            'stock_shortage' => $stockShortage,
+        ];
     }
 
     /**
@@ -656,12 +815,22 @@ class DashboardAgentController extends Controller
      * "embalado" havia horas e a etiqueta continuava tão agendada quanto
      * antes — escondê-lo da lista era exatamente o oposto do que devia
      * acontecer (ainda NÃO PODE sair, mesmo com a caixa pronta).
+     *
+     * ?channel= (pedido explícito 2026-08-29): filtro opcional — a aba
+     * "Mercado Livre" do KoraSync v2.0 chama com channel=mercado_livre pra
+     * ver só as vendas futuras desse canal (é praticamente o único que usa
+     * entrega agendada hoje, mas o filtro é genérico, não hardcoded). Sem
+     * o parâmetro, comportamento idêntico a antes (todos os canais).
      */
-    public function scheduledShipments(): JsonResponse
+    public function scheduledShipments(Request $request): JsonResponse
     {
         $shipments = ChannelShipment::query()
             ->whereNotNull('scheduled_for')
             ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
+            ->when(
+                $request->query('channel'),
+                fn ($query, $channel) => $query->where('channel', $channel),
+            )
             ->with(['order:id,external_order_id,origin,shipping_name', 'order.items:id,order_id,product_name,quantity'])
             ->orderBy('scheduled_for')
             ->get()

@@ -127,6 +127,7 @@ class DashboardAgentControllerTest extends TestCase
         $response->assertJson([
             'revenue_today' => 280.0,
             'sales_today' => 3,
+            'sales_yesterday' => 0,
             'cancelled_today' => 1,
             'refunded_today' => 1,
             'cart_items_count' => 5,
@@ -134,6 +135,11 @@ class DashboardAgentControllerTest extends TestCase
             // capturada) - os outros dois pedidos pagos hoje não têm
             // OrderChannelFee, então entram sem desconto nenhum.
             'net_profit_today' => 260.0,
+            // 1 cancelado + 1 devolvido (Payment estornado) neste mês —
+            // card "Cancelamentos e devoluções do mês" do KoraSync v2.0.
+            'cancellations_and_returns_month' => 2,
+            'packed_today' => 0,
+            'shipped_today' => 0,
         ]);
     }
 
@@ -442,6 +448,63 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertNotNull($queue[$packed->id]['packed_at']);
     }
 
+    /**
+     * KoraSync v2.0 (pedido explícito 2026-08-29): pedido sem estoque
+     * suficiente do produto vai pra 'out_of_stock' em vez de 'queue' — FIFO
+     * por id (quem vendeu primeiro consome o estoque disponível primeiro).
+     */
+    public function test_queue_splits_orders_between_normal_and_out_of_stock_by_available_stock(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 5, 'sku' => 'SKU-1']);
+
+        // Vendeu primeiro (id menor) — consome todo o estoque disponível.
+        $covered = $this->makeOrder(['external_order_id' => 'COVERED']);
+        $covered->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 5, 'subtotal' => 50]);
+
+        // Vendeu depois — não sobrou estoque nenhum pra este.
+        $shortfall = $this->makeOrder(['external_order_id' => 'SHORTFALL']);
+        $shortfall->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 2, 'subtotal' => 20]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+        $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
+
+        $this->assertTrue($queue->has($covered->id));
+        $this->assertSame([], $queue[$covered->id]['stock_shortage']);
+
+        $this->assertFalse($queue->has($shortfall->id));
+        $this->assertTrue($outOfStock->has($shortfall->id));
+        $this->assertSame('SKU-1', $outOfStock[$shortfall->id]['stock_shortage'][0]['sku']);
+        $this->assertSame(2, $outOfStock[$shortfall->id]['stock_shortage'][0]['missing']);
+
+        $this->assertSame(2, $response->json('pending_separation_count'));
+    }
+
+    /**
+     * KoraSync v2.0: assim que o estoque é reposto, o próximo poll (2s) já
+     * recalcula e o pedido sobe sozinho pra Fila normal — sem nenhuma ação
+     * manual de "mover" entre as abas (cálculo em tempo real, sem estado
+     * persistido, ver partitionByStock() no controller).
+     */
+    public function test_out_of_stock_order_moves_back_to_normal_queue_once_restocked(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'SKU-2']);
+        $order = $this->makeOrder(['external_order_id' => 'RESTOCK-ME']);
+        $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 3, 'subtotal' => 30]);
+
+        $before = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+        $this->assertTrue(collect($before->json('out_of_stock'))->contains('id', $order->id));
+        $this->assertFalse(collect($before->json('queue'))->contains('id', $order->id));
+
+        $product->update(['stock' => 3]);
+
+        $after = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+        $this->assertTrue(collect($after->json('queue'))->contains('id', $order->id));
+        $this->assertFalse(collect($after->json('out_of_stock'))->contains('id', $order->id));
+    }
+
     public function test_pack_order_marks_it_packed_without_removing_it_from_the_queue(): void
     {
         $order = $this->makeOrder(['external_order_id' => 'ML-1']);
@@ -613,5 +676,34 @@ class DashboardAgentControllerTest extends TestCase
 
         $this->assertTrue($result[$overdue->id]['is_overdue']);
         $this->assertArrayHasKey($packedButStillScheduled->id, $result);
+    }
+
+    /**
+     * Aba "Mercado Livre" do KoraSync v2.0 (pedido explícito 2026-08-29):
+     * ?channel= filtra a mesma lista pra só um canal, sem mudar o
+     * comportamento padrão (sem o parâmetro) usado pelos testes acima.
+     */
+    public function test_scheduled_shipments_filters_by_channel_query_param(): void
+    {
+        $ml = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-FUT']);
+        ChannelShipment::create([
+            'order_id' => $ml->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(2),
+        ]);
+
+        $shopee = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-FUT']);
+        ChannelShipment::create([
+            'order_id' => $shopee->id, 'channel' => Order::ORIGIN_SHOPEE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(2),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/scheduled-shipments?channel=mercado_livre');
+
+        $response->assertOk();
+        $result = collect($response->json('scheduled_shipments'))->keyBy('order_id');
+
+        $this->assertTrue($result->has($ml->id));
+        $this->assertFalse($result->has($shopee->id));
     }
 }

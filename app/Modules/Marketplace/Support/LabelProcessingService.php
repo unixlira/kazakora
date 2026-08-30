@@ -427,12 +427,12 @@ class LabelProcessingService
         $totalReservedLines = $skuReservedLines + ($scheduledLine !== null ? 1 : 0);
         $textHeight = $totalReservedLines * $lineHeight;
 
+        // Pedido explícito 2026-08-30: "remove o hr acima do sku e
+        // quantidade que sai na impressão" — linha separadora removida,
+        // $lineY continua existindo só como referência de posicionamento
+        // pro texto abaixo (nenhuma mudança de layout vertical).
         $lineY = $size['height'] - $marginBottom - $gapAboveText - $textHeight;
         $textTop = $lineY + $gapAboveText;
-
-        $pdf->SetDrawColor(0, 0, 0);
-        $pdf->SetLineWidth(0.3);
-        $pdf->Line($marginSide, $lineY, $size['width'] - $marginSide, $lineY);
 
         $pdf->SetTextColor(0, 0, 0);
         $pdf->SetXY($marginSide, $textTop);

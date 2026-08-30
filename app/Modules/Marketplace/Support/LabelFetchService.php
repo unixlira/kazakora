@@ -190,7 +190,22 @@ class LabelFetchService
         // fácil de esquecer o contexto).
         $isScheduled = $shipment->scheduled_for !== null;
 
-        if ($isPdf && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
+        // BUG REAL 2026-08-30 (achado no relato do usuário: a faixa SKU/QTD
+        // do Mercado Livre estava saindo na 1ª página — a etiqueta de
+        // verdade, colidindo com o layout dela) — $targetPage='last' pra
+        // ML abaixo pressupõe que a etiqueta SEMPRE vem em 2 páginas
+        // (etiqueta + DANFE simplificada), mas isso não é verdade pro Flex
+        // (METHOD_FLEX/self_service, entrega própria do Mercado Livre): a
+        // etiqueta dele é 1 página só, sem a 2ª de "DADOS ADICIONAIS" —
+        // 'last' então resolve pra a ÚNICA página que existe, a etiqueta
+        // real. Decisão do usuário: pra Flex, não estampa SKU/QTD nenhum
+        // (nem 1ª nem 2ª página) — só continua saindo na Shopee (1ª
+        // página, etiqueta única de verdade) e no Mercado Livre não-Flex
+        // (2ª página real, DANFE simplificada).
+        $isMercadoLivreFlex = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE
+            && $shipment->shipping_method === ChannelShipment::METHOD_FLEX;
+
+        if ($isPdf && ! $isMercadoLivreFlex && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
             try {
                 $declarationTokens = $shipment->order->items->map(function ($item) {
                     $sku = $item->product?->sku ?: $item->product_name;

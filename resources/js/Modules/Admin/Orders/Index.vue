@@ -99,7 +99,17 @@ const columns = [
             return h(StatusBadge, { status: badge.color, label: badge.label });
         },
     },
-    { id: 'customer', header: 'Cliente', accessorFn: (row) => row.user?.name ?? '—' },
+    // BUG REAL 2026-08-30 (achado no relato do usuário: "não consigo ver
+    // onde foi parar o pedido do Everton e da Gerusa" — os dois pedidos
+    // TikTok Shop, sem conta de usuário vinculada, mostravam "—" nessa
+    // coluna e ficavam impossíveis de achar pela busca global da tabela,
+    // que filtra sobre o valor deste accessorFn — não existia bug de
+    // limite/paginação, o pedido simplesmente não tinha texto nenhum pra
+    // bater a busca). row.user só existe pra conta cadastrada no site
+    // próprio; pedido importado de marketplace (Shopee/ML/TikTok Shop) é
+    // sempre guest checkout — shipping_name é o nome real do comprador
+    // nesses casos, mesmo campo que o KoraSync já usa (CustomerName).
+    { id: 'customer', header: 'Cliente', accessorFn: (row) => row.user?.name ?? row.shipping_name ?? '—' },
     { accessorKey: 'items_count', header: 'Itens' },
     { accessorKey: 'total', header: 'Total', cell: ({ row }) => formatPrice(row.original.total) },
     {

@@ -11,11 +11,24 @@ use Illuminate\Support\Str;
 
 /**
  * OAuth2 (authorization_code) do Bling — único grant que o Bling suporta
- * (nada de client_credentials/password/implicit, confirmado no SDK oficial
- * em JS, ver bling-erp-api-js/src/auth/oauth-client.ts, já que a doc de
- * ajuda em pt-BR (ajuda.bling.com.br) fica atrás de um desafio Cloudflare
- * que bloqueia scraping — o SDK é código real, testado, mais confiável
- * aqui do que tentar adivinhar a partir da doc renderizada).
+ * (nada de client_credentials/password/implicit).
+ *
+ * Hosts CONFIRMADOS no exemplo cURL literal de developer.bling.com.br/
+ * aplicativos (achado real 2026-08-31 — a 1ª versão deste arquivo copiava
+ * o SDK comunitário em JS bling-erp-api-js, que usa www.bling.com.br pros
+ * 3 endpoints de OAuth; a doc OFICIAL mostra token e revoke em
+ * api.bling.com.br, só authorize fica em www.bling.com.br — host errado
+ * quebraria a troca do code por token silenciosamente. ajuda.bling.com.br
+ * fica atrás de um desafio Cloudflare que bloqueia scraping direto, mas o
+ * texto de developer.bling.com.br (via leitor que renderiza JS) tem os
+ * cURLs literais, mais confiável que o SDK de terceiro nesse detalhe):
+ *   - authorize: GET  https://www.bling.com.br/Api/v3/oauth/authorize
+ *   - token:     POST https://api.bling.com.br/Api/v3/oauth/token
+ *   - revoke:    POST https://api.bling.com.br/oauth/revoke (SEM /Api/v3)
+ * Headers do token/revoke por esse mesmo exemplo: Content-Type
+ * application/x-www-form-urlencoded, Accept: 1.0 (literal, não é engano —
+ * é a versão da API, não um content-type de resposta) e Authorization
+ * Basic client_id:client_secret em base64.
  *
  * Por que Bling e não TikTok Shop direto: a API do TikTok Shop exige
  * aprovação de parceiro (Partner Center) que este projeto ainda não tem —
@@ -106,8 +119,14 @@ class BlingAuthService
     {
         if ($account->access_token) {
             try {
-                Http::baseUrl(rtrim(config('services.bling.oauth_base_url'), '/'))
-                    ->withHeaders(['Authorization' => 'Basic '.$this->basicAuth()])
+                // SEM /Api/v3 — o exemplo oficial de revoke usa o host de
+                // recursos (api.bling.com.br) na raiz, diferente do token
+                // (que leva /Api/v3). Ver docblock da classe.
+                Http::baseUrl($this->apiHost())
+                    ->withHeaders([
+                        'Authorization' => 'Basic '.$this->basicAuth(),
+                        'Accept' => '1.0',
+                    ])
                     ->asForm()
                     ->post('oauth/revoke', ['token' => $account->access_token]);
             } catch (\Throwable $exception) {
@@ -129,14 +148,12 @@ class BlingAuthService
      */
     private function requestToken(array $body): array
     {
-        // enable-jwt sempre presente (confirmado no SDK oficial) — sem
-        // isso o Bling ainda aceitaria, mas devolveria o formato de token
-        // antigo (pré-migração JWT), que este serviço não foi escrito pra
-        // tratar.
-        $response = Http::baseUrl(rtrim(config('services.bling.oauth_base_url'), '/'))
+        $response = Http::baseUrl(rtrim(config('services.bling.api_base_url'), '/'))
             ->withHeaders([
                 'Authorization' => 'Basic '.$this->basicAuth(),
-                'enable-jwt' => '1',
+                // Literal do exemplo oficial (developer.bling.com.br/aplicativos)
+                // — não é um Content-Type de resposta, é a versão da API.
+                'Accept' => '1.0',
             ])
             ->asForm()
             ->post('oauth/token', $body);
@@ -157,6 +174,16 @@ class BlingAuthService
     private function basicAuth(): string
     {
         return base64_encode(config('services.bling.client_id').':'.config('services.bling.client_secret'));
+    }
+
+    /**
+     * Host puro de recursos (https://api.bling.com.br, sem /Api/v3) — só o
+     * revoke usa isso; token/recursos normais usam api_base_url com o
+     * /Api/v3 junto (ver requestToken()/BlingClient).
+     */
+    private function apiHost(): string
+    {
+        return preg_replace('#/Api/v3/?$#', '', rtrim(config('services.bling.api_base_url'), '/'));
     }
 
     /**

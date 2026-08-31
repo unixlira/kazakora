@@ -109,10 +109,11 @@ return [
         'client_id' => env('BLING_CLIENT_ID'),
         'client_secret' => env('BLING_CLIENT_SECRET'),
         'redirect_uri' => env('BLING_REDIRECT_URI'),
-        // Confirmado no código-fonte real do SDK oficial em JS
-        // (bling-erp-api-js, DEFAULT_API_BASE_URL/DEFAULT_OAUTH_BASE_URL) —
-        // o host de autorização/token é www.bling.com.br, o de recursos
-        // (produtos/pedidos) é api.bling.com.br, os dois sob /Api/v3.
+        // Achado real 2026-08-31, confirmado no exemplo cURL literal de
+        // developer.bling.com.br/aplicativos: authorize fica em
+        // www.bling.com.br, mas token/recursos (produtos/pedidos) ficam em
+        // api.bling.com.br — NÃO é o mesmo host dos dois lados (ver
+        // docblock completo em BlingAuthService sobre esse achado).
         'api_base_url' => env('BLING_API_BASE_URL', 'https://api.bling.com.br/Api/v3'),
         'oauth_base_url' => env('BLING_OAUTH_BASE_URL', 'https://www.bling.com.br/Api/v3'),
     ],

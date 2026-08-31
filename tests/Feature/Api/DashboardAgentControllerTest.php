@@ -482,20 +482,46 @@ class DashboardAgentControllerTest extends TestCase
 
     /**
      * KoraSync v2.0 (pedido explícito 2026-08-29): pedido sem estoque
-     * suficiente do produto vai pra 'out_of_stock' em vez de 'queue' — FIFO
-     * por id (quem vendeu primeiro consome o estoque disponível primeiro).
+     * suficiente do produto vai pra 'out_of_stock' em vez de 'queue'.
+     *
+     * BUG REAL 2026-08-31 (relatado pelo usuário, pedido #1108 — "carregador
+     * de celular tem sim no estoque"): a versão anterior deste teste
+     * validava uma simulação FIFO que reconstruía "estoque disponível"
+     * decrementando Product::stock 1x por pedido pendente na fila — mas
+     * Product::stock JÁ é debitado de verdade, atomicamente, no momento de
+     * CADA venda real (StockManager::adjust(), chamado por
+     * OrderImportService/ManualOrderService na importação/criação do
+     * pedido). Rodar a simulação de novo em cima de um número que já é
+     * "quanto sobra depois de todas as vendas pendentes" descontava a MESMA
+     * unidade duas vezes — um produto com estoque real 28 e 34 pedidos
+     * pendentes (a maioria do mesmo SKU popular, cada um já com sua própria
+     * unidade debitada corretamente na hora da venda) tinha os últimos 6
+     * marcados como "sem estoque" por engano. Este teste antes só passava
+     * porque criava os itens direto via Eloquent (bypassando
+     * StockManager::adjust()) — um cenário que não existe na produção real.
+     *
+     * Corrigido: sem simulação — cada pedido pendente só entra em "sem
+     * estoque" se o produto está com stock <= 0 NESTE INSTANTE (ver
+     * partitionByStock() no controller).
      */
     public function test_queue_splits_orders_between_normal_and_out_of_stock_by_available_stock(): void
     {
-        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 5, 'sku' => 'SKU-1']);
+        $inStock = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 5, 'sku' => 'SKU-1']);
+        $depleted = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'SKU-2']);
 
-        // Vendeu primeiro (id menor) — consome todo o estoque disponível.
+        // Estoque real positivo — cada pedido pendente já debitou a própria
+        // unidade na hora da venda de verdade; múltiplos pedidos concorrendo
+        // pelo mesmo produto não reduzem esse número de novo aqui.
         $covered = $this->makeOrder(['external_order_id' => 'COVERED']);
-        $covered->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 5, 'subtotal' => 50]);
+        $covered->items()->create(['product_id' => $inStock->id, 'product_name' => $inStock->name, 'product_price' => 10, 'quantity' => 5, 'subtotal' => 50]);
 
-        // Vendeu depois — não sobrou estoque nenhum pra este.
+        $alsoCovered = $this->makeOrder(['external_order_id' => 'ALSO-COVERED']);
+        $alsoCovered->items()->create(['product_id' => $inStock->id, 'product_name' => $inStock->name, 'product_price' => 10, 'quantity' => 2, 'subtotal' => 20]);
+
+        // Estoque real zerado — sem unidade física, precisa repor no
+        // fornecedor antes de qualquer um destes sair.
         $shortfall = $this->makeOrder(['external_order_id' => 'SHORTFALL']);
-        $shortfall->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 2, 'subtotal' => 20]);
+        $shortfall->items()->create(['product_id' => $depleted->id, 'product_name' => $depleted->name, 'product_price' => 10, 'quantity' => 2, 'subtotal' => 20]);
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
 
@@ -506,12 +532,15 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertTrue($queue->has($covered->id));
         $this->assertSame([], $queue[$covered->id]['stock_shortage']);
 
+        $this->assertTrue($queue->has($alsoCovered->id));
+        $this->assertSame([], $queue[$alsoCovered->id]['stock_shortage']);
+
         $this->assertFalse($queue->has($shortfall->id));
         $this->assertTrue($outOfStock->has($shortfall->id));
-        $this->assertSame('SKU-1', $outOfStock[$shortfall->id]['stock_shortage'][0]['sku']);
+        $this->assertSame('SKU-2', $outOfStock[$shortfall->id]['stock_shortage'][0]['sku']);
         $this->assertSame(2, $outOfStock[$shortfall->id]['stock_shortage'][0]['missing']);
 
-        $this->assertSame(2, $response->json('pending_separation_count'));
+        $this->assertSame(3, $response->json('pending_separation_count'));
     }
 
     /**

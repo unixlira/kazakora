@@ -766,27 +766,38 @@ class DashboardAgentController extends Controller
      * ver queue()) entre "tem estoque pra separar agora" e "sem estoque,
      * precisa repor no fornecedor antes" — pedido explícito 2026-08-29.
      *
-     * Cálculo em tempo real a partir de Product::stock, SEM nenhum estado
-     * novo persistido — é isso que faz a aba trocar sozinha: assim que o
-     * estoque do produto for reposto (StockManager::adjust, reposição
-     * manual no admin), o próximo poll do KoraSync (2s, ver
-     * DashboardPoller) já recalcula do zero e o pedido sobe pra Fila
-     * normal; e se o estoque cair de novo enquanto ele ainda está lá
-     * (outro pedido consumiu, ajuste manual pra baixo etc), ele volta
-     * sozinho pra Sem Estoque no poll seguinte — nunca precisa de uma ação
-     * manual de "mover" o pedido entre as abas.
+     * BUG REAL 2026-08-31 (relatado pelo usuário, pedido #1108 — "carregador
+     * de celular tem sim no estoque", produto com stock=28 de verdade):
+     * a versão anterior fazia uma simulação FIFO reconstruindo um "estoque
+     * disponível" a partir de Product::stock e ia decrementando 1x por
+     * pedido pendente na fila — mas Product::stock JÁ é debitado de
+     * verdade, atomicamente, no momento de CADA venda (StockManager::
+     * adjust(), chamado por OrderImportService/ManualOrderService logo na
+     * importação/criação do pedido — confirmado ao vivo pelos
+     * StockMovements reais). Ou seja: Product::stock já reflete "quanto
+     * sobra depois de TODAS as vendas pendentes", não "quanto tinha antes
+     * delas" — rodar a simulação de novo em cima disso descontava a MESMA
+     * unidade duas vezes. Resultado real: produto com 28 de estoque e 34
+     * pedidos pagos/não embalados (a maioria do mesmo SKU popular) fazia a
+     * simulação "zerar" já no 28º pedido em ordem de id, marcando os 6
+     * seguintes como sem estoque — mesmo cada um deles já tendo debitado
+     * sua própria unidade normalmente, sem problema real nenhum.
      *
-     * FIFO por id crescente (pedido mais antigo primeiro): com estoque
-     * insuficiente pra atender todo mundo, quem vendeu primeiro consome o
-     * estoque disponível antes — quem vendeu depois é que fica marcado
-     * como sem estoque.
+     * StockManager::adjust() já clampa em 0 (nunca fica negativo) e já
+     * dispara OversellDetectedNotification pros admins na hora real em que
+     * uma venda de fato não tem unidade física suficiente — é ali que
+     * "vendeu mais do que tinha" já é detectado e avisado, não precisa (e
+     * não deve) ser reconstruído aqui de novo. Correção: sem simulação
+     * nenhuma — cada pedido pendente só entra em "sem estoque" se o
+     * produto está com stock <= 0 NESTE INSTANTE (repõe no fornecedor,
+     * volta sozinho pra Fila normal no próximo poll, mesma dinâmica de
+     * sempre). Continua em tempo real, sem estado novo persistido.
      *
      * @param  \Illuminate\Support\Collection<int, Order>  $actionableOrders  já carregado com items.product:stock (ver queue()) — só pedido PAID e ainda não embalado, ver comentário completo lá.
      * @return array{0: \Illuminate\Support\Collection<int, Order>, 1: \Illuminate\Support\Collection<int, Order>, 2: array<int, array<int, array{sku: ?string, name: string, missing: int}>>}
      */
     private function partitionByStock(\Illuminate\Support\Collection $actionableOrders): array
     {
-        $runningStock = [];
         $withStock = collect();
         $withoutStock = collect();
         $shortages = [];
@@ -805,26 +816,18 @@ class DashboardAgentController extends Controller
                     continue;
                 }
 
-                if (! array_key_exists($productId, $runningStock)) {
-                    $runningStock[$productId] = (int) ($item->product?->stock ?? 0);
-                }
+                $stock = (int) ($item->product?->stock ?? 0);
 
-                if ($runningStock[$productId] < $item->quantity) {
+                if ($stock <= 0) {
                     $orderShortage[] = [
                         'sku' => $item->product?->sku,
                         'name' => $item->product_name,
-                        'missing' => $item->quantity - $runningStock[$productId],
+                        'missing' => $item->quantity,
                     ];
                 }
             }
 
             if ($orderShortage === []) {
-                foreach ($order->items as $item) {
-                    if ($item->product_id !== null) {
-                        $runningStock[$item->product_id] -= $item->quantity;
-                    }
-                }
-
                 $withStock->push($order);
             } else {
                 $withoutStock->push($order);

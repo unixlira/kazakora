@@ -723,13 +723,39 @@ class DashboardAgentController extends Controller
      * tem entrega/coleta programada (ver comentário completo em queue(),
      * seção $displayOnlyOrders, mesma regra replicada aqui em PHP pra
      * reaplicar sobre $withStock sem precisar de uma 2ª query no banco).
+     *
+     * BUG REAL 2026-08-31 (RESSURGIU no mesmo dia — já tinha sido corrigido
+     * antes, mas um deploy de rotina sem relação nenhuma resetou este
+     * arquivo pro estado do git via rsync --delete e o fix nunca tinha sido
+     * commitado; ao reconstruir as outras correções depois do reset,
+     * esqueci de reaplicar esta também. Achado de novo no relato do
+     * usuário: "tem pedido na fila errado" — pedidos #863/893/894/910/925/
+     * 940/967/969, agendados pro dia 31/08 mas com etiqueta AINDA não
+     * liberada pelo Mercado Livre, apareciam na Fila normal só por a data
+     * agendada ter chegado, mesmo sem poder ser separado/impresso de
+     * verdade ainda): pedido com scheduled_for só entra na janela de hoje
+     * quando a etiqueta JÁ foi liberada pelo canal — chegar a data
+     * prometida não basta, o Mercado Livre pode atrasar a liberação de
+     * verdade (foi exatamente o caso agora, madrugada do dia agendado, ML
+     * ainda não liberou nenhuma). Sem entrega agendada (pedido normal),
+     * comportamento intacto — só created_at importa, como sempre foi.
+     *
+     * Sem janela de data quando tem entrega agendada — só "etiqueta
+     * liberada, sim ou não" importa nesse caso (não "liberada dentro de
+     * ontem/hoje/amanhã"): a data agendada em si já decidiu quando o
+     * pedido entrou em $actionableOrders (ver query lá, scheduled_for not
+     * null passa sem olhar created_at); se o Mercado Livre atrasar a
+     * liberação de verdade pra depois da data prometida, o pedido não pode
+     * deixar de aparecer só porque "passou da janela" — continua sendo
+     * trabalho pendente até ser embalado.
      */
     private function isInTodayWindow(Order $order, \Carbon\Carbon $yesterday, \Carbon\Carbon $tomorrow): bool
     {
-        $scheduledFor = $order->channelShipment?->scheduled_for;
+        $shipment = $order->channelShipment;
+        $scheduledFor = $shipment?->scheduled_for;
 
         if ($scheduledFor !== null) {
-            return $scheduledFor->between($yesterday, $tomorrow);
+            return in_array($shipment?->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true);
         }
 
         return $order->created_at->between($yesterday, $tomorrow);

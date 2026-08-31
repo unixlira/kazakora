@@ -12,7 +12,9 @@ use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
+use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
+use App\Modules\Admin\Http\Controllers\KoraSyncController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreFlexController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
@@ -387,6 +389,29 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');
     Route::delete('logistica/{shipping_method}', [ShippingMethodController::class, 'destroy'])->name('logistica.excluir')->middleware('permission:operacional.delete');
     Route::delete('logistica/melhor-envio', [ShippingMethodController::class, 'disconnectMelhorEnvio'])->name('logistica.melhor-envio.desconectar')->middleware('permission:operacional.edit');
+
+    // KoraSync (versão web, dentro do admin) — mesma tela do app desktop
+    // (Fila normal/Sem estoque/Vendas futuras/Separados/Cancelados), pedido
+    // explícito 2026-08-31. korasync.ver serve só a casca Inertia (qual aba
+    // abre); os dados de verdade vêm dos MESMOS endpoints que o app desktop
+    // já usa (DashboardAgentController, reaproveitado direto — ver
+    // KoraSyncController). Autenticação aqui é a sessão normal do admin
+    // (auth+staff+permission), diferente do token fixo que o app desktop
+    // usa (middleware print.agent, ver prefix('print-agent') em api.php) —
+    // por isso são rotas novas, não uma reexposição das de api.php.
+    Route::middleware('permission:operacional.view')->group(function () {
+        Route::get('korasync/{tab}', [KoraSyncController::class, 'index'])
+            ->where('tab', 'fila|sem-estoque|vendas-futuras|separados|cancelados')
+            ->name('korasync.ver');
+
+        Route::get('korasync-api/queue', [DashboardAgentController::class, 'queue'])->name('korasync.api.fila');
+        Route::get('korasync-api/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('korasync.api.agendados');
+        Route::get('korasync-api/metrics', [DashboardAgentController::class, 'metrics'])->name('korasync.api.metricas');
+        Route::get('korasync-api/queue/{order}/image', [DashboardAgentController::class, 'queueOrderImage'])->name('korasync.api.foto-pedido');
+        Route::get('korasync-api/queue/{order}/image/{product}', [DashboardAgentController::class, 'queueOrderProductImage'])->name('korasync.api.foto-produto');
+    });
+    Route::post('korasync-api/queue/{order}/pack', [DashboardAgentController::class, 'packOrder'])
+        ->name('korasync.api.embalar')->middleware('permission:operacional.edit');
 
     Route::middleware('admin')->group(function () {
         Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');

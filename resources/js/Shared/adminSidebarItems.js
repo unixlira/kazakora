@@ -47,6 +47,20 @@ export const sidebarSections = [
         ],
     },
     {
+        // Espelho web do app desktop KoraSync (pedido explícito 2026-08-31:
+        // "menu Korasync... dentro dele todos submenus das filas") — mesmas
+        // 5 telas que o operador de separação já usa no app nativo, agora
+        // acessíveis também pelo navegador. Ver KoraSyncController.
+        heading: 'KoraSync',
+        items: [
+            { label: 'Fila normal', href: '/admin/korasync/fila', icon: 'fas fa-list-check', color: 'text-success', permission: 'operacional.view' },
+            { label: 'Sem estoque', href: '/admin/korasync/sem-estoque', icon: 'fas fa-triangle-exclamation', color: 'text-warning', permission: 'operacional.view' },
+            { label: 'Vendas futuras', href: '/admin/korasync/vendas-futuras', icon: 'fas fa-calendar-days', color: 'text-warning', permission: 'operacional.view' },
+            { label: 'Separados', href: '/admin/korasync/separados', icon: 'fas fa-boxes-packing', color: 'text-success', permission: 'operacional.view' },
+            { label: 'Cancelados', href: '/admin/korasync/cancelados', icon: 'fas fa-circle-xmark', color: 'text-error', permission: 'operacional.view' },
+        ],
+    },
+    {
         heading: 'Configurações',
         items: [
             { label: 'Empresa', href: '/admin/empresa', icon: 'fas fa-building', color: 'text-success', permission: null },

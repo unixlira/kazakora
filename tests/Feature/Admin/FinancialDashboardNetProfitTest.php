@@ -53,6 +53,21 @@ class FinancialDashboardNetProfitTest extends TestCase
         ], $attributes));
     }
 
+    public function test_financial_summary_keeps_frontend_nan_guard_contract_without_sales(): void
+    {
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertOk();
+        $response->assertInertia(fn ($page) => $page
+            ->where('summary.productCostMonth', 0)
+            ->where('summary.marketplaceFeesMonth', 0)
+            ->where('summary.flexCostMonth', 0)
+            ->where('summary.adSpendMonth', 0)
+            ->where('summary.grossProfitMonth', 0)
+            ->where('summary.platformCostsMonth', 0)
+            ->where('summary.netProfitMarginMonth', 0));
+    }
+
     public function test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue(): void
     {
         $product = Product::factory()->create(['price' => 60.375, 'cost_price' => 40.25]);
@@ -98,6 +113,17 @@ class FinancialDashboardNetProfitTest extends TestCase
             ->where('summary.grossRevenueAllTime', 120.75)
             ->where('summary.netProfitAllTime', 9.65)
             ->where('summary.grossRevenueMonth', 120.75)
+            // Contrato com o Dashboard.vue atual: esses campos também ficam
+            // em summary porque os cards do topo não podem receber undefined
+            // e renderizar R$ NaN/NaN% quando backend e asset saem
+            // desalinhados.
+            ->where('summary.productCostMonth', 80.5)
+            ->where('summary.marketplaceFeesMonth', 15.3)
+            ->where('summary.flexCostMonth', 0)
+            ->where('summary.adSpendMonth', 15.3)
+            ->where('summary.grossProfitMonth', 40.25)
+            ->where('summary.platformCostsMonth', 15.3)
+            ->where('summary.netProfitMarginMonth', 7.99)
             // Pedido explícito 2026-08-10: faturamento líquido = bruto -
             // ads (sem abater custo do material) — vai no card "Entradas
             // no Mês".

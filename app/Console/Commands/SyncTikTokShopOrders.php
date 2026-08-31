@@ -17,10 +17,17 @@ use Throwable;
  * (OrderImportService::import() já detecta pedido existente por
  * origin+external_order_id, nunca duplica).
  *
- * Sem webhook do lado do Bling ainda (pedido explícito era "colocar no
- * KoraSync" — este comando sozinho, rodando de hora em hora, já resolve
- * isso; um webhook em tempo real fica pra uma sessão futura com acesso
- * real a uma conta Bling pra confirmar o payload).
+ * Sem webhook do lado do Bling ainda (a API do Bling não documenta um
+ * publicamente pra pedidos/vendas — só notificações internas da UI) —
+ * pedido explícito 2026-08-31 de sincronia "em tempo real": em vez de
+ * esperar um webhook, este comando roda de 2 em 2 minutos escopado só pro
+ * dia de hoje (--desde=hoje, ver routes/console.php), o que é barato
+ * (poucos pedidos, cache de 2min em BlingOrderService::listOrders() evita
+ * bater na API de novo se rodar 2x no mesmo intervalo) — mais um passe
+ * completo do mês inteiro de hora em hora como rede de segurança. Mesma
+ * idempotência de sempre (import() já detecta pedido existente por
+ * origin+external_order_id, nunca duplica) — seguro rodar com
+ * sobreposição de período.
  */
 class SyncTikTokShopOrders extends Command
 {

@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Bling\BlingOrderService;
 use App\Services\Bling\Exceptions\BlingException;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
@@ -26,12 +27,27 @@ use RuntimeException;
  * sistema (KoraSync, NF-e, etc. não sabem nem precisam saber que passou
  * pelo Bling).
  *
- * O restante (publicar produto, atualizar estoque, enviar NF-e, confirmar
- * envio, buscar etiqueta) continua não implementado — são funções que
- * exigiriam ou a API direta do TikTok Shop (aprovação pendente) ou
- * endpoints do Bling específicos de nota fiscal/expedição que não foram
- * verificados contra uma conta real nesta sessão. Documentado como TODO,
- * não como "funciona" — não é regressão: já não funcionava antes.
+ * ENVIO/ETIQUETA (achado real 2026-08-31, mesmo dia): a NF-e já sai
+ * automática assim que o pedido entra como PAID (mesmo gatilho de sempre,
+ * ver OrderImportService::createOrder() — GenerateInvoiceJob) — nenhum
+ * código novo precisou disso. Etiqueta é diferente: confirmShipping()/
+ * fetchLabel() agora usam endpoints REAIS do Bling
+ * (logisticas/etiquetas, confirmado existir contra a conta do usuário),
+ * mas NENHUM pedido da conta tinha "logística cadastrada" no momento em
+ * que isso foi escrito (rastreio ainda vazio em todos — a atribuição é
+ * feita pelo TikTok Shop/Bling de forma assíncrona, fora do nosso
+ * controle) — então o caminho de baixar um PDF de verdade não foi
+ * exercido ainda. Uma vez que algum pedido tiver rastreio, o pipeline
+ * padrão (CheckShipmentLabelJob/LabelFetchService, o mesmo de qualquer
+ * canal) deve simplesmente funcionar — vale conferir o resultado real na
+ * primeira vez que isso acontecer.
+ *
+ * O que continua REALMENTE não implementado: publishProduct/updateStock/
+ * unpublishProduct/submitInvoice-ao-canal (esse último é diferente de
+ * "gerar a NF-e", que já funciona — é o envio do XML/PDF autorizado PRO
+ * TikTok Shop, exigido antes de liberar o envio; nenhum endpoint do Bling
+ * pra isso foi identificado ainda). Documentado como TODO, não como
+ * "funciona" — não é regressão: já não funcionava antes.
  */
 class TikTokShopDriver extends AbstractMarketplaceDriver
 {
@@ -234,20 +250,69 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
     }
 
+    /**
+     * Ao contrário do Mercado Livre/Shopee, aqui não CONFIRMAMOS nada —
+     * o pickup/entrega é 100% da logística própria do TikTok Shop (o
+     * pedido real já vem com `transporte.volumes[0].servico` tipo
+     * "LSV-Standard-BR PICKUP", achado ao vivo 2026-08-31), Bling só
+     * reflete o que o TikTok já decidiu. Isto é pura CONSULTA (mesmo
+     * espírito do comentário original sobre Flex x padrão do Mercado
+     * Livre), útil só pra pegar o código de rastreio assim que o TikTok
+     * atribuir um.
+     */
     public function confirmShipping(Order $order): array
     {
-        $this->ensureConfigured();
+        $blingOrder = $this->blingOrders->findByOrderNumber($order->external_order_id);
 
-        // TODO: Fulfillment API, fluxo geral (não confirmado em detalhe):
-        // Get Shipping Provider → Create Package → Ship Package.
-        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+        if (! $blingOrder) {
+            throw new RuntimeException("Pedido {$order->external_order_id} não encontrado no Bling ao consultar o envio.");
+        }
+
+        $volume = $blingOrder['transporte']['volumes'][0] ?? [];
+        $trackingCode = $volume['codigoRastreamento'] ?: null;
+
+        return [
+            'external_shipment_id' => (string) $blingOrder['id'],
+            'tracking_code' => $trackingCode,
+            'shipping_method' => $volume['servico'] ?? 'TikTok Shop Logistics',
+            'status' => $trackingCode ? 'confirmed' : 'pending',
+        ];
     }
 
+    /**
+     * `logisticas/etiquetas` real do Bling (ver BlingOrderService::
+     * fetchLabel() pro docblock completo, incluindo o aviso de que isto
+     * NÃO foi testado contra um PDF de verdade ainda — nenhum pedido da
+     * conta do usuário tinha logística cadastrada no momento em que foi
+     * escrito). `ready: false` tanto pra "pedido ainda sem rastreio" (não
+     * é erro, CheckShipmentLabelJob tenta de novo) quanto pra falha real
+     * no download do PDF em si — mesma cautela de nunca derrubar o
+     * pipeline por uma etiqueta que só ainda não chegou.
+     */
     public function fetchLabel(Order $order): array
     {
-        $this->ensureConfigured();
+        $blingOrder = $this->blingOrders->findByOrderNumber($order->external_order_id);
 
-        // TODO: "Get Package Shipping Document", pós Ship Package.
-        throw new \RuntimeException('Integração com TikTok Shop ainda não implementada.');
+        if (! $blingOrder) {
+            return ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
+
+        $label = $this->blingOrders->fetchLabel((int) $blingOrder['id']);
+
+        if (! $label) {
+            return ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
+
+        $response = Http::timeout(20)->get($label['link']);
+
+        if ($response->failed()) {
+            return ['ready' => false, 'contents' => null, 'content_type' => null];
+        }
+
+        return [
+            'ready' => true,
+            'contents' => $response->body(),
+            'content_type' => $response->header('Content-Type') ?: 'application/pdf',
+        ];
     }
 }

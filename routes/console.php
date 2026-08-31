@@ -32,10 +32,21 @@ Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
-// TikTok Shop via Bling (pedido explícito 2026-08-31) — mesmo padrão dos
-// 3 de cima, ver SyncTikTokShopOrders/BlingOrderService. Idempotente e
-// silencioso (não falha o schedule) quando o Bling ainda não foi
-// conectado ou a loja do TikTok Shop ainda não foi configurada.
+// TikTok Shop via Bling. Idempotente e silencioso (não falha o schedule)
+// quando o Bling ainda não foi conectado ou a loja do TikTok Shop ainda
+// não foi configurada.
+//
+// Pedido explícito 2026-08-31 ("preciso de uma sincronia em tempo real —
+// saiu a venda lá, cai no KoraSync já"): sem webhook documentado do lado
+// do Bling pra pedidos/vendas, a saída real é poll frequente — de 2 em 2
+// min, escopado só pro dia de hoje (barato: poucos pedidos, cache de 2min
+// em BlingOrderService::listOrders() evita nova chamada à API se rodar 2x
+// no mesmo intervalo de 2min). O passe de hora em hora abaixo continua
+// existindo como rede de segurança de período maior (mês inteiro).
+Schedule::command('orders:sync-tiktok --desde='.now()->toDateString())
+    ->everyTwoMinutes()
+    ->withoutOverlapping(5);
+
 Schedule::command('orders:sync-tiktok')->hourly();
 
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do

@@ -140,6 +140,46 @@ class BlingOrderService
     }
 
     /**
+     * Link de download da etiqueta de envio já gerada pelo Bling pro
+     * pedido — endpoint real `GET logisticas/etiquetas`, confirmado ao
+     * vivo 2026-08-31 contra a conta real do usuário. Descoberta real no
+     * mesmo teste: só devolve algo quando o pedido já tem "logística
+     * cadastrada" no Bling (volume/rastreio atribuído do lado do
+     * TikTok Shop) — pedido recém-importado, sem rastreio ainda, dá
+     * RESOURCE_NOT_FOUND ("ids informados são inválidos ou não possuem
+     * logística cadastrada"). Trata como "ainda não pronta" (null), não
+     * como erro — mesma distinção que TODO fetchLabel() de canal já faz
+     * (ver ShopeeDriver::fetchLabel()).
+     *
+     * NÃO TESTADO com uma etiqueta de verdade ainda: nenhum pedido da
+     * conta do usuário tinha logística cadastrada no momento em que isso
+     * foi escrito (todos com codigoRastreamento vazio) — o endpoint e o
+     * tratamento de erro são reais/confirmados, mas o link de fato
+     * baixando um PDF válido ainda não foi verificado.
+     *
+     * @return array{link: string}|null
+     */
+    public function fetchLabel(int $blingOrderId): ?array
+    {
+        try {
+            $response = $this->client->get('logisticas/etiquetas', [
+                'formato' => 'PDF',
+                'idsVendas' => [$blingOrderId],
+            ]);
+        } catch (\App\Services\Bling\Exceptions\BlingException $exception) {
+            if ($exception->getCode() === 404) {
+                return null;
+            }
+
+            throw $exception;
+        }
+
+        $label = $response['data'][0] ?? null;
+
+        return $label && ! empty($label['link']) ? $label : null;
+    }
+
+    /**
      * Dados do contato (telefone/celular/e-mail/endereço) — a listagem de
      * pedidos só traz nome/documento do comprador; o resto exige esta
      * chamada extra por contato (mesmo padrão de 1 chamada complementar já

@@ -432,6 +432,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');
         Route::post('integracoes/amazon/conectar', [IntegrationController::class, 'connectAmazon'])->name('integracoes.amazon.conectar');
         Route::post('integracoes/shopee/importar-produtos', [IntegrationController::class, 'importShopeeProducts'])->name('integracoes.shopee.importar-produtos');
+        Route::post('integracoes/bling/loja-tiktok', [IntegrationController::class, 'saveBlingTiktokLoja'])->name('integracoes.bling.loja-tiktok');
 
         Route::get('integracoes/webhooks', [WebhookLogController::class, 'index'])->name('integracoes.webhooks');
         Route::post('integracoes/webhooks/{channel_webhook_log}/reprocessar', [WebhookLogController::class, 'reprocess'])->name('integracoes.webhooks.reprocessar');

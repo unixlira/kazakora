@@ -171,6 +171,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'bling' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/bling.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'amazon' => [
             'driver' => 'daily',
             'path' => storage_path('logs/amazon.log'),

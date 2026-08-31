@@ -7,7 +7,19 @@ import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     integrations: { type: Array, default: () => [] },
+    blingTiktokLojaId: { type: [Number, String], default: null },
 });
+
+const blingLojaId = ref(props.blingTiktokLojaId ?? '');
+const savingBlingLoja = ref(false);
+
+const saveBlingLoja = () => {
+    savingBlingLoja.value = true;
+    router.post('/admin/integracoes/bling/loja-tiktok', { tiktok_loja_id: blingLojaId.value }, {
+        preserveScroll: true,
+        onFinish: () => { savingBlingLoja.value = false; },
+    });
+};
 
 const mercadoLivreTabs = [
     { label: 'Vendas', href: '/admin/integracoes/mercado-livre/vendas' },
@@ -102,6 +114,23 @@ const disconnect = async (integration) => {
                         class="rounded-full bg-lightprimary px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary hover:text-white">
                         Logs de webhook
                     </Link>
+                </div>
+
+                <div v-if="integration.connected && integration.channel === 'bling'" class="mt-3">
+                    <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                        ID da loja do Bling que é o TikTok Shop
+                    </label>
+                    <div class="flex gap-1.5">
+                        <input v-model="blingLojaId" type="number" placeholder="ex: 123456"
+                            class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-2.5 py-1.5 text-sm">
+                        <button type="button" :disabled="savingBlingLoja || !blingLojaId" @click="saveBlingLoja"
+                            class="shrink-0 rounded-lg bg-lightprimary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary hover:text-white disabled:opacity-50">
+                            {{ savingBlingLoja ? 'Salvando...' : 'Salvar' }}
+                        </button>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-400">
+                        Veja esse número na tela de Pedidos de Venda do Bling, filtrando pela loja TikTok Shop (coluna/filtro "Loja").
+                    </p>
                 </div>
 
                 <div class="mt-4">

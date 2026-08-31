@@ -32,6 +32,11 @@ Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
+// TikTok Shop via Bling (pedido explícito 2026-08-31) — mesmo padrão dos
+// 3 de cima, ver SyncTikTokShopOrders/BlingOrderService. Idempotente e
+// silencioso (não falha o schedule) quando o Bling ainda não foi
+// conectado ou a loja do TikTok Shop ainda não foi configurada.
+Schedule::command('orders:sync-tiktok')->hourly();
 
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item

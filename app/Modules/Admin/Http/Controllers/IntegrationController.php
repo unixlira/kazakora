@@ -8,6 +8,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\ShopeeProductImportService;
 use App\Services\Amazon\AmazonAuthService;
 use App\Services\Amazon\Exceptions\AmazonException;
+use App\Services\Bling\BlingAuthService;
 use App\Services\MercadoLivre\MercadoLivreAuthService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -57,11 +58,25 @@ class IntegrationController extends Controller
             'connectHref' => '/api/amazon/auth',
             'available' => true,
         ],
+        // Não é um canal de venda — é a ponte pro TikTok Shop (pedido
+        // explícito 2026-08-31, ver TikTokShopDriver/BlingAuthService): o
+        // vendedor conecta o TikTok Shop uma vez DENTRO do painel do Bling,
+        // aqui só conectamos com o Bling em si e importamos os pedidos que
+        // já chegaram lá. Depois de conectar, precisa informar qual loja
+        // do Bling é o TikTok Shop (ver tiktokLojaId abaixo).
+        MarketplaceAccount::CHANNEL_BLING => [
+            'name' => 'Bling (ponte TikTok Shop)',
+            'description' => 'Importa pedidos do TikTok Shop através do Bling, já que a API direta do TikTok Shop exige aprovação de parceiro ainda pendente. Conecte o TikTok Shop dentro do painel do Bling primeiro (Configuração do TikTok Shop), depois conecte aqui e informe o ID da loja.',
+            'icon' => 'fas fa-diagram-project',
+            'connectHref' => '/api/bling/auth',
+            'available' => true,
+        ],
     ];
 
     public function __construct(
         private readonly MercadoLivreAuthService $mercadoLivreAuth,
         private readonly AmazonAuthService $amazonAuth,
+        private readonly BlingAuthService $blingAuth,
     ) {}
 
     /**
@@ -91,6 +106,7 @@ class IntegrationController extends Controller
 
         return Inertia::render('Admin/Integracoes/Index', [
             'integrations' => $integrations,
+            'blingTiktokLojaId' => $accounts->get(MarketplaceAccount::CHANNEL_BLING)?->metadata['tiktok_loja_id'] ?? null,
         ]);
     }
 
@@ -135,7 +151,43 @@ class IntegrationController extends Controller
             return back()->with('success', 'Amazon desconectada.');
         }
 
+        if ($channel === MarketplaceAccount::CHANNEL_BLING) {
+            $account = $this->blingAuth->currentAccount();
+
+            if ($account) {
+                $this->blingAuth->revoke($account);
+            }
+
+            return back()->with('success', 'Bling desconectado.');
+        }
+
         return back()->with('error', 'Esse canal ainda não está disponível.');
+    }
+
+    /**
+     * ID da loja do Bling que corresponde ao TikTok Shop (pedido explícito
+     * 2026-08-31) — o Bling pode ter várias lojas conectadas (própria,
+     * Mercado Livre, Shopee, TikTok Shop...), então precisa saber qual
+     * delas filtrar antes de importar qualquer pedido (ver
+     * BlingOrderService::tiktokLojaId()). Guardado em
+     * MarketplaceAccount(channel=bling).metadata pra não precisar de uma
+     * tabela/coluna nova só pra isso.
+     */
+    public function saveBlingTiktokLoja(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'tiktok_loja_id' => ['required', 'integer'],
+        ]);
+
+        $account = $this->blingAuth->currentAccount();
+
+        if (! $account?->isConnected()) {
+            return back()->with('error', 'Conecte o Bling antes de informar a loja do TikTok Shop.');
+        }
+
+        $account->update(['metadata' => array_merge($account->metadata ?? [], ['tiktok_loja_id' => $validated['tiktok_loja_id']])]);
+
+        return back()->with('success', 'Loja do TikTok Shop configurada. A sincronização de pedidos roda de hora em hora — ou rode "php artisan orders:sync-tiktok" agora pra importar já.');
     }
 
     /**

@@ -19,6 +19,13 @@ class MarketplaceAccount extends Model
 
     public const CHANNEL_SHEIN = 'shein';
 
+    // Não é um canal de venda em si — é a conta OAuth do Bling, usada como
+    // ponte pro TikTok Shop (ver BlingAuthService). Pedidos importados por
+    // ela continuam sendo gravados com origin=CHANNEL_TIKTOK_SHOP; esta
+    // constante só existe pra rastrear separadamente "o Bling está
+    // conectado" na mesma tabela/tela que os outros canais.
+    public const CHANNEL_BLING = 'bling';
+
     public const STATUS_DISCONNECTED = 'disconnected';
 
     public const STATUS_CONNECTED = 'connected';

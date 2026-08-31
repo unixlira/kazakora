@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AmazonController;
+use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
@@ -37,6 +38,11 @@ Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
     // Called by Mercado Livre's servers, not a browser — stays stateless
     // and CSRF-exempt (see bootstrap/app.php).
     Route::post('/webhook', [MercadoLivreController::class, 'webhook'])->name('webhook');
+});
+
+Route::prefix('bling')->name('api.bling.')->middleware(['web', 'auth', 'admin'])->group(function () {
+    Route::get('/auth', [BlingController::class, 'redirectToAuth'])->name('auth');
+    Route::get('/callback', [BlingController::class, 'callback'])->name('callback');
 });
 
 Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth', 'admin'])->group(function () {

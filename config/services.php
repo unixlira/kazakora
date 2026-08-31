@@ -99,6 +99,24 @@ return [
         'prazo_base_url' => env('CORREIOS_PRAZO_BASE_URL', 'https://api.correios.com.br/prazo'),
     ],
 
+    // Ponte pro TikTok Shop via Bling (pedido explícito 2026-08-31 — integração
+    // direta com a API do TikTok Shop segue bloqueada por aprovação de parceiro,
+    // ver TikTokShopDriver/CorreiosController). Bling já resolve a autenticação
+    // com o TikTok Shop do lado dele (ver ajuda.bling.com.br "Autenticação com o
+    // TikTok Shop") — aqui só precisamos de OAuth2 com o Bling em si e consultar
+    // pedidos/vendas filtrando pela loja conectada ao TikTok Shop.
+    'bling' => [
+        'client_id' => env('BLING_CLIENT_ID'),
+        'client_secret' => env('BLING_CLIENT_SECRET'),
+        'redirect_uri' => env('BLING_REDIRECT_URI'),
+        // Confirmado no código-fonte real do SDK oficial em JS
+        // (bling-erp-api-js, DEFAULT_API_BASE_URL/DEFAULT_OAUTH_BASE_URL) —
+        // o host de autorização/token é www.bling.com.br, o de recursos
+        // (produtos/pedidos) é api.bling.com.br, os dois sob /Api/v3.
+        'api_base_url' => env('BLING_API_BASE_URL', 'https://api.bling.com.br/Api/v3'),
+        'oauth_base_url' => env('BLING_OAUTH_BASE_URL', 'https://www.bling.com.br/Api/v3'),
+    ],
+
     'shopee' => [
         // Credenciais atuais são de teste/sandbox (SHOPEE_TEST_*, confirmado
         // pelo próprio nome) — pareiam com o host test-stable, não o de

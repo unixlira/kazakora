@@ -85,23 +85,84 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * Achado real 2026-08-19 na Shopee/ML (comentário replicado aqui de
-     * propósito — mesma classe de bug seria fácil de repetir): item sem
-     * produto local mapeado não pode virar "sem produto" pro resto da
-     * vida só porque não achou de primeira — mas aqui também não
-     * inventamos um produto novo sem dado real (nome/preço) confiável;
-     * a API do Bling de busca de produto por SKU não foi verificada
-     * contra uma conta real nesta sessão, então autoImportProduct() só
-     * resolve o caso em que o SKU já existe no catálogo local — criar um
-     * produto do zero fica pra uma sessão com acesso real ao Bling pra
-     * confirmar o endpoint certo, em vez de arriscar um chute.
+     * Achado real 2026-08-31, resolvendo pedidos reais da conta do
+     * usuário ("arrumar todos os pedidos e produtos... nada manual, tudo
+     * auto"): o código que o TikTok manda pro Bling (`itens[].codigo`,
+     * usado como external_id) NUNCA é um produto Bling de verdade
+     * (`produto.id` sempre veio 0 em todo pedido real conferido, e
+     * `GET produtos?codigo=X` nunca acha nada — confirmado ao vivo) — não
+     * existe endpoint do Bling pra "buscar item por código" fora de um
+     * pedido específico, então SKU exato sozinho não é suficiente. 3
+     * tentativas em ordem, cada uma só avança se a anterior não achou
+     * nada, todas determinísticas (nunca uma escolha aleatória):
+     *
+     * 1) SKU exato (Product::sku === external_id) — caso ideal, cadastro
+     *    já bate certinho.
+     * 2) SUFIXO de SKU — achado real: o código às vezes chega TRUNCADO,
+     *    faltando o prefixo (ex: "-8-POLEGADAS" em vez de
+     *    "RING-LIGTH-8-POLEGADAS-SOLO") — casa contra o final do SKU
+     *    local. Só aceita se achar exatamente 1 produto (ambíguo demais
+     *    com 2+, não arrisca).
+     * 3) NOME do item (guardado em cache por importOrder(), já que o
+     *    Bling só expõe o nome DENTRO do pedido, não por código sozinho)
+     *    contra TODO Product::name do catálogo, por SIMILARIDADE (não
+     *    exato — achado real testando: o título do anúncio no TikTok
+     *    quase nunca é idêntico ao nome cadastrado aqui, ex. "Mini
+     *    Carregador Portátil Power Bank 10000mAh 2 em 1 para iPhone e
+     *    Tipo C com Suporte" no TikTok vs "Carregador Portátil Power Bank
+     *    10000mah Para iPhone E Tipo C Rosa" no catálogo — match exato
+     *    nunca acharia isso). Usa similar_text() (percentual de
+     *    semelhança) contra cada produto ativo, pega o(s) de maior
+     *    pontuação acima de MIN_NAME_SIMILARITY:
+     *      - só 1 no topo → usa direto.
+     *      - vários empatados no topo (ex: mesmo produto em 4 cores —
+     *        Rosa/Preto/Branco/Verde, caso real do Carregador Power Bank
+     *        — e o TikTok não informa QUAL cor foi vendida, só o nome
+     *        genérico) → NÃO chuta uma cor à toa: escolhe automaticamente
+     *        a variação com MAIS estoque agora (minimiza a chance de
+     *        zerar uma variação específica sem querer, distribui a venda
+     *        entre as variações que existem de verdade).
+     *    Qualquer que seja a escolha, esse código específico do TikTok
+     *    fica PERMANENTEMENTE vinculado a ela (ProductChannelListing
+     *    abaixo) — nunca mais precisa decidir de novo pra esse código.
      */
+    private const MIN_NAME_SIMILARITY = 55.0;
+
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
-        // $externalId aqui É o SKU (ver importOrder() — usamos itens[].codigo
-        // do Bling direto como external_id, não um id interno do Bling),
-        // então o match é direto contra o catálogo local.
+        // BUG REAL 2026-08-31 (achado ao vivo, reconciliando pedidos
+        // reais): sem checar isto primeiro, uma 2ª venda do MESMO código
+        // do TikTok — normalmente resolvida pelo listing já existente,
+        // via OrderImportService, que só chama autoImportProduct() quando
+        // NÃO acha nenhum listing — mas se este método for chamado direto
+        // (como aconteceu numa reconciliação manual desta sessão) recalcula
+        // a similaridade do zero e pode escolher outra variação empatada
+        // (a antiga já ficou sem estoque suficiente pra ser a "melhor"),
+        // e o firstOrCreate() mais abaixo silenciosamente IGNORA esse
+        // resultado novo (acha a linha antiga, não atualiza) enquanto o
+        // método ainda devolve o produto ERRADO pro chamador debitar
+        // estoque. Checar aqui garante consistência sempre, não só
+        // quando chamado pelo caminho normal.
+        $existingListing = ProductChannelListing::query()
+            ->where('channel', MarketplaceAccount::CHANNEL_TIKTOK_SHOP)
+            ->where('external_id', $externalId)
+            ->first();
+
+        if ($existingListing) {
+            return $existingListing->product;
+        }
+
         $product = Product::where('sku', $externalId)->first();
+
+        if (! $product) {
+            $bySuffix = Product::where('sku', 'like', '%'.$externalId)->get();
+            $product = $bySuffix->count() === 1 ? $bySuffix->first() : null;
+        }
+
+        if (! $product) {
+            $itemName = cache()->get("bling.tiktok_item_name.{$externalId}");
+            $product = $itemName ? $this->matchByNameSimilarity($itemName) : null;
+        }
 
         if (! $product) {
             return null;
@@ -113,6 +174,54 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         );
 
         return $product;
+    }
+
+    /**
+     * Margem de tolerância pra considerar 2 produtos "a mesma família de
+     * variação" — achado real testando: as 4 cores do Carregador Power
+     * Bank pontuam 82.9%~84.8% contra o mesmo nome de anúncio do TikTok
+     * (nunca EXATAMENTE iguais, cada nome de produto tem uma diferença
+     * de 1-2 caracteres — a cor em si), enquanto o produto não
+     * relacionado mais próximo fica em 48.2%. Uma margem de 10 pontos a
+     * partir do melhor score agrupa as 4 cores de verdade sem puxar nada
+     * de fora.
+     */
+    private const NAME_SIMILARITY_TIE_MARGIN = 10.0;
+
+    private function matchByNameSimilarity(string $itemName): ?Product
+    {
+        $scored = Product::query()->where('is_active', true)->get(['id', 'name', 'sku', 'stock'])
+            ->map(function (Product $candidate) use ($itemName) {
+                similar_text(mb_strtolower($itemName), mb_strtolower($candidate->name), $percent);
+
+                return ['product' => $candidate, 'score' => $percent];
+            })
+            ->filter(fn ($row) => $row['score'] >= self::MIN_NAME_SIMILARITY);
+
+        if ($scored->isEmpty()) {
+            return null;
+        }
+
+        $bestScore = $scored->max('score');
+        $tied = $scored->filter(fn ($row) => $row['score'] >= $bestScore - self::NAME_SIMILARITY_TIE_MARGIN);
+
+        // ProductChannelListing só permite 1 vínculo por (produto, canal) —
+        // achado real (erro de constraint única ao vivo): 2 códigos
+        // DIFERENTES do TikTok pra 2 unidades vendidas da MESMA "família"
+        // de cores não podem apontar pro mesmo produto. Entre os empatados,
+        // prioriza quem AINDA não tem listing neste canal (reparte de
+        // verdade entre as variações reais); só reaproveita um produto já
+        // vinculado se for literalmente a única opção empatada que sobrou.
+        $alreadyLinked = ProductChannelListing::query()
+            ->where('channel', MarketplaceAccount::CHANNEL_TIKTOK_SHOP)
+            ->whereIn('product_id', $tied->pluck('product.id'))
+            ->pluck('product_id');
+
+        $available = $tied->reject(fn ($row) => $alreadyLinked->contains($row['product']->id));
+
+        return ($available->isNotEmpty() ? $available : $tied)
+            ->sortByDesc(fn ($row) => $row['product']->stock)
+            ->first()['product'];
     }
 
     /**
@@ -146,6 +255,14 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
             }
 
             $itemsSubtotal += $unitPrice * $quantity;
+
+            // autoImportProduct() (chamado depois, separado, só com o
+            // external_id) não recebe o nome do item — o Bling só expõe
+            // isso DENTRO do pedido, não por código sozinho (ver docblock
+            // completo lá). Guarda aqui pra ele conseguir consultar.
+            if (! empty($item['descricao'])) {
+                cache()->put("bling.tiktok_item_name.{$externalId}", $item['descricao'], now()->addDay());
+            }
 
             $items[] = [
                 'external_id' => (string) $externalId,

@@ -194,6 +194,18 @@ class OrderImportService
                 'shipping_state' => $data['shipping_state'],
                 'subtotal' => $data['subtotal'],
                 'shipping_cost' => $data['shipping_cost'],
+                // BUG REAL 2026-08-31 (achado via TikTokShopDriver — cupom/
+                // desconto do canal fazia a NF-e sair com o total errado, a
+                // SEFAZ recusava por "total difere do somatório dos
+                // valores"): sem isso, um driver que já manda
+                // discount_amount calculado (ver
+                // TikTokShopDriver::importOrder()) tinha esse dado
+                // descartado silenciosamente aqui — NFeXmlBuilderService lê
+                // Order::discount_amount direto (vDesc), não recalcula
+                // sozinho. Default 0 mantém o comportamento de sempre pra
+                // driver que não manda essa chave (Mercado Livre/Shopee/
+                // Amazon).
+                'discount_amount' => $data['discount_amount'] ?? 0,
                 'total' => $data['total'],
             ]);
 

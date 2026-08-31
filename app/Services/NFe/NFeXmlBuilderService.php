@@ -221,6 +221,17 @@ class NFeXmlBuilderService
         $itemsCount = $order->items->count();
         $allocatedShipping = 0.0;
 
+        // Rejeição real da SEFAZ (537, pedidos #1118/#1123/#1124,
+        // 2026-08-31 — TikTok Shop via Bling, cupom/desconto real do
+        // canal): "Total do Desconto difere do somatório dos itens" —
+        // MESMA regra do frete acima (docblock 2026-08-06), só que pra
+        // vDesc: a SEFAZ exige o total (icmsTot->vDesc, order->discount_amount)
+        // batendo com a soma do vDesc de cada item quando > 0. Mesma
+        // distribuição proporcional, mesmo último item absorvendo o resto
+        // do arredondamento.
+        $totalDiscount = (float) $order->discount_amount;
+        $allocatedDiscount = 0.0;
+
         foreach ($order->items as $index => $item) {
             $n = $index + 1;
             $fiscal = $this->resolveFiscalData($item);
@@ -228,13 +239,18 @@ class NFeXmlBuilderService
 
             if ($n === $itemsCount) {
                 $itemShipping = round($totalShipping - $allocatedShipping, 2);
+                $itemDiscount = round($totalDiscount - $allocatedDiscount, 2);
             } else {
                 $itemShipping = $orderSubtotal > 0
                     ? round($totalShipping * ((float) $item->subtotal / $orderSubtotal), 2)
                     : 0.0;
+                $itemDiscount = $orderSubtotal > 0
+                    ? round($totalDiscount * ((float) $item->subtotal / $orderSubtotal), 2)
+                    : 0.0;
             }
 
             $allocatedShipping += $itemShipping;
+            $allocatedDiscount += $itemDiscount;
 
             $prod = new stdClass();
             $prod->item = $n;
@@ -257,6 +273,9 @@ class NFeXmlBuilderService
             $prod->indTot = 1;
             if ($itemShipping > 0) {
                 $prod->vFrete = $itemShipping;
+            }
+            if ($itemDiscount > 0) {
+                $prod->vDesc = $itemDiscount;
             }
             if ($fiscal->cest) {
                 $prod->CEST = $fiscal->cest;

@@ -339,6 +339,15 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => round((float) ($order['transporte']['frete'] ?? 0), 2),
             'total' => round((float) ($order['total'] ?? $itemsSubtotal), 2),
+            // BUG REAL 2026-08-31 (achado ao vivo — 3 notas rejeitadas pela
+            // SEFAZ, "Total da NF difere do somatório dos valores"): quando o
+            // TikTok Shop dá cupom/desconto, `total` do Bling já vem COM o
+            // desconto aplicado, mas `itens[].valor` continua o preço CHEIO
+            // — sem informar discount_amount, o XML monta vProd (soma dos
+            // itens, cheio) e vNF (=order.total, já descontado) sem nenhum
+            // vDesc pra explicar a diferença, e a SEFAZ recusa a conta.
+            // `desconto.valor` do Bling é exatamente esse valor.
+            'discount_amount' => round((float) ($order['desconto']['valor'] ?? 0), 2),
             'buyer_name' => $buyerName,
             'buyer_document' => $buyerDocument,
             'buyer_phone' => $contact['celular'] ?? $contact['telefone'] ?? null,

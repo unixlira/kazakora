@@ -94,6 +94,8 @@ class FinancialDashboardController extends Controller
             ->sum('order_channel_fees.fee_amount'), 2);
 
         $adSpendMonth = round((float) ChannelAdSpend::query()->where('date', '>=', $startOfMonth)->sum('spend'), 2);
+        $grossProfitMonth = round($salesRevenueMonth - $productCostMonth, 2);
+        $platformCostsMonth = round($marketplaceFeeMonth + $flexCostMonth, 2);
 
         // Pedido explícito 2026-08-15: frete continua fora da conta de
         // faturamento/lucro (é pago pelo comprador/canal à transportadora,
@@ -117,6 +119,7 @@ class FinancialDashboardController extends Controller
         // custo real (~12-20% da receita) e o usuário confirmou que
         // precisa estar aqui pro número refletir o dinheiro de verdade.
         $netProfitMonth = round($salesRevenueMonth - $productCostMonth - $marketplaceFeeMonth - $adSpendMonth - $flexCostMonth, 2);
+        $netProfitMarginMonth = $salesRevenueMonth > 0 ? round(($netProfitMonth / $salesRevenueMonth) * 100, 2) : 0.0;
 
         // Pedido explícito 2026-08-10: "faturamento liquido é o valor bruto
         // menos ads" — métrica distinta de lucro líquido (que também abate
@@ -169,6 +172,16 @@ class FinancialDashboardController extends Controller
                 'grossRevenueAllTime' => $salesRevenueAllTime,
                 'netProfitAllTime' => $netProfitAllTime,
                 'grossRevenueMonth' => $salesRevenueMonth,
+                // Mantém contrato com bundles mais novos do Financeiro:
+                // cards do topo leem estes campos direto de summary. Sem
+                // eles, Intl.NumberFormat(undefined) vira R$ NaN/NaN%.
+                'grossProfitMonth' => $grossProfitMonth,
+                'platformCostsMonth' => $platformCostsMonth,
+                'marketplaceFeesMonth' => $marketplaceFeeMonth,
+                'adSpendMonth' => $adSpendMonth,
+                'productCostMonth' => $productCostMonth,
+                'flexCostMonth' => $flexCostMonth,
+                'netProfitMarginMonth' => $netProfitMarginMonth,
                 'netRevenueMonth' => $netRevenueMonth,
                 'stockValue' => $stockValue,
             ],

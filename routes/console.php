@@ -33,18 +33,6 @@ Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
 
-// Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
-// "pedido embalado continua na fila mesmo depois do ponto de coleta
-// escanear o pacote... preferir webhook, mas manter verificação periódica
-// como garantia") — orders:sync-mercadolivre acima NÃO cobre isso: ele
-// relê o pedido no nível de PEDIDO, e o Mercado Livre nunca reflete
-// entrega ali (só no sub-recurso shipment, ver ShipmentService::
-// processWebhook()). Rodando mais frequente que a reconciliação geral
-// (30min, não 1h) porque é justamente a garantia contra webhook perdido —
-// só reconsulta pedido ainda "pago" (ChannelShipment com order confirmado
-// no Mercado Livre), consulta rápida e idempotente.
-Schedule::command('orders:poll-mercadolivre-shipment-status')->everyThirtyMinutes();
-
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
 // ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,
@@ -82,42 +70,30 @@ Schedule::command('flex:check-billing-cycle')->dailyAt('07:00');
 // avisar, ver NotifyScheduledShipmentsCommand.
 Schedule::command('marketplace:notify-scheduled-shipments')->twiceDaily(8, 15);
 
-// Avaliações (nota/comentário/imagens/nome do comprador) de todos os
-// marketplaces conectados — pedido explícito 2026-08-16. Diário (não
-// precisa de tempo real como pedido/etiqueta) num horário fora dos outros
-// crons já agendados, pra não competir por chamada de API na mesma janela.
-Schedule::command('reviews:sync')->dailyAt('05:15');
-
-// Liberação operacional das vendas agendadas do Mercado Livre — reemite
-// NF-e pendente, reenvia ao canal quando autorizada, cutuca confirmação de
-// envio e checa etiqueta pra todo envio com scheduled_for vencido/hoje (ver
-// ReleaseMercadoLivreScheduledShipments). 07:10 com --sync (reimporta
-// pedidos recentes do ML antes) deixa o orders:sync-mercadolivre horário
-// das 07:00 terminar antes; withoutOverlapping evita duas varreduras
-// simultâneas.
+// Liberação operacional das vendas agendadas do Mercado Livre — pedido
+// explícito 2026-08-31 ("a partir das 6h da manhã, roda uma cron que
+// verifica via API se existe pedido pra enviar, emite NF-e se faltar,
+// imprime etiqueta, deixa disponível pro KoraSync"). A 1ª passada do dia
+// (06:00) leva --sync, que reimporta pedidos recentes do Mercado Livre —
+// deixa o orders:sync-mercadolivre horário rodar de novo depois sem
+// conflito (withoutOverlapping). As passadas seguintes, de 30 em 30 min
+// até as 21h, batem de novo na API do canal pra cada envio agendado ainda
+// sem etiqueta — não só relêem o que já está salvo — pra pegar rápido
+// tanto a etiqueta liberando quanto o canal corrigindo a data prometida
+// (ver BUG REAL 2026-08-31 no docblock de ReleaseMercadoLivreScheduledShipments:
+// antes disso, uma data errada gravada na 1ª confirmação podia ficar
+// escondida por dias sem ninguém perceber).
 Schedule::command('marketplace:release-scheduled-mercadolivre --sync')
-    ->dailyAt('07:10')
-    ->withoutOverlapping(60);
-
-// 2 checagens extras, sem --sync (orders:sync-mercadolivre já roda de hora
-// em hora, dado já está fresco) — pedido explícito do usuário 2026-08-30:
-// "no dia certo temos que fazer uma verificação no servidor 00:05 se está
-// liberada e outra as 06:05 se liberou e se tiver liberada imprime a
-// etiqueta e vai pra fila de separação". Mesmo comando de cima
-// (idempotente por design, ver docblock da classe) — só reduz o tempo
-// entre o canal liberar de verdade e alguém perceber, sem esperar até as
-// 07:10.
-//
-// RECRIADO 2026-08-31 — o comando e este agendamento tinham sido
-// construídos ao vivo em produção (mesmo dia, 2026-08-30), nunca
-// commitados, e um deploy de rotina sem relação nenhuma apagou os dois
-// junto ao resetar o código pro estado do git. 27 pacotes agendados pra
-// entregar sem NINGUÉM verificando etiqueta automaticamente até isso ser
-// percebido. Desta vez fica commitado.
-Schedule::command('marketplace:release-scheduled-mercadolivre')
-    ->dailyAt('00:05')
+    ->dailyAt('06:00')
     ->withoutOverlapping(60);
 
 Schedule::command('marketplace:release-scheduled-mercadolivre')
-    ->dailyAt('06:05')
+    ->everyThirtyMinutes()
+    ->between('06:30', '21:00')
     ->withoutOverlapping(60);
+
+// Avaliações Shopee alimentam a resposta automática da Manuela/Naia.
+// Roda a cada 4 minutos porque resposta pública atrasada prejudica a loja;
+// falhas ficam registradas no banco, em log PT-BR e notificam administradores.
+Schedule::command('reviews:sync')->cron('*/4 * * * *');
+Schedule::command('video-downloads:clean')->hourly();

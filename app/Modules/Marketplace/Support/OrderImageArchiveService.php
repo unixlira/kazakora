@@ -28,14 +28,25 @@ class OrderImageArchiveService
     private const DISK = 'local';
 
     /**
+     * @param  int|null  $productId  Foto de um produto ESPECÍFICO do
+     *                                pedido (pedido explícito 2026-08-30:
+     *                                "múltiplos produtos de 1 pedido... o
+     *                                pessoal identifica pela imagem/foto
+     *                                para embalar" — cada produto
+     *                                DIFERENTE do pedido tem sua própria
+     *                                foto, não só a do 1º item). null
+     *                                mantém o comportamento antigo (1º
+     *                                item com product_id) — usado pelo
+     *                                endpoint de imagem única, mantido por
+     *                                compatibilidade.
      * @return string|null caminho relativo no disco 'local' se a imagem
      *                      existe (recém-arquivada ou já arquivada antes),
-     *                      null se o pedido não tem produto/imagem pra
+     *                      null se o pedido/produto não tem imagem pra
      *                      arquivar.
      */
-    public function archive(Order $order): ?string
+    public function archive(Order $order, ?int $productId = null): ?string
     {
-        $path = $this->pathFor($order);
+        $path = $this->pathFor($order, $productId);
 
         // Idempotente/barato depois da primeira vez — só um exists() no
         // disco, sem reabrir/reconverter a imagem a cada chamada (este
@@ -45,7 +56,9 @@ class OrderImageArchiveService
             return $path;
         }
 
-        $image = $this->resolveProductImage($order);
+        $image = $productId !== null
+            ? $this->resolveProductImageById($productId)
+            : $this->resolveProductImage($order);
 
         if ($image === null) {
             return null;
@@ -83,13 +96,14 @@ class OrderImageArchiveService
     }
 
     /**
+     * @param  int|null  $productId  Ver comentário completo em archive().
      * @return string|null bytes da imagem já arquivada (chama archive()
      *                      primeiro se ainda não existir) — usado pelo
      *                      endpoint que serve a imagem pro KoraSync.
      */
-    public function bytes(Order $order): ?string
+    public function bytes(Order $order, ?int $productId = null): ?string
     {
-        $path = $this->archive($order);
+        $path = $this->archive($order, $productId);
 
         if ($path === null) {
             return null;
@@ -98,17 +112,21 @@ class OrderImageArchiveService
         return Storage::disk(self::DISK)->get($path);
     }
 
-    private function pathFor(Order $order): string
+    private function pathFor(Order $order, ?int $productId = null): string
     {
         $when = $order->created_at ?? now();
 
+        // Sufixo -{productId} pra não colidir com o cache da imagem única
+        // (sem productId, comportamento/caminho antigos intactos).
+        $suffix = $productId !== null ? "{$order->id}-{$productId}" : (string) $order->id;
+
         return sprintf(
-            'order-images/%s/%s/%s/%s/%d.png',
+            'order-images/%s/%s/%s/%s/%s.png',
             $when->format('Y'),
             $when->format('m'),
             $when->format('d'),
             $order->origin,
-            $order->id,
+            $suffix,
         );
     }
 
@@ -129,6 +147,22 @@ class OrderImageArchiveService
         }
 
         $product->loadMissing('images');
+
+        return $product->images->firstWhere('is_primary', true) ?? $product->images->first();
+    }
+
+    /**
+     * Mesma lógica de resolveProductImage() acima, mas por productId
+     * direto (não precisa saber a qual item do pedido ele pertence — só
+     * qual produto mostrar).
+     */
+    private function resolveProductImageById(int $productId): ?object
+    {
+        $product = \App\Modules\Catalog\Models\Product::query()->with('images')->find($productId);
+
+        if ($product === null) {
+            return null;
+        }
 
         return $product->images->firstWhere('is_primary', true) ?? $product->images->first();
     }

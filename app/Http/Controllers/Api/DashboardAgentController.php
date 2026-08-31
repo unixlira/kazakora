@@ -681,7 +681,30 @@ class DashboardAgentController extends Controller
         // normal (que é só a "vitrine" de hoje).
         $withStockToday = $withStock->filter(fn (Order $order) => $this->isInTodayWindow($order, $yesterday, $tomorrow));
 
-        $normalOrders = $displayOnlyOrders->merge($withStockToday)->sortByDesc('id')->values();
+        // BUG REAL 2026-08-31 (relatado pelo usuário: "vendas do mercado
+        // livre estao canceladas algumas horas depois e não apareceram na
+        // fila de cancelados... isso foi um erro que eu poderia ter
+        // enviado os produtos") — $displayOnlyOrders acima EXCLUI
+        // CANCELLED explicitamente (whereNotIn no topo), e $actionableOrders
+        // só pega status=PAID — nenhuma das duas nunca incluiu pedido
+        // cancelado, então um pedido que estava visível (pago, na fila) e
+        // foi cancelado horas depois simplesmente SUMIA da tela inteira no
+        // próximo poll, em vez de mudar pra aba "Cancelados" (o
+        // client-side do KoraSync já sabe separar por status=="cancelled"
+        // — MainViewModel.UpdateOrderQueue — só faltava o servidor não
+        // esconder esses pedidos antes disso chegar a acontecer). Pedido
+        // cancelado nas últimas ~48h (mesma janela ontem/hoje já usada em
+        // toda essa função) agora entra também, especificamente pra isso —
+        // sem essa visibilidade, ninguém percebe que precisa TIRAR um
+        // pedido já separado/em mãos da remessa.
+        $recentlyCancelledOrders = Order::query()
+            ->where('status', Order::STATUS_CANCELLED)
+            ->whereBetween('updated_at', [$yesterday, $tomorrow])
+            ->with($relations)
+            ->withSum('items as units_count', 'quantity')
+            ->get();
+
+        $normalOrders = $displayOnlyOrders->merge($withStockToday)->merge($recentlyCancelledOrders)->sortByDesc('id')->values();
         $outOfStockOrders = $outOfStock->sortByDesc('id')->values();
 
         $mapper = fn (Order $order) => $this->mapQueueOrder($order, $shortages[$order->id] ?? []);
@@ -812,7 +835,14 @@ class DashboardAgentController extends Controller
             'packed_at' => $order->packed_at,
             'status' => $order->status,
             'status_label' => self::STATUS_LABELS[$order->status] ?? $order->status,
+            // product_id (pedido explícito 2026-08-30 — "múltiplos
+            // produtos de 1 pedido... o pessoal identifica pela imagem/
+            // foto para embalar") — o cliente busca 1 foto por produto
+            // distinto em GET dashboard/queue/{order}/image/{productId}
+            // (ver queueOrderProductImage() abaixo), não mais 1 foto só
+            // pro pedido inteiro.
             'products' => $order->items->map(fn ($item) => [
+                'product_id' => $item->product_id,
                 'name' => $item->product_name,
                 'quantity' => $item->quantity,
                 'sku' => $item->product?->sku,
@@ -856,6 +886,27 @@ class DashboardAgentController extends Controller
 
         if ($bytes === null) {
             throw new NotFoundHttpException('Pedido sem imagem de produto disponível.');
+        }
+
+        return response($bytes, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
+    /**
+     * Uma foto por PRODUTO DISTINTO do pedido (pedido explícito
+     * 2026-08-30 — "múltiplos produtos de 1 pedido... o pessoal
+     * identifica pela imagem/foto para embalar"). $product é o product_id
+     * vindo em queue()/products.product_id. Mesmo padrão de 404 "sem
+     * imagem" de queueOrderImage() acima.
+     */
+    public function queueOrderProductImage(Order $order, int $product, OrderImageArchiveService $images): mixed
+    {
+        $bytes = $images->bytes($order, $product);
+
+        if ($bytes === null) {
+            throw new NotFoundHttpException('Produto sem imagem disponível.');
         }
 
         return response($bytes, 200, [

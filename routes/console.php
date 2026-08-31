@@ -87,3 +87,37 @@ Schedule::command('marketplace:notify-scheduled-shipments')->twiceDaily(8, 15);
 // precisa de tempo real como pedido/etiqueta) num horário fora dos outros
 // crons já agendados, pra não competir por chamada de API na mesma janela.
 Schedule::command('reviews:sync')->dailyAt('05:15');
+
+// Liberação operacional das vendas agendadas do Mercado Livre — reemite
+// NF-e pendente, reenvia ao canal quando autorizada, cutuca confirmação de
+// envio e checa etiqueta pra todo envio com scheduled_for vencido/hoje (ver
+// ReleaseMercadoLivreScheduledShipments). 07:10 com --sync (reimporta
+// pedidos recentes do ML antes) deixa o orders:sync-mercadolivre horário
+// das 07:00 terminar antes; withoutOverlapping evita duas varreduras
+// simultâneas.
+Schedule::command('marketplace:release-scheduled-mercadolivre --sync')
+    ->dailyAt('07:10')
+    ->withoutOverlapping(60);
+
+// 2 checagens extras, sem --sync (orders:sync-mercadolivre já roda de hora
+// em hora, dado já está fresco) — pedido explícito do usuário 2026-08-30:
+// "no dia certo temos que fazer uma verificação no servidor 00:05 se está
+// liberada e outra as 06:05 se liberou e se tiver liberada imprime a
+// etiqueta e vai pra fila de separação". Mesmo comando de cima
+// (idempotente por design, ver docblock da classe) — só reduz o tempo
+// entre o canal liberar de verdade e alguém perceber, sem esperar até as
+// 07:10.
+//
+// RECRIADO 2026-08-31 — o comando e este agendamento tinham sido
+// construídos ao vivo em produção (mesmo dia, 2026-08-30), nunca
+// commitados, e um deploy de rotina sem relação nenhuma apagou os dois
+// junto ao resetar o código pro estado do git. 27 pacotes agendados pra
+// entregar sem NINGUÉM verificando etiqueta automaticamente até isso ser
+// percebido. Desta vez fica commitado.
+Schedule::command('marketplace:release-scheduled-mercadolivre')
+    ->dailyAt('00:05')
+    ->withoutOverlapping(60);
+
+Schedule::command('marketplace:release-scheduled-mercadolivre')
+    ->dailyAt('06:05')
+    ->withoutOverlapping(60);

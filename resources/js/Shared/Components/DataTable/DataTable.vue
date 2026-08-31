@@ -19,6 +19,9 @@ const props = defineProps({
     // this component just tracks which tab is active and emits it.
     filterTabs: { type: Array, default: () => [] },
     rowKey: { type: String, default: 'id' },
+    showPagination: { type: Boolean, default: true },
+    hideSearch: { type: Boolean, default: false },
+    initialActiveTab: { type: String, default: 'all' },
 });
 
 const emit = defineEmits(['update:activeTab']);
@@ -26,7 +29,8 @@ const emit = defineEmits(['update:activeTab']);
 const globalFilter = ref('');
 const sorting = ref([]);
 const rowSelection = ref({});
-const activeTab = ref('all');
+const activeTab = ref(props.initialActiveTab || 'all');
+const showToolbar = computed(() => !props.hideSearch || Boolean(props.createLabel && props.createHref) || props.filterTabs.length > 0);
 
 const selectionColumn = {
     id: '__select',
@@ -82,8 +86,9 @@ const setActiveTab = (value) => {
     <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
         <slot name="stats" />
 
-        <DataTableToolbar v-model:global-filter="globalFilter" :search-placeholder="searchPlaceholder"
+        <DataTableToolbar v-if="showToolbar" v-model:global-filter="globalFilter" :search-placeholder="searchPlaceholder"
             :filter-tabs="filterTabs" :active-tab="activeTab" :create-label="createLabel" :create-href="createHref"
+            :hide-search="hideSearch"
             @update:active-tab="setActiveTab" />
 
         <div class="overflow-x-auto">
@@ -128,6 +133,6 @@ const setActiveTab = (value) => {
             </table>
         </div>
 
-        <DataTablePagination :table="table" />
+        <DataTablePagination v-if="showPagination" :table="table" />
     </div>
 </template>

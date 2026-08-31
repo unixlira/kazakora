@@ -1,12 +1,14 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
+import ShippingFiscalLabel from '@/Modules/Admin/Correios/Components/ShippingFiscalLabel.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     serviceOptions: { type: Array, required: true },
     configured: { type: Boolean, required: true },
+    sender: { type: Object, required: true },
     // Presente só na tela de edição (/admin/correios/{id}/editar) — reabre
     // uma tentativa que falhou pra corrigir e tentar de novo, ver
     // CorreiosController::edit().
@@ -43,6 +45,20 @@ const orderNumber = ref('');
 const searching = ref(false);
 const searchError = ref('');
 
+const emptyInvoice = () => ({
+    hasInvoice: false,
+    status: null,
+    serie: null,
+    numero: null,
+    valorTotal: null,
+    chaveAcesso: null,
+    chaveFormatada: null,
+    autorizadaEm: null,
+    danfePath: null,
+});
+
+const invoice = ref(props.editing?.invoice ?? emptyInvoice());
+
 const buscarPedido = async () => {
     if (! orderNumber.value.trim()) {
         return;
@@ -67,14 +83,11 @@ const buscarPedido = async () => {
         form.external_order_id = data.externalOrderId;
         form.customer = { ...data.customer };
         form.address = { ...data.address };
+        invoice.value = data.invoice ?? emptyInvoice();
 
         if (data.items.length) {
-            // `maxlength="60"` no <input> só trava digitação manual — nome de
-            // produto vindo do pedido chega aqui por atribuição direta (JS),
-            // que ignora o atributo, então precisa truncar na mão (mesmo
-            // limite que o backend exige em content_items.*.conteudo).
             form.content_items = data.items.map((item) => ({
-                conteudo: item.conteudo.slice(0, 60),
+                conteudo: item.conteudo,
                 quantidade: item.quantidade,
                 valor: item.valor,
             }));
@@ -93,6 +106,41 @@ const addItem = () => {
 const removeItem = (index) => {
     form.content_items.splice(index, 1);
 };
+
+const compact = (items) => items.filter((value) => value !== null && value !== undefined && String(value).trim() !== '');
+
+const recipientAddressLines = computed(() => {
+    const streetLine = compact([form.address.street, form.address.number]).join(', ');
+    const streetWithComplement = compact([streetLine, form.address.complement]).join(' - ');
+    const cityState = compact([form.address.city, form.address.state]).join('/');
+    const zipLine = form.address.zip ? `CEP ${form.address.zip}` : '';
+
+    return compact([
+        streetWithComplement,
+        form.address.neighborhood,
+        compact([zipLine, cityState]).join(' — '),
+    ]);
+});
+
+const recipientLabel = computed(() => ({
+    name: form.customer.name || 'Selecione um pedido',
+    document: form.customer.document,
+    phone: form.customer.phone,
+    zip: form.address.zip,
+    addressLines: recipientAddressLines.value,
+}));
+
+const orderLabel = computed(() => form.external_order_id || (form.order_id ? `#${form.order_id}` : null));
+
+const selectedServiceLabel = computed(() => props.serviceOptions.find((option) => option.value === form.service_code)?.label ?? 'Correios');
+
+const canPrintShippingLabel = computed(() => Boolean(
+    form.customer.name
+    && recipientAddressLines.value.length
+    && props.sender.addressLines?.length,
+));
+
+const printShippingLabel = () => window.print();
 
 const submit = () => {
     if (props.editing) {
@@ -144,6 +192,31 @@ const submit = () => {
                 <p v-if="form.external_order_id" class="mt-2 text-sm text-success">
                     <i class="fas fa-circle-check mr-1"></i> Pedido {{ form.external_order_id }} carregado.
                 </p>
+            </div>
+
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm print:contents">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+                    <div>
+                        <h3 class="text-base font-semibold">Etiqueta 10×15 paisagem para impressão</h3>
+                        <p class="text-xs text-slate-400">A impressão mostra QR Code, código de postagem, CEP do destinatário, remetente e declaração resumida do produto.</p>
+                    </div>
+                    <button type="button" :disabled="!canPrintShippingLabel"
+                        class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
+                        @click="printShippingLabel">
+                        <i class="fas fa-print mr-1.5"></i>
+                        Imprimir etiqueta
+                    </button>
+                </div>
+
+                <ShippingFiscalLabel
+                    :recipient="recipientLabel"
+                    :sender="sender"
+                    :invoice="invoice"
+                    :content-items="form.content_items"
+                    :service-label="selectedServiceLabel"
+                    :weight-grams="form.weight_grams"
+                    :order-label="orderLabel"
+                />
             </div>
 
             <form class="space-y-6" @submit.prevent="submit">
@@ -281,7 +354,7 @@ const submit = () => {
 
                 <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
                     <h3 class="mb-1 text-base font-semibold">Declaração de conteúdo</h3>
-                    <p class="mb-4 text-xs text-slate-400">O que tem dentro do pacote — exigido pelos Correios.</p>
+                    <p class="mb-4 text-xs text-slate-400">Ao buscar um pedido, a Naia resume o título e deixa só o nome principal do produto. Pode ajustar manualmente antes de gerar.</p>
 
                     <div class="flex flex-col gap-3">
                         <div v-for="(item, index) in form.content_items" :key="index" class="flex items-end gap-3">

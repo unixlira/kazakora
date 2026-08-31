@@ -27,10 +27,15 @@ class LabelFetchService
 {
     /**
      * Canais que recebem a declaração de conteúdo na etiqueta — pedido
-     * original 2026-08-15, escopo Shopee/TikTok. TikTok Shop ainda não tem
-     * fetchLabel() implementado (ver TikTokShopDriver — integração
-     * pendente de credencial de parceiro), então isso fica pronto e sem
-     * efeito prático até esse driver existir.
+     * original 2026-08-15, escopo Shopee/TikTok.
+     *
+     * TikTok Shop SAIU da lista em 2026-08-31 (pedido explícito do
+     * usuário, "quero só a etiqueta impressa, a declaração não" — depois
+     * que fetchLabel() passou a funcionar de verdade via Bling): a
+     * etiqueta que o Bling devolve pro TikTok Shop é só a etiqueta em si,
+     * sem DANFE simplificada numa 2ª página (diferente do Mercado Livre)
+     * — overlay de declaração aqui só correria risco de colidir com o
+     * layout dela sem necessidade real.
      *
      * Mercado Livre ENTROU nessa lista 2026-08-21 (antes só entrava via
      * $isScheduled abaixo) — achado real numa venda de verdade: a etiqueta
@@ -57,7 +62,6 @@ class LabelFetchService
      */
     private const CHANNELS_WITH_DECLARATION = [
         MarketplaceAccount::CHANNEL_SHOPEE,
-        MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
         MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
     ];
 

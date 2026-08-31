@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Drivers;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -168,10 +169,25 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
             return null;
         }
 
-        ProductChannelListing::query()->firstOrCreate(
-            ['channel' => MarketplaceAccount::CHANNEL_TIKTOK_SHOP, 'external_id' => $externalId],
-            ['product_id' => $product->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
-        );
+        // BUG REAL 2026-08-31 (achado ao vivo): product_channel_listings só
+        // permite 1 linha por (produto, canal) — mas o TikTok pode mandar
+        // VÁRIOS códigos diferentes que todos resolvem pro MESMO produto
+        // (achado real: o Power Bank Preto tem pelo menos 2 códigos
+        // distintos do TikTok, cada venda desse item físico aparentemente
+        // gera/usa um código próprio, não um id de anúncio fixo reaproveitado).
+        // Criar o listing é só uma otimização (evita recalcular a
+        // similaridade de novo pro mesmo código) — se já existe um listing
+        // pra este produto neste canal (com outro external_id), não é
+        // erro: ignora e segue, o produto já foi encontrado certo mesmo
+        // assim.
+        try {
+            ProductChannelListing::query()->firstOrCreate(
+                ['channel' => MarketplaceAccount::CHANNEL_TIKTOK_SHOP, 'external_id' => $externalId],
+                ['product_id' => $product->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
+            );
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Ignorado de propósito — ver comentário acima.
+        }
 
         return $product;
     }
@@ -188,6 +204,19 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
      */
     private const NAME_SIMILARITY_TIE_MARGIN = 10.0;
 
+    /**
+     * BUG REAL 2026-08-31 (relatado pelo usuário, "é preto" — errei):
+     * desempatar por MAIS estoque agora é o critério ERRADO — penaliza
+     * exatamente a variação mais vendida de verdade (menos estoque
+     * sobrando É o sinal de que é a popular). O histórico real de vendas
+     * (quantos itens desta MESMA venda genérica pelo TikTok já foram
+     * vinculados a cada variação, em pedidos anteriores) é o sinal
+     * correto — direto confirmado ao vivo: entre as 4 cores do Power
+     * Bank, "Preto" já tinha ~90 pedidos reais vinculados antes desta
+     * sessão, as outras cores quase nenhum. Só cai pra estoque como
+     * último recurso, quando NENHuma variação tem histórico nenhum ainda
+     * (produto novo de verdade, sem venda prévia pra guiar a escolha).
+     */
     private function matchByNameSimilarity(string $itemName): ?Product
     {
         $scored = Product::query()->where('is_active', true)->get(['id', 'name', 'sku', 'stock'])
@@ -205,23 +234,31 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         $bestScore = $scored->max('score');
         $tied = $scored->filter(fn ($row) => $row['score'] >= $bestScore - self::NAME_SIMILARITY_TIE_MARGIN);
 
-        // ProductChannelListing só permite 1 vínculo por (produto, canal) —
-        // achado real (erro de constraint única ao vivo): 2 códigos
-        // DIFERENTES do TikTok pra 2 unidades vendidas da MESMA "família"
-        // de cores não podem apontar pro mesmo produto. Entre os empatados,
-        // prioriza quem AINDA não tem listing neste canal (reparte de
-        // verdade entre as variações reais); só reaproveita um produto já
-        // vinculado se for literalmente a única opção empatada que sobrou.
-        $alreadyLinked = ProductChannelListing::query()
-            ->where('channel', MarketplaceAccount::CHANNEL_TIKTOK_SHOP)
+        if ($tied->count() === 1) {
+            return $tied->first()['product'];
+        }
+
+        // Desempate: quem já tem MAIS pedidos reais deste canal apontando
+        // pra ele (histórico de verdade > estoque atual — ver docblock
+        // acima). whereIn + groupBy numa query só, em vez de 1 count() por
+        // candidato.
+        $historyCounts = OrderItem::query()
             ->whereIn('product_id', $tied->pluck('product.id'))
-            ->pluck('product_id');
+            ->whereHas('order', fn ($query) => $query->where('origin', MarketplaceAccount::CHANNEL_TIKTOK_SHOP))
+            ->selectRaw('product_id, count(*) as total')
+            ->groupBy('product_id')
+            ->pluck('total', 'product_id');
 
-        $available = $tied->reject(fn ($row) => $alreadyLinked->contains($row['product']->id));
+        $bestHistory = $historyCounts->max() ?? 0;
 
-        return ($available->isNotEmpty() ? $available : $tied)
-            ->sortByDesc(fn ($row) => $row['product']->stock)
-            ->first()['product'];
+        if ($bestHistory > 0) {
+            $tied = $tied->filter(fn ($row) => ($historyCounts[$row['product']->id] ?? 0) === $bestHistory);
+        }
+
+        // Ainda empatado (ou sem histórico nenhum pra nenhum candidato,
+        // ex: variações genuinamente novas sem venda prévia) — estoque
+        // como último critério, só pra ter alguma resposta determinística.
+        return $tied->sortByDesc(fn ($row) => $row['product']->stock)->first()['product'];
     }
 
     /**
@@ -379,6 +416,14 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
      */
     public function confirmShipping(Order $order): array
     {
+        // BUG REAL 2026-08-31 (achado ao vivo reprocessando o backlog):
+        // pedido tiktok_shop sem external_order_id (ex: criado manualmente
+        // sem preencher esse campo) estourava TypeError cru aqui em vez de
+        // um erro claro — findByOrderNumber() exige string.
+        if (! $order->external_order_id) {
+            throw new RuntimeException("Pedido #{$order->id} não tem external_order_id — não dá pra consultar o envio no Bling.");
+        }
+
         $blingOrder = $this->blingOrders->findByOrderNumber($order->external_order_id);
 
         if (! $blingOrder) {

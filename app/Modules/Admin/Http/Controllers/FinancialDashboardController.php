@@ -220,7 +220,97 @@ class FinancialDashboardController extends Controller
             'adSpendByChannel' => $this->adSpendByChannel($startOfMonth),
             'adSpendSeries' => $this->adSpendSeries($start14),
             'cashFlowSeries' => $this->cashFlowSeries($start14),
+            // Pedido explícito 2026-08-31: "quanto eu ganhei líquido no
+            // tiktok... detalhado de cada marketplace por mês, custo e
+            // lucro líquido" — ver channelMonthlyBreakdown() pro real
+            // motivo de feeAvailable ficar false pro TikTok Shop (Bling
+            // não expõe a comissão real do canal, só um campo de comissão
+            // interna do Bling que veio zerado em todo pedido conferido).
+            'channelMonthlyBreakdown' => $this->channelMonthlyBreakdown(),
         ]);
+    }
+
+    /**
+     * Receita/custo/taxa/lucro líquido por CANAL, mês a mês (últimos 6
+     * meses) — pedido explícito 2026-08-31. Mesma definição de "lucro
+     * líquido" já usada no resto do dashboard (receita real - custo de
+     * produto - taxa de marketplace), só quebrada por canal+mês em vez de
+     * agregada.
+     *
+     * `feeAvailable` distingue "taxa real 0" de "não temos como saber a
+     * taxa deste canal" — achado real 2026-08-31 tentando ligar isso pro
+     * TikTok Shop: o Bling devolve `taxas`/`itens[].comissao` no pedido,
+     * mas são campos de COMISSÃO INTERNA DO BLING (ex: comissão de
+     * vendedor/representante cadastrado no Bling), não a taxa que o
+     * TikTok Shop cobra do lojista — vieram 100% zerados em todo pedido
+     * conferido ao vivo, então marketplace_fee nunca é gravado pro TikTok
+     * (mesma política de "nunca inventar taxa" já usada pro resto do
+     * projeto). Mostrar fee=0 sem aviso pareceria "TikTok não cobra
+     * comissão", o que quase certamente é falso — melhor mostrar "taxa
+     * não disponível" e deixar claro no lucro líquido que ele está
+     * SUPERESTIMADO até essa informação existir de outra fonte.
+     *
+     * @return array<int, array{channel: string, month: string, revenue: float, productCost: float, marketplaceFee: float, feeAvailable: bool, netProfit: float, orders: int}>
+     */
+    private function channelMonthlyBreakdown(): array
+    {
+        $since = Carbon::today()->startOfMonth()->subMonths(5);
+
+        $feeTrackedChannels = ['mercado_livre', 'shopee'];
+
+        // 'nota_devolucao_compra' (devolução de compra a fornecedor) e
+        // 'nota_fiscal_avulsa' usam a tabela orders só como suporte
+        // técnico da NF-e — não são venda de marketplace nenhum, não
+        // fazem sentido numa quebra "por canal" (achado ao vivo montando
+        // este relatório: "nota_devolucao_compra" aparecia como se fosse
+        // um canal de venda de verdade).
+        $orders = Order::query()
+            ->whereIn('status', self::REVENUE_STATUSES)
+            ->where('created_at', '>=', $since)
+            ->whereNotNull('origin')
+            ->whereNotIn('origin', ['nota_devolucao_compra', Order::ORIGIN_MANUAL_INVOICE])
+            ->get(['id', 'origin', 'subtotal', 'created_at']);
+
+        $productCostByOrder = Order::query()
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $since)
+            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->join('products', 'products.id', '=', 'order_items.product_id')
+            ->selectRaw('orders.id as order_id, COALESCE(SUM(order_items.quantity * products.cost_price), 0) as cost')
+            ->groupBy('orders.id')
+            ->pluck('cost', 'order_id');
+
+        $feeByOrder = OrderChannelFee::query()
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->pluck('fee_amount', 'order_id');
+
+        $rows = [];
+
+        foreach ($orders->groupBy(fn (Order $order) => $order->origin.'|'.$order->created_at->format('Y-m')) as $key => $group) {
+            [$channel, $month] = explode('|', $key);
+            /** @var \Illuminate\Support\Collection<int, Order> $group */
+            $revenue = round((float) $group->sum('subtotal'), 2);
+            $productCost = round((float) $group->sum(fn (Order $order) => $productCostByOrder[$order->id] ?? 0), 2);
+            $feeAvailable = in_array($channel, $feeTrackedChannels, true);
+            $marketplaceFee = $feeAvailable
+                ? round((float) $group->sum(fn (Order $order) => $feeByOrder[$order->id] ?? 0), 2)
+                : 0.0;
+
+            $rows[] = [
+                'channel' => $channel,
+                'month' => $month,
+                'revenue' => $revenue,
+                'productCost' => $productCost,
+                'marketplaceFee' => $marketplaceFee,
+                'feeAvailable' => $feeAvailable,
+                'netProfit' => round($revenue - $productCost - $marketplaceFee, 2),
+                'orders' => $group->count(),
+            ];
+        }
+
+        usort($rows, fn ($a, $b) => [$b['month'], $a['channel']] <=> [$a['month'], $b['channel']]);
+
+        return $rows;
     }
 
     /**

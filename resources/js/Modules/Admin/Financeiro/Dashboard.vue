@@ -12,6 +12,7 @@ const props = defineProps({
     adSpendByChannel: { type: Array, default: () => [] },
     adSpendSeries: { type: Array, default: () => [] },
     cashFlowSeries: { type: Array, default: () => [] },
+    channelMonthlyBreakdown: { type: Array, default: () => [] },
 });
 
 const safeNumber = (value, fallback = 0) => {
@@ -34,7 +35,36 @@ const chartData = computed(() => ({
 const CHANNEL_STYLES = {
     shopee: { label: 'Shopee', color: '#EE4D2D' },
     mercado_livre: { label: 'Mercado Livre', color: '#2968C8' },
+    tiktok_shop: { label: 'TikTok Shop', color: '#000000' },
+    amazon: { label: 'Amazon', color: '#FF9900' },
+    shein: { label: 'Shein', color: '#3D3D3D' },
+    loja: { label: 'Loja própria', color: '#04D7B6' },
 };
+
+const monthLabel = (month) => {
+    const [year, m] = month.split('-');
+    return new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(new Date(Number(year), Number(m) - 1, 1));
+};
+
+// Agrupado por mês (mais recente primeiro, já vem ordenado do backend),
+// cada mês com a lista de canais que tiveram pedido naquele mês —
+// pedido explícito 2026-08-31: "detalhado de cada marketplace por mês".
+const breakdownByMonth = computed(() => {
+    const months = [];
+
+    for (const row of props.channelMonthlyBreakdown) {
+        let bucket = months.find((m) => m.month === row.month);
+
+        if (!bucket) {
+            bucket = { month: row.month, rows: [] };
+            months.push(bucket);
+        }
+
+        bucket.rows.push(row);
+    }
+
+    return months;
+});
 
 const hexToRgba = (hex, alpha) => {
     const value = hex.replace('#', '');
@@ -230,6 +260,55 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 "Custo de produto" está subestimado até completar o cadastro.
             </span>
         </p>
+        <!-- Receita/custo/lucro líquido por canal, mês a mês — pedido
+             explícito 2026-08-31 ("quanto eu ganhei líquido no tiktok...
+             detalhado de cada marketplace por mês"). -->
+        <h2 class="mb-3 text-xl font-bold">Por Marketplace, por Mês</h2>
+
+        <div v-if="breakdownByMonth.length" class="mb-6 space-y-5">
+            <div v-for="bucket in breakdownByMonth" :key="bucket.month">
+                <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-slate-400">{{ monthLabel(bucket.month) }}</h3>
+                <div class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-[var(--surface-border)] text-left text-xs uppercase tracking-wide text-slate-400">
+                                <th class="px-4 py-2.5">Canal</th>
+                                <th class="px-4 py-2.5 text-right">Pedidos</th>
+                                <th class="px-4 py-2.5 text-right">Receita</th>
+                                <th class="px-4 py-2.5 text-right">Custo produto</th>
+                                <th class="px-4 py-2.5 text-right">Taxa canal</th>
+                                <th class="px-4 py-2.5 text-right">Lucro líquido</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="row in bucket.rows" :key="row.channel" class="border-b border-[var(--surface-border)] last:border-0">
+                                <td class="px-4 py-2.5">
+                                    <span class="inline-block rounded-full px-2.5 py-1 text-xs font-bold"
+                                        :style="{ color: CHANNEL_STYLES[row.channel]?.color ?? '#64748B', background: hexToRgba(CHANNEL_STYLES[row.channel]?.color ?? '#64748B', 0.12) }">
+                                        {{ CHANNEL_STYLES[row.channel]?.label ?? row.channel }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2.5 text-right text-slate-400">{{ row.orders }}</td>
+                                <td class="px-4 py-2.5 text-right font-medium">{{ formatPrice(row.revenue) }}</td>
+                                <td class="px-4 py-2.5 text-right text-slate-400">{{ formatPrice(row.productCost) }}</td>
+                                <td class="px-4 py-2.5 text-right text-slate-400">
+                                    <span v-if="row.feeAvailable">{{ formatPrice(row.marketplaceFee) }}</span>
+                                    <span v-else class="italic text-amber-600 dark:text-amber-400" title="Este canal ainda não tem captura de taxa real — lucro líquido está superestimado até essa fonte existir.">
+                                        não disponível
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2.5 text-right font-bold" :class="row.netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+                                    {{ formatPrice(row.netProfit) }}
+                                    <i v-if="!row.feeAvailable" class="fas fa-triangle-exclamation ml-1 text-xs text-amber-500" title="Sem taxa do canal descontada — número real é menor que este."></i>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <p v-else class="mb-6 text-sm text-slate-400">Nenhum pedido faturado nos últimos 6 meses ainda.</p>
+
         <!-- Gasto com anúncio por canal -->
         <h2 class="mb-3 text-xl font-bold">Gasto com Anúncio</h2>
 

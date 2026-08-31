@@ -81,6 +81,36 @@ class MercadoLivreClient
     }
 
     /**
+     * Envia XML cru para endpoints que não aceitam multipart/json.
+     *
+     * Usado pelo Mercado Livre Brasil para importar NF-e em envios
+     * drop_off/xd_drop_off/cross_docking/xd_same_day:
+     * POST /shipments/{shipment_id}/invoice_data?siteId=MLB
+     * Content-Type: application/xml.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     */
+    public function postXml(string $uri, string $xml, array $query = []): array
+    {
+        $token = $this->auth->ensureValidToken($this->auth->currentToken());
+
+        $response = Http::baseUrl(config('services.mercadolivre.api_base_url'))
+            ->withToken($token->access_token)
+            ->timeout((int) config('mercadolivre.timeout'))
+            ->connectTimeout((int) config('mercadolivre.connect_timeout'))
+            ->acceptJson()
+            ->withHeaders(['Content-Type' => 'application/xml'])
+            ->withQueryParameters($query)
+            ->withBody($xml, 'application/xml')
+            ->post(ltrim($uri, '/'));
+
+        $this->log('POST', $uri, $response);
+
+        return $this->handleResponse($response);
+    }
+
+    /**
      * Resposta binária (PDF/ZPL da etiqueta) — não passa por
      * handleResponse() porque o corpo não é JSON.
      *

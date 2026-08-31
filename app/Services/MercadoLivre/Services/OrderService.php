@@ -108,15 +108,26 @@ class OrderService
     }
 
     /**
-     * CPF/CNPJ real do comprador — não vem no payload normal do pedido
-     * (confirmado, só tem nome/endereço ali), mas a Mercado Livre mantém
-     * esse endpoint dedicado especificamente pra emissão de nota fiscal.
-     * Retorna null (nunca lança) se o endpoint falhar ou não trouxer
-     * documento — quem chama decide o que fazer com "sem CPF disponível",
-     * não é motivo pra derrubar a importação do pedido inteira.
+     * Dados de faturamento reais do comprador — não vêm no payload normal do
+     * pedido (confirmado, só tem nome/endereço ali), mas a Mercado Livre
+     * mantém esse endpoint dedicado especificamente pra emissão de nota
+     * fiscal. Nunca lança: em qualquer falha (endpoint indisponível, sem
+     * billing_info) volta tudo null — quem chama decide o que fazer com
+     * "sem CPF disponível", não é motivo pra derrubar a importação do
+     * pedido inteira.
+     *
+     * `state_registration` (Inscrição Estadual) não é exposta por esse
+     * endpoint pra nenhum tipo de comprador — a ML não coleta esse dado do
+     * lado do consumidor — então fica sempre null aqui; existe no retorno
+     * só pra já casar com o formato que o NF-e builder espera caso um dia
+     * apareça outra fonte pra ela.
+     *
+     * @return array{document: ?string, state_registration: ?string, taxpayer_type: ?string}
      */
-    public function getBuyerDocument(string $orderId): ?string
+    public function getBuyerBillingData(string $orderId): array
     {
+        $empty = ['document' => null, 'state_registration' => null, 'taxpayer_type' => null];
+
         try {
             $response = $this->client->get("orders/{$orderId}/billing_info");
         } catch (Throwable $exception) {
@@ -125,12 +136,21 @@ class OrderService
                 'message' => $exception->getMessage(),
             ]);
 
-            return null;
+            return $empty;
         }
 
         $docNumber = $response['billing_info']['doc_number'] ?? null;
+        $docType = $response['billing_info']['doc_type'] ?? null;
 
-        return $docNumber ? preg_replace('/\D/', '', (string) $docNumber) : null;
+        return [
+            'document' => $docNumber ? preg_replace('/\D/', '', (string) $docNumber) : null,
+            'state_registration' => null,
+            'taxpayer_type' => match (strtoupper((string) $docType)) {
+                'CNPJ' => 'juridica',
+                'CPF' => 'fisica',
+                default => null,
+            },
+        ];
     }
 
     /**

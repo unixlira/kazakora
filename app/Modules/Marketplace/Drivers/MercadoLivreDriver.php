@@ -353,7 +353,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         // NF-e não tem como identificar o destinatário (CPF é obrigatório
         // no modelo 55, real bug real encontrado 2026-08-02 travando o
         // pipeline inteiro venda→nota→envio→etiqueta pra pedido de canal).
-        $buyerDocument = $this->orders->getBuyerDocument($externalOrderId);
+        $buyerBilling = $this->orders->getBuyerBillingData($externalOrderId);
 
         return [
             'external_order_id' => (string) $order->id,
@@ -363,7 +363,9 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'total' => round($order->total_amount, 2),
             'marketplace_fee' => round($marketplaceFee, 2),
             'buyer_name' => $buyerName,
-            'buyer_document' => $buyerDocument,
+            'buyer_document' => $buyerBilling['document'],
+            'buyer_state_registration' => $buyerBilling['state_registration'],
+            'buyer_taxpayer_type' => $buyerBilling['taxpayer_type'],
             // 'email' aqui é o relay mascarado do próprio Mercado Livre
             // (algo como xxx@mail.mercadolivre.com), não o e-mail real do
             // comprador — o ML não expõe o e-mail verdadeiro pra vendedor
@@ -441,8 +443,37 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
         $mlOrder = $this->client->get("orders/{$order->external_order_id}");
         $packId = $mlOrder['pack_id'] ?? null;
+        $shippingId = $mlOrder['shipping']['id'] ?? null;
 
         try {
+            if ($shippingId) {
+                $shipment = $this->client->get("shipments/{$shippingId}");
+                $logisticType = $shipment['logistic_type'] ?? ($shipment['logistic']['type'] ?? null);
+
+                // Para Mercado Livre Brasil, envios que ficam em
+                // substatus=invoice_pending (drop_off, xd_drop_off,
+                // cross_docking, xd_same_day) NÃO aceitam o upload pelo
+                // endpoint genérico de pack. A documentação "Importar Nota
+                // Fiscal" manda importar o XML direto no shipment:
+                // POST /shipments/{shipment_id}/invoice_data?siteId=MLB.
+                // Usar /packs/{id}/fiscal_documents nesses casos retorna
+                // 403 "Access denied, you must use the biller of
+                // MercadoLibre" e deixa a etiqueta travada.
+                if (in_array($logisticType, ['drop_off', 'xd_drop_off', 'cross_docking', 'xd_same_day'], true)) {
+                    $response = $this->client->postXml(
+                        "shipments/{$shippingId}/invoice_data",
+                        $xml,
+                        ['siteId' => config('mercadolivre.site_id', 'MLB')],
+                    );
+
+                    return [
+                        'status' => 'sent',
+                        'external_reference' => (string) $shippingId,
+                        'response' => $response + ['endpoint' => 'shipment_invoice_data', 'logistic_type' => $logisticType],
+                    ];
+                }
+            }
+
             $response = $this->client->postMultipart(
                 'packs/'.($packId ?: $order->external_order_id).'/fiscal_documents',
                 [],
@@ -514,7 +545,23 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
         $date = \Illuminate\Support\Carbon::parse($bufferingDate);
 
-        return $date->isFuture() ? $date : null;
+        if ($date->isFuture()) {
+            return $date;
+        }
+
+        // Mercado Livre pode continuar devolvendo pending/buffered mesmo
+        // quando `buffering.date` vem como meia-noite UTC e, em São Paulo,
+        // já parece passado. Nesse caso a data ainda é operacionalmente
+        // relevante: mantém o DIA do agendamento para o KoraSync mostrar
+        // "sem etiqueta"/agendado e para os retries não tratarem como pedido
+        // normal sem agenda.
+        if (($shipment['status'] ?? null) === 'pending' && ($shipment['substatus'] ?? null) === 'buffered') {
+            $datePart = substr((string) $bufferingDate, 0, 10);
+
+            return \Illuminate\Support\Carbon::createFromFormat('Y-m-d H:i:s', "{$datePart} 00:00:00", config('app.timezone'));
+        }
+
+        return null;
     }
 
     /**

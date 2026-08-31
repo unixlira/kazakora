@@ -4,6 +4,7 @@ namespace App\Services\Bling;
 
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Pedidos de venda do Bling, filtrados pra só trazer os que vieram do
@@ -44,72 +45,84 @@ class BlingOrderService
      */
     public function listRecentOrderNumbers(Carbon $from, Carbon $to): array
     {
-        $lojaId = $this->tiktokLojaId();
-
-        if (! $lojaId) {
-            return [];
-        }
-
-        $numbers = [];
-        $page = 1;
-
-        do {
-            $response = $this->client->get('pedidos/vendas', [
-                'idLoja' => $lojaId,
-                'dataInicial' => $from->toDateString(),
-                'dataFinal' => $to->toDateString(),
-                'pagina' => $page,
-                'limite' => 100,
-            ]);
-
-            $results = $response['data'] ?? [];
-
-            foreach ($results as $order) {
-                if (! empty($order['numeroLoja'])) {
-                    $numbers[] = (string) $order['numeroLoja'];
-                }
-            }
-
-            $page++;
-        } while (count($results) === 100);
-
-        return $numbers;
+        return collect($this->listOrders($from, $to))
+            ->pluck('numeroLoja')
+            ->filter()
+            ->map(fn ($n) => (string) $n)
+            ->values()
+            ->all();
     }
 
     /**
-     * Acha o pedido pelo número de loja (numeroLoja) — a API do Bling só
-     * busca por idPedidoVenda (interno do Bling) direto, não por
-     * numeroLoja, então localiza primeiro dentro da mesma loja/intervalo
-     * recente e resolve pro id interno antes de buscar os detalhes
-     * completos.
+     * BUG REAL 2026-08-31 (achado testando ao vivo contra a conta real do
+     * usuário — os 16 pedidos listados por listRecentOrderNumbers() vinham
+     * todos como "não encontrado" aqui): o filtro `numero` da API do Bling
+     * é o número SEQUENCIAL INTERNO do Bling (o pequeno, tipo 16/15/14...),
+     * não o `numeroLoja` (o número real do pedido no TikTok Shop, uma
+     * string longa tipo "585827527600211202") — mandar o numeroLoja no
+     * parâmetro `numero` simplesmente nunca casava com nada, 100% dos
+     * pedidos reais falhavam. O Bling não tem um filtro de busca direto
+     * por numeroLoja; a única forma confiável é listar pela loja/período
+     * (mesma chamada de listRecentOrderNumbers()) e casar pelo numeroLoja
+     * no lado de cá — por isso os dois métodos agora reaproveitam
+     * listOrders(), com cache curto (ver lá) pra não multiplicar chamada
+     * por pedido (achado no mesmo teste: 2 dos 16 pedidos bateram "Limite
+     * de requisições atingido" só de cada um fazer sua própria varredura
+     * separada de 60 dias).
      *
      * @return array<string, mixed>|null
      */
     public function findByOrderNumber(string $orderNumber): ?array
     {
-        $lojaId = $this->tiktokLojaId();
-
-        if (! $lojaId) {
-            return null;
-        }
-
-        // Janela de 60 dias pra trás — cobre qualquer backfill razoável
-        // sem varrer o histórico inteiro da loja a cada consulta.
-        $response = $this->client->get('pedidos/vendas', [
-            'idLoja' => $lojaId,
-            'numero' => $orderNumber,
-            'dataInicial' => now()->subDays(60)->toDateString(),
-            'dataFinal' => now()->toDateString(),
-            'limite' => 10,
-        ]);
-
-        $match = collect($response['data'] ?? [])->firstWhere('numeroLoja', $orderNumber);
+        $match = collect($this->listOrders(now()->subDays(60), now()))
+            ->first(fn ($order) => (string) ($order['numeroLoja'] ?? '') === $orderNumber);
 
         if (! $match) {
             return null;
         }
 
         return $this->client->get("pedidos/vendas/{$match['id']}")['data'] ?? null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listOrders(Carbon $from, Carbon $to): array
+    {
+        $lojaId = $this->tiktokLojaId();
+
+        if (! $lojaId) {
+            return [];
+        }
+
+        // Cache curto (2min) por loja+período — um orders:sync-tiktok
+        // chama findByOrderNumber() uma vez por pedido encontrado; sem
+        // isso, cada chamada refaz a varredura paginada inteira do
+        // período, multiplicando requisições à toa e batendo no rate
+        // limit do Bling (achado real, ver docblock de findByOrderNumber()).
+        $cacheKey = "bling.orders.{$lojaId}.{$from->toDateString()}.{$to->toDateString()}";
+
+        return Cache::remember($cacheKey, now()->addMinutes(2), function () use ($lojaId, $from, $to) {
+            $orders = [];
+            $page = 1;
+
+            do {
+                $response = $this->client->get('pedidos/vendas', [
+                    'idLoja' => $lojaId,
+                    'dataInicial' => $from->toDateString(),
+                    'dataFinal' => $to->toDateString(),
+                    'pagina' => $page,
+                    'limite' => 100,
+                ]);
+
+                $results = $response['data'] ?? [];
+                array_push($orders, ...$results);
+
+                $page++;
+            } while (count($results) === 100);
+
+            return $orders;
+        });
     }
 
     /**

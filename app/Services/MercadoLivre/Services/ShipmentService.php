@@ -113,14 +113,28 @@ class ShipmentService
 
         $raw = $this->getShipment($shipment->external_shipment_id);
 
-        $newOrderStatus = match ($raw['status'] ?? null) {
-            'shipped' => Order::STATUS_SHIPPED,
-            'delivered' => Order::STATUS_COMPLETED,
+        $substatus = $raw['substatus'] ?? null;
+
+        $newOrderStatus = match (true) {
+            ($raw['status'] ?? null) === 'delivered' => Order::STATUS_COMPLETED,
+            ($raw['status'] ?? null) === 'shipped' => Order::STATUS_SHIPPED,
+            // BUG REAL 2026-09-01 (relatado pelo usuário: "pedidos já
+            // bipados na agência hoje e ainda estão no korasync"): em
+            // Agência/Drop off (logistic_type drop_off/xd_drop_off) o
+            // Mercado Livre marca o recebimento no BALCÃO só no substatus
+            // — o shipment fica em `ready_to_ship` com substatus
+            // `picked_up` (e date_shipped ainda null) por horas até virar
+            // `shipped` de verdade. Como o mapeamento só olhava o status,
+            // o pacote já entregue na agência continuava na fila de
+            // separação do KoraSync como se ainda estivesse na
+            // prateleira. `printed` (etiqueta impressa, pacote ainda
+            // aqui) continua de fora, que é a diferença que importa.
+            $substatus === 'picked_up' => Order::STATUS_SHIPPED,
             default => null,
         };
 
         if ($newOrderStatus !== null) {
-            $this->importer->syncStatus($shipment->order, $newOrderStatus, $raw['status'] ?? null);
+            $this->importer->syncStatus($shipment->order, $newOrderStatus, $substatus ?? $raw['status'] ?? null);
         }
     }
 }

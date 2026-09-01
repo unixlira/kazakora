@@ -4,10 +4,13 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Audit\Models\AuditLog;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\LabelFetchService;
@@ -15,8 +18,12 @@ use App\Notifications\OrderStatusUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,38 +44,141 @@ class OrderController extends Controller
         Order::ORIGIN_MERCADO_LIVRE,
         Order::ORIGIN_SHOPEE,
         Order::ORIGIN_TIKTOK_SHOP,
+        Order::ORIGIN_AMAZON,
     ];
 
     public function index(Request $request): Response
     {
+        $orders = Order::query()
+            ->nonPurchaseReturn()
+            // Relações latestOfMany não podem usar seleção parcial de colunas
+            // aqui: o Laravel monta subqueries que também carregam order_id, e
+            // o MySQL rejeita com "Column 'order_id' is ambiguous". Isso já
+            // havia sido confirmado em latestEmailLog e se repetiu em
+            // latestCorreiosPrePostagem depois da coluna Correios entrar na
+            // listagem.
+            ->with([
+                'user:id,name,email',
+                'invoice:id,order_id,status',
+                'latestEmailLog',
+                'latestCorreiosPrePostagem',
+            ])
+            ->withCount('items')
+            ->when($request->filled('origin'), fn ($query) => $query->where('origin', $request->string('origin')))
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $search = trim($request->string('search')->toString());
+                $digits = preg_replace('/\D+/', '', $search);
+                $parsedDate = $this->parseOrderSearchDate($search);
+
+                if ($digits !== '' && strlen($digits) <= 10) {
+                    $query->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [(int) $digits]);
+                }
+
+                $query->where(function ($inner) use ($search, $digits, $parsedDate) {
+                    $inner->where('external_order_id', 'like', "%{$search}%")
+                        ->orWhere('shipping_name', 'like', "%{$search}%")
+                        ->orWhere('shipping_email', 'like', "%{$search}%")
+                        ->orWhere('shipping_phone', 'like', "%{$search}%")
+                        ->orWhereHas('user', fn ($userQuery) => $userQuery
+                            ->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%"))
+                        ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery
+                            ->where('numero', 'like', "%{$search}%")
+                            ->orWhere('chave_acesso', 'like', "%{$search}%"));
+
+                    if ($digits !== '') {
+                        if (strlen($digits) <= 10) {
+                            $inner->orWhere('id', (int) $digits);
+                        }
+
+                        $inner->orWhere('external_order_id', 'like', "%{$digits}%")
+                            ->orWhere('shipping_phone', 'like', "%{$digits}%");
+                    }
+
+                    if ($parsedDate) {
+                        $inner->orWhereDate('created_at', $parsedDate->toDateString());
+                    }
+                });
+            })
+            ->latest()
+            ->paginate(50)
+            ->withQueryString();
+
         return Inertia::render('Admin/Orders/Index', [
-            'orders' => Order::query()
-                // latestEmailLog não pode usar seleção parcial de colunas aqui:
-                // combinado com o latestOfMany(['created_at','id']) da relação,
-                // o Laravel gera um SELECT com `order_id` ambíguo entre as
-                // subqueries — MySQL rejeita (SQLSTATE 23000), reproduzido e
-                // confirmado em 2026-07-31. A tabela é pequena, carregar a
-                // linha inteira não tem custo relevante.
-                ->with(['user:id,name,email', 'invoice:id,order_id,status', 'latestEmailLog'])
-                ->withCount('items')
-                ->when($request->filled('origin'), fn ($query) => $query->where('origin', $request->string('origin')))
-                ->latest()
-                ->get(),
+            'orders' => $orders,
             'statuses' => self::STATUSES,
             'channels' => self::CHANNELS,
-            'filters' => $request->only('origin'),
+            'filters' => $request->only('origin', 'search'),
         ]);
+    }
+
+    private function parseOrderSearchDate(string $value): ?Carbon
+    {
+        $value = trim($value);
+
+        foreach (['d/m/Y', 'd-m-Y', 'Y-m-d'] as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $value);
+                if ($date && $date->format($format) === $value) {
+                    return $date;
+                }
+            } catch (Throwable) {
+                // continua tentando os outros formatos
+            }
+        }
+
+        if (preg_match('/^\d{1,2}\/\d{1,2}$/', $value)) {
+            [$day, $month] = array_map('intval', explode('/', $value));
+
+            try {
+                return Carbon::createFromDate(now()->year, $month, $day);
+            } catch (Throwable) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     public function show(Order $order): Response
     {
+        $order->load(['items.product:id,sku,name,price,discount_percentage,discount_amount,stock,is_active', 'user:id,name,email', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
+            ->loadSum('items as units_count', 'quantity');
+
+        $selectedProductIds = $order->items
+            ->pluck('product_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $products = Product::query()
+            ->select('id', 'sku', 'name', 'price', 'discount_percentage', 'discount_amount', 'stock', 'is_active')
+            ->where(function ($query) use ($selectedProductIds) {
+                $query->where('is_active', true);
+
+                if ($selectedProductIds->isNotEmpty()) {
+                    $query->orWhereIn('id', $selectedProductIds);
+                }
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Product $product) => [
+                'id' => $product->id,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'stock' => $product->stock,
+                'is_active' => $product->is_active,
+                'final_price' => $product->final_price,
+            ]);
+
         return Inertia::render('Admin/Orders/Show', [
-            'order' => $order->load(['items', 'user:id,name,email', 'invoice', 'channelShipment'])
-                ->loadSum('items as units_count', 'quantity'),
+            'order' => $order,
+            'products' => $products,
             'statuses' => self::STATUSES,
             'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
             'emailLogs' => $order->emailLogs,
             'fulfillmentEvents' => $order->fulfillmentEvents,
+            'operationStatement' => $this->operationStatement($order),
             'auditLogs' => AuditLog::query()
                 ->where('entity', class_basename(Order::class))
                 ->where('entity_id', $order->id)
@@ -155,6 +265,108 @@ class OrderController extends Controller
         return $warnings ? $response->with('warning', implode(' ', $warnings)) : $response;
     }
 
+    public function updateItems(Request $request, Order $order, StockManager $stock): RedirectResponse
+    {
+        $order->loadMissing(['items', 'invoice']);
+
+        if (in_array($order->invoice?->status, ['signed', 'sent', 'authorized'], true)) {
+            return back()->with('error', 'Este pedido já tem NF-e assinada/enviada/autorizada. Para não deixar nota e pedido divergentes, os itens não foram alterados.');
+        }
+
+        $validated = $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['required', 'integer', 'distinct'],
+            'items.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at')],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:999'],
+        ]);
+
+        $currentItemIds = $order->items->pluck('id')->sort()->values()->all();
+        $submittedItemIds = collect($validated['items'])->pluck('id')->sort()->values()->all();
+
+        if ($currentItemIds !== $submittedItemIds) {
+            return back()->with('error', 'A lista de itens mudou enquanto você editava. Recarregue o pedido e tente novamente.');
+        }
+
+        DB::transaction(function () use ($order, $validated, $stock) {
+            $items = $order->items()->lockForUpdate()->get()->keyBy('id');
+            $oldValues = $items->map(fn ($item) => [
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product_name,
+                'quantity' => $item->quantity,
+                'subtotal' => $item->subtotal,
+            ])->values()->all();
+
+            $newValues = [];
+            $newSubtotal = 0.0;
+
+            foreach ($validated['items'] as $row) {
+                $item = $items->get($row['id']);
+                $product = Product::query()->whereKey($row['product_id'])->firstOrFail();
+                $oldProductId = $item->product_id ? (int) $item->product_id : null;
+                $newProductId = (int) $product->id;
+                $oldQuantity = (int) $item->quantity;
+                $newQuantity = (int) $row['quantity'];
+
+                if ($oldProductId && $oldProductId !== $newProductId) {
+                    $oldProduct = Product::query()->whereKey($oldProductId)->first();
+                    if ($oldProduct) {
+                        $stock->adjust($oldProduct, $oldQuantity, StockMovement::TYPE_ADJUSTMENT, reason: "Correção do pedido #{$order->id}: produto trocado no admin", reference: $order);
+                    }
+                }
+
+                if ($oldProductId === $newProductId) {
+                    $stockDelta = $oldQuantity - $newQuantity;
+                    if ($stockDelta !== 0) {
+                        $stock->adjust($product, $stockDelta, StockMovement::TYPE_ADJUSTMENT, reason: "Correção do pedido #{$order->id}: quantidade ajustada no admin", reference: $order);
+                    }
+                } else {
+                    $stock->adjust($product, -$newQuantity, StockMovement::TYPE_ADJUSTMENT, reason: "Correção do pedido #{$order->id}: produto trocado no admin", reference: $order);
+                }
+
+                $unitPrice = (float) ($item->product_price ?: $product->unitPriceForQuantity($newQuantity));
+                $lineSubtotal = round($unitPrice * $newQuantity, 2);
+
+                $item->update([
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_price' => $unitPrice,
+                    'quantity' => $newQuantity,
+                    'subtotal' => $lineSubtotal,
+                ]);
+
+                $newSubtotal += $lineSubtotal;
+                $newValues[] = [
+                    'id' => $item->id,
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'quantity' => $newQuantity,
+                    'subtotal' => $lineSubtotal,
+                ];
+            }
+
+            $shippingCost = (float) ($order->shipping_cost ?? 0);
+            $discountAmount = (float) ($order->discount_amount ?? 0);
+
+            $order->update([
+                'subtotal' => round($newSubtotal, 2),
+                'total' => round(max(0, $newSubtotal + $shippingCost - $discountAmount), 2),
+            ]);
+
+            AuditLog::create([
+                'user_id' => Auth::id(),
+                'action' => AuditLog::ACTION_UPDATE,
+                'entity' => class_basename(Order::class),
+                'entity_id' => $order->id,
+                'old_values' => ['items' => $oldValues],
+                'new_values' => ['items' => $newValues],
+                'created_at' => now(),
+            ]);
+        });
+
+        return back()->with('success', 'Itens do pedido atualizados. Produto, quantidade, totais e estoque local foram corrigidos.');
+    }
+
     /**
      * Botão "Verificar etiqueta agora" (Admin/Orders/Show) — pedido explícito
      * 2026-08-13: usuário voltando repetidas vezes pedindo pra destravar
@@ -180,6 +392,18 @@ class OrderController extends Controller
 
         if (in_array($shipment->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
             return back()->with('success', 'A etiqueta já está pronta — o KoraSync já deve ter imprimido ou vai imprimir no próximo ciclo.');
+        }
+
+        // 2026-08-31: geração automática de etiqueta pro TikTok Shop via
+        // Bling exige plano pago (R$200/mês) que o usuário decidiu não
+        // contratar — envio desse canal agora é resolvido manualmente
+        // direto no painel do TikTok. Esse botão consultando o Bling às
+        // vezes encontra um rastreio que só existe porque o próprio usuário
+        // já tratou o envio manual lá, e reimprime por cima aqui (pedido
+        // #1132, mesmo dia — etiqueta duplicada sem necessidade). Bloqueado
+        // até essa decisão mudar.
+        if ($shipment->channel === MarketplaceAccount::CHANNEL_TIKTOK_SHOP) {
+            return back()->with('error', 'TikTok Shop: etiqueta é tratada manualmente direto no painel do TikTok (geração automática via Bling exige plano pago). Esse botão fica desligado pra esse canal pra não duplicar etiqueta.');
         }
 
         $ready = app(LabelFetchService::class)->attempt($shipment);
@@ -276,6 +500,124 @@ class OrderController extends Controller
     }
 
     /**
+     * Extrato financeiro daquele pedido específico.
+     *
+     * Quando existe extrato importado do marketplace, ele é a fonte de verdade:
+     * mostra subtotal anunciado, quanto o cliente pagou, descontos bancados pela
+     * plataforma/vendedor, taxas, frete, recebido/a receber e lucro usando custo
+     * cadastrado no KazaKora. Quando ainda não existe extrato (ex.: Amazon por
+     * enquanto), cai para a visão parcial do pedido local + taxa real/manual se
+     * ela existir, sem inventar valor liquidado.
+     */
+    private function operationStatement(Order $order): array
+    {
+        $cost = DB::table('order_items as oi')
+            ->leftJoin('products as p', 'p.id', '=', 'oi.product_id')
+            ->where('oi.order_id', $order->id)
+            ->selectRaw('COALESCE(SUM(oi.quantity * COALESCE(oi.manual_cost_price, p.cost_price, 0)), 0) as product_cost,
+                SUM(CASE WHEN oi.id IS NOT NULL AND COALESCE(oi.manual_cost_price, p.cost_price) IS NULL THEN 1 ELSE 0 END) as cost_missing_items')
+            ->first();
+
+        $productCost = round((float) ($cost?->product_cost ?? 0), 2);
+        $costMissingItems = (int) ($cost?->cost_missing_items ?? 0);
+
+        $rows = collect();
+
+        if ($order->external_order_id && Schema::hasTable('marketplace_settlement_details')) {
+            $rows = DB::table('marketplace_settlement_details')
+                ->where('channel', $order->origin)
+                ->where('external_order_id', $order->external_order_id)
+                ->where('transaction_type', 'Pedido')
+                ->orderBy('external_sku_id')
+                ->get();
+        }
+
+        if ($rows->isNotEmpty()) {
+            $payout = round((float) $rows->sum('payout_amount'), 2);
+            $productNetSales = round((float) $rows->sum('product_net_sales'), 2);
+
+            return [
+                'source' => 'settlement',
+                'sourceLabel' => 'Extrato real do marketplace',
+                'hasSettlement' => true,
+                'isComplete' => $costMissingItems === 0,
+                'summary' => [
+                    'orderSubtotal' => round((float) $order->subtotal, 2),
+                    'orderTotal' => round((float) $order->total, 2),
+                    'advertisedSubtotal' => round((float) $rows->sum('item_subtotal_before_discounts'), 2),
+                    'customerPayment' => round((float) $rows->sum('customer_payment'), 2),
+                    'productNetSales' => $productNetSales,
+                    'payoutAmount' => $payout,
+                    'paidPayoutAmount' => round((float) $rows->where('status', 'Pagos')->sum('payout_amount'), 2),
+                    'pendingPayoutAmount' => round((float) $rows->where('status', '<>', 'Pagos')->sum('payout_amount'), 2),
+                    'sellerDiscounts' => round(abs((float) $rows->sum('seller_discounts')), 2),
+                    'platformProductDiscounts' => round(abs((float) $rows->sum('platform_product_discounts')), 2),
+                    'platformCouponDiscounts' => round(abs((float) $rows->sum('platform_coupon_discounts')), 2),
+                    'platformShippingDiscounts' => round(abs((float) $rows->sum('platform_shipping_discounts')), 2),
+                    'netShippingImpact' => round((float) $rows->sum('net_shipping_cost'), 2),
+                    'platformFeesTaxes' => round(abs((float) $rows->sum('platform_fees_taxes')), 2),
+                    'affiliateCommissions' => round(abs((float) $rows->sum('affiliate_commissions')), 2),
+                    'gmvMaxAdFee' => round(abs((float) $rows->sum('gmv_max_ad_fee')), 2),
+                    'productCost' => $productCost,
+                    'costMissingItems' => $costMissingItems,
+                    'grossProfitKnown' => round($productNetSales - $productCost, 2),
+                    'netProfitKnown' => round($payout - $productCost, 2),
+                ],
+                'lines' => $rows->map(fn ($row) => [
+                    'skuId' => $row->external_sku_id,
+                    'skuName' => $row->sku_name,
+                    'productName' => $row->product_name,
+                    'quantity' => (int) $row->quantity,
+                    'advertisedSubtotal' => round((float) $row->item_subtotal_before_discounts, 2),
+                    'customerPayment' => round((float) $row->customer_payment, 2),
+                    'productNetSales' => round((float) $row->product_net_sales, 2),
+                    'payoutAmount' => round((float) $row->payout_amount, 2),
+                    'status' => $row->status,
+                ])->values()->all(),
+            ];
+        }
+
+        $fee = DB::table('order_channel_fees')
+            ->where('order_id', $order->id)
+            ->where('channel', $order->origin)
+            ->first();
+
+        $gross = round((float) ($fee?->gross_amount ?? $order->subtotal), 2);
+        $feeAmount = $fee ? round(abs((float) $fee->fee_amount), 2) : null;
+        $payout = $feeAmount === null ? null : round($gross - $feeAmount, 2);
+
+        return [
+            'source' => $fee ? 'channel_fee' : 'local_order',
+            'sourceLabel' => $fee ? 'Pedido local + taxa do canal' : 'Pedido local sem extrato importado',
+            'hasSettlement' => false,
+            'isComplete' => $fee !== null && $costMissingItems === 0,
+            'summary' => [
+                'orderSubtotal' => round((float) $order->subtotal, 2),
+                'orderTotal' => round((float) $order->total, 2),
+                'advertisedSubtotal' => round((float) $order->subtotal, 2),
+                'customerPayment' => round((float) $order->total, 2),
+                'productNetSales' => $gross,
+                'payoutAmount' => $payout,
+                'paidPayoutAmount' => null,
+                'pendingPayoutAmount' => null,
+                'sellerDiscounts' => round(abs((float) $order->discount_amount), 2),
+                'platformProductDiscounts' => 0.0,
+                'platformCouponDiscounts' => 0.0,
+                'platformShippingDiscounts' => 0.0,
+                'netShippingImpact' => 0.0,
+                'platformFeesTaxes' => $feeAmount,
+                'affiliateCommissions' => 0.0,
+                'gmvMaxAdFee' => 0.0,
+                'productCost' => $productCost,
+                'costMissingItems' => $costMissingItems,
+                'grossProfitKnown' => round($gross - $productCost, 2),
+                'netProfitKnown' => $payout === null ? null : round($payout - $productCost, 2),
+            ],
+            'lines' => [],
+        ];
+    }
+
+    /**
      * Cancela a NF-e do pedido junto (Etapa 5) quando ele tem uma nota
      * autorizada. Nunca bloqueia a mudança de status do pedido em si — se o
      * cancelamento na SEFAZ falhar (ex: prazo de 24h expirado), o admin
@@ -288,6 +630,10 @@ class OrderController extends Controller
 
         if (! $order->invoice || $order->invoice->status !== Invoice::STATUS_AUTHORIZED) {
             return null;
+        }
+
+        if ($order->invoice->autorizada_em?->diffInHours(now()) >= 24) {
+            return 'Pedido cancelado, mas o prazo de 24h para cancelar a NF-e já expirou. Emita uma nota fiscal de devolução para venda retornada.';
         }
 
         try {

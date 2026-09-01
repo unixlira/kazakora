@@ -175,7 +175,15 @@ const resubmitToChannel = () => {
 };
 
 const canCheckLabel = () =>
-    props.order.channel_shipment && !['label_ready', 'label_downloaded'].includes(props.order.channel_shipment.status);
+    props.order.channel_shipment
+    // 2026-08-31: geração de etiqueta automática via Bling pro TikTok Shop
+    // exige plano pago (R$200/mês) que o usuário decidiu não contratar —
+    // envio desse canal agora é tratado manualmente direto no TikTok. Esse
+    // botão consultando o Bling às vezes acha um rastreio que só existe
+    // porque o próprio usuário já resolveu manual lá, e reimprime aqui por
+    // cima (pedido #1132, mesmo dia) — duplicando etiqueta sem necessidade.
+    && props.order.channel_shipment.channel !== 'tiktok_shop'
+    && !['label_ready', 'label_downloaded'].includes(props.order.channel_shipment.status);
 
 const checkLabelForm = useForm({});
 const checkLabel = () => {

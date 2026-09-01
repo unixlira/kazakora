@@ -758,7 +758,27 @@ class DashboardAgentController extends Controller
         $scheduledFor = $shipment?->scheduled_for;
 
         if ($scheduledFor !== null) {
-            return in_array($shipment?->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true);
+            if (in_array($shipment?->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
+                return true;
+            }
+
+            // BUG REAL 2026-09-01 (pedido explícito do usuário, repetido
+            // várias vezes): antes disso, pedido agendado sem etiqueta
+            // ficava SÓ na aba "Vendas futuras" pra sempre, mesmo depois da
+            // data prometida já ter chegado/vencido — "atrasado" ali não
+            // tinha nenhuma ação possível (nem embalar), só um aviso
+            // vermelho. Fila normal já tem um 3º estado de botão pronto
+            // pra exatamente esse caso ("Sem Etiqueta" — IsAwaitingLabel no
+            // KoraSync, ver OrderQueueCardViewModel.cs), só nunca tinha
+            // pedido chegando até lá pra usar. Agora, assim que a data
+            // agendada chega (hoje ou já passou — vencido), o pedido entra
+            // na Fila normal também (continua aparecendo em Vendas futuras
+            // igual, dupla visibilidade não é problema) — dá pra separar
+            // fisicamente e só falta a etiqueta de verdade, que é
+            // impressa sozinha assim que o canal libera. Só continua FORA
+            // da Fila normal enquanto a data ainda está no futuro (venda
+            // agendada de verdade, ainda não chegou a hora).
+            return $scheduledFor->lte($tomorrow);
         }
 
         return $order->created_at->between($yesterday, $tomorrow);

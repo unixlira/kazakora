@@ -1100,6 +1100,76 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * Resumo do dia do Mercado Livre — pedido explícito 2026-09-01: espelha
+     * os cartões "Envios de hoje" do próprio painel do Mercado Livre (Flex
+     * x Agência, canceladas, "NF-e para gerenciar", prontas pra enviar)
+     * direto na aba "Mercado Livre" do KoraSync, sem precisar abrir o site
+     * do canal pra conferir. "Hoje" = mesma regra de sempre: scheduled_for
+     * de hoje (envio com data prometida) OU, sem entrega agendada, venda
+     * de hoje (criada hoje).
+     *
+     * "nfe_pendente" (Agência) não é literalmente NF-e ausente — é
+     * qualquer pedido sem etiqueta ainda E sem confirmação de que o canal
+     * ACEITOU a nota (ChannelInvoiceSubmission::STATUS_SENT/ACCEPTED) —
+     * casa com o balde real do Mercado Livre, achado ao vivo 2026-09-01:
+     * 30 pedidos presos exatamente porque o envio da nota pro canal tinha
+     * falhado (erro real, nunca re-tentado) e o canal só libera a etiqueta
+     * depois de aceitar a nota.
+     */
+    public function mercadoLivreSummary(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $todayEnd = $today->clone()->endOfDay();
+
+        // BUG REAL 2026-09-01 (achado na hora): scheduled_for some sozinho
+        // assim que o Mercado Livre para de reportar uma data de buffering
+        // FUTURA (ver MercadoLivreDriver::extractScheduledFor()) — no dia
+        // prometido, a próxima reconfirmação (a cada 30min, ver
+        // ReleaseMercadoLivreScheduledShipments) já grava scheduled_for
+        // NULL de novo, mesmo o pedido continuando "de hoje" pro operador.
+        // "Hoje" por scheduled_for/created_at, então, não é confiável pra
+        // esse resumo — usa o mesmo critério real da Fila normal (ver
+        // queue()): todo pedido ML ainda PAID (não resolvido) é "precisa
+        // sair", não importa se a data agendada já sumiu do registro.
+        $orders = Order::query()
+            ->where('origin', Order::ORIGIN_MERCADO_LIVRE)
+            ->where('status', Order::STATUS_PAID)
+            ->with('channelShipment', 'invoice')
+            ->get();
+
+        $recentlyCancelled = Order::query()
+            ->where('origin', Order::ORIGIN_MERCADO_LIVRE)
+            ->where('status', Order::STATUS_CANCELLED)
+            ->whereBetween('updated_at', [$today, $todayEnd])
+            ->with('channelShipment')
+            ->get();
+
+        $isFlex = fn (Order $order) => ($order->channelShipment->shipping_method ?? null) === 'self_service';
+        $isReady = fn (Order $order) => in_array($order->channelShipment->status ?? null, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true);
+
+        $flex = $orders->filter($isFlex);
+        $agencia = $orders->reject($isFlex);
+
+        $agenciaCancelada = $recentlyCancelled->reject($isFlex)->count();
+        $agenciaProntos = $agencia->filter($isReady)->count();
+        $agenciaNfePendente = $agencia->reject($isReady)->count();
+
+        return response()->json([
+            'total' => $orders->count() + $recentlyCancelled->count(),
+            'flex' => [
+                'total' => $flex->count(),
+                'prontos' => $flex->filter($isReady)->count(),
+            ],
+            'agencia' => [
+                'total' => $agencia->count() + $agenciaCancelada,
+                'cancelada' => $agenciaCancelada,
+                'nfe_pendente' => $agenciaNfePendente,
+                'prontos' => $agenciaProntos,
+            ],
+        ]);
+    }
+
+    /**
      * Texto diário das Testemunhas de Jeová — só leitura do que já foi
      * salvo pelo comando agendado (App\Console\Commands\FetchDailyText,
      * roda a cada 12h). Não busca ao vivo aqui: esse endpoint precisa

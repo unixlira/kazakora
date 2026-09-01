@@ -96,6 +96,7 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::post('/dashboard/queue/{order}/pack', [DashboardAgentController::class, 'packOrder'])->name('dashboard.queue.pack');
     Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
     Route::get('/dashboard/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('dashboard.scheduled-shipments');
+    Route::get('/dashboard/mercadolivre-summary', [DashboardAgentController::class, 'mercadoLivreSummary'])->name('dashboard.mercadolivre-summary');
 });
 
 // API pública de parceiros externos — pedido explícito 2026-08-21. Arquivo

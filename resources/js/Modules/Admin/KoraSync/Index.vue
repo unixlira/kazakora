@@ -95,14 +95,29 @@ async function fetchMetrics() {
     }
 }
 
+// Resumo "Envios de hoje" (pedido explícito 2026-09-01) — espelha os
+// cartões Flex/Agência do próprio painel do Mercado Livre, calculado da
+// nossa base (ver DashboardAgentController::mercadoLivreSummary()), pra
+// não precisar abrir o site do canal só pra ver esse número.
+const mlSummary = ref(null);
+async function fetchMlSummary() {
+    try {
+        mlSummary.value = await fetchJson('/admin/korasync-api/mercadolivre-summary');
+    } catch {
+        // idem — resumo é só um complemento visual, nunca trava a tela
+    }
+}
+
 let queueTimer = null;
 let scheduledTimer = null;
 let metricsTimer = null;
+let mlSummaryTimer = null;
 
 onMounted(() => {
     fetchQueue();
     fetchScheduled();
     fetchMetrics();
+    fetchMlSummary();
 
     // Intervalos mais folgados que o app desktop (1s/5s, ver
     // DashboardPoller.cs) de propósito — lá é 1 processo só, sempre ligado,
@@ -112,11 +127,13 @@ onMounted(() => {
     queueTimer = setInterval(fetchQueue, 3000);
     scheduledTimer = setInterval(fetchScheduled, 8000);
     metricsTimer = setInterval(fetchMetrics, 20000);
+    mlSummaryTimer = setInterval(fetchMlSummary, 20000);
 });
 
 onUnmounted(() => {
     clearInterval(queueTimer);
     clearInterval(scheduledTimer);
+    clearInterval(mlSummaryTimer);
     clearInterval(metricsTimer);
 });
 
@@ -284,6 +301,25 @@ async function packOrder(order) {
                             class="w-full rounded-lg border py-2 pl-8 pr-3 text-sm outline-none focus:ring-1"
                             style="background: var(--ks-row-bg); border-color: var(--ks-border); color: var(--ks-text)"
                         >
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'vendas-futuras' && section === 'expedicao' && mlSummary" class="grid grid-cols-2 gap-3 border-b p-4 sm:grid-cols-4" style="border-color: var(--ks-border)">
+                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                        <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Flex — prontas</div>
+                        <div class="text-xl font-black" style="color: var(--ks-text)">{{ mlSummary.flex.prontos }}<span class="text-sm font-normal" style="color: var(--ks-text-secondary)"> / {{ mlSummary.flex.total }}</span></div>
+                    </div>
+                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                        <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Agência — prontas</div>
+                        <div class="text-xl font-black" style="color: var(--ks-text)">{{ mlSummary.agencia.prontos }}<span class="text-sm font-normal" style="color: var(--ks-text-secondary)"> / {{ mlSummary.agencia.total }}</span></div>
+                    </div>
+                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                        <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Nota fiscal pendente</div>
+                        <div class="text-xl font-black" :style="{ color: mlSummary.agencia.nfe_pendente > 0 ? 'var(--ks-error)' : 'var(--ks-text)' }">{{ mlSummary.agencia.nfe_pendente }}</div>
+                    </div>
+                    <div class="rounded-lg border p-3" style="background: var(--ks-row-bg); border-color: var(--ks-border)">
+                        <div class="text-[11px] font-bold uppercase tracking-wide" style="color: var(--ks-text-secondary)">Canceladas hoje</div>
+                        <div class="text-xl font-black" style="color: var(--ks-text)">{{ mlSummary.agencia.cancelada }}</div>
                     </div>
                 </div>
 

@@ -406,6 +406,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
         Route::get('korasync-api/queue', [DashboardAgentController::class, 'queue'])->name('korasync.api.fila');
         Route::get('korasync-api/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('korasync.api.agendados');
+        Route::get('korasync-api/mercadolivre-summary', [DashboardAgentController::class, 'mercadoLivreSummary'])->name('korasync.api.resumo-ml');
         Route::get('korasync-api/metrics', [DashboardAgentController::class, 'metrics'])->name('korasync.api.metricas');
         Route::get('korasync-api/queue/{order}/image', [DashboardAgentController::class, 'queueOrderImage'])->name('korasync.api.foto-pedido');
         Route::get('korasync-api/queue/{order}/image/{product}', [DashboardAgentController::class, 'queueOrderProductImage'])->name('korasync.api.foto-produto');

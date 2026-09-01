@@ -920,6 +920,17 @@ class DashboardAgentController extends Controller
             // (ver queueOrderProductImage() abaixo), não mais 1 foto só
             // pro pedido inteiro.
             'products' => $order->items->map(fn ($item) => [
+                // id do PRÓPRIO item do pedido (não do produto): um pedido
+                // pode ter 2 itens apontando pro MESMO product_id (2
+                // variações do mesmo anúncio do Mercado Livre, que a
+                // importação hoje casa no mesmo listing/produto — ver
+                // MercadoLivreDriver::importOrder(), que não lê
+                // variation_id). Sem um id único por LINHA, o cliente web
+                // usava product_id como chave de lista e as duas linhas
+                // colidiam, sumindo uma das duas da tela (KoraSync
+                // desktop nunca sofreu disso — ProductRows é 1 linha por
+                // item, sem chave).
+                'id' => $item->id,
                 'product_id' => $item->product_id,
                 'name' => $item->product_name,
                 'quantity' => $item->quantity,

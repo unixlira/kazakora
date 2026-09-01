@@ -72,7 +72,7 @@ function handlePack() {
         <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <!-- Fotos + dados, 1 linha por produto -->
             <div class="min-w-0 flex-1 space-y-2">
-                <div v-for="product in order.products" :key="product.product_id ?? product.name" class="flex items-center gap-3">
+                <div v-for="(product, idx) in order.products" :key="product.id ?? idx" class="flex items-center gap-3">
                     <div
                         class="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full"
                         style="background: var(--ks-bg)"

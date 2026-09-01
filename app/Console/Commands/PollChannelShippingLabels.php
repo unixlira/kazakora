@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Support\LabelFetchService;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -26,6 +27,15 @@ class PollChannelShippingLabels extends Command
     {
         $shipments = ChannelShipment::query()
             ->where('status', ChannelShipment::STATUS_CONFIRMED)
+            // 2026-08-31: TikTok Shop fora — geração automática de etiqueta
+            // via Bling exige plano pago que o usuário decidiu não
+            // contratar, envio desse canal é resolvido manualmente direto
+            // no painel do TikTok. Essa varredura sem filtro de canal achou
+            // rastreio pronto pra 10 pedidos TikTok de uma vez (que só
+            // existia porque o usuário já tinha resolvido manual lá) e
+            // reimprimiu etiqueta duplicada pra todos (mesmo dia, mesmo
+            // causa do bug já corrigido em OrderController::checkLabel()).
+            ->where('channel', '!=', MarketplaceAccount::CHANNEL_TIKTOK_SHOP)
             ->with('order.items')
             ->get();
 

@@ -14,6 +14,13 @@ class Review extends Model
         'product_id',
         'rating',
         'comment',
+        'seller_reply',
+        'seller_replied_at',
+        'seller_reply_attempted_at',
+        'seller_reply_status',
+        'seller_reply_template',
+        'seller_reply_error',
+        'seller_reply_payload',
         'reviewer_name',
         'channel',
         'external_id',
@@ -27,7 +34,17 @@ class Review extends Model
      * AdminReviewController usa ->makeVisible() explicitamente nas telas
      * internas de avaliações.
      */
-    protected $hidden = ['channel', 'external_id'];
+    protected $hidden = [
+        'channel',
+        'external_id',
+        'seller_reply',
+        'seller_replied_at',
+        'seller_reply_attempted_at',
+        'seller_reply_status',
+        'seller_reply_template',
+        'seller_reply_error',
+        'seller_reply_payload',
+    ];
 
     protected $appends = ['reviewer_display_name'];
 
@@ -35,6 +52,9 @@ class Review extends Model
     {
         return [
             'rating' => 'integer',
+            'seller_replied_at' => 'datetime',
+            'seller_reply_attempted_at' => 'datetime',
+            'seller_reply_payload' => 'array',
         ];
     }
 

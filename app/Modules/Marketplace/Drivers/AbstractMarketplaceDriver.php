@@ -35,6 +35,11 @@ abstract class AbstractMarketplaceDriver implements MarketplaceChannelDriver
         throw new \RuntimeException("Importação de avaliações via {$this->channel()} ainda não implementada.");
     }
 
+    public function replyReview(string $externalId, string $comment): array
+    {
+        throw new \RuntimeException("Resposta de avaliações via {$this->channel()} ainda não implementada.");
+    }
+
     protected function account(): ?MarketplaceAccount
     {
         return MarketplaceAccount::query()->where('channel', $this->channel())->first();

@@ -35,8 +35,9 @@ class AuthenticatedSessionController extends Controller
         // some sozinho depois do próximo request, então só aparece uma vez
         // por login, não em toda navegação seguinte.
         $user = $request->user();
+        $isAdmin = $user instanceof User && $user->role === User::ROLE_ADMIN;
 
-        if ($user instanceof User && $user->role === User::ROLE_ADMIN) {
+        if ($isAdmin) {
             $lowStockProducts = $lowStockAlert->checkAndNotify($user);
 
             if ($lowStockProducts !== []) {
@@ -44,7 +45,13 @@ class AuthenticatedSessionController extends Controller
             }
         }
 
-        return redirect()->intended(route('catalogo.inicio'));
+        // Correção 2026-08-20: o modal de estoque baixo só existe dentro do
+        // AdminLayout agora (antes vazava pra loja também). Sem URL
+        // "intended" salva, admin cai direto no painel — senão o flash
+        // acima nunca teria layout pra aparecer.
+        $default = $isAdmin ? route('admin.painel') : route('catalogo.inicio');
+
+        return redirect()->intended($default);
     }
 
     public function destroy(Request $request): RedirectResponse

@@ -1,10 +1,10 @@
 <script setup>
 // Pedido explícito 2026-08-16: modal de estoque baixo toda vez que um
-// admin loga. Componente próprio (não parte do AdminLayout) montado nos
-// DOIS layouts (Admin e App) — login redireciona pra `catalogo.inicio`
-// (loja, AppLayout) quando não há URL "intended" salva, então o modal
-// precisa disparar dali também, não só de dentro do admin, senão o
-// alerta nunca apareceria de verdade num login direto.
+// admin loga. Correção 2026-08-20: só deve aparecer dentro do admin —
+// componente montado exclusivamente no AdminLayout. O login (ver
+// AuthenticatedSessionController) já manda o admin pro painel por
+// padrão quando não há URL "intended" salva, então o flash sempre tem
+// esse layout disponível pra exibir.
 import { Link, usePage } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 

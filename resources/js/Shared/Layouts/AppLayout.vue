@@ -4,7 +4,6 @@ import { computed, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { useClickOutside } from '@/Shared/useClickOutside';
 import { COMPANY } from '@/Shared/company';
-import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 
 const page = usePage();
 const cartCount = computed(() => page.props.cart?.count ?? 0);
@@ -256,10 +255,5 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
             class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg">
             <i class="fab fa-whatsapp"></i>
         </a>
-
-        <!-- Login sem "intended" (achado real 2026-08-16) cai aqui, não no
-        admin — o modal de estoque baixo precisa existir nos dois layouts
-        pra disparar de verdade em todo login, ver LowStockAlertModal.vue. -->
-        <LowStockAlertModal />
     </div>
 </template>

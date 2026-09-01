@@ -12,6 +12,7 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Shopee\Exceptions\ShopeeException;
 use App\Services\Shopee\ShopeeClient;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -157,7 +158,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      *
      * @return ?array{external_id: string, name: string, price: ?float, description: ?string, stock: ?int, tax_info: ?array<string, mixed>, sku: ?string}
      */
-    public function fetchItemDetail(string $externalId): ?array
+    public function fetchItemDetail(string $externalId, ?string $externalModelId = null): ?array
     {
         $this->ensureConfigured();
 
@@ -165,7 +166,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             $base = $this->client->get('/api/v2/product/get_item_base_info', [
                 'item_id_list' => $externalId,
                 'need_tax_info' => 'true',
-                'response_optional_fields' => 'tax_info,description,stock_info_v2',
+                'response_optional_fields' => 'tax_info,description,stock_info_v2,price_info,item_sku',
             ]);
         } catch (ShopeeException $exception) {
             Log::channel('shopee')->warning('shopee.item_detail.lookup_failed', [
@@ -182,26 +183,49 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             return null;
         }
 
+        $model = null;
+
+        // Anúncios Shopee com variação real mandam `model_id` no pedido.
+        // O SKU correto da cor fica em get_model_list.model[].model_sku,
+        // não em get_item_base_info.item_sku. Sem ler o model, um segundo
+        // anúncio multivariação do mesmo power bank cai no SKU genérico do
+        // anúncio e pode auto-importar produto duplicado ou puxar imagem da
+        // cor errada. Mantém o fallback antigo para anúncios sem variação.
+        if ($externalModelId !== null) {
+            try {
+                $models = $this->client->get('/api/v2/product/get_model_list', [
+                    'item_id' => $externalId,
+                ]);
+
+                $model = collect($models['response']['model'] ?? [])
+                    ->first(fn (array $candidate) => (string) ($candidate['model_id'] ?? '') === (string) $externalModelId);
+            } catch (ShopeeException $exception) {
+                Log::channel('shopee')->warning('shopee.model_detail.lookup_failed', [
+                    'external_id' => $externalId,
+                    'external_model_id' => $externalModelId,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $price = $model['price_info'][0]['current_price']
+            ?? $item['price_info'][0]['current_price']
+            ?? null;
+        $stock = $model['stock_info_v2']['summary_info']['total_available_stock']
+            ?? $item['stock_info_v2']['summary_info']['total_available_stock']
+            ?? null;
+        $sku = trim((string) ($model['model_sku'] ?? '')) ?: trim((string) ($item['item_sku'] ?? ''));
+
         return [
             'external_id' => (string) $item['item_id'],
             'name' => (string) ($item['item_name'] ?? ''),
-            'price' => isset($item['price_info'][0]['current_price'])
-                ? (float) $item['price_info'][0]['current_price']
-                : null,
+            'price' => $price !== null ? (float) $price : null,
             'description' => $item['description'] ?? null,
-            'stock' => isset($item['stock_info_v2']['summary_info']['total_available_stock'])
-                ? (int) $item['stock_info_v2']['summary_info']['total_available_stock']
-                : null,
+            'stock' => $stock !== null ? (int) $stock : null,
             'tax_info' => $item['tax_info'] ?? null,
-            // SKU real cadastrado na Shopee (`item_sku`, já vem no
-            // get_item_base_info sem precisar de response_optional_fields —
-            // ver fetchItemSkus()) — usado por autoImportProduct() pra
-            // achar um produto local JÁ existente com esse mesmo SKU antes
-            // de criar um produto novo (achado real 2026-08-21: pedido
-            // criava produto duplicado com SKU sintético "SHOPEE-{id}"
-            // mesmo quando o produto certo, com o SKU de verdade, já
-            // existia — nunca checava isso).
-            'sku' => trim((string) ($item['item_sku'] ?? '')) ?: null,
+            // SKU real cadastrado na Shopee. Em anúncio com variação, usa o
+            // model_sku da cor comprada; em anúncio simples, usa item_sku.
+            'sku' => $sku !== '' ? $sku : null,
         ];
     }
 
@@ -237,7 +261,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      */
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
-        $item = $this->fetchItemDetail($externalId);
+        $item = $this->fetchItemDetail($externalId, $externalModelId);
 
         if (! $item || $item['name'] === '' || $item['price'] === null) {
             return null;
@@ -367,25 +391,15 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             return false;
         }
 
-        // Achado real 2026-08-08 (pedido #188): a Shopee às vezes deixa
-        // pis_cofins_cst vazio no tax_info mesmo com NCM/CFOP/CSOSN
-        // preenchidos, e NFeXmlBuilderService rejeita um XML com PIS/COFINS
-        // sem CST nenhum. A loja é MEI (confirmado pelo usuário) — MEI não
-        // destaca PIS/COFINS por item, fica coberto pelo DAS fixo mensal —
-        // então "08" (Operação sem Incidência da Contribuição) é o CST
-        // correto pra esse regime, não um palpite genérico; só entra como
-        // fallback quando a Shopee não mandou nada.
-        $pisCofinsCst = trim((string) ($taxInfo['pis_cofins_cst'] ?? '')) ?: '08';
+        // Empresa enquadrada como MEI: os campos fiscais recorrentes
+        // ficam padronizados no KazaKora, mesmo quando a Shopee manda CFOP,
+        // CSOSN ou unidade diferentes. NCM/CEST continuam vindo da origem
+        // porque são específicos do produto.
+        $defaultFiscalAttributes = ProductFiscalData::defaultMeiAttributes();
 
         ProductFiscalData::query()->updateOrCreate(['product_id' => $product->id], [
             'ncm' => $ncm,
-            'origem' => (int) ($taxInfo['origin'] ?? 0),
-            'cfop' => (string) ($taxInfo['same_state_cfop'] ?? ''),
-            'cfop_outros_estados' => (string) ($taxInfo['diff_state_cfop'] ?? ($taxInfo['same_state_cfop'] ?? '')),
-            'icms_situacao_tributaria' => (string) ($taxInfo['csosn'] ?? ''),
-            'unidade_tributavel' => (string) ($taxInfo['measure_unit'] ?? 'UN'),
-            'pis_situacao_tributaria' => $pisCofinsCst,
-            'cofins_situacao_tributaria' => $pisCofinsCst,
+            ...$defaultFiscalAttributes,
             'cest' => trim((string) ($taxInfo['cest'] ?? '')) ?: null,
             // BUG REAL 2026-08-08 (venda travada, pedido nunca nem chegou a
             // ser criado): product_fiscal_data.tipo_operacao é NOT NULL
@@ -470,27 +484,335 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     public function publishProduct(Product $product, ProductChannelListing $listing): string
     {
         $this->ensureConfigured();
+        $product->loadMissing(['images', 'fiscalData']);
 
-        // TODO: upload $product->images via v2.media_space.upload_image,
-        // then call v2.product.add_item with the returned image ids and
-        // the category-specific attributes from $listing->attributes.
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        if ($listing->external_id) {
+            $this->updateStock($product, $listing);
+
+            return (string) $listing->external_id;
+        }
+
+        $existingId = $this->findExistingItemIdBySku($product->sku);
+
+        if ($existingId !== null) {
+            $listing->update([
+                'status' => ProductChannelListing::STATUS_PUBLISHED,
+                'external_id' => $existingId,
+                'last_error' => null,
+                'last_synced_at' => now(),
+                'attributes' => array_merge($listing->attributes ?? [], [
+                    'source' => 'shopee_existing_sku_link',
+                ]),
+            ]);
+
+            return $existingId;
+        }
+
+        $payload = $this->buildAddItemPayload($product, $listing);
+        $response = $this->client->post('/api/v2/product/add_item', $payload);
+        $externalId = (string) ($response['response']['item_id'] ?? '');
+
+        if ($externalId === '') {
+            throw new RuntimeException('Shopee add_item não retornou item_id.');
+        }
+
+        $listing->update([
+            'attributes' => array_merge($listing->attributes ?? [], [
+                'source' => 'shopee_add_item',
+                'payload_summary' => $this->payloadSummary($payload),
+            ]),
+        ]);
+
+        return $externalId;
     }
 
     public function updateStock(Product $product, ProductChannelListing $listing): void
     {
         $this->ensureConfigured();
 
-        // TODO: call v2.product.update_stock with $product->stock.
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        if (! $listing->external_id) {
+            throw new RuntimeException('Anúncio Shopee sem external_id para atualizar estoque.');
+        }
+
+        $stock = max(0, (int) $product->stock);
+
+        $this->client->post('/api/v2/product/update_stock', [
+            'item_id' => (int) $listing->external_id,
+            'stock_list' => [
+                [
+                    'seller_stock' => [
+                        ['stock' => $stock],
+                    ],
+                ],
+            ],
+        ]);
     }
 
     public function unpublishProduct(ProductChannelListing $listing): void
     {
         $this->ensureConfigured();
 
-        // TODO: call v2.product.unlist_item.
-        throw new \RuntimeException('Integração com Shopee ainda não implementada.');
+        if (! $listing->external_id) {
+            throw new RuntimeException('Anúncio Shopee sem external_id para remover.');
+        }
+
+        $this->client->post('/api/v2/product/unlist_item', [
+            'item_list' => [
+                [
+                    'item_id' => (int) $listing->external_id,
+                    'unlist' => true,
+                ],
+            ],
+        ]);
+    }
+
+    private function findExistingItemIdBySku(?string $sku): ?string
+    {
+        $sku = trim((string) $sku);
+
+        if ($sku === '') {
+            return null;
+        }
+
+        $items = $this->fetchOwnItems();
+        $skuMap = $this->fetchItemSkus(array_column($items, 'external_id'));
+        $externalId = array_search($sku, $skuMap, true);
+
+        return $externalId === false ? null : (string) $externalId;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildAddItemPayload(Product $product, ProductChannelListing $listing): array
+    {
+        $categoryId = $this->resolvePublishCategoryId($listing);
+        $imageIds = $this->resolveShopeeImageIds($product, $listing);
+        $dimension = $this->resolvePackageDimension($product);
+        $weight = $this->resolvePackageWeight($product);
+        $logisticInfo = $this->resolveLogisticInfo($dimension, $weight);
+        $attributeList = $this->resolveAttributeList($categoryId, $listing);
+        $price = round((float) $product->final_price, 2);
+
+        if ($price <= 0) {
+            throw new RuntimeException('Produto sem preço final válido para publicar na Shopee.');
+        }
+
+        return [
+            'category_id' => $categoryId,
+            'item_name' => mb_substr($product->name, 0, 120),
+            'description' => (string) $product->description,
+            'item_sku' => (string) $product->sku,
+            'brand' => ['brand_id' => 0, 'original_brand_name' => 'NoBrand'],
+            'condition' => 'NEW',
+            'image' => ['image_id_list' => $imageIds],
+            'original_price' => $price,
+            'seller_stock' => [['stock' => max(0, (int) $product->stock)]],
+            'weight' => $weight,
+            'dimension' => $dimension,
+            'logistic_info' => $logisticInfo,
+            'attribute_list' => $attributeList,
+        ];
+    }
+
+    private function resolvePublishCategoryId(ProductChannelListing $listing): int
+    {
+        $categoryId = (int) (($listing->attributes ?? [])['category_id'] ?? 0);
+
+        if ($categoryId <= 0) {
+            throw new RuntimeException('Informe o category_id da Shopee no JSON de atributos antes de publicar.');
+        }
+
+        return $categoryId;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveShopeeImageIds(Product $product, ProductChannelListing $listing): array
+    {
+        $attributes = $listing->attributes ?? [];
+        $imageIds = array_values(array_filter((array) ($attributes['uploaded_image_ids'] ?? [])));
+
+        if ($imageIds) {
+            return array_slice(array_map('strval', $imageIds), 0, 9);
+        }
+
+        $product->loadMissing('images');
+        $images = $product->images->sortBy([['is_primary', 'desc'], ['position', 'asc']])->take(9);
+
+        foreach ($images as $image) {
+            $download = Http::timeout(60)->get($image->url);
+
+            if (! $download->successful()) {
+                throw new RuntimeException('Falha ao baixar imagem do produto para upload Shopee.');
+            }
+
+            $filename = basename(parse_url($image->url, PHP_URL_PATH) ?: ('product-'.$product->id.'.jpg'));
+            $uploaded = $this->client->postMultipart('/api/v2/media_space/upload_image', [], [
+                'contents' => $download->body(),
+                'filename' => $filename,
+            ], 'image');
+            $imageId = $uploaded['response']['image_info']['image_id'] ?? null;
+
+            if (! $imageId) {
+                throw new RuntimeException('Upload de imagem Shopee não retornou image_id.');
+            }
+
+            $imageIds[] = (string) $imageId;
+        }
+
+        if (! $imageIds) {
+            throw new RuntimeException('Produto sem imagem para publicar na Shopee.');
+        }
+
+        $listing->update([
+            'attributes' => array_merge($attributes, ['uploaded_image_ids' => $imageIds]),
+        ]);
+
+        return $imageIds;
+    }
+
+    /**
+     * @return array{package_length: float, package_width: float, package_height: float}
+     */
+    private function resolvePackageDimension(Product $product): array
+    {
+        $fiscal = $product->fiscalData;
+        $values = array_filter([
+            (float) ($fiscal?->altura_cm ?? 0),
+            (float) ($fiscal?->largura_cm ?? 0),
+            (float) ($fiscal?->profundidade_cm ?? 0),
+        ], fn (float $value) => $value > 0);
+
+        if (count($values) !== 3) {
+            throw new RuntimeException('Dimensões de pacote ausentes no cadastro fiscal do produto.');
+        }
+
+        rsort($values, SORT_NUMERIC);
+
+        return [
+            'package_length' => $values[0],
+            'package_width' => $values[1],
+            'package_height' => $values[2],
+        ];
+    }
+
+    private function resolvePackageWeight(Product $product): float
+    {
+        $weight = (float) ($product->fiscalData?->peso_bruto ?? 0);
+
+        if ($weight <= 0) {
+            throw new RuntimeException('Peso bruto ausente no cadastro fiscal do produto.');
+        }
+
+        return $weight;
+    }
+
+    /**
+     * @param  array{package_length: float, package_width: float, package_height: float}  $dimension
+     * @return array<int, array{logistic_id: int, enabled: bool}>
+     */
+    private function resolveLogisticInfo(array $dimension, float $weight): array
+    {
+        $response = $this->client->get('/api/v2/logistics/get_channel_list');
+        $channels = array_values(array_filter(
+            $response['response']['logistics_channel_list'] ?? [],
+            fn (array $channel) => ! empty($channel['enabled'])
+        ));
+        $logistics = [];
+        $dimensionSum = array_sum($dimension);
+
+        foreach ($channels as $channel) {
+            $id = (int) ($channel['logistics_channel_id'] ?? 0);
+            $dimensionLimit = $channel['item_max_dimension'] ?? [];
+            $weightLimit = $channel['weight_limit'] ?? [];
+
+            if ($id <= 0) {
+                continue;
+            }
+
+            if (isset($weightLimit['item_min_weight']) && $weight < (float) $weightLimit['item_min_weight']) {
+                continue;
+            }
+
+            if (isset($weightLimit['item_max_weight']) && $weight > (float) $weightLimit['item_max_weight']) {
+                continue;
+            }
+
+            if (($dimensionLimit['dimension_sum'] ?? 0) > 0 && $dimensionSum > (float) $dimensionLimit['dimension_sum']) {
+                continue;
+            }
+
+            if (($dimensionLimit['length'] ?? 0) > 0 && $dimension['package_length'] > (float) $dimensionLimit['length']) {
+                continue;
+            }
+
+            if (($dimensionLimit['width'] ?? 0) > 0 && $dimension['package_width'] > (float) $dimensionLimit['width']) {
+                continue;
+            }
+
+            if (($dimensionLimit['height'] ?? 0) > 0 && $dimension['package_height'] > (float) $dimensionLimit['height']) {
+                continue;
+            }
+
+            $logistics[] = ['logistic_id' => $id, 'enabled' => true];
+        }
+
+        if (! $logistics) {
+            throw new RuntimeException('Nenhum canal logístico Shopee habilitado aceita o peso/dimensões do produto.');
+        }
+
+        return $logistics;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveAttributeList(int $categoryId, ProductChannelListing $listing): array
+    {
+        $attributes = $listing->attributes ?? [];
+
+        if (! empty($attributes['attribute_list']) && is_array($attributes['attribute_list'])) {
+            return $attributes['attribute_list'];
+        }
+
+        $response = $this->client->get('/api/v2/product/get_attribute_tree', [
+            'category_id_list' => (string) $categoryId,
+            'language' => 'pt-br',
+        ]);
+        $mandatory = collect($response['response']['list'][0]['attribute_tree'] ?? [])
+            ->where('mandatory', true)
+            ->values();
+        $unsupported = $mandatory->reject(fn (array $attribute) => (int) ($attribute['attribute_id'] ?? 0) === 100730);
+
+        if ($unsupported->isNotEmpty()) {
+            throw new RuntimeException('A categoria Shopee possui atributos obrigatórios ainda não mapeados: '.$unsupported->pluck('attribute_id')->implode(', '));
+        }
+
+        return [[
+            'attribute_id' => 100730,
+            'attribute_value_list' => [[
+                'value_id' => 3823,
+                'original_value_name' => 'Assembly Required',
+            ]],
+        ]];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function payloadSummary(array $payload): array
+    {
+        return [
+            'price' => $payload['original_price'] ?? null,
+            'stock' => $payload['seller_stock'][0]['stock'] ?? null,
+            'image_count' => count($payload['image']['image_id_list'] ?? []),
+            'weight' => $payload['weight'] ?? null,
+            'dimension' => $payload['dimension'] ?? null,
+            'logistics' => array_column($payload['logistic_info'] ?? [], 'logistic_id'),
+        ];
     }
 
     /**
@@ -1206,5 +1528,28 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         } while ($more && $cursor !== '');
 
         return $reviews;
+    }
+
+    /**
+     * `v2.product.reply_comment` — responde publicamente uma avaliação da
+     * Shopee. O controle de quando usar fica no AutoReplyShopeeReviewsService:
+     * aqui só envia a chamada oficial, validando limite de 1 a 500 caracteres.
+     */
+    public function replyReview(string $externalId, string $comment): array
+    {
+        $this->ensureConfigured();
+
+        $comment = trim($comment);
+
+        if ($comment === '' || mb_strlen($comment) > 500) {
+            throw new \InvalidArgumentException('Resposta da avaliação Shopee precisa ter de 1 a 500 caracteres.');
+        }
+
+        return $this->client->post('/api/v2/product/reply_comment', [
+            'comment_list' => [[
+                'comment_id' => (int) $externalId,
+                'comment' => $comment,
+            ]],
+        ]);
     }
 }

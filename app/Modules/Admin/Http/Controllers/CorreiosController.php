@@ -5,6 +5,8 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
+use App\Modules\Fiscal\Models\Company;
+use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Services\Correios\CorreiosPrePostagemService;
 use App\Services\Correios\Exceptions\CorreiosException;
@@ -14,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -89,6 +92,7 @@ class CorreiosController extends Controller
         return Inertia::render('Admin/Correios/Create', [
             'serviceOptions' => self::SERVICE_OPTIONS,
             'configured' => $this->service->isConfigured(),
+            'sender' => $this->presentSender(Company::query()->first()),
         ]);
     }
 
@@ -107,7 +111,10 @@ class CorreiosController extends Controller
         }
 
         $order = Order::query()
-            ->with('items:id,order_id,product_name,product_price,quantity')
+            ->with([
+                'items:id,order_id,product_name,product_price,quantity',
+                'invoice:id,order_id,status,serie,numero,valor_total,chave_acesso,autorizada_em,danfe_path',
+            ])
             ->where('external_order_id', $numero)
             ->when(is_numeric($numero), fn ($query) => $query->orWhere('id', $numero))
             ->first();
@@ -136,8 +143,9 @@ class CorreiosController extends Controller
                 'city' => $order->shipping_city,
                 'state' => $order->shipping_state,
             ],
+            'invoice' => $this->presentInvoiceFiscal($order->invoice),
             'items' => $order->items->map(fn ($item) => [
-                'conteudo' => $item->product_name,
+                'conteudo' => $this->summarizeProductDeclaration($item->product_name),
                 'quantidade' => $item->quantity,
                 'valor' => (float) $item->product_price,
             ])->all(),
@@ -147,6 +155,7 @@ class CorreiosController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate($this->validationRules());
+        $validated['content_items'] = $this->safeContentItems($validated['content_items']);
 
         $record = new CorreiosPrePostagem(['created_by' => Auth::id()]);
         $this->hydrateRecord($record, $validated);
@@ -168,9 +177,12 @@ class CorreiosController extends Controller
             return redirect()->route('admin.correios.ver', $correio)->with('error', 'Essa pré-postagem já foi gerada — não dá mais pra editar.');
         }
 
+        $correio->load('order.invoice:id,order_id,status,serie,numero,valor_total,chave_acesso,autorizada_em,danfe_path');
+
         return Inertia::render('Admin/Correios/Create', [
             'serviceOptions' => self::SERVICE_OPTIONS,
             'configured' => $this->service->isConfigured(),
+            'sender' => $this->presentSender(Company::query()->first()),
             'editing' => $this->presentEditItem($correio),
         ]);
     }
@@ -182,6 +194,7 @@ class CorreiosController extends Controller
         }
 
         $validated = $request->validate($this->validationRules());
+        $validated['content_items'] = $this->safeContentItems($validated['content_items']);
 
         $this->hydrateRecord($correio, $validated);
 
@@ -257,6 +270,41 @@ class CorreiosController extends Controller
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function safeContentItems(array $items): array
+    {
+        return collect($items)->map(fn (array $item) => [
+            'conteudo' => $this->summarizeProductDeclaration($item['conteudo'] ?? null),
+            'quantidade' => $item['quantidade'],
+            'valor' => $item['valor'],
+        ])->all();
+    }
+
+    private function summarizeProductDeclaration(?string $productName): string
+    {
+        $text = html_entity_decode(strip_tags((string) $productName));
+        $text = preg_replace('/\s+/u', ' ', $text) ?: '';
+        $text = trim($text);
+
+        if ($text === '') {
+            return 'Produto KazaKora';
+        }
+
+        $text = preg_replace('/\s*[\[(].*?[\])]/u', ' ', $text) ?: $text;
+        $text = preg_replace('/\b(kazakora|novo|nova|original|oficial|promo[cç][aã]o|frete\s+gr[aá]tis|envio\s+imediato|pronta\s+entrega|mercado\s+livre|shopee|tiktok\s+shop)\b/iu', ' ', $text) ?: $text;
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?: $text;
+
+        $main = preg_split('/\s+[|–—]\s+|\s+-\s+/u', $text)[0] ?? $text;
+        $words = array_values(array_filter(explode(' ', $main)));
+        $summary = implode(' ', array_slice($words, 0, 8));
+        $summary = trim($summary) ?: 'Produto KazaKora';
+
+        return Str::limit($summary, 60, '');
+    }
+
+    /**
      * @param  array<string, mixed>  $validated
      */
     private function attemptCreate(CorreiosPrePostagem $record, array $validated, string $successMessage): RedirectResponse
@@ -301,7 +349,11 @@ class CorreiosController extends Controller
 
     public function show(CorreiosPrePostagem $correio): Response
     {
-        $correio->load('order:id,external_order_id');
+        $correio->load(
+            'order:id,external_order_id',
+            'order.items:id,order_id,product_name,product_price,quantity',
+            'order.invoice:id,order_id,status,serie,numero,valor_total,chave_acesso,autorizada_em,danfe_path',
+        );
 
         return Inertia::render('Admin/Correios/Show', [
             'item' => $this->presentDetail($correio),
@@ -342,20 +394,121 @@ class CorreiosController extends Controller
     {
         return [
             ...$this->presentListItem($item),
-            'address' => implode(' — ', array_filter([
-                trim("{$item->street} {$item->number}"),
+            'address' => implode(' — ', $this->addressLines(
+                $item->street,
+                $item->number,
+                $item->complement,
                 $item->neighborhood,
-                trim("{$item->city}/{$item->state}"),
+                $item->city,
+                $item->state,
                 $item->zip,
-            ])),
+            )),
+            'recipient' => [
+                'name' => $item->customer_name,
+                'document' => $item->customer_document,
+                'phone' => $item->customer_phone,
+                'email' => $item->customer_email,
+                'addressLines' => $this->addressLines(
+                    $item->street,
+                    $item->number,
+                    $item->complement,
+                    $item->neighborhood,
+                    $item->city,
+                    $item->state,
+                    $item->zip,
+                ),
+            ],
+            'sender' => $this->presentSender(Company::query()->first()),
+            'invoice' => $this->presentInvoiceFiscal($item->order?->invoice),
             'customerDocument' => $item->customer_document,
             'customerPhone' => $item->customer_phone,
             'weightGrams' => $item->weight_grams,
-            'contentItems' => $item->content_items,
+            'contentItems' => $this->contentItemsForLabel($item),
             'correiosId' => $item->correios_id,
             'qrPayload' => $item->qr_payload,
             'errorMessage' => $item->error_message,
         ];
+    }
+
+    /**
+     * @return array{hasInvoice: bool, status: ?string, serie: ?int, numero: ?int, valorTotal: ?float, chaveAcesso: ?string, chaveFormatada: ?string, autorizadaEm: ?string, danfePath: ?string}
+     */
+    private function presentInvoiceFiscal(?Invoice $invoice): array
+    {
+        $accessKey = $invoice?->chave_acesso;
+
+        return [
+            'hasInvoice' => (bool) $invoice,
+            'status' => $invoice?->status,
+            'serie' => $invoice?->serie,
+            'numero' => $invoice?->numero,
+            'valorTotal' => $invoice?->valor_total !== null ? (float) $invoice->valor_total : null,
+            'chaveAcesso' => $accessKey,
+            'chaveFormatada' => $accessKey ? trim(chunk_split($accessKey, 4, ' ')) : null,
+            'autorizadaEm' => $invoice?->autorizada_em?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+            'danfePath' => $invoice?->danfe_path,
+        ];
+    }
+
+    /**
+     * @return array<int, array{conteudo: string, quantidade: mixed, valor: mixed}>
+     */
+    private function contentItemsForLabel(CorreiosPrePostagem $item): array
+    {
+        if ($item->order?->items?->isNotEmpty()) {
+            return $item->order->items->map(fn ($orderItem) => [
+                'conteudo' => $this->summarizeProductDeclaration($orderItem->product_name),
+                'quantidade' => $orderItem->quantity,
+                'valor' => $orderItem->product_price,
+            ])->all();
+        }
+
+        return $this->safeContentItems($item->content_items ?? []);
+    }
+
+    /**
+     * @return array{name: string, document: ?string, phone: ?string, email: ?string, addressLines: array<int, string>}
+     */
+    private function presentSender(?Company $company): array
+    {
+        return [
+            'name' => $company?->nome_fantasia ?: $company?->razao_social ?: 'KazaKora',
+            'document' => $company?->cnpj,
+            'phone' => $company?->phone,
+            'email' => $company?->email,
+            'addressLines' => $company
+                ? $this->addressLines(
+                    $company->street,
+                    $company->number,
+                    $company->complement,
+                    $company->neighborhood,
+                    $company->city,
+                    $company->state,
+                    $company->zip,
+                )
+                : [],
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function addressLines(?string $street, ?string $number, ?string $complement, ?string $neighborhood, ?string $city, ?string $state, ?string $zip): array
+    {
+        $streetLine = trim(implode(', ', array_filter([$street, $number])));
+
+        if (filled($complement)) {
+            $streetLine = trim($streetLine.' - '.$complement);
+        }
+
+        $cityState = trim(implode('/', array_filter([$city, $state])));
+        $zipLine = filled($zip) ? 'CEP '.$zip : null;
+
+        return array_values(array_filter([
+            $streetLine,
+            $neighborhood,
+            trim(implode(' — ', array_filter([$zipLine, $cityState]))),
+        ]));
     }
 
     /**
@@ -395,6 +548,7 @@ class CorreiosController extends Controller
                 'length' => $item->dimension_length,
                 'diameter' => $item->dimension_diameter,
             ],
+            'invoice' => $this->presentInvoiceFiscal($item->order?->invoice),
             'contentItems' => $item->content_items,
             'errorMessage' => $item->error_message,
         ];

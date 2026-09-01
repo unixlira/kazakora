@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Support\Rbac\Auditable;
@@ -57,15 +58,30 @@ class Order extends Model
     // marketplace de verdade).
     public const ORIGIN_MANUAL_INVOICE = 'nota_fiscal_avulsa';
 
+    // Nota fiscal de devolução de compra: operador comprou mercadoria de
+    // fornecedor e precisa devolver itens avariados. Continua Order-based
+    // para reaproveitar Invoice/GenerateInvoiceJob, mas a NF-e sai com
+    // finNFe=4 e chave referenciada no XML.
+    public const ORIGIN_PURCHASE_RETURN_INVOICE = 'nota_devolucao_compra';
+
     protected $fillable = [
         'user_id',
         'status',
         'origin',
         'external_order_id',
+        'fiscal_operation_type',
+        'fiscal_nature_operation',
+        'fiscal_finality',
+        'fiscal_referenced_nfe_key',
+        'fiscal_additional_info',
         'buyer_document',
+        'buyer_state_registration',
+        'buyer_taxpayer_type',
         'disputed_at',
         'stock_restored_at',
         'packed_at',
+        'waiting_for_product_at',
+        'waiting_for_product_until',
         'shipping_method_id',
         'shipping_carrier_name',
         'shipping_name',
@@ -93,9 +109,12 @@ class Order extends Model
             'shipping_cost' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'total' => 'decimal:2',
+            'fiscal_finality' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',
             'packed_at' => 'datetime',
+            'waiting_for_product_at' => 'datetime',
+            'waiting_for_product_until' => 'datetime',
         ];
     }
 
@@ -144,6 +163,16 @@ class Order extends Model
         return $this->hasOne(ChannelShipment::class);
     }
 
+    public function correiosPrePostagens(): HasMany
+    {
+        return $this->hasMany(CorreiosPrePostagem::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    public function latestCorreiosPrePostagem(): HasOne
+    {
+        return $this->hasOne(CorreiosPrePostagem::class)->latestOfMany(['created_at', 'id']);
+    }
+
     public function channelFee(): HasOne
     {
         return $this->hasOne(OrderChannelFee::class);
@@ -152,5 +181,23 @@ class Order extends Model
     public function fulfillmentEvents(): HasMany
     {
         return $this->hasMany(OrderFulfillmentEvent::class)->orderBy('created_at')->orderBy('id');
+    }
+
+    /**
+     * Pedido fiscal de devolução de compra usa a tabela orders só como suporte
+     * técnico da NF-e. Não é venda, não deve aparecer na fila/lista operacional
+     * nem inflar métricas de pedido/faturamento.
+     */
+    public function scopeNonPurchaseReturn($query)
+    {
+        return $query
+            ->where(function ($query) {
+                $query->where($this->qualifyColumn('origin'), '!=', self::ORIGIN_PURCHASE_RETURN_INVOICE)
+                    ->orWhereNull($this->qualifyColumn('origin'));
+            })
+            ->where(function ($query) {
+                $query->where($this->qualifyColumn('fiscal_operation_type'), '!=', 'purchase_return')
+                    ->orWhereNull($this->qualifyColumn('fiscal_operation_type'));
+            });
     }
 }

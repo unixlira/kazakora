@@ -147,4 +147,13 @@ interface MarketplaceChannelDriver
      * }>
      */
     public function fetchReviews(string $externalId): array;
+
+    /**
+     * Responde uma avaliação/comentário no canal de origem. Usado com extremo
+     * cuidado: só para avaliações importadas e idempotentes, porque escreve
+     * publicamente no marketplace. Canais sem suporte lançam RuntimeException.
+     *
+     * @return array<string, mixed> Resposta bruta normalizada do canal.
+     */
+    public function replyReview(string $externalId, string $comment): array;
 }

@@ -8,6 +8,7 @@ use App\Services\Correios\Exceptions\CorreiosNotConfiguredException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Cria a pré-postagem de verdade na API dos Correios (POST /v1/prepostagens
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  * app/site oficial dos Correios não tem endpoint público equivalente na
  * API — é gerado dentro da própria plataforma deles a partir do protocolo.
  * Por isso o QR que esta loja imprime é gerado aqui mesmo (no navegador,
- * ver resources/js/vendor/qrcode-generator.mjs), codificando o
+ * via pacote qrcode-generator), codificando o
  * `correios_id`/código de rastreio — o mesmo dado que o atendente da
  * agência usaria pra localizar a pré-postagem informando "o número do
  * lote", só que como QR em vez de texto (ver CorreiosController).
@@ -71,7 +72,10 @@ class CorreiosPrePostagemService
             // aqui, não um campo que o usuário preenche na tela.
             'cienteObjetoNaoProibido' => '1',
             'itensDeclaracaoConteudo' => collect($input['content_items'])->map(fn (array $item) => [
-                'conteudo' => $item['conteudo'],
+                // O conteúdo chega do admin já resumido/sanitizado: mantém o
+                // tipo principal do produto sem despejar título comercial
+                // inteiro de marketplace na declaração.
+                'conteudo' => $this->sanitizeContentLabel($item['conteudo'] ?? null),
                 'quantidade' => (string) $item['quantidade'],
                 'valor' => number_format((float) $item['valor'], 2, '.', ''),
             ])->all(),
@@ -202,6 +206,14 @@ class CorreiosPrePostagemService
     private function onlyDigits(?string $value): ?string
     {
         return $value ? preg_replace('/\D/', '', $value) : $value;
+    }
+
+    private function sanitizeContentLabel(?string $value): string
+    {
+        $text = html_entity_decode(strip_tags((string) $value));
+        $text = preg_replace('/\s+/u', ' ', trim($text)) ?: '';
+
+        return $text !== '' ? Str::limit($text, 60, '') : 'Produto KazaKora';
     }
 
     /**

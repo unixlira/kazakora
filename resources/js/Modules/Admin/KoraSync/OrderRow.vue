@@ -87,7 +87,22 @@ function handlePack() {
                         >
                     </div>
                     <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold" style="color: var(--ks-text)">{{ order.customer_name || 'Cliente não informado' }}</p>
+                        <p class="truncate text-sm font-semibold" style="color: var(--ks-text)">
+                            {{ order.customer_name || 'Cliente não informado' }}
+                            <!-- Pedido de mais de 1 item: cada linha diz qual
+                                 item é ("Item 2/2"). Sem isso, 2 itens do
+                                 mesmo produto (2 variações do mesmo anúncio
+                                 do Mercado Livre caem no mesmo produto local)
+                                 ficam com nome/pedido/SKU idênticos e parecem
+                                 a MESMA linha repetida por bug de tela — o
+                                 operador embala 1 e fecha o pedido faltando
+                                 item. -->
+                            <span
+                                v-if="order.products.length > 1"
+                                class="ml-1 rounded px-1.5 py-0.5 text-xs font-bold"
+                                style="background: color-mix(in srgb, var(--ks-warning) 20%, transparent); color: var(--ks-warning)"
+                            >Item {{ idx + 1 }}/{{ order.products.length }}</span>
+                        </p>
                         <p class="text-xs" style="color: var(--ks-text-secondary)">Pedido {{ order.external_order_id || '—' }}</p>
                         <p class="text-xs" style="color: var(--ks-text-secondary)">
                             SKU: {{ product.sku || '—' }}

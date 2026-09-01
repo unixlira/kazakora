@@ -325,6 +325,40 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertSame(1, $queue[2]['units_count']);
     }
 
+    /**
+     * BUG REAL 2026-09-01 (relatado pelo usuário — pedido do Mercado Livre
+     * com 2 itens aparecendo com 1 só na tela de separação): dois itens do
+     * MESMO produto local no mesmo pedido (2 variações do mesmo anúncio do
+     * ML caem no mesmo listing/produto — importOrder() não lê variation_id)
+     * viravam 2 entradas de `products` indistinguíveis entre si: mesmo
+     * product_id, mesmo nome, mesmo SKU. O cliente web usava product_id
+     * como chave de lista e derrubava uma das linhas.
+     *
+     * O payload manda o id do PRÓPRIO item do pedido justamente pra cada
+     * linha ter identidade própria — é o que impede a tela de colapsar as
+     * duas de novo.
+     */
+    public function test_queue_lists_one_product_entry_per_order_item_even_when_they_share_the_same_product(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 10, 'sku' => 'SKU-VAR']);
+
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-VARIACOES']);
+        $first = $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 25, 'quantity' => 1, 'subtotal' => 25]);
+        $second = $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 25, 'quantity' => 2, 'subtotal' => 50]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $products = $queue[$order->id]['products'];
+
+        $this->assertCount(2, $products);
+        $this->assertSame([$first->id, $second->id], array_column($products, 'id'));
+        $this->assertSame([1, 2], array_column($products, 'quantity'));
+        $this->assertSame(3, $queue[$order->id]['units_count']);
+    }
+
     public function test_queue_includes_yesterdays_orders_of_any_status_but_not_older_ones(): void
     {
         // Bug real relatado 2026-08-17: pedido pago ONTEM e ainda não

@@ -561,7 +561,6 @@ class DashboardAgentController extends Controller
         $today = now()->startOfDay();
         $yesterday = $today->clone()->subDay();
         $tomorrow = $today->clone()->addDay();
-        $monthStart = $today->clone()->startOfMonth();
 
         $relations = [
             'items:id,order_id,product_id,product_name,quantity',
@@ -616,33 +615,51 @@ class DashboardAgentController extends Controller
                 $query->whereNotNull('packed_at')->orWhere('status', '!=', Order::STATUS_PAID);
             })
             ->where(function ($query) use ($yesterday, $tomorrow) {
-                // Sem entrega agendada — entra pela data normal da venda,
-                // como sempre foi.
-                $query->where(function ($query) use ($yesterday, $tomorrow) {
-                    $query->whereBetween('created_at', [$yesterday, $tomorrow])
-                        ->whereDoesntHave('channelShipment', function ($query) {
-                            $query->whereNotNull('scheduled_for');
-                        });
-                })
-                    // Com entrega agendada — só entra no dia agendado,
-                    // NUNCA no dia da venda (BUG REAL 2026-08-29: pedido
-                    // vendido hoje mas agendado pra semana que vem batia
-                    // na condição de created_at e entrava antes da hora).
-                    ->orWhereHas('channelShipment', function ($query) use ($yesterday, $tomorrow) {
-                        $query->whereBetween('scheduled_for', [$yesterday, $tomorrow]);
+                // BUG REAL 2026-09-01 (relatado pelo usuário: "mercado livre
+                // tá marcando mais de 40 pedidos", 18 pedidos reais sumidos
+                // de TODA tela — #927/931/932/939/973/980/989/990/1006/1023/
+                // 1026/1037/1040/1045/1047/1048/1050/1051): pedido ainda
+                // PAID (canal nunca confirmou o despacho de verdade, mesmo
+                // já embalado e com etiqueta pronta há dias) não pode
+                // desaparecer só porque a VENDA foi há mais de 1 dia — isso
+                // não é "auditoria de pedido resolvido", é trabalho pendente
+                // de verdade que simplesmente sumia da tela sem resolver,
+                // pior ainda no dia 1º do mês (corte de "mês atual" reseta
+                // bem quando o pedido tem só 2-3 dias). Mesmo princípio já
+                // aplicado a pedido agendado vencido (ver isInTodayWindow):
+                // não resolvido = sempre visível, não importa a idade.
+                $query->where('status', Order::STATUS_PAID)
+                    ->orWhere(function ($query) use ($yesterday, $tomorrow) {
+                        // Resolvido de outro jeito que não seja PAID (só
+                        // sobra "aguardando pagamento" aqui — cancelado/
+                        // enviado/concluído já saem no whereNotIn do topo) —
+                        // mantém a janela de auditoria original de sempre.
+                        $query->where(function ($query) use ($yesterday, $tomorrow) {
+                            $query->whereBetween('created_at', [$yesterday, $tomorrow])
+                                ->whereDoesntHave('channelShipment', function ($query) {
+                                    $query->whereNotNull('scheduled_for');
+                                });
+                        })
+                            ->orWhereHas('channelShipment', function ($query) use ($yesterday, $tomorrow) {
+                                $query->whereBetween('scheduled_for', [$yesterday, $tomorrow]);
+                            });
                     });
             })
             ->with($relations)
             ->withSum('items as units_count', 'quantity')
             ->get();
 
-        // min(início do mês, ontem) — não simplesmente $monthStart: se HOJE
-        // for dia 1º do mês, "ontem" cai no mês anterior, e o carry-over de
-        // pedido pago de ontem ainda não embalado (garantido desde
-        // 2026-08-17, ver isInTodayWindow) não pode quebrar só por causa do
-        // corte mensal novo — ele precisa continuar entrando em
-        // $actionableOrders pra aparecer na Fila normal amanhã de manhã.
-        $actionableSince = $yesterday->lessThan($monthStart) ? $yesterday : $monthStart;
+        // BUG REAL 2026-09-01 (relatado pelo usuário: "mercado livre tá
+        // marcando mais de 40 pedidos", 18 pedidos reais sumidos de TODA
+        // tela): min(início do mês, ontem) só protegia 1 dia de carry-over
+        // no limite do mês — pedido #927 (criado 28/08, ainda PAID, etiqueta
+        // já pronta há dias) tinha 3-4 dias, mais velho que "ontem", e
+        // sumia de $actionableOrders inteiro assim que o mês virou (hoje é
+        // dia 1º, então "início do mês" É hoje). 30 dias corridos em vez de
+        // "início do mês corrente" — continua limitado (não é "arquivo
+        // morto de anos", intenção original de 2026-08-29), só não reseta
+        // pra zero toda virada de mês.
+        $actionableSince = now()->subDays(30);
 
         // SÓ pedido PAGO e ainda não embalado entra na conta de estoque — é
         // o único status que representa de verdade "precisa separar, tem
@@ -781,7 +798,16 @@ class DashboardAgentController extends Controller
             return $scheduledFor->lte($tomorrow);
         }
 
-        return $order->created_at->between($yesterday, $tomorrow);
+        // BUG REAL 2026-09-01 (mesmo relato: 18 pedidos reais sumidos de
+        // toda tela, ex. #927 criado 28/08, ainda PAID, etiqueta pronta há
+        // dias — mais velho que a janela ontem/hoje/amanhã, então nunca
+        // aparecia). Pedido sem entrega agendada continua entrando pela
+        // janela normal da venda quando é isso mesmo (pedido de hoje/ontem
+        // de verdade) — mas se AINDA está PAID (canal nunca confirmou o
+        // despacho), fica visível sempre, não importa a idade: mesmo
+        // princípio já aplicado acima pra entrega agendada vencida.
+        return $order->created_at->between($yesterday, $tomorrow)
+            || $order->status === Order::STATUS_PAID;
     }
 
     /**

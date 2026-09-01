@@ -610,6 +610,7 @@ class DashboardAgentController extends Controller
         // de mostrar pedido nesse status "pra auditoria" — decisão
         // 2026-08-15 revertida especificamente pra esses 2 status agora.
         $displayOnlyOrders = Order::query()
+            ->nonPurchaseReturn()
             ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
             ->where(function ($query) {
                 $query->whereNotNull('packed_at')->orWhere('status', '!=', Order::STATUS_PAID);
@@ -660,6 +661,7 @@ class DashboardAgentController extends Controller
         // aplicado depois, em PHP (isInTodayWindow), sobre quem tem estoque
         // OK — sem precisar de uma 2ª query.
         $actionableOrders = Order::query()
+            ->nonPurchaseReturn()
             ->where('status', Order::STATUS_PAID)
             ->whereNull('packed_at')
             ->where(function ($query) use ($actionableSince) {
@@ -698,6 +700,7 @@ class DashboardAgentController extends Controller
         // sem essa visibilidade, ninguém percebe que precisa TIRAR um
         // pedido já separado/em mãos da remessa.
         $recentlyCancelledOrders = Order::query()
+            ->nonPurchaseReturn()
             ->where('status', Order::STATUS_CANCELLED)
             ->whereBetween('updated_at', [$yesterday, $tomorrow])
             ->with($relations)

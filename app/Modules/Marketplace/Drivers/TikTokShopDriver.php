@@ -129,6 +129,15 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
      */
     private const MIN_NAME_SIMILARITY = 55.0;
 
+    /**
+     * Id universal de fábrica do Bling pra situação "Cancelado" — o mesmo
+     * em toda conta Bling, não é customizável por conta feito as outras
+     * situações. Ver mapOrderStatus() pro porquê disso importar (escopo
+     * OAuth insuficiente pra resolver o nome de qualquer situação por
+     * API).
+     */
+    private const BLING_SITUACAO_CANCELADO_ID = 12;
+
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
         // BUG REAL 2026-08-31 (achado ao vivo, reconciliando pedidos
@@ -371,13 +380,23 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * Situações do Bling são personalizáveis por conta (ver
-     * BlingOrderService::situacaoName()) — resolve pelo NOME real em vez
-     * de um id numérico fixo, que poderia variar de conta pra conta.
-     * Default seguro: PAID — pelo momento em que um pedido de marketplace
-     * chega até aqui (já sincronizado do TikTok Shop pro Bling), a venda
-     * quase sempre já foi paga do lado do canal; só rebaixa pra CANCELLED
-     * quando o nome da situação deixa isso explícito.
+     * BUG REAL 2026-08-31/09-01 (achado ao vivo — pedidos #1120 e #1135
+     * ficaram travados pra sempre como "pago", nunca saiu etiqueta, um já
+     * tinha sido embalado à toa): o token OAuth do Bling não tem o escopo
+     * pra chamar `situacoes/{id}` — TODA chamada de situacaoName() sempre
+     * devolvia 403 "insufficient_scope", o catch abaixo engolia o erro e
+     * caía no default PAID sempre, silenciosamente. Ou seja, nenhum
+     * cancelamento do TikTok JAMAIS foi detectado desde que essa
+     * integração existe.
+     *
+     * Fix: `12` é o id universal do Bling pra "Cancelado" (situação padrão
+     * de fábrica em toda conta Bling, não depende de escopo nenhum pra
+     * checar — é só comparar o id numérico já presente na resposta de
+     * pedidos/vendas). Checa isso PRIMEIRO, sem chamada de API nenhuma.
+     * Só tenta resolver o nome via API (pra pegar situação CUSTOM de
+     * cancelamento que a conta possa ter criado) como bônus best-effort;
+     * se falhar (mesmo erro de escopo), mantém o default seguro PAID em
+     * vez de travar o pedido.
      */
     private function mapOrderStatus(array $order): string
     {
@@ -385,6 +404,10 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
 
         if ($situacaoId === null) {
             return Order::STATUS_PAID;
+        }
+
+        if ((int) $situacaoId === self::BLING_SITUACAO_CANCELADO_ID) {
+            return Order::STATUS_CANCELLED;
         }
 
         try {

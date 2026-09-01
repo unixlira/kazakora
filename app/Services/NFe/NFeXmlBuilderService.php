@@ -159,13 +159,33 @@ class NFeXmlBuilderService
 
         $dest = new stdClass();
         $dest->xNome = $order->shipping_name;
-        $dest->indIEDest = 9; // não contribuinte
         $dest->email = $customer?->email;
 
-        if (strlen($document) === 14) {
+        // BUG REAL 2026-09-01 (pedido #1165 do Mercado Livre, nota 810
+        // rejeitada pela SEFAZ: "232 - IE do destinatário não informada"):
+        // indIEDest era 9 (não contribuinte) FIXO, pra qualquer
+        // destinatário. Pra pessoa física está certo, mas venda pra CNPJ
+        // contribuinte tem que ir com indIEDest=1 e a inscrição estadual
+        // junto — a SEFAZ recusa a nota inteira sem isso. O canal já
+        // mandava a IE (ver OrderService::getBuyerBillingData(), que
+        // descartava esse dado até hoje).
+        $stateRegistration = preg_replace('/\D/', '', (string) $order->buyer_state_registration);
+        $isCompany = strlen($document) === 14;
+
+        if ($isCompany) {
             $dest->CNPJ = $document;
+
+            if ($stateRegistration !== '' && $order->buyer_taxpayer_type !== 'isento') {
+                $dest->indIEDest = 1; // contribuinte de ICMS
+                $dest->IE = $stateRegistration;
+            } else {
+                // Empresa sem inscrição estadual — indIEDest=2 e NENHUMA
+                // tag IE (informar as duas coisas é outra rejeição).
+                $dest->indIEDest = 2;
+            }
         } else {
             $dest->CPF = $document;
+            $dest->indIEDest = 9; // pessoa física, não contribuinte
         }
 
         $make->tagdest($dest);

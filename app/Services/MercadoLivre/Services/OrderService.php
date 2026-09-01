@@ -142,13 +142,37 @@ class OrderService
         $docNumber = $response['billing_info']['doc_number'] ?? null;
         $docType = $response['billing_info']['doc_type'] ?? null;
 
+        // BUG REAL 2026-09-01 (pedido #1165, nota 810 REJEITADA pela SEFAZ:
+        // "232 - IE do destinatário não informada"): comprador CNPJ
+        // contribuinte (52.029.695 JEFFERSON QUEIROZ RODRIGUES DA SILVA,
+        // IE 657842247116). O Mercado Livre MANDA a inscrição estadual e o
+        // tipo de contribuinte, mas dentro de `additional_info` — uma
+        // lista de {type, value}, não campos soltos em billing_info — e
+        // esta função devolvia state_registration SEMPRE null, jogando
+        // fora o dado que já estava na resposta. Sem IE, o XML saía com
+        // indIEDest=9 (não contribuinte) pra um CNPJ contribuinte, que a
+        // SEFAZ recusa. Valia pra TODA venda de CNPJ do canal, não só
+        // esta.
+        $additional = collect($response['billing_info']['additional_info'] ?? [])
+            ->mapWithKeys(fn ($entry) => [strtoupper((string) ($entry['type'] ?? '')) => $entry['value'] ?? null]);
+
+        $stateRegistration = preg_replace('/\D/', '', (string) ($additional['STATE_REGISTRATION'] ?? '')) ?: null;
+        $taxpayerLabel = mb_strtolower(trim((string) ($additional['TAXPAYER_TYPE_ID'] ?? '')));
+        $isCompany = strtoupper((string) $docType) === 'CNPJ';
+
         return [
             'document' => $docNumber ? preg_replace('/\D/', '', (string) $docNumber) : null,
-            'state_registration' => null,
-            'taxpayer_type' => match (strtoupper((string) $docType)) {
-                'CNPJ' => 'juridica',
-                'CPF' => 'fisica',
-                default => null,
+            'state_registration' => $stateRegistration,
+            // Vocabulário do indIEDest da NF-e (ver NFeXmlBuilderService),
+            // não o do canal: é isso que decide se a nota leva IE ou não.
+            // Pessoa física nunca é contribuinte; CNPJ sem IE informada
+            // entra como isento (indIEDest=2), que é o que a SEFAZ espera
+            // pra empresa sem inscrição estadual.
+            'taxpayer_type' => match (true) {
+                ! $isCompany => 'nao_contribuinte',
+                str_contains($taxpayerLabel, 'isento') => 'isento',
+                $stateRegistration !== null => 'contribuinte',
+                default => 'isento',
             },
         ];
     }

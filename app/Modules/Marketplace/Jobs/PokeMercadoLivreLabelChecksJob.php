@@ -42,5 +42,25 @@ class PokeMercadoLivreLabelChecksJob implements ShouldQueue
             ->where('created_at', '>=', now()->subHours(4))
             ->pluck('id')
             ->each(fn (int $id) => CheckShipmentLabelJob::dispatch($id));
+
+        // BUG REAL 2026-09-01 (relatado pelo usuário, 30+ vendas agendadas
+        // de hoje travadas em CONFIRMED): o CheckShipmentLabelJob original
+        // de uma venda agendada (ver ChannelShippingService::confirm())
+        // fica retentando sozinho por até 24h DEPOIS da data prometida —
+        // só que se o worker da fila reiniciar no meio disso (deploy,
+        // restart do servidor), o retry morre em silêncio e nada mais
+        // reprocessa esse envio, porque o filtro de 4h acima só cobre
+        // envio CRIADO recentemente, não venda agendada pra HOJE mas criada
+        // há dias. Reforça especificamente quem tem scheduled_for vencendo
+        // (hoje ou já passou) e ainda não tem etiqueta — mesmo sendo
+        // antigo, tem prazo real correndo, não é "esquecido morto" igual
+        // ao caso que o filtro de 4h acima protege.
+        ChannelShipment::query()
+            ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
+            ->where('status', ChannelShipment::STATUS_CONFIRMED)
+            ->whereNotNull('scheduled_for')
+            ->where('scheduled_for', '<=', now())
+            ->pluck('id')
+            ->each(fn (int $id) => CheckShipmentLabelJob::dispatch($id));
     }
 }

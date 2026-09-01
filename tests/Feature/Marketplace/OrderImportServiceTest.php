@@ -91,6 +91,48 @@ class OrderImportServiceTest extends TestCase
     }
 
     /**
+     * BUG REAL 2026-09-01 (pedido #894, Mercado Livre): pedido existente
+     * estava com ZERO itens — a nota nunca sairia e o card da fila só
+     * mostrava os itens do irmão de pacote. Reprocessar corrigia data,
+     * totais e comprador, mas nunca os itens.
+     */
+    public function test_reimport_backfills_items_the_order_is_missing(): void
+    {
+        Queue::fake();
+
+        $externalOrderId = 'SN-'.uniqid();
+        $service = app(OrderImportService::class);
+
+        $order = $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData(['external_order_id' => $externalOrderId, 'status' => Order::STATUS_PAID]),
+            dispatchShippingConfirmation: false,
+        );
+
+        // Simula o estado real encontrado em produção: pedido sem item nenhum.
+        $order->items()->delete();
+        $this->assertSame(0, $order->items()->count());
+
+        $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData(['external_order_id' => $externalOrderId, 'status' => Order::STATUS_PAID]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame(1, $order->items()->count());
+        $this->assertSame('ITEM-1', $order->items()->first()->external_item_id);
+
+        // Idempotente: reprocessar de novo não duplica o item recuperado.
+        $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData(['external_order_id' => $externalOrderId, 'status' => Order::STATUS_PAID]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame(1, $order->items()->count());
+    }
+
+    /**
      * BUG REAL 2026-09-01 (relatado pelo usuário: "tem pedido em aberto que
      * ta no cancelado" — pedido #894, ML 2000018160810742, `paid` na API do
      * canal e `cancelled` aqui): cancelado era absorvente, então cada

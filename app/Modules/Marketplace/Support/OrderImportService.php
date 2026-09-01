@@ -107,6 +107,8 @@ class OrderImportService
                 $existing->update($buyerFields);
             }
 
+            $this->reconcileMissingItems($existing, $channel, $data['items'] ?? []);
+
             return $this->syncStatus($existing, $data['status'], $data['channel_status'] ?? null);
         }
 
@@ -166,6 +168,104 @@ class OrderImportService
             }
 
             return $this->syncStatus($order, $data['status'], $data['channel_status'] ?? null);
+        }
+    }
+
+
+    /**
+     * BUG REAL 2026-09-01 (pedido #894, Mercado Livre): pedido existente com
+     * MENOS itens do que o canal informa — o #894 estava com ZERO itens,
+     * então a nota nunca sairia ("Pedido sem itens") e o card da fila
+     * mostrava só os itens do irmão de pacote. Até aqui, reprocessar o
+     * pedido corrigia data, totais, comprador e IE, mas NUNCA os itens: um
+     * pedido que nasceu incompleto ficava incompleto pra sempre, sem
+     * nenhum jeito de consertar sem mexer no banco na mão.
+     *
+     * Só ACRESCENTA o que falta (casando por external_item_id) — nunca
+     * apaga nem altera item existente. Se algum item já gravado não tem
+     * external_item_id (pedido anterior à migration
+     * add_external_item_id, 2026-08-19), não dá pra saber com segurança o
+     * que é duplicata: sai sem fazer nada em vez de arriscar duplicar
+     * item e debitar estoque duas vezes.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function reconcileMissingItems(Order $order, string $channel, array $items): void
+    {
+        if ($items === []) {
+            return;
+        }
+
+        $order->loadMissing('items');
+
+        if ($order->items->isNotEmpty() && $order->items->contains(fn ($item) => $item->external_item_id === null)) {
+            return;
+        }
+
+        $known = $order->items
+            ->map(fn ($item) => $item->external_item_id.'|'.($item->external_model_id ?? ''))
+            ->all();
+
+        foreach ($items as $item) {
+            $externalModelId = $item['external_model_id'] ?? null;
+
+            if (in_array($item['external_id'].'|'.($externalModelId ?? ''), $known, true)) {
+                continue;
+            }
+
+            $listingQuery = ProductChannelListing::query()
+                ->where('channel', $channel)
+                ->where('external_id', $item['external_id']);
+
+            $listing = $externalModelId
+                ? (clone $listingQuery)->where('external_model_id', $externalModelId)->first()
+                : null;
+
+            $listing ??= (clone $listingQuery)->whereNull('external_model_id')->first();
+
+            $product = $listing?->product
+                ?? $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity'], $externalModelId);
+
+            $order->items()->create([
+                'product_id' => $product?->id,
+                'external_item_id' => $item['external_id'],
+                'external_model_id' => $externalModelId,
+                'product_name' => $product?->name
+                    ?? ($item['external_name'] ?? null)
+                    ?? "Item {$item['external_id']} (sem produto local mapeado)",
+                'product_price' => $item['unit_price'],
+                'quantity' => $item['quantity'],
+                'subtotal' => round($item['unit_price'] * $item['quantity'], 2),
+            ]);
+
+            Log::warning('marketplace.order_import.item_backfilled', [
+                'order_id' => $order->id,
+                'channel' => $channel,
+                'item_external_id' => $item['external_id'],
+                'product_id' => $product?->id,
+            ]);
+
+            // A venda é real e nunca tinha debitado esta unidade — sem
+            // isso o estoque fica sobrando exatamente o que este item
+            // levou. Pedido já cancelado com estoque devolvido é a
+            // exceção: aí não há o que debitar (e syncStatus() cuida do
+            // débito se ele voltar a ficar pago).
+            if ($product && $order->status !== Order::STATUS_CANCELLED) {
+                $this->stock->adjust(
+                    $product,
+                    -$item['quantity'],
+                    StockMovement::TYPE_SALE,
+                    reason: 'Item faltante do pedido recuperado do canal — '.$channel,
+                    reference: $order,
+                );
+            }
+
+            $this->timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_STOCK_UPDATED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                "Item que faltava no pedido foi recuperado do canal ({$item['external_id']})",
+            );
         }
     }
 

@@ -363,6 +363,14 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'total' => round($order->total_amount, 2),
             'marketplace_fee' => round($marketplaceFee, 2),
             'buyer_name' => $buyerName,
+            // Pedido explícito 2026-09-01 ("colocar destinatario e o nome
+            // do usuario entre parenteses"): o KoraSync mostra
+            // "{destinatário} ({apelido})" — ver
+            // DashboardAgentController::mapQueueOrder(). Os dois são só
+            // exibição: buyer_name (acima) continua sendo o nome que casa
+            // com o CPF na NF-e.
+            'recipient_name' => $address['recipient'] ?? null,
+            'buyer_nickname' => $buyer['nickname'] ?? null,
             'buyer_document' => $buyerBilling['document'],
             'buyer_state_registration' => $buyerBilling['state_registration'],
             'buyer_taxpayer_type' => $buyerBilling['taxpayer_type'],
@@ -652,6 +660,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'city' => 'Não informado',
             'state' => 'NA',
             'phone' => null,
+            'recipient' => null,
         ];
 
         $shipmentId = $shipping['id'] ?? null;
@@ -681,6 +690,11 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // receiver_address dependendo do formato de resposta — a doc
             // oficial não é explícita sobre isso, então tenta os dois.
             'phone' => $shipment['receiver_phone'] ?? $receiver['receiver_phone'] ?? null,
+            // Quem RECEBE o pacote, direto da etiqueta — nem sempre é o
+            // titular da conta (presente enviado pra outra pessoa, compra
+            // entregue no trabalho etc.). Só exibição; o nome que vai na
+            // NF-e continua sendo o do comprador (ver importOrder()).
+            'recipient' => $receiver['receiver_name'] ?? null,
         ];
     }
 

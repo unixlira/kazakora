@@ -568,7 +568,11 @@ class DashboardAgentController extends Controller
             // partitionByStock() usa pra decidir a aba. SKU continua vindo
             // junto, pro payload de shortage.
             'items.product:id,sku,stock',
-            'channelShipment:id,order_id,status,scheduled_for',
+            // external_shipment_id a mais: é a prova de que 2 pedidos do
+            // Mercado Livre vão na MESMA caixa (carrinho — ver
+            // groupOrdersShippedTogether()). Sem ele no select, a coluna
+            // vem null e o agrupamento silenciosamente nunca acontece.
+            'channelShipment:id,order_id,status,scheduled_for,external_shipment_id',
         ];
 
         // Pedido que NÃO é "pago e ainda não embalado" — já embalado,
@@ -727,14 +731,31 @@ class DashboardAgentController extends Controller
         $normalOrders = $displayOnlyOrders->merge($withStockToday)->merge($recentlyCancelledOrders)->sortByDesc('id')->values();
         $outOfStockOrders = $outOfStock->sortByDesc('id')->values();
 
-        $mapper = fn (Order $order) => $this->mapQueueOrder($order, $shortages[$order->id] ?? []);
+        // BUG REAL 2026-09-01 (relatado pelo usuário — "um pedido do
+        // Genivaldo do Mercado Livre que são 2 itens... no korasync deve
+        // aparecer os 2 itens", pedidos #1159/#1160 conferidos na produção):
+        // carrinho do Mercado Livre (comprador leva 2 anúncios de uma vez)
+        // vira DOIS pedidos na API — external_order_id ...284 e ...286,
+        // 1 item cada — mas UM pacote só, com a MESMA etiqueta
+        // (channel_shipments.external_shipment_id 47904652512 nos dois).
+        // O painel do ML mostra isso como uma venda só, com os 2 itens; a
+        // fila mostrava 2 cards de 1 item, e quem embala só vê metade do
+        // que tem que ir na caixa em cada card. Agrupado, o card volta a
+        // ser 1 por PACOTE, com todos os itens dele.
+        $normalGroups = $this->groupOrdersShippedTogether($normalOrders);
+        $outOfStockGroups = $this->groupOrdersShippedTogether($outOfStockOrders);
+
+        $mapper = fn (\Illuminate\Support\Collection $group) => $this->mapQueueOrder($group, $shortages);
 
         return response()->json([
-            'queue' => $normalOrders->map($mapper)->values(),
-            'out_of_stock' => $outOfStockOrders->map($mapper)->values(),
+            'queue' => $normalGroups->map($mapper)->values(),
+            'out_of_stock' => $outOfStockGroups->map($mapper)->values(),
             // Todo o backlog sem estoque conta aqui também (não só o de
             // hoje) — é trabalho pendente de verdade, só esperando repor.
-            'pending_separation_count' => $withStockToday->count() + $outOfStockOrders->count(),
+            // Conta PACOTES, não pedidos: um carrinho do ML é uma caixa só
+            // pra separar, não duas (ver groupOrdersShippedTogether()).
+            'pending_separation_count' => $this->groupOrdersShippedTogether($withStockToday->values())->count()
+                + $outOfStockGroups->count(),
         ]);
     }
 
@@ -884,33 +905,126 @@ class DashboardAgentController extends Controller
             }
         }
 
+        // Carrinho do Mercado Livre (ver groupOrdersShippedTogether()): a
+        // caixa é uma só, então ou ela inteira dá pra separar, ou nenhuma
+        // parte dela dá. Sem isso, um carrinho com um item em falta ficava
+        // partido entre as duas abas — metade em "Fila", metade em "Sem
+        // Estoque" — e quem embalasse a metade da Fila fecharia a caixa
+        // faltando o resto.
+        $blockedPacks = $this->groupOrdersShippedTogether($withoutStock)
+            ->map(fn (\Illuminate\Support\Collection $group) => $group->first())
+            ->filter(fn (Order $order) => $order->origin === Order::ORIGIN_MERCADO_LIVRE)
+            ->map(fn (Order $order) => $order->channelShipment?->external_shipment_id)
+            ->filter()
+            ->unique()
+            ->all();
+
+        if ($blockedPacks !== []) {
+            [$dragged, $stillWithStock] = $withStock->partition(
+                fn (Order $order) => $order->origin === Order::ORIGIN_MERCADO_LIVRE
+                    && in_array($order->channelShipment?->external_shipment_id, $blockedPacks, true),
+            );
+
+            $withStock = $stillWithStock->values();
+            $withoutStock = $withoutStock->merge($dragged)->values();
+        }
+
         return [$withStock, $withoutStock, $shortages];
     }
 
     /**
-     * @param  array<int, array{sku: ?string, name: string, missing: int}>  $stockShortage  vazio pra pedido com estoque OK — ver partitionByStock().
+     * Chave de agrupamento: pedidos que vão na MESMA caixa, com a MESMA
+     * etiqueta, viram um card só. Hoje isso só existe no Mercado Livre
+     * (carrinho/pack — ver o comentário completo em queue()): a API cria
+     * um pedido por anúncio, mas o envio é um só, e é o
+     * channel_shipments.external_shipment_id compartilhado que prova isso
+     * — não precisa de campo novo nem de consultar a API de novo.
+     *
+     * Status entra na chave de propósito: se o comprador cancelar UM dos
+     * pedidos do carrinho, o cancelado tem que continuar aparecendo
+     * sozinho na aba Cancelados (é justamente o que o operador precisa
+     * ver pra TIRAR aquele item da caixa), não escondido dentro do card
+     * do que sobrou.
+     *
+     * @param  \Illuminate\Support\Collection<int, Order>  $orders
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Order>>
+     */
+    private function groupOrdersShippedTogether(\Illuminate\Support\Collection $orders): \Illuminate\Support\Collection
+    {
+        return $orders->groupBy(function (Order $order) {
+            $shipmentId = $order->channelShipment?->external_shipment_id;
+
+            return $order->origin === Order::ORIGIN_MERCADO_LIVRE && $shipmentId
+                ? "pack:{$order->origin}:{$shipmentId}:{$order->status}"
+                : "order:{$order->id}";
+        })->values();
+    }
+
+    /**
+     * Nome exibido na fila. Pedido explícito 2026-09-01 ("colocar
+     * destinatario e o nome do usuario entre parenteses"): quem RECEBE o
+     * pacote na frente, o apelido da conta no canal entre parênteses —
+     * "Genivaldo Jose Filho (GENIVALDOJOSEFILHOFILHO)". Os dois vêm do
+     * canal (ver MercadoLivreDriver::importOrder()); pedido sem
+     * destinatário/apelido (loja própria, canais que ainda não mandam
+     * esses campos) cai no shipping_name de sempre, sem parênteses.
+     */
+    private function queueCustomerName(Order $order): string
+    {
+        $name = trim((string) ($order->shipping_recipient_name ?: $order->shipping_name));
+
+        // Achado real 2026-08-15 (pedido #371): a própria Shopee manda
+        // o nome do comprador mascarado com asterisco ("S******o") pra
+        // pedido cancelado/não pago — confirmado ao vivo contra a API
+        // deles, não é bug nosso nem dado perdido no nosso lado, o nome
+        // de verdade simplesmente não existe mais na resposta. Troca só
+        // na EXIBIÇÃO desta fila (não mexe em shipping_name, que fica
+        // intacto pra qualquer outro uso — NF-e, histórico etc.) por um
+        // texto que não confunde o operador achando que é o nome real
+        // truncado.
+        if (str_contains($name, '*')) {
+            return 'Cliente (dados ocultados pelo canal)';
+        }
+
+        $nickname = trim((string) $order->channel_buyer_nickname);
+
+        return $nickname !== '' ? "{$name} ({$nickname})" : $name;
+    }
+
+    /**
+     * Um card por PACOTE (ver groupOrdersShippedTogether()) — o grupo tem
+     * 1 pedido só no caso normal, 2+ quando é carrinho do Mercado Livre.
+     * O pedido "principal" (id/número exibidos, alvo do botão de embalar)
+     * é o primeiro do grupo; os itens, unidades e faltas de estoque são a
+     * soma de todos, porque é isso que vai junto na caixa.
+     *
+     * @param  \Illuminate\Support\Collection<int, Order>  $group
+     * @param  array<int, array<int, array{sku: ?string, name: string, missing: int}>>  $shortages  por order_id, vazio pra pedido com estoque OK — ver partitionByStock().
      * @return array<string, mixed>
      */
-    private function mapQueueOrder(Order $order, array $stockShortage): array
+    private function mapQueueOrder(\Illuminate\Support\Collection $group, array $shortages): array
     {
+        $order = $group->first();
+        $stockShortage = $group->flatMap(fn (Order $item) => $shortages[$item->id] ?? [])->values()->all();
+
         return [
             'id' => $order->id,
             'external_order_id' => $order->external_order_id,
             'channel' => $order->origin,
-            // Achado real 2026-08-15 (pedido #371): a própria Shopee manda
-            // o nome do comprador mascarado com asterisco
-            // ("S******o") pra pedido cancelado/não pago — confirmado ao
-            // vivo contra a API deles, não é bug nosso nem dado perdido no
-            // nosso lado, o nome de verdade simplesmente não existe mais
-            // na resposta. Troca só na EXIBIÇÃO desta fila (não mexe em
-            // shipping_name, que fica intacto pra qualquer outro uso —
-            // NF-e, histórico etc.) por um texto que não confunde o
-            // operador achando que é o nome real truncado.
-            'customer_name' => str_contains($order->shipping_name, '*')
-                ? 'Cliente (dados ocultados pelo canal)'
-                : $order->shipping_name,
-            'units_count' => (int) $order->units_count,
-            'packed_at' => $order->packed_at,
+            'customer_name' => $this->queueCustomerName($order),
+            // Carrinho do ML: quantos pedidos vão nesta caixa (1 no caso
+            // normal) e os outros números de pedido, pro operador conferir
+            // a etiqueta contra o painel do canal. Campo novo é ignorado
+            // por cliente que ainda não conhece (o KoraSync desktop
+            // desserializa só o que declara em OrderQueueItemDto).
+            'pack_order_count' => $group->count(),
+            'pack_external_order_ids' => $group->pluck('external_order_id')->filter()->values(),
+            'units_count' => (int) $group->sum('units_count'),
+            // Só conta como embalado quando TODOS os pedidos da caixa
+            // estão embalados — meia caixa embalada não é caixa pronta.
+            'packed_at' => $group->every(fn (Order $item) => $item->packed_at !== null)
+                ? $group->max('packed_at')
+                : null,
             'status' => $order->status,
             'status_label' => self::STATUS_LABELS[$order->status] ?? $order->status,
             // product_id (pedido explícito 2026-08-30 — "múltiplos
@@ -918,8 +1032,9 @@ class DashboardAgentController extends Controller
             // foto para embalar") — o cliente busca 1 foto por produto
             // distinto em GET dashboard/queue/{order}/image/{productId}
             // (ver queueOrderProductImage() abaixo), não mais 1 foto só
-            // pro pedido inteiro.
-            'products' => $order->items->map(fn ($item) => [
+            // pro pedido inteiro. Num carrinho do ML, são os itens de
+            // TODOS os pedidos da caixa, na ordem dos pedidos.
+            'products' => $group->flatMap(fn (Order $packOrder) => $packOrder->items)->map(fn ($item) => [
                 // id do PRÓPRIO item do pedido (não do produto): um pedido
                 // pode ter 2 itens apontando pro MESMO product_id (2
                 // variações do mesmo anúncio do Mercado Livre, que a
@@ -1005,6 +1120,29 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * Os pedidos que vão na MESMA caixa que $order (ele incluído) — ver
+     * groupOrdersShippedTogether() pro porquê de isso existir. Consulta
+     * própria (não dá pra reaproveitar o agrupamento da fila: este
+     * endpoint recebe só um pedido, sem a lista toda em mãos).
+     *
+     * @return \Illuminate\Support\Collection<int, Order>
+     */
+    private function ordersShippedWith(Order $order): \Illuminate\Support\Collection
+    {
+        $shipmentId = $order->channelShipment?->external_shipment_id;
+
+        if ($order->origin !== Order::ORIGIN_MERCADO_LIVRE || ! $shipmentId) {
+            return collect([$order]);
+        }
+
+        return Order::query()
+            ->where('origin', $order->origin)
+            ->where('status', $order->status)
+            ->whereHas('channelShipment', fn ($query) => $query->where('external_shipment_id', $shipmentId))
+            ->get();
+    }
+
+    /**
      * Botão "Em preparação" -> "Embalado" do card, no KoraSync — marca o
      * pedido como embalado (packed_at) sem tocar em orders.status, que
      * continua sendo só a visão do canal sobre o pedido (ver comentário da
@@ -1020,18 +1158,29 @@ class DashboardAgentController extends Controller
             return response()->json(['message' => 'Pedido não está pago — nada pra embalar.'], 409);
         }
 
-        if ($order->packed_at === null) {
-            $order->forceFill(['packed_at' => now()])->save();
+        // O card é a CAIXA, não o pedido (ver groupOrdersShippedTogether()):
+        // num carrinho do Mercado Livre o clique embala os 2 pedidos que
+        // vão no mesmo pacote de uma vez. Sem isso o irmão continuaria
+        // "não embalado" e voltaria pra fila sozinho no poll seguinte, como
+        // se faltasse separar uma caixa que já foi.
+        foreach ($this->ordersShippedWith($order) as $packOrder) {
+            if ($packOrder->status !== Order::STATUS_PAID || $packOrder->packed_at !== null) {
+                continue;
+            }
+
+            $packOrder->forceFill(['packed_at' => now()])->save();
 
             app(OrderFulfillmentTimeline::class)->record(
-                $order,
+                $packOrder,
                 OrderFulfillmentEvent::STEP_ORDER_PACKED,
                 OrderFulfillmentEvent::STATUS_SUCCESS,
-                'Pedido marcado como embalado no KoraSync',
+                $packOrder->is($order)
+                    ? 'Pedido marcado como embalado no KoraSync'
+                    : "Pedido marcado como embalado no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
             );
         }
 
-        return response()->json(['packed_at' => $order->packed_at]);
+        return response()->json(['packed_at' => $order->refresh()->packed_at]);
     }
 
     /**

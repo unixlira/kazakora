@@ -103,7 +103,22 @@ function handlePack() {
                                 style="background: color-mix(in srgb, var(--ks-warning) 20%, transparent); color: var(--ks-warning)"
                             >Item {{ idx + 1 }}/{{ order.products.length }}</span>
                         </p>
-                        <p class="text-xs" style="color: var(--ks-text-secondary)">Pedido {{ order.external_order_id || '—' }}</p>
+                        <p class="text-xs" style="color: var(--ks-text-secondary)">
+                            Pedido {{ order.external_order_id || '—' }}
+                            <!-- Carrinho do Mercado Livre: 2+ pedidos do
+                                 canal na MESMA caixa, com uma etiqueta só
+                                 (ver groupOrdersShippedTogether no
+                                 DashboardAgentController). O card já é a
+                                 caixa inteira; o selo mostra os outros
+                                 números pro operador conferir contra o
+                                 painel do canal. -->
+                            <span
+                                v-if="order.pack_order_count > 1"
+                                class="ml-1 rounded px-1.5 py-0.5 text-xs font-bold"
+                                :title="`Carrinho do canal — pedidos: ${(order.pack_external_order_ids ?? []).join(', ')}`"
+                                style="background: color-mix(in srgb, var(--ks-brand) 18%, transparent); color: var(--ks-brand)"
+                            >Carrinho: {{ order.pack_order_count }} pedidos, 1 etiqueta</span>
+                        </p>
                         <p class="text-xs" style="color: var(--ks-text-secondary)">
                             SKU: {{ product.sku || '—' }}
                             <span

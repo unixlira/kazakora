@@ -359,6 +359,101 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertSame(3, $queue[$order->id]['units_count']);
     }
 
+    /**
+     * BUG REAL 2026-09-01 (relatado pelo usuário: "um pedido do Genivaldo do
+     * Mercado Livre que são 2 itens... no korasync deve aparecer os 2
+     * itens" — pedidos #1159/#1160 conferidos na produção): carrinho do ML
+     * é UM pacote com UMA etiqueta, mas DOIS pedidos na API
+     * (external_order_id ...284 e ...286, 1 item cada, mesmo
+     * channel_shipments.external_shipment_id 47904652512). A fila mostrava
+     * 2 cards de 1 item e quem embala via metade da caixa em cada um.
+     */
+    public function test_queue_merges_mercado_livre_cart_orders_that_ship_in_the_same_package(): void
+    {
+        $first = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => '2000018222059284', 'shipping_name' => 'Genivaldo José Filho']);
+        $first->items()->create(['product_name' => 'Extensão Elétrica 5 Tomadas', 'product_price' => 60, 'quantity' => 1, 'subtotal' => 60]);
+        ChannelShipment::create([
+            'order_id' => $first->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'external_shipment_id' => '47904652512',
+        ]);
+
+        $second = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => '2000018222059286', 'shipping_name' => 'Genivaldo José Filho']);
+        $second->items()->create(['product_name' => 'Lixeira Redonda 5L Inox', 'product_price' => 40, 'quantity' => 1, 'subtotal' => 40]);
+        ChannelShipment::create([
+            'order_id' => $second->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'external_shipment_id' => '47904652512',
+        ]);
+
+        // Outro pedido do MESMO canal com envio próprio continua sozinho.
+        $unrelated = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SOZINHO']);
+        $unrelated->items()->create(['product_name' => 'Produto Avulso', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'));
+
+        // 2 cards, não 3: o carrinho virou uma caixa só.
+        $this->assertCount(2, $queue);
+
+        $pack = $queue->firstWhere('id', $second->id);
+        $this->assertNotNull($pack, 'O card do carrinho deve ser o pedido mais novo do pacote.');
+        $this->assertSame(2, $pack['pack_order_count']);
+        $this->assertCount(2, $pack['products']);
+        $this->assertSame(2, $pack['units_count']);
+        $this->assertEqualsCanonicalizing(
+            ['2000018222059284', '2000018222059286'],
+            $pack['pack_external_order_ids'],
+        );
+
+        $this->assertSame(1, $queue->firstWhere('id', $unrelated->id)['pack_order_count']);
+
+        // Embalar o card embala a CAIXA inteira — o irmão não pode voltar
+        // pra fila sozinho no poll seguinte.
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$second->id}/pack")
+            ->assertOk();
+
+        $this->assertNotNull($first->refresh()->packed_at);
+        $this->assertNotNull($second->refresh()->packed_at);
+    }
+
+    /**
+     * Pedido explícito 2026-09-01: "colocar destinatario e o nome do usuario
+     * entre parenteses". shipping_name (nome que casa com o CPF na NF-e)
+     * fica intacto — a troca é só de exibição.
+     */
+    public function test_queue_shows_the_recipient_with_the_channel_nickname_in_parentheses(): void
+    {
+        $order = $this->makeOrder([
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-NOME',
+            'shipping_name' => 'Genivaldo  José Filho',
+            'shipping_recipient_name' => 'Genivaldo Jose Filho',
+            'channel_buyer_nickname' => 'GENIVALDOJOSEFILHOFILHO',
+        ]);
+        $order->items()->create(['product_name' => 'Produto', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        // Sem destinatário/apelido (loja própria) continua como sempre foi.
+        $ownStore = $this->makeOrder(['external_order_id' => 'LOJA-1', 'shipping_name' => 'Maria de Souza']);
+        $ownStore->items()->create(['product_name' => 'Produto', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertSame('Genivaldo Jose Filho (GENIVALDOJOSEFILHOFILHO)', $queue[$order->id]['customer_name']);
+        $this->assertSame('Genivaldo  José Filho', $order->refresh()->shipping_name);
+        $this->assertSame('Maria de Souza', $queue[$ownStore->id]['customer_name']);
+    }
+
     public function test_queue_includes_yesterdays_orders_of_any_status_but_not_older_ones(): void
     {
         // Bug real relatado 2026-08-17: pedido pago ONTEM e ainda não

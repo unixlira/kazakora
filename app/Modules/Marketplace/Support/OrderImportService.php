@@ -182,6 +182,13 @@ class OrderImportService
                 'external_order_id' => $data['external_order_id'],
                 'buyer_document' => $data['buyer_document'] ?? null,
                 'shipping_name' => $data['buyer_name'],
+                // Só exibição (ver migration
+                // add_recipient_and_buyer_nickname_to_orders_table):
+                // destinatário real da etiqueta e apelido do comprador no
+                // canal. Driver que não manda essas chaves (Shopee/Amazon/
+                // TikTok hoje) grava null e nada muda pra ele.
+                'shipping_recipient_name' => $data['recipient_name'] ?? null,
+                'channel_buyer_nickname' => $data['buyer_nickname'] ?? null,
                 'shipping_phone' => $data['buyer_phone'] ?? 'Não informado',
                 'shipping_email' => $data['buyer_email'] ?? null,
                 'shipping_whatsapp' => $data['buyer_whatsapp'] ?? null,
@@ -551,6 +558,22 @@ class OrderImportService
 
         if ($newEmail !== '' && empty($existing->shipping_email)) {
             $fields['shipping_email'] = $newEmail;
+        }
+
+        // Campos de exibição que nasceram depois de pedidos já
+        // importados (2026-09-01): reprocessar o pedido preenche, mesmo
+        // padrão de autocorreção dos campos acima. Só preenche o que
+        // ainda está vazio — nunca sobrescreve algo já ajustado à mão.
+        $newRecipient = (string) ($data['recipient_name'] ?? '');
+
+        if ($newRecipient !== '' && empty($existing->shipping_recipient_name)) {
+            $fields['shipping_recipient_name'] = $newRecipient;
+        }
+
+        $newNickname = (string) ($data['buyer_nickname'] ?? '');
+
+        if ($newNickname !== '' && empty($existing->channel_buyer_nickname)) {
+            $fields['channel_buyer_nickname'] = $newNickname;
         }
 
         return $fields;

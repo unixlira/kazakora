@@ -85,6 +85,11 @@ class Order extends Model
         'shipping_method_id',
         'shipping_carrier_name',
         'shipping_name',
+        // Só exibição (KoraSync/admin) — shipping_name continua sendo o
+        // nome do comprador que casa com o CPF na NF-e. Ver a migration
+        // add_recipient_and_buyer_nickname_to_orders_table.
+        'shipping_recipient_name',
+        'channel_buyer_nickname',
         'shipping_phone',
         'shipping_email',
         'shipping_whatsapp',

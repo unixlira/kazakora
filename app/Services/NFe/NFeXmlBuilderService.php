@@ -137,7 +137,26 @@ class NFeXmlBuilderService
         $make->tagenderEmit($enderEmit);
 
         $customer = $order->user;
-        $cMunDest = $this->ibge->resolve($order->shipping_city, $order->shipping_state);
+
+        // Cidade que o canal mandou pode não ser um município de verdade
+        // (comprador digita o bairro — ver
+        // IbgeMunicipioResolver::resolveByCep()). Quando o CEP resolve, o
+        // nome do município vai corrigido no xMun também: cMun e xMun
+        // divergentes seriam outra rejeição.
+        $xMunDest = (string) $order->shipping_city;
+
+        try {
+            $cMunDest = $this->ibge->resolve($order->shipping_city, $order->shipping_state);
+        } catch (RuntimeException $exception) {
+            $fromCep = $this->ibge->resolveByCep((string) $order->shipping_zip, (string) $order->shipping_state);
+
+            if ($fromCep === null) {
+                throw $exception;
+            }
+
+            $cMunDest = $fromCep['code'];
+            $xMunDest = $fromCep['city'];
+        }
 
         // Pedido de canal externo não tem Order::user (user_id fica null
         // em importação de marketplace) — o CPF real vem de
@@ -203,7 +222,7 @@ class NFeXmlBuilderService
         $enderDest->xCpl = Str::limit((string) $order->shipping_complement, 60, '');
         $enderDest->xBairro = Str::limit((string) $order->shipping_neighborhood, 60, '');
         $enderDest->cMun = $cMunDest;
-        $enderDest->xMun = Str::limit((string) $order->shipping_city, 60, '');
+        $enderDest->xMun = Str::limit($xMunDest, 60, '');
         $enderDest->UF = $order->shipping_state;
         $enderDest->CEP = preg_replace('/\D/', '', $order->shipping_zip);
         $enderDest->cPais = 1058;

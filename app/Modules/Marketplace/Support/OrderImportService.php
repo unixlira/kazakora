@@ -564,6 +564,23 @@ class OrderImportService
         // importados (2026-09-01): reprocessar o pedido preenche, mesmo
         // padrão de autocorreção dos campos acima. Só preenche o que
         // ainda está vazio — nunca sobrescreve algo já ajustado à mão.
+        // IE/tipo de contribuinte: o canal só passou a devolver isso de
+        // verdade em 2026-09-01 (ver OrderService::getBuyerBillingData()),
+        // então pedido importado antes disso está sem — e sem IE a nota de
+        // venda pra CNPJ é rejeitada pela SEFAZ (232). Reprocessar
+        // preenche, mesmo padrão dos campos acima.
+        $newStateRegistration = (string) ($data['buyer_state_registration'] ?? '');
+
+        if ($newStateRegistration !== '' && empty($existing->buyer_state_registration)) {
+            $fields['buyer_state_registration'] = $newStateRegistration;
+        }
+
+        $newTaxpayerType = (string) ($data['buyer_taxpayer_type'] ?? '');
+
+        if ($newTaxpayerType !== '' && empty($existing->buyer_taxpayer_type)) {
+            $fields['buyer_taxpayer_type'] = $newTaxpayerType;
+        }
+
         $newRecipient = (string) ($data['recipient_name'] ?? '');
 
         if ($newRecipient !== '' && empty($existing->shipping_recipient_name)) {

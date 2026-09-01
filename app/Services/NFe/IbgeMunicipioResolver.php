@@ -31,6 +31,52 @@ class IbgeMunicipioResolver
     }
 
     /**
+     * BUG REAL 2026-09-01 (pedido #1158, Mercado Livre — emissão travada em
+     * 'Não foi possível encontrar o código IBGE do município "Canaã/AL"'):
+     * o comprador digita o BAIRRO no campo de cidade e o canal repassa do
+     * jeito que veio ("Canaã" é bairro de Arapiraca/AL, CEP 57318-750) —
+     * não existe município nenhum com esse nome, e a nota nunca saía. O
+     * CEP, esse sim, é sempre confiável: o ViaCEP devolve o município real
+     * e o próprio código do IBGE. Devolve null (não estoura) quando o CEP
+     * não resolve ou é de outra UF — quem chama mantém o erro original,
+     * que é mais informativo que "CEP inválido".
+     *
+     * @return array{code: string, city: string}|null
+     */
+    public function resolveByCep(string $cep, string $uf): ?array
+    {
+        $digits = preg_replace('/\D/', '', $cep);
+
+        if (strlen($digits) !== 8) {
+            return null;
+        }
+
+        return Cache::remember("ibge.cep.{$digits}", now()->addDays(30), function () use ($digits, $uf) {
+            try {
+                $response = Http::timeout(10)->get("https://viacep.com.br/ws/{$digits}/json/");
+            } catch (\Throwable) {
+                return null;
+            }
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $data = $response->json();
+            $code = preg_replace('/\D/', '', (string) ($data['ibge'] ?? ''));
+            $city = trim((string) ($data['localidade'] ?? ''));
+
+            // UF diferente = CEP de outro estado; melhor não "consertar"
+            // o endereço por conta própria nesse caso.
+            if (strlen($code) !== 7 || $city === '' || strcasecmp((string) ($data['uf'] ?? ''), $uf) !== 0) {
+                return null;
+            }
+
+            return ['code' => $code, 'city' => $city];
+        });
+    }
+
+    /**
      * @return array<int, array{id: int, nome: string}>
      */
     private function municipiosDoEstado(string $uf): array

@@ -489,8 +489,26 @@ class OrderImportService
             return false;
         }
 
+        // BUG REAL 2026-09-01 (relatado pelo usuário: "tem pedido em aberto
+        // que ta no cancelado" — pedido #894, Léia Feijó, ML
+        // 2000018160810742): cancelado era ABSORVENTE, nada nunca tirava o
+        // pedido de lá. Esse pedido está `paid` no Mercado Livre AGORA
+        // (conferido ao vivo na API), e desde 31/08 CADA consulta horária
+        // trazia "paid" e era descartada aqui — 20+ eventos seguidos de
+        // "status paid ignorado, pedido já estava em cancelled" na linha
+        // do tempo dele. Ficaria na aba Cancelados pra sempre, com a venda
+        // aberta e ninguém separando.
+        //
+        // Voltar de cancelado pra PAGO é liberado porque TODO chamador de
+        // syncStatus() lê o estado ATUAL do canal antes de chamar
+        // (importNormalized() vem de driver->importOrder(), que consulta a
+        // API; ShipmentService::syncOrderStatusFromShipment() idem) — não
+        // é um webhook antigo ressuscitando pedido, é o canal dizendo
+        // agora que a venda está de pé. O resto da trava continua igual:
+        // nada de shipped/completed/aguardando pagamento em cima de um
+        // cancelamento, só a volta pra "pago".
         if ($current === Order::STATUS_CANCELLED) {
-            return true;
+            return $newStatus !== Order::STATUS_PAID;
         }
 
         $currentRank = self::STATUS_PROGRESS[$current] ?? null;
@@ -750,6 +768,39 @@ class OrderImportService
         }
 
         if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
+            // Pedido voltando de um cancelamento (ver isStaleStatus()): o
+            // cancelamento devolveu as unidades ao estoque
+            // (restoreStockIfNeeded), então a venda precisa debitar de
+            // novo — senão o estoque fica inflado por uma devolução que
+            // não existe mais, e o KoraSync manda separar item que não
+            // tem.
+            if ($wasCancelled && $order->stock_restored_at) {
+                $order->loadMissing('items.product');
+
+                foreach ($order->items as $item) {
+                    if (! $item->product) {
+                        continue;
+                    }
+
+                    $this->stock->adjust(
+                        $item->product,
+                        -$item->quantity,
+                        StockMovement::TYPE_SALE,
+                        reason: 'Cancelamento revertido pelo canal — '.$order->origin,
+                        reference: $order,
+                    );
+                }
+
+                $order->update(['stock_restored_at' => null]);
+
+                $this->timeline->record(
+                    $order,
+                    OrderFulfillmentEvent::STEP_STOCK_UPDATED,
+                    OrderFulfillmentEvent::STATUS_SUCCESS,
+                    'Pedido voltou a ficar pago no canal — estoque debitado de novo',
+                );
+            }
+
             // Revertido junto com createOrder() (ver comentário lá) —
             // volta ao modelo paralelo de sempre.
             ConfirmChannelShippingJob::dispatch($order->id);

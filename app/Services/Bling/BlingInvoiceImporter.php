@@ -173,15 +173,22 @@ class BlingInvoiceImporter
 
     /**
      * O que importa pra decidir "mudou o suficiente pra tentar de novo":
-     * os campos fiscais que a SEFAZ recusa.
+     * os campos que a SEFAZ recusa.
+     *
+     * Série e número entram junto com os itens — achado na rejeição 539
+     * (duplicidade de NF-e) do pedido #1216: o conserto ali NÃO é no item,
+     * é trocar a série/numeração da nota, e com a impressão olhando só os
+     * itens a retransmissão nunca aconteceria depois do conserto.
      *
      * @param  array<string, mixed>  $nota
      */
     private function impressaoDosItens(array $nota): string
     {
-        return collect($nota['itens'] ?? [])
+        $itens = collect($nota['itens'] ?? [])
             ->map(fn ($item) => ($item['codigo'] ?? '').':'.($item['cfop'] ?? '').':'.($item['classificacaoFiscal'] ?? '').':'.($item['valor'] ?? ''))
             ->implode('|');
+
+        return 'serie'.($nota['serie'] ?? '').'-num'.($nota['numero'] ?? '').'|'.$itens;
     }
 
     private function chaveDaUltimaTentativa(int $nfeId): string

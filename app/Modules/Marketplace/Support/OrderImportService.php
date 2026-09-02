@@ -481,6 +481,25 @@ class OrderImportService
                     }
                 }
 
+                // BUG REAL 2026-09-02 (achado no primeiro pedido que chegou
+                // pelo webhook do Bling — #1213, criado e cancelado no
+                // mesmo minuto): pedido que já NASCE cancelado debitava
+                // estoque igual, e nunca devolvia. restoreStockIfNeeded()
+                // só roda na TRANSIÇÃO pra cancelado (syncStatus), e essa
+                // transição nunca acontece quando o pedido já entra
+                // cancelado — a unidade sumia do estoque pra sempre, por
+                // uma venda que não existiu. Havia 29 pedidos assim nos
+                // últimos 30 dias.
+                //
+                // Não debita, e marca stock_restored_at pra manter o
+                // invariante do resto do fluxo: se esse pedido voltar a
+                // ficar pago (o canal reabrindo a venda, ver
+                // isStaleStatus), syncStatus usa exatamente essa marca pra
+                // saber que precisa debitar agora.
+                if ($data['status'] === Order::STATUS_CANCELLED) {
+                    continue;
+                }
+
                 $this->stock->adjust(
                     $product,
                     -$item['quantity'],
@@ -490,7 +509,11 @@ class OrderImportService
                 );
             }
 
-            if ($unmappedItems) {
+            if ($data['status'] === Order::STATUS_CANCELLED) {
+                $order->forceFill(['stock_restored_at' => now()])->save();
+
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Pedido já entrou cancelado — nenhum estoque debitado');
+            } elseif ($unmappedItems) {
                 $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_FAILED, 'Itens sem produto local mapeado, estoque não debitado para eles', ['unmapped_external_ids' => $unmappedItems]);
             } else {
                 $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Estoque central debitado para todos os itens');

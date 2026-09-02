@@ -110,6 +110,58 @@ class OrderImportServiceTest extends TestCase
     }
 
     /**
+     * BUG REAL 2026-09-02 (pedido #1213, primeiro que chegou pelo webhook
+     * do Bling — criado e cancelado no mesmo minuto): pedido que já NASCE
+     * cancelado debitava estoque e nunca devolvia, porque
+     * restoreStockIfNeeded() só roda na TRANSIÇÃO pra cancelado, e essa
+     * transição nunca acontece. Eram 29 pedidos assim em 30 dias.
+     */
+    public function test_order_that_arrives_already_cancelled_never_debits_stock(): void
+    {
+        Queue::fake();
+
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
+        $produto = \App\Modules\Catalog\Models\Product::first();
+        $estoqueAntes = $produto->stock;
+
+        $order = app(OrderImportService::class)->importNormalized(
+            MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+            $this->normalizedData(['status' => Order::STATUS_CANCELLED, 'channel_status' => 'CANCELLED']),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame($estoqueAntes, $produto->fresh()->stock, 'Venda cancelada não pode consumir estoque.');
+        $this->assertNotNull($order->stock_restored_at, 'Precisa ficar marcado como "sem estoque a devolver".');
+    }
+
+    /**
+     * O contrário do teste acima: se o canal reabrir a venda, aí sim o
+     * estoque tem que sair — é a marca stock_restored_at que syncStatus usa
+     * pra saber disso.
+     */
+    public function test_order_born_cancelled_debits_stock_when_the_channel_reopens_the_sale(): void
+    {
+        Queue::fake();
+
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
+        $produto = \App\Modules\Catalog\Models\Product::first();
+        $estoqueAntes = $produto->stock;
+
+        $service = app(OrderImportService::class);
+
+        $order = $service->importNormalized(
+            MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+            $this->normalizedData(['status' => Order::STATUS_CANCELLED, 'channel_status' => 'CANCELLED']),
+            dispatchShippingConfirmation: false,
+        );
+
+        $service->syncStatus($order, Order::STATUS_PAID);
+
+        $this->assertSame($estoqueAntes - 1, $produto->fresh()->stock);
+        $this->assertNull($order->fresh()->stock_restored_at);
+    }
+
+    /**
      * BUG REAL 2026-09-01 (pedido #894, Mercado Livre): pedido existente
      * estava com ZERO itens — a nota nunca sairia e o card da fila só
      * mostrava os itens do irmão de pacote. Reprocessar corrigia data,

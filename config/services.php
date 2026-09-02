@@ -129,6 +129,18 @@ return [
         // Vazio (padrão) = nada muda: continuamos emitindo tudo. Ligar
         // isto sem ligar a geração automática no Bling deixaria o pedido
         // SEM nota nenhuma — as duas pontas viram juntas.
+        // Envia à SEFAZ (POST /nfe/{id}/enviar) a nota que o Bling gerou
+        // a partir do pedido. Achado ao vivo 2026-09-02 (nota 26759176098,
+        // pedido #1216): a automação do Bling GERA a nota mas NÃO envia —
+        // ela fica em situação 1 (pendente), sem chave de acesso e sem
+        // XML, e nesse estado o TikTok não recebe nada e a etiqueta não
+        // libera. É esta chamada que fecha o ciclo.
+        //
+        // Desligado por padrão de propósito: emitir NF-e é ato fiscal
+        // irreversível (a v3 do Bling não tem endpoint de cancelamento —
+        // cancelar exige a tela dele). Ligar só com decisão explícita.
+        'auto_send_nfe' => filter_var(env('BLING_AUTO_SEND_NFE', false), FILTER_VALIDATE_BOOLEAN),
+
         'invoice_issuer_channels' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('BLING_INVOICE_ISSUER_CHANNELS', '')),

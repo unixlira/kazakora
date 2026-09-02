@@ -107,6 +107,15 @@ class BlingInvoiceImporter
             return null;
         }
 
+        // Nota gerada pelo Bling nasce PENDENTE (situação 1) — ele gera a
+        // partir do pedido, mas não envia à SEFAZ. Sem esse envio não há
+        // chave de acesso, não há XML, o TikTok não recebe nada e a
+        // etiqueta nunca libera. Ver services.bling.auto_send_nfe pro
+        // porquê de isso ser uma decisão explícita e não o padrão.
+        if ((int) ($nota['situacao'] ?? 0) === 1 && config('services.bling.auto_send_nfe')) {
+            $nota = $this->enviarParaSefaz($nfeId) ?? $nota;
+        }
+
         $situacao = (int) ($nota['situacao'] ?? 0);
         $chave = preg_replace('/\D/', '', (string) ($nota['chaveAcesso'] ?? ''));
         $status = self::SITUACAO_PARA_STATUS[$situacao] ?? Invoice::STATUS_PENDING;
@@ -130,8 +139,8 @@ class BlingInvoiceImporter
 
         $invoice->save();
 
-        if ($chave !== '' && $status === Invoice::STATUS_AUTHORIZED) {
-            $this->storeDocuments($invoice, $chave);
+        if ($status === Invoice::STATUS_AUTHORIZED) {
+            $this->storeDocuments($invoice, $chave, $nota);
         }
 
         $this->timeline->record(
@@ -142,6 +151,28 @@ class BlingInvoiceImporter
         );
 
         return $invoice;
+    }
+
+    /**
+     * POST /nfe/{id}/enviar — o que efetivamente emite na SEFAZ. Devolve a
+     * nota reconsultada (já com situação/chave novas) ou null se o envio
+     * falhar; nunca lança, porque isto roda dentro do fluxo do webhook.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function enviarParaSefaz(int $nfeId): ?array
+    {
+        try {
+            $this->client->post("nfe/{$nfeId}/enviar");
+        } catch (BlingException $exception) {
+            Log::warning('bling.invoice.send_failed', ['nfe_id' => $nfeId, 'error' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        Log::info('bling.invoice.sent_to_sefaz', ['nfe_id' => $nfeId]);
+
+        return $this->fetchNota($nfeId);
     }
 
     /**
@@ -171,38 +202,87 @@ class BlingInvoiceImporter
     }
 
     /**
-     * XML autorizado + DANFE gerado dele, nos mesmos caminhos das notas
-     * emitidas por nós. Best-effort: nota sem XML disponível ainda continua
-     * registrada (número, chave, situação), só sem os arquivos.
+     * XML e DANFE nos mesmos caminhos das notas emitidas por nós.
+     *
+     * Campos confirmados no payload REAL de GET /nfe/{id} (nota 26759176098,
+     * 2026-09-02): a própria nota traz `xml`, `linkDanfe` e `linkPDF` —
+     * não precisa da rota /nfe/documento/{chave}, que fica só de reserva
+     * pro caso de `xml` vir vazio numa nota já autorizada. O PDF vem do
+     * `linkPDF` do Bling (é o DANFE oficial daquela nota); gerar o nosso a
+     * partir do XML é o plano B, e só funciona se o XML for um nfeProc
+     * completo, com protocolo.
+     *
+     * Best-effort: nota sem arquivo disponível continua registrada
+     * (número, série, chave, situação), só sem XML/PDF.
+     *
+     * @param  array<string, mixed>  $nota
      */
-    private function storeDocuments(Invoice $invoice, string $chave): void
+    private function storeDocuments(Invoice $invoice, string $chave, array $nota): void
     {
-        $xml = $this->fetchXml($chave);
+        $nome = $chave !== '' ? $chave : ('bling-'.($nota['id'] ?? $invoice->id));
 
-        if ($xml === null) {
-            return;
+        $xml = $this->resolveConteudo($nota['xml'] ?? null) ?? ($chave !== '' ? $this->fetchXml($chave) : null);
+        $atualizacao = [];
+
+        if ($xml !== null) {
+            $xmlPath = "invoices/{$invoice->order_id}/nfe-{$nome}.xml";
+            Storage::disk('local')->put($xmlPath, $xml);
+            $atualizacao['xml_path'] = $xmlPath;
         }
 
-        $xmlPath = "invoices/{$invoice->order_id}/nfe-{$chave}.xml";
-        Storage::disk('local')->put($xmlPath, $xml);
+        $pdf = $this->baixarLink($nota['linkPDF'] ?? null);
 
-        $danfePath = null;
+        if ($pdf === null && $xml !== null) {
+            try {
+                $pdf = $this->danfe->generate($xml);
+            } catch (Throwable $exception) {
+                Log::warning('bling.invoice.danfe_failed', ['chave' => $chave, 'error' => $exception->getMessage()]);
+            }
+        }
+
+        if ($pdf !== null) {
+            $danfePath = "invoices/{$invoice->order_id}/danfe-{$nome}.pdf";
+            Storage::disk('local')->put($danfePath, $pdf);
+            $atualizacao['danfe_path'] = $danfePath;
+        }
+
+        if ($atualizacao !== []) {
+            $invoice->update($atualizacao);
+        }
+    }
+
+    /**
+     * O campo pode vir como o conteúdo em si, em base64, ou como link — o
+     * Bling usa link em etiqueta e DANFE, então não dá pra assumir.
+     */
+    private function resolveConteudo(mixed $valor): ?string
+    {
+        if (! is_string($valor) || trim($valor) === '') {
+            return null;
+        }
+
+        if (str_starts_with($valor, 'http')) {
+            return $this->baixarLink($valor);
+        }
+
+        return $this->decodeIfBase64($valor);
+    }
+
+    private function baixarLink(mixed $link): ?string
+    {
+        if (! is_string($link) || ! str_starts_with($link, 'http')) {
+            return null;
+        }
 
         try {
-            $danfePath = "invoices/{$invoice->order_id}/danfe-{$chave}.pdf";
-            Storage::disk('local')->put($danfePath, $this->danfe->generate($xml));
+            $resposta = Http::timeout(25)->get($link);
         } catch (Throwable $exception) {
-            // DANFE depende do XML ser um nfeProc completo (com protocolo).
-            // Se o Bling devolver só o XML da nota sem protocolo, o
-            // gerador recusa — registra e segue com o XML salvo.
-            Log::warning('bling.invoice.danfe_failed', ['chave' => $chave, 'error' => $exception->getMessage()]);
-            $danfePath = null;
+            Log::warning('bling.invoice.download_failed', ['link' => $link, 'error' => $exception->getMessage()]);
+
+            return null;
         }
 
-        $invoice->update(array_filter([
-            'xml_path' => $xmlPath,
-            'danfe_path' => $danfePath,
-        ]));
+        return $resposta->successful() ? $resposta->body() : null;
     }
 
     private function fetchXml(string $chave): ?string

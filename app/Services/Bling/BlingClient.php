@@ -75,8 +75,23 @@ class BlingClient
         if ($response->failed()) {
             $body = $response->json();
 
+            // Achado real 2026-09-02 (envio da nota 26759176098 à SEFAZ):
+            // só `message` deixava o erro inútil pra diagnóstico — "Não
+            // foi possível emitir a nota fiscal" e nada mais. O Bling
+            // detalha o motivo real em `description` e em `fields[]`
+            // (ex: campo fiscal faltando), e é isso que resolve o problema.
+            $erro = $body['error'] ?? [];
+            $partes = array_filter([
+                $erro['message'] ?? null,
+                $erro['description'] ?? null,
+                collect($erro['fields'] ?? [])
+                    ->map(fn ($campo) => trim(($campo['element'] ?? '').' '.($campo['msg'] ?? '')))
+                    ->filter()
+                    ->implode(' | ') ?: null,
+            ]);
+
             throw new BlingException(
-                $body['error']['message'] ?? $body['error']['description'] ?? "Erro na API do Bling (HTTP {$response->status()}).",
+                $partes !== [] ? implode(' — ', $partes) : "Erro na API do Bling (HTTP {$response->status()}).",
                 $response->status(),
                 ['body' => $body],
             );

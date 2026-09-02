@@ -165,7 +165,11 @@ class BlingInvoiceImporter
         try {
             $this->client->post("nfe/{$nfeId}/enviar");
         } catch (BlingException $exception) {
-            Log::warning('bling.invoice.send_failed', ['nfe_id' => $nfeId, 'error' => $exception->getMessage()]);
+            Log::warning('bling.invoice.send_failed', [
+                'nfe_id' => $nfeId,
+                'error' => $exception->getMessage(),
+                'resposta' => $exception->context ?? null,
+            ]);
 
             return null;
         }

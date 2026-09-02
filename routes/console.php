@@ -56,6 +56,13 @@ Schedule::command('orders:sync-tiktok')->hourly();
 // tenta de novo a cada 5 min. Sai sozinha do ar se a chave for desligada.
 Schedule::command('invoices:sync-bling')->everyFiveMinutes()->withoutOverlapping(10);
 
+// Produto novo do TikTok nasce no Bling SEM NCM (a integração dele não
+// preenche dado fiscal), e sem NCM a nota não emite — foi o que travou a
+// primeira venda pelo caminho novo, o pedido #1216. Empurra o NCM do
+// nosso catálogo pra lá antes que a primeira venda do produto aconteça.
+// Só preenche o que está vazio no Bling, nunca sobrescreve.
+Schedule::command('bling:sync-fiscal')->everyThirtyMinutes()->withoutOverlapping(20);
+
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
 // ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,

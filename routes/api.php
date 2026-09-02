@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
+use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
@@ -40,9 +41,24 @@ Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
     Route::post('/webhook', [MercadoLivreController::class, 'webhook'])->name('webhook');
 });
 
-Route::prefix('bling')->name('api.bling.')->middleware(['web', 'auth', 'admin'])->group(function () {
-    Route::get('/auth', [BlingController::class, 'redirectToAuth'])->name('auth');
-    Route::get('/callback', [BlingController::class, 'callback'])->name('callback');
+Route::prefix('bling')->name('api.bling.')->group(function () {
+    // OAuth: navegador do admin logado, precisa de sessão/CSRF (ver
+    // /api/mercadolivre acima).
+    Route::middleware(['web', 'auth', 'admin'])->group(function () {
+        Route::get('/auth', [BlingController::class, 'redirectToAuth'])->name('auth');
+        Route::get('/callback', [BlingController::class, 'callback'])->name('callback');
+    });
+
+    // Chamado pelos servidores do Bling (pedido de venda do TikTok Shop em
+    // tempo real), não por um navegador — sem sessão/CSRF, a assinatura
+    // HMAC é verificada dentro do controller.
+    Route::post('/webhook', [BlingWebhookController::class, 'webhook'])->name('webhook');
+
+    // A tela de webhooks do Bling pode bater na URL antes de salvar a
+    // configuração (a referência deles não documenta se valida) — um GET
+    // que devolve 200 evita que um 405 pareça "URL inválida", mesmo padrão
+    // já usado na Shopee/Mercado Pago.
+    Route::match(['get', 'head'], '/webhook', fn () => response()->json(['status' => 'ok']))->name('webhook.verify');
 });
 
 Route::prefix('melhorenvio')->name('api.melhorenvio.')->middleware(['web', 'auth', 'admin'])->group(function () {

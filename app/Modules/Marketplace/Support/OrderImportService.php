@@ -223,8 +223,16 @@ class OrderImportService
 
             $listing ??= (clone $listingQuery)->whereNull('external_model_id')->first();
 
-            $product = $listing?->product
-                ?? $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity'], $externalModelId);
+            // SÓ o listing local — nada de auto-import aqui, de propósito.
+            // Achado por teste 2026-09-02: chamar o driver neste ponto
+            // muda o comportamento de um simples resync de pedido já
+            // existente (passa a bater na API do canal, e um canal sem
+            // credencial configurada derrubava o import inteiro, que antes
+            // só sincronizava o status). Item sem produto entra assim
+            // mesmo: a rotina marketplace:relink-unmapped-items (a cada
+            // 30min) já existe exatamente pra vincular isso depois, e o
+            // nome vem do próprio payload do canal.
+            $product = $listing?->product;
 
             $order->items()->create([
                 'product_id' => $product?->id,

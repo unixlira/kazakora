@@ -3,8 +3,10 @@
 namespace App\Services\Bling;
 
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Services\Bling\Exceptions\BlingException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Pedidos de venda do Bling, filtrados pra só trazer os que vieram do
@@ -53,6 +55,43 @@ class BlingOrderService
             ->all();
     }
 
+
+    /**
+     * Guarda "numeroLoja (número do pedido no TikTok Shop) → id interno do
+     * Bling", correspondência que só o webhook entrega de graça (ver
+     * BlingWebhookController). O teto do Bling é 3 req/s pra conta INTEIRA,
+     * disputados com emissão de nota e etiqueta — cada varredura de 60 dias
+     * evitada conta.
+     */
+    public function rememberOrderId(string $orderNumber, int $blingOrderId): void
+    {
+        Cache::put($this->orderIdCacheKey($orderNumber), $blingOrderId, now()->addDays(30));
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function findById(int $blingOrderId): ?array
+    {
+        try {
+            $response = $this->client->get("pedidos/vendas/{$blingOrderId}");
+        } catch (BlingException $exception) {
+            Log::warning('bling.order.find_by_id_failed', [
+                'bling_order_id' => $blingOrderId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        return $response['data'] ?? null;
+    }
+
+    private function orderIdCacheKey(string $orderNumber): string
+    {
+        return 'bling.order_id.'.$orderNumber;
+    }
+
     /**
      * BUG REAL 2026-08-31 (achado testando ao vivo contra a conta real do
      * usuário — os 16 pedidos listados por listRecentOrderNumbers() vinham
@@ -74,6 +113,17 @@ class BlingOrderService
      */
     public function findByOrderNumber(string $orderNumber): ?array
     {
+        // Atalho alimentado pelo webhook (ProcessBlingOrderWebhook), que já
+        // recebe o id interno do Bling no próprio payload: vai direto no
+        // pedido em vez de varrer 60 dias da loja atrás do numeroLoja.
+        // Também é o único caminho que funciona pra pedido FORA dessa
+        // janela de 60 dias.
+        if ($blingId = Cache::get($this->orderIdCacheKey($orderNumber))) {
+            if ($order = $this->findById((int) $blingId)) {
+                return $order;
+            }
+        }
+
         $match = collect($this->listOrders(now()->subDays(60), now()))
             ->first(fn ($order) => (string) ($order['numeroLoja'] ?? '') === $orderNumber);
 

@@ -21,6 +21,25 @@ class OrderImportServiceTest extends TestCase
     use RefreshDatabase;
 
     /**
+     * Produto local já mapeado pro item ITEM-1 dos payloads abaixo. Sem
+     * isso, criar o pedido cai no auto-import do canal (que exige conta
+     * conectada de verdade) e o teste passa a medir a integração, não o
+     * comportamento do import.
+     */
+    private function mapItemToLocalProduct(string $channel): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 10]);
+
+        \App\Modules\Marketplace\Models\ProductChannelListing::create([
+            'product_id' => $product->id,
+            'channel' => $channel,
+            'is_enabled' => true,
+            'status' => \App\Modules\Marketplace\Models\ProductChannelListing::STATUS_PUBLISHED,
+            'external_id' => 'ITEM-1',
+        ]);
+    }
+
+    /**
      * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
      */
@@ -99,6 +118,7 @@ class OrderImportServiceTest extends TestCase
     public function test_reimport_backfills_items_the_order_is_missing(): void
     {
         Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_MERCADO_LIVRE);
 
         $externalOrderId = 'SN-'.uniqid();
         $service = app(OrderImportService::class);
@@ -143,6 +163,7 @@ class OrderImportServiceTest extends TestCase
     public function test_order_comes_back_from_cancelled_when_the_channel_says_it_is_paid_again(): void
     {
         Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_MERCADO_LIVRE);
 
         $externalOrderId = 'SN-'.uniqid();
         $service = app(OrderImportService::class);
@@ -169,6 +190,7 @@ class OrderImportServiceTest extends TestCase
     public function test_cancelled_order_still_ignores_shipped_and_awaiting_payment(): void
     {
         Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_MERCADO_LIVRE);
 
         $service = app(OrderImportService::class);
 

@@ -12,6 +12,7 @@ use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Bling\Exceptions\BlingException;
 use App\Services\NFe\NFeDanfeService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -117,7 +118,7 @@ class BlingInvoiceImporter
         // chave de acesso, não há XML, o TikTok não recebe nada e a
         // etiqueta nunca libera. Ver services.bling.auto_send_nfe pro
         // porquê de isso ser uma decisão explícita e não o padrão.
-        if ((int) ($nota['situacao'] ?? 0) === 1 && config('services.bling.auto_send_nfe')) {
+        if ($this->deveTransmitir($nfeId, $nota)) {
             $divergencias = $this->conferirContraNossoCadastro($order, $nota);
 
             if ($divergencias !== []) {
@@ -126,10 +127,66 @@ class BlingInvoiceImporter
                 return $this->gravarInvoice($order, $nota);
             }
 
+            Cache::put($this->chaveDaUltimaTentativa($nfeId), $this->impressaoDosItens($nota), now()->addDays(30));
+
             $nota = $this->enviarParaSefaz($nfeId) ?? $nota;
         }
 
         return $this->gravarInvoice($order, $nota);
+    }
+
+
+    /**
+     * Situação 1 (pendente) sempre transmite. Situação 4 (REJEITADA) só
+     * transmite de novo quando o conteúdo fiscal dos itens MUDOU desde a
+     * última tentativa.
+     *
+     * Achado ao vivo 2026-09-02 (nota nº 2, pedido #1216): depois de a
+     * SEFAZ rejeitar por CFOP inválido pra MEI, corrigir o CFOP no Bling
+     * não bastava — a nota ficava parada em rejeitada porque nada
+     * retransmitia. Retransmitir sempre também é ruim: rejeição que a
+     * nossa conferência não enxerga (certificado, cadastro do emitente)
+     * viraria uma tentativa a cada 5 minutos, pra sempre, com o mesmo
+     * erro. Comparar a impressão dos itens resolve os dois: mexeu no
+     * dado, tenta de novo; não mexeu, espera alguém mexer.
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function deveTransmitir(int $nfeId, array $nota): bool
+    {
+        if (! config('services.bling.auto_send_nfe')) {
+            return false;
+        }
+
+        $situacao = (int) ($nota['situacao'] ?? 0);
+
+        if ($situacao === 1) {
+            return true;
+        }
+
+        if ($situacao !== 4) {
+            return false;
+        }
+
+        return Cache::get($this->chaveDaUltimaTentativa($nfeId)) !== $this->impressaoDosItens($nota);
+    }
+
+    /**
+     * O que importa pra decidir "mudou o suficiente pra tentar de novo":
+     * os campos fiscais que a SEFAZ recusa.
+     *
+     * @param  array<string, mixed>  $nota
+     */
+    private function impressaoDosItens(array $nota): string
+    {
+        return collect($nota['itens'] ?? [])
+            ->map(fn ($item) => ($item['codigo'] ?? '').':'.($item['cfop'] ?? '').':'.($item['classificacaoFiscal'] ?? '').':'.($item['valor'] ?? ''))
+            ->implode('|');
+    }
+
+    private function chaveDaUltimaTentativa(int $nfeId): string
+    {
+        return "bling.invoice.ultima_transmissao.{$nfeId}";
     }
 
     /**

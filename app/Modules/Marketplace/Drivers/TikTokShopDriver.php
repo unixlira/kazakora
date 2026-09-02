@@ -2,15 +2,19 @@
 
 namespace App\Modules\Marketplace\Drivers;
 
+use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Bling\BlingOrderService;
 use App\Services\Bling\Exceptions\BlingException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use RuntimeException;
 
 /**
@@ -247,27 +251,43 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
             return $tied->first()['product'];
         }
 
-        // Desempate: quem já tem MAIS pedidos reais deste canal apontando
-        // pra ele (histórico de verdade > estoque atual — ver docblock
-        // acima). whereIn + groupBy numa query só, em vez de 1 count() por
-        // candidato.
-        $historyCounts = OrderItem::query()
-            ->whereIn('product_id', $tied->pluck('product.id'))
-            ->whereHas('order', fn ($query) => $query->where('origin', MarketplaceAccount::CHANNEL_TIKTOK_SHOP))
-            ->selectRaw('product_id, count(*) as total')
-            ->groupBy('product_id')
-            ->pluck('total', 'product_id');
+        // BUG REAL 2026-09-02 (relatado pelo usuário: pedido com 1 Power
+        // Bank PRETO e 1 ROSA aparecendo como 2 PRETOS no KoraSync): até
+        // aqui, empate era desempatado por histórico de vendas — e o
+        // histórico puxa pra variação mais vendida (Preto, ~90 pedidos),
+        // então a venda de qualquer OUTRA cor virava Preto silenciosamente.
+        // O operador embala a cor errada e o cliente recebe errado.
+        //
+        // O empate acontece porque as 4 cores têm o MESMO nome no catálogo
+        // (a cor só existe no SKU: -PRE-, -ROSA-, -BRA-, -VERDE-) e o
+        // TikTok, via Bling, não manda a cor em campo nenhum: `descricao` é
+        // igual pros dois itens e `produto.id` vem 0. Não existe sinal
+        // nenhum no dado que diga qual cor foi vendida.
+        //
+        // Então NÃO ESCOLHE. Sem sinal, chutar é pior que parar: um item
+        // sem produto vinculado trava a nota (alguém conserta em 30s), um
+        // item com a COR ERRADA vira encomenda errada na casa do cliente.
+        // O código do TikTok é estável por variação, então basta alguém
+        // vincular UMA vez (ProductChannelListing) e nunca mais se decide
+        // isso pra esse código.
+        Log::warning('tiktok.item.variacao_ambigua', [
+            'item_name' => $itemName,
+            'candidatos' => $tied->map(fn ($row) => ['id' => $row['product']->id, 'sku' => $row['product']->sku])->values()->all(),
+        ]);
 
-        $bestHistory = $historyCounts->max() ?? 0;
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
 
-        if ($bestHistory > 0) {
-            $tied = $tied->filter(fn ($row) => ($historyCounts[$row['product']->id] ?? 0) === $bestHistory);
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new WebhookImportFailedNotification(
+                MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+                null,
+                'Item "'.mb_substr($itemName, 0, 60).'" casa com '.$tied->count().' variações do mesmo produto ('
+                    .$tied->map(fn ($row) => $row['product']->sku)->implode(', ')
+                    .') e o canal não informa qual. Vincule o SKU do TikTok ao produto certo — nenhum produto foi escolhido.',
+            ));
         }
 
-        // Ainda empatado (ou sem histórico nenhum pra nenhum candidato,
-        // ex: variações genuinamente novas sem venda prévia) — estoque
-        // como último critério, só pra ter alguma resposta determinística.
-        return $tied->sortByDesc(fn ($row) => $row['product']->stock)->first()['product'];
+        return null;
     }
 
     /**

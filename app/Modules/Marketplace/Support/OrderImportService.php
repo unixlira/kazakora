@@ -706,8 +706,16 @@ class OrderImportService
         $newName = (string) ($data['buyer_name'] ?? '');
         $nameLooksMasked = str_contains($newName, '*');
         $existingNameLooksMasked = str_contains((string) $existing->shipping_name, '*');
+        // BUG REAL 2026-09-02 (pedido #1222): nome acima de 60 caracteres
+        // não é só "feio", é impossível de emitir — o schema da NF-e
+        // limita xNome a 60 e o XML nem chega na SEFAZ (ver
+        // NFeXmlBuilderService). Um pedido que nasceu assim ficava preso
+        // pra sempre, porque este método só trocava nome vazio/mascarado.
+        // Só conta como conserto se o nome novo couber de verdade.
+        $existingNameTooLongForNfe = mb_strlen((string) $existing->shipping_name) > 60;
+        $newNameFitsNfe = mb_strlen($newName) <= 60;
 
-        if ($newName !== '' && ! $nameLooksMasked && (empty($existing->shipping_name) || $existingNameLooksMasked)) {
+        if ($newName !== '' && ! $nameLooksMasked && (empty($existing->shipping_name) || $existingNameLooksMasked || ($existingNameTooLongForNfe && $newNameFitsNfe))) {
             $fields['shipping_name'] = $newName;
         }
 
@@ -778,7 +786,13 @@ class OrderImportService
             return;
         }
 
-        $needsRefresh = empty($order->buyer_document) || str_contains((string) $order->shipping_name, '*');
+        // Nome acima de 60 caracteres é tão bloqueante quanto documento
+        // ausente: o XML não passa nem no validador local (ver
+        // resolveBuyerFieldUpdates()/NFeXmlBuilderService, pedido #1222).
+        // Buscar de novo no canal é o que traz a razão social correta.
+        $needsRefresh = empty($order->buyer_document)
+            || str_contains((string) $order->shipping_name, '*')
+            || mb_strlen((string) $order->shipping_name) > 60;
 
         if (! $needsRefresh) {
             return;

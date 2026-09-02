@@ -177,7 +177,17 @@ class NFeXmlBuilderService
         }
 
         $dest = new stdClass();
-        $dest->xNome = $order->shipping_name;
+        // Mesmo tratamento do xCpl acima: o schema da NF-e limita xNome a
+        // 60 caracteres e o validador do sped-nfe barra o XML ANTES de
+        // qualquer chamada à SEFAZ — pedido #1222 (2026-09-02) ficou dias
+        // sem nota porque o nome do comprador chegou do canal com 61.
+        // Truncar é a única saída que ainda emite a nota: o destinatário
+        // continua identificado pelo CNPJ/CPF, que é o que a SEFAZ casa de
+        // verdade. A causa raiz daquele caso (nome duplicado pela ML) foi
+        // corrigida na origem — ver MercadoLivreDriver::importOrder() —
+        // mas nome legítimo com mais de 60 caracteres existe, e o limite
+        // vale pra todo canal.
+        $dest->xNome = Str::limit((string) $order->shipping_name, 60, '');
         $dest->email = $customer?->email;
 
         // BUG REAL 2026-09-01 (pedido #1165 do Mercado Livre, nota 810

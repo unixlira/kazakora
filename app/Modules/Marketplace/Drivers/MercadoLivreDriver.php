@@ -355,6 +355,20 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         // pipeline inteiro venda→nota→envio→etiqueta pra pedido de canal).
         $buyerBilling = $this->orders->getBuyerBillingData($externalOrderId);
 
+        // BUG REAL 2026-09-02 (pedido #1222, nota 871 nunca emitida — o
+        // validador local barrou o XML: "xNome: o valor tem 61 caracteres,
+        // excede o máximo de 60"): pra comprador CNPJ, `buyer.first_name`
+        // vem com a razão social DUPLICADA e truncada em 30 caracteres cada
+        // metade ("18.689.367 FABIO EDUARDO DOS S 18.689.367 FABIO EDUARDO
+        // DOS S", 61 no total, com last_name vazio) — a duplicação vem
+        // pronta da ML, não da concatenação acima. O nome fiscal correto e
+        // inteiro está no BUSINESS_NAME do billing_info (ver
+        // OrderService::getBuyerBillingData()), que é justamente o endpoint
+        // que a ML mantém pra emissão de nota — quando ele existe, é ele
+        // que vale, porque é o nome que tem que bater com o CNPJ no
+        // destinatário da NF-e.
+        $buyerName = $buyerBilling['legal_name'] ?: $buyerName;
+
         return [
             'external_order_id' => (string) $order->id,
             'status' => $this->mapOrderStatus($order->status),

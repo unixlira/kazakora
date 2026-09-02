@@ -317,4 +317,82 @@ class OrderImportServiceTest extends TestCase
         $this->assertNotNull($result);
         $this->assertDatabaseCount('orders', 1);
     }
+
+    /**
+     * BUG REAL 2026-09-02 (pedido #1222): o nome do comprador chegou do
+     * Mercado Livre com 61 caracteres (razão social duplicada pela própria
+     * ML) e o schema da NF-e limita xNome a 60 — a nota nunca saiu. Até
+     * aqui, resolveBuyerFieldUpdates() só trocava nome VAZIO ou MASCARADO,
+     * então o pedido ficava travado pra sempre mesmo depois do canal
+     * passar a devolver o nome certo.
+     */
+    public function test_reimport_replaces_a_buyer_name_that_is_too_long_for_the_invoice(): void
+    {
+        Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_MERCADO_LIVRE);
+
+        $externalOrderId = 'SN-'.uniqid();
+        $service = app(OrderImportService::class);
+        $longName = '18.689.367 FABIO EDUARDO DOS S 18.689.367 FABIO EDUARDO DOS S';
+
+        $order = $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData([
+                'external_order_id' => $externalOrderId,
+                'status' => Order::STATUS_PAID,
+                'buyer_name' => $longName,
+            ]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame($longName, $order->refresh()->shipping_name);
+
+        $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData([
+                'external_order_id' => $externalOrderId,
+                'status' => Order::STATUS_PAID,
+                'buyer_name' => '18.689.367 FABIO EDUARDO DOS SANTOS BARCELLOS',
+            ]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame('18.689.367 FABIO EDUARDO DOS SANTOS BARCELLOS', $order->refresh()->shipping_name);
+    }
+
+    /**
+     * A contrapartida do teste acima: nome que já cabe na nota nunca é
+     * substituído por um reimport — a regra continua sendo "só conserta
+     * vazio/mascarado/impossível de emitir", nunca sobrescrever dado bom.
+     */
+    public function test_reimport_never_overwrites_a_buyer_name_that_already_fits(): void
+    {
+        Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_MERCADO_LIVRE);
+
+        $externalOrderId = 'SN-'.uniqid();
+        $service = app(OrderImportService::class);
+
+        $order = $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData([
+                'external_order_id' => $externalOrderId,
+                'status' => Order::STATUS_PAID,
+                'buyer_name' => 'Cliente Original',
+            ]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $service->importNormalized(
+            MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            $this->normalizedData([
+                'external_order_id' => $externalOrderId,
+                'status' => Order::STATUS_PAID,
+                'buyer_name' => 'Outro Nome Qualquer',
+            ]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame('Cliente Original', $order->refresh()->shipping_name);
+    }
 }

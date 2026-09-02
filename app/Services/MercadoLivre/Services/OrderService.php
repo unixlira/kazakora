@@ -122,11 +122,15 @@ class OrderService
      * só pra já casar com o formato que o NF-e builder espera caso um dia
      * apareça outra fonte pra ela.
      *
-     * @return array{document: ?string, state_registration: ?string, taxpayer_type: ?string}
+     * `legal_name` (BUSINESS_NAME do additional_info) é a razão social de
+     * verdade do comprador — ver MercadoLivreDriver::importOrder() pro
+     * bug real que motivou trazer esse campo (2026-09-02, pedido #1222).
+     *
+     * @return array{document: ?string, state_registration: ?string, taxpayer_type: ?string, legal_name: ?string}
      */
     public function getBuyerBillingData(string $orderId): array
     {
-        $empty = ['document' => null, 'state_registration' => null, 'taxpayer_type' => null];
+        $empty = ['document' => null, 'state_registration' => null, 'taxpayer_type' => null, 'legal_name' => null];
 
         try {
             $response = $this->client->get("orders/{$orderId}/billing_info");
@@ -163,6 +167,17 @@ class OrderService
         return [
             'document' => $docNumber ? preg_replace('/\D/', '', (string) $docNumber) : null,
             'state_registration' => $stateRegistration,
+            // BUG REAL 2026-09-02 (pedido #1222, nota 871 barrada pelo
+            // validador local: xNome com 61 caracteres, limite do schema é
+            // 60): `buyer.first_name` do payload do pedido vinha com a
+            // razão social DUPLICADA e truncada em 30 caracteres cada
+            // ("18.689.367 FABIO EDUARDO DOS S 18.689.367 FABIO EDUARDO DOS
+            // S") — lixo do lado da ML, não da nossa concatenação
+            // (last_name vinha vazio). O BUSINESS_NAME daqui é o nome
+            // fiscal correto e inteiro ("18.689.367 FABIO EDUARDO DOS
+            // SANTOS BARCELLOS"), que é o que a nota precisa pra bater com
+            // o CNPJ do destinatário.
+            'legal_name' => trim((string) ($additional['BUSINESS_NAME'] ?? '')) ?: null,
             // Vocabulário do indIEDest da NF-e (ver NFeXmlBuilderService),
             // não o do canal: é isso que decide se a nota leva IE ou não.
             // Pessoa física nunca é contribuinte; CNPJ sem IE informada

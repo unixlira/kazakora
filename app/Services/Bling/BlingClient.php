@@ -32,6 +32,15 @@ class BlingClient
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function put(string $uri, array $data = []): array
+    {
+        return $this->request('PUT', $uri, ['json' => $data]);
+    }
+
     public function post(string $uri, array $data = []): array
     {
         return $this->request('POST', $uri, ['json' => $data]);
@@ -53,6 +62,7 @@ class BlingClient
         $response = match ($method) {
             'GET' => $pending->get(ltrim($uri, '/'), $options['query'] ?? []),
             'POST' => $pending->asJson()->post(ltrim($uri, '/'), $options['json'] ?? []),
+            'PUT' => $pending->asJson()->put(ltrim($uri, '/'), $options['json'] ?? []),
             default => throw new BlingException("Método HTTP não suportado pelo BlingClient: {$method}"),
         };
 

@@ -116,6 +116,23 @@ return [
         // docblock completo em BlingAuthService sobre esse achado).
         'api_base_url' => env('BLING_API_BASE_URL', 'https://api.bling.com.br/Api/v3'),
         'oauth_base_url' => env('BLING_OAUTH_BASE_URL', 'https://www.bling.com.br/Api/v3'),
+        // Canais cuja NF-e é emitida PELO BLING, não por nós (lista
+        // separada por vírgula, ex: "tiktok_shop"). Existe por um motivo
+        // concreto, achado testando a API em 2026-09-02: o TikTok Shop só
+        // libera a etiqueta depois de receber o XML da nota, e o Bling só
+        // repassa nota pra loja quando ELE mesmo a gerou a partir do
+        // pedido de venda — `POST /nfe` cria nota solta (confirmado ao
+        // vivo: ele ignora qualquer referência a pedido no corpo) e
+        // nota solta não é repassada. Então, pra esse canal, ou a emissão
+        // é do Bling ou o XML sobe na mão no Seller Center.
+        //
+        // Vazio (padrão) = nada muda: continuamos emitindo tudo. Ligar
+        // isto sem ligar a geração automática no Bling deixaria o pedido
+        // SEM nota nenhuma — as duas pontas viram juntas.
+        'invoice_issuer_channels' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('BLING_INVOICE_ISSUER_CHANNELS', '')),
+        ))),
     ],
 
     'shopee' => [

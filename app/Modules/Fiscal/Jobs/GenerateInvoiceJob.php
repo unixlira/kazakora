@@ -86,6 +86,21 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         // ANTES de montar o XML, em vez de só falhar 3 vezes com o mesmo
         // erro ("não foi possível identificar o CPF/CNPJ do comprador")
         // esperando um webhook futuro consertar sozinho.
+        // Canal cuja nota é emitida pelo Bling (ver
+        // services.bling.invoice_issuer_channels): emitir aqui também
+        // geraria DUAS notas pra mesma venda. A nota real chega de volta
+        // pelo webhook `invoice` do Bling.
+        if (in_array($order->origin, (array) config('services.bling.invoice_issuer_channels', []), true)) {
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                'Emissão delegada ao Bling para este canal — nenhuma nota emitida aqui.',
+            );
+
+            return;
+        }
+
         $orderImport->refreshBuyerInfo($order);
         $order->refresh();
 

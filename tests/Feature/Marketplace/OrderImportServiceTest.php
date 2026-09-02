@@ -182,6 +182,8 @@ class OrderImportServiceTest extends TestCase
         );
 
         // Simula o estado real encontrado em produção: pedido sem item nenhum.
+        // (Pedido que JÁ tem item não é completado — ver o comentário em
+        // reconcileMissingItems sobre o clone do #1216, que duplicou item.)
         $order->items()->delete();
         $this->assertSame(0, $order->items()->count());
 
@@ -202,6 +204,44 @@ class OrderImportServiceTest extends TestCase
         );
 
         $this->assertSame(1, $order->items()->count());
+    }
+
+    /**
+     * BUG REAL 2026-09-02 (pedido #1216): pra refazer uma nota com série
+     * errada, o pedido foi CLONADO no Bling — e o clone reescreve o código
+     * dos itens. Na reimportação, os códigos novos pareceram "itens que
+     * faltavam" e viraram itens EXTRAS num pedido já completo: 4 no lugar
+     * de 2, os novos sem produto vinculado, travando a emissão da nota e
+     * arriscando o operador embalar o dobro.
+     */
+    public function test_order_that_already_has_items_is_never_completed_with_new_ones(): void
+    {
+        Queue::fake();
+
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
+        $externalOrderId = 'SN-'.uniqid();
+        $service = app(OrderImportService::class);
+
+        $order = $service->importNormalized(
+            MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+            $this->normalizedData(['external_order_id' => $externalOrderId, 'status' => Order::STATUS_PAID]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame(1, $order->items()->count());
+
+        // Mesma venda voltando com o item sob OUTRO código, como no clone.
+        $service->importNormalized(
+            MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+            $this->normalizedData([
+                'external_order_id' => $externalOrderId,
+                'status' => Order::STATUS_PAID,
+                'items' => [['external_id' => '3ITEM-1', 'external_model_id' => null, 'unit_price' => 100, 'quantity' => 1]],
+            ]),
+            dispatchShippingConfirmation: false,
+        );
+
+        $this->assertSame(1, $order->items()->count(), 'Pedido que já tem item não pode ganhar item novo na reimportação.');
     }
 
     /**

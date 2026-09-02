@@ -198,7 +198,23 @@ class OrderImportService
 
         $order->loadMissing('items');
 
-        if ($order->items->isNotEmpty() && $order->items->contains(fn ($item) => $item->external_item_id === null)) {
+        // SÓ pedido com ZERO item — que é o caso real que motivou isto
+        // (#894, importado sem item nenhum, nota impossível e card da fila
+        // mostrando só os itens do irmão de pacote).
+        //
+        // BUG REAL 2026-09-02 (pedido #1216): completar item a item era
+        // ganancioso demais. Pra refazer uma nota com série errada, o
+        // pedido foi CLONADO no Bling, e o clone reescreve o código dos
+        // itens ("3" na frente do código original). Na reimportação, esses
+        // códigos novos pareceram "itens que faltavam" e viraram 2 itens
+        // extras num pedido que já estava completo: 4 itens no lugar de 2,
+        // os dois novos sem produto vinculado — o que travou a emissão da
+        // nota e faria o operador embalar o dobro.
+        //
+        // Pedido que já tem item é assunto do canal, não nosso: se o canal
+        // mudar o item de uma venda, isso chega por outro caminho, com
+        // gente olhando.
+        if ($order->items->isNotEmpty()) {
             return;
         }
 

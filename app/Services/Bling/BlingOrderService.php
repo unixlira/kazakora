@@ -113,25 +113,50 @@ class BlingOrderService
      */
     public function findByOrderNumber(string $orderNumber): ?array
     {
-        // Atalho alimentado pelo webhook (ProcessBlingOrderWebhook), que já
-        // recebe o id interno do Bling no próprio payload: vai direto no
-        // pedido em vez de varrer 60 dias da loja atrás do numeroLoja.
-        // Também é o único caminho que funciona pra pedido FORA dessa
-        // janela de 60 dias.
+        // Candidatos, em ordem de preferência:
+        // 1) o atalho alimentado pelo webhook (ProcessBlingOrderWebhook já
+        //    recebe o id interno do Bling no payload) — evita varrer 60
+        //    dias da loja, e é o único caminho pra pedido fora dessa janela;
+        // 2) os pedidos da loja com esse mesmo numeroLoja, do mais novo
+        //    pro mais antigo.
+        $ids = [];
+
         if ($blingId = Cache::get($this->orderIdCacheKey($orderNumber))) {
-            if ($order = $this->findById((int) $blingId)) {
-                return $order;
+            $ids[] = (int) $blingId;
+        }
+
+        foreach (collect($this->listOrders(now()->subDays(60), now()))
+            ->filter(fn ($order) => (string) ($order['numeroLoja'] ?? '') === $orderNumber)
+            ->sortByDesc('id') as $encontrado) {
+            $ids[] = (int) $encontrado['id'];
+        }
+
+        // ACHADO REAL 2026-09-02 (pedido do Silvio, TikTok
+        // 585847186919688158): o MESMO numeroLoja pode ter mais de um
+        // pedido no Bling. A nota nasceu com série errada, teve que ser
+        // excluída, e a forma de refazer foi CLONAR o pedido — o clone
+        // (nº 55) herda o numeroLoja do original (nº 54) e é ele que passa
+        // a ter a nota. Pegando só o primeiro que casa, ficaríamos presos
+        // no pedido velho e a nota nova seria invisível pra sempre.
+        // Entre pedidos irmãos, o que TEM nota é o que interessa; sem
+        // nenhum com nota, vale o mais recente.
+        $primeiro = null;
+
+        foreach (array_unique($ids) as $id) {
+            $pedido = $this->findById($id);
+
+            if (! $pedido) {
+                continue;
+            }
+
+            $primeiro ??= $pedido;
+
+            if ((int) ($pedido['notaFiscal']['id'] ?? 0) > 0) {
+                return $pedido;
             }
         }
 
-        $match = collect($this->listOrders(now()->subDays(60), now()))
-            ->first(fn ($order) => (string) ($order['numeroLoja'] ?? '') === $orderNumber);
-
-        if (! $match) {
-            return null;
-        }
-
-        return $this->client->get("pedidos/vendas/{$match['id']}")['data'] ?? null;
+        return $primeiro;
     }
 
     /**

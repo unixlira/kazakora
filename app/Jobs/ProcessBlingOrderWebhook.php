@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelWebhookLog;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\WebhookImportFailedNotification;
+use App\Services\Bling\BlingInvoiceImporter;
 use App\Services\Bling\BlingOrderService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -103,7 +104,16 @@ class ProcessBlingOrderWebhook implements ShouldQueue, ShouldBeUnique
             $blingOrders->rememberOrderId($externalOrderId, (int) $blingId);
         }
 
-        $importer->import(Order::ORIGIN_TIKTOK_SHOP, $externalOrderId);
+        $order = $importer->import(Order::ORIGIN_TIKTOK_SHOP, $externalOrderId);
+
+        // A nota deste canal é emitida PELO BLING (ver
+        // services.bling.invoice_issuer_channels): traz ela pra cá, com XML
+        // e DANFE, senão o pedido ficaria sem registro nenhum de NF-e do
+        // nosso lado. Pedido ainda sem nota lá volta null e a próxima
+        // varredura tenta de novo — a emissão no Bling é assíncrona.
+        if ($order) {
+            app(BlingInvoiceImporter::class)->syncForOrder($order);
+        }
 
         $log?->update(['status' => ChannelWebhookLog::STATUS_PROCESSED]);
     }

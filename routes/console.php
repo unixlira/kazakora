@@ -49,6 +49,13 @@ Schedule::command('orders:sync-tiktok --desde='.now()->toDateString())
 
 Schedule::command('orders:sync-tiktok')->hourly();
 
+// A NF-e do TikTok Shop é emitida pelo Bling desde 02/09/2026 (ver
+// services.bling.invoice_issuer_channels), e a emissão lá é assíncrona —
+// quando o pedido chega pelo webhook a nota quase nunca existe ainda.
+// Esta varredura fecha isso: pedido pago sem nota (ou com nota sem XML)
+// tenta de novo a cada 5 min. Sai sozinha do ar se a chave for desligada.
+Schedule::command('invoices:sync-bling')->everyFiveMinutes()->withoutOverlapping(10);
+
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
 // ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,

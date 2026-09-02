@@ -2,14 +2,19 @@
 
 namespace App\Services\Bling;
 
+use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
+use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Bling\Exceptions\BlingException;
 use App\Services\NFe\NFeDanfeService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -113,9 +118,94 @@ class BlingInvoiceImporter
         // etiqueta nunca libera. Ver services.bling.auto_send_nfe pro
         // porquê de isso ser uma decisão explícita e não o padrão.
         if ((int) ($nota['situacao'] ?? 0) === 1 && config('services.bling.auto_send_nfe')) {
+            $divergencias = $this->conferirContraNossoCadastro($order, $nota);
+
+            if ($divergencias !== []) {
+                $this->registrarDivergencia($order, $divergencias);
+
+                return $this->gravarInvoice($order, $nota);
+            }
+
             $nota = $this->enviarParaSefaz($nfeId) ?? $nota;
         }
 
+        return $this->gravarInvoice($order, $nota);
+    }
+
+    /**
+     * Confere a nota que o BLING montou contra o dado fiscal do NOSSO
+     * catálogo, ANTES de mandar pra SEFAZ.
+     *
+     * BUG REAL 2026-09-02 (nota nº 2, pedido #1216): o Bling montou a nota
+     * com CFOP 6108 numa venda interestadual, e o emitente é MEI — a SEFAZ
+     * recusou com "337 - CFOP inválido para emitente MEI (CRT 4)". O CFOP
+     * certo (6102) já estava cadastrado aqui em product_fiscal_data o
+     * tempo todo; ninguém conferiu antes de transmitir. Rejeição da SEFAZ
+     * queima tempo, exige conserto manual nota a nota e só é descoberta
+     * quando alguém vai olhar — o barato é comparar antes.
+     *
+     * @param  array<string, mixed>  $nota
+     * @return array<int, string>
+     */
+    private function conferirContraNossoCadastro(Order $order, array $nota): array
+    {
+        $ufEmitente = Company::query()->value('state');
+        $interestadual = $ufEmitente && strcasecmp((string) $order->shipping_state, (string) $ufEmitente) !== 0;
+        $divergencias = [];
+
+        foreach (($nota['itens'] ?? []) as $item) {
+            $codigo = (string) ($item['codigo'] ?? '');
+            $fiscal = ProductChannelListing::query()
+                ->where('channel', $order->origin)
+                ->where('external_id', $codigo)
+                ->with('product.fiscalData')
+                ->first()?->product?->fiscalData;
+
+            if (! $fiscal) {
+                continue;
+            }
+
+            $cfopEsperado = $interestadual ? $fiscal->cfop_outros_estados : $fiscal->cfop;
+            $cfopNota = (string) ($item['cfop'] ?? '');
+
+            if ($cfopEsperado && $cfopNota !== (string) $cfopEsperado) {
+                $divergencias[] = "item {$codigo}: CFOP {$cfopNota} na nota do Bling, {$cfopEsperado} no nosso cadastro";
+            }
+
+            $ncmNota = preg_replace('/\D/', '', (string) ($item['classificacaoFiscal'] ?? ''));
+            $ncmNosso = preg_replace('/\D/', '', (string) $fiscal->ncm);
+
+            if ($ncmNosso !== '' && $ncmNota !== $ncmNosso) {
+                $divergencias[] = "item {$codigo}: NCM ".($ncmNota ?: 'vazio')." na nota do Bling, {$ncmNosso} no nosso cadastro";
+            }
+        }
+
+        return $divergencias;
+    }
+
+    /**
+     * @param  array<int, string>  $divergencias
+     */
+    private function registrarDivergencia(Order $order, array $divergencias): void
+    {
+        $mensagem = 'Nota do Bling NÃO enviada à SEFAZ — divergência fiscal: '.implode('; ', $divergencias);
+
+        Log::warning('bling.invoice.fiscal_mismatch', ['order_id' => $order->id, 'divergencias' => $divergencias]);
+
+        $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $mensagem);
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new WebhookImportFailedNotification($order->origin, $order->external_order_id, $mensagem));
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $nota
+     */
+    private function gravarInvoice(Order $order, array $nota): Invoice
+    {
         $situacao = (int) ($nota['situacao'] ?? 0);
         $chave = preg_replace('/\D/', '', (string) ($nota['chaveAcesso'] ?? ''));
         $status = self::SITUACAO_PARA_STATUS[$situacao] ?? Invoice::STATUS_PENDING;

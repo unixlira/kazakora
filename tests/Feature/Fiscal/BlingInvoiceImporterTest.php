@@ -138,6 +138,62 @@ class BlingInvoiceImporterTest extends TestCase
         $this->assertNull($order->fresh()->invoice);
     }
 
+    /**
+     * BUG REAL 2026-09-02 (nota nº 2, pedido #1216): o Bling montou a nota
+     * com CFOP 6108 numa venda interestadual e o emitente é MEI — a SEFAZ
+     * recusou com "337 - CFOP inválido para emitente MEI". O CFOP certo
+     * (6102) já estava no nosso cadastro o tempo todo. Conferir antes de
+     * transmitir evita a rejeição, que custa conserto manual nota a nota.
+     */
+    public function test_invoice_with_a_cfop_that_diverges_from_our_catalog_is_not_sent_to_sefaz(): void
+    {
+        \App\Modules\Fiscal\Models\Company::create([
+            'razao_social' => 'Kazakora', 'cnpj' => '65604590000107', 'regime_tributario' => 'mei',
+            'zip' => '01000-000', 'street' => 'Rua X', 'number' => '1', 'neighborhood' => 'Centro',
+            'city' => 'São Paulo', 'state' => 'SP',
+        ]);
+
+        $produto = \App\Modules\Catalog\Models\Product::factory()->create();
+        \App\Modules\Fiscal\Models\ProductFiscalData::create([
+            'product_id' => $produto->id, 'ncm' => '85076000', 'cfop' => '5102', 'cfop_outros_estados' => '6102',
+        ]);
+        \App\Modules\Marketplace\Models\ProductChannelListing::create([
+            'product_id' => $produto->id, 'channel' => Order::ORIGIN_TIKTOK_SHOP, 'is_enabled' => true,
+            'status' => \App\Modules\Marketplace\Models\ProductChannelListing::STATUS_PUBLISHED,
+            'external_id' => '1736780989365585230',
+        ]);
+
+        config(['services.bling.auto_send_nfe' => true]);
+
+        Http::fake([
+            '*/pedidos/vendas/26759086886' => Http::response(['data' => [
+                'id' => 26759086886, 'numeroLoja' => '585846882986263720', 'notaFiscal' => ['id' => 55501],
+            ]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => [[
+                'id' => 26759086886, 'numeroLoja' => '585846882986263720',
+            ]]]),
+            '*/nfe/55501' => Http::response(['data' => [
+                'id' => 55501, 'numero' => '000002', 'serie' => 1, 'situacao' => 1, 'chaveAcesso' => '',
+                'valorNota' => 79.98,
+                // CFOP de venda a não contribuinte que MEI não pode usar.
+                'itens' => [['codigo' => '1736780989365585230', 'cfop' => '6108', 'classificacaoFiscal' => '85076000']],
+            ]]),
+        ]);
+
+        // Pedido pra outro estado (AM): o esperado é o CFOP interestadual, 6102.
+        $order = $this->makeOrder();
+        $order->update(['shipping_state' => 'AM']);
+
+        $invoice = app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
+        $this->assertSame(Invoice::STATUS_PENDING, $invoice->status, 'A nota fica pendente, não vai pra SEFAZ com CFOP errado.');
+        $this->assertDatabaseHas('order_fulfillment_events', [
+            'order_id' => $order->id,
+            'status' => \App\Modules\Checkout\Models\OrderFulfillmentEvent::STATUS_FAILED,
+        ]);
+    }
+
     /** Falha do Bling não pode derrubar o fluxo — o importador roda dentro do webhook. */
     public function test_failure_on_the_bling_side_never_throws(): void
     {

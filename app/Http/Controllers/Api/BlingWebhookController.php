@@ -90,6 +90,34 @@ class BlingWebhookController extends Controller
             return response()->json(['status' => 'duplicate']);
         }
 
+        // "order.updated" -> recurso "order". O servidor de webhook do
+        // Bling é um só pra vários recursos (hoje `order` e `invoice`
+        // estão ativos pro mesmo endpoint), então o recurso precisa ser
+        // olhado antes de qualquer coisa: um evento de NOTA não tem
+        // numeroLoja e não é pedido nenhum.
+        $resource = $event !== null ? strtok($event, '.') : null;
+
+        if ($resource !== 'order') {
+            ChannelWebhookLog::create([
+                'channel' => MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+                'event_type' => $event,
+                'payload' => $payload,
+                'headers' => $request->headers->all(),
+                'signature_valid' => true,
+                'status' => ChannelWebhookLog::STATUS_IGNORED,
+                // `invoice` foi ativado junto com `order` de propósito
+                // (elimina polling de situação de nota quando a emissão
+                // pela API do Bling entrar — fase seguinte). Até lá, quem
+                // emite NF-e aqui somos nós, então não há o que fazer com
+                // o evento além de registrar que ele chegou.
+                'error_message' => $resource === 'invoice'
+                    ? 'Evento de nota fiscal do Bling — registrado; a emissão hoje é nossa, nada a sincronizar ainda.'
+                    : "Recurso \"{$resource}\" não tratado por este endpoint.",
+            ]);
+
+            return response()->json(['status' => 'ignored']);
+        }
+
         $lojaId = $payload['data']['loja']['id'] ?? null;
         $tiktokLojaId = $blingOrders->tiktokLojaId();
         $isTiktokStore = $tiktokLojaId !== null && (int) $lojaId === (int) $tiktokLojaId;

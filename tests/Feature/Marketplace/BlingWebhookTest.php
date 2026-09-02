@@ -135,6 +135,30 @@ class BlingWebhookTest extends TestCase
         $this->assertDatabaseHas('channel_webhook_logs', ['status' => ChannelWebhookLog::STATUS_IGNORED]);
     }
 
+    /**
+     * O mesmo servidor de webhook atende `order` e `invoice` (os dois
+     * ativos na conta desde 02/09/2026). Evento de nota não é pedido: não
+     * tem numeroLoja e não pode entrar no caminho de import.
+     */
+    public function test_invoice_event_is_recorded_without_touching_the_order_pipeline(): void
+    {
+        Queue::fake();
+
+        $payload = $this->payload([
+            'eventId' => 'evento-de-nota-1',
+            'event' => 'invoice.updated',
+            'data' => ['id' => 987, 'situacao' => 5, 'numero' => 1744, 'loja' => ['id' => self::LOJA_TIKTOK]],
+        ]);
+
+        $this->postWebhook($payload)->assertOk()->assertJson(['status' => 'ignored']);
+
+        Queue::assertNothingPushed();
+        $this->assertDatabaseHas('channel_webhook_logs', [
+            'event_type' => 'invoice.updated',
+            'status' => ChannelWebhookLog::STATUS_IGNORED,
+        ]);
+    }
+
     public function test_get_on_the_webhook_url_answers_ok_for_panel_checks(): void
     {
         $this->get('/api/bling/webhook')->assertOk()->assertJson(['status' => 'ok']);

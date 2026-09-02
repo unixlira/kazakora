@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\Log;
  */
 class BlingClient
 {
+    /** 3 tentativas cobrem o pico normal de concorrência sem segurar o processo por muito tempo. */
+    private const MAX_RATE_LIMIT_RETRIES = 3;
+
+    /** ~0,7s, 1,4s, 2,1s — o teto é por SEGUNDO, então esperas curtas bastam. */
+    private const RATE_LIMIT_BACKOFF_MICROSECONDS = 700000;
+
     public function __construct(private readonly BlingAuthService $auth) {}
 
     /**
@@ -50,7 +56,7 @@ class BlingClient
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
      */
-    private function request(string $method, string $uri, array $options, bool $isRetry = false): array
+    private function request(string $method, string $uri, array $options, bool $isRetry = false, int $attempt = 1): array
     {
         $account = $this->auth->ensureValidToken($this->auth->currentAccount());
 
@@ -70,6 +76,19 @@ class BlingClient
             $this->auth->refreshToken($account);
 
             return $this->request($method, $uri, $options, isRetry: true);
+        }
+
+        // O teto do Bling é 3 req/s pra CONTA inteira (não por endpoint):
+        // poll, emissão de nota, etiqueta e sincronização de produto
+        // disputam a mesma fila, então 429 acontece o tempo todo em
+        // qualquer rotina que faça mais de duas chamadas seguidas —
+        // aconteceu ao vivo 2026-09-02 em bling:sync-fiscal, que morreu
+        // em 7 dos 8 produtos. Espera e tenta de novo em vez de devolver
+        // erro pra quem chamou: o próprio Bling manda tentar mais tarde.
+        if ($response->status() === 429 && $attempt < self::MAX_RATE_LIMIT_RETRIES) {
+            usleep(self::RATE_LIMIT_BACKOFF_MICROSECONDS * $attempt);
+
+            return $this->request($method, $uri, $options, $isRetry, $attempt + 1);
         }
 
         $this->log($method, $uri, $response);

@@ -20,6 +20,15 @@ class ProductImage extends Model
     protected $appends = ['url', 'thumb_url'];
 
     /**
+     * O front nunca usa o caminho cru — usa `url` e `thumb_url`, que são
+     * derivados dele. Escondê-los tira ~13 KB do payload da home (118
+     * imagens x 2 caminhos) sem tirar nada de ninguém: `$hidden` só afeta
+     * a serialização pra JSON, o acesso em PHP (OrderImageArchiveService,
+     * publicação em canal) continua igual.
+     */
+    protected $hidden = ['path', 'thumb_path'];
+
+    /**
      * Performance 2026-09-03: toda foto nova nasce com miniatura, venha de
      * upload do admin (ProductImageController) ou de importação de canal
      * (ShopeeMediaImportService) — em vez de cada chamador ter que lembrar

@@ -63,6 +63,11 @@ jobs:
             $PHP artisan optimize:clear
             $PHP artisan migrate --force
             $PHP artisan storage:link || true
+            # Idempotente: só olha foto com thumb_path nulo. Depois do
+            # primeiro deploy que gera as miniaturas, vira uma consulta
+            # vazia. || true porque miniatura faltando não derruba o site
+            # (thumb_url cai pra imagem original sozinho).
+            $PHP artisan catalog:generate-thumbnails || true
             $PHP artisan config:cache
             $PHP artisan route:cache
             $PHP artisan view:cache

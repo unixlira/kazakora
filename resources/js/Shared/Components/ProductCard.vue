@@ -3,7 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import StarRating from '@/Shared/Components/StarRating.vue';
-import { addToCart, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
+import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
 const props = defineProps({
     product: {
@@ -34,7 +34,7 @@ const secondImage = computed(() => {
     const images = props.product.images ?? [];
     if (images.length < 2) return null;
     const primary = images.find((img) => img.is_primary) ?? images[0];
-    return images.find((img) => img.url !== primary.url)?.url ?? null;
+    return cardImageUrl(images.find((img) => img.url !== primary.url));
 });
 
 /**

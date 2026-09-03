@@ -164,7 +164,7 @@ class Product extends Model
                 'stock',
                 'created_at',
             ])
-            ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'position', 'is_primary'])])
+            ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])])
             ->withAvg('reviews', 'rating');
     }
 

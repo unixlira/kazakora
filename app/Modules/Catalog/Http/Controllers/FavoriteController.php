@@ -18,9 +18,7 @@ class FavoriteController extends Controller
     public function index(Request $request): Response
     {
         $products = Product::query()
-            ->with('category:id,name,slug', 'images')
-            ->withAvg('reviews', 'rating')
-            ->withCount('reviews')
+            ->forCard()
             ->whereHas('favorites', fn ($query) => $query->where('user_id', $request->user()->id))
             ->latest()
             ->paginate(12);

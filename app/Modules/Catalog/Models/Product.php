@@ -7,6 +7,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Support\Rbac\Auditable;
 use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -128,6 +129,43 @@ class Product extends Model
             $parentId,
             ...static::query()->where('parent_product_id', $parentId)->pluck('id')->all(),
         ];
+    }
+
+    /**
+     * Performance 2026-09-03: a vitrine (ProductCard) usa um punhado de
+     * campos, mas a home mandava o produto INTEIRO — inclusive a
+     * `description`, que é o texto completo do anúncio (alguns passam de
+     * 4 KB cada). Com 17 cards na home isso sozinho respondia por ~75%
+     * do payload Inertia da página.
+     *
+     * Este escopo é o contrato de "produto para card": qualquer tela que
+     * renderiza ProductCard (home, favoritos, relacionados) usa ele. Ao
+     * mexer no ProductCard, confira se o campo novo está aqui.
+     *
+     * `parent_product_id` entra porque variantGroupIds() depende dele
+     * (relatedReviewableIds em CatalogController::show) — sem ele uma
+     * variação viraria silenciosamente um produto solto.
+     */
+    public function scopeForCard(Builder $query): Builder
+    {
+        return $query
+            ->select([
+                'id',
+                'parent_product_id',
+                'category_id',
+                'name',
+                'slug',
+                'brand',
+                'model',
+                'color',
+                'price',
+                'discount_percentage',
+                'discount_amount',
+                'stock',
+                'created_at',
+            ])
+            ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'position', 'is_primary'])])
+            ->withAvg('reviews', 'rating');
     }
 
     public function images(): HasMany

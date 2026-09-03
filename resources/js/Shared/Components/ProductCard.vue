@@ -37,7 +37,38 @@ const secondImage = computed(() => {
     return images.find((img) => img.url !== primary.url)?.url ?? null;
 });
 
+/**
+ * Performance 2026-09-03: a segunda imagem (a que troca no hover) tinha
+ * `src` real desde a primeira renderização. Mesmo com opacity 0 o browser
+ * baixa a imagem, então a home baixava o dobro de imagens do que mostrava
+ * — numa vitrine de 17 cards isso era metade do peso da página, gasto em
+ * imagem que a maioria das visitas nunca vê.
+ *
+ * Agora o `src` só existe depois do primeiro hover de verdade, e em
+ * dispositivo sem hover (celular/tablet) nunca — lá a troca no hover não
+ * acontece na prática, então baixar a segunda imagem era 100% desperdício.
+ */
+const supportsHover = typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(hover: hover)').matches
+    : false;
+
 const isHovering = ref(false);
+const hasHovered = ref(false);
+const secondImageLoaded = ref(false);
+
+const showSecondImage = computed(() => supportsHover && hasHovered.value && !!secondImage.value);
+
+// Só esconde a imagem principal quando a segunda já carregou — senão o
+// primeiro hover piscaria o fundo vazio enquanto a segunda baixa.
+const secondImageVisible = computed(() => isHovering.value && secondImageLoaded.value);
+
+const onPointerEnter = () => {
+    isHovering.value = true;
+
+    if (supportsHover) {
+        hasHovered.value = true;
+    }
+};
 
 const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
 
@@ -58,14 +89,15 @@ const submitReview = () => {
 <template>
     <article class="flex flex-col overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised transition-shadow hover:shadow-lg">
         <div class="relative aspect-[4/3.3] cursor-pointer" style="background: radial-gradient(120% 120% at 25% 15%, color-mix(in oklab, var(--color-store-accent) 14%, var(--color-store-bg-raised)), var(--color-store-bg-sunken) 70%);"
-            @mouseenter="isHovering = true" @mouseleave="isHovering = false" @click="goToProduct">
+            @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @click="goToProduct">
             <template v-if="primaryImage(product)">
-                <img :src="primaryImage(product)" :alt="product.name"
+                <img :src="primaryImage(product)" :alt="product.name" loading="lazy" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
-                    :class="isHovering && secondImage ? 'opacity-0' : 'opacity-100'">
-                <img v-if="secondImage" :src="secondImage" :alt="product.name"
+                    :class="secondImageVisible ? 'opacity-0' : 'opacity-100'">
+                <img v-if="showSecondImage" :src="secondImage" :alt="product.name" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
-                    :class="isHovering ? 'opacity-100' : 'opacity-0'">
+                    :class="secondImageVisible ? 'opacity-100' : 'opacity-0'"
+                    @load="secondImageLoaded = true">
             </template>
             <div v-else class="flex h-full w-full items-center justify-center">
                 <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>

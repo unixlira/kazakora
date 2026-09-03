@@ -57,7 +57,10 @@ jobs:
           ssh -p ${{ secrets.HOMOLOG_SSH_PORT }} ${{ secrets.HOMOLOG_SSH_USER }}@${{ secrets.HOMOLOG_SSH_HOST }} '
             cd ${{ secrets.HOMOLOG_DEPLOY_PATH }}
             PHP=/opt/alt/php83/usr/bin/php
-            $PHP artisan config:clear
+            # optimize:clear no lugar de config:clear: o rsync --delete
+            # acabou de trocar os arquivos, então qualquer cache compilado
+            # que tenha sobrado (config, rotas, views, eventos) está velho.
+            $PHP artisan optimize:clear
             $PHP artisan migrate --force
             $PHP artisan storage:link || true
             $PHP artisan config:cache

@@ -35,9 +35,7 @@ class CatalogController extends Controller
         $tipo = $request->query('tipo');
 
         $baseQuery = Product::query()
-            ->with('category:id,name,slug', 'images')
-            ->withAvg('reviews', 'rating')
-            ->withCount('reviews')
+            ->forCard()
             ->where('is_active', true)
             ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
             ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
@@ -51,9 +49,7 @@ class CatalogController extends Controller
         return Inertia::render('Catalog/Home', [
             'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'image_path_mobile', 'link_url']),
             'featuredProducts' => Product::query()
-                ->with('category:id,name,slug', 'images')
-                ->withAvg('reviews', 'rating')
-                ->withCount('reviews')
+                ->forCard()
                 ->where('is_active', true)
                 ->where('is_featured', true)
                 ->latest()
@@ -102,9 +98,7 @@ class CatalogController extends Controller
         $user = $request->user();
 
         $relatedProducts = Product::query()
-            ->with('category:id,name,slug', 'images')
-            ->withAvg('reviews', 'rating')
-            ->withCount('reviews')
+            ->forCard()
             ->where('is_active', true)
             ->where('id', '!=', $product->id)
             ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
@@ -117,9 +111,7 @@ class CatalogController extends Controller
 
             $relatedProducts = $relatedProducts->concat(
                 Product::query()
-                    ->with('category:id,name,slug', 'images')
-                    ->withAvg('reviews', 'rating')
-                    ->withCount('reviews')
+                    ->forCard()
                     ->where('is_active', true)
                     ->whereNotIn('id', $excludeIds)
                     ->latest()

@@ -5,7 +5,6 @@ namespace App\Modules\Marketplace\Jobs;
 use App\Models\User;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
-use App\Modules\Marketplace\Exceptions\LabelNotReadyException;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Notifications\LabelUnavailableNotification;
@@ -98,7 +97,22 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
         }
 
         if (! $service->attempt($shipment)) {
-            throw new LabelNotReadyException("Etiqueta do envio #{$this->shipmentId} ainda não disponível no canal.");
+            // Performance/ruído 2026-09-03: até aqui isso era um `throw` —
+            // o retry funcionava, mas cada tentativa virava uma exception
+            // registrada pelo handler do Laravel. Com backoff de 5s dentro
+            // de uma janela de 4h (mais ainda em venda agendada) e vários
+            // envios em paralelo, o laravel.log passou de 350 MB num único
+            // dia registrando uma condição totalmente esperada ("o canal
+            // ainda não gerou a etiqueta").
+            //
+            // release() reagenda exatamente igual — mesmo backoff, mesmo
+            // retryUntil(), e a trava do ShouldBeUnique CONTINUA segura
+            // durante a espera (CallQueuedHandler só solta o lock quando o
+            // job não foi released). A diferença é que não passa pelo
+            // handler de exceptions. Quando retryUntil() vence, o worker
+            // falha o job por conta própria e failed() roda igual antes,
+            // com MaxAttemptsExceededException no lugar da nossa.
+            $this->release(self::RETRY_INTERVAL_SECONDS);
         }
     }
 

@@ -110,6 +110,11 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::get('/dashboard/queue/{order}/image', [DashboardAgentController::class, 'queueOrderImage'])->name('dashboard.queue.image');
     Route::get('/dashboard/queue/{order}/image/{product}', [DashboardAgentController::class, 'queueOrderProductImage'])->name('dashboard.queue.product-image');
     Route::post('/dashboard/queue/{order}/pack', [DashboardAgentController::class, 'packOrder'])->name('dashboard.queue.pack');
+    // Fase 3 (2026-09-04): o clique de separar com conferência no canal
+    // antes de liberar. /pack acima continua no ar de propósito — KoraSync
+    // antigo ainda chama ele, e este deploy não pode quebrar quem não
+    // atualizou o app ainda.
+    Route::post('/dashboard/queue/{order}/separar', [DashboardAgentController::class, 'separateOrder'])->name('dashboard.queue.separate');
     Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
     Route::get('/dashboard/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('dashboard.scheduled-shipments');
     Route::get('/dashboard/mercadolivre-summary', [DashboardAgentController::class, 'mercadoLivreSummary'])->name('dashboard.mercadolivre-summary');

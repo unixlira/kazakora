@@ -9,14 +9,19 @@ use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Support\OrderImageArchiveService;
+use App\Modules\Marketplace\Support\SeparationGateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Throwable;
 
 /**
  * Dados agregados pro dashboard do agente local (app nativo Windows que
@@ -1158,11 +1163,68 @@ class DashboardAgentController extends Controller
             return response()->json(['message' => 'Pedido não está pago — nada pra embalar.'], 409);
         }
 
-        // O card é a CAIXA, não o pedido (ver groupOrdersShippedTogether()):
-        // num carrinho do Mercado Livre o clique embala os 2 pedidos que
-        // vão no mesmo pacote de uma vez. Sem isso o irmão continuaria
-        // "não embalado" e voltaria pra fila sozinho no poll seguinte, como
-        // se faltasse separar uma caixa que já foi.
+        $this->markPacked($order);
+
+        return response()->json(['packed_at' => $order->refresh()->packed_at]);
+    }
+
+    /**
+     * Fase 3 (2026-09-04) — o clique de "separado/embalado" com porteiro.
+     *
+     * Substitui packOrder() como destino do botão do KoraSync. A diferença
+     * é o que acontece ANTES de gravar packed_at:
+     *
+     * - Shopee e Mercado Livre: o pedido é reconsultado no canal agora (ver
+     *   SeparationGateService). Se voltou cancelado, NÃO embala — devolve
+     *   result=cancelled com a mensagem que o KoraSync mostra em modal, e o
+     *   pedido cai sozinho na aba "Cancelados" no próximo poll (o payload
+     *   de queue() já inclui cancelado desde 2026-08-31).
+     * - TikTok Shop (ponte do Bling): sem consulta e sem etiqueta — a
+     *   etiqueta continua saindo pelo painel do TikTok. O clique só move o
+     *   pedido pra embalados, que é exatamente o pedido do briefing.
+     *
+     * packOrder() continua existindo e funcionando: um KoraSync antigo, que
+     * ainda chama /pack, não quebra com este deploy.
+     */
+    public function separateOrder(Order $order, SeparationGateService $gate): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID && $order->status !== Order::STATUS_CANCELLED) {
+            return response()->json([
+                'result' => 'blocked',
+                'message' => 'Pedido não está pago — nada pra separar.',
+            ], 409);
+        }
+
+        $outcome = $gate->validate($order);
+
+        if ($outcome['result'] === SeparationGateService::RESULT_CANCELLED) {
+            return response()->json([
+                'result' => SeparationGateService::RESULT_CANCELLED,
+                'message' => $outcome['message'],
+                'order_id' => $order->id,
+            ]);
+        }
+
+        $this->markPacked($order);
+        $this->nudgeLabel($order);
+
+        return response()->json([
+            'result' => SeparationGateService::RESULT_OK,
+            'message' => $outcome['message'],
+            'channel_checked' => $outcome['checked'],
+            'packed_at' => $order->refresh()->packed_at,
+        ]);
+    }
+
+    /**
+     * O card é a CAIXA, não o pedido (ver groupOrdersShippedTogether()):
+     * num carrinho do Mercado Livre o clique embala os 2 pedidos que vão no
+     * mesmo pacote de uma vez. Sem isso o irmão continuaria "não embalado"
+     * e voltaria pra fila sozinho no poll seguinte, como se faltasse
+     * separar uma caixa que já foi.
+     */
+    private function markPacked(Order $order): void
+    {
         foreach ($this->ordersShippedWith($order) as $packOrder) {
             if ($packOrder->status !== Order::STATUS_PAID || $packOrder->packed_at !== null) {
                 continue;
@@ -1179,8 +1241,51 @@ class DashboardAgentController extends Controller
                     : "Pedido marcado como embalado no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
             );
         }
+    }
 
-        return response()->json(['packed_at' => $order->refresh()->packed_at]);
+    /**
+     * "Se estiver ativo, aí gera/busca a etiqueta" (briefing Fase 3). Não
+     * reimplementa nada: reaproveita as duas engrenagens que já existem —
+     * ConfirmChannelShippingJob quando o envio ainda nem existe do lado do
+     * canal, CheckShipmentLabelJob quando existe mas a etiqueta ainda não
+     * saiu. Se a etiqueta já está pronta, não faz nada.
+     *
+     * Só pros canais com fetchLabel() de verdade — a mesma lista usada em
+     * ChannelShippingService::confirm(). TikTok/Shein são stub lá, e
+     * disparar aqui só geraria 4h de tentativa inútil.
+     */
+    private function nudgeLabel(Order $order): void
+    {
+        if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
+            return;
+        }
+
+        $shipment = $order->loadMissing('channelShipment')->channelShipment;
+
+        if ($shipment && in_array($shipment->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
+            return;
+        }
+
+        // O empurrão da etiqueta é melhor-esforço e acontece DEPOIS do
+        // pedido já estar embalado: se ele explodir, o operador levaria um
+        // erro na cara por um trabalho que já deu certo, e — pior — poderia
+        // clicar de novo achando que não salvou. Falha aqui só vira log; a
+        // etiqueta ainda tem o webhook e o poke job como caminho.
+        try {
+            if ($shipment) {
+                CheckShipmentLabelJob::dispatch($shipment->id);
+
+                return;
+            }
+
+            ConfirmChannelShippingJob::dispatch($order->id);
+        } catch (Throwable $exception) {
+            Log::warning('separation.label_nudge_failed', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     /**

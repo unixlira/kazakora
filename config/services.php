@@ -231,6 +231,18 @@ return [
         'auth_draft_mode' => (bool) env('AMAZON_AUTH_DRAFT_MODE', true),
     ],
 
+
+    'whatsapp' => [
+        // API oficial do WhatsApp Cloud API. Tokens reais ficam só no .env/cofre,
+        // nunca na tela admin. O painel mostra apenas presença/ausência.
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
+        'app_secret' => env('WHATSAPP_APP_SECRET'),
+        'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
+        'webhook_url' => env('WHATSAPP_WEBHOOK_URL', 'https://kazakora.devlira.com.br/api/webhooks/whatsapp'),
+    ],
+
     // Pra quem manda o e-mail de fechamento quinzenal do Mercado Envios
     // Flex — pedido explícito 2026-08-10, ver CheckFlexBillingCycle.
     'mercado_livre_flex' => [

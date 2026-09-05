@@ -60,6 +60,14 @@ export const sidebarSections = [
             { label: 'Cancelados', href: '/admin/korasync/cancelados', icon: 'fas fa-circle-xmark', color: 'text-error', permission: 'operacional.view' },
         ],
     },
+
+    {
+        heading: 'WhatsApp',
+        items: [
+            { label: 'Configurações', href: '/admin/whatsapp', icon: 'fab fa-whatsapp', color: 'text-success', permission: 'configuracoes.integracoes' },
+            { label: 'Disparos', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', color: 'text-primary', permission: 'configuracoes.integracoes' },
+        ],
+    },
     {
         heading: 'Configurações',
         items: [

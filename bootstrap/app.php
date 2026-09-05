@@ -61,6 +61,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/stripe/webhook',
             'api/mercadopago/webhook',
             'api/shopee/webhook',
+            'api/webhooks/whatsapp',
+            'api/whatsapp/webhook',
             'api/bling/webhook',
         ]);
     })

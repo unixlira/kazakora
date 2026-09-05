@@ -35,6 +35,8 @@ use App\Modules\Admin\Http\Controllers\PrintJobController;
 use App\Modules\Admin\Http\Controllers\PrintTestController;
 use App\Modules\Admin\Http\Controllers\WebhookLogController;
 use App\Modules\Admin\Http\Controllers\WebhookTestController;
+use App\Modules\Admin\Http\Controllers\WhatsAppCampaignController;
+use App\Modules\Admin\Http\Controllers\WhatsAppSettingsController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
@@ -428,6 +430,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('api-parceiros/{api_partner}', [ApiPartnerController::class, 'destroy'])->name('api-parceiros.excluir');
         Route::post('api-parceiros/{api_partner}/tokens', [ApiPartnerController::class, 'issueToken'])->name('api-parceiros.tokens.emitir');
         Route::delete('api-parceiros/{api_partner}/tokens/{token}', [ApiPartnerController::class, 'revokeToken'])->name('api-parceiros.tokens.revogar');
+
+
+        // WhatsApp/Manuela precisa ser publicado como um conjunto: rotas, controllers,
+        // migrations e componentes Vue. Se só o build Vite/manifest for enviado, o menu
+        // aponta para /admin/whatsapp, mas o Laravel ativo não encontra a página e a tela quebra.
+        // Não remover estas rotas sem remover também o item do menu e os assets relacionados.
+        Route::get('whatsapp', [WhatsAppSettingsController::class, 'edit'])->name('whatsapp.editar');
+        Route::put('whatsapp', [WhatsAppSettingsController::class, 'update'])->name('whatsapp.atualizar');
+        Route::post('whatsapp/testar-envio', [WhatsAppSettingsController::class, 'testSend'])->name('whatsapp.testar-envio');
+        Route::get('whatsapp/disparos', [WhatsAppCampaignController::class, 'index'])->name('whatsapp.disparos');
+        Route::post('whatsapp/disparos', [WhatsAppCampaignController::class, 'store'])->name('whatsapp.disparos.enviar');
 
         Route::get('integracoes', [IntegrationController::class, 'index'])->name('integracoes.listar');
         Route::delete('integracoes/{channel}', [IntegrationController::class, 'disconnect'])->name('integracoes.desconectar');

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
 // Chamado pelos servidores do Stripe, não por um navegador — sem sessão/CSRF
@@ -26,6 +27,19 @@ Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handl
 // 405 pro teste GET deles).
 Route::match(['get', 'head'], '/mercadopago/callback', fn () => response()->json(['status' => 'ok']))->name('api.mercadopago.callback');
 Route::match(['get', 'head'], '/mercadopago/webhook', fn () => response()->json(['status' => 'ok']))->name('api.mercadopago.webhook.verify');
+
+
+Route::prefix('whatsapp')->name('api.whatsapp.')->group(function () {
+    // Webhook oficial da Meta/WhatsApp. GET valida hub.challenge; POST recebe mensagens/status.
+    Route::match(['get', 'head'], '/webhook', [WhatsAppWebhookController::class, 'verify'])->name('webhook.verify');
+    Route::post('/webhook', [WhatsAppWebhookController::class, 'handle'])->name('webhook');
+});
+
+Route::prefix('webhooks')->name('api.webhooks.')->group(function () {
+    // Alias compatível com a URL operacional usada no Meta Manager.
+    Route::match(['get', 'head'], '/whatsapp', [WhatsAppWebhookController::class, 'verify'])->name('whatsapp.verify');
+    Route::post('/whatsapp', [WhatsAppWebhookController::class, 'handle'])->name('whatsapp');
+});
 
 Route::prefix('mercadolivre')->name('api.mercadolivre.')->group(function () {
     // OAuth is initiated/completed by a logged-in admin's browser, so it

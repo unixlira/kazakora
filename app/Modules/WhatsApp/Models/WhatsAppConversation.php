@@ -18,8 +18,12 @@ class WhatsAppConversation extends Model
         'wa_id',
         'phone',
         'profile_name',
+        'profile_photo_url',
+        'contact_notes',
         'status',
         'needs_human',
+        'unread_count',
+        'last_message_preview',
         'last_message_at',
         'last_customer_message_at',
         'last_auto_reply_at',
@@ -28,6 +32,7 @@ class WhatsAppConversation extends Model
 
     protected $casts = [
         'needs_human' => 'boolean',
+        'unread_count' => 'integer',
         'last_message_at' => 'datetime',
         'last_customer_message_at' => 'datetime',
         'last_auto_reply_at' => 'datetime',

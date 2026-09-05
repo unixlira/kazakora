@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -72,30 +73,43 @@ class WhatsAppWebhookController extends Controller
         $body = $message['text']['body'] ?? $message['button']['text'] ?? $message['interactive']['button_reply']['title'] ?? null;
         $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp']) : now();
         $waId = $message['from'];
+        $preview = $this->messagePreview($body, $message['type'] ?? 'unknown');
 
         $conversation = WhatsAppConversation::query()->updateOrCreate(
             ['wa_id' => $waId],
             [
                 'phone' => $waId,
                 'profile_name' => $contact['profile']['name'] ?? null,
+                'profile_photo_url' => $contact['profile']['photo_url'] ?? null,
+                'last_message_preview' => $preview,
                 'last_message_at' => $receivedAt,
                 'last_customer_message_at' => $receivedAt,
                 'metadata' => ['last_payload_object' => $payload['object'] ?? null],
             ],
         );
 
-        WhatsAppMessage::query()->firstOrCreate(
-            ['wa_message_id' => $message['id'] ?? null],
-            [
-                'conversation_id' => $conversation->id,
-                'direction' => 'inbound',
-                'type' => $message['type'] ?? 'unknown',
-                'body' => $body,
-                'status' => 'received',
-                'payload' => $message,
-                'received_at' => $receivedAt,
-            ],
-        );
+        $messagePayload = [
+            'conversation_id' => $conversation->id,
+            'direction' => 'inbound',
+            'type' => $message['type'] ?? 'unknown',
+            'body' => $body,
+            'status' => 'received',
+            'payload' => $message,
+            'received_at' => $receivedAt,
+        ];
+
+        if (filled($message['id'] ?? null)) {
+            $messageRecord = WhatsAppMessage::query()->firstOrCreate(
+                ['wa_message_id' => $message['id']],
+                $messagePayload,
+            );
+        } else {
+            $messageRecord = WhatsAppMessage::query()->create($messagePayload);
+        }
+
+        if ($messageRecord->wasRecentlyCreated) {
+            $conversation->increment('unread_count');
+        }
 
         return $conversation->fresh();
     }
@@ -176,7 +190,11 @@ class WhatsAppWebhookController extends Controller
                 'sent_at' => now(),
             ]);
 
-            $conversation->update(['last_auto_reply_at' => now(), 'last_message_at' => now()]);
+            $conversation->update([
+                'last_auto_reply_at' => now(),
+                'last_message_at' => now(),
+                'last_message_preview' => $this->messagePreview($reply['reply'], 'text'),
+            ]);
         } catch (Throwable $exception) {
             Log::warning('whatsapp_auto_reply_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
 
@@ -189,6 +207,22 @@ class WhatsAppWebhookController extends Controller
                 'payload' => ['manuela' => $reply, 'error' => $exception->getMessage()],
             ]);
         }
+    }
+
+    private function messagePreview(?string $body, string $type): string
+    {
+        if (filled($body)) {
+            return Str::limit(trim($body), 220);
+        }
+
+        return match ($type) {
+            'image' => '📷 Imagem recebida',
+            'video' => '🎥 Vídeo recebido',
+            'audio', 'voice' => '🎙️ Áudio recebido',
+            'document' => '📎 Documento recebido',
+            'location' => '📍 Localização recebida',
+            default => 'Mensagem recebida',
+        };
     }
 
     private function signatureIsValid(Request $request): bool

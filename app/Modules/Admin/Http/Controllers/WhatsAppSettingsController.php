@@ -9,6 +9,7 @@ use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -20,9 +21,47 @@ class WhatsAppSettingsController extends Controller
         $settingsPayload = $settings->all();
         $configuredCallback = config('services.whatsapp.webhook_url') ?: url('/api/whatsapp/webhook');
         $lastInboundAt = WhatsAppConversation::query()->max('last_customer_message_at');
+        $conversations = WhatsAppConversation::query()
+            ->latest('last_message_at')
+            ->latest('id')
+            ->limit(40)
+            ->get()
+            ->map(function (WhatsAppConversation $conversation) {
+                $messages = $conversation->messages()
+                    ->oldest('id')
+                    ->limit(80)
+                    ->get()
+                    ->map(fn ($message) => [
+                        'id' => $message->id,
+                        'direction' => $message->direction,
+                        'type' => $message->type,
+                        'body' => $message->body,
+                        'status' => $message->status,
+                        'time' => ($message->sent_at ?? $message->received_at ?? $message->created_at)?->timezone('America/Sao_Paulo')->format('H:i'),
+                        'date' => ($message->sent_at ?? $message->received_at ?? $message->created_at)?->timezone('America/Sao_Paulo')->format('d/m/Y'),
+                    ]);
+                $displayName = $conversation->profile_name ?: 'Contato sem nome';
+
+                return [
+                    'id' => $conversation->id,
+                    'wa_id' => $conversation->wa_id,
+                    'phone' => $conversation->phone,
+                    'profile_name' => $conversation->profile_name,
+                    'display_name' => $displayName,
+                    'avatar_initials' => Str::of($displayName)->explode(' ')->filter()->take(2)->map(fn ($part) => Str::upper(Str::substr($part, 0, 1)))->join('') ?: 'KK',
+                    'profile_photo_url' => $conversation->profile_photo_url,
+                    'status' => $conversation->status,
+                    'needs_human' => $conversation->needs_human,
+                    'unread_count' => $conversation->unread_count,
+                    'last_message_preview' => $conversation->last_message_preview ?: ($messages->last()['body'] ?? 'Nenhuma mensagem registrada ainda.'),
+                    'last_message_at' => $conversation->last_message_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+                    'messages' => $messages,
+                ];
+            });
 
         return Inertia::render('Admin/WhatsApp/Index', [
             'settings' => $settingsPayload,
+            'conversations' => $conversations,
             'callbackUrl' => $configuredCallback,
             'requestedCallbackUrl' => config('services.whatsapp.webhook_url') ?: 'https://kazakora.devlira.com.br/api/webhooks/whatsapp',
             'credentials' => [

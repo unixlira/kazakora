@@ -271,11 +271,7 @@ class LabelProcessingService
 
         foreach ([$blocos[0], $blocos[1]] as $indice => $bloco) {
             [$compacto, $altura] = $this->compactarZpl($bloco);
-            $larguraNativa = 812;
-
-            if ($indice === 1) {
-                [$compacto, $larguraNativa] = $this->reforcarCodigoDaDanfe($compacto);
-            }
+            [$compacto, $larguraNativa] = $this->engrossarCodigoDeBarras($compacto, $indice === 1, $altura);
 
             $pdfs[] = $this->converterCompactoParaPdf($compacto, $altura, $larguraNativa);
         }
@@ -382,30 +378,142 @@ class LabelProcessingService
      * Labelary vem deles — não do 4x6 fixo de extractLabelSizeInInches().
      */
     /**
-     * O código da chave de acesso sai do canal em ^BY2 — barra de 0,2 mm,
-     * que depois da escala da composição vira 0,148 mm e NÃO É LIDO. Foi o
-     * que o teste físico de 2026-09-06 reprovou: o lado da transportadora
-     * leu, este não.
+     * Engrossa a barra até o código ocupar a largura inteira da metade.
      *
-     * ^BY3 resolve, mas 44 dígitos em Code 128-C viram ~104 mm de código —
-     * não cabem nos 101,6 mm da etiqueta física. Como este bloco é
-     * renderizado SOZINHO antes de entrar na metade, a tela nativa dele não
-     * precisa ter o tamanho da etiqueta: ^PW836 dá o espaço, e a escala da
-     * composição devolve tudo pro lugar. Resultado medido: 0,254 mm, o
-     * mesmo valor do código que leu.
+     * TESTE FÍSICO 2026-09-06: com a etiqueta girada, o QR leu e os dois
+     * códigos de barras NÃO. A causa é orientação — girando o conteúdo, as
+     * barras passam a correr no sentido do AVANÇO do papel ("escada"),
+     * onde a térmica depende do passo do motor, em vez de no sentido do
+     * cabeçote ("cerca"), onde cada elemento é um ponto fixo. Barra mais
+     * grossa é a compensação direta.
      *
-     * A altura cai de 150 pra 110 dots (pedido do usuário: pode engrossar
-     * e diminuir a altura, desde que não gire).
+     * A barra final vale `^BY x 0,125mm x (largura da metade / largura
+     * nativa)`. Aumentar o ^BY e a largura nativa JUNTOS não adianta nada:
+     * o ganho se cancela na divisão (erro cometido na primeira tentativa).
+     * O ganho real vem de a tela nativa ser do tamanho do CÓDIGO, e não da
+     * folha — o código do ML ocupava 78 dos 101,6 mm da tela, e esses
+     * 23 mm de sobra eram escala jogada fora.
      *
-     * @return array{0: string, 1: int} ZPL reforçado e a largura nativa
+     * A largura é MEDIDA, não estimada: renderiza numa tela folgada, acha a
+     * coluna mais à direita com tinta e re-renderiza no tamanho exato.
+     * Estimar módulos de Code 128 pelo número de dígitos erra feio quando o
+     * canal muda o conteúdo do código.
+     *
+     * @return array{0: string, 1: int} ZPL e a largura nativa em dots
      */
-    private function reforcarCodigoDaDanfe(string $zpl): array
+    private function engrossarCodigoDeBarras(string $zpl, bool $ehDanfe, int $alturaEmDots): array
     {
-        $zpl = preg_replace('/\^BY2(,|\^)/', '^BY3$1', $zpl, 1);
-        $zpl = preg_replace('/\^BC([NRIB]?),150,/', '^BC$1,110,', $zpl, 1);
-        $zpl = preg_replace('/\^PW\d+/', '^PW836', $zpl, 1);
+        $de = $ehDanfe ? 2 : 3;
+        $para = $de + 1;
+        $larguraBase = 812;
 
-        return [$zpl, 836];
+        if (! str_contains($zpl, "^BY{$de}")) {
+            return [$zpl, $larguraBase];
+        }
+
+        $zpl = preg_replace('/\^BY'.$de.'(,|\^)/', "^BY{$para}$1", $zpl, 1);
+
+        // Altura de barra menor na DANFE, a pedido do usuário: pode
+        // engrossar e diminuir a altura, desde que não gire.
+        if ($ehDanfe) {
+            $zpl = preg_replace('/\^BC([NRIB]?),150,/', '^BC$1,110,', $zpl, 1);
+        }
+
+        // Mede o código na tela ORIGINAL, antes de mexer no ^PW: numa tela
+        // folgada os campos centralizados/à direita se espalham e a medida
+        // vira a do texto, não a do código (erro cometido na 1ª tentativa).
+        $larguraAtual = $this->medirLarguraDoCodigo(
+            $this->converterCompactoParaPdf(
+                preg_replace('/\^BY'.$para.'(,|\^)/', "^BY{$de}$1", $zpl, 1),
+                $alturaEmDots,
+                $larguraBase,
+            ),
+        );
+
+        // O código cresce na proporção do ^BY. A tela passa a ser do
+        // tamanho DELE — é essa folga eliminada que vira barra mais grossa.
+        $larguraNativa = max($larguraBase, (int) ceil($larguraAtual * $para / $de) + 8);
+
+        $zpl = preg_replace('/\^PW\d+/', "^PW{$larguraNativa}", $zpl, 1);
+
+        return [$zpl, $larguraNativa];
+    }
+
+    /**
+     * Largura do código de barras, em dots de 203 dpi.
+     *
+     * Acha o código pela assinatura que só ele tem: a MESMA sequência de
+     * barras repetida por dezenas de linhas seguidas. Texto muda de linha
+     * pra linha; código de barras não.
+     */
+    private function medirLarguraDoCodigo(string $pdfBytes): int
+    {
+        $imagick = new \Imagick;
+        $imagick->setResolution(203, 203);
+        $imagick->readImageBlob($pdfBytes);
+        $imagick->setImageBackgroundColor('white');
+        $imagick = $imagick->flattenImages();
+        $imagick->transformImageColorspace(\Imagick::COLORSPACE_GRAY);
+
+        $largura = $imagick->getImageWidth();
+        $altura = $imagick->getImageHeight();
+        $assinaturas = [];
+
+        for ($y = 2; $y < $altura - 2; $y += 2) {
+            $faixa = clone $imagick;
+            $faixa->cropImage($largura, 1, 0, $y);
+
+            $inicio = null;
+            $fim = null;
+            $transicoes = 0;
+            $escuroAntes = false;
+            $x = 0;
+
+            foreach ($faixa->getPixelIterator() as $linha) {
+                foreach ($linha as $pixel) {
+                    $escuro = $pixel->getColorValue(\Imagick::COLOR_RED) < 0.5;
+
+                    if ($escuro) {
+                        $inicio ??= $x;
+                        $fim = $x;
+                    }
+
+                    if ($escuro !== $escuroAntes) {
+                        $transicoes++;
+                        $escuroAntes = $escuro;
+                    }
+
+                    $x++;
+                }
+            }
+
+            $faixa->destroy();
+
+            if ($transicoes < 40 || $inicio === null) {
+                continue;
+            }
+
+            $chave = $transicoes.':'.$inicio.':'.$fim;
+            $assinaturas[$chave] = ($assinaturas[$chave] ?? 0) + 1;
+        }
+
+        $imagick->destroy();
+
+        if ($assinaturas === []) {
+            return $largura;
+        }
+
+        arsort($assinaturas);
+        $vencedora = array_key_first($assinaturas);
+
+        // Menos de ~10 linhas iguais não é código de barras, é ruído.
+        if ($assinaturas[$vencedora] < 10) {
+            return $largura;
+        }
+
+        [, $inicio, $fim] = explode(':', $vencedora);
+
+        return (int) $fim - (int) $inicio;
     }
 
     private function converterCompactoParaPdf(string $zpl, int $alturaEmDots, int $larguraEmDots = 812): string

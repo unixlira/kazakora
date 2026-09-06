@@ -63,6 +63,13 @@ Schedule::command('invoices:sync-bling')->everyFiveMinutes()->withoutOverlapping
 // Só preenche o que está vazio no Bling, nunca sobrescreve.
 Schedule::command('bling:sync-fiscal')->everyThirtyMinutes()->withoutOverlapping(20);
 
+// Pedido que o canal já despachou mas que nunca recebeu o clique de
+// separar fica na fila do KoraSync pra sempre — a fila é `paid` +
+// `packed_at IS NULL`, e ninguém clica em "separar" num pedido que já foi
+// embora. Foi assim que a fila chegou a 211 cards, o mais antigo de
+// 06/08. Roda de madrugada porque reconsulta canal a canal.
+Schedule::command('separation:close-shipped')->dailyAt('04:30')->withoutOverlapping(60);
+
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
 // ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,

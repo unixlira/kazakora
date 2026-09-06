@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
+use App\Modules\Catalog\Support\ProductMediaBackfillService;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
@@ -410,6 +411,22 @@ class OrderImportService
                             'item_external_id' => $item['external_id'],
                             'product_id' => $product->id,
                         ]);
+
+                        // Produto nascido de venda vinha SEM foto nenhuma
+                        // em todos os drivers — e é justamente ele que o
+                        // OrderImageArchiveService não consegue servir,
+                        // deixando o card de separação sem imagem. Busca a
+                        // foto no próprio anúncio agora, enquanto o pedido
+                        // está entrando. Best-effort de propósito: falha
+                        // aqui não pode derrubar a importação do pedido.
+                        try {
+                            app(ProductMediaBackfillService::class)->fill($product);
+                        } catch (\Throwable $exception) {
+                            Log::warning('marketplace.order_import.media_backfill_failed', [
+                                'product_id' => $product->id,
+                                'message' => $exception->getMessage(),
+                            ]);
+                        }
 
                         // Pedido explícito 2026-08-17 (variações de
                         // produto, achado ao vivo investigando o pedido

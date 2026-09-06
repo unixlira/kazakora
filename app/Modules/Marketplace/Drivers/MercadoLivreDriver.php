@@ -151,6 +151,39 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      *
      * @return ?array{external_id: string, name: string, price: ?float, stock: ?int, sku: ?string}
      */
+    /**
+     * Fotos do anúncio. `items/{id}` já era chamado por fetchItemDetail()
+     * e a resposta SEMPRE trouxe `pictures` — o array só era descartado no
+     * retorno. Era por isso que produto criado por autoImportProduct()
+     * nascia sem foto nenhuma e o card do KoraSync ficava sem imagem.
+     *
+     * `secure_url` antes de `url`: a página é servida em https e a versão
+     * http vira mixed content bloqueado pelo navegador.
+     *
+     * @return array<int, string>
+     */
+    public function fetchItemImages(string $externalId, ?string $externalModelId = null): array
+    {
+        $this->ensureConfigured();
+
+        try {
+            $item = $this->client->get("items/{$externalId}");
+        } catch (MercadoLivreException $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.item_images.lookup_failed', [
+                'external_id' => $externalId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [];
+        }
+
+        return collect($item['pictures'] ?? [])
+            ->map(fn ($picture) => (string) ($picture['secure_url'] ?? $picture['url'] ?? ''))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
     public function fetchItemDetail(string $externalId): ?array
     {
         $this->ensureConfigured();

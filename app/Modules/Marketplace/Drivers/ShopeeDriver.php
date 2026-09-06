@@ -442,6 +442,17 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      *
      * @return array{images: array<int, string>, video: ?array{url: string, duration: ?int}}
      */
+    /**
+     * Só a fatia de imagens do fetchItemMedia() abaixo, pro contrato comum
+     * que ProductMediaBackfillService usa em todos os canais.
+     *
+     * @return array<int, string>
+     */
+    public function fetchItemImages(string $externalId, ?string $externalModelId = null): array
+    {
+        return array_values($this->fetchItemMedia($externalId)['images'] ?? []);
+    }
+
     public function fetchItemMedia(string $externalId): array
     {
         $this->ensureConfigured();

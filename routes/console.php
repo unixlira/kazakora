@@ -70,6 +70,12 @@ Schedule::command('bling:sync-fiscal')->everyThirtyMinutes()->withoutOverlapping
 // 06/08. Roda de madrugada porque reconsulta canal a canal.
 Schedule::command('separation:close-shipped')->dailyAt('04:30')->withoutOverlapping(60);
 
+// Card de separação sem foto é inaceitável (pedido do usuário, 2026-09-05:
+// é pela imagem que o operador confere o que embalar). O auto-import já
+// busca a foto na hora da venda; esta varredura cobre o que ficou pra trás
+// e o produto cujo canal estava fora do ar naquele instante.
+Schedule::command('catalog:fill-missing-images')->hourly()->withoutOverlapping(30);
+
 // Rede de segurança pro caso de autoImportProduct() falhar na hora do
 // import (API do canal fora do ar naquele instante) — sem isso o item
 // ficava sem produto/SKU vinculado pra sempre (achado real 2026-08-19,

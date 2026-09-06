@@ -24,6 +24,18 @@ abstract class AbstractMarketplaceDriver implements MarketplaceChannelDriver
     }
 
     /**
+     * URLs das fotos do anúncio no canal. Default vazio: canal sem forma
+     * de consultar mídia (Amazon, TikTok via Bling) devolve [] e quem
+     * chamou tenta o próximo canal do produto, em vez de quebrar.
+     *
+     * @return array<int, string>
+     */
+    public function fetchItemImages(string $externalId, ?string $externalModelId = null): array
+    {
+        return [];
+    }
+
+    /**
      * Default: canal ainda sem busca de avaliações implementada (só a
      * Shopee tem, por enquanto — ver ShopeeDriver::fetchReviews()).
      * Lançar, e não devolver [], porque ReviewImportService precisa

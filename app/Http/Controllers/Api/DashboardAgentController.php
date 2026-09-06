@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
@@ -15,6 +17,7 @@ use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\OrderImageArchiveService;
 use App\Modules\Marketplace\Support\SeparationGateService;
 use Illuminate\Http\JsonResponse;
@@ -1255,6 +1258,119 @@ class DashboardAgentController extends Controller
             'message' => $outcome['message'],
             'channel_checked' => $outcome['checked'],
             'packed_at' => $order->refresh()->packed_at,
+        ]);
+    }
+
+    /**
+     * Candidatos pra vincular um item sem produto (2026-09-06).
+     *
+     * Busca por nome ou SKU, só produto ativo. Serve a tela do KoraSync que
+     * fecha a lacuna descrita em TikTokShopDriver::matchByNameSimilarity():
+     * quando o canal não diz qual variação foi vendida, o sistema se recusa
+     * a chutar e pede pra alguém vincular UMA vez. Até agora não havia onde.
+     */
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $termo = trim((string) $request->query('q', ''));
+
+        $produtos = Product::query()
+            ->where('is_active', true)
+            ->when($termo !== '', fn ($query) => $query->where(
+                fn ($q) => $q->where('name', 'like', "%{$termo}%")->orWhere('sku', 'like', "%{$termo}%"),
+            ))
+            ->orderBy('name')
+            ->limit(30)
+            ->get(['id', 'name', 'sku', 'color', 'stock']);
+
+        return response()->json([
+            'products' => $produtos->map(fn (Product $p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'sku' => $p->sku,
+                'color' => $p->color,
+                'stock' => $p->stock,
+            ]),
+        ]);
+    }
+
+    /**
+     * Vincula um item de pedido sem produto ao produto certo, escolhido por
+     * uma pessoa (2026-09-06). É a decisão que o sistema se RECUSA a tomar
+     * sozinho: as 4 cores do Power Bank têm o mesmo nome no catálogo e o
+     * canal não informa a cor, então chutar significaria o operador embalar
+     * a cor errada (ver o comentário longo em matchByNameSimilarity()).
+     *
+     * Vale pro CÓDIGO do canal, não só pra este item: grava o
+     * ProductChannelListing e alcança todos os itens em aberto com o mesmo
+     * external_item_id. É o que o driver já esperava que existisse — "basta
+     * alguém vincular UMA vez e nunca mais se decide isso pra esse código".
+     *
+     * NÃO mexe em estoque: o canal já debitou do lado dele no momento da
+     * venda, e o produto que está sendo vinculado agora foi vendido antes —
+     * debitar aqui contaria a mesma venda duas vezes (mesmo raciocínio de
+     * RelinkUnmappedMarketplaceItems).
+     */
+    public function linkOrderItem(Request $request, Order $order, OrderItem $item): JsonResponse
+    {
+        if ($item->order_id !== $order->id) {
+            return response()->json(['message' => 'Este item não é deste pedido.'], 404);
+        }
+
+        if ($item->product_id !== null) {
+            return response()->json(['message' => 'Este item já tem produto vinculado.'], 409);
+        }
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+        ]);
+
+        $product = Product::query()->findOrFail($validated['product_id']);
+        $externalItemId = $item->external_item_id;
+
+        $itens = OrderItem::query()
+            ->whereNull('product_id')
+            ->when(
+                $externalItemId !== null,
+                fn ($query) => $query->where('external_item_id', $externalItemId),
+                fn ($query) => $query->where('id', $item->id),
+            )
+            ->get();
+
+        foreach ($itens as $alvo) {
+            $alvo->forceFill([
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+            ])->save();
+        }
+
+        // O listing é o que evita repetir essa decisão: da próxima venda
+        // com o mesmo código, o driver acha o produto sem passar perto da
+        // similaridade de nome.
+        if ($externalItemId !== null && $order->origin !== null) {
+            ProductChannelListing::query()->firstOrCreate(
+                ['channel' => $order->origin, 'external_id' => $externalItemId],
+                [
+                    'product_id' => $product->id,
+                    'is_enabled' => true,
+                    'status' => ProductChannelListing::STATUS_PUBLISHED,
+                    'last_synced_at' => now(),
+                ],
+            );
+        }
+
+        app(OrderFulfillmentTimeline::class)->record(
+            $order,
+            OrderFulfillmentEvent::STEP_STOCK_UPDATED,
+            OrderFulfillmentEvent::STATUS_SUCCESS,
+            "Item \"{$item->product_name}\" vinculado ao produto #{$product->id} ({$product->sku}) pelo KoraSync",
+        );
+
+        return response()->json([
+            'result' => 'ok',
+            'message' => $itens->count() > 1
+                ? "Produto vinculado. {$itens->count()} itens com o mesmo código do canal foram corrigidos."
+                : 'Produto vinculado.',
+            'product' => ['id' => $product->id, 'name' => $product->name, 'sku' => $product->sku],
         ]);
     }
 

@@ -28,6 +28,21 @@ class OrderImageArchiveService
     private const DISK = 'local';
 
     /**
+     * Lado máximo da miniatura arquivada.
+     *
+     * BUG REAL 2026-09-06 (relatado como "foto sem aparecer"): isto
+     * reencodava a foto no tamanho ORIGINAL pra um slot de 50x50 no card.
+     * Medido na fila real: de 86 KB a 1,1 MB POR miniatura — com ~200
+     * itens na tela, dezenas de megabytes por carregamento. As fotos não
+     * faltavam: não terminavam de chegar, e ainda faziam a hospedagem
+     * tratar a tela como tráfego de bot.
+     *
+     * 320 e não 50: o dobro do slot cobre tela retina, e o mesmo arquivo
+     * serve se um dia a foto for ampliada na tela.
+     */
+    private const LADO_MAXIMO = 320;
+
+    /**
      * @param  int|null  $productId  Foto de um produto ESPECÍFICO do
      *                                pedido (pedido explícito 2026-08-30:
      *                                "múltiplos produtos de 1 pedido... o
@@ -79,6 +94,8 @@ class OrderImageArchiveService
         }
 
         try {
+            $gd = $this->reduzir($gd);
+
             ob_start();
             imagepng($gd);
             $pngBytes = ob_get_clean();
@@ -93,6 +110,36 @@ class OrderImageArchiveService
         Storage::disk(self::DISK)->put($path, $pngBytes);
 
         return $path;
+    }
+
+    /**
+     * Reduz mantendo a proporção; imagem já pequena passa intacta.
+     * imagealphablending(false) + imagesavealpha(true) preservam o fundo
+     * transparente, que é o padrão das fotos de catálogo — sem isso o
+     * recorte do produto ganha um fundo preto.
+     */
+    private function reduzir(\GdImage $gd): \GdImage
+    {
+        $largura = imagesx($gd);
+        $altura = imagesy($gd);
+        $maior = max($largura, $altura);
+
+        if ($maior <= self::LADO_MAXIMO) {
+            return $gd;
+        }
+
+        $escala = self::LADO_MAXIMO / $maior;
+        $menor = imagescale($gd, (int) round($largura * $escala), (int) round($altura * $escala), IMG_BICUBIC);
+
+        if ($menor === false) {
+            return $gd;
+        }
+
+        imagealphablending($menor, false);
+        imagesavealpha($menor, true);
+        imagedestroy($gd);
+
+        return $menor;
     }
 
     /**
@@ -121,7 +168,7 @@ class OrderImageArchiveService
         $suffix = $productId !== null ? "{$order->id}-{$productId}" : (string) $order->id;
 
         return sprintf(
-            'order-images/%s/%s/%s/%s/%s.png',
+            'order-images/t320/%s/%s/%s/%s/%s.png',
             $when->format('Y'),
             $when->format('m'),
             $when->format('d'),

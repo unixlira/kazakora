@@ -245,6 +245,95 @@ class SeparateOrderEndpointTest extends TestCase
     }
 
     /**
+     * "Tentar de novo" (2026-09-06): a impressora recusou, o job ficou
+     * failed, e até então não havia caminho nenhum pra mandar de novo sem
+     * mexer no banco.
+     */
+    public function test_reprint_requeues_the_same_label_after_a_printer_failure(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $order->forceFill(['packed_at' => now()])->save();
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'external_shipment_id' => 'SHIP-11',
+            'shipping_method' => 'standard',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-11.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        PrintJob::create([
+            'order_id' => $order->id,
+            'label_path' => "labels/{$order->id}/etiqueta-11.pdf",
+            'status' => PrintJob::STATUS_FAILED,
+            'error_message' => 'Impressora não está pronta',
+        ]);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        // Linha NOVA, não a antiga reaberta: o agente da loja ignora id que
+        // já viu.
+        $this->assertSame(2, PrintJob::where('order_id', $order->id)->count());
+        $this->assertSame(1, PrintJob::where('order_id', $order->id)->where('status', PrintJob::STATUS_QUEUED)->count());
+    }
+
+    public function test_reprint_does_not_stack_a_second_label_when_one_is_already_waiting(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $order->forceFill(['packed_at' => now()])->save();
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'external_shipment_id' => 'SHIP-12',
+            'shipping_method' => 'standard',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-12.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        PrintJob::create([
+            'order_id' => $order->id,
+            'label_path' => "labels/{$order->id}/etiqueta-12.pdf",
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['ok' => true, 'already_queued' => true]);
+
+        $this->assertSame(1, PrintJob::where('order_id', $order->id)->count());
+    }
+
+    public function test_reprint_is_refused_for_an_order_that_was_not_separated(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'external_shipment_id' => 'SHIP-13',
+            'shipping_method' => 'standard',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-13.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['ok' => false]);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /**
      * Desfazer (2026-09-05) — o botão da aba "Separados" do KoraSync.
      */
     public function test_undoing_separation_returns_the_order_to_the_queue(): void

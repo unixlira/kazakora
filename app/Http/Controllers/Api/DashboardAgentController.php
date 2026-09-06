@@ -1455,6 +1455,79 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * "Tentar de novo" do modal de falha de impressão (2026-09-06).
+     *
+     * Nasceu do pedido #1503: a impressora recusou a etiqueta, o job ficou
+     * failed e não havia caminho nenhum pra mandar de novo sem alguém
+     * mexer no banco. Reaproveita a etiqueta JÁ baixada — não consulta o
+     * canal, não gera etiqueta nova, não passa de novo pelo gate: o pedido
+     * já foi separado, o que faltou foi papel sair.
+     *
+     * Cria uma LINHA nova de PrintJob de propósito, em vez de reabrir a
+     * antiga: o agente da loja guarda localmente os jobs que já viu, e um
+     * id repetido costuma não disparar impressão nenhuma.
+     */
+    public function reprintLabel(Order $order): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Pedido não está mais pago — não dá pra reimprimir por aqui.',
+            ], 409);
+        }
+
+        if ($order->packed_at === null) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Conclua a separação primeiro — a etiqueta sai por lá.',
+            ], 409);
+        }
+
+        $shipment = $order->loadMissing('channelShipment')->channelShipment;
+
+        if (! $shipment?->label_path) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'A etiqueta deste pedido ainda não foi baixada do canal.',
+            ], 409);
+        }
+
+        // Já tem uma esperando a impressora: não empilha uma segunda, senão
+        // uma sequência de cliques vira uma sequência de etiquetas.
+        $emAberto = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->whereIn('status', [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED])
+            ->latest('id')
+            ->first();
+
+        if ($emAberto) {
+            return response()->json([
+                'ok' => true,
+                'already_queued' => true,
+                'job_id' => $emAberto->id,
+                'message' => 'Esta etiqueta já está na fila da impressora.',
+            ]);
+        }
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => $shipment->channel,
+            'tracking_code' => $shipment->tracking_code,
+            'label_path' => $shipment->label_path,
+            'raw_label_path' => $shipment->raw_label_path,
+            'is_thank_you' => false,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'job_id' => $job->id,
+            'message' => 'Etiqueta mandada de novo pra impressora.',
+        ]);
+    }
+
+    /**
      * O inverso de separateOrder(): tira o pedido de "separados" e devolve
      * pra fila (pedido de 2026-09-05, botão "Desfazer" da aba Separados do
      * KoraSync). Clique errado acontece — sem isso, só dava pra corrigir

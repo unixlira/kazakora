@@ -134,6 +134,7 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::post('/dashboard/queue/{order}/separar', [DashboardAgentController::class, 'separateOrder'])->name('dashboard.queue.separate');
     Route::post('/dashboard/queue/{order}/desfazer-separacao', [DashboardAgentController::class, 'unseparateOrder'])->name('dashboard.queue.unseparate');
     Route::get('/dashboard/queue/{order}/etiqueta-status', [DashboardAgentController::class, 'labelStatus'])->name('dashboard.queue.label-status');
+    Route::post('/dashboard/queue/{order}/reimprimir', [DashboardAgentController::class, 'reprintLabel'])->name('dashboard.queue.reprint');
     // Vincular item sem produto (2026-09-06): a decisão que o driver se
     // recusa a tomar sozinho quando o canal não diz qual variação foi
     // vendida. Ver DashboardAgentController::linkOrderItem().

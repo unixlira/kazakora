@@ -1251,6 +1251,64 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * Passo "Deseja imprimir a etiqueta?" do modal de separação
+     * (2026-09-05). SÓ CONSULTA — não cria, não recria e não reenfileira
+     * PrintJob nenhum, de propósito.
+     *
+     * O motivo é o incidente de 2026-08-12: um empurrão de checagem
+     * recriou jobs e reimprimiu 11 etiquetas físicas de pedidos antigos,
+     * uma delas de pedido cancelado. Enfileirar impressão a partir de um
+     * clique de tela é exatamente o tipo de gatilho que causou aquilo.
+     *
+     * E não precisa: quando a etiqueta chega, LabelFetchService já cria o
+     * PrintJob sozinho e o agente local imprime. Este endpoint só conta ao
+     * operador em que pé isso está.
+     */
+    public function labelStatus(Order $order): JsonResponse
+    {
+        // TikTok e Shein não têm fetchLabel() de verdade (mesma lista de
+        // nudgeLabel()): a etiqueta sai no painel do canal, nunca por aqui.
+        if (in_array($order->origin, [Order::ORIGIN_TIKTOK_SHOP, Order::ORIGIN_SHEIN], true)) {
+            return response()->json([
+                'state' => 'channel_only',
+                'message' => 'A etiqueta deste canal sai no painel do próprio marketplace — ela não passa pelo Kazakora.',
+            ]);
+        }
+
+        $job = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->latest('id')
+            ->first();
+
+        if ($job?->status === PrintJob::STATUS_PRINTED) {
+            return response()->json([
+                'state' => 'printed',
+                'message' => 'Etiqueta já impressa em '.$job->printed_at?->format('d/m/Y H:i').'. Pra tirar outra via, use Etiquetas no admin.',
+            ]);
+        }
+
+        if ($job && in_array($job->status, [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED], true)) {
+            return response()->json([
+                'state' => 'queued',
+                'message' => 'Etiqueta na fila da impressora — o agente local imprime em instantes.',
+            ]);
+        }
+
+        if ($job?->status === PrintJob::STATUS_FAILED) {
+            return response()->json([
+                'state' => 'failed',
+                'message' => 'A última tentativa de impressão falhou: '.($job->error_message ?: 'sem detalhe do agente').'.',
+            ]);
+        }
+
+        return response()->json([
+            'state' => 'pending',
+            'message' => 'O canal ainda não liberou a etiqueta deste pedido. Assim que liberar, ela entra sozinha na fila de impressão — não precisa voltar aqui.',
+        ]);
+    }
+
+    /**
      * O inverso de separateOrder(): tira o pedido de "separados" e devolve
      * pra fila (pedido de 2026-09-05, botão "Desfazer" da aba Separados do
      * KoraSync). Clique errado acontece — sem isso, só dava pra corrigir

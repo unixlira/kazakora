@@ -133,6 +133,7 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     // atualizou o app ainda.
     Route::post('/dashboard/queue/{order}/separar', [DashboardAgentController::class, 'separateOrder'])->name('dashboard.queue.separate');
     Route::post('/dashboard/queue/{order}/desfazer-separacao', [DashboardAgentController::class, 'unseparateOrder'])->name('dashboard.queue.unseparate');
+    Route::get('/dashboard/queue/{order}/etiqueta-status', [DashboardAgentController::class, 'labelStatus'])->name('dashboard.queue.label-status');
     Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
     Route::get('/dashboard/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('dashboard.scheduled-shipments');
     Route::get('/dashboard/mercadolivre-summary', [DashboardAgentController::class, 'mercadoLivreSummary'])->name('dashboard.mercadolivre-summary');

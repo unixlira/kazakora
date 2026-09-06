@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Modules\Marketplace\Support\SeparationGateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -206,5 +207,67 @@ class SeparateOrderEndpointTest extends TestCase
         $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/desfazer-separacao", [], $this->authHeaders())
             ->assertOk()
             ->assertJson(['result' => 'ok', 'packed_at' => null]);
+    }
+
+    /**
+     * Passo "Deseja imprimir a etiqueta?" do modal (2026-09-05). O que
+     * importa provar: a consulta NUNCA cria PrintJob — foi criar job por
+     * gatilho de tela que causou o incidente de reimpressão de 2026-08-12.
+     */
+    public function test_label_status_for_tiktok_says_the_label_comes_from_the_channel(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'channel_only']);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    public function test_label_status_without_a_job_reports_pending_and_creates_nothing(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'pending']);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    public function test_label_status_reports_a_job_already_queued_for_the_printer(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => PrintJob::STATUS_QUEUED,
+            'label_path' => 'labels/pedido-teste.pdf',
+            'is_thank_you' => false,
+        ]);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'queued']);
+
+        $this->assertDatabaseCount('print_jobs', 1);
+    }
+
+    public function test_label_status_reports_an_already_printed_label(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => PrintJob::STATUS_PRINTED,
+            'printed_at' => now(),
+            'label_path' => 'labels/pedido-teste.pdf',
+            'is_thank_you' => false,
+        ]);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'printed']);
     }
 }

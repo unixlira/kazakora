@@ -270,4 +270,14 @@ return [
         'secret' => env('API_PARTNER_JWT_SECRET'),
     ],
 
+
+    /*
+     * Etiqueta única do Mercado Livre (etiqueta + DANFE numa folha 10x15
+     * em paisagem). Desligada por padrão de propósito: a versão de
+     * 2026-08-21 foi revertida 2x por deixar o código de barras ilegível,
+     * e esta só deve ser ligada DEPOIS de imprimir uma e passar o leitor.
+     * Ver LabelProcessingService::composeMercadoLivreCombinada().
+     */
+    'mercado_livre_etiqueta_combinada' => (bool) env('ML_ETIQUETA_COMBINADA', false),
+
 ];

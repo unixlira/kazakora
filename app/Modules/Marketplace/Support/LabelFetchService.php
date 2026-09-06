@@ -156,7 +156,33 @@ class LabelFetchService
         // com "^XA" — checa a presença em vez de exigir como primeiro
         // caractere.
         if (str_contains($contents, '^XA')) {
-            $contents = $this->processor->convertZplToPdf($contents);
+            // Etiqueta ÚNICA do Mercado Livre (2026-09-06): etiqueta +
+            // DANFE numa folha 10x15 em paisagem, em vez de 2 folhas.
+            //
+            // Só pro ML de 2 blocos — o Flex tem 1 bloco e nem entra aqui.
+            // Atrás de flag DESLIGADA por padrão: a versão de 2026-08-21
+            // foi revertida 2x por deixar o código de barras ilegível, e
+            // esta só deve ser ligada depois de imprimir uma e passar o
+            // leitor. Se a composição falhar por qualquer motivo, cai no
+            // caminho de sempre — nunca deixa o pedido sem etiqueta.
+            $combinada = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE
+                && config('services.mercado_livre_etiqueta_combinada')
+                && substr_count($contents, '^XA') >= 2;
+
+            if ($combinada) {
+                try {
+                    $contents = $this->processor->composeMercadoLivreCombinada($contents);
+                } catch (Throwable $exception) {
+                    Log::warning('marketplace.label_fetch.combinada_falhou', [
+                        'shipment_id' => $shipment->id,
+                        'message' => $exception->getMessage(),
+                    ]);
+
+                    $contents = $this->processor->convertZplToPdf($contents);
+                }
+            } else {
+                $contents = $this->processor->convertZplToPdf($contents);
+            }
         }
 
         $isPdf = str_starts_with($contents, '%PDF-');
@@ -209,7 +235,12 @@ class LabelFetchService
         $isMercadoLivreFlex = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE
             && $shipment->shipping_method === ChannelShipment::METHOD_FLEX;
 
-        if ($isPdf && ! $isMercadoLivreFlex && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
+        // Na etiqueta combinada a 2ª página não existe mais (virou a
+        // metade direita da folha), então não há onde estampar a faixa sem
+        // colidir — a conferência de SKU/QTD segue na tela do KoraSync.
+        $ehCombinada = isset($combinada) && $combinada && str_starts_with($contents, '%PDF-');
+
+        if ($isPdf && ! $ehCombinada && ! $isMercadoLivreFlex && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
             try {
                 $declarationTokens = $shipment->order->items->map(function ($item) {
                     $sku = $item->product?->sku ?: $item->product_name;

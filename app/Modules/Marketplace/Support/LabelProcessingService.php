@@ -43,6 +43,270 @@ class LabelProcessingService
      * estritamente melhor que o índice fixo pros outros chamadores desse
      * método também (ZPL de 1 etiqueta só continua saindo com 1 página).
      */
+    /**
+     * Altura real de um elemento ZPL, em dots.
+     *
+     * Existe pra compactar sem encavalar. Os dois valores que mais
+     * importam são o do QR e o da caixa: o QR do Mercado Livre é
+     * `^BQN,2,10` e ocupa 226 dots — estimar 22 (o padrão de texto) fazia
+     * o elemento seguinte subir por cima dele. **O QR nunca pode ser
+     * cortado nem coberto**, é o que a transportadora lê na coleta.
+     */
+    private function alturaDoElemento(string $trecho): int
+    {
+        $altura = 22;
+
+        if (preg_match('/\^A0N,(\d+),/', $trecho, $m)) {
+            $altura = (int) $m[1] + 4;
+        }
+
+        if (preg_match('/\^GB(\d+),(\d+),/', $trecho, $m)) {
+            $altura = max($altura, (int) $m[2]);
+        }
+
+        if (preg_match('/\^BC[NRIB]?,(\d+)/', $trecho, $m)) {
+            $altura = max($altura, (int) $m[1] + 34);
+        }
+
+        // ^BQ<orientacao>,<modelo>,<magnificacao> — o lado do QR sai em
+        // torno de 25 módulos vezes a magnificação.
+        if (preg_match('/\^BQ[NRIB]?,\d+,(\d+)/', $trecho, $m)) {
+            $altura = max($altura, (int) $m[1] * 25);
+        }
+
+        if (str_contains($trecho, '^GFA')) {
+            $altura = max($altura, 90);
+        }
+
+        return $altura;
+    }
+
+    /**
+     * Texto num ^FB de UMA linha é truncado em silêncio pelo ZPL quando
+     * não cabe. Uma rota mais longa que o normal
+     * ("XSP16 > SSP53 > ABC99 > 12") sumiria pela direita sem erro
+     * nenhum. Reduz a fonte até caber, com piso de 14 dots pra não virar
+     * ilegível.
+     */
+    private function encolherSeNaoCouber(string $trecho): string
+    {
+        if (! preg_match('/\^FB(\d+),1,/', $trecho, $fb)) {
+            return $trecho;
+        }
+
+        if (! preg_match('/\^A0N,(\d+),(\d+)/', $trecho, $fonte)) {
+            return $trecho;
+        }
+
+        if (! preg_match('/\^FD(.*?)(?:\^FS|$)/s', $trecho, $dado)) {
+            return $trecho;
+        }
+
+        $caracteres = mb_strlen(trim($dado[1]));
+
+        if ($caracteres === 0) {
+            return $trecho;
+        }
+
+        $largura = (int) $fb[1];
+        $alturaFonte = (int) $fonte[1];
+        $larguraFonte = (int) $fonte[2];
+
+        // ^A0 é proporcional: o avanço médio fica em torno de 62% do
+        // parâmetro de largura.
+        $necessario = $caracteres * $larguraFonte * 0.62;
+
+        if ($necessario <= $largura) {
+            return $trecho;
+        }
+
+        $fator = max(14 / $alturaFonte, $largura / $necessario);
+
+        return preg_replace(
+            '/\^A0N,\d+,\d+/',
+            sprintf('^A0N,%d,%d', max(14, (int) floor($alturaFonte * $fator)), max(14, (int) floor($larguraFonte * $fator))),
+            $trecho,
+            1,
+        );
+    }
+
+    /**
+     * Tira o espaço morto vertical de um bloco ZPL sem redimensionar
+     * NADA: os campos só são reaproximados, mantendo fonte, altura de
+     * código de barras e ^BY intactos.
+     *
+     * É o que torna a etiqueta combinada viável. Medido numa etiqueta
+     * real do Mercado Livre (pedido 1481): a DANFE tinha 47 mm de papel
+     * em branco no meio e caiu de 152,4 para 88,9 mm; a etiqueta caiu de
+     * 152,4 para 141,1 mm. Sem isso, encaixar as duas metades exigiria
+     * 66,7% de escala, que põe a barra fina do código da transportadora
+     * em 0,226 mm — abaixo dos 0,25 mm que o leitor laser exige, e foi
+     * exatamente o que reprovou a tentativa de 2026-08-21.
+     *
+     * @return array{0: string, 1: int} ZPL compactado e a altura em dots
+     */
+    public function compactarZpl(string $bloco, int $vaoMaximo = 20): array
+    {
+        $trechos = preg_split('/(?=\^FO\d+,\d+)/', $bloco, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        array_shift($trechos);
+
+        $elementos = [];
+
+        foreach ($trechos as $trecho) {
+            $trecho = $this->encolherSeNaoCouber($trecho);
+
+            if (! preg_match('/^\^FO(\d+),(\d+)/', $trecho, $m)) {
+                continue;
+            }
+
+            $elementos[] = ['x' => (int) $m[1], 'y' => (int) $m[2], 'altura' => $this->alturaDoElemento($trecho), 'zpl' => $trecho];
+        }
+
+        if ($elementos === []) {
+            throw new RuntimeException('Bloco ZPL sem elementos posicionáveis.');
+        }
+
+        usort($elementos, fn (array $a, array $b) => $a['y'] <=> $b['y']);
+
+        $linhas = [];
+
+        foreach ($elementos as $e) {
+            $linhas[$e['y']] = max($linhas[$e['y']] ?? 0, $e['altura']);
+        }
+
+        ksort($linhas);
+
+        $deslocamento = 0;
+        $fimCorrente = 0;
+        $mapa = [];
+
+        foreach ($linhas as $y => $altura) {
+            if ($fimCorrente > 0) {
+                $vao = $y - $fimCorrente;
+
+                if ($vao > $vaoMaximo) {
+                    $deslocamento += $vao - $vaoMaximo;
+                }
+            }
+
+            $mapa[$y] = $y - $deslocamento;
+
+            // MAIOR fim até aqui, não o do último elemento lido: uma caixa
+            // de 150 dots seguida de um texto de 30 tem o fim da caixa como
+            // limite. Trocar isso encavalava a linha de roteirização em
+            // cima do bloco de destino.
+            $fimCorrente = max($fimCorrente, $y + $altura);
+        }
+
+        $alturaFinal = 16 + max(array_map(fn (int $y) => $mapa[$y] + $linhas[$y], array_keys($linhas)));
+
+        $saida = "^XA\n^CI28\n^MCY\n^PW812\n^LL{$alturaFinal}\n";
+
+        foreach ($elementos as $e) {
+            $saida .= preg_replace('/^\^FO'.$e['x'].','.$e['y'].'\b/', '^FO'.$e['x'].','.$mapa[$e['y']], $e['zpl'], 1);
+        }
+
+        return [$saida.'^XZ', $alturaFinal];
+    }
+
+    /**
+     * Etiqueta ÚNICA do Mercado Livre: uma folha 10x15 em paisagem, com a
+     * etiqueta de envio na metade esquerda, uma linha divisória e a DANFE
+     * simplificada na direita — cada metade em retrato.
+     *
+     * Só faz sentido pro ML de DUAS páginas (Mercado Envios / Coleta), que
+     * é onde hoje saem 2 folhas por pedido. O Flex vem com um bloco só e
+     * não passa por aqui.
+     *
+     * A tentativa de 2026-08-21 (composeSideBySideLabel(), revertida 2x)
+     * falhou por espremer a etiqueta inteira a 66,7%, o que põe a barra
+     * fina em 0,226 mm — abaixo dos 0,25 mm do leitor laser. A diferença
+     * aqui é compactarZpl() ANTES: tirando o espaço morto, a escala sobe
+     * pra ~71% e a barra fica em 0,285 mm. Medido na etiqueta real do
+     * pedido 1481.
+     *
+     * Alinhado no TOPO, não centralizado: a DANFE é mais curta que a
+     * etiqueta, e centralizar deixava uma faixa branca inútil em cima dela.
+     */
+    public function composeMercadoLivreCombinada(string $zpl): string
+    {
+        $blocos = preg_split('/(?=\^XA)/', $zpl, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        if (count($blocos) < 2) {
+            throw new RuntimeException('ZPL do Mercado Livre não tem os 2 blocos (etiqueta + DANFE).');
+        }
+
+        $pdfs = [];
+
+        foreach ([$blocos[0], $blocos[1]] as $bloco) {
+            [$compacto, $altura] = $this->compactarZpl($bloco);
+            $pdfs[] = $this->converterCompactoParaPdf($compacto, $altura);
+        }
+
+        $largura = 152.4;
+        $alturaFolha = 101.6;
+        $metade = $largura / 2;
+        $margem = 0.6;
+
+        $arquivos = [];
+
+        try {
+            $pdf = new Fpdi;
+            $pdf->SetAutoPageBreak(false);
+            $pdf->AddPage('L', [$alturaFolha, $largura]);
+
+            foreach ($pdfs as $indice => $bytes) {
+                $arquivo = tempnam(sys_get_temp_dir(), 'ml_meia_').'.pdf';
+                file_put_contents($arquivo, $bytes);
+                $arquivos[] = $arquivo;
+
+                $pdf->setSourceFile($arquivo);
+                $template = $pdf->importPage(1);
+                $tamanho = $pdf->getTemplateSize($template);
+
+                $escala = min(
+                    ($metade - $margem * 2) / $tamanho['width'],
+                    ($alturaFolha - $margem * 2) / $tamanho['height'],
+                );
+
+                $w = $tamanho['width'] * $escala;
+                $h = $tamanho['height'] * $escala;
+
+                $pdf->useTemplate($template, $indice * $metade + ($metade - $w) / 2, $margem, $w, $h);
+            }
+
+            $pdf->SetDrawColor(0, 0, 0);
+            $pdf->SetLineWidth(0.3);
+            $pdf->Line($metade, 3, $metade, $alturaFolha - 3);
+
+            return $pdf->Output('S');
+        } finally {
+            foreach ($arquivos as $arquivo) {
+                @unlink($arquivo);
+            }
+        }
+    }
+
+    /**
+     * O ZPL compactado declara ^PW/^LL próprios, então o tamanho pedido ao
+     * Labelary vem deles — não do 4x6 fixo de extractLabelSizeInInches().
+     */
+    private function converterCompactoParaPdf(string $zpl, int $alturaEmDots): string
+    {
+        $largura = number_format(812 / 203, 2, '.', '');
+        $altura = number_format($alturaEmDots / 203, 2, '.', '');
+
+        $response = Http::withHeaders(['Accept' => 'application/pdf'])
+            ->withBody($zpl, 'application/x-www-form-urlencoded')
+            ->post('http://api.labelary.com/v1/printers/'.self::DENSITY_DPMM."dpmm/labels/{$largura}x{$altura}/");
+
+        if ($response->failed()) {
+            throw new RuntimeException('Labelary recusou o ZPL compactado: '.$response->status().' — '.$response->body());
+        }
+
+        return $response->body();
+    }
+
     public function convertZplToPdf(string $zpl): string
     {
         [$width, $height] = $this->extractLabelSizeInInches($zpl);

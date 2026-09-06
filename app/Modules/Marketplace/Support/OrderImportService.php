@@ -81,7 +81,7 @@ class OrderImportService
             // existir (achado real 2026-08-06, ver comentário em
             // createOrder()) — reprocessar o backfill já corrige a data sem
             // precisar de um script separado.
-            if (! empty($data['placed_at']) && ! $existing->created_at->equalTo($data['placed_at'])) {
+            if ($this->temHoraDeVerdade($data['placed_at'] ?? null) && ! $existing->created_at->equalTo($data['placed_at'])) {
                 $existing->forceFill(['created_at' => $data['placed_at']])->save();
             }
 
@@ -350,7 +350,7 @@ class OrderImportService
             // hoje aparecia como "vendido hoje" nos cards de faturamento.
             // Sem placed_at (tela de teste de webhook, pedido fake), fica
             // now() mesmo, que já é o comportamento correto pra isso.
-            if (! empty($data['placed_at'])) {
+            if ($this->temHoraDeVerdade($data['placed_at'] ?? null)) {
                 $order->forceFill(['created_at' => $data['placed_at']])->save();
             }
 
@@ -1024,5 +1024,34 @@ class OrderImportService
                 'claim_updated_at' => now(),
             ]
         );
+    }
+
+    /**
+     * A data da venda só vale quando o canal manda HORA de verdade.
+     *
+     * BUG REAL 2026-09-06, relatado pelo usuário ("saiu uma venda do TikTok
+     * e a hora do pedido tá errada... está abaixo do pedido do Mercado
+     * Livre"): a ponte do Bling manda `data` sem hora nenhuma
+     * (TikTokShopDriver linha do placed_at), e Carbon::parse('2026-09-06')
+     * vira 00:00:00. Com isso TODO pedido do TikTok nascia à meia-noite —
+     * hora errada no card e, pior, afundava na fila ordenada pela venda
+     * mais recente, contra a regra de "última venda no topo".
+     *
+     * Sem hora, o melhor dado que existe é a hora em que o pedido chegou
+     * aqui (created_at padrão, que a sincronia em tempo real deixa a
+     * minutos da venda). Mercado Livre e Shopee mandam data E hora reais e
+     * seguem exatamente como antes.
+     *
+     * Meia-noite cravada de um canal que manda hora de verdade é 1 segundo
+     * por dia em que caímos no fallback — troca aceita pra não precisar de
+     * uma coluna nova só pra isso.
+     */
+    private function temHoraDeVerdade(mixed $placedAt): bool
+    {
+        if (empty($placedAt)) {
+            return false;
+        }
+
+        return \Illuminate\Support\Carbon::parse($placedAt)->format('H:i:s') !== '00:00:00';
     }
 }

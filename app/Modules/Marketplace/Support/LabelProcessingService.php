@@ -15,6 +15,37 @@ use setasign\Fpdi\Fpdi;
  * automático (LabelFetchService::attempt(), Shopee/TikTok) quanto pela tela
  * de teste de impressão (Admin/Integracoes/TesteImpressao).
  */
+/**
+ * FPDF não gira conteúdo por padrão. Esta é a extensão clássica: emite a
+ * matriz de transformação direto no fluxo da página, entre q/Q.
+ *
+ * Existe porque a impressora térmica tem mídia 101,6 x 152,4 EM PÉ. Mandar
+ * uma página 152,4 x 101,6 deitada faz o driver tentar encaixar sozinho e
+ * sair torto — foi o que aconteceu no teste de 2026-09-06. A página tem
+ * que ter o tamanho da etiqueta, e o CONTEÚDO é que vem girado.
+ */
+class PdfRotativo extends Fpdi
+{
+    public function iniciarRotacao(float $graus, float $x, float $y): void
+    {
+        $rad = $graus * M_PI / 180;
+        $cos = cos($rad);
+        $sen = sin($rad);
+        $cx = $x * $this->k;
+        $cy = ($this->h - $y) * $this->k;
+
+        $this->_out(sprintf(
+            'q %.5F %.5F %.5F %.5F %.2F %.2F cm 1 0 0 1 %.2F %.2F cm',
+            $cos, $sen, -$sen, $cos, $cx, $cy, -$cx, -$cy,
+        ));
+    }
+
+    public function terminarRotacao(): void
+    {
+        $this->_out('Q');
+    }
+}
+
 class LabelProcessingService
 {
     /** Dots por mm assumido pro ZPL da Shopee — impressoras térmicas de etiqueta de marketplace usam quase sempre 203dpi. */
@@ -266,9 +297,22 @@ class LabelProcessingService
         $arquivos = [];
 
         try {
-            $pdf = new Fpdi;
+            // Página do TAMANHO DA ETIQUETA (retrato). O conteúdo é que
+            // gira — ver PdfRotativo. A folha deitada de antes saía torta
+            // na impressora térmica.
+            $pdf = new PdfRotativo;
             $pdf->SetAutoPageBreak(false);
-            $pdf->AddPage('L', [$alturaFolha, $largura]);
+            $pdf->AddPage('P', [$alturaFolha, $largura]);
+
+            // Girando 90° em torno do centro, um retângulo 152,4 x 101,6
+            // encaixa exatamente na página 101,6 x 152,4. A origem do
+            // desenho passa a ser este deslocamento.
+            $centroX = $alturaFolha / 2;
+            $centroY = $largura / 2;
+            $pdf->iniciarRotacao(90, $centroX, $centroY);
+
+            $deslocX = $centroX - $largura / 2;
+            $deslocY = $centroY - $alturaFolha / 2;
 
             foreach ($pdfs as $indice => $bytes) {
                 [$x0, $larguraMetade] = $metades[$indice];
@@ -291,12 +335,14 @@ class LabelProcessingService
 
                 // Alinhado no TOPO: a DANFE é mais curta e centralizar
                 // deixava faixa branca inútil em cima dela.
-                $pdf->useTemplate($template, $x0 + ($larguraMetade - $w) / 2, $margem, $w, $h);
+                $pdf->useTemplate($template, $deslocX + $x0 + ($larguraMetade - $w) / 2, $deslocY + $margem, $w, $h);
             }
 
             $pdf->SetDrawColor(0, 0, 0);
             $pdf->SetLineWidth(0.3);
-            $pdf->Line($divisao, 3, $divisao, $alturaFolha - 3);
+            $pdf->Line($deslocX + $divisao, $deslocY + 3, $deslocX + $divisao, $deslocY + $alturaFolha - 3);
+
+            $pdf->terminarRotacao();
 
             $saida = $pdf->Output('S');
 

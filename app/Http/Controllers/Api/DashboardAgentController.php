@@ -269,19 +269,27 @@ class DashboardAgentController extends Controller
 
         // Achado real 2026-08-15: "Pedidos hoje" mostrava 17 quando o
         // usuário contava 18 pedidos recebidos no dia — a diferença era 1
-        // pedido cancelado (Shopee UNPAID). Ao contrário de faturamento
-        // (onde um pedido cancelado corretamente NÃO deve contar, ver
-        // $revenueToday acima), "pedidos hoje" é sobre quantos pedidos
-        // CHEGARAM no dia, não quantos foram pagos — mesmo critério "todo
-        // pedido do dia, qualquer status" já decidido pra fila do
-        // KoraSync (queue(), pedido explícito 2026-08-15). Por isso não usa
-        // PAID_STATUSES aqui, de propósito.
+        // pedido cancelado (Shopee UNPAID) —, e a decisão de 2026-08-15 foi
+        // contar "todo pedido do dia, qualquer status", porque a pergunta
+        // era quantos pedidos CHEGARAM.
+        //
+        // REVERTIDO em 2026-09-05, a pedido do usuário: venda cancelada não
+        // é venda. Ele conferiu o total de ontem e o número não fechava com
+        // o que vendeu de verdade. Vale pros DOIS dias, não só ontem —
+        // "hoje / ontem" com bases diferentes (um contando cancelado e o
+        // outro não) daria uma razão que não significa nada.
+        //
+        // Só CANCELLED sai. Pedido aguardando pagamento continua contando:
+        // ele ainda pode virar venda, e tirá-lo faria o número de hoje
+        // encolher e crescer sozinho ao longo do dia.
         $salesToday = Order::query()
             ->where('created_at', '>=', $today)
+            ->where('status', '!=', Order::STATUS_CANCELLED)
             ->count();
 
         $salesYesterday = Order::query()
             ->whereBetween('created_at', [$yesterday, $today])
+            ->where('status', '!=', Order::STATUS_CANCELLED)
             ->count();
 
         $cancelledToday = Order::query()
@@ -372,10 +380,10 @@ class DashboardAgentController extends Controller
         return response()->json([
             'revenue_today' => $revenueToday,
             'sales_today' => $salesToday,
-            // Bruto (sem filtro de status), pra dar pra calcular
-            // "vendas de hoje / ontem" no META DO DIA do KoraSync (mesma
-            // base de $salesToday acima, sem PAID_STATUSES) — antes só a
-            // variação percentual viajava, não os dois números crus.
+            // Mesma base de $salesToday acima (tudo menos cancelado), pra
+            // dar pra calcular "vendas de hoje / ontem" no META DO DIA do
+            // KoraSync — antes só a variação percentual viajava, não os
+            // dois números crus.
             'sales_yesterday' => $salesYesterday,
             'cancelled_today' => $cancelledToday,
             'refunded_today' => $refundedToday,

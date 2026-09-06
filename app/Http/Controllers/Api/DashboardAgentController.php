@@ -1347,15 +1347,29 @@ class DashboardAgentController extends Controller
         // com o mesmo código, o driver acha o produto sem passar perto da
         // similaridade de nome.
         if ($externalItemId !== null && $order->origin !== null) {
-            ProductChannelListing::query()->firstOrCreate(
-                ['channel' => $order->origin, 'external_id' => $externalItemId],
-                [
-                    'product_id' => $product->id,
-                    'is_enabled' => true,
-                    'status' => ProductChannelListing::STATUS_PUBLISHED,
-                    'last_synced_at' => now(),
-                ],
-            );
+            try {
+                ProductChannelListing::query()->firstOrCreate(
+                    ['channel' => $order->origin, 'external_id' => $externalItemId],
+                    [
+                        'product_id' => $product->id,
+                        'is_enabled' => true,
+                        'status' => ProductChannelListing::STATUS_PUBLISHED,
+                        'last_synced_at' => now(),
+                    ],
+                );
+            } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+                // BUG REAL 2026-09-06, na primeira vez que a tela foi usada:
+                // a tabela só permite 1 linha por (produto, canal), e o
+                // produto escolhido já tinha uma pra OUTRO código do mesmo
+                // canal — o TikTok gera um código por variação. A exceção
+                // estourava DEPOIS dos itens já terem sido gravados: o
+                // vínculo aplicava e a tela mostrava erro.
+                //
+                // O listing é só atalho pra próxima venda não recalcular
+                // nada. Não conseguir criá-lo não invalida o vínculo, que é
+                // o que importa. Mesmo tratamento de
+                // MercadoLivreDriver::autoImportProduct().
+            }
         }
 
         app(OrderFulfillmentTimeline::class)->record(

@@ -360,11 +360,25 @@ class LabelFetchService
             return true;
         }
 
-        // Já saiu papel. Devolve false de propósito: o KoraSync então
-        // consulta o estado real e diz "etiqueta já impressa às 08:50", em
-        // vez de prometer um papel que não vai sair de novo. Pra tirar 2ª
-        // via existe o botão de reimprimir.
-        if ($ultimo && $ultimo->status === PrintJob::STATUS_PRINTED) {
+        // Já saiu papel DEPOIS da separação: é a etiqueta deste trabalho,
+        // está na mão do operador. Devolve false de propósito — o KoraSync
+        // consulta o estado real e diz "etiqueta já impressa às 08:50" em
+        // vez de prometer papel que não vai sair. Pra 2ª via existe o botão
+        // de reimprimir.
+        //
+        // BUG REAL 2026-09-06 (relato "parou no da shopee", pedido #1499):
+        // etiqueta impressa ANTES da separação não conta. Foi o caso das 4
+        // que saíram sozinhas de manhã, pelo bug da impressão automática —
+        // papel impresso às 09:17 que ninguém separou e que já se perdeu no
+        // meio do dia. Quando o operador conclui a separação horas depois,
+        // com a caixa na mão, ele precisa da etiqueta AGORA; aquela
+        // impressão não fazia parte deste trabalho.
+        // printed_at nulo num job "printed" não devia existir (complete()
+        // sempre grava a hora), mas se acontecer o desempate é não
+        // reimprimir: etiqueta a mais é papel jogado fora e confunde quem
+        // embala; etiqueta a menos tem o botão de reimprimir do lado.
+        if ($ultimo && $ultimo->status === PrintJob::STATUS_PRINTED
+            && ($ultimo->printed_at === null || $ultimo->printed_at->gte($order->packed_at))) {
             return false;
         }
 

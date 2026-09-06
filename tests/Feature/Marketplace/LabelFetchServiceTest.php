@@ -180,18 +180,43 @@ class LabelFetchServiceTest extends TestCase
     public function test_queue_print_reports_false_when_the_label_was_already_printed(): void
     {
         Storage::fake('local');
-        $shipment = $this->makeShipment(packedAt: now());
+        $shipment = $this->makeShipment(packedAt: now()->subMinute());
         $shipment->forceFill(['label_path' => 'labels/ja-impressa.pdf'])->save();
 
         PrintJob::create([
             'order_id' => $shipment->order_id,
             'label_path' => 'labels/ja-impressa.pdf',
             'status' => PrintJob::STATUS_PRINTED,
+            // Saiu DEPOIS da separação: é a etiqueta deste trabalho.
             'printed_at' => now(),
         ]);
 
         $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
         $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+    }
+
+    /**
+     * BUG REAL 2026-09-06 ("parou no da shopee", pedido #1499): etiqueta que
+     * saiu ANTES da separação — as 4 que a impressão automática soltou de
+     * manhã — não é a etiqueta deste trabalho. Quem separa horas depois, com
+     * a caixa na mão, precisa dela impressa agora.
+     */
+    public function test_queue_print_prints_again_when_the_old_label_came_out_before_the_separation(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/impressa-antes.pdf'])->save();
+
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'label_path' => 'labels/impressa-antes.pdf',
+            'status' => PrintJob::STATUS_PRINTED,
+            // Saiu de manhã, muito antes de alguém separar.
+            'printed_at' => now()->subHours(3),
+        ]);
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->where('status', PrintJob::STATUS_QUEUED)->count());
     }
 
     /**

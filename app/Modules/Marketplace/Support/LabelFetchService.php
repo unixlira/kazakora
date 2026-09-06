@@ -330,13 +330,71 @@ class LabelFetchService
 
         $this->timeline->record($shipment->order, OrderFulfillmentEvent::STEP_LABEL_GENERATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Etiqueta baixada do canal');
 
+        // A etiqueta fica PRONTA aqui, mas não sai na impressora aqui —
+        // ver queuePrint(). Regra 8 do briefing do Corea SYNC V3.
+        $this->queuePrint($shipment, $path, $rawPath);
+
+        return true;
+    }
+
+    /**
+     * Cria o PrintJob — a única coisa que faz uma etiqueta sair de verdade
+     * na impressora do galpão (o agente local imprime todo job em fila).
+     *
+     * BUG REAL 2026-09-06, relatado pelo usuário ("imprimiu a etiqueta da
+     * Gabriela da Shopee, não está como eu pedi"): baixar a etiqueta e
+     * IMPRIMIR a etiqueta eram a mesma linha de código dentro de attempt(),
+     * então todo pedido novo saía impresso minutos depois de entrar —
+     * pedido #1497 entrou 08:47 e o job #942 imprimiu 08:50, com o pedido
+     * ainda PAID e packed_at NULL, ninguém tendo separado nada. Isso é
+     * exatamente o que a regra 8 do briefing (2026-09-05) manda acabar:
+     * "etiqueta não deve ser gerada quando o pedido entra na fila, nem por
+     * cron automático sem separação física".
+     *
+     * Agora attempt() continua consultando o canal, baixando e guardando a
+     * etiqueta (é isso que acende label_ready no card e tira o pedido da
+     * Separação Futura) — o papel só é gasto quando o operador conclui a
+     * separação: DashboardAgentController::separateOrder() chama este
+     * método depois de gravar packed_at e passar pelo SeparationGateService.
+     *
+     * firstOrCreate por order_id mantém a idempotência de sempre: duplo
+     * clique, retry de rede ou uma segunda passada do poll não geram uma
+     * segunda etiqueta do mesmo pedido.
+     *
+     * @return bool true se a etiqueta entrou na fila de impressão agora.
+     */
+    public function queuePrint(ChannelShipment $shipment, ?string $path = null, ?string $rawPath = null): bool
+    {
+        $order = $shipment->order;
+        $path ??= $shipment->label_path;
+
+        if (! $order || ! $path) {
+            return false;
+        }
+
+        // Mesma trava do incidente 2026-08-12 (ver attempt()): pedido que
+        // não está mais esperando pra ser embalado nunca imprime.
+        if ($order->status !== Order::STATUS_PAID) {
+            return false;
+        }
+
+        if ($order->packed_at === null) {
+            Log::info('marketplace.label_fetch.print_held_until_separation', [
+                'shipment_id' => $shipment->id,
+                'order_id' => $shipment->order_id,
+                'channel' => $shipment->channel,
+            ]);
+
+            return false;
+        }
+
         PrintJob::query()->firstOrCreate(
             ['order_id' => $shipment->order_id],
             [
                 'channel' => $shipment->channel,
                 'tracking_code' => $shipment->tracking_code,
                 'label_path' => $path,
-                'raw_label_path' => $rawPath,
+                'raw_label_path' => $rawPath ?? $shipment->raw_label_path,
                 'status' => PrintJob::STATUS_QUEUED,
             ],
         );

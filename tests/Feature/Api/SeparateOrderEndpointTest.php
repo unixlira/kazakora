@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Modules\Marketplace\Support\SeparationGateService;
@@ -157,6 +158,81 @@ class SeparateOrderEndpointTest extends TestCase
 
         $this->assertNotNull($order->refresh()->packed_at);
         Queue::assertPushed(ConfirmChannelShippingJob::class);
+    }
+
+    /**
+     * BUG REAL 2026-09-06 ("imprimiu a etiqueta da Gabriela da Shopee"): a
+     * etiqueta passou a ser baixada sem imprimir (ver
+     * LabelFetchService::queuePrint()), então é ESTE clique que tem que
+     * mandar pra impressora a etiqueta que já estava pronta e guardada. Sem
+     * isso, o pedido separaria e nada sairia na impressora nunca.
+     */
+    public function test_separation_prints_the_label_that_was_waiting_for_it(): void
+    {
+        Queue::fake();
+
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-9',
+            'shipping_method' => 'self_service',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-9.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        $importer = Mockery::mock(OrderImportService::class);
+        $importer->shouldReceive('import')->once()->andReturn($order);
+        $this->app->instance(OrderImportService::class, $importer);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['result' => 'ok', 'label_queued' => true]);
+
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $order->id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * O contrário: pedido cancelado no canal não embala — e, por tabela,
+     * não imprime. A etiqueta guardada continua guardada.
+     */
+    public function test_a_cancelled_order_never_reaches_the_printer(): void
+    {
+        Queue::fake();
+
+        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'external_shipment_id' => 'SHIP-10',
+            'shipping_method' => 'standard',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-10.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        $importer = Mockery::mock(OrderImportService::class);
+        $importer->shouldReceive('import')->once()->andReturnUsing(function () use ($order) {
+            $order->forceFill(['status' => Order::STATUS_CANCELLED])->save();
+
+            return $order;
+        });
+        $this->app->instance(OrderImportService::class, $importer);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['result' => SeparationGateService::RESULT_CANCELLED]);
+
+        $this->assertNull($order->refresh()->packed_at);
+        $this->assertDatabaseCount('print_jobs', 0);
     }
 
     public function test_an_order_that_is_not_paid_is_refused(): void

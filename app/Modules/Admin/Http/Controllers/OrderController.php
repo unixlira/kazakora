@@ -391,7 +391,7 @@ class OrderController extends Controller
         }
 
         if (in_array($shipment->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
-            return back()->with('success', 'A etiqueta já está pronta — o KoraSync já deve ter imprimido ou vai imprimir no próximo ciclo.');
+            return back()->with('success', 'A etiqueta já está pronta e guardada — ela sai na impressora quando o operador concluir a separação no KoraSync (desde 2026-09-06 nada imprime sozinho).');
         }
 
         // 2026-08-31: geração automática de etiqueta pro TikTok Shop via
@@ -409,7 +409,7 @@ class OrderController extends Controller
         $ready = app(LabelFetchService::class)->attempt($shipment);
 
         return $ready
-            ? back()->with('success', 'Etiqueta ficou pronta agora — o KoraSync já pode imprimir.')
+            ? back()->with('success', 'Etiqueta ficou pronta agora e está guardada — imprime quando a separação for concluída no KoraSync.')
             : back()->with('error', "O {$shipment->channel} ainda não liberou a etiqueta desse envio. Isso é decidido do lado do canal (Shopee/Mercado Livre), não é algo que dá pra forçar — o sistema continua tentando sozinho automaticamente.");
     }
 

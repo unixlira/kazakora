@@ -18,6 +18,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Modules\Marketplace\Support\OrderImageArchiveService;
 use App\Modules\Marketplace\Support\SeparationGateService;
 use Illuminate\Http\JsonResponse;
@@ -1251,12 +1252,19 @@ class DashboardAgentController extends Controller
         }
 
         $this->markPacked($order);
+
+        // A ORDEM importa: primeiro imprime a etiqueta que já estava pronta
+        // e guardada esperando este clique (releaseLabel), depois cutuca o
+        // canal pelas que ainda não saíram (nudgeLabel). As duas juntas são
+        // "gera a etiqueta agora, e só agora" do briefing.
+        $labelQueued = $this->releaseLabel($order);
         $this->nudgeLabel($order);
 
         return response()->json([
             'result' => SeparationGateService::RESULT_OK,
             'message' => $outcome['message'],
             'channel_checked' => $outcome['checked'],
+            'label_queued' => $labelQueued,
             'packed_at' => $order->refresh()->packed_at,
         ]);
     }
@@ -1541,6 +1549,43 @@ class DashboardAgentController extends Controller
      * ChannelShippingService::confirm(). TikTok/Shein são stub lá, e
      * disparar aqui só geraria 4h de tentativa inútil.
      */
+    /**
+     * Manda pra impressora a etiqueta que JÁ estava pronta e guardada.
+     *
+     * Desde 2026-09-06 baixar a etiqueta não imprime mais nada sozinho (ver
+     * LabelFetchService::queuePrint() e o relato "imprimiu a etiqueta da
+     * Gabriela da Shopee"): o canal libera a etiqueta quando quiser, o
+     * arquivo fica arquivado esperando, e o papel só é gasto neste ponto
+     * aqui — depois do operador ter separado de verdade e do porteiro ter
+     * reconsultado o pedido no canal.
+     *
+     * Percorre o pacote inteiro, não só este pedido, pelo mesmo motivo de
+     * markPacked(): carrinho do Mercado Livre são 2 pedidos numa caixa só
+     * (ver ordersShippedWith()).
+     *
+     * @return bool true se ao menos uma etiqueta entrou na fila de impressão.
+     */
+    private function releaseLabel(Order $order): bool
+    {
+        $queued = false;
+
+        foreach ($this->ordersShippedWith($order) as $packOrder) {
+            $shipment = $packOrder->loadMissing('channelShipment')->channelShipment;
+
+            if (! $shipment || ! $shipment->label_path) {
+                continue;
+            }
+
+            // setRelation pra queuePrint() enxergar o packed_at recém-gravado
+            // sem uma consulta a mais por pedido.
+            $shipment->setRelation('order', $packOrder);
+
+            $queued = app(LabelFetchService::class)->queuePrint($shipment) || $queued;
+        }
+
+        return $queued;
+    }
+
     private function nudgeLabel(Order $order): void
     {
         if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {

@@ -21,7 +21,7 @@ class LabelFetchServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE, ?\Illuminate\Support\Carbon $scheduledFor = null): ChannelShipment
+    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE, ?\Illuminate\Support\Carbon $scheduledFor = null, ?\Illuminate\Support\Carbon $packedAt = null): ChannelShipment
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
@@ -41,6 +41,10 @@ class LabelFetchServiceTest extends TestCase
             'subtotal' => 100,
             'total' => 100,
         ]);
+
+        if ($packedAt !== null) {
+            $order->forceFill(['packed_at' => $packedAt])->save();
+        }
 
         $order->items()->create([
             'product_name' => 'Produto teste',
@@ -64,9 +68,15 @@ class LabelFetchServiceTest extends TestCase
     {
         $driver = Mockery::mock(MarketplaceChannelDriver::class);
         $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
+        // A etiqueta pronta faz o serviço reconsultar o rastreio quando ele
+        // ainda não existe (refreshTrackingCode) — é uma 2ª ida ao driver,
+        // sempre foi. Sem estas duas linhas o Mockery derrubava metade dos
+        // testes deste arquivo por contagem de chamada, escondendo o que
+        // eles de fato provam.
+        $driver->shouldReceive('confirmShipping')->zeroOrMoreTimes()->andReturn(['tracking_code' => null]);
 
         $manager = Mockery::mock(MarketplaceDriverManager::class);
-        $manager->shouldReceive('driver')->with($channel)->once()->andReturn($driver);
+        $manager->shouldReceive('driver')->with($channel)->atLeast()->once()->andReturn($driver);
 
         $this->app->instance(MarketplaceDriverManager::class, $manager);
     }
@@ -86,7 +96,7 @@ class LabelFetchServiceTest extends TestCase
     public function test_attempt_downloads_and_registers_the_label_when_ready(): void
     {
         Storage::fake('local');
-        $shipment = $this->makeShipment();
+        $shipment = $this->makeShipment(packedAt: now());
         $this->mockDriver(['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream']);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
@@ -108,10 +118,62 @@ class LabelFetchServiceTest extends TestCase
         ]);
     }
 
+    /**
+     * BUG REAL 2026-09-06, relatado pelo usuário ("imprimiu a etiqueta da
+     * Gabriela da Shopee"): baixar a etiqueta imprimia a etiqueta. Pedido
+     * #1497 entrou 08:47 e saiu impresso 08:50, ainda PAID e sem packed_at,
+     * sem ninguém ter separado nada — contra a regra 8 do briefing do Corea
+     * SYNC V3. A etiqueta pode (e deve) ficar pronta e guardada; o papel só
+     * é gasto no clique de separação.
+     */
+    public function test_attempt_stores_the_label_but_does_not_print_it_before_the_separation(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(
+            ['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream'],
+            MarketplaceAccount::CHANNEL_SHOPEE,
+        );
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready, 'A etiqueta continua sendo baixada normalmente.');
+        $fresh = $shipment->fresh();
+        $this->assertSame(ChannelShipment::STATUS_LABEL_READY, $fresh->status);
+        Storage::disk('local')->assertExists($fresh->label_path);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /**
+     * O outro lado da mesma regra: com o pedido já separado, o job nasce —
+     * é assim que separateOrder() imprime a etiqueta que estava esperando.
+     */
+    public function test_queue_print_creates_the_job_for_an_order_already_separated(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(
+            ['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream'],
+            MarketplaceAccount::CHANNEL_SHOPEE,
+        );
+
+        app(LabelFetchService::class)->attempt($shipment->fresh());
+        $this->assertDatabaseCount('print_jobs', 0);
+
+        $shipment->order->forceFill(['packed_at' => now()])->save();
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
     public function test_attempt_is_idempotent_and_does_not_duplicate_the_print_job(): void
     {
         Storage::fake('local');
-        $shipment = $this->makeShipment();
+        $shipment = $this->makeShipment(packedAt: now());
         PrintJob::create(['order_id' => $shipment->order_id, 'label_path' => 'labels/existing.pdf', 'status' => PrintJob::STATUS_PRINTED]);
 
         $this->mockDriver(['ready' => true, 'contents' => 'conteudo', 'content_type' => 'application/octet-stream']);

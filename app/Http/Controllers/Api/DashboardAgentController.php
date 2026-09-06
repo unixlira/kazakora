@@ -1143,7 +1143,7 @@ class DashboardAgentController extends Controller
         }
 
         return response($bytes, 200, [
-            'Content-Type' => 'image/png',
+            'Content-Type' => 'image/jpeg',
             'Cache-Control' => 'public, max-age=86400',
         ]);
     }
@@ -1164,7 +1164,7 @@ class DashboardAgentController extends Controller
         }
 
         return response($bytes, 200, [
-            'Content-Type' => 'image/png',
+            'Content-Type' => 'image/jpeg',
             'Cache-Control' => 'public, max-age=86400',
         ]);
     }

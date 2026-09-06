@@ -43,6 +43,14 @@ class OrderImageArchiveService
     private const LADO_MAXIMO = 320;
 
     /**
+     * JPEG, não PNG. Medido na mesma foto, já reduzida pra 320px:
+     * PNG 129 KB contra JPEG 22 KB. PNG é sem perdas e ótimo pra desenho
+     * com poucas cores; foto de produto é o caso oposto. A qualidade 82
+     * é indistinguível num quadro de 50px.
+     */
+    private const QUALIDADE_JPEG = 82;
+
+    /**
      * @param  int|null  $productId  Foto de um produto ESPECÍFICO do
      *                                pedido (pedido explícito 2026-08-30:
      *                                "múltiplos produtos de 1 pedido... o
@@ -94,52 +102,66 @@ class OrderImageArchiveService
         }
 
         try {
-            $gd = $this->reduzir($gd);
+            $gd = $this->achatar($this->reduzir($gd));
 
             ob_start();
-            imagepng($gd);
-            $pngBytes = ob_get_clean();
+            imagejpeg($gd, null, self::QUALIDADE_JPEG);
+            $bytes = ob_get_clean();
         } finally {
             imagedestroy($gd);
         }
 
-        if ($pngBytes === false || $pngBytes === '') {
+        if ($bytes === false || $bytes === '') {
             return null;
         }
 
-        Storage::disk(self::DISK)->put($path, $pngBytes);
+        Storage::disk(self::DISK)->put($path, $bytes);
 
         return $path;
     }
 
     /**
      * Reduz mantendo a proporção; imagem já pequena passa intacta.
-     * imagealphablending(false) + imagesavealpha(true) preservam o fundo
-     * transparente, que é o padrão das fotos de catálogo — sem isso o
-     * recorte do produto ganha um fundo preto.
+     *
+     * SEM passar modo de interpolação: IMG_BICUBIC devolve `false` nesta
+     * build do GD (testado no servidor), e como o código tratava false
+     * como "não deu, segue com a original", a redução silenciosamente
+     * NUNCA acontecia — a miniatura continuava saindo em tamanho cheio.
+     * O modo padrão funciona e a diferença visual em 320px é nenhuma.
      */
     private function reduzir(\GdImage $gd): \GdImage
     {
-        $largura = imagesx($gd);
-        $altura = imagesy($gd);
-        $maior = max($largura, $altura);
+        $maior = max(imagesx($gd), imagesy($gd));
 
         if ($maior <= self::LADO_MAXIMO) {
             return $gd;
         }
 
         $escala = self::LADO_MAXIMO / $maior;
-        $menor = imagescale($gd, (int) round($largura * $escala), (int) round($altura * $escala), IMG_BICUBIC);
+        $menor = imagescale($gd, (int) round(imagesx($gd) * $escala), (int) round(imagesy($gd) * $escala));
 
         if ($menor === false) {
             return $gd;
         }
 
-        imagealphablending($menor, false);
-        imagesavealpha($menor, true);
         imagedestroy($gd);
 
         return $menor;
+    }
+
+    /**
+     * JPEG não tem canal alfa: sem achatar antes, todo pixel transparente
+     * das fotos recortadas (padrão do catálogo) sairia PRETO. Fundo branco
+     * é o que o card já mostra atrás da miniatura.
+     */
+    private function achatar(\GdImage $gd): \GdImage
+    {
+        $fundo = imagecreatetruecolor(imagesx($gd), imagesy($gd));
+        imagefill($fundo, 0, 0, imagecolorallocate($fundo, 255, 255, 255));
+        imagecopy($fundo, $gd, 0, 0, 0, 0, imagesx($gd), imagesy($gd));
+        imagedestroy($gd);
+
+        return $fundo;
     }
 
     /**
@@ -168,7 +190,7 @@ class OrderImageArchiveService
         $suffix = $productId !== null ? "{$order->id}-{$productId}" : (string) $order->id;
 
         return sprintf(
-            'order-images/t320/%s/%s/%s/%s/%s.png',
+            'order-images/t320/%s/%s/%s/%s/%s.jpg',
             $when->format('Y'),
             $when->format('m'),
             $when->format('d'),

@@ -194,6 +194,29 @@ class LabelFetchServiceTest extends TestCase
         $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
     }
 
+    /**
+     * Falha de impressora não pode condenar o pedido a nunca mais imprimir
+     * (achado ao desfazer a separação do #1503 pra testar de novo: com os
+     * jobs falhados no banco, uma nova separação não enfileirava nada).
+     */
+    public function test_queue_print_tries_again_when_the_last_attempt_failed(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/tentar-de-novo.pdf'])->save();
+
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'label_path' => 'labels/tentar-de-novo.pdf',
+            'status' => PrintJob::STATUS_FAILED,
+            'error_message' => 'Impressora não está pronta',
+        ]);
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(2, PrintJob::where('order_id', $shipment->order_id)->count());
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->where('status', PrintJob::STATUS_QUEUED)->count());
+    }
+
     public function test_attempt_is_idempotent_and_does_not_duplicate_the_print_job(): void
     {
         Storage::fake('local');

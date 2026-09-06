@@ -349,24 +349,40 @@ class LabelFetchService
             return false;
         }
 
-        $job = PrintJob::query()->firstOrCreate(
-            ['order_id' => $shipment->order_id],
-            [
-                'channel' => $shipment->channel,
-                'tracking_code' => $shipment->tracking_code,
-                'label_path' => $path,
-                'raw_label_path' => $rawPath ?? $shipment->raw_label_path,
-                'status' => PrintJob::STATUS_QUEUED,
-            ],
-        );
+        $ultimo = PrintJob::query()
+            ->where('order_id', $shipment->order_id)
+            ->where('is_thank_you', false)
+            ->latest('id')
+            ->first();
 
-        // "Foi pra impressora agora" só é verdade se o job nasceu aqui ou
-        // ainda está na fila. Um job já IMPRESSO (caso dos pedidos que a
-        // versão antiga imprimiu sozinha antes desta correção) devolve
-        // false de propósito: aí o KoraSync consulta o estado real e diz
-        // "etiqueta já impressa às 08:50", em vez de prometer um papel que
-        // não vai sair da impressora de novo.
-        return $job->wasRecentlyCreated || $job->status === PrintJob::STATUS_QUEUED;
+        // Já esperando a impressora: não empilha uma segunda etiqueta.
+        if ($ultimo && in_array($ultimo->status, [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED], true)) {
+            return true;
+        }
+
+        // Já saiu papel. Devolve false de propósito: o KoraSync então
+        // consulta o estado real e diz "etiqueta já impressa às 08:50", em
+        // vez de prometer um papel que não vai sair de novo. Pra tirar 2ª
+        // via existe o botão de reimprimir.
+        if ($ultimo && $ultimo->status === PrintJob::STATUS_PRINTED) {
+            return false;
+        }
+
+        // Nenhum job, ou o último FALHOU (impressora recusou, fila do
+        // Windows travada). Falha antiga não pode condenar o pedido a nunca
+        // mais imprimir: linha NOVA, porque o agente da loja guarda
+        // localmente os ids que já viu e ignora um id repetido.
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'channel' => $shipment->channel,
+            'tracking_code' => $shipment->tracking_code,
+            'label_path' => $path,
+            'raw_label_path' => $rawPath ?? $shipment->raw_label_path,
+            'is_thank_you' => false,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        return true;
     }
 
     /**

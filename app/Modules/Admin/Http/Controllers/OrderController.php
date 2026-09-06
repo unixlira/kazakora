@@ -425,14 +425,29 @@ class OrderController extends Controller
      * Serve o arquivo exatamente como está — não gera nada novo, não
      * consulta o canal (isso é o que checkLabel() acima já faz).
      */
-    public function printLabel(Order $order): HttpResponse
+    public function printLabel(Order $order, Request $request): HttpResponse
     {
         $order->loadMissing('channelShipment');
         $shipment = $order->channelShipment;
 
         abort_unless($shipment?->label_path && Storage::disk('local')->exists($shipment->label_path), 404, 'Etiqueta ainda não foi baixada pra este pedido.');
 
-        return response(Storage::disk('local')->get($shipment->label_path), 200, [
+        $caminho = $shipment->label_path;
+
+        // ?original=1 devolve as 2 folhas originais do canal, guardadas
+        // junto quando a etiqueta combinada do Mercado Livre é usada (ver
+        // LabelFetchService). Serve pra quando a combinada rasgar, borrar
+        // ou o leitor recusar: reimprime o formato de sempre sem consultar
+        // o canal de novo. Caminho por convenção, sufixo "-original".
+        if ($request->boolean('original')) {
+            $alternativo = preg_replace('/\.pdf$/', '-original.pdf', $caminho);
+
+            if ($alternativo !== $caminho && Storage::disk('local')->exists($alternativo)) {
+                $caminho = $alternativo;
+            }
+        }
+
+        return response(Storage::disk('local')->get($caminho), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => "inline; filename=\"etiqueta-pedido-{$order->id}.pdf\"",
         ]);

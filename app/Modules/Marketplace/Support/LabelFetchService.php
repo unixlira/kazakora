@@ -170,15 +170,23 @@ class LabelFetchService
                 && substr_count($contents, '^XA') >= 2;
 
             if ($combinada) {
+                // A ORIGINAL é sempre gerada e guardada, mesmo quando a
+                // combinada dá certo: se a etiqueta rasgar, sair borrada ou
+                // o leitor recusar, o admin reimprime as 2 folhas de
+                // sempre sem depender de consultar o canal de novo (ver
+                // OrderController::printLabel()).
+                $original = $this->processor->convertZplToPdf($contents);
+
                 try {
                     $contents = $this->processor->composeMercadoLivreCombinada($contents);
+                    $originalContents = $original;
                 } catch (Throwable $exception) {
                     Log::warning('marketplace.label_fetch.combinada_falhou', [
                         'shipment_id' => $shipment->id,
                         'message' => $exception->getMessage(),
                     ]);
 
-                    $contents = $this->processor->convertZplToPdf($contents);
+                    $contents = $original;
                 }
             } else {
                 $contents = $this->processor->convertZplToPdf($contents);
@@ -288,6 +296,16 @@ class LabelFetchService
         $extension = $isPdf ? 'pdf' : 'bin';
         $path = "labels/{$shipment->order_id}/etiqueta-{$shipment->id}.{$extension}";
         Storage::disk('local')->put($path, $contents);
+
+        // Caminho por CONVENÇÃO, sem coluna nova: quem quiser a versão de 2
+        // folhas procura o mesmo nome com sufixo "-original". Só existe
+        // quando a combinada foi realmente usada.
+        if (isset($originalContents)) {
+            Storage::disk('local')->put(
+                "labels/{$shipment->order_id}/etiqueta-{$shipment->id}-original.pdf",
+                $originalContents,
+            );
+        }
 
         // Achado real 2026-08-07 (pedido #183): tracking_code é resolvido só
         // uma vez, dentro de confirmShipping() — na Shopee o número de

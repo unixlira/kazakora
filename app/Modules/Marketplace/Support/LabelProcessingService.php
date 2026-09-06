@@ -238,15 +238,30 @@ class LabelProcessingService
 
         $pdfs = [];
 
-        foreach ([$blocos[0], $blocos[1]] as $bloco) {
+        foreach ([$blocos[0], $blocos[1]] as $indice => $bloco) {
             [$compacto, $altura] = $this->compactarZpl($bloco);
-            $pdfs[] = $this->converterCompactoParaPdf($compacto, $altura);
+            $larguraNativa = 812;
+
+            if ($indice === 1) {
+                [$compacto, $larguraNativa] = $this->reforcarCodigoDaDanfe($compacto);
+            }
+
+            $pdfs[] = $this->converterCompactoParaPdf($compacto, $altura, $larguraNativa);
         }
 
         $largura = 152.4;
         $alturaFolha = 101.6;
-        $metade = $largura / 2;
         $margem = 0.6;
+
+        // Divisão ASSIMÉTRICA, não meio a meio. A etiqueta de envio é
+        // limitada pela ALTURA (141 mm de conteúdo em 100,4 mm de folha),
+        // então ceder largura pra ela não muda a escala em nada até ~71 mm.
+        // A DANFE é limitada pela LARGURA, e cada milímetro a mais engrossa
+        // a barra dela. Os 4,8 mm que a etiqueta cede saem de graça e foram
+        // o que levou o código da DANFE de 0,212 pra 0,254 mm — o mesmo
+        // valor do código da transportadora, que leu no teste físico.
+        $divisao = 71.4;
+        $metades = [[0.0, $divisao], [$divisao, $largura - $divisao]];
 
         $arquivos = [];
 
@@ -256,6 +271,8 @@ class LabelProcessingService
             $pdf->AddPage('L', [$alturaFolha, $largura]);
 
             foreach ($pdfs as $indice => $bytes) {
+                [$x0, $larguraMetade] = $metades[$indice];
+
                 $arquivo = tempnam(sys_get_temp_dir(), 'ml_meia_').'.pdf';
                 file_put_contents($arquivo, $bytes);
                 $arquivos[] = $arquivo;
@@ -265,21 +282,36 @@ class LabelProcessingService
                 $tamanho = $pdf->getTemplateSize($template);
 
                 $escala = min(
-                    ($metade - $margem * 2) / $tamanho['width'],
+                    ($larguraMetade - $margem * 2) / $tamanho['width'],
                     ($alturaFolha - $margem * 2) / $tamanho['height'],
                 );
 
                 $w = $tamanho['width'] * $escala;
                 $h = $tamanho['height'] * $escala;
 
-                $pdf->useTemplate($template, $indice * $metade + ($metade - $w) / 2, $margem, $w, $h);
+                // Alinhado no TOPO: a DANFE é mais curta e centralizar
+                // deixava faixa branca inútil em cima dela.
+                $pdf->useTemplate($template, $x0 + ($larguraMetade - $w) / 2, $margem, $w, $h);
             }
 
             $pdf->SetDrawColor(0, 0, 0);
             $pdf->SetLineWidth(0.3);
-            $pdf->Line($metade, 3, $metade, $alturaFolha - 3);
+            $pdf->Line($divisao, 3, $divisao, $alturaFolha - 3);
 
-            return $pdf->Output('S');
+            $saida = $pdf->Output('S');
+
+            // GARANTIA de 1 folha só: é o ponto inteiro desta feature. Se
+            // por qualquer motivo sair mais de uma página, é melhor abortar
+            // e deixar o caminho normal assumir do que imprimir 2 etiquetas
+            // achando que economizou. O chamador trata a exceção caindo pro
+            // convertZplToPdf() de sempre.
+            $paginas = $this->contarPaginas($saida);
+
+            if ($paginas !== 1) {
+                throw new RuntimeException("Etiqueta combinada saiu com {$paginas} páginas — esperado exatamente 1.");
+            }
+
+            return $saida;
         } finally {
             foreach ($arquivos as $arquivo) {
                 @unlink($arquivo);
@@ -287,13 +319,52 @@ class LabelProcessingService
         }
     }
 
+    private function contarPaginas(string $pdfBytes): int
+    {
+        $arquivo = tempnam(sys_get_temp_dir(), 'conta_pag_').'.pdf';
+        file_put_contents($arquivo, $pdfBytes);
+
+        try {
+            return (new Fpdi)->setSourceFile($arquivo);
+        } finally {
+            @unlink($arquivo);
+        }
+    }
+
     /**
      * O ZPL compactado declara ^PW/^LL próprios, então o tamanho pedido ao
      * Labelary vem deles — não do 4x6 fixo de extractLabelSizeInInches().
      */
-    private function converterCompactoParaPdf(string $zpl, int $alturaEmDots): string
+    /**
+     * O código da chave de acesso sai do canal em ^BY2 — barra de 0,2 mm,
+     * que depois da escala da composição vira 0,148 mm e NÃO É LIDO. Foi o
+     * que o teste físico de 2026-09-06 reprovou: o lado da transportadora
+     * leu, este não.
+     *
+     * ^BY3 resolve, mas 44 dígitos em Code 128-C viram ~104 mm de código —
+     * não cabem nos 101,6 mm da etiqueta física. Como este bloco é
+     * renderizado SOZINHO antes de entrar na metade, a tela nativa dele não
+     * precisa ter o tamanho da etiqueta: ^PW836 dá o espaço, e a escala da
+     * composição devolve tudo pro lugar. Resultado medido: 0,254 mm, o
+     * mesmo valor do código que leu.
+     *
+     * A altura cai de 150 pra 110 dots (pedido do usuário: pode engrossar
+     * e diminuir a altura, desde que não gire).
+     *
+     * @return array{0: string, 1: int} ZPL reforçado e a largura nativa
+     */
+    private function reforcarCodigoDaDanfe(string $zpl): array
     {
-        $largura = number_format(812 / 203, 2, '.', '');
+        $zpl = preg_replace('/\^BY2(,|\^)/', '^BY3$1', $zpl, 1);
+        $zpl = preg_replace('/\^BC([NRIB]?),150,/', '^BC$1,110,', $zpl, 1);
+        $zpl = preg_replace('/\^PW\d+/', '^PW836', $zpl, 1);
+
+        return [$zpl, 836];
+    }
+
+    private function converterCompactoParaPdf(string $zpl, int $alturaEmDots, int $larguraEmDots = 812): string
+    {
+        $largura = number_format($larguraEmDots / 203, 2, '.', '');
         $altura = number_format($alturaEmDots / 203, 2, '.', '');
 
         $response = Http::withHeaders(['Accept' => 'application/pdf'])

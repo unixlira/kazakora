@@ -350,8 +350,10 @@ class OrderImportService
             // hoje aparecia como "vendido hoje" nos cards de faturamento.
             // Sem placed_at (tela de teste de webhook, pedido fake), fica
             // now() mesmo, que já é o comportamento correto pra isso.
-            if ($this->temHoraDeVerdade($data['placed_at'] ?? null)) {
-                $order->forceFill(['created_at' => $data['placed_at']])->save();
+            $dataDaVenda = $this->dataDaVenda($data['placed_at'] ?? null);
+
+            if ($dataDaVenda) {
+                $order->forceFill(['created_at' => $dataDaVenda])->save();
             }
 
             $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Pedido importado do canal {$channel}", ['external_order_id' => $data['external_order_id']]);
@@ -1053,5 +1055,39 @@ class OrderImportService
         }
 
         return \Illuminate\Support\Carbon::parse($placedAt)->format('H:i:s') !== '00:00:00';
+    }
+
+    /**
+     * Que valor gravar em created_at (a "hora da venda" que a fila ordena e
+     * o card mostra). Devolve null pra deixar o now() padrão.
+     *
+     * Confirmado ao vivo no payload do Bling em 2026-09-06: ele NÃO tem
+     * campo de hora nenhum — só `data`, `dataSaida` e `dataPrevista`, todos
+     * data pura. Então pro TikTok a hora exata da venda não existe deste
+     * lado, e o que dá pra fazer é escolher o menos errado:
+     *
+     * - canal mandou hora (Mercado Livre, Shopee): usa ela, sempre;
+     * - só data, e a data é HOJE: usa o momento em que o pedido chegou
+     *   aqui — a sincronia em tempo real deixa isso a minutos da venda,
+     *   muito melhor que a meia-noite que afundava o pedido na fila;
+     * - só data, de um dia ANTERIOR: mantém o dia, à meia-noite. É o caso
+     *   do #1514 (venda de 05/09 que o Bling só entregou dia 06 às 14:15):
+     *   carimbar "agora" jogaria uma venda de ontem pro topo da fila de
+     *   hoje, mexeria no faturamento do dia e ainda dispararia o som de
+     *   venda nova — foi exatamente a reclamação do usuário.
+     */
+    private function dataDaVenda(mixed $placedAt): ?\Illuminate\Support\Carbon
+    {
+        if (empty($placedAt)) {
+            return null;
+        }
+
+        $data = \Illuminate\Support\Carbon::parse($placedAt);
+
+        if ($data->format('H:i:s') !== '00:00:00') {
+            return $data;
+        }
+
+        return $data->isToday() ? now() : $data;
     }
 }

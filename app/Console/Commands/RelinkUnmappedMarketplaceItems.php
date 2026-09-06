@@ -46,13 +46,23 @@ class RelinkUnmappedMarketplaceItems extends Command
         $items = OrderItem::query()
             ->whereNull('product_id')
             ->whereNotNull('external_item_id')
-            // Todos os canais, não só ML/Shopee (2026-09-06). O recorte
-            // antigo deixava o TikTok de fora e ele é hoje quem mais gera
-            // item sem vínculo: 14 dos 17 pendentes. Pior, deixava parado
-            // caso que já estava RESOLVIDO — 4 itens do código 58213072403
-            // com ProductChannelListing existente apontando pro produto
-            // certo, esperando alguém rodar algo que nunca os alcançava.
-            ->whereHas('order', fn ($query) => $query->whereNotNull('origin'))
+            // TODOS os canais de marketplace, não só ML/Shopee
+            // (2026-09-06): o recorte antigo deixava o TikTok de fora, e
+            // ele é hoje quem mais gera item sem vínculo — 14 dos 17
+            // pendentes.
+            //
+            // Enumerado, e não "origin não nulo": o dry-run com o critério
+            // aberto varreu junto DUAS notas de devolução de compra
+            // (nota_devolucao_compra/1.26051.04.1000), que não são pedido
+            // de canal nenhum — tentar autoImportProduct nelas é pedir pra
+            // criar produto errado a partir de um código que não é anúncio.
+            ->whereHas('order', fn ($query) => $query->whereIn('origin', [
+                Order::ORIGIN_MERCADO_LIVRE,
+                Order::ORIGIN_SHOPEE,
+                Order::ORIGIN_AMAZON,
+                Order::ORIGIN_TIKTOK_SHOP,
+                Order::ORIGIN_SHEIN,
+            ]))
             ->with('order:id,origin,external_order_id')
             ->get();
 

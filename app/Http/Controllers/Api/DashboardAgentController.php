@@ -192,6 +192,40 @@ class DashboardAgentController extends Controller
         return response()->json(['channels' => $channels]);
     }
 
+    /**
+     * Batida curta: o mínimo pra tela saber que entrou venda nova.
+     *
+     * Pedido explícito 2026-09-05: "quero que toque o som quando sair venda
+     * e atualizar o sistema, quase que imediato ao chegar o webhook". Sem
+     * canal de push até o navegador (o estático é servido pelo Hostinger
+     * compartilhado e o /api passa por um proxy PHP que bufferiza a
+     * resposta, então SSE/WebSocket não atravessam), a saída é consulta
+     * curta — e pra isso o payload precisa ser barato: o dashboard inteiro
+     * tem 266 KB, que a cada 5s daria uns 4 GB por dia por tela aberta.
+     *
+     * Devolve também os pedidos recentes com o canal, porque o som é POR
+     * CANAL (mesma regra do app WPF, ver NewSaleSoundService): quem não tem
+     * som próprio fica em silêncio em vez de tocar um genérico.
+     */
+    public function pulse(): JsonResponse
+    {
+        $recentes = Order::query()
+            ->nonPurchaseReturn()
+            ->where('created_at', '>=', now()->subMinutes(15))
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get(['id', 'origin', 'created_at']);
+
+        return response()->json([
+            'last_order_id' => (int) (Order::query()->nonPurchaseReturn()->max('id') ?? 0),
+            'recent' => $recentes->map(fn (Order $order) => [
+                'id' => $order->id,
+                'channel' => $order->origin,
+            ])->values(),
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
     public function metrics(): JsonResponse
     {
         $now = now();

@@ -118,6 +118,9 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::post('/jobs/{printJob}/complete', [PrintAgentController::class, 'complete'])->name('jobs.complete');
     Route::get('/dashboard/channels', [DashboardAgentController::class, 'channels'])->name('dashboard.channels');
     Route::get('/dashboard/metrics', [DashboardAgentController::class, 'metrics'])->name('dashboard.metrics');
+    // Batida curta pro KoraSync Web: payload minúsculo, consultado de 5 em
+    // 5s pra tocar o som e recarregar quase junto com o webhook.
+    Route::get('/dashboard/pulse', [DashboardAgentController::class, 'pulse'])->name('dashboard.pulse');
     Route::get('/dashboard/channels/{channel}/orders', [DashboardAgentController::class, 'channelOrders'])->name('dashboard.channel-orders');
     Route::get('/dashboard/labels', [DashboardAgentController::class, 'labels'])->name('dashboard.labels');
     Route::get('/dashboard/queue', [DashboardAgentController::class, 'queue'])->name('dashboard.queue');

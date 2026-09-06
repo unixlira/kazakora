@@ -375,17 +375,32 @@ class SeparateOrderEndpointTest extends TestCase
     }
 
     /**
-     * Passo "Deseja imprimir a etiqueta?" do modal (2026-09-05). O que
-     * importa provar: a consulta NUNCA cria PrintJob — foi criar job por
-     * gatilho de tela que causou o incidente de reimpressão de 2026-08-12.
+     * Consulta de etiqueta do modal (2026-09-05). O que importa provar: a
+     * consulta NUNCA cria PrintJob — foi criar job por gatilho de tela que
+     * causou o incidente de reimpressão de 2026-08-12.
+     *
+     * Shein continua sendo o canal sem etiqueta nossa. O TikTok saiu dessa
+     * lista em 2026-09-06: a etiqueta dele vem pelo Bling e passa pelo
+     * fluxo normal, então aqui ele responde como qualquer outro canal.
      */
-    public function test_label_status_for_tiktok_says_the_label_comes_from_the_channel(): void
+    public function test_label_status_for_shein_says_the_label_comes_from_the_channel(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_SHEIN);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'channel_only']);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    public function test_label_status_for_tiktok_follows_the_normal_flow(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
 
         $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
             ->assertOk()
-            ->assertJson(['state' => 'channel_only']);
+            ->assertJson(['state' => 'pending']);
 
         $this->assertDatabaseCount('print_jobs', 0);
     }

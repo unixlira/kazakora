@@ -1412,11 +1412,9 @@ class DashboardAgentController extends Controller
      */
     public function labelStatus(Order $order): JsonResponse
     {
-        // Shein não tem fetchLabel() de verdade: a etiqueta sai no painel do
-        // canal, nunca por aqui. O TikTok SAIU desta lista em 2026-09-06 —
-        // a etiqueta dele vem pelo Bling e agora é buscada no clique de
-        // separação (ver nudgeLabel()).
-        if (in_array($order->origin, [Order::ORIGIN_SHEIN], true)) {
+        // TikTok Shop e Shein: a etiqueta sai no painel do próprio canal
+        // (no TikTok, pela ponte do Bling), nunca pela nossa impressora.
+        if (in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
             return response()->json([
                 'state' => 'channel_only',
                 'message' => 'A etiqueta deste canal sai no painel do próprio marketplace — ela não passa pelo Kazakora.',
@@ -1482,6 +1480,13 @@ class DashboardAgentController extends Controller
             return response()->json([
                 'ok' => false,
                 'message' => 'Conclua a separação primeiro — a etiqueta sai por lá.',
+            ], 409);
+        }
+
+        if (in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'A etiqueta deste canal sai no painel do próprio marketplace — ela não passa pela impressora daqui.',
             ], 409);
         }
 
@@ -1663,21 +1668,11 @@ class DashboardAgentController extends Controller
 
     private function nudgeLabel(Order $order): void
     {
-        // TikTok Shop ENTROU em 2026-09-06. A etiqueta dele vem pela ponte
-        // do Bling (TikTokShopDriver::fetchLabel() -> logisticas/etiquetas),
-        // testada ao vivo em 05/09 nos 3 pedidos do dia: link S3, PDF de
-        // ~52 KB, e não depende da NF-e. Ficava de fora por um bloqueio de
-        // 2026-08-31 com dois motivos:
-        //
-        // 1. "geração via Bling exige plano pago" — não se confirmou, a
-        //    chamada responde sem erro de plano (o plano é pro Bling GERAR
-        //    etiqueta; aqui ela é do TikTok e o Bling só repassa);
-        // 2. varredura automática reimprimiu etiqueta de 10 pedidos já
-        //    despachados à mão — esse risco morreu com a regra nova: nada
-        //    imprime sem packed_at, e quem chama isto aqui é o clique de
-        //    separação. A varredura retroativa (PollChannelShippingLabels)
-        //    continua excluindo o canal de propósito.
-        if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON, Order::ORIGIN_TIKTOK_SHOP], true)) {
+        // TikTok Shop e Shein NÃO entram aqui — ver
+        // LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA. Decisão do usuário,
+        // repetida em 2026-09-06: a etiqueta do TikTok é do Bling e não sai
+        // pela nossa impressora; mandar pra ela trava a impressora.
+        if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
             return;
         }
 

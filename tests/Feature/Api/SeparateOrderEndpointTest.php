@@ -394,13 +394,41 @@ class SeparateOrderEndpointTest extends TestCase
         $this->assertDatabaseCount('print_jobs', 0);
     }
 
-    public function test_label_status_for_tiktok_follows_the_normal_flow(): void
+    public function test_label_status_for_tiktok_says_the_label_comes_from_the_channel(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
 
         $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
             ->assertOk()
-            ->assertJson(['state' => 'pending']);
+            ->assertJson(['state' => 'channel_only']);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /**
+     * A trava que o usuário pediu duas vezes: etiqueta do TikTok é do Bling
+     * e sai no painel dele. Se sair pela nossa impressora, trava a
+     * impressora.
+     */
+    public function test_reprint_is_refused_for_tiktok(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
+        $order->forceFill(['packed_at' => now()])->save();
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'tiktok_shop',
+            'external_shipment_id' => 'SHIP-14',
+            'shipping_method' => 'standard',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-14.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['ok' => false]);
 
         $this->assertDatabaseCount('print_jobs', 0);
     }

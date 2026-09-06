@@ -60,6 +60,22 @@ class LabelFetchService
      * Shopee original. Ver uso de $isScheduled logo abaixo, não altera esta
      * constante.
      */
+    /**
+     * Canais cuja etiqueta NUNCA sai pela nossa impressora — ela é emitida
+     * e impressa no painel do próprio marketplace.
+     *
+     * Decisão do usuário, repetida em 2026-09-06 depois de eu ter religado
+     * o TikTok por engano e queimado 2 etiquetas: **"do TikTok é do Bling,
+     * essas não imprimem pelo nosso fluxo, só Shopee e Mercado Livre — se
+     * não, trava a impressora"**. A trava mora aqui, no único ponto que
+     * cria PrintJob, pra nenhum caminho novo conseguir furar isso: nem a
+     * separação, nem o botão de reimprimir, nem uma varredura futura.
+     */
+    public const CANAIS_SEM_IMPRESSAO_NOSSA = [
+        MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+        MarketplaceAccount::CHANNEL_SHEIN,
+    ];
+
     private const CHANNELS_WITH_DECLARATION = [
         MarketplaceAccount::CHANNEL_SHOPEE,
         MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
@@ -330,6 +346,19 @@ class LabelFetchService
         $path ??= $shipment->label_path;
 
         if (! $order || ! $path) {
+            return false;
+        }
+
+        // A trava do TikTok/Shein (ver CANAIS_SEM_IMPRESSAO_NOSSA). Vale
+        // pelo canal do ENVIO e pela origem do pedido: os dois já foram
+        // vistos divergindo em pedido criado por ponte.
+        if (in_array($shipment->channel, self::CANAIS_SEM_IMPRESSAO_NOSSA, true)
+            || in_array($order->origin, self::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
+            Log::info('marketplace.label_fetch.canal_nao_imprime_aqui', [
+                'order_id' => $order->id,
+                'channel' => $shipment->channel,
+            ]);
+
             return false;
         }
 

@@ -141,6 +141,17 @@ return [
         // cancelar exige a tela dele). Ligar só com decisão explícita.
         'auto_send_nfe' => filter_var(env('BLING_AUTO_SEND_NFE', false), FILTER_VALIDATE_BOOLEAN),
 
+        // Ids de situação do Bling que significam "pedido já despachado"
+        // (lista separada por vírgula). Vazio = nada muda: o TikTok
+        // continua entrando só como pago/cancelado. Ver o comentário longo
+        // em TikTokShopDriver::mapOrderStatus() sobre por que isto NÃO tem
+        // padrão adivinhado — os ids são custom da conta e o token não tem
+        // escopo pra ler o nome da situação.
+        'situacoes_enviado' => array_values(array_filter(array_map(
+            'intval',
+            array_filter(array_map('trim', explode(',', (string) env('BLING_SITUACOES_ENVIADO', '')))),
+        ))),
+
         'invoice_issuer_channels' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('BLING_INVOICE_ISSUER_CHANNELS', '')),

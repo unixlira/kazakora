@@ -430,6 +430,21 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
             return Order::STATUS_CANCELLED;
         }
 
+        // Situações que significam "já despachado" NESTA conta do Bling.
+        //
+        // Vazio por padrão de propósito. Diferente do id 12 (Cancelado, de
+        // fábrica em toda conta), as situações do fluxo de venda aqui são
+        // CUSTOM da conta — em 2026-09-05 os ids reais eram 894763, 894764
+        // e 894765 — e `situacoes/{id}` continua devolvendo 403 por falta
+        // de escopo no token, então não há como descobrir o nome pela API.
+        // Mapear por adivinhação daria BAIXA DE SEPARAÇÃO em pedido não
+        // separado: o item nunca seria pego e o cliente não receberia.
+        // Preencher BLING_SITUACOES_ENVIADO só depois de conferir no painel
+        // do Bling qual id é o de enviado/concluído.
+        if (in_array((int) $situacaoId, config('services.bling.situacoes_enviado', []), true)) {
+            return Order::STATUS_SHIPPED;
+        }
+
         try {
             $nome = mb_strtolower($this->blingOrders->situacaoName((int) $situacaoId) ?? '');
         } catch (BlingException) {

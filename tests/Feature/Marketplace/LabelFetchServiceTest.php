@@ -170,6 +170,30 @@ class LabelFetchServiceTest extends TestCase
         ]);
     }
 
+    /**
+     * Os pedidos que a versão antiga já imprimiu sozinha (06/09, antes da
+     * correção) não podem prometer uma segunda impressão quando o operador
+     * separar: o job existe e já saiu. false aqui é o que faz o KoraSync
+     * mostrar "etiqueta já impressa às HH:MM" em vez de "enviada pra
+     * impressão".
+     */
+    public function test_queue_print_reports_false_when_the_label_was_already_printed(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/ja-impressa.pdf'])->save();
+
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'label_path' => 'labels/ja-impressa.pdf',
+            'status' => PrintJob::STATUS_PRINTED,
+            'printed_at' => now(),
+        ]);
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+    }
+
     public function test_attempt_is_idempotent_and_does_not_duplicate_the_print_job(): void
     {
         Storage::fake('local');

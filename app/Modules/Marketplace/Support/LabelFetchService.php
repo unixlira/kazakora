@@ -388,7 +388,7 @@ class LabelFetchService
             return false;
         }
 
-        PrintJob::query()->firstOrCreate(
+        $job = PrintJob::query()->firstOrCreate(
             ['order_id' => $shipment->order_id],
             [
                 'channel' => $shipment->channel,
@@ -399,7 +399,13 @@ class LabelFetchService
             ],
         );
 
-        return true;
+        // "Foi pra impressora agora" só é verdade se o job nasceu aqui ou
+        // ainda está na fila. Um job já IMPRESSO (caso dos pedidos que a
+        // versão antiga imprimiu sozinha antes desta correção) devolve
+        // false de propósito: aí o KoraSync consulta o estado real e diz
+        // "etiqueta já impressa às 08:50", em vez de prometer um papel que
+        // não vai sair da impressora de novo.
+        return $job->wasRecentlyCreated || $job->status === PrintJob::STATUS_QUEUED;
     }
 
     /**

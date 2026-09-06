@@ -156,41 +156,17 @@ class LabelFetchService
         // com "^XA" — checa a presença em vez de exigir como primeiro
         // caractere.
         if (str_contains($contents, '^XA')) {
-            // Etiqueta ÚNICA do Mercado Livre (2026-09-06): etiqueta +
-            // DANFE numa folha 10x15 em paisagem, em vez de 2 folhas.
+            // ETIQUETA DO MERCADO LIVRE = AS 2 FOLHAS ORIGINAIS DO CANAL.
             //
-            // Só pro ML de 2 blocos — o Flex tem 1 bloco e nem entra aqui.
-            // Atrás de flag DESLIGADA por padrão: a versão de 2026-08-21
-            // foi revertida 2x por deixar o código de barras ilegível, e
-            // esta só deve ser ligada depois de imprimir uma e passar o
-            // leitor. Se a composição falhar por qualquer motivo, cai no
-            // caminho de sempre — nunca deixa o pedido sem etiqueta.
-            $combinada = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE
-                && config('services.mercado_livre_etiqueta_combinada')
-                && substr_count($contents, '^XA') >= 2;
-
-            if ($combinada) {
-                // A ORIGINAL é sempre gerada e guardada, mesmo quando a
-                // combinada dá certo: se a etiqueta rasgar, sair borrada ou
-                // o leitor recusar, o admin reimprime as 2 folhas de
-                // sempre sem depender de consultar o canal de novo (ver
-                // OrderController::printLabel()).
-                $original = $this->processor->convertZplToPdf($contents);
-
-                try {
-                    $contents = $this->processor->composeMercadoLivreCombinada($contents);
-                    $originalContents = $original;
-                } catch (Throwable $exception) {
-                    Log::warning('marketplace.label_fetch.combinada_falhou', [
-                        'shipment_id' => $shipment->id,
-                        'message' => $exception->getMessage(),
-                    ]);
-
-                    $contents = $original;
-                }
-            } else {
-                $contents = $this->processor->convertZplToPdf($contents);
-            }
+            // Decisão do usuário em 2026-09-06, encerrando o assunto: "tem
+            // que ser as 2 mesmo, de acordo com a documentação, não pode ser
+            // 2 em 1". A tentativa de juntar etiqueta + DANFE numa folha
+            // 10x15 (composeMercadoLivreCombinada, atrás da flag
+            // ML_ETIQUETA_COMBINADA) foi revertida 3 vezes por deixar o
+            // código de barras ilegível — a flag saiu junto com este
+            // caminho pra não existir jeito de reativar sem querer. O
+            // método continua em LabelProcessingService, sem chamador.
+            $contents = $this->processor->convertZplToPdf($contents);
         }
 
         $isPdf = str_starts_with($contents, '%PDF-');
@@ -243,12 +219,7 @@ class LabelFetchService
         $isMercadoLivreFlex = $shipment->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE
             && $shipment->shipping_method === ChannelShipment::METHOD_FLEX;
 
-        // Na etiqueta combinada a 2ª página não existe mais (virou a
-        // metade direita da folha), então não há onde estampar a faixa sem
-        // colidir — a conferência de SKU/QTD segue na tela do KoraSync.
-        $ehCombinada = isset($combinada) && $combinada && str_starts_with($contents, '%PDF-');
-
-        if ($isPdf && ! $ehCombinada && ! $isMercadoLivreFlex && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
+        if ($isPdf && ! $isMercadoLivreFlex && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
             try {
                 $declarationTokens = $shipment->order->items->map(function ($item) {
                     $sku = $item->product?->sku ?: $item->product_name;
@@ -296,16 +267,6 @@ class LabelFetchService
         $extension = $isPdf ? 'pdf' : 'bin';
         $path = "labels/{$shipment->order_id}/etiqueta-{$shipment->id}.{$extension}";
         Storage::disk('local')->put($path, $contents);
-
-        // Caminho por CONVENÇÃO, sem coluna nova: quem quiser a versão de 2
-        // folhas procura o mesmo nome com sufixo "-original". Só existe
-        // quando a combinada foi realmente usada.
-        if (isset($originalContents)) {
-            Storage::disk('local')->put(
-                "labels/{$shipment->order_id}/etiqueta-{$shipment->id}-original.pdf",
-                $originalContents,
-            );
-        }
 
         // Achado real 2026-08-07 (pedido #183): tracking_code é resolvido só
         // uma vez, dentro de confirmShipping() — na Shopee o número de

@@ -166,4 +166,45 @@ class SeparateOrderEndpointTest extends TestCase
             ->assertStatus(409)
             ->assertJson(['result' => 'blocked']);
     }
+
+    /**
+     * Desfazer (2026-09-05) — o botão da aba "Separados" do KoraSync.
+     */
+    public function test_undoing_separation_returns_the_order_to_the_queue(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
+        $order->forceFill(['packed_at' => now()])->save();
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/desfazer-separacao", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['result' => 'ok', 'packed_at' => null]);
+
+        $this->assertNull($order->refresh()->packed_at);
+    }
+
+    /**
+     * A proteção que importa: pedido que já saiu não volta pra fila, senão
+     * o operador separa a mesma caixa duas vezes.
+     */
+    public function test_undoing_separation_is_refused_for_an_order_that_already_left(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP, Order::STATUS_SHIPPED);
+        $order->forceFill(['packed_at' => now()])->save();
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/desfazer-separacao", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['result' => 'blocked']);
+
+        $this->assertNotNull($order->refresh()->packed_at);
+    }
+
+    /** Clique repetido (ou retry de rede) confirma o estado, não estoura. */
+    public function test_undoing_a_separation_that_was_already_undone_is_idempotent(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/desfazer-separacao", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['result' => 'ok', 'packed_at' => null]);
+    }
 }

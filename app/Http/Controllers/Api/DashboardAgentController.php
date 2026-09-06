@@ -1251,6 +1251,63 @@ class DashboardAgentController extends Controller
     }
 
     /**
+     * O inverso de separateOrder(): tira o pedido de "separados" e devolve
+     * pra fila (pedido de 2026-09-05, botão "Desfazer" da aba Separados do
+     * KoraSync). Clique errado acontece — sem isso, só dava pra corrigir
+     * mexendo no banco.
+     *
+     * NÃO desfaz pedido que já saiu (status != pago): a etiqueta pode ter
+     * sido gerada e o pacote despachado no meio, e devolver isso pra fila
+     * faria o operador separar a mesma caixa duas vezes. O gate aqui é o
+     * mesmo de packOrder(), só que pelo outro lado.
+     *
+     * Idempotente, como packOrder(): desfazer o que já está desfeito
+     * confirma o estado em vez de estourar erro.
+     */
+    public function unseparateOrder(Order $order): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID) {
+            return response()->json([
+                'result' => 'blocked',
+                'message' => 'Pedido não está mais pago — já saiu da operação e não volta pra fila.',
+            ], 409);
+        }
+
+        $this->markUnpacked($order);
+
+        return response()->json([
+            'result' => 'ok',
+            'message' => 'Pedido devolvido para a fila de separação.',
+            'packed_at' => $order->refresh()->packed_at,
+        ]);
+    }
+
+    /**
+     * Espelha markPacked(): o card é a CAIXA, então desfazer um pedido do
+     * carrinho desfaz os irmãos que iam no mesmo pacote. Sem isso o irmão
+     * continuaria embalado e o card voltaria pra fila pela metade.
+     */
+    private function markUnpacked(Order $order): void
+    {
+        foreach ($this->ordersShippedWith($order) as $packOrder) {
+            if ($packOrder->status !== Order::STATUS_PAID || $packOrder->packed_at === null) {
+                continue;
+            }
+
+            $packOrder->forceFill(['packed_at' => null])->save();
+
+            app(OrderFulfillmentTimeline::class)->record(
+                $packOrder,
+                OrderFulfillmentEvent::STEP_ORDER_PACKED,
+                OrderFulfillmentEvent::STATUS_PENDING,
+                $packOrder->is($order)
+                    ? 'Separação desfeita no KoraSync — pedido devolvido para a fila'
+                    : "Separação desfeita no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
+            );
+        }
+    }
+
+    /**
      * O card é a CAIXA, não o pedido (ver groupOrdersShippedTogether()):
      * num carrinho do Mercado Livre o clique embala os 2 pedidos que vão no
      * mesmo pacote de uma vez. Sem isso o irmão continuaria "não embalado"

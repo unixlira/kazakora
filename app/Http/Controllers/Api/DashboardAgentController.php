@@ -1265,8 +1265,33 @@ class DashboardAgentController extends Controller
             'message' => $outcome['message'],
             'channel_checked' => $outcome['checked'],
             'label_queued' => $labelQueued,
+            // Quando nada foi pra impressora porque a etiqueta JÁ tinha
+            // saído, o operador precisa saber disso na hora, com a data —
+            // senão ele fica esperando um papel que não vem (ou pior, acha
+            // que o sistema falhou e clica de novo). Ver
+            // LabelFetchService::queuePrint() e o duplicado de 2026-09-07.
+            'label_already_printed_at' => $labelQueued ? null : $this->lastPrintedAt($order),
             'packed_at' => $order->refresh()->packed_at,
         ]);
+    }
+
+    /**
+     * Quando a etiqueta deste pedido já saiu na impressora — e quando.
+     * null se nunca saiu (ou se a última tentativa falhou/está na fila).
+     */
+    private function lastPrintedAt(Order $order): ?string
+    {
+        $job = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->latest('id')
+            ->first();
+
+        if ($job?->status !== PrintJob::STATUS_PRINTED) {
+            return null;
+        }
+
+        return $job->printed_at?->format('d/m/Y H:i');
     }
 
     /**
@@ -1430,7 +1455,7 @@ class DashboardAgentController extends Controller
         if ($job?->status === PrintJob::STATUS_PRINTED) {
             return response()->json([
                 'state' => 'printed',
-                'message' => 'Etiqueta já impressa em '.$job->printed_at?->format('d/m/Y H:i').'. Pra tirar outra via, use Etiquetas no admin.',
+                'message' => 'Etiqueta já impressa em '.$job->printed_at?->format('d/m/Y H:i').'. Ela não sai de novo sozinha — se esse papel se perdeu, use "Imprimir de novo".',
             ]);
         }
 

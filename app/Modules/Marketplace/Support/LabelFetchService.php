@@ -389,25 +389,28 @@ class LabelFetchService
             return true;
         }
 
-        // Já saiu papel DEPOIS da separação: é a etiqueta deste trabalho,
-        // está na mão do operador. Devolve false de propósito — o KoraSync
-        // consulta o estado real e diz "etiqueta já impressa às 08:50" em
-        // vez de prometer papel que não vai sair. Pra 2ª via existe o botão
-        // de reimprimir.
+        // Já saiu papel deste pedido: NUNCA sai uma segunda etiqueta
+        // sozinha. Devolve false de propósito — o KoraSync consulta o
+        // estado real e diz "etiqueta já impressa em 04/09 23:06" em vez de
+        // gastar papel por conta própria. A 2ª via existe no botão de
+        // reimprimir: é decisão de quem está na bancada, não do servidor.
         //
-        // BUG REAL 2026-09-06 (relato "parou no da shopee", pedido #1499):
-        // etiqueta impressa ANTES da separação não conta. Foi o caso das 4
-        // que saíram sozinhas de manhã, pelo bug da impressão automática —
-        // papel impresso às 09:17 que ninguém separou e que já se perdeu no
-        // meio do dia. Quando o operador conclui a separação horas depois,
-        // com a caixa na mão, ele precisa da etiqueta AGORA; aquela
-        // impressão não fazia parte deste trabalho.
-        // printed_at nulo num job "printed" não devia existir (complete()
-        // sempre grava a hora), mas se acontecer o desempate é não
-        // reimprimir: etiqueta a mais é papel jogado fora e confunde quem
+        // BUG REAL 2026-09-07 (relato do usuário: "tá saindo duplicado e
+        // agora não sabe qual é"): a regra de 06/09 reimprimia sozinha
+        // sempre que a impressão anterior fosse ANTERIOR ao packed_at, pra
+        // cobrir as etiquetas que a impressão automática soltava de manhã e
+        // se perdiam no dia. Só que #1419/#1422/#1437 (Flex do Mercado
+        // Livre) tinham sido impressos em 04-05/09 pelo mesmo bug antigo, o
+        // operador AINDA TINHA aquele papel, e separar hoje soltou uma
+        // segunda etiqueta idêntica de cada um — duas do mesmo pedido na
+        // bancada, sem saber qual valia.
+        //
+        // O servidor não tem como saber se o papel de 3 dias atrás ainda
+        // existe; quem sabe é quem está com a caixa na mão. Então vale o
+        // desempate que o comentário anterior já enunciava e a regra
+        // contrariava: etiqueta a mais é papel jogado fora e confunde quem
         // embala; etiqueta a menos tem o botão de reimprimir do lado.
-        if ($ultimo && $ultimo->status === PrintJob::STATUS_PRINTED
-            && ($ultimo->printed_at === null || $ultimo->printed_at->gte($order->packed_at))) {
+        if ($ultimo && $ultimo->status === PrintJob::STATUS_PRINTED) {
             return false;
         }
 

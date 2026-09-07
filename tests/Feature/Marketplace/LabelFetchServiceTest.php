@@ -211,12 +211,14 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * BUG REAL 2026-09-06 ("parou no da shopee", pedido #1499): etiqueta que
-     * saiu ANTES da separação — as 4 que a impressão automática soltou de
-     * manhã — não é a etiqueta deste trabalho. Quem separa horas depois, com
-     * a caixa na mão, precisa dela impressa agora.
+     * BUG REAL 2026-09-07 ("tá saindo duplicado e agora não sabe qual é",
+     * pedidos #1419/#1422/#1437, Flex do Mercado Livre): etiqueta que saiu
+     * dias ANTES da separação, pelo bug antigo da impressão automática,
+     * continuava na mão do operador. Reimprimir sozinha nesse caso põe duas
+     * etiquetas iguais na bancada. Papel só sai de novo pelo botão de
+     * reimprimir, que é decisão de quem está embalando.
      */
-    public function test_queue_print_prints_again_when_the_old_label_came_out_before_the_separation(): void
+    public function test_queue_print_never_prints_again_when_the_label_already_came_out(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(packedAt: now());
@@ -226,12 +228,12 @@ class LabelFetchServiceTest extends TestCase
             'order_id' => $shipment->order_id,
             'label_path' => 'labels/impressa-antes.pdf',
             'status' => PrintJob::STATUS_PRINTED,
-            // Saiu de manhã, muito antes de alguém separar.
-            'printed_at' => now()->subHours(3),
+            // Saiu há 3 dias, muito antes de alguém separar.
+            'printed_at' => now()->subDays(3),
         ]);
 
-        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
-        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->where('status', PrintJob::STATUS_QUEUED)->count());
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(0, PrintJob::where('order_id', $shipment->order_id)->where('status', PrintJob::STATUS_QUEUED)->count());
     }
 
     /**

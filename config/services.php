@@ -90,6 +90,13 @@ return [
         // propósito: um ambiente novo (ou um .env que perdeu a linha) tem
         // que falhar pro lado de não gastar papel de pedido antigo, que foi
         // exatamente o estrago do incidente de 2026-08-12.
+        //
+        // ⚠️ A data vai no FUSO DO APP (app.timezone, America/Sao_Paulo) —
+        // é com ele que orders.created_at é comparado. Escrever a saída do
+        // `date` do servidor aqui coloca o corte 3h no futuro (o SO é UTC)
+        // e desliga a impressão automática inteira sem avisar: erro real de
+        // 2026-09-07, custou uma etiqueta da Shopee não impressa. Pra
+        // pegar o valor certo: artisan tinker --execute="echo now();".
         'auto_print_since' => env('PRINT_AUTO_SINCE'),
     ],
 

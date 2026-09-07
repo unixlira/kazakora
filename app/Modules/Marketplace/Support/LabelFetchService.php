@@ -505,6 +505,22 @@ class LabelFetchService
             return false;
         }
 
+        // ERRO REAL 2026-09-07, na mesma tarde em que a automática voltou:
+        // gravei PRINT_AUTO_SINCE com a hora do `date` do servidor (UTC) e
+        // o app roda em America/Sao_Paulo — o corte caiu 3h no FUTURO e
+        // desligou a impressão automática de TUDO, calado. Só apareceu
+        // quando uma venda da Shopee (#1602) não imprimiu e o usuário
+        // cobrou. Corte no futuro é sempre configuração errada: ninguém
+        // liga impressão automática pra daqui a pouco.
+        if ($desde->isFuture()) {
+            Log::warning('marketplace.label_fetch.corte_no_futuro', [
+                'corte' => $desde->toDateTimeString(),
+                'agora' => now()->toDateTimeString(),
+                'timezone_do_app' => config('app.timezone'),
+                'efeito' => 'impressão automática desligada pra todo mundo até essa hora',
+            ]);
+        }
+
         if ($order->created_at === null || $order->created_at->lt($desde)) {
             Log::info('marketplace.label_fetch.pedido_anterior_ao_corte', [
                 'order_id' => $order->id,

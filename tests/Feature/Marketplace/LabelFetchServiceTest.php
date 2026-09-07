@@ -214,6 +214,29 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
+     * ERRO REAL 2026-09-07: o corte foi gravado com a hora do SO (UTC)
+     * enquanto o app roda em America/Sao_Paulo, caiu 3h no futuro e
+     * desligou a impressão automática de TODO mundo, calado — só apareceu
+     * quando uma venda da Shopee não imprimiu. O bloqueio em si está certo
+     * (venda anterior ao corte não imprime); o que faltava era o aviso.
+     */
+    public function test_a_cutoff_in_the_future_blocks_everything_and_warns(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Log::spy();
+        config(['services.print_agent.auto_print_since' => now()->addHours(3)->toDateTimeString()]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $shipment->forceFill(['label_path' => 'labels/corte-futuro.pdf'])->save();
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseCount('print_jobs', 0);
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $mensagem) => $mensagem === 'marketplace.label_fetch.corte_no_futuro');
+    }
+
+    /**
      * Ambiente sem PRINT_AUTO_SINCE não decide sozinho começar a imprimir o
      * histórico: falha pro lado de não gastar papel.
      */

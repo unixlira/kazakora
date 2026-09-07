@@ -328,51 +328,55 @@ class LabelFetchService
      * "etiqueta não deve ser gerada quando o pedido entra na fila, nem por
      * cron automático sem separação física".
      *
-     * Agora attempt() continua consultando o canal, baixando e guardando a
-     * etiqueta (é isso que acende label_ready no card e tira o pedido da
-     * Separação Futura) — mas nada sai da impressora por conta própria.
+     * MUDANÇA DE FLUXO 2026-09-07 (duas ordens do usuário no mesmo dia, e a
+     * segunda depende da primeira):
      *
-     * MUDANÇA DE FLUXO 2026-09-07 (pedido do usuário): quem gasta papel
-     * agora é o botão "Gerar etiquetas em lote", que imprime o lote inteiro
-     * ANTES da separação — ver queuePrintInBatch() e
-     * DashboardAgentController::batchPrintLabels(). A separação deixou de
-     * imprimir: separateOrder() só dá a baixa. Este método, com a exigência
-     * de packed_at, continua existindo pro caminho automático (attempt()),
-     * onde a trava é justamente o que impede a volta da impressão sozinha.
+     * 1. A separação parou de imprimir — o galpão passou a imprimir as
+     *    etiquetas ANTES e a baixa virou só a baixa.
+     * 2. **A impressão automática voltou**: assim que o canal libera a
+     *    etiqueta, ela vai pra impressora sozinha. Com a impressão
+     *    acontecendo antes da separação de qualquer jeito, esperar clique
+     *    virou só atraso — o operador quer o papel já na bandeja quando
+     *    chegar pra separar.
      *
-     * A dedupe por último PrintJob do pedido mantém a idempotência de
-     * sempre: duplo clique, retry de rede ou uma segunda passada do lote não
-     * geram uma segunda etiqueta do mesmo pedido.
+     * Por isso a exigência de packed_at, que existiu entre 06/09 e 07/09,
+     * NÃO está mais aqui. O que segura a impressão continua sendo o que
+     * segurava antes dela existir, e é o que importa de verdade: pedido tem
+     * que estar PAGO (trava do incidente de 2026-08-12, que reimprimiu 11
+     * etiquetas de pedidos velhos, uma delas cancelada), o canal tem que
+     * ser um que imprime aqui, e etiqueta que já saiu nunca sai de novo.
+     *
+     * O botão "Gerar etiquetas em lote" (ver BatchLabelPrintService)
+     * continua valendo como rede: é ele que pega o que ficou pra trás
+     * quando a impressora estava fora do ar ou quando a etiqueta só foi
+     * liberada de madrugada.
+     *
+     * A dedupe pelo último PrintJob do pedido mantém a idempotência de
+     * sempre: retry de rede, uma segunda passada do poll ou o lote rodando
+     * em cima não geram uma segunda etiqueta do mesmo pedido.
      *
      * @return bool true se a etiqueta entrou na fila de impressão agora.
      */
     public function queuePrint(ChannelShipment $shipment, ?string $path = null, ?string $rawPath = null): bool
     {
-        return $this->enqueue($shipment, $path, $rawPath, requirePacked: true);
+        return $this->enqueue($shipment, $path, $rawPath, automatico: true);
     }
 
     /**
      * A mesma impressão, pedida por uma PESSOA no botão "Gerar etiquetas em
-     * lote" — e por isso sem a exigência de packed_at.
+     * lote" — e por isso sem o corte de data.
      *
-     * Mudança de fluxo pedida pelo usuário em 2026-09-07: o galpão passou a
-     * imprimir o lote inteiro de etiquetas ANTES de separar, e a baixa da
-     * separação virou só a baixa. A trava de packed_at continua valendo
-     * inteira pro caminho AUTOMÁTICO (queuePrint(), chamado por attempt()
-     * quando o canal libera a etiqueta) — é ela que impede a volta do bug
-     * de 2026-09-06, em que todo pedido novo saía impresso sozinho minutos
-     * depois de entrar. O que muda aqui é só quem manda: clique humano
-     * imprime; máquina, não.
-     *
-     * Todas as outras travas continuam de pé: canal que não imprime aqui,
-     * pedido não-pago, job já na fila e etiqueta que já saiu.
+     * O corte existe pra máquina não sair imprimindo o represamento antigo
+     * sozinha; o botão é justamente a ferramenta pra dar conta desse
+     * represamento, com alguém olhando. Todas as outras travas valem igual
+     * pros dois caminhos.
      */
     public function queuePrintInBatch(ChannelShipment $shipment): bool
     {
-        return $this->enqueue($shipment, null, null, requirePacked: false);
+        return $this->enqueue($shipment, null, null, automatico: false);
     }
 
-    private function enqueue(ChannelShipment $shipment, ?string $path, ?string $rawPath, bool $requirePacked): bool
+    private function enqueue(ChannelShipment $shipment, ?string $path, ?string $rawPath, bool $automatico): bool
     {
         $order = $shipment->order;
         $path ??= $shipment->label_path;
@@ -400,13 +404,18 @@ class LabelFetchService
             return false;
         }
 
-        if ($requirePacked && $order->packed_at === null) {
-            Log::info('marketplace.label_fetch.print_held_until_separation', [
-                'shipment_id' => $shipment->id,
-                'order_id' => $shipment->order_id,
-                'channel' => $shipment->channel,
-            ]);
-
+        // "Somente pedidos a partir desse momento" — a condição que o
+        // usuário pôs em cima da volta da impressão automática, 2026-09-07.
+        //
+        // Quando a automática voltou havia 61 pedidos represados esperando o
+        // canal liberar etiqueta, alguns de dias antes. Sem este corte, cada
+        // uma dessas etiquetas cairia sozinha na impressora conforme o canal
+        // fosse liberando, no meio do dia, sem ninguém esperando por ela —
+        // que é a forma exata do estrago de 2026-08-12.
+        //
+        // Vale só pro caminho automático: o botão de lote existe pra dar
+        // conta justamente do que ficou atrás do corte.
+        if ($automatico && ! $this->dentroDoCorteAutomatico($order)) {
             return false;
         }
 
@@ -459,6 +468,52 @@ class LabelFetchService
             'is_thank_you' => false,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
+
+        return true;
+    }
+
+    /**
+     * A venda entrou depois do momento em que a impressão automática foi
+     * religada?
+     *
+     * Sem PRINT_AUTO_SINCE configurado a resposta é NÃO pra todo mundo: um
+     * ambiente sem a data não pode decidir sozinho começar a imprimir o
+     * histórico inteiro. Data inválida cai no mesmo lugar, e loga —
+     * silêncio aqui viraria papel gasto que ninguém explica.
+     */
+    private function dentroDoCorteAutomatico(Order $order): bool
+    {
+        $corte = config('services.print_agent.auto_print_since');
+
+        if (! $corte) {
+            Log::info('marketplace.label_fetch.auto_print_desligada', [
+                'order_id' => $order->id,
+                'motivo' => 'PRINT_AUTO_SINCE não configurado',
+            ]);
+
+            return false;
+        }
+
+        try {
+            $desde = \Illuminate\Support\Carbon::parse($corte);
+        } catch (Throwable $exception) {
+            Log::warning('marketplace.label_fetch.auto_print_corte_invalido', [
+                'valor' => $corte,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        if ($order->created_at === null || $order->created_at->lt($desde)) {
+            Log::info('marketplace.label_fetch.pedido_anterior_ao_corte', [
+                'order_id' => $order->id,
+                'criado_em' => (string) $order->created_at,
+                'corte' => $desde->toDateTimeString(),
+            ]);
+
+            return false;
+        }
 
         return true;
     }

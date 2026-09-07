@@ -80,6 +80,17 @@ return [
 
     'print_agent' => [
         'token' => env('PRINT_AGENT_TOKEN'),
+
+        // A impressão automática voltou em 2026-09-07, com um corte:
+        // "somente pedidos a partir desse momento". Este é o momento —
+        // venda que entrou ANTES dele nunca sai sozinha na impressora, só
+        // pelo botão "Gerar etiquetas em lote".
+        //
+        // Sem o env definido, a impressão automática fica DESLIGADA de
+        // propósito: um ambiente novo (ou um .env que perdeu a linha) tem
+        // que falhar pro lado de não gastar papel de pedido antigo, que foi
+        // exatamente o estrago do incidente de 2026-08-12.
+        'auto_print_since' => env('PRINT_AUTO_SINCE'),
     ],
 
     'correios' => [

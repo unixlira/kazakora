@@ -21,7 +21,20 @@ class LabelFetchServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE, ?\Illuminate\Support\Carbon $scheduledFor = null, ?\Illuminate\Support\Carbon $packedAt = null): ChannelShipment
+    /**
+     * A impressão automática só vale pra venda posterior ao corte
+     * (PRINT_AUTO_SINCE, 2026-09-07). Um corte antigo por padrão deixa os
+     * testes das OUTRAS regras exercitarem o que eles se propõem a testar,
+     * em vez de passarem de graça pelo corte.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.print_agent.auto_print_since' => now()->subYear()->toDateTimeString()]);
+    }
+
+    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE, ?\Illuminate\Support\Carbon $scheduledFor = null, ?\Illuminate\Support\Carbon $packedAt = null, ?\Illuminate\Support\Carbon $createdAt = null): ChannelShipment
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
@@ -44,6 +57,10 @@ class LabelFetchServiceTest extends TestCase
 
         if ($packedAt !== null) {
             $order->forceFill(['packed_at' => $packedAt])->save();
+        }
+
+        if ($createdAt !== null) {
+            $order->forceFill(['created_at' => $createdAt])->save();
         }
 
         $order->items()->create([
@@ -119,33 +136,6 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * BUG REAL 2026-09-06, relatado pelo usuário ("imprimiu a etiqueta da
-     * Gabriela da Shopee"): baixar a etiqueta imprimia a etiqueta. Pedido
-     * #1497 entrou 08:47 e saiu impresso 08:50, ainda PAID e sem packed_at,
-     * sem ninguém ter separado nada — contra a regra 8 do briefing do Corea
-     * SYNC V3. A etiqueta pode (e deve) ficar pronta e guardada; o papel só
-     * é gasto no clique de separação.
-     */
-    public function test_attempt_stores_the_label_but_does_not_print_it_before_the_separation(): void
-    {
-        Storage::fake('local');
-        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
-        $this->mockDriver(
-            ['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream'],
-            MarketplaceAccount::CHANNEL_SHOPEE,
-        );
-
-        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
-
-        $this->assertTrue($ready, 'A etiqueta continua sendo baixada normalmente.');
-        $fresh = $shipment->fresh();
-        $this->assertSame(ChannelShipment::STATUS_LABEL_READY, $fresh->status);
-        Storage::disk('local')->assertExists($fresh->label_path);
-
-        $this->assertDatabaseCount('print_jobs', 0);
-    }
-
-    /**
      * Trava pedida pelo usuário duas vezes (a segunda em 2026-09-06, depois
      * de eu religar o canal por engano): etiqueta do TikTok é do Bling e sai
      * no painel dele. Mandar pra nossa impressora trava a impressora.
@@ -161,10 +151,11 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * O outro lado da mesma regra: com o pedido já separado, o job nasce —
-     * é assim que separateOrder() imprime a etiqueta que estava esperando.
+     * MUDANÇA DE FLUXO 2026-09-07 (2ª ordem do dia): a impressão automática
+     * voltou. Assim que o canal libera a etiqueta, ela vai pra impressora
+     * sozinha — sem esperar clique nenhum.
      */
-    public function test_queue_print_creates_the_job_for_an_order_already_separated(): void
+    public function test_attempt_prints_by_itself_for_a_sale_after_the_cutoff(): void
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
@@ -174,15 +165,68 @@ class LabelFetchServiceTest extends TestCase
         );
 
         app(LabelFetchService::class)->attempt($shipment->fresh());
-        $this->assertDatabaseCount('print_jobs', 0);
 
-        $shipment->order->forceFill(['packed_at' => now()])->save();
-
-        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertNull($shipment->order->refresh()->packed_at, 'Ninguém separou nada — a etiqueta sai antes disso.');
         $this->assertDatabaseHas('print_jobs', [
             'order_id' => $shipment->order_id,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
+    }
+
+    /**
+     * A condição que o usuário pôs junto com a volta da automática:
+     * "somente pedidos a partir desse momento". Quando ela foi religada
+     * havia 61 pedidos represados esperando etiqueta — nenhum deles pode
+     * cair sozinho na impressora conforme o canal for liberando.
+     */
+    public function test_attempt_never_prints_a_sale_from_before_the_cutoff(): void
+    {
+        Storage::fake('local');
+        config(['services.print_agent.auto_print_since' => now()->toDateTimeString()]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE, createdAt: now()->subDays(3));
+        $this->mockDriver(
+            ['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream'],
+            MarketplaceAccount::CHANNEL_SHOPEE,
+        );
+
+        $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()), 'A etiqueta continua sendo baixada e guardada.');
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /**
+     * O mesmo pedido antigo SAI pelo botão de lote: o corte é pra máquina
+     * não decidir sozinha, não pra prender o operador.
+     */
+    public function test_the_batch_prints_a_sale_from_before_the_cutoff(): void
+    {
+        Storage::fake('local');
+        config(['services.print_agent.auto_print_since' => now()->toDateTimeString()]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE, createdAt: now()->subDays(3));
+        $shipment->forceFill(['label_path' => 'labels/represada.pdf'])->save();
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrintInBatch($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * Ambiente sem PRINT_AUTO_SINCE não decide sozinho começar a imprimir o
+     * histórico: falha pro lado de não gastar papel.
+     */
+    public function test_automatic_printing_stays_off_without_a_configured_cutoff(): void
+    {
+        Storage::fake('local');
+        config(['services.print_agent.auto_print_since' => null]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $shipment->forceFill(['label_path' => 'labels/sem-corte.pdf'])->save();
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseCount('print_jobs', 0);
     }
 
     /**

@@ -116,6 +116,94 @@ class InvoiceServiceTest extends TestCase
     }
 
     /**
+     * BUG REAL 2026-09-07 (pedido #1604, "a nota da Amanda não saiu"):
+     * rejeição **539 — Duplicidade de NF-e** é a exceção da regra acima. A
+     * SEFAZ está dizendo que aquele número JÁ foi consumido por outra
+     * chave, então reenviar com o mesmo número é rejeição garantida pra
+     * sempre — o pedido ficou preso nesse laço, e como a Shopee só libera o
+     * envio depois da nota, a etiqueta nunca saiu.
+     */
+    public function test_issue_reserves_a_new_number_when_the_rejection_was_a_duplicate(): void
+    {
+        Storage::fake('local');
+        $order = $this->makeOrder();
+
+        $invoice = Invoice::create([
+            'order_id' => $order->id,
+            'status' => Invoice::STATUS_REJECTED,
+            'serie' => (int) config('nfe.serie'),
+            'numero' => 2037,
+            'ambiente' => config('nfe.ambiente'),
+            'chave_acesso' => str_repeat('1', 44),
+            'xml_path' => "invoices/{$order->id}/nfe-old.xml",
+            'motivo_rejeicao' => '539 - Rejeição: Duplicidade de NF-e com diferença na Chave de Acesso [chNFe:352609...]',
+        ]);
+        Storage::disk('local')->put($invoice->xml_path, '<xml>antigo</xml>');
+
+        $xmlBuilder = Mockery::mock(NFeXmlBuilderService::class);
+        $xmlBuilder->shouldReceive('build')
+            ->atLeast()->once()
+            // O número NOVO, nunca o 2037 queimado.
+            ->with(Mockery::on(fn ($o) => $o->id === $order->id), 2038)
+            ->andReturn(['xml' => '<xml>novo</xml>', 'chave' => str_repeat('3', 44)]);
+        $this->app->instance(NFeXmlBuilderService::class, $xmlBuilder);
+
+        $certificateService = Mockery::mock(NFeCertificateService::class);
+        $certificateService->shouldReceive('isConfigured')->andReturn(false);
+        $this->app->instance(NFeCertificateService::class, $certificateService);
+
+        $result = app(InvoiceService::class)->issue($order->fresh());
+
+        $this->assertSame(2038, $result->numero);
+        $this->assertSame(Invoice::STATUS_PENDING, $result->status);
+        $this->assertNull($result->motivo_rejeicao);
+        Storage::disk('local')->assertMissing("invoices/{$order->id}/nfe-old.xml");
+    }
+
+    /**
+     * A CAUSA do 539 acima: o contador de números olhava só a coluna
+     * `numero`, e a coluna mente — o BlingInvoiceImporter renumerava uma
+     * nota que já tinha sido autorizada pela SEFAZ, trocando pela numeração
+     * interna do Bling (o #1603 saiu como série 2 nº 2037 e virou "série 3
+     * nº 119" no banco). A chave de acesso não mente: série e número estão
+     * gravados dentro dela.
+     */
+    public function test_the_next_number_respects_what_is_written_inside_the_access_key(): void
+    {
+        Storage::fake('local');
+
+        $serie = str_pad((string) config('nfe.serie'), 3, '0', STR_PAD_LEFT);
+        // Chave real de uma nota nº 2037 da série configurada, gravada numa
+        // linha cuja COLUNA foi renumerada pra série 3 / nº 119.
+        $chaveDoVizinho = '35260965604590000107'.'55'.$serie.'000002037'.'1'.'70524178'.'1';
+
+        Invoice::create([
+            'order_id' => $this->makeOrder()->id,
+            'status' => Invoice::STATUS_AUTHORIZED,
+            'serie' => 3,
+            'numero' => 119,
+            'ambiente' => config('nfe.ambiente'),
+            'chave_acesso' => $chaveDoVizinho,
+        ]);
+
+        $order = $this->makeOrder();
+
+        $xmlBuilder = Mockery::mock(NFeXmlBuilderService::class);
+        $xmlBuilder->shouldReceive('build')
+            ->atLeast()->once()
+            // 2038, não 2037: o 2037 está queimado dentro da chave acima.
+            ->with(Mockery::on(fn ($o) => $o->id === $order->id), 2038)
+            ->andReturn(['xml' => '<xml>novo</xml>', 'chave' => str_repeat('4', 44)]);
+        $this->app->instance(NFeXmlBuilderService::class, $xmlBuilder);
+
+        $certificateService = Mockery::mock(NFeCertificateService::class);
+        $certificateService->shouldReceive('isConfigured')->andReturn(false);
+        $this->app->instance(NFeCertificateService::class, $certificateService);
+
+        $this->assertSame(2038, app(InvoiceService::class)->issue($order)->numero);
+    }
+
+    /**
      * DENIED (cStat 110/301/302 — normalmente irregularidade de CNPJ/IE do
      * emissor) continua terminal de propósito, ao contrário de REJECTED:
      * a SEFAZ queima esse número, reenviar o mesmo dado nunca muda o

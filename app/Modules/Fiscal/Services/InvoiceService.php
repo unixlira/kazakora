@@ -118,7 +118,13 @@ class InvoiceService
         // seguro: a chave pode mudar (tem componente aleatório), mas como
         // a SEFAZ nunca autorizou a chave antiga, não sobra nada pra
         // invalidar.
-        if (in_array($invoice->status, [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED], true)) {
+        // Rejeição 539 (duplicidade de número) é a única em que reaproveitar
+        // o número reservado é rejeição garantida pra sempre — a SEFAZ está
+        // dizendo que aquele número já foi consumido por outra chave. Ver
+        // reserveNewNumber(); pedido #1604 ficou preso nesse laço.
+        if ($invoice->status === Invoice::STATUS_REJECTED && $this->rejeitadaPorDuplicidade($invoice)) {
+            $invoice = $this->reserveNewNumber($invoice, $order);
+        } elseif (in_array($invoice->status, [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED], true)) {
             $invoice = $this->rebuildPendingInvoice($invoice, $order);
         }
 
@@ -131,6 +137,110 @@ class InvoiceService
         $this->signAndSend($invoice);
 
         return $invoice->fresh();
+    }
+
+    /** cStat 539 — "Duplicidade de NF-e com diferença na Chave de Acesso". */
+    private function rejeitadaPorDuplicidade(Invoice $invoice): bool
+    {
+        $motivo = (string) $invoice->motivo_rejeicao;
+
+        return str_contains($motivo, '539') || stripos($motivo, 'duplicidade') !== false;
+    }
+
+    /**
+     * O próximo número de NF-e da série configurada.
+     *
+     * BUG REAL 2026-09-07 (pedido #1604, "a nota da Amanda não saiu"): a
+     * conta olhava só a COLUNA `numero`, e a coluna mente. O
+     * BlingInvoiceImporter sobrescrevia serie/numero de uma nota que o
+     * nosso sistema já tinha emitido e autorizado, trocando pela numeração
+     * interna do Bling — o pedido #1603 saiu autorizado na SEFAZ como
+     * série 2 nº 2037 e virou "série 3 nº 119" no banco. Com o 2037 fora do
+     * alcance de `max(numero) where serie = 2`, o pedido seguinte reservou
+     * 2037 de novo e a SEFAZ devolveu **539 — Duplicidade de NF-e com
+     * diferença na Chave de Acesso**. A etiqueta nunca saiu porque a Shopee
+     * exige a nota antes de liberar o envio.
+     *
+     * A chave de acesso não mente: série e número estão gravados DENTRO
+     * dela (posições 22-24 e 25-33), e ela é o que a SEFAZ registrou. Então
+     * o número novo é o maior entre o que a coluna diz e o que as chaves
+     * dizem.
+     *
+     * Feito em PHP, não em SQL: `SUBSTRING`/`CAST` mudam de nome entre
+     * MySQL (produção) e SQLite (testes), e a tabela inteira são ~1,2 mil
+     * linhas de uma coluna curta — o custo é irrelevante perto de emitir
+     * uma nota com número queimado.
+     */
+    private function proximoNumero(): int
+    {
+        $serie = (int) config('nfe.serie');
+        $ambiente = config('nfe.ambiente');
+
+        $maxColuna = (int) (Invoice::query()
+            ->where('serie', $serie)
+            ->where('ambiente', $ambiente)
+            ->lockForUpdate()
+            ->max('numero') ?? 0);
+
+        $serieNaChave = str_pad((string) $serie, 3, '0', STR_PAD_LEFT);
+
+        $maxChave = Invoice::query()
+            ->where('ambiente', $ambiente)
+            ->whereNotNull('chave_acesso')
+            ->pluck('chave_acesso')
+            ->reduce(function (int $maior, ?string $chave) use ($serieNaChave) {
+                if ($chave === null || strlen($chave) !== 44 || substr($chave, 22, 3) !== $serieNaChave) {
+                    return $maior;
+                }
+
+                return max($maior, (int) substr($chave, 25, 9));
+            }, 0);
+
+        return max($maxColuna, $maxChave, (int) config('nfe.numero_inicial')) + 1;
+    }
+
+    /**
+     * Queima o número atual e reserva um novo pra MESMA linha de nota.
+     *
+     * Só pra rejeição de duplicidade (539): nesse caso — e só nesse — a
+     * SEFAZ está dizendo que o número JÁ foi consumido por outra chave, ou
+     * seja, reenviar com o mesmo número é rejeição garantida pra sempre.
+     * Em toda outra rejeição o número continua livre e o retry reaproveita
+     * ele (ver rebuildPendingInvoice()), que é o certo pra não abrir buraco
+     * na numeração fiscal à toa.
+     */
+    private function reserveNewNumber(Invoice $invoice, Order $order): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $order) {
+            $numero = $this->proximoNumero();
+
+            ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
+
+            if ($invoice->xml_path) {
+                Storage::disk('local')->delete($invoice->xml_path);
+            }
+
+            $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
+            Storage::disk('local')->put($xmlPath, $xml);
+
+            Log::channel('stripe')->warning('nfe.numero_queimado_por_duplicidade', [
+                'order_id' => $order->id,
+                'invoice_id' => $invoice->id,
+                'numero_antigo' => $invoice->numero,
+                'numero_novo' => $numero,
+            ]);
+
+            $invoice->update([
+                'status' => Invoice::STATUS_PENDING,
+                'serie' => (int) config('nfe.serie'),
+                'numero' => $numero,
+                'chave_acesso' => $chave,
+                'xml_path' => $xmlPath,
+                'motivo_rejeicao' => null,
+            ]);
+
+            return $invoice->fresh();
+        });
     }
 
     /**
@@ -163,14 +273,7 @@ class InvoiceService
     {
         try {
             return DB::transaction(function () use ($order) {
-                $localMax = Invoice::query()
-                    ->where('serie', config('nfe.serie'))
-                    ->where('ambiente', config('nfe.ambiente'))
-                    ->lockForUpdate()
-                    ->max('numero') ?? 0;
-
-                // max(local, numero_inicial) — ver comentário em config/nfe.php.
-                $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
+                $numero = $this->proximoNumero();
 
                 ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
 
@@ -219,13 +322,7 @@ class InvoiceService
     private function convertExternalToPending(Invoice $invoice, Order $order): Invoice
     {
         return DB::transaction(function () use ($invoice, $order) {
-            $localMax = Invoice::query()
-                ->where('serie', config('nfe.serie'))
-                ->where('ambiente', config('nfe.ambiente'))
-                ->lockForUpdate()
-                ->max('numero') ?? 0;
-
-            $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
+            $numero = $this->proximoNumero();
 
             ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
 

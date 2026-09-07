@@ -276,16 +276,39 @@ class BlingInvoiceImporter
 
         $invoice = Invoice::query()->firstOrNew(['order_id' => $order->id]);
 
+        // BUG REAL 2026-09-07 (pedido #1604, "a nota da Amanda não saiu"):
+        // esta linha renumerava nota que o NOSSO sistema já tinha emitido e
+        // a SEFAZ já tinha autorizado. O #1603 saiu autorizado como série 2
+        // nº 2037 e virou "série 3 nº 119" aqui — a numeração do Bling, não
+        // a fiscal. Com o 2037 fora do alcance do contador, o pedido
+        // seguinte reservou 2037 de novo e levou rejeição 539 (duplicidade);
+        // como a Shopee só libera o envio depois da nota, a etiqueta nunca
+        // saiu.
+        //
+        // Nota já AUTORIZADA é fato consumado na SEFAZ: o Bling pode
+        // reportar o que quiser sobre ela, mas série, número e chave são os
+        // que foram autorizados. Só o que o Bling sabe melhor (situação,
+        // documentos) continua sendo atualizado.
+        $jaAutorizadaPorNos = $invoice->exists && $invoice->status === Invoice::STATUS_AUTHORIZED;
+
         $invoice->fill([
             'origem' => Invoice::ORIGEM_PEDIDO,
             'status' => $status,
             'ambiente' => Invoice::AMBIENTE_PRODUCAO,
-            'serie' => isset($nota['serie']) ? (int) $nota['serie'] : $invoice->serie,
-            'numero' => isset($nota['numero']) ? (int) $nota['numero'] : $invoice->numero,
+            'serie' => $jaAutorizadaPorNos ? $invoice->serie : (isset($nota['serie']) ? (int) $nota['serie'] : $invoice->serie),
+            'numero' => $jaAutorizadaPorNos ? $invoice->numero : (isset($nota['numero']) ? (int) $nota['numero'] : $invoice->numero),
             'valor_total' => $nota['valorNota'] ?? $nota['valor'] ?? $order->total,
-            'chave_acesso' => $chave ?: $invoice->chave_acesso,
+            'chave_acesso' => $jaAutorizadaPorNos ? $invoice->chave_acesso : ($chave ?: $invoice->chave_acesso),
             'motivo_rejeicao' => $status === Invoice::STATUS_REJECTED ? ($nota['observacoes'] ?? 'Rejeitada no Bling — ver detalhe lá.') : null,
         ]);
+
+        if ($jaAutorizadaPorNos) {
+            Log::info('bling.invoice.numeracao_preservada', [
+                'order_id' => $order->id,
+                'nosso' => "s{$invoice->serie}/n{$invoice->numero}",
+                'bling_queria' => 's'.($nota['serie'] ?? '?').'/n'.($nota['numero'] ?? '?'),
+            ]);
+        }
 
         if ($status === Invoice::STATUS_AUTHORIZED && ! $invoice->autorizada_em) {
             $invoice->autorizada_em = now();

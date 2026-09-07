@@ -11,6 +11,8 @@ use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
@@ -1539,10 +1541,27 @@ class DashboardAgentController extends Controller
 
         $shipment = $order->loadMissing('channelShipment')->channelShipment;
 
+        // Sem etiqueta baixada não há o que mandar pra impressora — mas
+        // devolver só "não tem" é beco sem saída pra quem está com a caixa
+        // pronta. Pede a etiqueta ao canal agora e diz pra tentar de novo:
+        // o mesmo empurrão que o lote dá, no clique de um pedido só.
         if (! $shipment?->label_path) {
+            try {
+                if ($shipment) {
+                    CheckShipmentLabelJob::dispatch($shipment->id);
+                } else {
+                    ConfirmChannelShippingJob::dispatch($order->id);
+                }
+            } catch (Throwable $exception) {
+                Log::warning('dashboard.reprint_nudge_failed', [
+                    'order_id' => $order->id,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+
             return response()->json([
                 'ok' => false,
-                'message' => 'A etiqueta deste pedido ainda não foi baixada do canal.',
+                'message' => 'O canal ainda não liberou a etiqueta deste pedido. Acabei de pedir pra ele — tente de novo em instantes.',
             ], 409);
         }
 

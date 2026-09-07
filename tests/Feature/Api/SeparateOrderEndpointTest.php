@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -230,6 +231,35 @@ class SeparateOrderEndpointTest extends TestCase
             ->assertJson(['ok' => true, 'already_queued' => true]);
 
         $this->assertSame(1, PrintJob::where('order_id', $order->id)->count());
+    }
+
+    /**
+     * Botão "Gerar etiqueta" do card em Separados, no caso em que o canal
+     * ainda não liberou nada: em vez de beco sem saída, pede a etiqueta e
+     * manda tentar de novo.
+     */
+    public function test_reprint_without_a_label_asks_the_channel_for_it(): void
+    {
+        Queue::fake();
+
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $order->forceFill(['packed_at' => now()])->save();
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-33',
+            'shipping_method' => 'self_service',
+            'status' => ChannelShipment::STATUS_PENDING,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['ok' => false]);
+
+        Queue::assertPushed(CheckShipmentLabelJob::class);
+        $this->assertDatabaseCount('print_jobs', 0);
     }
 
     /**

@@ -26,7 +26,7 @@ use Throwable;
  *    Some da fila sozinho (a query exige paid), mas o histórico fica
  *    mentindo que nunca foi separado — e é o que alimenta relatório.
  * 2. Pedido ainda `paid`: reconsulta o canal (mesma engrenagem que
- *    SeparationGateService usa no clique) e, se voltar despachado, fecha.
+ *    o antigo porteiro da separação usava) e, se voltar despachado, fecha.
  *
  * NUNCA inventa despacho: só fecha o que o canal afirma. Se o canal não
  * informa envio, o pedido continua na fila — é o caso do TikTok Shop até
@@ -91,7 +91,7 @@ class CloseSeparationForShippedOrders extends Command
                 // caminho que atualiza orders.status (via syncStatus).
                 $importer->import($order->origin, (string) $order->external_order_id);
             } catch (Throwable $exception) {
-                // Falha-aberto, igual ao SeparationGateService: canal fora
+                // Falha-aberto, como o antigo porteiro da separação: canal fora
                 // do ar não pode derrubar a varredura inteira.
                 Log::warning('separation.close_shipped.channel_check_failed', [
                     'order_id' => $order->id,

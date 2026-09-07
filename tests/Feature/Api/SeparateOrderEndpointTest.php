@@ -8,18 +8,19 @@ use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Support\OrderImportService;
-use App\Modules\Marketplace\Support\SeparationGateService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\TestCase;
 
 /**
- * Fase 3 (2026-09-04) — o clique de separar deixou de ser cego.
+ * O clique de separar do KoraSync.
  *
- * O que importa provar aqui é a regra de segurança: pedido cancelado no
- * canal NÃO pode ser embalado, e o operador tem que receber o texto que diz
- * o que fazer com o produto que já está na mão dele.
+ * Nasceu na Fase 3 (2026-09-04) com porteiro de canal e impressão de
+ * etiqueta pendurados nele. Em 2026-09-07 o usuário inverteu o fluxo do
+ * galpão — imprime-se o lote de etiquetas ANTES e a baixa passou a ser só a
+ * baixa — e os dois saíram daqui. O que estes testes guardam agora é
+ * justamente isso: separar grava packed_at e mais nada.
  */
 class SeparateOrderEndpointTest extends TestCase
 {
@@ -60,114 +61,34 @@ class SeparateOrderEndpointTest extends TestCase
     }
 
     /**
-     * TikTok entra pela ponte do Bling e a etiqueta continua saindo no
-     * painel do TikTok — o clique só embala, sem consultar canal nenhum.
+     * MUDANÇA DE FLUXO 2026-09-07: o clique de separar não consulta canal
+     * nenhum. Antes ele reconsultava Shopee/Mercado Livre pra pegar um
+     * cancelamento de última hora; o usuário mandou tirar isso junto com a
+     * impressão ("só dá baixa na separação"). TikTok já era assim.
      */
-    public function test_tiktok_order_is_packed_without_any_channel_check(): void
+    public function test_separation_never_calls_the_channel(): void
     {
-        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
-
         $importer = Mockery::mock(OrderImportService::class);
         $importer->shouldNotReceive('import');
         $this->app->instance(OrderImportService::class, $importer);
 
-        $response = $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders());
+        foreach ([Order::ORIGIN_TIKTOK_SHOP, Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE] as $canal) {
+            $order = $this->makeOrder($canal);
 
-        $response->assertOk()
-            ->assertJson(['result' => 'ok', 'channel_checked' => false]);
+            $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
+                ->assertOk()
+                ->assertJson(['result' => 'ok', 'channel_checked' => false]);
 
-        $this->assertNotNull($order->refresh()->packed_at);
+            $this->assertNotNull($order->refresh()->packed_at, "Pedido de {$canal} devia ter sido dado baixa.");
+        }
     }
 
     /**
-     * O caso que a Fase 3 existe pra cobrir: a venda caiu no marketplace
-     * DEPOIS de já estar na fila. Não embala, e devolve a mensagem do modal.
+     * O coração da mudança de 2026-09-07: separar NÃO imprime mais nada,
+     * nem quando a etiqueta está pronta e guardada esperando. Quem gasta
+     * papel agora é o botão "Gerar etiquetas em lote", antes da separação.
      */
-    public function test_order_cancelled_at_the_channel_is_not_packed_and_returns_the_modal_message(): void
-    {
-        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
-
-        // A reconsulta no canal descobre o cancelamento — é o import real
-        // que grava o status novo, então o mock reproduz esse efeito.
-        $importer = Mockery::mock(OrderImportService::class);
-        $importer->shouldReceive('import')
-            ->once()
-            ->andReturnUsing(function () use ($order) {
-                $order->forceFill(['status' => Order::STATUS_CANCELLED])->save();
-
-                return $order;
-            });
-        $this->app->instance(OrderImportService::class, $importer);
-
-        $response = $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders());
-
-        $response->assertOk()
-            ->assertJson([
-                'result' => 'cancelled',
-                'message' => SeparationGateService::CANCELLED_MESSAGE,
-            ]);
-
-        $this->assertNull($order->refresh()->packed_at, 'Pedido cancelado não pode ser marcado como embalado.');
-    }
-
-    /**
-     * Falha-aberto: canal fora do ar não pode travar o galpão — embala, mas
-     * avisa que ninguém conferiu.
-     *
-     * Queue::fake() aqui não é decoração: sem ele o dispatch do empurrão de
-     * etiqueta roda INLINE (QUEUE_CONNECTION=sync no phpunit.xml) e bate
-     * numa conta de canal não conectada. Produção usa fila database, então
-     * o dispatch nunca executa dentro da requisição — o fake reproduz o
-     * comportamento real, não o esconde.
-     */
-    public function test_channel_failure_still_packs_but_warns_the_operator(): void
-    {
-        Queue::fake();
-
-        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
-
-        $importer = Mockery::mock(OrderImportService::class);
-        $importer->shouldReceive('import')->once()->andThrow(new \RuntimeException('API fora'));
-        $this->app->instance(OrderImportService::class, $importer);
-
-        $response = $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders());
-
-        $response->assertOk()->assertJson(['result' => 'ok', 'channel_checked' => false]);
-        $this->assertNotNull($order->refresh()->packed_at);
-        $this->assertStringContainsString('Não deu pra confirmar', $response->json('message'));
-    }
-
-    /**
-     * Pedido ativo de canal com etiqueta de verdade: além de embalar, o
-     * fluxo de etiqueta é acionado — "se estiver ativo, aí gera/busca a
-     * etiqueta" do briefing.
-     */
-    public function test_active_marketplace_order_is_packed_and_kicks_the_label_flow(): void
-    {
-        Queue::fake();
-
-        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
-
-        $importer = Mockery::mock(OrderImportService::class);
-        $importer->shouldReceive('import')->once()->andReturn($order);
-        $this->app->instance(OrderImportService::class, $importer);
-
-        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
-            ->assertOk()
-            ->assertJson(['result' => 'ok', 'channel_checked' => true]);
-
-        $this->assertNotNull($order->refresh()->packed_at);
-        Queue::assertPushed(ConfirmChannelShippingJob::class);
-    }
-
-    /**
-     * BUG REAL 2026-09-06 ("imprimiu a etiqueta da Gabriela da Shopee"): a
-     * etiqueta passou a ser baixada sem imprimir (ver
-     * LabelFetchService::queuePrint()), então é ESTE clique que tem que
-     * mandar pra impressora a etiqueta que já estava pronta e guardada. Sem
-     * isso, o pedido separaria e nada sairia na impressora nunca.
-     */
-    public function test_separation_prints_the_label_that_was_waiting_for_it(): void
+    public function test_separation_does_not_print_anything_anymore(): void
     {
         Queue::fake();
 
@@ -184,55 +105,55 @@ class SeparateOrderEndpointTest extends TestCase
             'label_ready_at' => now(),
         ]);
 
-        $importer = Mockery::mock(OrderImportService::class);
-        $importer->shouldReceive('import')->once()->andReturn($order);
-        $this->app->instance(OrderImportService::class, $importer);
-
         $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
             ->assertOk()
-            ->assertJson(['result' => 'ok', 'label_queued' => true]);
+            ->assertJson(['result' => 'ok', 'label_queued' => false]);
 
-        $this->assertDatabaseHas('print_jobs', [
-            'order_id' => $order->id,
-            'status' => PrintJob::STATUS_QUEUED,
-        ]);
+        $this->assertNotNull($order->refresh()->packed_at);
+        $this->assertDatabaseCount('print_jobs', 0);
     }
 
     /**
-     * O contrário: pedido cancelado no canal não embala — e, por tabela,
-     * não imprime. A etiqueta guardada continua guardada.
+     * A separação também não cutuca mais o canal atrás de etiqueta que
+     * ainda não saiu — esse empurrão mudou de lugar junto com a impressão
+     * (ver BatchLabelPrintService::cutucar()).
      */
-    public function test_a_cancelled_order_never_reaches_the_printer(): void
+    public function test_separation_does_not_kick_the_label_flow_anymore(): void
     {
         Queue::fake();
 
-        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
 
-        ChannelShipment::create([
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
+            ->assertOk();
+
+        Queue::assertNotPushed(ConfirmChannelShippingJob::class);
+    }
+
+    /**
+     * Quando a etiqueta JÁ saiu antes (o normal no fluxo novo: o lote
+     * imprimiu de manhã, a baixa vem depois), a resposta diz a data — é o
+     * que o KoraSync mostra pra ninguém ficar esperando papel.
+     */
+    public function test_separation_reports_when_the_label_already_came_out(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        PrintJob::create([
             'order_id' => $order->id,
-            'channel' => 'shopee',
-            'external_shipment_id' => 'SHIP-10',
-            'shipping_method' => 'standard',
-            'status' => ChannelShipment::STATUS_LABEL_READY,
-            'confirmed_at' => now(),
-            'label_path' => "labels/{$order->id}/etiqueta-10.pdf",
-            'label_ready_at' => now(),
+            'channel' => 'mercado_livre',
+            'label_path' => "labels/{$order->id}/etiqueta.pdf",
+            'status' => PrintJob::STATUS_PRINTED,
+            'printed_at' => now()->setTime(8, 30),
         ]);
-
-        $importer = Mockery::mock(OrderImportService::class);
-        $importer->shouldReceive('import')->once()->andReturnUsing(function () use ($order) {
-            $order->forceFill(['status' => Order::STATUS_CANCELLED])->save();
-
-            return $order;
-        });
-        $this->app->instance(OrderImportService::class, $importer);
 
         $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/separar", [], $this->authHeaders())
             ->assertOk()
-            ->assertJson(['result' => SeparationGateService::RESULT_CANCELLED]);
-
-        $this->assertNull($order->refresh()->packed_at);
-        $this->assertDatabaseCount('print_jobs', 0);
+            ->assertJson([
+                'result' => 'ok',
+                'label_queued' => false,
+                'label_already_printed_at' => now()->setTime(8, 30)->format('d/m/Y H:i'),
+            ]);
     }
 
     public function test_an_order_that_is_not_paid_is_refused(): void
@@ -311,31 +232,38 @@ class SeparateOrderEndpointTest extends TestCase
         $this->assertSame(1, PrintJob::where('order_id', $order->id)->count());
     }
 
-    public function test_reprint_is_refused_for_an_order_that_was_not_separated(): void
+    /**
+     * MUDANÇA DE FLUXO 2026-09-07: reimprimir não espera mais a separação.
+     * O caso real é a etiqueta que amassou no lote da manhã, de um pedido
+     * que ninguém separou ainda — antes disso ele ficava sem saída.
+     */
+    public function test_reprint_works_before_the_separation(): void
     {
-        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
 
         ChannelShipment::create([
             'order_id' => $order->id,
-            'channel' => 'shopee',
-            'external_shipment_id' => 'SHIP-13',
-            'shipping_method' => 'standard',
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-22',
+            'shipping_method' => 'self_service',
             'status' => ChannelShipment::STATUS_LABEL_READY,
             'confirmed_at' => now(),
-            'label_path' => "labels/{$order->id}/etiqueta-13.pdf",
+            'label_path' => "labels/{$order->id}/etiqueta-22.pdf",
             'label_ready_at' => now(),
         ]);
 
-        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
-            ->assertStatus(409)
-            ->assertJson(['ok' => false]);
+        $this->assertNull($order->packed_at);
 
-        $this->assertDatabaseCount('print_jobs', 0);
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $order->id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
     }
 
-    /**
-     * Desfazer (2026-09-05) — o botão da aba "Separados" do KoraSync.
-     */
     public function test_undoing_separation_returns_the_order_to_the_queue(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);

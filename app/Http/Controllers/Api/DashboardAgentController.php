@@ -11,16 +11,14 @@ use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
-use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
-use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Support\BatchLabelPrintService;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Modules\Marketplace\Support\OrderImageArchiveService;
-use App\Modules\Marketplace\Support\SeparationGateService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -1215,24 +1213,32 @@ class DashboardAgentController extends Controller
     }
 
     /**
-     * Fase 3 (2026-09-04) — o clique de "separado/embalado" com porteiro.
+     * O clique de "separado/embalado" do KoraSync — hoje SÓ a baixa.
      *
-     * Substitui packOrder() como destino do botão do KoraSync. A diferença
-     * é o que acontece ANTES de gravar packed_at:
+     * Nasceu na Fase 3 (2026-09-04) fazendo três coisas: conferir o pedido
+     * no canal (o antigo SeparationGateService), gravar packed_at e soltar a
+     * etiqueta na impressora.
      *
-     * - Shopee e Mercado Livre: o pedido é reconsultado no canal agora (ver
-     *   SeparationGateService). Se voltou cancelado, NÃO embala — devolve
-     *   result=cancelled com a mensagem que o KoraSync mostra em modal, e o
-     *   pedido cai sozinho na aba "Cancelados" no próximo poll (o payload
-     *   de queue() já inclui cancelado desde 2026-08-31).
-     * - TikTok Shop (ponte do Bling): sem consulta e sem etiqueta — a
-     *   etiqueta continua saindo pelo painel do TikTok. O clique só move o
-     *   pedido pra embalados, que é exatamente o pedido do briefing.
+     * MUDANÇA DE FLUXO 2026-09-07, pedida pelo usuário depois do dia em que
+     * etiqueta saiu duplicada: o galpão passou a **imprimir o lote inteiro
+     * de etiquetas antes** (botão "Gerar etiquetas em lote", ver
+     * batchPrintLabels()) e só depois ir dando baixa com os papéis na mão.
+     * Com a impressão fora daqui, as duas engrenagens que existiam pra
+     * proteger a impressão saíram junto — ordem explícita: "remove a ação
+     * de gerar etiqueta e validação se foi cancelada o pedido antes de
+     * imprimir, e só dá baixa na separação".
+     *
+     * O que isso significa na prática, registrado de propósito: a
+     * reconsulta ao canal no instante do clique não acontece mais, então um
+     * cancelamento que o canal ainda não nos mandou por webhook não é mais
+     * pego aqui. O que continua de pé é a aba "Cancelados" alimentada pelo
+     * webhook e a trava de status na impressão (pedido não-pago nunca
+     * imprime, ver LabelFetchService).
      *
      * packOrder() continua existindo e funcionando: um KoraSync antigo, que
      * ainda chama /pack, não quebra com este deploy.
      */
-    public function separateOrder(Order $order, SeparationGateService $gate): JsonResponse
+    public function separateOrder(Order $order): JsonResponse
     {
         if ($order->status !== Order::STATUS_PAID && $order->status !== Order::STATUS_CANCELLED) {
             return response()->json([
@@ -1241,37 +1247,55 @@ class DashboardAgentController extends Controller
             ], 409);
         }
 
-        $outcome = $gate->validate($order);
-
-        if ($outcome['result'] === SeparationGateService::RESULT_CANCELLED) {
-            return response()->json([
-                'result' => SeparationGateService::RESULT_CANCELLED,
-                'message' => $outcome['message'],
-                'order_id' => $order->id,
-            ]);
-        }
-
         $this->markPacked($order);
 
-        // A ORDEM importa: primeiro imprime a etiqueta que já estava pronta
-        // e guardada esperando este clique (releaseLabel), depois cutuca o
-        // canal pelas que ainda não saíram (nudgeLabel). As duas juntas são
-        // "gera a etiqueta agora, e só agora" do briefing.
-        $labelQueued = $this->releaseLabel($order);
-        $this->nudgeLabel($order);
+        return response()->json([
+            'result' => 'ok',
+            'message' => null,
+            // Mantidos no payload de propósito, sempre nesses valores: o
+            // KoraSync no ar hoje lê os dois, e um deploy só do Kazakora não
+            // pode fazer a tela dizer que mandou papel pra impressora.
+            'channel_checked' => false,
+            'label_queued' => false,
+            'label_already_printed_at' => $this->lastPrintedAt($order),
+            'packed_at' => $order->refresh()->packed_at,
+        ]);
+    }
+
+    /**
+     * "Gerar etiquetas em lote" (2026-09-07) — o novo começo do dia no
+     * galpão. Manda pra impressora, de uma vez, toda etiqueta já disponível
+     * de pedido da Shopee/Mercado Livre que ainda falta separar.
+     *
+     * Toda a decisão de quem entra mora no BatchLabelPrintService; aqui é
+     * só a porta HTTP pro botão do KoraSync. Não consulta canal nenhum, por
+     * isso responde na hora mesmo com o galpão cheio.
+     */
+    public function batchPrintLabels(BatchLabelPrintService $service): JsonResponse
+    {
+        $resultado = $service->run();
+
+        $enfileiradas = count($resultado['enfileiradas']);
+        $jaImpressas = count($resultado['ja_impressas']);
+        $semEtiqueta = count($resultado['sem_etiqueta']);
+
+        $mensagem = match (true) {
+            $enfileiradas > 0 => $enfileiradas === 1
+                ? '1 etiqueta foi pra impressora.'
+                : "{$enfileiradas} etiquetas foram pra impressora.",
+            $jaImpressas > 0 => 'Nenhuma etiqueta nova: todas as disponíveis já tinham sido impressas.',
+            $semEtiqueta > 0 => 'Nenhuma etiqueta disponível ainda — o canal não liberou nenhuma dos pedidos que faltam separar.',
+            default => 'Não há pedido esperando separação.',
+        };
 
         return response()->json([
-            'result' => SeparationGateService::RESULT_OK,
-            'message' => $outcome['message'],
-            'channel_checked' => $outcome['checked'],
-            'label_queued' => $labelQueued,
-            // Quando nada foi pra impressora porque a etiqueta JÁ tinha
-            // saído, o operador precisa saber disso na hora, com a data —
-            // senão ele fica esperando um papel que não vem (ou pior, acha
-            // que o sistema falhou e clica de novo). Ver
-            // LabelFetchService::queuePrint() e o duplicado de 2026-09-07.
-            'label_already_printed_at' => $labelQueued ? null : $this->lastPrintedAt($order),
-            'packed_at' => $order->refresh()->packed_at,
+            'result' => 'ok',
+            'message' => $mensagem,
+            'enfileiradas' => $enfileiradas,
+            'ja_impressas' => $jaImpressas,
+            'sem_etiqueta' => $semEtiqueta,
+            'total_candidatos' => $resultado['total_candidatos'],
+            'detalhe' => $resultado,
         ]);
     }
 
@@ -1491,6 +1515,11 @@ class DashboardAgentController extends Controller
      * Cria uma LINHA nova de PrintJob de propósito, em vez de reabrir a
      * antiga: o agente da loja guarda localmente os jobs que já viu, e um
      * id repetido costuma não disparar impressão nenhuma.
+     *
+     * MUDANÇA DE FLUXO 2026-09-07: não exige mais separação concluída. Com
+     * a impressão acontecendo em lote ANTES da separação, exigir packed_at
+     * aqui deixaria justamente o caso mais comum sem saída — a etiqueta que
+     * amassou no lote da manhã, de um pedido que ninguém separou ainda.
      */
     public function reprintLabel(Order $order): JsonResponse
     {
@@ -1498,13 +1527,6 @@ class DashboardAgentController extends Controller
             return response()->json([
                 'ok' => false,
                 'message' => 'Pedido não está mais pago — não dá pra reimprimir por aqui.',
-            ], 409);
-        }
-
-        if ($order->packed_at === null) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Conclua a separação primeiro — a etiqueta sai por lá.',
             ], 409);
         }
 
@@ -1640,92 +1662,6 @@ class DashboardAgentController extends Controller
                     ? 'Pedido marcado como embalado no KoraSync'
                     : "Pedido marcado como embalado no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
             );
-        }
-    }
-
-    /**
-     * "Se estiver ativo, aí gera/busca a etiqueta" (briefing Fase 3). Não
-     * reimplementa nada: reaproveita as duas engrenagens que já existem —
-     * ConfirmChannelShippingJob quando o envio ainda nem existe do lado do
-     * canal, CheckShipmentLabelJob quando existe mas a etiqueta ainda não
-     * saiu. Se a etiqueta já está pronta, não faz nada.
-     *
-     * Só pros canais com fetchLabel() de verdade — a mesma lista usada em
-     * ChannelShippingService::confirm(). TikTok/Shein são stub lá, e
-     * disparar aqui só geraria 4h de tentativa inútil.
-     */
-    /**
-     * Manda pra impressora a etiqueta que JÁ estava pronta e guardada.
-     *
-     * Desde 2026-09-06 baixar a etiqueta não imprime mais nada sozinho (ver
-     * LabelFetchService::queuePrint() e o relato "imprimiu a etiqueta da
-     * Gabriela da Shopee"): o canal libera a etiqueta quando quiser, o
-     * arquivo fica arquivado esperando, e o papel só é gasto neste ponto
-     * aqui — depois do operador ter separado de verdade e do porteiro ter
-     * reconsultado o pedido no canal.
-     *
-     * Percorre o pacote inteiro, não só este pedido, pelo mesmo motivo de
-     * markPacked(): carrinho do Mercado Livre são 2 pedidos numa caixa só
-     * (ver ordersShippedWith()).
-     *
-     * @return bool true se ao menos uma etiqueta entrou na fila de impressão.
-     */
-    private function releaseLabel(Order $order): bool
-    {
-        $queued = false;
-
-        foreach ($this->ordersShippedWith($order) as $packOrder) {
-            $shipment = $packOrder->loadMissing('channelShipment')->channelShipment;
-
-            if (! $shipment || ! $shipment->label_path) {
-                continue;
-            }
-
-            // setRelation pra queuePrint() enxergar o packed_at recém-gravado
-            // sem uma consulta a mais por pedido.
-            $shipment->setRelation('order', $packOrder);
-
-            $queued = app(LabelFetchService::class)->queuePrint($shipment) || $queued;
-        }
-
-        return $queued;
-    }
-
-    private function nudgeLabel(Order $order): void
-    {
-        // TikTok Shop e Shein NÃO entram aqui — ver
-        // LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA. Decisão do usuário,
-        // repetida em 2026-09-06: a etiqueta do TikTok é do Bling e não sai
-        // pela nossa impressora; mandar pra ela trava a impressora.
-        if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
-            return;
-        }
-
-        $shipment = $order->loadMissing('channelShipment')->channelShipment;
-
-        if ($shipment && in_array($shipment->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
-            return;
-        }
-
-        // O empurrão da etiqueta é melhor-esforço e acontece DEPOIS do
-        // pedido já estar embalado: se ele explodir, o operador levaria um
-        // erro na cara por um trabalho que já deu certo, e — pior — poderia
-        // clicar de novo achando que não salvou. Falha aqui só vira log; a
-        // etiqueta ainda tem o webhook e o poke job como caminho.
-        try {
-            if ($shipment) {
-                CheckShipmentLabelJob::dispatch($shipment->id);
-
-                return;
-            }
-
-            ConfirmChannelShippingJob::dispatch($order->id);
-        } catch (Throwable $exception) {
-            Log::warning('separation.label_nudge_failed', [
-                'order_id' => $order->id,
-                'channel' => $order->origin,
-                'message' => $exception->getMessage(),
-            ]);
         }
     }
 

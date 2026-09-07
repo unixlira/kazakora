@@ -330,17 +330,49 @@ class LabelFetchService
      *
      * Agora attempt() continua consultando o canal, baixando e guardando a
      * etiqueta (é isso que acende label_ready no card e tira o pedido da
-     * Separação Futura) — o papel só é gasto quando o operador conclui a
-     * separação: DashboardAgentController::separateOrder() chama este
-     * método depois de gravar packed_at e passar pelo SeparationGateService.
+     * Separação Futura) — mas nada sai da impressora por conta própria.
      *
-     * firstOrCreate por order_id mantém a idempotência de sempre: duplo
-     * clique, retry de rede ou uma segunda passada do poll não geram uma
-     * segunda etiqueta do mesmo pedido.
+     * MUDANÇA DE FLUXO 2026-09-07 (pedido do usuário): quem gasta papel
+     * agora é o botão "Gerar etiquetas em lote", que imprime o lote inteiro
+     * ANTES da separação — ver queuePrintInBatch() e
+     * DashboardAgentController::batchPrintLabels(). A separação deixou de
+     * imprimir: separateOrder() só dá a baixa. Este método, com a exigência
+     * de packed_at, continua existindo pro caminho automático (attempt()),
+     * onde a trava é justamente o que impede a volta da impressão sozinha.
+     *
+     * A dedupe por último PrintJob do pedido mantém a idempotência de
+     * sempre: duplo clique, retry de rede ou uma segunda passada do lote não
+     * geram uma segunda etiqueta do mesmo pedido.
      *
      * @return bool true se a etiqueta entrou na fila de impressão agora.
      */
     public function queuePrint(ChannelShipment $shipment, ?string $path = null, ?string $rawPath = null): bool
+    {
+        return $this->enqueue($shipment, $path, $rawPath, requirePacked: true);
+    }
+
+    /**
+     * A mesma impressão, pedida por uma PESSOA no botão "Gerar etiquetas em
+     * lote" — e por isso sem a exigência de packed_at.
+     *
+     * Mudança de fluxo pedida pelo usuário em 2026-09-07: o galpão passou a
+     * imprimir o lote inteiro de etiquetas ANTES de separar, e a baixa da
+     * separação virou só a baixa. A trava de packed_at continua valendo
+     * inteira pro caminho AUTOMÁTICO (queuePrint(), chamado por attempt()
+     * quando o canal libera a etiqueta) — é ela que impede a volta do bug
+     * de 2026-09-06, em que todo pedido novo saía impresso sozinho minutos
+     * depois de entrar. O que muda aqui é só quem manda: clique humano
+     * imprime; máquina, não.
+     *
+     * Todas as outras travas continuam de pé: canal que não imprime aqui,
+     * pedido não-pago, job já na fila e etiqueta que já saiu.
+     */
+    public function queuePrintInBatch(ChannelShipment $shipment): bool
+    {
+        return $this->enqueue($shipment, null, null, requirePacked: false);
+    }
+
+    private function enqueue(ChannelShipment $shipment, ?string $path, ?string $rawPath, bool $requirePacked): bool
     {
         $order = $shipment->order;
         $path ??= $shipment->label_path;
@@ -368,7 +400,7 @@ class LabelFetchService
             return false;
         }
 
-        if ($order->packed_at === null) {
+        if ($requirePacked && $order->packed_at === null) {
             Log::info('marketplace.label_fetch.print_held_until_separation', [
                 'shipment_id' => $shipment->id,
                 'order_id' => $shipment->order_id,

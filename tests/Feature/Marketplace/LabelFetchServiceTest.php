@@ -219,12 +219,12 @@ class LabelFetchServiceTest extends TestCase
 
     /**
      * ERRO REAL 2026-09-07: o corte foi gravado com a hora do SO (UTC)
-     * enquanto o app roda em America/Sao_Paulo, caiu 3h no futuro e
-     * desligou a impressão automática de TODO mundo, calado — só apareceu
-     * quando uma venda da Shopee não imprimiu. O bloqueio em si está certo
-     * (venda anterior ao corte não imprime); o que faltava era o aviso.
+     * enquanto o app roda em America/Sao_Paulo e caiu 3h no futuro. Até
+     * 2026-09-08 isso DESLIGAVA a impressão de todo mundo; hoje o valor
+     * errado é ignorado e só grita no log — configuração torta não pode
+     * parar a loja.
      */
-    public function test_a_cutoff_in_the_future_blocks_everything_and_warns(): void
+    public function test_a_cutoff_in_the_future_is_ignored_and_warns(): void
     {
         Storage::fake('local');
         \Illuminate\Support\Facades\Log::spy();
@@ -233,18 +233,27 @@ class LabelFetchServiceTest extends TestCase
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
         $shipment->forceFill(['label_path' => 'labels/corte-futuro.pdf'])->save();
 
-        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
-        $this->assertDatabaseCount('print_jobs', 0);
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
 
         \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
             ->withArgs(fn (string $mensagem) => $mensagem === 'marketplace.label_fetch.corte_no_futuro');
     }
 
     /**
-     * Ambiente sem PRINT_AUTO_SINCE não decide sozinho começar a imprimir o
-     * histórico: falha pro lado de não gastar papel.
+     * INCIDENTE 2026-09-08: um restore no servidor devolveu um `.env` de
+     * 02/09 e a linha PRINT_AUTO_SINCE, criada em 07/09, sumiu junto — a
+     * impressora ficou meia jornada sem receber nada, sem erro nenhum,
+     * porque "ausente" significava "desligada". Hoje ausente = LIGADA.
+     *
+     * O represamento antigo continua protegido, mas por outra via:
+     * attempt() só roda pra envio sem etiqueta baixada, e etiqueta já
+     * impressa nunca sai de novo.
      */
-    public function test_automatic_printing_stays_off_without_a_configured_cutoff(): void
+    public function test_automatic_printing_stays_on_without_a_configured_cutoff(): void
     {
         Storage::fake('local');
         config(['services.print_agent.auto_print_since' => null]);
@@ -252,8 +261,30 @@ class LabelFetchServiceTest extends TestCase
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
         $shipment->forceFill(['label_path' => 'labels/sem-corte.pdf'])->save();
 
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * Desligar continua possível — mas só na cara, nunca por omissão.
+     */
+    public function test_printing_only_turns_off_with_an_explicit_off(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Log::spy();
+        config(['services.print_agent.auto_print_since' => 'off']);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $shipment->forceFill(['label_path' => 'labels/desligada.pdf'])->save();
+
         $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
         $this->assertDatabaseCount('print_jobs', 0);
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $mensagem) => $mensagem === 'marketplace.label_fetch.auto_print_desligada');
     }
 
     /**

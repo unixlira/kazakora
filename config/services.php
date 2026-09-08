@@ -81,22 +81,13 @@ return [
     'print_agent' => [
         'token' => env('PRINT_AGENT_TOKEN'),
 
-        // A impressão automática voltou em 2026-09-07, com um corte:
-        // "somente pedidos a partir desse momento". Este é o momento —
-        // venda que entrou ANTES dele nunca sai sozinha na impressora, só
-        // pelo botão "Gerar etiquetas em lote".
+        // Chave liga/desliga da impressão automática de etiqueta.
         //
-        // Sem o env definido, a impressão automática fica DESLIGADA de
-        // propósito: um ambiente novo (ou um .env que perdeu a linha) tem
-        // que falhar pro lado de não gastar papel de pedido antigo, que foi
-        // exatamente o estrago do incidente de 2026-08-12.
-        //
-        // ⚠️ A data vai no FUSO DO APP (app.timezone, America/Sao_Paulo) —
-        // é com ele que orders.created_at é comparado. Escrever a saída do
-        // `date` do servidor aqui coloca o corte 3h no futuro (o SO é UTC)
-        // e desliga a impressão automática inteira sem avisar: erro real de
-        // 2026-09-07, custou uma etiqueta da Shopee não impressa. Pra
-        // pegar o valor certo: artisan tinker --execute="echo now();".
+        // OPCIONAL, e LIGADA quando ausente — o contrário do que valia até
+        // 2026-09-08, quando a linha sumir do .env custou meia jornada de
+        // loja sem imprimir, calada. Só o valor explícito `off` (ou `false`,
+        // ou `0`) desliga. Ver o comentário longo em
+        // LabelFetchService::dentroDoCorteAutomatico().
         'auto_print_since' => env('PRINT_AUTO_SINCE'),
     ],
 

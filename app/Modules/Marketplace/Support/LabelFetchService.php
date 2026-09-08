@@ -404,17 +404,12 @@ class LabelFetchService
             return false;
         }
 
-        // "Somente pedidos a partir desse momento" — a condição que o
-        // usuário pôs em cima da volta da impressão automática, 2026-09-07.
+        // A chave liga/desliga da impressão automática — hoje LIGADA por
+        // padrão, e só `PRINT_AUTO_SINCE=off` desliga. Ver o porquê da
+        // inversão em dentroDoCorteAutomatico().
         //
-        // Quando a automática voltou havia 61 pedidos represados esperando o
-        // canal liberar etiqueta, alguns de dias antes. Sem este corte, cada
-        // uma dessas etiquetas cairia sozinha na impressora conforme o canal
-        // fosse liberando, no meio do dia, sem ninguém esperando por ela —
-        // que é a forma exata do estrago de 2026-08-12.
-        //
-        // Vale só pro caminho automático: o botão de lote existe pra dar
-        // conta justamente do que ficou atrás do corte.
+        // Vale só pro caminho automático: o botão de lote é o que uma pessoa
+        // usa pra dar conta do represamento, e não passa por aqui.
         if ($automatico && ! $this->dentroDoCorteAutomatico($order)) {
             return false;
         }
@@ -473,25 +468,47 @@ class LabelFetchService
     }
 
     /**
-     * A venda entrou depois do momento em que a impressão automática foi
-     * religada?
+     * A impressão automática está ligada?
      *
-     * Sem PRINT_AUTO_SINCE configurado a resposta é NÃO pra todo mundo: um
-     * ambiente sem a data não pode decidir sozinho começar a imprimir o
-     * histórico inteiro. Data inválida cai no mesmo lugar, e loga —
-     * silêncio aqui viraria papel gasto que ninguém explica.
+     * LIGADA POR PADRÃO desde 2026-09-08 — e a inversão foi paga com meio
+     * dia de loja sem imprimir. Até aqui, `PRINT_AUTO_SINCE` ausente
+     * significava "desligada", pra um ambiente sem a data não sair
+     * despejando o histórico. Aí um restore no servidor devolveu um `.env`
+     * de 02/09; a linha, criada em 07/09, sumiu junto; e a impressora ficou
+     * das 09:36 às 15:00 sem receber nada — sem erro em lugar nenhum,
+     * porque o aviso era `Log::info` e o `LOG_LEVEL` de produção é
+     * `warning`. Configuração que some vira loja parada em silêncio, e isso
+     * é pior do que o risco que a trava protegia.
+     *
+     * E dá pra falhar pro lado de imprimir porque o represamento já está
+     * protegido por outra via, não por esta data: `attempt()` só roda pra
+     * envio que ainda NÃO tem etiqueta baixada, e etiqueta já impressa
+     * nunca sai de novo (ver a checagem de PrintJob em `enqueue()`).
+     * Etiqueta velha não passa por aqui nem se quiser.
+     *
+     * A data em si não é mais comparada com nada desde 2026-09-07, quando o
+     * corte deixou de olhar a data da VENDA e passou a valer sobre o momento
+     * em que a etiqueta CHEGA — e este método só roda nesse momento. O que
+     * sobrou do valor é o papel de chave liga/desliga.
+     *
+     * Pra desligar de propósito: `PRINT_AUTO_SINCE=off`. Só o valor
+     * explícito desliga; omissão, nunca.
      */
     private function dentroDoCorteAutomatico(Order $order): bool
     {
         $corte = config('services.print_agent.auto_print_since');
 
-        if (! $corte) {
-            Log::info('marketplace.label_fetch.auto_print_desligada', [
+        if (is_string($corte) && in_array(mb_strtolower(trim($corte)), ['off', 'false', '0'], true)) {
+            Log::warning('marketplace.label_fetch.auto_print_desligada', [
                 'order_id' => $order->id,
-                'motivo' => 'PRINT_AUTO_SINCE não configurado',
+                'motivo' => 'PRINT_AUTO_SINCE=off — desligamento explícito',
             ]);
 
             return false;
+        }
+
+        if (! $corte) {
+            return true;
         }
 
         try {
@@ -500,48 +517,29 @@ class LabelFetchService
             Log::warning('marketplace.label_fetch.auto_print_corte_invalido', [
                 'valor' => $corte,
                 'message' => $exception->getMessage(),
+                'efeito' => 'valor ignorado — a impressão automática segue LIGADA',
             ]);
 
-            return false;
+            return true;
         }
 
         // ERRO REAL 2026-09-07, na mesma tarde em que a automática voltou:
         // gravei PRINT_AUTO_SINCE com a hora do `date` do servidor (UTC) e
         // o app roda em America/Sao_Paulo — o corte caiu 3h no FUTURO e
-        // desligou a impressão automática de TUDO, calado. Só apareceu
-        // quando uma venda da Shopee (#1602) não imprimiu e o usuário
-        // cobrou. Corte no futuro é sempre configuração errada: ninguém
-        // liga impressão automática pra daqui a pouco.
+        // desligou a impressão automática de TUDO, calado. Corte no futuro é
+        // sempre configuração errada: ninguém liga impressão automática pra
+        // daqui a pouco. Hoje isso não desliga mais nada, só grita no log.
         if ($desde->isFuture()) {
             Log::warning('marketplace.label_fetch.corte_no_futuro', [
                 'corte' => $desde->toDateTimeString(),
                 'agora' => now()->toDateTimeString(),
                 'timezone_do_app' => config('app.timezone'),
-                'efeito' => 'impressão automática desligada pra todo mundo até essa hora',
+                'efeito' => 'valor ignorado — a impressão automática segue LIGADA',
             ]);
 
-            // "Ligada desde X" com X no futuro é o mesmo que desligada —
-            // e é sempre configuração errada, nunca intenção.
-            return false;
+            return true;
         }
 
-        // O QUE O CORTE COMPARA — mudou em 2026-09-07, no mesmo dia:
-        //
-        // Nasceu comparando a DATA DA VENDA, pra impressão automática não
-        // despejar de uma vez as 86 etiquetas represadas. Só que isso
-        // barrava também as vendas AGENDADAS do Mercado Livre: venda de dias
-        // atrás cuja etiqueta o canal só libera na véspera da coleta —
-        // exatamente o que o usuário pediu pra sair sozinho ("já deveriam
-        // estar liberadas... emite, gera etiqueta e coloca na fila de
-        // separação, isso quero auto").
-        //
-        // Agora o corte é sobre o MOMENTO em que a etiqueta chega: daqui pra
-        // frente, etiqueta que o canal libera vai pra impressora sozinha,
-        // não importa quando a venda entrou. E isso não despeja represamento
-        // nenhum: quem já tem etiqueta baixada não passa mais por aqui (o
-        // attempt() só roda pra quem ainda não tem), e etiqueta já impressa
-        // nunca sai de novo. O botão "Gerar etiquetas em lote" continua
-        // sendo como se resolve o que ficou pra trás, com alguém olhando.
         return true;
     }
 

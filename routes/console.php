@@ -56,6 +56,18 @@ Schedule::command('orders:sync-tiktok')->hourly();
 // tenta de novo a cada 5 min. Sai sozinha do ar se a chave for desligada.
 Schedule::command('invoices:sync-bling')->everyFiveMinutes()->withoutOverlapping(10);
 
+// Nota que não saiu trava a etiqueta: Shopee e Mercado Livre só liberam o
+// envio depois de aceitar a NF-e. O retry do próprio job são 3 tentativas
+// em ~15 min — passou disso, o pedido ficava parado pra sempre esperando
+// alguém olhar. Foi o que segurou 5 pedidos do ML até 2026-09-07, todos
+// por problemas JÁ corrigidos no código (rejeição 232 da IE, 539 da
+// numeração duplicada, e um que nunca chegou a emitir).
+//
+// De 15 em 15 minutos, com espera de 30 min por nota pra não martelar a
+// SEFAZ com o mesmo erro. Nota autorizada segue sozinha o resto do
+// caminho até a impressora — ver RetryStuckInvoices.
+Schedule::command('nfe:retry-stuck')->everyFifteenMinutes()->withoutOverlapping(20);
+
 // Produto novo do TikTok nasce no Bling SEM NCM (a integração dele não
 // preenche dado fiscal), e sem NCM a nota não emite — foi o que travou a
 // primeira venda pelo caminho novo, o pedido #1216. Empurra o NCM do

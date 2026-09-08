@@ -43,7 +43,9 @@ class RetryStuckInvoices extends Command
         {--forcar : Ignora a espera acima}
         {--sincrono : Processa na hora, sem passar pela fila}
         {--limite=20 : Teto de notas por rodada — trava de segurança, ver comentário}
-        {--canal= : Só este canal (ex: mercado_livre)}';
+        {--canal= : Só este canal (ex: mercado_livre)}
+        {--so-conferir : Só consulta na SEFAZ as notas em limbo, sem reemitir nada}
+        {--incluir-delegados : Inclui na CONSULTA os canais cuja nota é do Bling (auditoria do teto)}';
 
     protected $description = 'Tenta de novo a NF-e dos pedidos pagos cuja nota ficou pendente, rejeitada ou nunca foi emitida — e redispara o envio travado por causa dela';
 
@@ -64,7 +66,15 @@ class RetryStuckInvoices extends Command
             return self::SUCCESS;
         }
 
-        $this->reconciliarEnviadas($canal, $delegadosAoBling);
+        // Auditoria do teto do MEI (2026-09-07): as notas do TikTok que
+        // ficaram em limbo podem estar autorizadas na SEFAZ sem a gente
+        // saber — e aí contam no faturamento. Consultar é leitura; o que
+        // muda aqui é só o registro do que a SEFAZ já decidiu.
+        $this->reconciliarEnviadas($canal, $this->option('incluir-delegados') ? [] : $delegadosAoBling);
+
+        if ($this->option('so-conferir')) {
+            return self::SUCCESS;
+        }
 
         $orders = Order::query()
             ->with('invoice')

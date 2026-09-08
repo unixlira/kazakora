@@ -53,6 +53,17 @@ class RetryStuckInvoices extends Command
         $delegadosAoBling = (array) config('services.bling.invoice_issuer_channels', []);
         $canal = $this->option('canal');
 
+        // A SEFAZ-SP bloqueia o CNPJ por ~1h quando leva requisição demais
+        // (cStat 656, "Consumo Indevido"). Durante a punição, tentar de novo
+        // só renova a punição — e foi assim que 4 notas do Mercado Livre
+        // ficaram repetindo erro em 2026-09-07. Sai sem fazer nada; a
+        // próxima rodada de 15 min pega quando liberar.
+        if ($bloqueadoAte = app(InvoiceService::class)->bloqueadoPorConsumoIndevidoAte()) {
+            $this->warn("SEFAZ bloqueando por consumo indevido (656) até {$bloqueadoAte}. Nada foi enviado — a próxima rodada tenta de novo.");
+
+            return self::SUCCESS;
+        }
+
         $this->reconciliarEnviadas($canal, $delegadosAoBling);
 
         $orders = Order::query()

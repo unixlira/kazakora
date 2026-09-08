@@ -9,6 +9,7 @@ use App\Services\NFe\NFeDanfeService;
 use App\Services\NFe\NFeWebserviceService;
 use App\Services\NFe\NFeXmlBuilderService;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -35,6 +36,21 @@ class InvoiceService
         private readonly NFeWebserviceService $webservice,
         private readonly NFeDanfeService $danfeService,
     ) {
+    }
+
+    /** cStat 656 — a SEFAZ-SP bloqueia o CNPJ por excesso de requisições. */
+    private const CSTAT_CONSUMO_INDEVIDO = '656';
+
+    private const CACHE_CONSUMO_INDEVIDO = 'nfe.consumo_indevido_ate';
+
+    /**
+     * Até quando a SEFAZ está nos barrando por consumo indevido (656), ou
+     * null se está liberado. Quem emite em lote consulta isto ANTES de
+     * começar — insistir durante a punição só renova a punição.
+     */
+    public function bloqueadoPorConsumoIndevidoAte(): ?string
+    {
+        return Cache::get(self::CACHE_CONSUMO_INDEVIDO);
     }
 
     public function issue(Order $order): Invoice
@@ -451,9 +467,42 @@ class InvoiceService
         $infProt = $protNFe[0] ?? null;
 
         if (! $infProt) {
-            // Resposta sem protocolo reconhecível — pode ser uma falha
-            // transitória de comunicação/parsing, vale tentar de novo.
-            throw new RuntimeException('Resposta da SEFAZ sem protocolo reconhecível.');
+            // Sem protNFe quase nunca é "resposta ilegível": é uma rejeição
+            // do LOTE, que vem em retEnviNFe/cStat e o código ignorava,
+            // devolvendo "resposta sem protocolo reconhecível" pra tudo.
+            //
+            // BUG REAL 2026-09-07: 4 notas do Mercado Livre ficaram em
+            // `sent` repetindo esse erro genérico. A resposta de verdade
+            // era **656 - Rejeição: Consumo Indevido** — a SEFAZ-SP tinha
+            // bloqueado o CNPJ por excesso de requisições (uma varredura
+            // minha mandou ~100 notas de uma vez). Sem ler o cStat do lote,
+            // o retry insistia e realimentava o próprio bloqueio.
+            $cStatLote = (string) ($result->xpath('//n:retEnviNFe/n:cStat')[0] ?? $result->xpath('//retEnviNFe/cStat')[0] ?? '');
+            $xMotivoLote = (string) ($result->xpath('//n:retEnviNFe/n:xMotivo')[0] ?? $result->xpath('//retEnviNFe/xMotivo')[0] ?? '');
+
+            // O lote não foi recebido, então este número NÃO foi consumido
+            // na SEFAZ: volta pra pendente e reenvia com ele mesmo depois.
+            $invoice->update([
+                'status' => Invoice::STATUS_PENDING,
+                'motivo_rejeicao' => $cStatLote !== '' ? "{$cStatLote} - {$xMotivoLote}" : null,
+            ]);
+
+            if ($cStatLote === self::CSTAT_CONSUMO_INDEVIDO) {
+                // A SEFAZ-SP libera sozinha depois de ~1h. Insistir antes
+                // disso só renova a punição, então a espera fica registrada
+                // pra qualquer caminho automático respeitar.
+                Cache::put(self::CACHE_CONSUMO_INDEVIDO, now()->addHour()->toDateTimeString(), now()->addHour());
+
+                Log::channel('stripe')->warning('nfe.consumo_indevido', [
+                    'invoice_id' => $invoice->id,
+                    'order_id' => $invoice->order_id,
+                    'liberado_em' => now()->addHour()->toDateTimeString(),
+                ]);
+            }
+
+            throw new RuntimeException($cStatLote !== ''
+                ? "SEFAZ recusou o lote: {$cStatLote} - {$xMotivoLote}"
+                : 'Resposta da SEFAZ sem protocolo reconhecível.');
         }
 
         $cStat = (string) $infProt->cStat;

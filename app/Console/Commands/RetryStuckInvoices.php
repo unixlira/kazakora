@@ -8,6 +8,7 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Support\OrderImportService;
 use Illuminate\Console\Command;
@@ -41,7 +42,8 @@ class RetryStuckInvoices extends Command
         {--minutos=30 : Só tenta de novo notas paradas há mais que isso (evita martelar a SEFAZ)}
         {--forcar : Ignora a espera acima}
         {--sincrono : Processa na hora, sem passar pela fila}
-        {--limite=20 : Teto de notas por rodada — trava de segurança, ver comentário}';
+        {--limite=20 : Teto de notas por rodada — trava de segurança, ver comentário}
+        {--canal= : Só este canal (ex: mercado_livre)}';
 
     protected $description = 'Tenta de novo a NF-e dos pedidos pagos cuja nota ficou pendente, rejeitada ou nunca foi emitida — e redispara o envio travado por causa dela';
 
@@ -49,11 +51,15 @@ class RetryStuckInvoices extends Command
     {
         $espera = now()->subMinutes((int) $this->option('minutos'));
         $delegadosAoBling = (array) config('services.bling.invoice_issuer_channels', []);
+        $canal = $this->option('canal');
+
+        $this->reconciliarEnviadas($canal, $delegadosAoBling);
 
         $orders = Order::query()
             ->with('invoice')
             ->where('status', Order::STATUS_PAID)
             ->whereNotIn('origin', array_merge($delegadosAoBling, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE]))
+            ->when($canal, fn ($query) => $query->where('origin', $canal))
             ->where(function ($query) {
                 $query->whereDoesntHave('invoice')
                     ->orWhereHas('invoice', fn ($q) => $q->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED]));
@@ -116,7 +122,7 @@ class RetryStuckInvoices extends Command
             GenerateInvoiceJob::dispatch($order->id);
         }
 
-        // 2ª parte: envio que morreu ESPERANDO a nota ("Etiqueta não ficou
+        // 3ª parte: envio que morreu ESPERANDO a nota ("Etiqueta não ficou
         // disponível após 4h") não volta sozinho depois que ela sai — o
         // canal precisa ser reconsultado. Sem isto, consertar a nota não
         // faria a etiqueta aparecer.
@@ -124,6 +130,7 @@ class RetryStuckInvoices extends Command
             ->where('status', ChannelShipment::STATUS_ERROR)
             ->whereHas('order', fn ($query) => $query
                 ->where('status', Order::STATUS_PAID)
+                ->when($canal, fn ($q) => $q->where('origin', $canal))
                 ->whereHas('invoice', fn ($q) => $q->where('status', Invoice::STATUS_AUTHORIZED)))
             ->get();
 
@@ -140,5 +147,54 @@ class RetryStuckInvoices extends Command
         ]);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 1ª parte, e a mais importante: nota que ficou em `sent`.
+     *
+     * `sent` é o limbo — foi assinada e enviada, mas a resposta da SEFAZ
+     * veio sem protocolo (comunicação, timeout, lote em processamento) e
+     * NINGUÉM olhava pra ela de novo. O canal não libera envio sem nota
+     * autorizada, então a etiqueta nunca sai; e reemitir às cegas arrisca
+     * duplicar uma NF-e que talvez já esteja autorizada lá.
+     *
+     * Consultar por chave é a única resposta confiável, e vem ANTES de
+     * qualquer reemissão de propósito: sem isso a rodada seguinte
+     * reemitiria em cima de nota autorizada.
+     *
+     * @param  array<int, string>  $delegadosAoBling
+     */
+    private function reconciliarEnviadas(?string $canal, array $delegadosAoBling): void
+    {
+        $enviadas = Invoice::query()
+            ->where('status', Invoice::STATUS_SENT)
+            ->whereNotNull('chave_acesso')
+            ->whereHas('order', fn ($query) => $query
+                ->where('status', Order::STATUS_PAID)
+                ->whereNotIn('origin', $delegadosAoBling)
+                ->when($canal, fn ($q) => $q->where('origin', $canal)))
+            ->orderBy('id')
+            ->limit(max(1, (int) $this->option('limite')))
+            ->get();
+
+        $this->info("Notas em limbo (enviadas sem resposta) pra conferir na SEFAZ: {$enviadas->count()}");
+
+        foreach ($enviadas as $invoice) {
+            try {
+                $resolvida = app(InvoiceService::class)->reconcileSent($invoice);
+                $this->line("  #{$invoice->order_id} nº {$invoice->numero} -> {$resolvida->status}".
+                    ($resolvida->motivo_rejeicao ? ' ('.substr($resolvida->motivo_rejeicao, 0, 70).')' : ''));
+
+                // Autorizada agora: manda pro canal, que é o que destrava a
+                // etiqueta. O fluxo normal faz isso no GenerateInvoiceJob.
+                if ($resolvida->status === Invoice::STATUS_AUTHORIZED) {
+                    SubmitInvoiceToChannelJob::dispatch($resolvida->order_id);
+                }
+            } catch (\Throwable $exception) {
+                $this->warn("  #{$invoice->order_id} -> falhou na consulta: ".substr($exception->getMessage(), 0, 110));
+            }
+        }
+
+        $this->newLine();
     }
 }

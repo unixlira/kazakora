@@ -343,6 +343,96 @@ class InvoiceService
         });
     }
 
+    /**
+     * Pergunta à SEFAZ o que aconteceu com uma nota que ficou em `sent`.
+     *
+     * BURACO REAL, achado em 2026-09-07 nos pedidos do Mercado Livre: o
+     * envio é síncrono, mas quando a resposta vem sem protocolo
+     * reconhecível (falha de comunicação, timeout do lado da SEFAZ, lote em
+     * processamento) o código grava `sent`, lança e vai embora. **Nada
+     * nunca mais olhava pra essa nota.** Ela não é rejeitada nem
+     * autorizada: fica num limbo em que o canal não libera o envio e a
+     * etiqueta nunca sai — e reemitir às cegas arrisca duplicar uma NF-e
+     * que talvez esteja autorizada lá.
+     *
+     * A consulta por chave é a única resposta confiável. Três desfechos:
+     *
+     * - **autorizada de verdade** (cStat 100): adota o protocolo, monta o
+     *   nfeProc e a DANFE — o resto do fluxo segue como se nunca tivesse
+     *   travado.
+     * - **denegada** (110/301/302): terminal, igual ao caminho normal.
+     * - **nunca chegou lá** (217 "NF-e não consta na base"): volta pra
+     *   `pending` com o MESMO número. Esse número não foi consumido na
+     *   SEFAZ, então reenviar é seguro e não abre buraco na numeração.
+     */
+    public function reconcileSent(Invoice $invoice): Invoice
+    {
+        if ($invoice->status !== Invoice::STATUS_SENT || ! $invoice->chave_acesso) {
+            return $invoice;
+        }
+
+        $certificate = $this->certificateService->load();
+        $response = $this->webservice->consultarChave($invoice->chave_acesso, $certificate);
+
+        $result = new SimpleXMLElement($response);
+        $result->registerXPathNamespace('n', 'http://www.portalfiscal.inf.br/nfe');
+
+        $cStatConsulta = (string) ($result->xpath('//n:retConsSitNFe/n:cStat')[0] ?? $result->xpath('//cStat')[0] ?? '');
+        $xMotivoConsulta = (string) ($result->xpath('//n:retConsSitNFe/n:xMotivo')[0] ?? $result->xpath('//xMotivo')[0] ?? '');
+
+        $infProt = $result->xpath('//n:protNFe/n:infProt')[0] ?? $result->xpath('//protNFe/infProt')[0] ?? null;
+
+        Log::channel('stripe')->info('nfe.reconcile_sent', [
+            'invoice_id' => $invoice->id,
+            'order_id' => $invoice->order_id,
+            'chave' => $invoice->chave_acesso,
+            'cStat_consulta' => $cStatConsulta,
+            'tem_protocolo' => $infProt !== null,
+        ]);
+
+        // 217: a SEFAZ nunca recebeu esta nota. O número continua livre —
+        // devolve pra pendente pra reenviar com ele mesmo.
+        if ($infProt === null) {
+            $invoice->update([
+                'status' => Invoice::STATUS_PENDING,
+                'motivo_rejeicao' => $cStatConsulta !== ''
+                    ? "Não consta na SEFAZ ({$cStatConsulta} - {$xMotivoConsulta}) — será reenviada com o mesmo número."
+                    : null,
+            ]);
+
+            return $invoice->fresh();
+        }
+
+        $cStat = (string) $infProt->cStat;
+        $xMotivo = (string) $infProt->xMotivo;
+
+        if ($cStat === '100') {
+            $signedXml = Storage::disk('local')->get($invoice->xml_path);
+            $nfeProcXml = \NFePHP\NFe\Complements::toAuthorize($signedXml, $response);
+
+            $invoice->update([
+                'status' => Invoice::STATUS_AUTHORIZED,
+                'protocolo_autorizacao' => (string) $infProt->nProt,
+                'autorizada_em' => now(),
+                'motivo_rejeicao' => null,
+            ]);
+            Storage::disk('local')->put($invoice->xml_path, $nfeProcXml);
+
+            $danfePath = "invoices/{$invoice->order_id}/danfe-{$invoice->chave_acesso}.pdf";
+            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml));
+            $invoice->update(['danfe_path' => $danfePath]);
+
+            return $invoice->fresh();
+        }
+
+        $invoice->update([
+            'status' => in_array($cStat, ['110', '301', '302'], true) ? Invoice::STATUS_DENIED : Invoice::STATUS_REJECTED,
+            'motivo_rejeicao' => "{$cStat} - {$xMotivo}",
+        ]);
+
+        return $invoice->fresh();
+    }
+
     private function signAndSend(Invoice $invoice): void
     {
         $xml = Storage::disk('local')->get($invoice->xml_path);

@@ -77,6 +77,23 @@ class ReleaseMercadoLivreScheduledShipments extends Command
      */
     private const UPCOMING_HORIZON_DAYS = 14;
 
+    /**
+     * Quantos dias À FRENTE já contam como "libera agora".
+     *
+     * Era 0 (só hoje e vencidos) até 2026-09-07, quando o usuário apontou o
+     * óbvio da operação: **"as vendas para a data de amanhã já deveriam
+     * estar liberadas"**. O Mercado Livre libera a etiqueta na véspera, e
+     * quem embala precisa do dia inteiro de antecedência pra preparar — não
+     * das horas da manhã do próprio dia da coleta. Com 0, 32 vendas
+     * agendadas pra amanhã ficavam só sendo "reconferidas", sem nunca pedir
+     * nota nem etiqueta.
+     *
+     * Pedir cedo demais não custa nada: o canal simplesmente responde que a
+     * etiqueta ainda não está pronta, e o CheckShipmentLabelJob tenta de
+     * novo. O que custava era pedir tarde.
+     */
+    private const RELEASE_LOOKAHEAD_DAYS = 1;
+
     protected $signature = 'marketplace:release-scheduled-mercadolivre
         {--sync : Sincroniza pedidos recentes do Mercado Livre antes de liberar os agendados}
         {--desde= : Data inicial da sincronização ML (Y-m-d), padrão: 14 dias atrás}
@@ -93,7 +110,9 @@ class ReleaseMercadoLivreScheduledShipments extends Command
             $this->line('dry-run: sincronização ML pulada.');
         }
 
-        $tomorrow = now()->startOfDay()->addDay();
+        // O corte de "já é hora de liberar": fim do dia de amanhã, não o de
+        // hoje — ver RELEASE_LOOKAHEAD_DAYS.
+        $releaseUntil = now()->startOfDay()->addDays(self::RELEASE_LOOKAHEAD_DAYS + 1);
         $horizon = now()->startOfDay()->addDays(self::UPCOMING_HORIZON_DAYS);
 
         $baseQuery = fn () => ChannelShipment::query()
@@ -103,7 +122,7 @@ class ReleaseMercadoLivreScheduledShipments extends Command
             ->whereHas('order', fn ($query) => $query->where('status', Order::STATUS_PAID));
 
         $dueShipments = $baseQuery()
-            ->where('scheduled_for', '<', $tomorrow)
+            ->where('scheduled_for', '<', $releaseUntil)
             ->with(['order.invoice'])
             ->orderBy('scheduled_for')
             ->get();
@@ -113,7 +132,7 @@ class ReleaseMercadoLivreScheduledShipments extends Command
         // que o canal fizer, em vez de só descobrir isso quando o prazo já
         // salvo (que pode estar errado) chegar.
         $upcomingShipments = $baseQuery()
-            ->whereBetween('scheduled_for', [$tomorrow, $horizon])
+            ->whereBetween('scheduled_for', [$releaseUntil, $horizon])
             ->orderBy('scheduled_for')
             ->get();
 

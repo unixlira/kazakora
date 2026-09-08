@@ -519,18 +519,29 @@ class LabelFetchService
                 'timezone_do_app' => config('app.timezone'),
                 'efeito' => 'impressão automática desligada pra todo mundo até essa hora',
             ]);
-        }
 
-        if ($order->created_at === null || $order->created_at->lt($desde)) {
-            Log::info('marketplace.label_fetch.pedido_anterior_ao_corte', [
-                'order_id' => $order->id,
-                'criado_em' => (string) $order->created_at,
-                'corte' => $desde->toDateTimeString(),
-            ]);
-
+            // "Ligada desde X" com X no futuro é o mesmo que desligada —
+            // e é sempre configuração errada, nunca intenção.
             return false;
         }
 
+        // O QUE O CORTE COMPARA — mudou em 2026-09-07, no mesmo dia:
+        //
+        // Nasceu comparando a DATA DA VENDA, pra impressão automática não
+        // despejar de uma vez as 86 etiquetas represadas. Só que isso
+        // barrava também as vendas AGENDADAS do Mercado Livre: venda de dias
+        // atrás cuja etiqueta o canal só libera na véspera da coleta —
+        // exatamente o que o usuário pediu pra sair sozinho ("já deveriam
+        // estar liberadas... emite, gera etiqueta e coloca na fila de
+        // separação, isso quero auto").
+        //
+        // Agora o corte é sobre o MOMENTO em que a etiqueta chega: daqui pra
+        // frente, etiqueta que o canal libera vai pra impressora sozinha,
+        // não importa quando a venda entrou. E isso não despeja represamento
+        // nenhum: quem já tem etiqueta baixada não passa mais por aqui (o
+        // attempt() só roda pra quem ainda não tem), e etiqueta já impressa
+        // nunca sai de novo. O botão "Gerar etiquetas em lote" continua
+        // sendo como se resolve o que ficou pra trás, com alguém olhando.
         return true;
     }
 

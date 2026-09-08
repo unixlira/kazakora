@@ -174,15 +174,16 @@ class LabelFetchServiceTest extends TestCase
     }
 
     /**
-     * A condição que o usuário pôs junto com a volta da automática:
-     * "somente pedidos a partir desse momento". Quando ela foi religada
-     * havia 61 pedidos represados esperando etiqueta — nenhum deles pode
-     * cair sozinho na impressora conforme o canal for liberando.
+     * O corte mudou de significado em 2026-09-07, no mesmo dia: ele começou
+     * comparando a DATA DA VENDA e passou a valer pelo MOMENTO em que a
+     * etiqueta chega. Motivo: venda AGENDADA do Mercado Livre é de dias
+     * atrás e o canal só libera a etiqueta na véspera — comparando a data da
+     * venda, justamente a que o usuário quer automática ficava de fora.
      */
-    public function test_attempt_never_prints_a_sale_from_before_the_cutoff(): void
+    public function test_attempt_prints_a_scheduled_sale_even_though_it_is_old(): void
     {
         Storage::fake('local');
-        config(['services.print_agent.auto_print_since' => now()->toDateTimeString()]);
+        config(['services.print_agent.auto_print_since' => now()->subHour()->toDateTimeString()]);
 
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE, createdAt: now()->subDays(3));
         $this->mockDriver(
@@ -190,8 +191,11 @@ class LabelFetchServiceTest extends TestCase
             MarketplaceAccount::CHANNEL_SHOPEE,
         );
 
-        $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()), 'A etiqueta continua sendo baixada e guardada.');
-        $this->assertDatabaseCount('print_jobs', 0);
+        $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
     }
 
     /**

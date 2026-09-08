@@ -40,7 +40,8 @@ class RetryStuckInvoices extends Command
     protected $signature = 'nfe:retry-stuck
         {--minutos=30 : Só tenta de novo notas paradas há mais que isso (evita martelar a SEFAZ)}
         {--forcar : Ignora a espera acima}
-        {--sincrono : Processa na hora, sem passar pela fila}';
+        {--sincrono : Processa na hora, sem passar pela fila}
+        {--limite=20 : Teto de notas por rodada — trava de segurança, ver comentário}';
 
     protected $description = 'Tenta de novo a NF-e dos pedidos pagos cuja nota ficou pendente, rejeitada ou nunca foi emitida — e redispara o envio travado por causa dela';
 
@@ -65,6 +66,26 @@ class RetryStuckInvoices extends Command
                 || $order->invoice === null
                 || $order->invoice->updated_at === null
                 || $order->invoice->updated_at->lt($espera));
+
+        // TRAVA REAL 2026-09-07, aprendida na primeira execução: rodei isto
+        // com BLING_INVOICE_ISSUER_CHANNELS vazio e ele varreu 94 notas do
+        // TikTok Shop — canal cuja nota é do BLING, não nossa. Cada
+        // rejeição 539 dessas queima um número de NF-e (ver
+        // InvoiceService::reserveNewNumber()), e a série 2 pulou de 2041
+        // pra 2091 em minutos. Número de nota fiscal não volta.
+        //
+        // O env foi corrigido (tiktok_shop entrou na lista, que é o certo —
+        // ver o incidente da nota dupla de 2026-09-05), mas configuração
+        // errada não pode custar 50 números de novo: a partir daqui, um
+        // teto por rodada. Se houver mais que isso travado, é acúmulo de
+        // verdade e alguém tem que olhar, não é caso pra varredura cega.
+        $total = $orders->count();
+        $limite = max(1, (int) $this->option('limite'));
+
+        if ($total > $limite) {
+            $this->warn("{$total} notas travadas — acima do teto de {$limite} por rodada. Tratando as {$limite} mais antigas; rode de novo (ou aumente --limite) depois de conferir por que são tantas.");
+            $orders = $orders->take($limite);
+        }
 
         $this->info("Notas travadas pra tentar de novo: {$orders->count()}");
 

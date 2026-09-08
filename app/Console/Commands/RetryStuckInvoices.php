@@ -125,6 +125,14 @@ class RetryStuckInvoices extends Command
                     $this->line('     -> '.($order->fresh()->invoice?->status ?? '?'));
                 } catch (\Throwable $exception) {
                     $this->warn('     -> falhou: '.substr($exception->getMessage(), 0, 120));
+
+                    // Levou 656 no meio da rodada: a SEFAZ já barrou o CNPJ,
+                    // e cada tentativa seguinte renova a punição. Para aqui.
+                    if (app(InvoiceService::class)->bloqueadoPorConsumoIndevidoAte()) {
+                        $this->warn('     SEFAZ bloqueou por consumo indevido — parando a rodada aqui.');
+
+                        break;
+                    }
                 }
 
                 continue;

@@ -610,7 +610,11 @@ class OrderImportService
                     ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
                 }
 
-                GenerateInvoiceJob::dispatch($order->id)->afterCommit();
+                if ($order->shouldAutoGenerateInvoice()) {
+                    GenerateInvoiceJob::dispatch($order->id)->afterCommit();
+                } else {
+                    $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, 'TikTok Shop: emissão automática de NF-e no KazaKora não disparada para evitar duplicidade fiscal.');
+                }
             }
 
             $this->recordReturnClaimIfNeeded($order, $data['channel_status'] ?? null);
@@ -984,7 +988,12 @@ class OrderImportService
             // Revertido junto com createOrder() (ver comentário lá) —
             // volta ao modelo paralelo de sempre.
             ConfirmChannelShippingJob::dispatch($order->id);
-            GenerateInvoiceJob::dispatch($order->id);
+
+            if ($order->shouldAutoGenerateInvoice()) {
+                GenerateInvoiceJob::dispatch($order->id);
+            } else {
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, 'TikTok Shop: emissão automática de NF-e no KazaKora não disparada para evitar duplicidade fiscal.');
+            }
         }
 
         $this->recordReturnClaimIfNeeded($order, $channelStatus);

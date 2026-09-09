@@ -64,6 +64,17 @@ class Order extends Model
     // finNFe=4 e chave referenciada no XML.
     public const ORIGIN_PURCHASE_RETURN_INVOICE = 'nota_devolucao_compra';
 
+    /**
+     * TikTok Shop é operado fiscalmente fora do pipeline automático do
+     * KazaKora: a venda entra para separação/estoque, mas a NF-e da venda é
+     * tratada na plataforma/Bling pelo operador. Se o KazaKora também emitir
+     * aqui, cria duplicidade fiscal para o mesmo pedido.
+     */
+    public function shouldAutoGenerateInvoice(): bool
+    {
+        return $this->origin !== self::ORIGIN_TIKTOK_SHOP;
+    }
+
     protected $fillable = [
         'user_id',
         'status',

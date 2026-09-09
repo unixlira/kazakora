@@ -133,6 +133,18 @@ class RecoverMissingInvoiceXml extends Command
                 continue;
             }
 
+            // Série diferente da nossa é nota que NÃO saiu deste emissor —
+            // na prática, a série do Bling (canais em
+            // services.bling.invoice_issuer_channels). Remontar com o
+            // NFeXmlBuilderService daria outro documento, então nem tenta: o
+            // XML dessas volta pelo importador do Bling, não daqui.
+            if ((int) $invoice->serie !== (int) config('nfe.serie')) {
+                $this->warn("     -> série {$invoice->serie} não é a nossa (".config('nfe.serie').') — nota emitida fora deste sistema, recuperar pelo Bling.');
+                $falhas++;
+
+                continue;
+            }
+
             if ($indice > 0) {
                 usleep(max(0, (int) $this->option('pausa')) * 1000);
             }
@@ -273,21 +285,48 @@ class RecoverMissingInvoiceXml extends Command
                     1,
                 );
 
+                if ($this->digest($candidato) !== $digestSefaz) {
+                    continue;
+                }
+
                 try {
-                    $assinado = $webservice->sign($candidato, $certificate);
+                    return $webservice->sign($candidato, $certificate);
                 } catch (Throwable $exception) {
                     $this->warn('     -> assinatura falhou: '.substr($exception->getMessage(), 0, 120));
 
                     return null;
                 }
-
-                if (preg_match('#<DigestValue>([^<]+)</DigestValue>#', $assinado, $match) && $match[1] === $digestSefaz) {
-                    return $assinado;
-                }
             }
         }
 
         return null;
+    }
+
+    /**
+     * O mesmo digest que a assinatura gravaria no DigestValue, calculado sem
+     * assinar: canoniza o `infNFe` e tira o SHA-1, exatamente como
+     * NFePHP\Common\Signer::makeDigest() (C14N exclusiva sem comentários,
+     * const CANONICAL = [true, false, null, null]).
+     *
+     * Existe por desempenho e só por isso: a varredura testa até ~1.200
+     * candidatos de dhEmi por nota, e assinar cada um (validação de schema +
+     * RSA) levava perto de um minuto por nota que não bate. Assim, só o
+     * candidato que já bateu com a SEFAZ é assinado de verdade.
+     */
+    private function digest(string $xml): ?string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = false;
+        $dom->loadXML($xml);
+
+        $node = $dom->getElementsByTagName('infNFe')->item(0);
+
+        if (! $node) {
+            return null;
+        }
+
+        return base64_encode(hash('sha1', $node->C14N(true, false, null, null), true));
     }
 
     /**

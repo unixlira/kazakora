@@ -376,6 +376,33 @@ class LabelFetchService
         return $this->enqueue($shipment, null, null, automatico: false);
     }
 
+    /**
+     * Outro pedido que divide o MESMO envio (pack) já tem etiqueta na fila
+     * ou impressa? A etiqueta é uma só — o rastreio é o mesmo.
+     */
+    private function irmaoDoPackJaImprimiu(ChannelShipment $shipment): bool
+    {
+        if (! $shipment->external_shipment_id) {
+            return false;
+        }
+
+        $irmaos = ChannelShipment::query()
+            ->where('channel', $shipment->channel)
+            ->where('external_shipment_id', $shipment->external_shipment_id)
+            ->where('order_id', '!=', $shipment->order_id)
+            ->pluck('order_id');
+
+        if ($irmaos->isEmpty()) {
+            return false;
+        }
+
+        return PrintJob::query()
+            ->whereIn('order_id', $irmaos)
+            ->where('is_thank_you', false)
+            ->whereIn('status', [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED, PrintJob::STATUS_PRINTED])
+            ->exists();
+    }
+
     private function enqueue(ChannelShipment $shipment, ?string $path, ?string $rawPath, bool $automatico): bool
     {
         $order = $shipment->order;
@@ -447,6 +474,25 @@ class LabelFetchService
         // contrariava: etiqueta a mais é papel jogado fora e confunde quem
         // embala; etiqueta a menos tem o botão de reimprimir do lado.
         if ($ultimo && $ultimo->status === PrintJob::STATUS_PRINTED) {
+            return false;
+        }
+
+        // PACK: dois pedidos do mesmo comprador podem dividir UM envio (e
+        // portanto UMA etiqueta só). A dedupe acima é por pedido, então sem
+        // isto o segundo pedido do pack imprime uma cópia idêntica da mesma
+        // etiqueta — e a varredura `marketplace:poll-labels` pega TODO
+        // shipment confirmado, então ela sairia sozinha na cron seguinte.
+        //
+        // Achado real 2026-09-09 no pack 2000014900875351 (pedidos #1540 e
+        // #1541, shipment 47949684147, um único rastreio). Mesma regra de
+        // sempre: etiqueta a mais é papel jogado fora e confunde quem
+        // embala, e reimprimir é clique humano.
+        if ($this->irmaoDoPackJaImprimiu($shipment)) {
+            Log::info('marketplace.label_fetch.pack_ja_impresso', [
+                'order_id' => $order->id,
+                'shipment' => $shipment->external_shipment_id,
+            ]);
+
             return false;
         }
 

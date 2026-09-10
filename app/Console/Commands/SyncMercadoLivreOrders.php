@@ -2,12 +2,16 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
+use App\Notifications\OrderImportFailedNotification;
 use App\Services\MercadoLivre\MercadoLivreAuthService;
 use App\Services\MercadoLivre\Services\OrderService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
 /**
@@ -45,19 +49,45 @@ class SyncMercadoLivreOrders extends Command
         $this->info(count($ids).' pedido(s) encontrado(s) no período.');
 
         $imported = 0;
-        $failed = 0;
+        $falhas = [];
 
         foreach ($ids as $id) {
             try {
                 $importer->import(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $id);
                 $imported++;
             } catch (Throwable $exception) {
-                $failed++;
+                $falhas[] = ['sn' => (string) $id, 'message' => $exception->getMessage()];
                 $this->warn("Pedido {$id}: {$exception->getMessage()}");
             }
         }
 
-        $this->info("Concluído: {$imported} sincronizado(s), {$failed} com erro.");
+        $this->info('Concluído: '.$imported.' sincronizado(s), '.count($falhas).' com erro.');
+
+        // Mesma regra da Shopee, pelo mesmo motivo (incidente 2026-09-10):
+        // venda que não entra não aparece em tela nenhuma, porque toda tela
+        // mostra o que existe no banco. Falha aqui grita por e-mail.
+        if ($falhas !== []) {
+            $janela = $from->toDateString().' a '.$to->toDateString();
+
+            Log::error('mercadolivre.sync.import_failed', [
+                'janela' => $janela,
+                'quantidade' => count($falhas),
+                'vendas' => $falhas,
+            ]);
+
+            $aviso = new OrderImportFailedNotification('Mercado Livre', $falhas, $janela);
+            $destino = config('services.alerts.email');
+
+            if ($destino) {
+                Notification::route('mail', $destino)->notify($aviso);
+            }
+
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+            if ($admins->isNotEmpty()) {
+                Notification::send($admins, $aviso);
+            }
+        }
 
         return self::SUCCESS;
     }

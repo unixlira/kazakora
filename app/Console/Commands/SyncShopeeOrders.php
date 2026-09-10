@@ -5,8 +5,12 @@ namespace App\Console\Commands;
 use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
+use App\Models\User;
+use App\Notifications\OrderImportFailedNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
 /**
@@ -39,19 +43,54 @@ class SyncShopeeOrders extends Command
         $this->info(count($sns).' pedido(s) encontrado(s) no período.');
 
         $imported = 0;
-        $failed = 0;
+        $falhas = [];
 
         foreach ($sns as $sn) {
             try {
                 $importer->import(MarketplaceAccount::CHANNEL_SHOPEE, $sn);
                 $imported++;
             } catch (Throwable $exception) {
-                $failed++;
+                $falhas[] = ['sn' => $sn, 'message' => $exception->getMessage()];
                 $this->warn("Pedido {$sn}: {$exception->getMessage()}");
             }
         }
 
-        $this->info("Concluído: {$imported} sincronizado(s), {$failed} com erro.");
+        $this->info('Concluído: '.$imported.' sincronizado(s), '.count($falhas).' com erro.');
+
+        // INCIDENTE 2026-09-10: até aqui a falha era SÓ o warn acima — e
+        // isto roda por cron, num console que ninguém lê. A venda
+        // 260910M2M4KAK5 falhou a cada hora, o dia inteiro, em silêncio:
+        // ficou 24h sem nota e sem etiqueta, e quem descobriu foi o
+        // usuário abrindo o painel da Shopee.
+        //
+        // Venda que não entra é o pior erro possível deste sistema: não
+        // aparece em tela nenhuma, porque toda tela mostra o que existe no
+        // banco. A única defesa é gritar — log de erro E notificação pros
+        // admins, com o número da venda, pra dar pra ir atrás na mão.
+        if ($falhas !== []) {
+            $janela = $from->toDateString().' a '.$to->toDateString();
+
+            Log::channel('shopee')->error('shopee.sync.import_failed', [
+                'janela' => $janela,
+                'quantidade' => count($falhas),
+                'vendas' => $falhas,
+            ]);
+
+            $aviso = new OrderImportFailedNotification('Shopee', $falhas, $janela);
+            $destino = config('services.alerts.email');
+
+            if ($destino) {
+                Notification::route('mail', $destino)->notify($aviso);
+            }
+
+            // Os admins continuam recebendo (e-mail + sino da tela) — o
+            // endereço de alerta acima é um a mais, não um no lugar.
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+            if ($admins->isNotEmpty()) {
+                Notification::send($admins, $aviso);
+            }
+        }
 
         return self::SUCCESS;
     }

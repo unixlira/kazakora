@@ -29,6 +29,38 @@ Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 // seguro rodar de hora em hora. Sem --desde/--ate, os dois comandos
 // escopam pro mês corrente por padrão (pedido explícito do usuário) — não
 // varre o histórico inteiro a cada execução.
+/**
+ * AS TRÊS CONFERÊNCIAS DO DIA — pedido do usuário em 2026-09-10, no dia em
+ * que uma venda da Shopee (260910M2M4KAK5) ficou 24h fora do sistema, sem
+ * nota e sem etiqueta, e ele descobriu abrindo o painel do canal.
+ *
+ * A varredura de hora em hora abaixo já existia e não salvou: ela falhava
+ * no MESMO pedido a cada hora e só reclamava num console que ninguém lê.
+ * Por isso estas rodadas vêm junto com o alerta por e-mail (ver
+ * OrderImportFailedNotification) — sem o e-mail, mais cron é mais silêncio.
+ *
+ * 06:00 — o dia anterior inteiro (a madrugada é onde a venda some sem
+ *         ninguém por perto).
+ * 12:00 — o dia anterior + o dia corrente até agora.
+ * 18:00 — o dia corrente, antes de fechar a expedição.
+ *
+ * A data é calculada a cada `schedule:run`, então no disparo ela é sempre
+ * a do dia certo. Importação é idempotente: rodar de novo não duplica.
+ */
+foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
+    Schedule::command($comando.' --desde='.now()->subDay()->toDateString().' --ate='.now()->subDay()->toDateString())
+        ->dailyAt('06:00')
+        ->withoutOverlapping(30);
+
+    Schedule::command($comando.' --desde='.now()->subDay()->toDateString().' --ate='.now()->toDateString())
+        ->dailyAt('12:00')
+        ->withoutOverlapping(30);
+
+    Schedule::command($comando.' --desde='.now()->toDateString().' --ate='.now()->toDateString())
+        ->dailyAt('18:00')
+        ->withoutOverlapping(30);
+}
+
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();

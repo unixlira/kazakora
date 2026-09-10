@@ -102,6 +102,17 @@ return [
         'receipt_retention_days' => (int) env('KORAFLEX_RECEIPT_RETENTION_DAYS', 180),
     ],
 
+    /**
+     * Pra onde vão os alertas que não podem esperar alguém abrir uma tela
+     * (hoje: venda que o canal tem e não entrou no sistema).
+     *
+     * Sem ALERT_EMAIL no .env, cai pros e-mails dos admins cadastrados —
+     * nunca fica sem destinatário.
+     */
+    'alerts' => [
+        'email' => env('ALERT_EMAIL'),
+    ],
+
     'print_agent' => [
         'token' => env('PRINT_AGENT_TOKEN'),
 

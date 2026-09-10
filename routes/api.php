@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
+use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
@@ -110,6 +111,17 @@ Route::prefix('amazon')->name('api.amazon.')->middleware(['web', 'auth', 'admin'
 
 // Chamado pelo agente local de impressão (fora deste servidor) — token fixo,
 // não sessão. Ver AuthenticatePrintAgent.
+/**
+ * KoraFlex — app de celular (PWA no iPhone, APK no Android) que bipa o QR
+ * da etiqueta do Flex e registra a caixa como pronta pra coleta. Token
+ * próprio, ver AuthenticateKoraFlex.
+ */
+Route::prefix('koraflex')->name('api.koraflex.')->middleware('koraflex')->group(function () {
+    Route::get('/dia', [KoraFlexController::class, 'dia'])->name('dia');
+    Route::post('/bipar', [KoraFlexController::class, 'bipar'])->name('bipar');
+    Route::post('/desfazer', [KoraFlexController::class, 'desfazer'])->name('desfazer');
+});
+
 Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent')->group(function () {
     Route::get('/jobs', [PrintAgentController::class, 'index'])->name('jobs.index');
     Route::post('/jobs/{printJob}/claim', [PrintAgentController::class, 'claim'])->name('jobs.claim');

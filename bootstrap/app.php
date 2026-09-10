@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuthenticateKoraFlex;
 use App\Http\Middleware\AuthenticatePrintAgent;
 use App\Http\Middleware\EnsureApiPartnerIsActive;
 use App\Http\Middleware\EnsureHasPermission;
@@ -41,6 +42,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'staff' => EnsureUserIsStaff::class,
             'permission' => EnsureHasPermission::class,
             'print.agent' => AuthenticatePrintAgent::class,
+            'koraflex' => AuthenticateKoraFlex::class,
             'log.api' => LogApiRequest::class,
             // Sanctum 4.x parou de registrar esses alias sozinho (era
             // automático em versões antigas) — confirmado lendo o

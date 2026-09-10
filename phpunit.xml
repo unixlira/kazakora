@@ -46,6 +46,8 @@
         <env name="SHOPEE_REDIRECT_URL" value="http://localhost/api/shopee/callback"/>
         <env name="SHOPEE_API_BASE_URL" value="https://partner.test-stable.shopeemobile.com"/>
         <env name="PRINT_AGENT_TOKEN" value="test-print-agent-token"/>
+        <env name="KORAFLEX_TOKEN" value="test-koraflex-token"/>
+        <env name="KORAFLEX_CUTOFF" value="12:00"/>
         <env name="CORREIOS_NUMERO_USUARIO" value=""/>
         <env name="CORREIOS_CODIGO_ACESSO" value=""/>
         <env name="CORREIOS_CONTRATO" value=""/>

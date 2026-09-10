@@ -25,6 +25,9 @@ class OrderFulfillmentEvent extends Model
     // KoraSync (ver Order::packed_at / DashboardAgentController::packOrder).
     public const STEP_ORDER_PACKED = 'order_packed';
 
+    /** Bipado no KoraFlex: etiquetado, fechado e na área de coleta. */
+    public const STEP_READY_FOR_PICKUP = 'ready_for_pickup';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_SUCCESS = 'success';

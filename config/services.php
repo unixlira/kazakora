@@ -78,6 +78,22 @@ return [
         'token_url' => env('MELHORENVIO_TOKEN_URL', 'https://sandbox.melhorenvio.com.br/oauth/token'),
     ],
 
+    /**
+     * KoraFlex — o app de celular que bipa o QR da etiqueta do Flex e
+     * registra "pronto pra coleta". Ver FlexPickupService.
+     */
+    'koraflex' => [
+        // Token PRÓPRIO do celular, separado do PRINT_AGENT_TOKEN de
+        // propósito (ver AuthenticateKoraFlex): celular sai do prédio.
+        'token' => env('KORAFLEX_TOKEN'),
+
+        // Horário de corte do despacho, "HH:MM" (padrão 12:00, definido
+        // pelo usuário em 2026-09-10). Venda fechada depois dele entra na
+        // lista do dia SEGUINTE — a regra inteira em FlexPickupService::
+        // janela(). Mudar aqui não exige deploy do app.
+        'cutoff' => env('KORAFLEX_CUTOFF', '12:00'),
+    ],
+
     'print_agent' => [
         'token' => env('PRINT_AGENT_TOKEN'),
 

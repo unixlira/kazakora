@@ -52,21 +52,35 @@ class PrintAgentController extends Controller
         return response()->json(['jobs' => $jobs]);
     }
 
+    /**
+     * A reivindicação é a trava que garante UMA impressão por job: quem
+     * reivindica primeiro é o único que consegue baixar a etiqueta (o
+     * /label exige status "claimed").
+     *
+     * Por isso ela é um UPDATE CONDICIONAL, não um "confere e depois
+     * grava": entre a leitura e a escrita, dois agentes (duas instalações
+     * do KoraSync na loja, ou o app aberto duas vezes) passavam os dois
+     * pela conferência e imprimiam a MESMA etiqueta. O `where status =
+     * queued` faz o banco desempatar, e quem perder leva 409.
+     */
     public function claim(Request $request, PrintJob $printJob): JsonResponse
     {
         $validated = $request->validate(['agent_id' => ['required', 'string', 'max:255']]);
 
-        if ($printJob->status !== PrintJob::STATUS_QUEUED) {
+        $reivindicado = PrintJob::query()
+            ->whereKey($printJob->getKey())
+            ->where('status', PrintJob::STATUS_QUEUED)
+            ->update([
+                'status' => PrintJob::STATUS_CLAIMED,
+                'claimed_by' => $validated['agent_id'],
+                'claimed_at' => now(),
+            ]);
+
+        if ($reivindicado === 0) {
             return response()->json(['message' => 'Job já foi reivindicado por outro agente.'], 409);
         }
 
-        $printJob->update([
-            'status' => PrintJob::STATUS_CLAIMED,
-            'claimed_by' => $validated['agent_id'],
-            'claimed_at' => now(),
-        ]);
-
-        return response()->json(['job' => $printJob]);
+        return response()->json(['job' => $printJob->refresh()]);
     }
 
     public function label(PrintJob $printJob): HttpResponse

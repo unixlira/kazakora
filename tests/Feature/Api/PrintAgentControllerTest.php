@@ -79,6 +79,35 @@ class PrintAgentControllerTest extends TestCase
         $response->assertJsonPath('jobs.0.sale_id', null);
     }
 
+    /**
+     * Dois agentes (duas instalações do KoraSync na loja, ou o app aberto
+     * duas vezes) não podem imprimir a mesma etiqueta: só quem reivindica
+     * primeiro baixa o arquivo. A segunda reivindicação leva 409 e o
+     * claimed_by continua sendo o do primeiro.
+     */
+    public function test_a_second_agent_cannot_claim_a_job_that_is_already_claimed(): void
+    {
+        $order = $this->makeOrder();
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'label_path' => 'labels/teste.pdf',
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        $this->postJson("/api/print-agent/jobs/{$job->id}/claim", ['agent_id' => 'PC-DA-LOJA'], $this->authHeaders())
+            ->assertOk();
+
+        $this->postJson("/api/print-agent/jobs/{$job->id}/claim", ['agent_id' => 'PC-DO-ESCRITORIO'], $this->authHeaders())
+            ->assertStatus(409);
+
+        $job->refresh();
+
+        $this->assertSame(PrintJob::STATUS_CLAIMED, $job->status);
+        $this->assertSame('PC-DA-LOJA', $job->claimed_by);
+    }
+
     public function test_jobs_list_only_returns_queued_jobs(): void
     {
         $order = $this->makeOrder();

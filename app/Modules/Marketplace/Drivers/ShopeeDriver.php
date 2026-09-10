@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 use RuntimeException;
 
 /**
@@ -365,7 +366,32 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'last_synced_at' => now(),
         ]);
 
-        $this->importFiscalData($product, $item['tax_info'] ?? null);
+        // MELHOR-ESFORÇO, e essa é a lição cara de 2026-09-10: dado fiscal
+        // do produto NUNCA pode derrubar a importação da venda.
+        //
+        // A venda 260910M2M4KAK5 se perdeu porque uma exception aqui dentro
+        // (método inexistente) subiu pela transação de
+        // OrderImportService::createOrder() e matou o pedido INTEIRO —
+        // Order, OrderItem, Product, tudo desfeito, nas 3 tentativas do
+        // webhook. Resultado: venda sem nota, sem etiqueta, invisível no
+        // sistema, descoberta só no painel da Shopee. O mesmo formato de
+        // estrago já tinha acontecido em 2026-08-08 (ver o comentário sobre
+        // tipo_operacao dentro de importFiscalData) — duas vezes é padrão,
+        // não azar.
+        //
+        // Produto sem dado fiscal é um problema pequeno e VISÍVEL: a nota
+        // fica pendente por falta de NCM e aparece na tela fiscal. Venda
+        // que nunca entrou é um problema grande e INVISÍVEL. Entre os dois,
+        // fica sempre com o visível.
+        try {
+            $this->importFiscalData($product, $item['tax_info'] ?? null);
+        } catch (Throwable $exception) {
+            Log::channel('shopee')->error('shopee.fiscal_data.import_failed', [
+                'product_id' => $product->id,
+                'external_id' => $externalId,
+                'message' => $exception->getMessage(),
+            ]);
+        }
 
         return $product;
     }

@@ -93,6 +93,7 @@ class FlexPickupService
             ->get();
 
         $entregas = $doDia->map(fn (Order $order) => $this->paraTela($order));
+        $pendentesDoDia = $entregas->where('estado', self::ESTADO_PENDENTE)->count();
 
         return [
             'dia' => $janela['ate']->toDateString(),
@@ -102,9 +103,26 @@ class FlexPickupService
                 'ate' => $janela['ate']->toDateTimeString(),
             ],
             'total' => $entregas->count(),
-            'pendentes' => $entregas->where('estado', self::ESTADO_PENDENTE)->count(),
+            'pendentes' => $pendentesDoDia,
             'prontos' => $entregas->where('estado', self::ESTADO_PRONTO)->count(),
             'coletados' => $entregas->where('estado', self::ESTADO_COLETADO)->count(),
+
+            // FALTAM = tudo que ainda tem que ser bipado, do dia MAIS o
+            // atrasado. Pergunta do usuário em 2026-09-10, na primeira vez
+            // que ele olhou a tela com uma caixa velha em aberto: "se tem
+            // um em aberto atrasado, porque não está no card Faltam?".
+            //
+            // Estava fora porque o contador espelhava só a janela do dia —
+            // e "Faltam" não é uma medida da janela, é a fila de trabalho
+            // de quem está no galpão. Um contador que marca 0 com caixa na
+            // prateleira é pior que contador nenhum: o atrasado é
+            // justamente o que não pode ser esquecido de novo.
+            //
+            // 'total' continua sendo só o dia (a regra do corte que o
+            // usuário definiu) — quem soma é a fila, não o total.
+            'atrasados_total' => $atrasados->count(),
+            'faltam' => $pendentesDoDia + $atrasados->count(),
+
             'entregas' => $entregas->values()->all(),
             'atrasados' => $atrasados->map(fn (Order $order) => $this->paraTela($order))->values()->all(),
         ];

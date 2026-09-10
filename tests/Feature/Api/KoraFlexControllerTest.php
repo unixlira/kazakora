@@ -109,6 +109,29 @@ class KoraFlexControllerTest extends TestCase
         $this->assertSame($velha->id, $resposta->json('atrasados.0.pedido'));
     }
 
+    /**
+     * "Se tem um em aberto atrasado, porque não está no card Faltam?" —
+     * pergunta do usuário em 2026-09-10. Faltam é a fila de trabalho, não
+     * uma medida da janela do dia: contador em 0 com caixa na prateleira é
+     * pior que contador nenhum.
+     */
+    public function test_the_faltam_counter_adds_the_late_boxes_to_the_day(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 15:00:00'));
+
+        $this->makeFlexOrder('900', Carbon::parse('2026-09-05 10:00:00'));
+        $this->makeFlexOrder('901', Carbon::parse('2026-09-10 09:00:00'));
+        $bipada = $this->makeFlexOrder('902', Carbon::parse('2026-09-10 09:30:00'));
+        $bipada->forceFill(['ready_for_pickup_at' => now()])->save();
+
+        $resposta = $this->getJson('/api/koraflex/dia', $this->headers())->assertOk();
+
+        $this->assertSame(2, $resposta->json('total'), 'o total continua sendo só a janela do dia');
+        $this->assertSame(1, $resposta->json('pendentes'), 'pendentes segue sendo só do dia');
+        $this->assertSame(1, $resposta->json('atrasados_total'));
+        $this->assertSame(2, $resposta->json('faltam'), 'a fila de trabalho soma o atrasado');
+    }
+
     public function test_scanning_the_real_flex_qr_marks_the_order_ready_for_pickup(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-10 10:00:00'));

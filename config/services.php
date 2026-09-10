@@ -92,6 +92,14 @@ return [
         // lista do dia SEGUINTE — a regra inteira em FlexPickupService::
         // janela(). Mudar aqui não exige deploy do app.
         'cutoff' => env('KORAFLEX_CUTOFF', '12:00'),
+
+        // Por quanto tempo a assinatura e a FOTO do entregador ficam
+        // guardadas. Elas existem pra resolver dúvida sobre entrega, e
+        // dúvida de entrega não aparece seis meses depois — guardar foto de
+        // pessoa pra sempre não é "cuidado", é acúmulo. Ver o comando
+        // koraflex:limpar-recibos (o recibo em si, com hora e lista de
+        // pacotes, permanece; só as imagens somem).
+        'receipt_retention_days' => (int) env('KORAFLEX_RECEIPT_RETENTION_DAYS', 180),
     ],
 
     'print_agent' => [

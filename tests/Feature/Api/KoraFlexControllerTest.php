@@ -6,6 +6,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -130,6 +131,190 @@ class KoraFlexControllerTest extends TestCase
         $this->assertSame(1, $resposta->json('pendentes'), 'pendentes segue sendo só do dia');
         $this->assertSame(1, $resposta->json('atrasados_total'));
         $this->assertSame(2, $resposta->json('faltam'), 'a fila de trabalho soma o atrasado');
+    }
+
+    /**
+     * ACHADO DO USUÁRIO 2026-09-10, testando: bipar uma ATRASADA a fazia
+     * sumir da tela — some por ter dado certo, e sem entrar no card
+     * "Prontas" porque é velha demais pra janela do dia. O que tira a caixa
+     * da lista tem que ser ela SAIR daqui, não ter sido bipada.
+     */
+    public function test_a_late_order_stays_visible_as_ready_after_being_scanned(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 15:00:00'));
+
+        $velha = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-05 10:00:00'));
+
+        $this->postJson('/api/koraflex/bipar', ['qr' => self::QR_REAL], $this->headers())->assertOk();
+
+        $resposta = $this->getJson('/api/koraflex/dia', $this->headers())->assertOk();
+
+        $this->assertSame($velha->id, $resposta->json('atrasados.0.pedido'), 'a atrasada continua na tela');
+        $this->assertSame('pronto', $resposta->json('atrasados.0.estado'));
+        $this->assertSame(1, $resposta->json('prontos'), 'e conta no card Prontas');
+        $this->assertSame(0, $resposta->json('faltam'), 'mas não conta mais como faltando');
+        $this->assertSame([$velha->id], $resposta->json('prontas_ids'));
+    }
+
+    /**
+     * O botão "Entreguei ao entregador": até aqui "coletada" só vinha do
+     * canal (o ML marcando enviada), horas depois do motorista ter saído.
+     */
+    public function test_handing_the_boxes_to_the_carrier_moves_them_to_collected(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 10:00:00'));
+
+        $order = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-10 08:00:00'));
+        $this->postJson('/api/koraflex/bipar', ['qr' => self::QR_REAL], $this->headers())->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-09-10 11:30:00'));
+
+        $resposta = $this->postJson('/api/koraflex/coletar', ['pedidos' => [$order->id]], $this->headers())->assertOk();
+
+        $this->assertTrue($resposta->json('ok'));
+        $this->assertSame([$order->id], $resposta->json('entregues'));
+        $this->assertSame('10/09 11:30', $order->refresh()->collected_at->format('d/m H:i'));
+
+        $dia = $this->getJson('/api/koraflex/dia', $this->headers())->assertOk();
+
+        $this->assertSame(1, $dia->json('coletados'));
+        $this->assertSame(0, $dia->json('prontos'));
+
+        $this->assertDatabaseHas('order_fulfillment_events', [
+            'order_id' => $order->id,
+            'step' => 'handed_to_carrier',
+            'status' => 'success',
+        ]);
+    }
+
+    /** Entregar o que ninguém conferiu é o buraco que o app existe pra fechar. */
+    public function test_it_refuses_to_hand_over_a_box_that_was_never_scanned(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 10:00:00'));
+
+        $order = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-10 08:00:00'));
+
+        $resposta = $this->postJson('/api/koraflex/coletar', ['pedidos' => [$order->id]], $this->headers())->assertOk();
+
+        $this->assertSame([], $resposta->json('entregues'));
+        $this->assertSame([$order->id], $resposta->json('ignorados'));
+        $this->assertNull($order->refresh()->collected_at);
+    }
+
+    /** A tela "conferida e entregue": assinatura, foto e consentimento. */
+    public function test_the_signed_receipt_stores_signature_photo_and_consent(): void
+    {
+        Storage::fake('local');
+        Carbon::setTestNow(Carbon::parse('2026-09-10 11:30:00'));
+
+        $order = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-10 08:00:00'));
+        $this->postJson('/api/koraflex/bipar', ['qr' => self::QR_REAL], $this->headers())->assertOk();
+
+        $resposta = $this->postJson('/api/koraflex/entregar', [
+            'pedidos' => [$order->id],
+            'consentimento' => true,
+            'assinatura' => 'data:image/png;base64,'.base64_encode($this->pngDeTeste()),
+            'foto' => 'data:image/jpeg;base64,'.base64_encode($this->jpegDeTeste()),
+            'nome' => 'João Motorista',
+            'aviso' => 'Vamos registrar sua assinatura e uma foto.',
+            'dispositivo' => 'iPhone da loja',
+        ], $this->headers())->assertOk();
+
+        $this->assertTrue($resposta->json('recibo.assinado'));
+        $this->assertTrue($resposta->json('recibo.com_foto'));
+        $this->assertSame('João Motorista', $resposta->json('recibo.entregador'));
+
+        $recibo = \App\Modules\Marketplace\Models\FlexPickupReceipt::firstOrFail();
+
+        $this->assertNotNull($recibo->consented_at);
+        $this->assertSame('Vamos registrar sua assinatura e uma foto.', $recibo->consent_text);
+        $this->assertSame([$order->id], $recibo->order_ids);
+        $this->assertSame($recibo->id, $order->refresh()->pickup_receipt_id);
+
+        Storage::disk('local')->assertExists($recibo->signature_path);
+        Storage::disk('local')->assertExists($recibo->photo_path);
+
+        // A imagem é servida por rota autenticada, nunca de pasta pública.
+        $this->get("/api/koraflex/recibos/{$recibo->id}/assinatura")->assertStatus(401);
+        $this->get("/api/koraflex/recibos/{$recibo->id}/assinatura", $this->headers())->assertOk();
+    }
+
+    /** Sem consentimento nenhuma imagem é gravada — a entrega vira baixa simples. */
+    public function test_without_consent_no_image_is_stored(): void
+    {
+        Storage::fake('local');
+        Carbon::setTestNow(Carbon::parse('2026-09-10 11:30:00'));
+
+        $order = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-10 08:00:00'));
+        $this->postJson('/api/koraflex/bipar', ['qr' => self::QR_REAL], $this->headers())->assertOk();
+
+        $resposta = $this->postJson('/api/koraflex/entregar', [
+            'pedidos' => [$order->id],
+            'consentimento' => false,
+            'assinatura' => 'data:image/png;base64,'.base64_encode($this->pngDeTeste()),
+            'foto' => 'data:image/jpeg;base64,'.base64_encode($this->jpegDeTeste()),
+        ], $this->headers())->assertOk();
+
+        $this->assertFalse($resposta->json('recibo.assinado'));
+        $this->assertFalse($resposta->json('recibo.com_foto'));
+
+        $recibo = \App\Modules\Marketplace\Models\FlexPickupReceipt::firstOrFail();
+
+        $this->assertNull($recibo->consented_at);
+        $this->assertNull($recibo->signature_path);
+        $this->assertNull($recibo->photo_path);
+        $this->assertNotNull($order->refresh()->collected_at, 'a entrega acontece mesmo assim');
+    }
+
+    /** Não é imagem de verdade? Não entra no disco, mesmo com o cabeçalho certo. */
+    public function test_it_rejects_a_file_that_is_not_really_an_image(): void
+    {
+        Storage::fake('local');
+        Carbon::setTestNow(Carbon::parse('2026-09-10 11:30:00'));
+
+        $order = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-10 08:00:00'));
+        $this->postJson('/api/koraflex/bipar', ['qr' => self::QR_REAL], $this->headers())->assertOk();
+
+        $this->postJson('/api/koraflex/entregar', [
+            'pedidos' => [$order->id],
+            'consentimento' => true,
+            'assinatura' => 'data:image/png;base64,'.base64_encode('<?php echo "oi";'),
+        ], $this->headers())->assertOk();
+
+        $this->assertNull(\App\Modules\Marketplace\Models\FlexPickupReceipt::firstOrFail()->signature_path);
+    }
+
+    /** Desfazer volta UM passo: entregue -> pronta -> pendente. */
+    public function test_undo_steps_back_one_state_at_a_time(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 10:00:00'));
+
+        $order = $this->makeFlexOrder('47981054232', Carbon::parse('2026-09-10 08:00:00'));
+        $this->postJson('/api/koraflex/bipar', ['qr' => self::QR_REAL], $this->headers())->assertOk();
+        $this->postJson('/api/koraflex/coletar', ['pedidos' => [$order->id]], $this->headers())->assertOk();
+
+        $primeiro = $this->postJson('/api/koraflex/desfazer', ['pedido' => $order->id], $this->headers())->assertOk();
+
+        $this->assertSame('desfeita_entrega', $primeiro->json('motivo'));
+        $this->assertNull($order->refresh()->collected_at);
+        $this->assertNotNull($order->ready_for_pickup_at, 'continua pronta');
+
+        $segundo = $this->postJson('/api/koraflex/desfazer', ['pedido' => $order->id], $this->headers())->assertOk();
+
+        $this->assertSame('desfeito', $segundo->json('motivo'));
+        $this->assertNull($order->refresh()->ready_for_pickup_at);
+        $this->assertNotNull($order->packed_at, 'a separação nunca é desfeita');
+    }
+
+    /** PNG 1x1 de verdade — o serviço confere os bytes, não o cabeçalho declarado. */
+    private function pngDeTeste(): string
+    {
+        return base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    }
+
+    private function jpegDeTeste(): string
+    {
+        return base64_decode('/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==');
     }
 
     public function test_scanning_the_real_flex_qr_marks_the_order_ready_for_pickup(): void

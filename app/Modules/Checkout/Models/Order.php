@@ -92,6 +92,8 @@ class Order extends Model
         'stock_restored_at',
         'packed_at',
         'ready_for_pickup_at',
+        'collected_at',
+        'pickup_receipt_id',
         'waiting_for_product_at',
         'waiting_for_product_until',
         'shipping_method_id',
@@ -131,6 +133,7 @@ class Order extends Model
             'stock_restored_at' => 'datetime',
             'packed_at' => 'datetime',
             'ready_for_pickup_at' => 'datetime',
+            'collected_at' => 'datetime',
             'waiting_for_product_at' => 'datetime',
             'waiting_for_product_until' => 'datetime',
         ];

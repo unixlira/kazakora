@@ -28,6 +28,9 @@ class OrderFulfillmentEvent extends Model
     /** Bipado no KoraFlex: etiquetado, fechado e na área de coleta. */
     public const STEP_READY_FOR_PICKUP = 'ready_for_pickup';
 
+    /** Entregue em mãos ao entregador do Flex — a hora que a caixa saiu daqui. */
+    public const STEP_HANDED_TO_CARRIER = 'handed_to_carrier';
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_SUCCESS = 'success';

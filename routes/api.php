@@ -119,6 +119,11 @@ Route::prefix('amazon')->name('api.amazon.')->middleware(['web', 'auth', 'admin'
 Route::prefix('koraflex')->name('api.koraflex.')->middleware('koraflex')->group(function () {
     Route::get('/dia', [KoraFlexController::class, 'dia'])->name('dia');
     Route::post('/bipar', [KoraFlexController::class, 'bipar'])->name('bipar');
+    Route::post('/entregar', [KoraFlexController::class, 'entregar'])->name('entregar');
+    Route::post('/coletar', [KoraFlexController::class, 'coletar'])->name('coletar');
+    Route::get('/recibos/{recibo}/{tipo}', [KoraFlexController::class, 'imagemDoRecibo'])
+        ->whereIn('tipo', ['assinatura', 'foto'])
+        ->name('recibo.imagem');
     Route::post('/desfazer', [KoraFlexController::class, 'desfazer'])->name('desfazer');
 });
 

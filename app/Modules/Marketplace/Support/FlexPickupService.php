@@ -6,12 +6,14 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\FlexPickupReceipt;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * O motor do KoraFlex (app de celular, repositório à parte): a lista do que
@@ -82,18 +84,29 @@ class FlexPickupService
             ->whereBetween('orders.created_at', [$janela['de'], $janela['ate']])
             ->get();
 
-        // ATRASADOS: venda de janela anterior que ninguém bipou e o canal
-        // não deu como enviada. Sem esta lista, uma caixa esquecida de
-        // ontem some da tela hoje — que é exatamente o tipo de sumiço que
-        // gerou a briga com a transportadora.
+        // ATRASADOS: venda de janela anterior que ainda não saiu daqui.
+        // Sem esta lista, uma caixa esquecida de ontem some da tela hoje —
+        // que é exatamente o tipo de sumiço que gerou a briga com a
+        // transportadora.
+        //
+        // CORREÇÃO 2026-09-10 (o usuário viu ao testar): o filtro era
+        // "ninguém bipou", então bipar uma atrasada a fazia DESAPARECER da
+        // tela — sumia por ter dado certo, que é o pior tipo de sumiço, e
+        // ela nem entrava no card "Prontas" porque é velha demais pra
+        // janela do dia. Agora o que tira a caixa da lista é ela ter sido
+        // ENTREGUE ao entregador (ou o canal dar a venda como enviada),
+        // não ter sido bipada.
         $atrasados = $this->flexQuery()
             ->where('orders.created_at', '<', $janela['de'])
             ->where('orders.status', Order::STATUS_PAID)
-            ->whereNull('orders.ready_for_pickup_at')
+            ->whereNull('orders.collected_at')
             ->get();
 
         $entregas = $doDia->map(fn (Order $order) => $this->paraTela($order));
+        $atrasadas = $atrasados->map(fn (Order $order) => $this->paraTela($order));
+
         $pendentesDoDia = $entregas->where('estado', self::ESTADO_PENDENTE)->count();
+        $prontasDoDia = $entregas->where('estado', self::ESTADO_PRONTO)->count();
 
         return [
             'dia' => $janela['ate']->toDateString(),
@@ -102,9 +115,19 @@ class FlexPickupService
                 'de' => $janela['de']->toDateTimeString(),
                 'ate' => $janela['ate']->toDateTimeString(),
             ],
+            // Vai pro texto do consentimento na tela de entrega: o app
+            // promete ao entregador o prazo REAL de retenção da foto, não
+            // um número escrito à mão que envelhece.
+            'retencao_dias' => (int) config('services.koraflex.receipt_retention_days', 180),
+
             'total' => $entregas->count(),
             'pendentes' => $pendentesDoDia,
-            'prontos' => $entregas->where('estado', self::ESTADO_PRONTO)->count(),
+
+            // PRONTAS conta dia + atrasadas, pela mesma razão que "Faltam":
+            // são as caixas que estão AGORA na área de coleta esperando o
+            // entregador. Uma atrasada bipada está tão pronta quanto a de
+            // hoje — e é ela que costuma ser esquecida.
+            'prontos' => $prontasDoDia + $atrasadas->where('estado', self::ESTADO_PRONTO)->count(),
             'coletados' => $entregas->where('estado', self::ESTADO_COLETADO)->count(),
 
             // FALTAM = tudo que ainda tem que ser bipado, do dia MAIS o
@@ -120,11 +143,17 @@ class FlexPickupService
             //
             // 'total' continua sendo só o dia (a regra do corte que o
             // usuário definiu) — quem soma é a fila, não o total.
-            'atrasados_total' => $atrasados->count(),
-            'faltam' => $pendentesDoDia + $atrasados->count(),
+            'atrasados_total' => $atrasadas->count(),
+            'faltam' => $pendentesDoDia + $atrasadas->where('estado', self::ESTADO_PENDENTE)->count(),
+
+            // Os ids que o botão "Entreguei ao entregador" carimba de uma
+            // vez — o motorista leva tudo junto, não de caixa em caixa.
+            'prontas_ids' => $entregas->where('estado', self::ESTADO_PRONTO)->pluck('pedido')
+                ->merge($atrasadas->where('estado', self::ESTADO_PRONTO)->pluck('pedido'))
+                ->values()->all(),
 
             'entregas' => $entregas->values()->all(),
-            'atrasados' => $atrasados->map(fn (Order $order) => $this->paraTela($order))->values()->all(),
+            'atrasados' => $atrasadas->values()->all(),
         ];
     }
 
@@ -222,9 +251,237 @@ class FlexPickupService
     }
 
     /**
-     * Desfaz uma bipada — bipou a caixa errada, ou a coleta não aconteceu e
-     * a caixa voltou pra prateleira. Só limpa o "pronto"; não desfaz a
-     * separação, que continua verdadeira.
+     * "Entreguei ao entregador" — o botão que tira as caixas da área de
+     * coleta e fecha o ciclo, com hora.
+     *
+     * Recebe uma lista porque é assim que acontece de verdade: o motorista
+     * chega, leva TUDO que está pronto, e ninguém vai carimbar caixa por
+     * caixa com ele esperando na porta.
+     *
+     * Só carimba o que já foi bipado: entregar o que ninguém conferiu é
+     * exatamente o buraco que o app existe pra fechar.
+     *
+     * @param  list<int>  $pedidos
+     * @return array<string, mixed>
+     */
+    public function coletar(array $pedidos, ?string $dispositivo = null, ?FlexPickupReceipt $recibo = null): array
+    {
+        $ordens = Order::query()
+            ->whereIn('id', $pedidos)
+            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->get();
+
+        $entregues = [];
+        $ignorados = [];
+        $agora = now();
+
+        DB::transaction(function () use ($ordens, $agora, $dispositivo, $recibo, &$entregues, &$ignorados) {
+            foreach ($ordens as $order) {
+                if (! $order->ready_for_pickup_at) {
+                    $ignorados[] = $order->id;
+
+                    continue;
+                }
+
+                if ($order->collected_at) {
+                    continue;
+                }
+
+                $order->forceFill([
+                    'collected_at' => $agora,
+                    'pickup_receipt_id' => $recibo?->id,
+                ])->save();
+
+                $this->timeline->record(
+                    $order,
+                    OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER,
+                    OrderFulfillmentEvent::STATUS_SUCCESS,
+                    $recibo?->assinado()
+                        ? 'Entregue ao entregador do Flex, com assinatura (KoraFlex)'
+                        : 'Entregue ao entregador do Flex (KoraFlex)',
+                    ['dispositivo' => $dispositivo, 'recibo' => $recibo?->id],
+                );
+
+                $entregues[] = $order->id;
+            }
+        });
+
+        Log::info('koraflex.coletado', [
+            'entregues' => $entregues,
+            'ignorados' => $ignorados,
+            'dispositivo' => $dispositivo,
+        ]);
+
+        $quantidade = count($entregues);
+
+        return [
+            'ok' => true,
+            'motivo' => 'coletado',
+            'mensagem' => match (true) {
+                $quantidade === 0 => 'Nada novo pra entregar.',
+                $quantidade === 1 => '1 caixa entregue ao entregador às '.$agora->format('H:i').'.',
+                default => "{$quantidade} caixas entregues ao entregador às ".$agora->format('H:i').'.',
+            },
+            'entregues' => $entregues,
+            'ignorados' => $ignorados,
+        ];
+    }
+
+    /**
+     * "Conferida e entregue" com comprovante: a mesma entrega do coletar(),
+     * mas guardando assinatura, foto e consentimento do entregador.
+     *
+     * Pedido do usuário em 2026-09-10: "um campo de assinatura, que pode
+     * ser um visto feito pelo dedo mesmo, mas quando a pessoa clica em
+     * enviar, tira uma foto dele, mas antes de assinar colocar um aviso de
+     * consentimento".
+     *
+     * O CONSENTIMENTO NÃO É FORMALIDADE. Assinatura e foto são dados
+     * pessoais de alguém que não trabalha aqui — o entregador. Por isso:
+     *
+     * - sem `consentimento` verdadeiro, nada de imagem é gravado (a entrega
+     *   até acontece, mas vira uma baixa simples, sem recibo assinado);
+     * - o TEXTO do aviso mostrado na tela vem junto e fica gravado no
+     *   recibo, pra daqui a seis meses ser possível dizer exatamente com o
+     *   que ele concordou, mesmo que o texto tenha mudado desde então;
+     * - as imagens vão pro disco local (nunca uma pasta pública) e são
+     *   apagadas depois de `services.koraflex.receipt_retention_days` — ver
+     *   o comando koraflex:limpar-recibos.
+     *
+     * @param  list<int>  $pedidos
+     * @return array<string, mixed>
+     */
+    public function entregar(
+        array $pedidos,
+        bool $consentimento,
+        ?string $assinatura = null,
+        ?string $foto = null,
+        ?string $nome = null,
+        ?string $dispositivo = null,
+        ?string $textoDoAviso = null,
+    ): array {
+        $agora = now();
+
+        $recibo = FlexPickupReceipt::create([
+            'carrier_name' => $nome ? trim($nome) : null,
+            'collected_at' => $agora,
+            'device' => $dispositivo,
+            'consented_at' => $consentimento ? $agora : null,
+            'consent_text' => $consentimento ? $textoDoAviso : null,
+            'signature_path' => null,
+            'photo_path' => null,
+            'order_ids' => [],
+            'orders_count' => 0,
+        ]);
+
+        // As imagens só existem com o consentimento de pé.
+        if ($consentimento) {
+            $recibo->forceFill([
+                'signature_path' => $this->guardarImagem($assinatura, $recibo->id, 'assinatura', ['image/png'], 2_000_000),
+                'photo_path' => $this->guardarImagem($foto, $recibo->id, 'foto', ['image/jpeg', 'image/png'], 5_000_000),
+            ])->save();
+        }
+
+        $resultado = $this->coletar($pedidos, $dispositivo, $recibo);
+
+        $recibo->forceFill([
+            'order_ids' => $resultado['entregues'],
+            'orders_count' => count($resultado['entregues']),
+        ])->save();
+
+        // Recibo sem nenhuma caixa é lixo: o entregador não levou nada.
+        if ($recibo->orders_count === 0) {
+            $this->apagarImagens($recibo);
+            $recibo->delete();
+
+            return $resultado + ['recibo' => null];
+        }
+
+        return $resultado + [
+            'recibo' => [
+                'id' => $recibo->id,
+                'assinado' => $recibo->assinado(),
+                'com_foto' => $recibo->photo_path !== null,
+                'entregador' => $recibo->carrier_name,
+                'hora' => $recibo->collected_at->format('d/m/Y H:i'),
+                'caixas' => $recibo->orders_count,
+            ],
+        ];
+    }
+
+    /**
+     * Grava uma imagem que chegou como data URL do celular.
+     *
+     * Confere o cabeçalho declarado E os primeiros bytes do arquivo: o que
+     * o navegador diz que mandou não é prova de nada, e isto aqui é um
+     * endpoint que aceita arquivo de fora.
+     */
+    private function guardarImagem(?string $dataUrl, int $reciboId, string $nome, array $tiposAceitos, int $limiteBytes): ?string
+    {
+        if (! $dataUrl) {
+            return null;
+        }
+
+        if (! preg_match('#^data:(image/[a-z+]+);base64,(.+)$#is', trim($dataUrl), $partes)) {
+            Log::warning('koraflex.recibo.imagem_invalida', ['recibo' => $reciboId, 'campo' => $nome]);
+
+            return null;
+        }
+
+        [, $tipo, $base64] = $partes;
+
+        if (! in_array(strtolower($tipo), $tiposAceitos, true)) {
+            Log::warning('koraflex.recibo.tipo_recusado', ['recibo' => $reciboId, 'campo' => $nome, 'tipo' => $tipo]);
+
+            return null;
+        }
+
+        $conteudo = base64_decode($base64, true);
+
+        if ($conteudo === false || strlen($conteudo) > $limiteBytes) {
+            Log::warning('koraflex.recibo.imagem_recusada', [
+                'recibo' => $reciboId,
+                'campo' => $nome,
+                'bytes' => $conteudo === false ? null : strlen($conteudo),
+            ]);
+
+            return null;
+        }
+
+        $ehPng = str_starts_with($conteudo, "\x89PNG\r\n\x1a\n");
+        $ehJpeg = str_starts_with($conteudo, "\xFF\xD8\xFF");
+
+        if (! $ehPng && ! $ehJpeg) {
+            Log::warning('koraflex.recibo.bytes_nao_sao_imagem', ['recibo' => $reciboId, 'campo' => $nome]);
+
+            return null;
+        }
+
+        $caminho = "flex/recibos/{$reciboId}/{$nome}.".($ehPng ? 'png' : 'jpg');
+
+        Storage::disk('local')->put($caminho, $conteudo);
+
+        return $caminho;
+    }
+
+    public function apagarImagens(FlexPickupReceipt $recibo): void
+    {
+        foreach ([$recibo->signature_path, $recibo->photo_path] as $caminho) {
+            if ($caminho && Storage::disk('local')->exists($caminho)) {
+                Storage::disk('local')->delete($caminho);
+            }
+        }
+    }
+
+    /**
+     * Desfaz UM passo, o último: se a caixa já tinha sido entregue ao
+     * entregador, volta pra "pronta"; se estava só bipada, volta pra
+     * "pendente".
+     *
+     * Um passo de cada vez porque os dois enganos são diferentes — "marquei
+     * entregue antes da hora" e "bipei a caixa errada" — e quem toca no
+     * botão está no meio da operação, sem tempo pra escolher entre opções.
+     * A separação (packed_at) nunca é desfeita: ela continua verdadeira.
      *
      * @return array<string, mixed>
      */
@@ -234,6 +491,24 @@ class FlexPickupService
 
         if (! $order) {
             return $this->recusa('nao_encontrada', "Pedido #{$orderId} não existe.");
+        }
+
+        if ($order->collected_at) {
+            $order->forceFill(['collected_at' => null])->save();
+
+            $this->timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER,
+                OrderFulfillmentEvent::STATUS_FAILED,
+                'Entrega ao entregador desfeita no KoraFlex',
+            );
+
+            return [
+                'ok' => true,
+                'motivo' => 'desfeita_entrega',
+                'mensagem' => 'Voltou pra pronta, esperando o entregador.',
+                'venda' => $this->paraTela($order->loadMissing(['items', 'channelShipment'])),
+            ];
         }
 
         if (! $order->ready_for_pickup_at) {
@@ -317,13 +592,24 @@ class FlexPickupService
             'estado' => $this->estado($order),
             'separado_em' => $order->packed_at?->format('d/m H:i'),
             'pronto_em' => $order->ready_for_pickup_at?->format('d/m H:i'),
+            'coletado_em' => $order->collected_at?->format('d/m H:i'),
             'etiqueta_impressa' => $this->etiquetaImpressa($order),
         ];
     }
 
+    /**
+     * COLETADA quer dizer "saiu daqui": ou alguém entregou em mãos ao
+     * entregador (o botão do app, `collected_at`), ou o canal já deu a
+     * venda como enviada.
+     *
+     * O carimbo humano existe porque o do canal chega tarde demais — o
+     * Mercado Livre só marca "enviada" quando o pacote é lido lá na ponta,
+     * às vezes horas depois do motorista ter saído da loja. Pra discussão
+     * com a transportadora, a hora que vale é a da entrega em mãos.
+     */
     private function estado(Order $order): string
     {
-        if (in_array($order->status, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true)) {
+        if ($order->collected_at || in_array($order->status, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true)) {
             return self::ESTADO_COLETADO;
         }
 

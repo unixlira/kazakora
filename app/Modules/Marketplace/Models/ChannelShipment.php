@@ -24,6 +24,15 @@ class ChannelShipment extends Model
 
     public const METHOD_FULFILLMENT = 'fulfillment';
 
+    /** Devolução conferida por uma pessoa: o produto está de volta na loja. */
+    public const RETURN_BACK_IN_STORE = 'voltou';
+
+    /** Devolução encerrada sem o produto voltar (reembolso do canal, perda assumida...). */
+    public const RETURN_CLOSED_WITHOUT_ITEM = 'sem_retorno';
+
+    /** Conferido por uma pessoa e sem problema (ex.: o ML só atrasou a baixa da rota). */
+    public const RETURN_CHECKED = 'conferido';
+
     protected $fillable = [
         'order_id',
         'channel',
@@ -38,6 +47,22 @@ class ChannelShipment extends Model
         'confirmed_at',
         'scheduled_for',
         'label_ready_at',
+        'channel_status',
+        'channel_substatus',
+        'channel_shipped_at',
+        'channel_first_visit_at',
+        'channel_delivered_at',
+        'channel_not_delivered_at',
+        'channel_returned_at',
+        'channel_cancelled_at',
+        'channel_status_checked_at',
+        'return_resolution',
+        'return_resolved_at',
+        'return_resolved_by',
+        'return_note',
+        'flex_alerts',
+        'flex_alerts_notified',
+        'flex_alerts_resolved',
     ];
 
     protected function casts(): array
@@ -47,6 +72,17 @@ class ChannelShipment extends Model
             'unrecoverable_at' => 'datetime',
             'scheduled_for' => 'datetime',
             'label_ready_at' => 'datetime',
+            'channel_shipped_at' => 'datetime',
+            'channel_first_visit_at' => 'datetime',
+            'channel_delivered_at' => 'datetime',
+            'channel_not_delivered_at' => 'datetime',
+            'channel_returned_at' => 'datetime',
+            'channel_cancelled_at' => 'datetime',
+            'channel_status_checked_at' => 'datetime',
+            'return_resolved_at' => 'datetime',
+            'flex_alerts' => 'array',
+            'flex_alerts_notified' => 'array',
+            'flex_alerts_resolved' => 'array',
         ];
     }
 

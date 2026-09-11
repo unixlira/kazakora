@@ -186,6 +186,12 @@ class Order extends Model
         return $this->hasOne(ChannelShipment::class);
     }
 
+    /** Comprovante da entrega ao entregador do Flex (KoraFlex), quando houve. */
+    public function pickupReceipt(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Marketplace\Models\FlexPickupReceipt::class, 'pickup_receipt_id');
+    }
+
     public function correiosPrePostagens(): HasMany
     {
         return $this->hasMany(CorreiosPrePostagem::class)->orderByDesc('created_at')->orderByDesc('id');

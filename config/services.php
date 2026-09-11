@@ -100,6 +100,12 @@ return [
         // koraflex:limpar-recibos (o recibo em si, com hora e lista de
         // pacotes, permanece; só as imagens somem).
         'receipt_retention_days' => (int) env('KORAFLEX_RECEIPT_RETENTION_DAYS', 180),
+
+        // Quantas horas depois da entrega ao entregador o Mercado Livre
+        // ainda pode não mostrar a rota iniciada antes de virar alerta na
+        // tela Envios Flex (2026-09-11: "tem entregador que não está
+        // colocando que iniciou a rota").
+        'route_alert_hours' => (int) env('KORAFLEX_ROUTE_ALERT_HOURS', 2),
     ],
 
     /**

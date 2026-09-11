@@ -23,9 +23,16 @@ class FlexPickupReceipt extends Model
         'consented_at',
         'consent_text',
         'signature_path',
+        'signature_sha256',
         'photo_path',
+        'photo_sha256',
+        'ip_address',
+        'user_agent',
         'order_ids',
         'orders_count',
+        'legal_hold_at',
+        'legal_hold_reason',
+        'legal_hold_by',
     ];
 
     protected function casts(): array
@@ -33,8 +40,15 @@ class FlexPickupReceipt extends Model
         return [
             'collected_at' => 'datetime',
             'consented_at' => 'datetime',
+            'legal_hold_at' => 'datetime',
             'order_ids' => 'array',
         ];
+    }
+
+    /** Retido como prova: as imagens não são apagadas pela rotina de retenção. */
+    public function retido(): bool
+    {
+        return $this->legal_hold_at !== null;
     }
 
     public function orders(): HasMany

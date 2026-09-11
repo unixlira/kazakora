@@ -234,6 +234,11 @@ class KoraFlexControllerTest extends TestCase
         Storage::disk('local')->assertExists($recibo->signature_path);
         Storage::disk('local')->assertExists($recibo->photo_path);
 
+        // Prova de integridade (2026-09-11): o hash é dos bytes gravados.
+        $this->assertSame(hash('sha256', $this->pngDeTeste()), $recibo->signature_sha256);
+        $this->assertSame(hash('sha256', $this->jpegDeTeste()), $recibo->photo_sha256);
+        $this->assertNotNull($recibo->ip_address);
+
         // A imagem é servida por rota autenticada, nunca de pasta pública.
         $this->get("/api/koraflex/recibos/{$recibo->id}/assinatura")->assertStatus(401);
         $this->get("/api/koraflex/recibos/{$recibo->id}/assinatura", $this->headers())->assertOk();

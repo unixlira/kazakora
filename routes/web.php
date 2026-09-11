@@ -15,6 +15,7 @@ use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\KoraSyncController;
+use App\Modules\Admin\Http\Controllers\EnviosFlexController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreFlexController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
@@ -415,6 +416,23 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     });
     Route::post('korasync-api/queue/{order}/pack', [DashboardAgentController::class, 'packOrder'])
         ->name('korasync.api.embalar')->middleware('permission:operacional.edit');
+
+    // Envios Flex — controle do que saiu com o entregador, comprovante de
+    // retirada e alertas (pedido explícito 2026-09-11). Ver EnviosFlexController.
+    Route::middleware('permission:operacional.view')->group(function () {
+        Route::get('envios-flex', [EnviosFlexController::class, 'index'])->name('envios-flex.listar');
+        Route::get('envios-flex/recibos/{recibo}', [EnviosFlexController::class, 'comprovante'])->name('envios-flex.comprovante');
+        Route::get('envios-flex/recibos/{recibo}/{tipo}', [EnviosFlexController::class, 'imagem'])
+            ->whereIn('tipo', ['assinatura', 'foto'])
+            ->name('envios-flex.recibo.imagem');
+    });
+    Route::middleware('permission:operacional.edit')->group(function () {
+        Route::post('envios-flex/{envio}/resolver', [EnviosFlexController::class, 'resolver'])->name('envios-flex.resolver');
+        Route::delete('envios-flex/{envio}/resolver', [EnviosFlexController::class, 'desfazerResolucao'])->name('envios-flex.desfazer-resolucao');
+        Route::post('envios-flex/{envio}/sincronizar', [EnviosFlexController::class, 'sincronizar'])->name('envios-flex.sincronizar');
+        Route::post('envios-flex/recibos/{recibo}/reter', [EnviosFlexController::class, 'reter'])->name('envios-flex.reter');
+        Route::delete('envios-flex/recibos/{recibo}/reter', [EnviosFlexController::class, 'liberar'])->name('envios-flex.liberar');
+    });
 
     Route::middleware('admin')->group(function () {
         Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');

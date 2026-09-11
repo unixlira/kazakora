@@ -5,8 +5,10 @@ namespace App\Services\MercadoLivre\Services;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\FlexControlService;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\MercadoLivre\MercadoLivreClient;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class ShipmentService
@@ -113,6 +115,8 @@ class ShipmentService
 
         $raw = $this->getShipment($shipment->external_shipment_id);
 
+        $this->gravarStatusDoCanal($shipment, $raw);
+
         $substatus = $raw['substatus'] ?? null;
 
         $newOrderStatus = match (true) {
@@ -135,6 +139,54 @@ class ShipmentService
 
         if ($newOrderStatus !== null) {
             $this->importer->syncStatus($shipment->order, $newOrderStatus, $substatus ?? $raw['status'] ?? null);
+        }
+
+        // Depois do syncStatus de propósito: o alerta olha o status do
+        // pedido já atualizado (entregue, cancelado...).
+        if ($shipment->shipping_method === ChannelShipment::METHOD_FLEX) {
+            app(FlexControlService::class)->reavaliar($shipment->refresh());
+        }
+    }
+
+    /**
+     * Guarda o que o canal diz do envio — status, substatus e as datas do
+     * `status_history` — em vez de jogar fora depois de decidir o status
+     * do pedido.
+     *
+     * Existe por causa da bicicleta do pedido #1384 (2026-09-11): o único
+     * sinal de que ela saiu com o entregador sem ele iniciar a rota era o
+     * `date_shipped` vazio numa venda cancelada — e ninguém guardava isso.
+     * Falhar aqui nunca pode derrubar a sincronização do pedido.
+     *
+     * @param  array<string, mixed>  $raw
+     */
+    private function gravarStatusDoCanal(ChannelShipment $shipment, array $raw): void
+    {
+        try {
+            $historico = is_array($raw['status_history'] ?? null) ? $raw['status_history'] : [];
+
+            $data = function (string $chave) use ($historico): ?Carbon {
+                $valor = $historico[$chave] ?? null;
+
+                return $valor ? Carbon::parse($valor)->setTimezone(config('app.timezone')) : null;
+            };
+
+            $shipment->forceFill([
+                'channel_status' => isset($raw['status']) ? mb_substr((string) $raw['status'], 0, 40) : null,
+                'channel_substatus' => isset($raw['substatus']) ? mb_substr((string) $raw['substatus'], 0, 60) : null,
+                'channel_shipped_at' => $data('date_shipped'),
+                'channel_first_visit_at' => $data('date_first_visit'),
+                'channel_delivered_at' => $data('date_delivered'),
+                'channel_not_delivered_at' => $data('date_not_delivered'),
+                'channel_returned_at' => $data('date_returned'),
+                'channel_cancelled_at' => $data('date_cancelled'),
+                'channel_status_checked_at' => now(),
+            ])->save();
+        } catch (\Throwable $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.shipment.status_canal_nao_gravado', [
+                'shipment_id' => $shipment->id,
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 }

@@ -359,6 +359,8 @@ class FlexPickupService
         ?string $nome = null,
         ?string $dispositivo = null,
         ?string $textoDoAviso = null,
+        ?string $ip = null,
+        ?string $userAgent = null,
     ): array {
         $agora = now();
 
@@ -366,6 +368,10 @@ class FlexPickupService
             'carrier_name' => $nome ? trim($nome) : null,
             'collected_at' => $agora,
             'device' => $dispositivo,
+            // IP e navegador de onde saiu o registro: junto com o hash das
+            // imagens, é o que sustenta o recibo como prova (2026-09-11).
+            'ip_address' => $ip ? mb_substr($ip, 0, 45) : null,
+            'user_agent' => $userAgent ? mb_substr($userAgent, 0, 255) : null,
             'consented_at' => $consentimento ? $agora : null,
             'consent_text' => $consentimento ? $textoDoAviso : null,
             'signature_path' => null,
@@ -376,9 +382,14 @@ class FlexPickupService
 
         // As imagens só existem com o consentimento de pé.
         if ($consentimento) {
+            [$assinaturaPath, $assinaturaHash] = $this->guardarImagem($assinatura, $recibo->id, 'assinatura', ['image/png'], 2_000_000);
+            [$fotoPath, $fotoHash] = $this->guardarImagem($foto, $recibo->id, 'foto', ['image/jpeg', 'image/png'], 5_000_000);
+
             $recibo->forceFill([
-                'signature_path' => $this->guardarImagem($assinatura, $recibo->id, 'assinatura', ['image/png'], 2_000_000),
-                'photo_path' => $this->guardarImagem($foto, $recibo->id, 'foto', ['image/jpeg', 'image/png'], 5_000_000),
+                'signature_path' => $assinaturaPath,
+                'signature_sha256' => $assinaturaHash,
+                'photo_path' => $fotoPath,
+                'photo_sha256' => $fotoHash,
             ])->save();
         }
 
@@ -415,17 +426,22 @@ class FlexPickupService
      * Confere o cabeçalho declarado E os primeiros bytes do arquivo: o que
      * o navegador diz que mandou não é prova de nada, e isto aqui é um
      * endpoint que aceita arquivo de fora.
+     *
+     * Devolve o caminho e o SHA-256 dos bytes gravados — o hash fica no
+     * recibo pra provar, depois, que o arquivo não foi trocado.
+     *
+     * @return array{0: ?string, 1: ?string}
      */
-    private function guardarImagem(?string $dataUrl, int $reciboId, string $nome, array $tiposAceitos, int $limiteBytes): ?string
+    private function guardarImagem(?string $dataUrl, int $reciboId, string $nome, array $tiposAceitos, int $limiteBytes): array
     {
         if (! $dataUrl) {
-            return null;
+            return [null, null];
         }
 
         if (! preg_match('#^data:(image/[a-z+]+);base64,(.+)$#is', trim($dataUrl), $partes)) {
             Log::warning('koraflex.recibo.imagem_invalida', ['recibo' => $reciboId, 'campo' => $nome]);
 
-            return null;
+            return [null, null];
         }
 
         [, $tipo, $base64] = $partes;
@@ -433,7 +449,7 @@ class FlexPickupService
         if (! in_array(strtolower($tipo), $tiposAceitos, true)) {
             Log::warning('koraflex.recibo.tipo_recusado', ['recibo' => $reciboId, 'campo' => $nome, 'tipo' => $tipo]);
 
-            return null;
+            return [null, null];
         }
 
         $conteudo = base64_decode($base64, true);
@@ -445,7 +461,7 @@ class FlexPickupService
                 'bytes' => $conteudo === false ? null : strlen($conteudo),
             ]);
 
-            return null;
+            return [null, null];
         }
 
         $ehPng = str_starts_with($conteudo, "\x89PNG\r\n\x1a\n");
@@ -454,14 +470,18 @@ class FlexPickupService
         if (! $ehPng && ! $ehJpeg) {
             Log::warning('koraflex.recibo.bytes_nao_sao_imagem', ['recibo' => $reciboId, 'campo' => $nome]);
 
-            return null;
+            return [null, null];
         }
 
         $caminho = "flex/recibos/{$reciboId}/{$nome}.".($ehPng ? 'png' : 'jpg');
 
-        Storage::disk('local')->put($caminho, $conteudo);
+        if (! Storage::disk('local')->put($caminho, $conteudo)) {
+            Log::error('koraflex.recibo.gravacao_falhou', ['recibo' => $reciboId, 'campo' => $nome]);
 
-        return $caminho;
+            return [null, null];
+        }
+
+        return [$caminho, hash('sha256', $conteudo)];
     }
 
     public function apagarImagens(FlexPickupReceipt $recibo): void

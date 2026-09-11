@@ -79,6 +79,8 @@ class KoraFlexController extends Controller
             nome: $dados['nome'] ?? null,
             dispositivo: $dados['dispositivo'] ?? null,
             textoDoAviso: $dados['aviso'] ?? null,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
         ));
     }
 

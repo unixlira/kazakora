@@ -27,6 +27,7 @@ class HandleInertiaRequests extends Middleware
      * fora de contexto. Filtra esses tipos fora do contexto admin.
      */
     private const ADMIN_ONLY_NOTIFICATION_TYPES = [
+        \App\Notifications\FlexShipmentAlertNotification::class,
         InvoiceIssuanceFailedNotification::class,
         LabelUnavailableNotification::class,
         PrintJobFailedNotification::class,
@@ -75,6 +76,12 @@ class HandleInertiaRequests extends Middleware
                 'count' => $request->user() ? Favorite::query()->where('user_id', $request->user()->id)->count() : 0,
             ],
             'notifications' => fn () => $this->notificationsFor($request),
+            // Contadores do menu lateral do admin (item com `badgeKey` em
+            // adminSidebarItems.js). Só dentro de /admin e só pra equipe; o
+            // número vem de cache de 5 min, recalculado quando um alerta muda.
+            'sidebarBadges' => fn () => $request->is('admin*') && $request->user()?->isStaff()
+                ? ['flexAlertas' => app(\App\Modules\Marketplace\Support\FlexControlService::class)->contagemDeAlertas()]
+                : [],
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

@@ -149,6 +149,18 @@ Schedule::command('ads:sync-wallet-balance')->hourly();
 // 31 dias).
 Schedule::command('flex:check-billing-cycle')->dailyAt('07:00');
 
+// Envios Flex depois que saem daqui — pedido explícito 2026-09-11 (a
+// bicicleta do #1384, cancelada com o produto fora e sem rota iniciada no
+// ML). De 30 em 30 min: reconsulta no ML o que ainda pode mudar e recalcula
+// os alertas (o de "entregador não iniciou a rota" depende só do relógio).
+Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverlapping(25);
+
+// Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido
+// no consentimento, MENOS recibo retido como prova ou com pendência aberta
+// (ver PurgeKoraFlexReceiptImages). Existia desde 2026-09-10, mas nunca
+// tinha sido agendado.
+Schedule::command('koraflex:limpar-recibos')->dailyAt('03:40');
+
 // Vendas agendadas pelo canal (Coleta/Places do Mercado Livre, etiqueta só
 // liberada perto de uma data futura) — pedido explícito 2026-08-14, depois
 // do pedido #278 (agendado pro dia 17, ninguém do time sabia por que a

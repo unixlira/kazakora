@@ -60,6 +60,18 @@ export const sidebarSections = [
             { label: 'Cancelados', href: '/admin/korasync/cancelados', icon: 'fas fa-circle-xmark', color: 'text-error', permission: 'operacional.view' },
         ],
     },
+    {
+        // Envios Flex (pedido explícito 2026-09-11): tudo que saiu com o
+        // entregador do Flex, o comprovante de retirada (foto e assinatura
+        // do KoraFlex) e os alertas — devolução pendente, venda cancelada
+        // com o produto fora, entregador que não iniciou a rota. O número
+        // no item é quantos envios têm pendência aberta.
+        heading: 'Envios Flex',
+        items: [
+            { label: 'Controle de envios', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', color: 'text-warning', permission: 'operacional.view', badgeKey: 'flexAlertas' },
+            { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', color: 'text-info', permission: 'configuracoes.integracoes' },
+        ],
+    },
 
     {
         heading: 'WhatsApp',

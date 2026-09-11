@@ -12,6 +12,8 @@ const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const notifications = computed(() => page.props.notifications?.items ?? []);
 const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
+// Contador por item do menu (ex.: alertas abertos dos Envios Flex).
+const sidebarBadge = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
 const { can } = usePermissions();
@@ -150,6 +152,11 @@ watch(
                                         : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'">
                                     <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? item.color : 'text-slate-400']"></i>
                                     <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
+                                    <span v-if="sidebarBadge(item) > 0"
+                                        class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
+                                        :title="`${sidebarBadge(item)} pendência(s)`">
+                                        {{ sidebarBadge(item) }}
+                                    </span>
                                 </Link>
                             </li>
                         </ul>

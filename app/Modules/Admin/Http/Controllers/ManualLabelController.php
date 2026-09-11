@@ -76,27 +76,25 @@ class ManualLabelController extends Controller
             'file' => ['required_without:content', 'nullable', 'file', 'mimes:txt', 'max:2048'],
             'content' => ['required_without:file', 'nullable', 'string'],
             'print_thank_you' => ['nullable', 'boolean'],
-            'duas_colunas' => ['nullable', 'boolean'],
+            'etiquetas_full' => ['nullable', 'boolean'],
         ]);
 
         $rawContent = $request->hasFile('file')
             ? $request->file('file')->get()
             : $validated['content'];
 
-        try {
-            // Rolo de etiqueta pequena de 2 colunas (5 x 2,5 cm, vão de
-            // 2 mm). O ZPL de produto do Full vem sem ^PW/^LL e já com as
-            // duas etiquetas da linha lado a lado: sem tamanho, sairia em
-            // 4x6 e pularia linhas do rolo (job #1269, 2026-09-11). A linha
-            // tem 102 x 25 mm = 4,02 x 0,98 pol.
-            $duasColunas = $request->boolean('duas_colunas');
-            $pdfBytes = $processor->convertZplToPdf($rawContent, $duasColunas ? [4.02, 0.98] : null);
+        $full = $request->boolean('etiquetas_full');
+        $base = 'labels/'.($full ? 'full' : 'manual').'-'.now()->timestamp.'-'.uniqid();
 
-            // ZPL de 1 etiqueta por bloco (com ^PW/^LL próprios) ainda é
-            // montado 2 a 2; página que já tem a largura da linha passa
-            // intacta — ver LabelProcessingService::montarDuasColunas().
-            if ($duasColunas) {
-                $pdfBytes = $processor->montarDuasColunas($pdfBytes);
+        try {
+            if ($full) {
+                // Etiquetas Full: o que vai pra impressora é o TSPL (ver
+                // LabelProcessingService::zplParaTspl). O PDF é só a prévia
+                // do "Ver PDF" — nunca é impresso.
+                $tspl = $processor->zplParaTspl($rawContent);
+                $previa = $processor->convertZplToPdf($rawContent, LabelProcessingService::FULL_POLEGADAS);
+            } else {
+                $pdfBytes = $processor->convertZplToPdf($rawContent);
             }
         } catch (Throwable $exception) {
             report($exception);
@@ -104,8 +102,14 @@ class ManualLabelController extends Controller
             return back()->withInput()->with('error', 'Falha ao gerar o PDF da etiqueta: '.$exception->getMessage());
         }
 
-        $path = 'labels/manual-'.now()->timestamp.'-'.uniqid().'.pdf';
-        Storage::disk('local')->put($path, $pdfBytes);
+        if ($full) {
+            $path = "{$base}.tspl";
+            Storage::disk('local')->put($path, $tspl);
+            Storage::disk('local')->put("{$base}.pdf", $previa);
+        } else {
+            $path = "{$base}.pdf";
+            Storage::disk('local')->put($path, $pdfBytes);
+        }
 
         $printJob = PrintJob::create([
             'order_id' => null,
@@ -114,6 +118,17 @@ class ManualLabelController extends Controller
             'origin' => PrintJob::ORIGEM_MANUAL,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
+
+        if ($full) {
+            preg_match_all('/PRINT 1,(\d+)/', $tspl, $linhas);
+            $totalLinhas = array_sum(array_map('intval', $linhas[1]));
+
+            // Agradecimento é PDF 10x15: no rolo pequeno sairia errado.
+            return redirect()->route('admin.etiquetas-manuais.listar')->with(
+                'success',
+                "Etiquetas Full #{$printJob->id} geradas — {$totalLinhas} linhas (".($totalLinhas * 2).' etiquetas) vão direto pra térmica. Confira se o rolo pequeno está na impressora.'
+            );
+        }
 
         $message = "Etiqueta #{$printJob->id} gerada — o KoraSync vai imprimir assim que estiver aberto.";
 
@@ -185,9 +200,16 @@ class ManualLabelController extends Controller
     public function pdf(PrintJob $printJob): HttpResponse
     {
         abort_if($printJob->order_id !== null, 404);
-        abort_unless(Storage::disk('local')->exists($printJob->label_path), 404, 'Arquivo da etiqueta não encontrado.');
 
-        return response(Storage::disk('local')->get($printJob->label_path), 200, [
+        // Etiquetas Full: o arquivo da fila é TSPL; a prévia em PDF mora ao
+        // lado, com o mesmo nome.
+        $caminho = self::ehEtiquetaFull($printJob)
+            ? substr($printJob->label_path, 0, -strlen('.tspl')).'.pdf'
+            : $printJob->label_path;
+
+        abort_unless(Storage::disk('local')->exists($caminho), 404, 'Arquivo da etiqueta não encontrado.');
+
+        return response(Storage::disk('local')->get($caminho), 200, [
             'Content-Type' => 'application/pdf',
         ]);
     }
@@ -211,6 +233,10 @@ class ManualLabelController extends Controller
         $rawContent = $request->hasFile('file') ? $request->file('file')->get() : ($validated['content'] ?? null);
 
         if (filled($rawContent)) {
+            if (self::ehEtiquetaFull($printJob)) {
+                return back()->with('error', 'Etiquetas Full não são editáveis por aqui — gere de novo pela tela, com "Etiquetas Full" marcado.');
+            }
+
             try {
                 $pdfBytes = $processor->convertZplToPdf($rawContent);
             } catch (Throwable $exception) {
@@ -237,9 +263,18 @@ class ManualLabelController extends Controller
             Storage::disk('local')->delete($printJob->label_path);
         }
 
+        if (self::ehEtiquetaFull($printJob)) {
+            Storage::disk('local')->delete(substr($printJob->label_path, 0, -strlen('.tspl')).'.pdf');
+        }
+
         $printJob->delete();
 
         return back()->with('success', "Etiqueta #{$printJob->id} removida.");
+    }
+
+    private static function ehEtiquetaFull(PrintJob $printJob): bool
+    {
+        return str_ends_with((string) $printJob->label_path, '.tspl');
     }
 
     /**

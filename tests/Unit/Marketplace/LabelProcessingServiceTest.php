@@ -502,51 +502,6 @@ class LabelProcessingServiceTest extends TestCase
         $this->assertSame($zpl, $enviados[0][0]->body());
     }
 
-    /** PDF de N páginas do tamanho pedido, em mm. */
-    private static function pdfComPaginas(int $quantidade, float $largura, float $altura): string
-    {
-        $pdf = new Fpdi();
-
-        for ($i = 0; $i < $quantidade; $i++) {
-            $pdf->AddPage($largura > $altura ? 'L' : 'P', [$largura, $altura]);
-        }
-
-        return $pdf->Output('S');
-    }
-
-    /** @return array{0: int, 1: float, 2: float} páginas, largura e altura da 1ª em mm */
-    private function medirPdf(string $pdf): array
-    {
-        $arquivo = tempnam(sys_get_temp_dir(), 'teste_med_').'.pdf';
-        file_put_contents($arquivo, $pdf);
-
-        try {
-            $leitor = new Fpdi();
-            $paginas = $leitor->setSourceFile($arquivo);
-            $tamanho = $leitor->getTemplateSize($leitor->importPage(1));
-
-            return [$paginas, round($tamanho['width'], 1), round($tamanho['height'], 1)];
-        } finally {
-            @unlink($arquivo);
-        }
-    }
-
-    /** Pedido de 2026-09-11: rolo de 2 colunas, etiqueta 5 x 2,5 cm, vão de 2 mm. */
-    public function test_duas_colunas_poe_duas_etiquetas_por_linha_de_102_por_25(): void
-    {
-        $resultado = (new LabelProcessingService)->montarDuasColunas(self::pdfComPaginas(5, 50, 25));
-
-        // 5 etiquetas -> 3 linhas (a última com a coluna da direita vazia).
-        $this->assertSame([3, 102.0, 25.0], $this->medirPdf($resultado));
-    }
-
-    public function test_duas_colunas_deita_etiqueta_que_veio_em_pe(): void
-    {
-        $resultado = (new LabelProcessingService)->montarDuasColunas(self::pdfComPaginas(4, 25, 50));
-
-        $this->assertSame([2, 102.0, 25.0], $this->medirPdf($resultado));
-    }
-
     /**
      * BUG REAL 2026-09-11 (job #1269): ZPL de produto do Full sem ^PW/^LL
      * saiu em 4x6 e pulou ~5 linhas do rolo pequeno a cada etiqueta.
@@ -569,10 +524,60 @@ class LabelProcessingServiceTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), '/labels/3x5/'));
     }
 
-    public function test_duas_colunas_nao_mexe_em_pdf_que_ja_vem_com_duas_colunas(): void
+    /** PNG 16x8: os 8 primeiros pontos de cada linha pretos, o resto branco. */
+    private static function pngDeTeste(): string
     {
-        $original = self::pdfComPaginas(3, 104, 25);
+        $imagem = imagecreate(16, 8);
+        imagecolorallocate($imagem, 255, 255, 255);
+        $preto = imagecolorallocate($imagem, 0, 0, 0);
+        imagefilledrectangle($imagem, 0, 0, 7, 7, $preto);
 
-        $this->assertSame($original, (new LabelProcessingService)->montarDuasColunas($original));
+        ob_start();
+        imagepng($imagem);
+        $png = ob_get_clean();
+        imagedestroy($imagem);
+
+        return $png;
+    }
+
+    /**
+     * Etiquetas Full (2026-09-11): o .txt do ML repete a mesma linha 25 vezes
+     * por produto — uma imagem por linha DIFERENTE, cópias no PRINT.
+     */
+    public function test_etiquetas_full_viram_tspl_com_uma_imagem_por_linha_diferente(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::pngDeTeste(), 200, ['Content-Type' => 'image/png'])]);
+
+        $a = '^XA^FO20,20^FDDLMU35614^FS^XZ';
+        $b = '^XA^FO20,20^FDDODV35622^FS^XZ';
+
+        $tspl = (new LabelProcessingService)->zplParaTspl(implode("\n", [$a, $a, $a, $b, $b]));
+
+        $this->assertCount(2, Http::recorded());
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/labels/4.02x0.98/0/') && $request->hasHeader('Accept', 'image/png'));
+        $this->assertStringStartsWith("SIZE 102 mm,25 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 0\r\nREFERENCE 0,0\r\nCLS\r\n", $tspl);
+        $this->assertSame(2, substr_count($tspl, 'BITMAP 0,0,2,8,0,'));
+        $this->assertMatchesRegularExpression('/PRINT 1,3\r\n.*PRINT 1,2\r\n$/s', $tspl);
+
+        // 1 bit por ponto, bit 0 = preto: 8 pretos (0x00) + 8 brancos (0xFF).
+        $inicio = strpos($tspl, 'BITMAP 0,0,2,8,0,') + strlen('BITMAP 0,0,2,8,0,');
+        $this->assertSame("\x00\xFF", substr($tspl, $inicio, 2));
+    }
+
+    public function test_etiquetas_full_usam_o_pq_como_numero_de_linhas(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::pngDeTeste(), 200, ['Content-Type' => 'image/png'])]);
+
+        $tspl = (new LabelProcessingService)->zplParaTspl('^XA^FO20,20^FDX^FS^PQ25^XZ');
+
+        $this->assertStringEndsWith("PRINT 1,25\r\n", $tspl);
+        Http::assertSent(fn ($request) => ! str_contains($request->body(), '^PQ'));
+    }
+
+    public function test_etiquetas_full_recusam_arquivo_sem_zpl(): void
+    {
+        $this->expectException(\RuntimeException::class);
+
+        (new LabelProcessingService)->zplParaTspl('isto não é uma etiqueta');
     }
 }

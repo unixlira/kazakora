@@ -12,7 +12,7 @@ const form = useForm({
     file: null,
     content: '',
     print_thank_you: false,
-    duas_colunas: false,
+    etiquetas_full: false,
 });
 
 const fileInput = ref(null);
@@ -36,7 +36,7 @@ const submit = () => {
     form.post('/admin/etiquetas-manuais', {
         forceFormData: true,
         onSuccess: () => {
-            form.reset('file', 'content', 'print_thank_you');
+            form.reset('file', 'content', 'print_thank_you', 'etiquetas_full');
             if (fileInput.value) fileInput.value.value = '';
         },
     });
@@ -99,29 +99,31 @@ const submit = () => {
                     <p v-if="form.errors.content" class="mt-1 text-xs text-error">{{ form.errors.content }}</p>
                 </div>
 
-                <label class="flex items-center gap-2 text-sm">
-                    <input v-model="form.duas_colunas" type="checkbox"
+                <label class="flex items-center gap-2 text-sm font-medium">
+                    <input v-model="form.etiquetas_full" type="checkbox"
                         class="h-4 w-4 rounded border-[var(--surface-border)]">
-                    Rolo de 2 colunas (etiqueta pequena 5 × 2,5 cm)
+                    Etiquetas Full
                 </label>
                 <p class="-mt-2 text-xs text-slate-400">
-                    Monta duas etiquetas lado a lado por linha, com vão de 2 mm (linha de 10,2 × 2,5 cm).
-                    A impressora precisa estar com o rolo pequeno e o tamanho de papel desse rolo no Windows.
+                    Arquivo "Etiquetas de produtos" do envio Full do Mercado Livre (rolo de 2 colunas, 5 × 2,5 cm).
+                    Sai direto na térmica, sem PDF. Coloque o rolo pequeno antes de gerar e volte o rolo 10x15 depois.
                 </p>
 
-                <label class="flex items-center gap-2 text-sm">
-                    <input v-model="form.print_thank_you" type="checkbox"
-                        class="h-4 w-4 rounded border-[var(--surface-border)]">
-                    Imprimir etiqueta de agradecimento
-                </label>
-                <p class="-mt-2 text-xs text-slate-400">
-                    Se marcado, a etiqueta fixa de agradecimento é enfileirada logo depois desta.
-                </p>
+                <template v-if="!form.etiquetas_full">
+                    <label class="flex items-center gap-2 text-sm">
+                        <input v-model="form.print_thank_you" type="checkbox"
+                            class="h-4 w-4 rounded border-[var(--surface-border)]">
+                        Imprimir etiqueta de agradecimento
+                    </label>
+                    <p class="-mt-2 text-xs text-slate-400">
+                        Se marcado, a etiqueta fixa de agradecimento é enfileirada logo depois desta.
+                    </p>
+                </template>
 
                 <button type="submit"
                     :disabled="form.processing || !form.channel || (inputMode === 'file' ? !form.file : !form.content)"
                     class="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50">
-                    {{ form.processing ? 'Processando...' : 'Gerar e enfileirar impressão' }}
+                    {{ form.processing ? 'Processando...' : (form.etiquetas_full ? 'Gerar e imprimir Etiquetas Full' : 'Gerar e enfileirar impressão') }}
                 </button>
             </form>
         </div>

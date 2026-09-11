@@ -655,69 +655,107 @@ class LabelProcessingService
         return array_map(fn (array $lote) => $prefixo.implode("\n", $lote), $lotes);
     }
 
+    /** Linha do rolo de Etiquetas Full: 2 etiquetas de 50 x 25 mm + vão de 2 mm. */
+    public const FULL_POLEGADAS = [4.02, 0.98];
+
     /**
-     * Rolo de 2 colunas (pedido de 2026-09-11, etiqueta de produto do Full):
-     * cada linha do rolo tem DUAS etiquetas de 5 x 2,5 cm lado a lado, com
-     * vão de 2 mm. O Labelary devolve uma página por etiqueta; aqui as
-     * páginas viram linhas de 10,2 x 2,5 cm com duas etiquetas cada, na
-     * ordem (1 e 2 na primeira linha, 3 e 4 na segunda...). Número ímpar
-     * deixa a última linha com a coluna da direita vazia.
+     * Etiquetas Full (2026-09-11): o .txt de etiqueta de PRODUTO que o
+     * Mercado Livre dá pro envio Full vira TSPL pronto pra térmica da loja.
      *
-     * - Etiqueta que veio EM PÉ no ZPL (mais alta que larga) é girada 90°
-     *   pra deitar no rolo, em vez de sair espremida.
-     * - PDF que já vem com a largura de 2 colunas (o ZPL já montou as
-     *   duas lado a lado) volta intacto — montar de novo daria 4 por linha.
+     * Por que não PDF: o ZPL do ML vem sem ^PW/^LL e já com as 2 etiquetas
+     * da linha lado a lado. Em PDF, o SumatraPDF do agente girava a linha de
+     * 10,2 x 2,5 cm pra caber no papel e ela saía borrada no meio — com o
+     * papel do driver em 100x150 ou em 100x25. O que imprimiu as 150 do
+     * envio 76888660 certas foi o TSPL cru, montado exatamente como aqui.
+     *
+     * Cada linha DIFERENTE (em sequência) vira uma imagem pela Labelary e um
+     * bloco SIZE/GAP/BITMAP/PRINT com o número de linhas iguais seguidas (ou
+     * o ^PQ) como cópias — o arquivo do ML repete a mesma linha 25 vezes por
+     * produto, então são 3 imagens, não 75.
      */
-    public function montarDuasColunas(string $pdfBytes, float $larguraEtiquetaMm = 50.0, float $alturaEtiquetaMm = 25.0, float $vaoMm = 2.0): string
+    public function zplParaTspl(string $zpl): string
     {
-        $origem = tempnam(sys_get_temp_dir(), 'duas_colunas_').'.pdf';
-        file_put_contents($origem, $pdfBytes);
+        if (! preg_match_all('/\^XA.*?\^XZ/s', $zpl, $encontrados)) {
+            throw new RuntimeException('O arquivo não tem nenhuma etiqueta ZPL (^XA ... ^XZ).');
+        }
 
-        try {
-            $pdf = new PdfRotativo();
-            $pdf->SetAutoPageBreak(false);
-            $paginas = $pdf->setSourceFile($origem);
+        $grupos = [];
 
-            $primeira = $pdf->getTemplateSize($pdf->importPage(1));
+        foreach ($encontrados[0] as $bloco) {
+            $copias = preg_match('/\^PQ(\d+)/', $bloco, $pq) ? max(1, (int) $pq[1]) : 1;
+            $semCopias = preg_replace('/\^PQ[^\^]*/', '', $bloco);
+            $ultimo = array_key_last($grupos);
 
-            if (max($primeira['width'], $primeira['height']) > $larguraEtiquetaMm * 1.5) {
-                return $pdfBytes;
+            if ($ultimo !== null && $grupos[$ultimo]['zpl'] === $semCopias) {
+                $grupos[$ultimo]['copias'] += $copias;
+
+                continue;
             }
 
-            $larguraLinha = 2 * $larguraEtiquetaMm + $vaoMm;
+            $grupos[] = ['zpl' => $semCopias, 'copias' => $copias];
+        }
 
-            for ($pagina = 1; $pagina <= $paginas; $pagina += 2) {
-                $pdf->AddPage('L', [$larguraLinha, $alturaEtiquetaMm]);
+        $tspl = '';
 
-                foreach ([0, 1] as $coluna) {
-                    if ($pagina + $coluna > $paginas) {
-                        break;
-                    }
+        foreach ($grupos as $indice => $grupo) {
+            if ($indice > 0) {
+                usleep(400_000);
+            }
 
-                    $modelo = $pdf->importPage($pagina + $coluna);
-                    $tamanho = $pdf->getTemplateSize($modelo);
-                    $x = $coluna * ($larguraEtiquetaMm + $vaoMm);
+            $tspl .= $this->imagemEmTspl($this->linhaFullEmPng($grupo['zpl']), $grupo['copias']);
+        }
 
-                    if ($tamanho['height'] > $tamanho['width']) {
-                        // Girando 90° no sentido anti-horário em torno do
-                        // canto de baixo da célula, a largura do modelo sobe
-                        // (vira a altura da etiqueta) e a altura vai pra
-                        // direita (vira a largura).
-                        $pdf->iniciarRotacao(90, $x, $alturaEtiquetaMm);
-                        $pdf->useTemplate($modelo, $x, $alturaEtiquetaMm, $alturaEtiquetaMm, $larguraEtiquetaMm);
-                        $pdf->terminarRotacao();
+        return $tspl;
+    }
 
-                        continue;
-                    }
+    private function linhaFullEmPng(string $bloco): string
+    {
+        [$largura, $altura] = self::FULL_POLEGADAS;
 
-                    $pdf->useTemplate($modelo, $x, 0, $larguraEtiquetaMm, $alturaEtiquetaMm);
+        $response = Http::withHeaders(['Accept' => 'image/png'])
+            ->withBody($bloco, 'application/x-www-form-urlencoded')
+            ->post('http://api.labelary.com/v1/printers/'.self::DENSITY_DPMM."dpmm/labels/{$largura}x{$altura}/0/");
+
+        if ($response->failed()) {
+            throw new RuntimeException('Labelary não conseguiu desenhar a Etiqueta Full: '.$response->status().' — '.$response->body());
+        }
+
+        return $response->body();
+    }
+
+    /**
+     * PNG -> BITMAP do TSPL: 1 bit por ponto, e em TSPL o bit 0 é o que
+     * imprime (preto). Cabeçalho idêntico ao que saiu certo na térmica.
+     */
+    private function imagemEmTspl(string $png, int $copias): string
+    {
+        $imagem = @imagecreatefromstring($png);
+
+        if ($imagem === false) {
+            throw new RuntimeException('A imagem da Etiqueta Full voltou ilegível da Labelary.');
+        }
+
+        $largura = imagesx($imagem);
+        $altura = imagesy($imagem);
+        $bytesPorLinha = intdiv($largura + 7, 8);
+        $bits = array_fill(0, $bytesPorLinha * $altura, 0xFF);
+
+        for ($y = 0; $y < $altura; $y++) {
+            for ($x = 0; $x < $largura; $x++) {
+                $cor = imagecolorsforindex($imagem, imagecolorat($imagem, $x, $y));
+
+                if ($cor['alpha'] < 64 && ($cor['red'] + $cor['green'] + $cor['blue']) / 3 < 128) {
+                    $posicao = $y * $bytesPorLinha + intdiv($x, 8);
+                    $bits[$posicao] &= ~(0x80 >> ($x % 8)) & 0xFF;
                 }
             }
-
-            return $pdf->Output('S');
-        } finally {
-            @unlink($origem);
         }
+
+        imagedestroy($imagem);
+
+        return "SIZE 102 mm,25 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 0\r\nREFERENCE 0,0\r\nCLS\r\n"
+            ."BITMAP 0,0,{$bytesPorLinha},{$altura},0,".pack('C*', ...$bits)
+            ."\r\nPRINT 1,{$copias}\r\n";
     }
 
     /**

@@ -109,8 +109,11 @@ class PrintAgentController extends Controller
         abort_unless($printJob->status === PrintJob::STATUS_CLAIMED, 409, 'Job precisa ser reivindicado antes de baixar a etiqueta.');
         abort_unless(Storage::disk('local')->exists($printJob->label_path), 404, 'Arquivo da etiqueta não encontrado.');
 
+        // Etiquetas Full saem em TSPL cru (ver LabelProcessingService::
+        // zplParaTspl); o agente reconhece pelo conteúdo, o tipo aqui é só
+        // pra não mentir que é PDF.
         return response(Storage::disk('local')->get($printJob->label_path), 200, [
-            'Content-Type' => 'application/pdf',
+            'Content-Type' => str_ends_with($printJob->label_path, '.tspl') ? 'application/octet-stream' : 'application/pdf',
         ]);
     }
 

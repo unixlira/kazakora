@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Modules\Marketplace\Support\LabelProcessingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,12 +25,34 @@ use Throwable;
  */
 class ManualLabelController extends Controller
 {
+    /**
+     * Canais que a etiqueta avulsa aceita.
+     *
+     * TikTok Shop e Shein ficam DE FORA — regra do usuário, repetida três
+     * vezes (2026-09-06, 2026-09-07 e 2026-09-10): **a etiqueta do TikTok
+     * só sai no painel do próprio canal; aqui só Shopee e Mercado Livre**.
+     * Mandar a do TikTok pra impressora da loja trava a térmica (já
+     * queimou etiqueta duas vezes).
+     *
+     * Esta tela era o último caminho que ainda furava: todos os outros
+     * (automático, lote, reimprimir) já checam
+     * LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, mas aqui o canal era
+     * escolhido na mão numa lista que oferecia TikTok. A lista agora é
+     * derivada da mesma constante — fonte única, e canal novo que entrar
+     * na proibição some daqui sozinho.
+     */
     private const CHANNELS = [
         MarketplaceAccount::CHANNEL_SHOPEE => 'Shopee',
         MarketplaceAccount::CHANNEL_MERCADO_LIVRE => 'Mercado Livre',
         MarketplaceAccount::CHANNEL_TIKTOK_SHOP => 'TikTok Shop',
         MarketplaceAccount::CHANNEL_AMAZON => 'Amazon',
     ];
+
+    /** @return array<string, string> */
+    private static function canaisPermitidos(): array
+    {
+        return array_diff_key(self::CHANNELS, array_flip(LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA));
+    }
 
     /**
      * Cópia fixa do PDF de agradecimento no disco 'local' (mesmo disco que
@@ -49,10 +72,11 @@ class ManualLabelController extends Controller
     public function store(Request $request, LabelProcessingService $processor): RedirectResponse
     {
         $validated = $request->validate([
-            'channel' => ['required', Rule::in(array_keys(self::CHANNELS))],
+            'channel' => ['required', Rule::in(array_keys(self::canaisPermitidos()))],
             'file' => ['required_without:content', 'nullable', 'file', 'mimes:txt', 'max:2048'],
             'content' => ['required_without:file', 'nullable', 'string'],
             'print_thank_you' => ['nullable', 'boolean'],
+            'duas_colunas' => ['nullable', 'boolean'],
         ]);
 
         $rawContent = $request->hasFile('file')
@@ -61,6 +85,12 @@ class ManualLabelController extends Controller
 
         try {
             $pdfBytes = $processor->convertZplToPdf($rawContent);
+
+            // Rolo de etiqueta pequena de 2 colunas (5 x 2,5 cm, vão de
+            // 2 mm) — ver LabelProcessingService::montarDuasColunas().
+            if ($request->boolean('duas_colunas')) {
+                $pdfBytes = $processor->montarDuasColunas($pdfBytes);
+            }
         } catch (Throwable $exception) {
             report($exception);
 
@@ -164,7 +194,7 @@ class ManualLabelController extends Controller
         }
 
         $validated = $request->validate([
-            'channel' => ['required', Rule::in(array_keys(self::CHANNELS))],
+            'channel' => ['required', Rule::in(array_keys(self::canaisPermitidos()))],
             'file' => ['nullable', 'file', 'mimes:txt', 'max:2048'],
             'content' => ['nullable', 'string'],
         ]);
@@ -205,8 +235,13 @@ class ManualLabelController extends Controller
         return back()->with('success', "Etiqueta #{$printJob->id} removida.");
     }
 
+    /**
+     * Só os canais permitidos — a lista da tela é que oferecia TikTok (ver
+     * CHANNELS). A listagem continua traduzindo o nome de job antigo de
+     * qualquer canal pelo CHANNELS completo.
+     */
     private function channelOptions(): array
     {
-        return collect(self::CHANNELS)->map(fn ($name, $channel) => ['value' => $channel, 'label' => $name])->values()->all();
+        return collect(self::canaisPermitidos())->map(fn ($name, $channel) => ['value' => $channel, 'label' => $name])->values()->all();
     }
 }

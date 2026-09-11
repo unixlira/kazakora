@@ -501,4 +501,56 @@ class LabelProcessingServiceTest extends TestCase
         $this->assertCount(1, $enviados);
         $this->assertSame($zpl, $enviados[0][0]->body());
     }
+
+    /** PDF de N páginas do tamanho pedido, em mm. */
+    private static function pdfComPaginas(int $quantidade, float $largura, float $altura): string
+    {
+        $pdf = new Fpdi();
+
+        for ($i = 0; $i < $quantidade; $i++) {
+            $pdf->AddPage($largura > $altura ? 'L' : 'P', [$largura, $altura]);
+        }
+
+        return $pdf->Output('S');
+    }
+
+    /** @return array{0: int, 1: float, 2: float} páginas, largura e altura da 1ª em mm */
+    private function medirPdf(string $pdf): array
+    {
+        $arquivo = tempnam(sys_get_temp_dir(), 'teste_med_').'.pdf';
+        file_put_contents($arquivo, $pdf);
+
+        try {
+            $leitor = new Fpdi();
+            $paginas = $leitor->setSourceFile($arquivo);
+            $tamanho = $leitor->getTemplateSize($leitor->importPage(1));
+
+            return [$paginas, round($tamanho['width'], 1), round($tamanho['height'], 1)];
+        } finally {
+            @unlink($arquivo);
+        }
+    }
+
+    /** Pedido de 2026-09-11: rolo de 2 colunas, etiqueta 5 x 2,5 cm, vão de 2 mm. */
+    public function test_duas_colunas_poe_duas_etiquetas_por_linha_de_102_por_25(): void
+    {
+        $resultado = (new LabelProcessingService)->montarDuasColunas(self::pdfComPaginas(5, 50, 25));
+
+        // 5 etiquetas -> 3 linhas (a última com a coluna da direita vazia).
+        $this->assertSame([3, 102.0, 25.0], $this->medirPdf($resultado));
+    }
+
+    public function test_duas_colunas_deita_etiqueta_que_veio_em_pe(): void
+    {
+        $resultado = (new LabelProcessingService)->montarDuasColunas(self::pdfComPaginas(4, 25, 50));
+
+        $this->assertSame([2, 102.0, 25.0], $this->medirPdf($resultado));
+    }
+
+    public function test_duas_colunas_nao_mexe_em_pdf_que_ja_vem_com_duas_colunas(): void
+    {
+        $original = self::pdfComPaginas(3, 104, 25);
+
+        $this->assertSame($original, (new LabelProcessingService)->montarDuasColunas($original));
+    }
 }

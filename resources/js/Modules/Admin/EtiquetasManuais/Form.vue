@@ -12,6 +12,7 @@ const form = useForm({
     file: null,
     content: '',
     print_thank_you: false,
+    duas_colunas: false,
 });
 
 const fileInput = ref(null);
@@ -97,6 +98,16 @@ const submit = () => {
                     <p v-if="form.errors.file" class="mt-1 text-xs text-error">{{ form.errors.file }}</p>
                     <p v-if="form.errors.content" class="mt-1 text-xs text-error">{{ form.errors.content }}</p>
                 </div>
+
+                <label class="flex items-center gap-2 text-sm">
+                    <input v-model="form.duas_colunas" type="checkbox"
+                        class="h-4 w-4 rounded border-[var(--surface-border)]">
+                    Rolo de 2 colunas (etiqueta pequena 5 × 2,5 cm)
+                </label>
+                <p class="-mt-2 text-xs text-slate-400">
+                    Monta duas etiquetas lado a lado por linha, com vão de 2 mm (linha de 10,2 × 2,5 cm).
+                    A impressora precisa estar com o rolo pequeno e o tamanho de papel desse rolo no Windows.
+                </p>
 
                 <label class="flex items-center gap-2 text-sm">
                     <input v-model="form.print_thank_you" type="checkbox"

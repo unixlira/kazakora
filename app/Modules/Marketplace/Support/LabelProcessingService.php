@@ -647,6 +647,71 @@ class LabelProcessingService
     }
 
     /**
+     * Rolo de 2 colunas (pedido de 2026-09-11, etiqueta de produto do Full):
+     * cada linha do rolo tem DUAS etiquetas de 5 x 2,5 cm lado a lado, com
+     * vão de 2 mm. O Labelary devolve uma página por etiqueta; aqui as
+     * páginas viram linhas de 10,2 x 2,5 cm com duas etiquetas cada, na
+     * ordem (1 e 2 na primeira linha, 3 e 4 na segunda...). Número ímpar
+     * deixa a última linha com a coluna da direita vazia.
+     *
+     * - Etiqueta que veio EM PÉ no ZPL (mais alta que larga) é girada 90°
+     *   pra deitar no rolo, em vez de sair espremida.
+     * - PDF que já vem com a largura de 2 colunas (o ZPL já montou as
+     *   duas lado a lado) volta intacto — montar de novo daria 4 por linha.
+     */
+    public function montarDuasColunas(string $pdfBytes, float $larguraEtiquetaMm = 50.0, float $alturaEtiquetaMm = 25.0, float $vaoMm = 2.0): string
+    {
+        $origem = tempnam(sys_get_temp_dir(), 'duas_colunas_').'.pdf';
+        file_put_contents($origem, $pdfBytes);
+
+        try {
+            $pdf = new PdfRotativo();
+            $pdf->SetAutoPageBreak(false);
+            $paginas = $pdf->setSourceFile($origem);
+
+            $primeira = $pdf->getTemplateSize($pdf->importPage(1));
+
+            if (max($primeira['width'], $primeira['height']) > $larguraEtiquetaMm * 1.5) {
+                return $pdfBytes;
+            }
+
+            $larguraLinha = 2 * $larguraEtiquetaMm + $vaoMm;
+
+            for ($pagina = 1; $pagina <= $paginas; $pagina += 2) {
+                $pdf->AddPage('L', [$larguraLinha, $alturaEtiquetaMm]);
+
+                foreach ([0, 1] as $coluna) {
+                    if ($pagina + $coluna > $paginas) {
+                        break;
+                    }
+
+                    $modelo = $pdf->importPage($pagina + $coluna);
+                    $tamanho = $pdf->getTemplateSize($modelo);
+                    $x = $coluna * ($larguraEtiquetaMm + $vaoMm);
+
+                    if ($tamanho['height'] > $tamanho['width']) {
+                        // Girando 90° no sentido anti-horário em torno do
+                        // canto de baixo da célula, a largura do modelo sobe
+                        // (vira a altura da etiqueta) e a altura vai pra
+                        // direita (vira a largura).
+                        $pdf->iniciarRotacao(90, $x, $alturaEtiquetaMm);
+                        $pdf->useTemplate($modelo, $x, $alturaEtiquetaMm, $alturaEtiquetaMm, $larguraEtiquetaMm);
+                        $pdf->terminarRotacao();
+
+                        continue;
+                    }
+
+                    $pdf->useTemplate($modelo, $x, 0, $larguraEtiquetaMm, $alturaEtiquetaMm);
+                }
+            }
+
+            return $pdf->Output('S');
+        } finally {
+            @unlink($origem);
+        }
+    }
+
+    /**
      * Junta os PDFs dos lotes na ordem, página por página, mantendo o
      * tamanho de cada página (etiqueta 2,5x5 continua 2,5x5).
      *

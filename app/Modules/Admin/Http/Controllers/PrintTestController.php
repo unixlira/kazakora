@@ -112,6 +112,7 @@ class PrintTestController extends Controller
         $printJob = PrintJob::create([
             'order_id' => $order->id,
             'label_path' => $path,
+            'origin' => PrintJob::ORIGEM_TESTE,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
 

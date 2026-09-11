@@ -74,6 +74,7 @@ class ManualLabelController extends Controller
             'order_id' => null,
             'channel' => $validated['channel'],
             'label_path' => $path,
+            'origin' => PrintJob::ORIGEM_MANUAL,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
 
@@ -90,7 +91,8 @@ class ManualLabelController extends Controller
                 'order_id' => null,
                 'channel' => $validated['channel'],
                 'label_path' => self::THANK_YOU_LABEL_PATH,
-                'status' => PrintJob::STATUS_QUEUED,
+                'origin' => PrintJob::ORIGEM_MANUAL,
+            'status' => PrintJob::STATUS_QUEUED,
                 'is_thank_you' => true,
             ]);
 

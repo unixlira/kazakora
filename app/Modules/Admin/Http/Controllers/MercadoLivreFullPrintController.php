@@ -71,6 +71,7 @@ class MercadoLivreFullPrintController extends Controller
             'order_id' => null,
             'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
             'label_path' => $path,
+            'origin' => PrintJob::ORIGEM_MANUAL,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
 

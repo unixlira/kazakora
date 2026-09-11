@@ -545,9 +545,18 @@ class LabelProcessingService
      * juntadas na ordem, num PDF só. Até 50 continua sendo a mesma chamada
      * única de sempre, com o ZPL intacto.
      */
-    public function convertZplToPdf(string $zpl): string
+    /**
+     * @param  array{0: float, 1: float}|null  $tamanhoSemDeclaracao  largura e
+     *         altura em polegadas pra quando o ZPL não traz ^PW/^LL. Sem isso
+     *         vale o 4x6 de sempre (etiqueta de envio). BUG REAL 2026-09-11:
+     *         o ZPL de etiqueta de produto do Full vem SEM ^PW/^LL e com as 2
+     *         etiquetas da linha já lado a lado — renderizado em 4x6, cada
+     *         linha de 2,5 cm virou uma página de 15 cm e a impressora pulou
+     *         ~5 linhas do rolo pequeno a cada etiqueta.
+     */
+    public function convertZplToPdf(string $zpl, ?array $tamanhoSemDeclaracao = null): string
     {
-        [$width, $height] = $this->extractLabelSizeInInches($zpl);
+        [$width, $height] = $this->extractLabelSizeInInches($zpl, $tamanhoSemDeclaracao);
 
         $lotes = $this->dividirZplEmLotes($zpl, self::LABELARY_MAX_ETIQUETAS);
 
@@ -750,10 +759,10 @@ class LabelProcessingService
     /**
      * @return array{0: float, 1: float} largura e altura em polegadas
      */
-    private function extractLabelSizeInInches(string $zpl): array
+    private function extractLabelSizeInInches(string $zpl, ?array $tamanhoSemDeclaracao = null): array
     {
         if (! preg_match('/\^PW(\d+)/', $zpl, $widthMatch) || ! preg_match('/\^LL(\d+)/', $zpl, $heightMatch)) {
-            return [4.0, 6.0];
+            return $tamanhoSemDeclaracao ?? [4.0, 6.0];
         }
 
         $dotsPerInch = self::DENSITY_DPMM * 25.4;

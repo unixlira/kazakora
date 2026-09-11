@@ -547,6 +547,28 @@ class LabelProcessingServiceTest extends TestCase
         $this->assertSame([2, 102.0, 25.0], $this->medirPdf($resultado));
     }
 
+    /**
+     * BUG REAL 2026-09-11 (job #1269): ZPL de produto do Full sem ^PW/^LL
+     * saiu em 4x6 e pulou ~5 linhas do rolo pequeno a cada etiqueta.
+     */
+    public function test_zpl_sem_tamanho_usa_o_tamanho_pedido_em_vez_de_4x6(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        (new LabelProcessingService)->convertZplToPdf('^XA^FO20,20^FDDLMU35614^FS^FO430,20^FDDLMU35614^FS^XZ', [4.02, 0.98]);
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/labels/4.02x0.98/'));
+    }
+
+    public function test_tamanho_declarado_no_zpl_vence_o_tamanho_pedido(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        (new LabelProcessingService)->convertZplToPdf('^XA^PW609^LL1015^FDX^FS^XZ', [4.02, 0.98]);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/labels/3x5/'));
+    }
+
     public function test_duas_colunas_nao_mexe_em_pdf_que_ja_vem_com_duas_colunas(): void
     {
         $original = self::pdfComPaginas(3, 104, 25);

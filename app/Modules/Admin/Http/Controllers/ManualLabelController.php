@@ -84,11 +84,18 @@ class ManualLabelController extends Controller
             : $validated['content'];
 
         try {
-            $pdfBytes = $processor->convertZplToPdf($rawContent);
-
             // Rolo de etiqueta pequena de 2 colunas (5 x 2,5 cm, vão de
-            // 2 mm) — ver LabelProcessingService::montarDuasColunas().
-            if ($request->boolean('duas_colunas')) {
+            // 2 mm). O ZPL de produto do Full vem sem ^PW/^LL e já com as
+            // duas etiquetas da linha lado a lado: sem tamanho, sairia em
+            // 4x6 e pularia linhas do rolo (job #1269, 2026-09-11). A linha
+            // tem 102 x 25 mm = 4,02 x 0,98 pol.
+            $duasColunas = $request->boolean('duas_colunas');
+            $pdfBytes = $processor->convertZplToPdf($rawContent, $duasColunas ? [4.02, 0.98] : null);
+
+            // ZPL de 1 etiqueta por bloco (com ^PW/^LL próprios) ainda é
+            // montado 2 a 2; página que já tem a largura da linha passa
+            // intacta — ver LabelProcessingService::montarDuasColunas().
+            if ($duasColunas) {
                 $pdfBytes = $processor->montarDuasColunas($pdfBytes);
             }
         } catch (Throwable $exception) {

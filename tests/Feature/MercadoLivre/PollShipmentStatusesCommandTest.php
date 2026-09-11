@@ -83,6 +83,55 @@ class PollShipmentStatusesCommandTest extends TestCase
         return $order;
     }
 
+    /** Outro pedido do mesmo carrinho: mesmo envio, outro número de pedido. */
+    private function makePackSibling(Order $order, string $orderStatus = Order::STATUS_PAID): Order
+    {
+        $irmao = $order->replicate();
+        $irmao->external_order_id = $order->external_order_id.'-IRMAO';
+        $irmao->status = $orderStatus;
+        $irmao->save();
+
+        ChannelShipment::create([
+            'order_id' => $irmao->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_shipment_id' => $order->channelShipment->external_shipment_id,
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now()->subDays(2),
+        ]);
+
+        return $irmao;
+    }
+
+    /**
+     * BUG REAL 2026-09-11: #894/#1300/#1368 ficaram "pagos" com o carrinho
+     * já entregue — só um pedido do envio era atualizado.
+     */
+    public function test_carrinho_atualiza_todos_os_pedidos_do_envio_com_uma_consulta_so(): void
+    {
+        $order = $this->makeOrderWithShipment('555999');
+        $irmao = $this->makePackSibling($order);
+        Http::fake(['https://api.mercadolibre.com/shipments/555999' => Http::response(['status' => 'delivered'])]);
+
+        $this->artisan('orders:poll-mercadolivre-shipment-status')->assertSuccessful();
+
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
+        $this->assertSame(Order::STATUS_COMPLETED, $irmao->fresh()->status);
+        Http::assertSentCount(1);
+    }
+
+    public function test_carrinho_nao_ressuscita_pedido_cancelado_do_mesmo_envio(): void
+    {
+        $order = $this->makeOrderWithShipment('555888');
+        $cancelado = $this->makePackSibling($order, Order::STATUS_CANCELLED);
+        Http::fake(['https://api.mercadolibre.com/shipments/555888' => Http::response(['status' => 'shipped'])]);
+
+        $this->artisan('orders:poll-mercadolivre-shipment-status')->assertSuccessful();
+
+        $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status);
+        $this->assertSame(Order::STATUS_CANCELLED, $cancelado->fresh()->status);
+    }
+
     public function test_advances_a_paid_order_to_shipped_when_the_channel_already_confirmed_pickup(): void
     {
         $order = $this->makeOrderWithShipment('555111');

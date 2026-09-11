@@ -64,6 +64,22 @@ foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
 Schedule::command('orders:sync-amazon')->hourly();
+
+// Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
+// "pedido embalado continua na fila mesmo depois do ponto de coleta
+// escanear o pacote... preferir webhook, mas manter verificação periódica
+// como garantia") — orders:sync-mercadolivre acima NÃO cobre isso: ele
+// relê o pedido no nível de PEDIDO, e o Mercado Livre nunca reflete
+// entrega ali (só no sub-recurso shipment, ver ShipmentService::
+// processWebhook()).
+//
+// DEVOLVIDO 2026-09-11: esta linha sumiu em 2b7d3c3 (31/08), num arquivo
+// antigo copiado por cima do servidor via SCP — ninguém decidiu tirar. Sem
+// ela, pedido cujo webhook de envio se perdeu ficava "pago" pra sempre; e
+// como o webhook só atualizava UM pedido do carrinho, os irmãos #894,
+// #1300, #1368 e #1541 ficaram parados na fila. Ensaio no dia: 55 envios
+// pagos nos últimos 60 dias = 55 consultas por rodada, e só esses 4 mudavam.
+Schedule::command('orders:poll-mercadolivre-shipment-status')->everyThirtyMinutes()->withoutOverlapping(25);
 // TikTok Shop via Bling. Idempotente e silencioso (não falha o schedule)
 // quando o Bling ainda não foi conectado ou a loja do TikTok Shop ainda
 // não foi configurada.

@@ -59,7 +59,12 @@ class PollMercadoLivreShipmentStatuses extends Command
             ->where('created_at', '>=', now()->subDays(60))
             ->whereHas('order', fn ($query) => $query->where('status', Order::STATUS_PAID))
             ->with('order')
-            ->get();
+            ->get()
+            // Carrinho: N pedidos, um envio só. syncOrderStatusFromShipment()
+            // já atualiza todos os pedidos do envio com uma consulta — sem
+            // isto, a mesma consulta rodaria uma vez por pedido.
+            ->unique('external_shipment_id')
+            ->values();
 
         $this->info("{$pending->count()} envio(s) do Mercado Livre ainda pago(s) pra reconferir.");
 

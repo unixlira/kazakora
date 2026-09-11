@@ -82,9 +82,13 @@ class ShipmentService
 
         $shipmentId = $matches[1];
 
+        // Qualquer um dos pedidos do envio serve de ponto de partida:
+        // syncOrderStatusFromShipment() aplica o status em todos os pedidos
+        // que dividem este envio (carrinho).
         $shipment = ChannelShipment::query()
             ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
             ->where('external_shipment_id', $shipmentId)
+            ->whereHas('order')
             ->first();
 
         if (! $shipment || ! $shipment->order) {
@@ -115,7 +119,28 @@ class ShipmentService
 
         $raw = $this->getShipment($shipment->external_shipment_id);
 
-        $this->gravarStatusDoCanal($shipment, $raw);
+        // BUG REAL 2026-09-11: carrinho do Mercado Livre é N pedidos com o
+        // MESMO envio, e isto só atualizava o pedido do ChannelShipment que
+        // chegou aqui (o webhook pegava o primeiro com ->first()). O irmão
+        // ficava "pago" pra sempre: #894, #1300 e #1368 entregues e #1541
+        // enviado continuavam na fila, e o card do carrinho no KoraSync se
+        // partia (o agrupamento separa por status). O envio é um só — o
+        // status dele vale pra todos os pedidos que vão nele, com UMA
+        // consulta à API.
+        $doEnvio = ChannelShipment::query()
+            ->where('channel', $shipment->channel)
+            ->where('external_shipment_id', $shipment->external_shipment_id)
+            ->with('order')
+            ->get()
+            ->filter(fn (ChannelShipment $item) => $item->order !== null);
+
+        if ($doEnvio->isEmpty()) {
+            $doEnvio = collect([$shipment]);
+        }
+
+        foreach ($doEnvio as $item) {
+            $this->gravarStatusDoCanal($item, $raw);
+        }
 
         $substatus = $raw['substatus'] ?? null;
 
@@ -138,11 +163,22 @@ class ShipmentService
         };
 
         if ($newOrderStatus !== null) {
-            $this->importer->syncStatus($shipment->order, $newOrderStatus, $substatus ?? $raw['status'] ?? null);
+            foreach ($doEnvio as $item) {
+                // Pedido do carrinho cancelado sozinho (comprador desistiu de
+                // um item) não "volta" por causa do envio dos outros: o item
+                // dele não foi na caixa.
+                if ($item->order->status === Order::STATUS_CANCELLED) {
+                    continue;
+                }
+
+                $this->importer->syncStatus($item->order, $newOrderStatus, $substatus ?? $raw['status'] ?? null);
+            }
         }
 
         // Depois do syncStatus de propósito: o alerta olha o status do
-        // pedido já atualizado (entregue, cancelado...).
+        // pedido já atualizado (entregue, cancelado...). Só no envio que
+        // chegou aqui, como sempre — reavaliar cada pedido do carrinho
+        // mandaria o mesmo alerta de Flex uma vez por pedido.
         if ($shipment->shipping_method === ChannelShipment::METHOD_FLEX) {
             app(FlexControlService::class)->reavaliar($shipment->refresh());
         }

@@ -72,6 +72,32 @@ class ShipmentServiceTest extends TestCase
         return $order;
     }
 
+    /**
+     * BUG REAL 2026-09-11: o webhook pegava o primeiro pedido do envio
+     * (->first()) e o outro pedido do carrinho ficava "pago" pra sempre.
+     */
+    public function test_webhook_do_envio_de_carrinho_atualiza_os_dois_pedidos(): void
+    {
+        $order = $this->makeOrderWithShipment('999777');
+        $irmao = $order->replicate();
+        $irmao->external_order_id = 'ML-2';
+        $irmao->save();
+        ChannelShipment::create([
+            'order_id' => $irmao->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_shipment_id' => '999777',
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_ERROR,
+            'confirmed_at' => now()->subDays(20),
+        ]);
+        Http::fake(['https://api.mercadolibre.com/shipments/999777' => Http::response(['status' => 'shipped'])]);
+
+        app(ShipmentService::class)->processWebhook(['resource' => '/shipments/999777']);
+
+        $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status);
+        $this->assertSame(Order::STATUS_SHIPPED, $irmao->fresh()->status);
+    }
+
     public function test_webhook_advances_the_order_to_shipped_when_the_channel_reports_shipped(): void
     {
         $order = $this->makeOrderWithShipment('999111');

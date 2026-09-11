@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Jobs;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
+use App\Modules\Marketplace\Exceptions\MarketplaceNotConfiguredException;
 use App\Modules\Marketplace\Support\ChannelShippingService;
 use App\Notifications\LabelUnavailableNotification;
 use Illuminate\Bus\Queueable;
@@ -43,6 +44,11 @@ class ConfirmChannelShippingJob implements ShouldQueue
 
         try {
             $service->confirm($order);
+        } catch (MarketplaceNotConfiguredException $exception) {
+            // Canal não conectado não vira conectado por retentativa: são
+            // 6 tentativas por hora, por pedido, pra um erro que só uma
+            // PESSOA resolve (conectar a conta na tela de integrações).
+            $this->fail($exception);
         } catch (ChannelOrderNotFoundException $exception) {
             // UMA tentativa, e para. O canal não conhece o pedido e não vai
             // passar a conhecer com o tempo — as 6 tentativas com backoff de

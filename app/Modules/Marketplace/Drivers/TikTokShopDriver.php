@@ -489,7 +489,9 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         // sem preencher esse campo) estourava TypeError cru aqui em vez de
         // um erro claro — findByOrderNumber() exige string.
         if (! $order->external_order_id) {
-            throw new RuntimeException("Pedido #{$order->id} não tem external_order_id — não dá pra consultar o envio no Bling.");
+            // Permanente: sem o número do pedido no canal não há nem o que
+            // perguntar — nenhuma tentativa futura inventa esse dado.
+            throw new ChannelOrderNotFoundException("Pedido #{$order->id} não tem external_order_id — não dá pra consultar o envio no Bling.");
         }
 
         $blingOrder = $this->blingOrders->findByOrderNumber($order->external_order_id);

@@ -116,6 +116,24 @@ return [
     'print_agent' => [
         'token' => env('PRINT_AGENT_TOKEN'),
 
+        // QUAIS MÁQUINAS PODEM PEGAR ETIQUETA (lista separada por vírgula
+        // dos agent_id; vazio = qualquer uma, como era antes).
+        //
+        // Pergunta do usuário em 2026-09-10: "outros agentes rodam em
+        // outros pc e notebook, isso pode duplicar impressão?". Duplicar,
+        // não — a reivindicação virou atômica hoje, e só uma máquina ganha
+        // cada job. Mas quem ganha imprime na PRÓPRIA impressora: um
+        // notebook com o agente ligado rouba a etiqueta e ela sai lá (ou
+        // não sai), e na bancada isso é idêntico a "a etiqueta não veio".
+        //
+        // Com a lista preenchida, o servidor só entrega etiqueta pra
+        // máquina da loja — instalar o agente em qualquer outro lugar
+        // deixa de ter efeito.
+        'allowed_agents' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('PRINT_AGENT_ALLOWED_IDS', '')),
+        ))),
+
         // Chave liga/desliga da impressão automática de etiqueta.
         //
         // OPCIONAL, e LIGADA quando ausente — o contrário do que valia até

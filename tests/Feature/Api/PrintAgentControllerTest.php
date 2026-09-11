@@ -108,6 +108,56 @@ class PrintAgentControllerTest extends TestCase
         $this->assertSame('PC-DA-LOJA', $job->claimed_by);
     }
 
+    /**
+     * Pergunta do usuário (2026-09-10): "outros agentes rodam em outros pc
+     * e notebook, isso pode duplicar impressão?".
+     *
+     * Duplicar não — a reivindicação é atômica. Mas quem reivindica
+     * imprime na PRÓPRIA impressora: um notebook com o agente ligado leva
+     * a etiqueta embora, e na bancada isso é igual a "a etiqueta não veio".
+     */
+    public function test_only_the_allowed_machine_can_claim_a_label(): void
+    {
+        config(['services.print_agent.allowed_agents' => ['KazaKora-PC']]);
+
+        $order = $this->makeOrder();
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'label_path' => 'labels/teste.pdf',
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        $this->postJson("/api/print-agent/jobs/{$job->id}/claim", ['agent_id' => 'NOTEBOOK-DO-JOSE'], $this->authHeaders())
+            ->assertStatus(403);
+
+        $this->assertSame(PrintJob::STATUS_QUEUED, $job->refresh()->status);
+
+        $this->postJson("/api/print-agent/jobs/{$job->id}/claim", ['agent_id' => 'KazaKora-PC'], $this->authHeaders())
+            ->assertOk();
+
+        $this->assertSame(PrintJob::STATUS_CLAIMED, $job->refresh()->status);
+    }
+
+    /** Sem lista configurada, segue como sempre foi: qualquer agente pega. */
+    public function test_without_an_allowlist_any_agent_can_claim(): void
+    {
+        config(['services.print_agent.allowed_agents' => []]);
+
+        $order = $this->makeOrder();
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => 'shopee',
+            'label_path' => 'labels/teste.pdf',
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        $this->postJson("/api/print-agent/jobs/{$job->id}/claim", ['agent_id' => 'QUALQUER-PC'], $this->authHeaders())
+            ->assertOk();
+    }
+
     public function test_jobs_list_only_returns_queued_jobs(): void
     {
         $order = $this->makeOrder();

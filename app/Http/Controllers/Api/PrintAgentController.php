@@ -11,6 +11,7 @@ use App\Notifications\PrintJobFailedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -66,6 +67,26 @@ class PrintAgentController extends Controller
     public function claim(Request $request, PrintJob $printJob): JsonResponse
     {
         $validated = $request->validate(['agent_id' => ['required', 'string', 'max:255']]);
+
+        // A loja tem UMA impressora de etiqueta. Se o agente estiver
+        // instalado também num notebook, quem reivindicar primeiro imprime
+        // — na impressora DELE. Não é etiqueta duplicada (a reivindicação
+        // é atômica), é etiqueta que sai no lugar errado, e na bancada isso
+        // parece "a etiqueta não veio". Com PRINT_AGENT_ALLOWED_IDS
+        // configurado, só a máquina da loja consegue pegar.
+        $permitidos = config('services.print_agent.allowed_agents', []);
+
+        if ($permitidos !== [] && ! in_array($validated['agent_id'], $permitidos, true)) {
+            Log::warning('print_agent.claim_recusado', [
+                'agent_id' => $validated['agent_id'],
+                'job_id' => $printJob->id,
+                'permitidos' => $permitidos,
+            ]);
+
+            return response()->json([
+                'message' => 'Esta máquina não está autorizada a imprimir etiqueta. A impressão é só na máquina da loja.',
+            ], 403);
+        }
 
         $reivindicado = PrintJob::query()
             ->whereKey($printJob->getKey())

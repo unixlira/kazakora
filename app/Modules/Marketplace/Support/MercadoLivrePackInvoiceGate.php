@@ -7,7 +7,9 @@ use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Services\MercadoLivre\MercadoLivreClient;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 /**
  * O que a emissão da NF-e precisa perguntar ao Mercado Livre antes de montar
@@ -86,7 +88,30 @@ class MercadoLivrePackInvoiceGate
      */
     public function garantirCompleto(Order $order, string $packId): void
     {
-        $externos = collect($this->client->get("packs/{$packId}")['orders'] ?? [])
+        // Achado no ar, 2026-09-11: o ML dá pack_id (e a tag pack_order) pra
+        // TODO pedido — venda de um anúncio só vira um "pack" de 1 pedido.
+        // Então esta consulta roda pra toda nota do ML. Se ela falhar (429,
+        // timeout) e não houver irmão no banco, a nota segue como pedido
+        // avulso, exatamente como era antes: um soluço da API não pode
+        // atrasar a etiqueta da venda comum. Com irmão no banco o carrinho é
+        // certo, e aí a nota espera.
+        try {
+            $resposta = $this->client->get("packs/{$packId}");
+        } catch (Throwable $exception) {
+            if ($this->pack->pedidos($order)->count() > 1) {
+                throw $exception;
+            }
+
+            Log::warning('nfe.pack.consulta_falhou_segue_avulso', [
+                'order_id' => $order->id,
+                'pack_id' => $packId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return;
+        }
+
+        $externos = collect($resposta['orders'] ?? [])
             ->pluck('id')
             ->filter()
             ->map(fn ($id) => (string) $id)

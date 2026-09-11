@@ -256,6 +256,37 @@ class MercadoLivrePackInvoiceTest extends TestCase
         app(MercadoLivrePackInvoiceGate::class)->garantirCompleto($primeiro, self::PACK);
     }
 
+    /**
+     * O ML dá pack_id até pra venda de um anúncio só, então a consulta do
+     * carrinho roda pra toda nota do ML — falha dela não pode travar venda
+     * comum.
+     */
+    public function test_falha_da_api_do_carrinho_nao_trava_a_nota_de_pedido_sem_irmao(): void
+    {
+        $unico = $this->pedido('2000018408944002', 99.98, 'Power Bank');
+
+        $client = Mockery::mock(MercadoLivreClient::class);
+        $client->shouldReceive('get')->andThrow(new RuntimeException('HTTP 429'));
+        $this->app->instance(MercadoLivreClient::class, $client);
+
+        app(MercadoLivrePackInvoiceGate::class)->garantirCompleto($unico, self::PACK);
+
+        $this->assertSame($unico->id, app(PackDoPedido::class)->pedidoFiscal($unico->fresh())->id);
+    }
+
+    public function test_falha_da_api_com_irmao_no_banco_segura_a_nota(): void
+    {
+        [$titular] = $this->carrinho();
+
+        $client = Mockery::mock(MercadoLivreClient::class);
+        $client->shouldReceive('get')->andThrow(new RuntimeException('HTTP 429'));
+        $this->app->instance(MercadoLivreClient::class, $client);
+
+        $this->expectException(RuntimeException::class);
+
+        app(MercadoLivrePackInvoiceGate::class)->garantirCompleto($titular, self::PACK);
+    }
+
     public function test_cancelar_um_pedido_do_carrinho_nao_cancela_a_nota_do_carrinho(): void
     {
         [$titular, $irmao] = $this->carrinho();

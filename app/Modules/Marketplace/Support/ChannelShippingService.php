@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use Illuminate\Support\Carbon;
 use Throwable;
@@ -36,7 +37,16 @@ class ChannelShippingService
         try {
             $result = $this->manager->driver($order->origin)->confirmShipping($order);
         } catch (Throwable $exception) {
-            $shipment->update(['status' => ChannelShipment::STATUS_ERROR, 'error_message' => $exception->getMessage()]);
+            // Erro PERMANENTE (o canal não conhece o pedido) fica marcado no
+            // envio: os caminhos automáticos param de redisparar, e a fila
+            // deixa de ser ocupada por tentativa que nunca vai dar certo —
+            // ver ChannelOrderNotFoundException e o incidente da fila com
+            // 7.794 falhas/dia em 2026-09-10.
+            $shipment->update([
+                'status' => ChannelShipment::STATUS_ERROR,
+                'error_message' => $exception->getMessage(),
+                'unrecoverable_at' => $exception instanceof ChannelOrderNotFoundException ? now() : null,
+            ]);
             $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_FAILED, $exception->getMessage());
 
             throw $exception;

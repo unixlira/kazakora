@@ -134,6 +134,9 @@ class BatchLabelPrintService
      */
     private function cutucar(Order $order, ?object $shipment): void
     {
+        // Aqui NÃO checa unrecoverable_at de propósito: o lote é clique de
+        // gente. Se alguém quer forçar, força — o que a marca bloqueia é o
+        // redisparo automático (ver OrderImportService).
         try {
             if ($shipment) {
                 CheckShipmentLabelJob::dispatch($shipment->id);

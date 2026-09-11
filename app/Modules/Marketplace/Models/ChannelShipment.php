@@ -34,6 +34,7 @@ class ChannelShipment extends Model
         'label_path',
         'raw_label_path',
         'error_message',
+        'unrecoverable_at',
         'confirmed_at',
         'scheduled_for',
         'label_ready_at',
@@ -43,6 +44,7 @@ class ChannelShipment extends Model
     {
         return [
             'confirmed_at' => 'datetime',
+            'unrecoverable_at' => 'datetime',
             'scheduled_for' => 'datetime',
             'label_ready_at' => 'datetime',
         ];

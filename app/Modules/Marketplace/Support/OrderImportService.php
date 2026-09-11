@@ -1000,7 +1000,15 @@ class OrderImportService
 
             // Revertido junto com createOrder() (ver comentário lá) —
             // volta ao modelo paralelo de sempre.
-            ConfirmChannelShippingJob::dispatch($order->id);
+            //
+            // MENOS quando o envio já foi marcado como irrecuperável (o
+            // canal não conhece o pedido): era daqui que saía o loop —
+            // varredura horária reimporta, redispara, o job queima 6
+            // tentativas, e amanhã tudo de novo. Ver
+            // ChannelOrderNotFoundException.
+            if (! $order->channelShipment?->unrecoverable_at) {
+                ConfirmChannelShippingJob::dispatch($order->id);
+            }
 
             if ($order->shouldAutoGenerateInvoice()) {
                 GenerateInvoiceJob::dispatch($order->id);

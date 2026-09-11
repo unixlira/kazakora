@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Drivers;
 
+use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
@@ -494,7 +495,10 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         $blingOrder = $this->blingOrders->findByOrderNumber($order->external_order_id);
 
         if (! $blingOrder) {
-            throw new RuntimeException("Pedido {$order->external_order_id} não encontrado no Bling ao consultar o envio.");
+            // Permanente: o Bling não conhece esse pedido, e não vai passar
+            // a conhecer sozinho. Ver ChannelOrderNotFoundException — foi
+            // este erro, retentado por um mês, que entupiu a fila.
+            throw new ChannelOrderNotFoundException("Pedido {$order->external_order_id} não encontrado no Bling ao consultar o envio.");
         }
 
         $volume = $blingOrder['transporte']['volumes'][0] ?? [];

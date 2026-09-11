@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Jobs;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
 use App\Modules\Marketplace\Support\ChannelShippingService;
 use App\Notifications\LabelUnavailableNotification;
 use Illuminate\Bus\Queueable;
@@ -40,7 +41,16 @@ class ConfirmChannelShippingJob implements ShouldQueue
     {
         $order = Order::findOrFail($this->orderId);
 
-        $service->confirm($order);
+        try {
+            $service->confirm($order);
+        } catch (ChannelOrderNotFoundException $exception) {
+            // UMA tentativa, e para. O canal não conhece o pedido e não vai
+            // passar a conhecer com o tempo — as 6 tentativas com backoff de
+            // até 2h viram só disputa de worker com nota fiscal e etiqueta
+            // de venda de verdade. Foi assim que 110 pedidos do TikTok de
+            // agosto geraram 7.794 falhas em 24h (incidente 2026-09-10).
+            $this->fail($exception);
+        }
     }
 
     /**

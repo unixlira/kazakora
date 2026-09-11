@@ -1084,4 +1084,45 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertTrue($result->has($ml->id));
         $this->assertFalse($result->has($shopee->id));
     }
+
+    /**
+     * Relato de 2026-09-11: "tem Rosângela e Rosangela, só apareceu o sem
+     * acento". A Rosângela já estava enviada — fora da fila, fora da busca.
+     * (Acento em si é da collation do MySQL; o SQLite dos testes não ignora
+     * acento, então aqui o que se prova é achar pedido fora da fila.)
+     */
+    public function test_busca_de_pedido_acha_pedido_ja_enviado_que_saiu_da_fila(): void
+    {
+        $enviado = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => '260910M91YKUVC', 'shipping_name' => 'Rosangela de Andrade da Silva Breta', 'packed_at' => now()->subDay()]);
+        $this->makeOrder(['shipping_name' => 'Outra Cliente', 'external_order_id' => 'X-1', 'origin' => Order::ORIGIN_SHOPEE]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q='.urlencode('andrade rosangela'));
+
+        $response->assertOk();
+        $this->assertSame([$enviado->id], collect($response->json('orders'))->pluck('id')->all());
+        $this->assertSame('shipped', $response->json('orders.0.status'));
+        $this->assertNotNull($response->json('orders.0.packed_at'));
+    }
+
+    public function test_busca_de_pedido_pelo_numero_de_um_pedido_do_carrinho_traz_a_caixa_inteira(): void
+    {
+        $a = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'status' => Order::STATUS_COMPLETED, 'external_order_id' => '2000018325566408', 'shipping_name' => 'Ana Rosa']);
+        $b = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'status' => Order::STATUS_COMPLETED, 'external_order_id' => '2000018325568030', 'shipping_name' => 'Ana Rosa']);
+        foreach ([$a, $b] as $order) {
+            ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'external_shipment_id' => '47952448296', 'status' => ChannelShipment::STATUS_LABEL_READY]);
+        }
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q=2000018325568030');
+
+        $response->assertOk()->assertJsonCount(1, 'orders');
+        $this->assertSame(2, $response->json('orders.0.pack_order_count'));
+    }
+
+    public function test_busca_de_pedido_com_menos_de_3_letras_nao_consulta(): void
+    {
+        $this->makeOrder(['shipping_name' => 'Ana']);
+
+        $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q=an')
+            ->assertOk()->assertJsonCount(0, 'orders');
+    }
 }

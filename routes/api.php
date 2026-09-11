@@ -161,6 +161,7 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     // recusa a tomar sozinho quando o canal não diz qual variação foi
     // vendida. Ver DashboardAgentController::linkOrderItem().
     Route::get('/dashboard/produtos/buscar', [DashboardAgentController::class, 'searchProducts'])->name('dashboard.products.search');
+    Route::get('/dashboard/pedidos/buscar', [DashboardAgentController::class, 'searchOrders'])->name('dashboard.orders.search');
     Route::post('/dashboard/queue/{order}/itens/{item}/vincular', [DashboardAgentController::class, 'linkOrderItem'])->name('dashboard.queue.link-item');
     Route::get('/dashboard/daily-text', [DashboardAgentController::class, 'dailyText'])->name('dashboard.daily-text');
     Route::get('/dashboard/scheduled-shipments', [DashboardAgentController::class, 'scheduledShipments'])->name('dashboard.scheduled-shipments');

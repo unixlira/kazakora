@@ -607,24 +607,26 @@ class DashboardAgentController extends Controller
      * separar (soma das duas abas, exceto pedido já embalado/cancelado) —
      * alimenta o card "Pendentes de separação" do META DO DIA.
      */
+    private const RELACOES_DA_FILA = [
+        'items:id,order_id,product_id,product_name,quantity',
+        // stock a mais que a versão anterior buscava — é o dado que
+        // partitionByStock() usa pra decidir a aba. SKU continua vindo
+        // junto, pro payload de shortage.
+        'items.product:id,sku,stock',
+        // external_shipment_id a mais: é a prova de que 2 pedidos do
+        // Mercado Livre vão na MESMA caixa (carrinho — ver
+        // groupOrdersShippedTogether()). Sem ele no select, a coluna
+        // vem null e o agrupamento silenciosamente nunca acontece.
+        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id',
+    ];
+
     public function queue(): JsonResponse
     {
         $today = now()->startOfDay();
         $yesterday = $today->clone()->subDay();
         $tomorrow = $today->clone()->addDay();
 
-        $relations = [
-            'items:id,order_id,product_id,product_name,quantity',
-            // stock a mais que a versão anterior buscava — é o dado que
-            // partitionByStock() usa pra decidir a aba. SKU continua vindo
-            // junto, pro payload de shortage.
-            'items.product:id,sku,stock',
-            // external_shipment_id a mais: é a prova de que 2 pedidos do
-            // Mercado Livre vão na MESMA caixa (carrinho — ver
-            // groupOrdersShippedTogether()). Sem ele no select, a coluna
-            // vem null e o agrupamento silenciosamente nunca acontece.
-            'channelShipment:id,order_id,status,scheduled_for,external_shipment_id',
-        ];
+        $relations = self::RELACOES_DA_FILA;
 
         // Pedido que NÃO é "pago e ainda não embalado" — já embalado,
         // aguardando pagamento, ou já enviado/concluído — exibido como está
@@ -1363,6 +1365,89 @@ class DashboardAgentController extends Controller
         }
 
         return $job->printed_at?->format('d/m/Y H:i');
+    }
+
+    private const HISTORICO_DIAS = 120;
+
+    private const HISTORICO_LIMITE = 40;
+
+    /**
+     * Busca de pedido no histórico, pra busca do KoraSync (2026-09-11).
+     *
+     * Relato do usuário: "tem Rosângela e Rosangela, só apareceu o sem
+     * acento". A busca da tela já ignorava acento — o problema era outro: ela
+     * só procura no que a fila carregou, e a fila tira o pedido assim que o
+     * canal confirma o envio. A Rosângela (#1914, Shopee) tinha sido separada
+     * e enviada no dia anterior; a Rosangela (#934, TikTok) continuava na
+     * lista só porque o TikTok nunca marca enviado. Aqui a busca vai no banco
+     * inteiro (últimos HISTORICO_DIAS dias), qualquer status.
+     */
+    public function searchOrders(Request $request): JsonResponse
+    {
+        $palavras = collect(preg_split('/\s+/u', trim((string) $request->query('q', ''))))
+            ->filter(fn (string $palavra) => $palavra !== '')
+            ->take(5)
+            ->values();
+
+        if (mb_strlen($palavras->implode('')) < 3) {
+            return response()->json(['orders' => []]);
+        }
+
+        $pedidos = Order::query()
+            ->nonPurchaseReturn()
+            ->where('created_at', '>=', now()->subDays(self::HISTORICO_DIAS))
+            ->where(function ($query) use ($palavras) {
+                // Cada palavra casa em algum campo, em qualquer ordem — o
+                // mesmo "like" da busca local da tela. Sem acento de graça:
+                // as colunas são utf8mb4_unicode_ci, e nessa collation o
+                // MySQL compara "rosangela" = "Rosângela".
+                foreach ($palavras as $palavra) {
+                    $like = '%'.addcslashes($palavra, '%_\\').'%';
+
+                    $query->where(fn ($q) => $q
+                        ->where('shipping_name', 'like', $like)
+                        ->orWhere('shipping_recipient_name', 'like', $like)
+                        ->orWhere('channel_buyer_nickname', 'like', $like)
+                        ->orWhere('external_order_id', 'like', $like)
+                        ->orWhereHas('items', fn ($item) => $item
+                            ->where('product_name', 'like', $like)
+                            ->orWhereHas('product', fn ($produto) => $produto->where('sku', 'like', $like)))
+                        ->when(ctype_digit($palavra), fn ($q) => $q->orWhere('id', (int) $palavra)));
+                }
+            })
+            ->with(self::RELACOES_DA_FILA)
+            ->withSum('items as units_count', 'quantity')
+            ->orderByDesc('id')
+            ->limit(self::HISTORICO_LIMITE)
+            ->get();
+
+        // Carrinho do ML: quem busca pelo número de UM pedido tem que ver a
+        // caixa inteira, não metade dela.
+        $envios = $pedidos
+            ->filter(fn (Order $order) => $order->origin === Order::ORIGIN_MERCADO_LIVRE)
+            ->map(fn (Order $order) => $order->channelShipment?->external_shipment_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($envios->isNotEmpty()) {
+            $irmaos = Order::query()
+                ->where('origin', Order::ORIGIN_MERCADO_LIVRE)
+                ->whereNotIn('id', $pedidos->pluck('id'))
+                ->whereHas('channelShipment', fn ($query) => $query->whereIn('external_shipment_id', $envios))
+                ->with(self::RELACOES_DA_FILA)
+                ->withSum('items as units_count', 'quantity')
+                ->get();
+
+            $pedidos = $pedidos->merge($irmaos);
+        }
+
+        $grupos = $this->groupOrdersShippedTogether($pedidos->sortByDesc('id')->values());
+        $impressas = $this->labelsPrintedAt($pedidos->pluck('id')->all());
+
+        return response()->json([
+            'orders' => $grupos->map(fn (\Illuminate\Support\Collection $group) => $this->mapQueueOrder($group, [], $impressas))->values(),
+        ]);
     }
 
     /**

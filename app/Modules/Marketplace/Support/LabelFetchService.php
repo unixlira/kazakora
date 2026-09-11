@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -237,12 +238,15 @@ class LabelFetchService
 
         if ($isPdf && ! $isMercadoLivreFlex && (in_array($shipment->channel, self::CHANNELS_WITH_DECLARATION, true) || $isScheduled)) {
             try {
-                $declarationTokens = $shipment->order->items->map(function ($item) {
-                    $sku = $item->product?->sku ?: $item->product_name;
-                    $quantity = str_pad((string) $item->quantity, 2, '0', STR_PAD_LEFT);
+                $declarationTokens = $this->itensDoEnvio($shipment)
+                    ->groupBy(fn ($item) => $item->product?->sku ?: $item->product_name)
+                    ->map(function ($itens, $sku) {
+                        $quantity = str_pad((string) $itens->sum('quantity'), 2, '0', STR_PAD_LEFT);
 
-                    return "{$sku} | QTD: {$quantity}";
-                })->all();
+                        return "{$sku} | QTD: {$quantity}";
+                    })
+                    ->values()
+                    ->all();
 
                 $scheduledLine = $isScheduled
                     ? sprintf('Pedido agendado dia %s | Pedido nº %d', $shipment->scheduled_for->format('d/m/Y'), $shipment->order_id)
@@ -380,6 +384,42 @@ class LabelFetchService
      * Outro pedido que divide o MESMO envio (pack) já tem etiqueta na fila
      * ou impressa? A etiqueta é uma só — o rastreio é o mesmo.
      */
+    /**
+     * Itens de TODOS os pedidos que dividem este envio, não só do pedido
+     * dono da etiqueta.
+     *
+     * BUG REAL 2026-09-11 (pack ML 2000014906196989, pedidos #1588/#1589):
+     * no pack o ML cria um pedido por anúncio, mas a etiqueta é uma só e sai
+     * por um só deles (irmaoDoPackJaImprimiu segura a do outro). A faixa
+     * SKU/QTD listava só os itens do pedido que imprimiu — saiu o Power Bank
+     * e sumiu o Dispensador, e é por essa faixa que o galpão monta a caixa.
+     * Pedido irmão cancelado fica de fora: aquele item não vai na caixa.
+     *
+     * @return \Illuminate\Support\Collection<int, OrderItem>
+     */
+    private function itensDoEnvio(ChannelShipment $shipment): \Illuminate\Support\Collection
+    {
+        $orderIds = collect([$shipment->order_id]);
+
+        if ($shipment->external_shipment_id) {
+            $irmaos = ChannelShipment::query()
+                ->where('channel', $shipment->channel)
+                ->where('external_shipment_id', $shipment->external_shipment_id)
+                ->where('order_id', '!=', $shipment->order_id)
+                ->whereHas('order', fn ($query) => $query->where('status', '!=', Order::STATUS_CANCELLED))
+                ->pluck('order_id');
+
+            $orderIds = $orderIds->merge($irmaos);
+        }
+
+        return OrderItem::query()
+            ->with('product')
+            ->whereIn('order_id', $orderIds->unique())
+            ->orderBy('order_id')
+            ->orderBy('id')
+            ->get();
+    }
+
     private function irmaoDoPackJaImprimiu(ChannelShipment $shipment): bool
     {
         if (! $shipment->external_shipment_id) {

@@ -47,7 +47,7 @@ class SyncShopeeOrders extends Command
 
         foreach ($sns as $sn) {
             try {
-                $importer->import(MarketplaceAccount::CHANNEL_SHOPEE, $sn);
+                $importer->import(MarketplaceAccount::CHANNEL_SHOPEE, $sn, viaVarredura: true);
                 $imported++;
             } catch (Throwable $exception) {
                 $falhas[] = ['sn' => $sn, 'message' => $exception->getMessage()];

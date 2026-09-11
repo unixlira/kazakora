@@ -47,11 +47,18 @@ class OrderImportService
      *                     criado — ver importNormalized() pro único caso
      *                     disso hoje (Shopee com pagamento pendente).
      */
-    public function import(string $channel, string $externalOrderId): ?Order
+    /**
+     * @param  bool  $viaVarredura  true quando quem chamou foi uma varredura
+     *                              (orders:sync-*), não o webhook do canal.
+     *                              Venda achada por varredura NÃO imprime
+     *                              sozinha — ver createOrder() e a migration
+     *                              add_auto_print_blocked_to_orders_table.
+     */
+    public function import(string $channel, string $externalOrderId, bool $viaVarredura = false): ?Order
     {
         $data = $this->manager->driver($channel)->importOrder($externalOrderId);
 
-        return $this->importNormalized($channel, $data);
+        return $this->importNormalized($channel, $data, viaVarredura: $viaVarredura);
     }
 
     /**
@@ -67,7 +74,7 @@ class OrderImportService
      *                     pendente, pedido novo) — em todo outro caso
      *                     sempre devolve um Order de verdade.
      */
-    public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true): ?Order
+    public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true, bool $viaVarredura = false): ?Order
     {
         $existing = Order::query()
             ->where('origin', $channel)
@@ -136,7 +143,7 @@ class OrderImportService
         }
 
         try {
-            return $this->createOrder($channel, $data, $dispatchShippingConfirmation);
+            return $this->createOrder($channel, $data, $dispatchShippingConfirmation, $viaVarredura);
         } catch (QueryException $exception) {
             // Reentrega de webhook quase simultânea pode passar pelo check
             // de existência acima antes do outro processo commitar — o
@@ -297,13 +304,19 @@ class OrderImportService
     /**
      * @param  array<string, mixed>  $data
      */
-    private function createOrder(string $channel, array $data, bool $dispatchShippingConfirmation = true): Order
+    private function createOrder(string $channel, array $data, bool $dispatchShippingConfirmation = true, bool $viaVarredura = false): Order
     {
-        return DB::transaction(function () use ($channel, $data, $dispatchShippingConfirmation) {
+        return DB::transaction(function () use ($channel, $data, $dispatchShippingConfirmation, $viaVarredura) {
             $order = Order::create([
                 'user_id' => null,
                 'status' => $data['status'],
                 'origin' => $channel,
+                // ERRO MEU 2026-09-10: recuperei pela varredura uma venda
+                // que o sistema nunca tinha visto, e o fluxo seguiu sozinho
+                // até IMPRIMIR a etiqueta de um pedido que já estava a
+                // caminho. Varredura acha o que se perdeu; quem decide
+                // gastar papel é a bancada.
+                'auto_print_blocked' => $viaVarredura,
                 'external_order_id' => $data['external_order_id'],
                 'buyer_document' => $data['buyer_document'] ?? null,
                 'shipping_name' => $data['buyer_name'],

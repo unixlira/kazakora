@@ -441,6 +441,20 @@ class LabelFetchService
             return false;
         }
 
+        // Venda que veio de VARREDURA (recuperação de pedido perdido) nunca
+        // manda papel sozinha — ERRO MEU 2026-09-10, relato do usuário: "já
+        // tinha pedido a caminho e vc imprimiu de novo". A varredura acha o
+        // que se perdeu; gastar papel é decisão de quem olha a bancada, no
+        // botão de lote ou no card.
+        if ($automatico && $order->auto_print_blocked) {
+            Log::info('marketplace.label_fetch.varredura_nao_imprime_sozinha', [
+                'order_id' => $order->id,
+                'origem' => $order->origin,
+            ]);
+
+            return false;
+        }
+
         $ultimo = PrintJob::query()
             ->where('order_id', $shipment->order_id)
             ->where('is_thank_you', false)
@@ -507,6 +521,7 @@ class LabelFetchService
             'label_path' => $path,
             'raw_label_path' => $rawPath ?? $shipment->raw_label_path,
             'is_thank_you' => false,
+            'origin' => $automatico ? PrintJob::ORIGEM_AUTOMATICA : PrintJob::ORIGEM_LOTE,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
 

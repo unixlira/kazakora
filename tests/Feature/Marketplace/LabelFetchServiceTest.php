@@ -294,6 +294,32 @@ class LabelFetchServiceTest extends TestCase
      * mostrar "etiqueta já impressa às HH:MM" em vez de "enviada pra
      * impressão".
      */
+    /**
+     * ERRO MEU, 2026-09-10 ("já tinha pedido a caminho e vc imprimiu de
+     * novo"): recuperei pela varredura uma venda que o sistema nunca tinha
+     * visto e o fluxo seguiu sozinho até imprimir a etiqueta de um pedido
+     * já despachado por fora. Varredura acha o que se perdeu; gastar papel
+     * é decisão de quem olha a bancada.
+     */
+    public function test_an_order_found_by_a_sweep_never_prints_by_itself(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: null);
+        $shipment->forceFill(['label_path' => 'labels/varredura.pdf'])->save();
+        $shipment->order->forceFill(['auto_print_blocked' => true])->save();
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(0, PrintJob::where('order_id', $shipment->order_id)->count());
+
+        // Mas o botão de lote (uma PESSOA decidindo) imprime normalmente.
+        $this->assertTrue(app(LabelFetchService::class)->queuePrintInBatch($shipment->fresh()));
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+        $this->assertSame(
+            PrintJob::ORIGEM_LOTE,
+            PrintJob::where('order_id', $shipment->order_id)->latest('id')->first()->origin,
+        );
+    }
+
     public function test_queue_print_reports_false_when_the_label_was_already_printed(): void
     {
         Storage::fake('local');

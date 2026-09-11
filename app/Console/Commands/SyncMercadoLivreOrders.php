@@ -53,7 +53,7 @@ class SyncMercadoLivreOrders extends Command
 
         foreach ($ids as $id) {
             try {
-                $importer->import(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $id);
+                $importer->import(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $id, viaVarredura: true);
                 $imported++;
             } catch (Throwable $exception) {
                 $falhas[] = ['sn' => (string) $id, 'message' => $exception->getMessage()];

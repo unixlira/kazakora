@@ -16,7 +16,22 @@ class PrintJob extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    /**
+     * De onde veio a impressão — ver a migration que criou a coluna. Existe
+     * pra "quem imprimiu isso duas vezes?" ser consulta, não escavação.
+     */
+    public const ORIGEM_AUTOMATICA = 'automatico';
+
+    public const ORIGEM_LOTE = 'lote';
+
+    public const ORIGEM_REIMPRESSAO = 'reimpressao';
+
+    public const ORIGEM_MANUAL = 'manual';
+
+    public const ORIGEM_TESTE = 'teste';
+
     protected $fillable = [
+        'origin',
         'order_id',
         'channel',
         'tracking_code',

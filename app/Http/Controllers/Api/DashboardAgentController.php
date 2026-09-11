@@ -796,7 +796,18 @@ class DashboardAgentController extends Controller
         $normalGroups = $this->groupOrdersShippedTogether($normalOrders);
         $outOfStockGroups = $this->groupOrdersShippedTogether($outOfStockOrders);
 
-        $mapper = fn (\Illuminate\Support\Collection $group) => $this->mapQueueOrder($group, $shortages);
+        // Quando a etiqueta de cada pedido saiu na impressora — UMA query
+        // pra fila inteira, não uma por card.
+        //
+        // É o dado que faltava na tela e que custou papel (3º relato de
+        // duplicada, 2026-09-10): sem ele o card não tinha como avisar que
+        // a etiqueta já tinha saído sozinha, e o operador clicava em
+        // "Gerar etiqueta" achando que estava imprimindo a primeira.
+        $impressas = $this->labelsPrintedAt(
+            $normalGroups->flatten(1)->merge($outOfStockGroups->flatten(1))->pluck('id')->all(),
+        );
+
+        $mapper = fn (\Illuminate\Support\Collection $group) => $this->mapQueueOrder($group, $shortages, $impressas);
 
         return response()->json([
             'queue' => $normalGroups->map($mapper)->values(),
@@ -1053,7 +1064,10 @@ class DashboardAgentController extends Controller
      * @param  array<int, array<int, array{sku: ?string, name: string, missing: int}>>  $shortages  por order_id, vazio pra pedido com estoque OK — ver partitionByStock().
      * @return array<string, mixed>
      */
-    private function mapQueueOrder(\Illuminate\Support\Collection $group, array $shortages): array
+    /**
+     * @param  array<int, string>  $impressas  order_id => "d/m/Y H:i" da impressão
+     */
+    private function mapQueueOrder(\Illuminate\Support\Collection $group, array $shortages, array $impressas = []): array
     {
         $order = $group->first();
         $stockShortage = $group->flatMap(fn (Order $item) => $shortages[$item->id] ?? [])->values()->all();
@@ -1120,7 +1134,38 @@ class DashboardAgentController extends Controller
             // "falta Nx SKU" no card da aba Sem Estoque (pedido explícito
             // 2026-08-29, ver partitionByStock()).
             'stock_shortage' => $stockShortage,
+            // Quando a etiqueta desta caixa já saiu na impressora (null se
+            // nunca saiu). O KoraSync mostra no card e pergunta antes de
+            // mandar outra — ver reprintLabel().
+            'label_printed_at' => $group->map(fn (Order $item) => $impressas[$item->id] ?? null)->filter()->first(),
         ];
+    }
+
+    /**
+     * A hora da última impressão BEM-SUCEDIDA de cada pedido da lista.
+     *
+     * Uma query só: a fila do galpão tem dezenas de cards e é consultada de
+     * poucos em poucos segundos pelo KoraSync.
+     *
+     * @param  list<int>  $orderIds
+     * @return array<int, string>
+     */
+    private function labelsPrintedAt(array $orderIds): array
+    {
+        if ($orderIds === []) {
+            return [];
+        }
+
+        return PrintJob::query()
+            ->whereIn('order_id', $orderIds)
+            ->where('is_thank_you', false)
+            ->where('status', PrintJob::STATUS_PRINTED)
+            ->orderBy('id')
+            ->get(['order_id', 'printed_at'])
+            // O último de cada pedido vence (a ordenação acima garante).
+            ->mapWithKeys(fn (PrintJob $job) => [$job->order_id => $job->printed_at?->format('d/m/Y H:i')])
+            ->filter()
+            ->all();
     }
 
     /**
@@ -1522,8 +1567,23 @@ class DashboardAgentController extends Controller
      * a impressão acontecendo em lote ANTES da separação, exigir packed_at
      * aqui deixaria justamente o caso mais comum sem saída — a etiqueta que
      * amassou no lote da manhã, de um pedido que ninguém separou ainda.
+     *
+     * TRAVA DE CONFIRMAÇÃO 2026-09-10, terceiro relato de etiqueta
+     * duplicada ("isso causa prejuízo"): a impressão automática imprime uma
+     * vez só — a trava dela funciona. O segundo papel saía DAQUI, do clique
+     * no botão "Gerar etiqueta" do card, que mandava direto pra impressora
+     * sem dizer que a etiqueta já tinha saído. Na venda AGENDADA isso é
+     * quase certo: a etiqueta sai sozinha na véspera, o operador só olha o
+     * pedido no dia da entrega, não vê nada na tela dizendo que já saiu, e
+     * clica.
+     *
+     * Agora, com etiqueta já impressa, este endpoint RECUSA e devolve a
+     * hora — quem quiser a 2ª via manda `confirmar: true`, que é o que a
+     * tela envia depois de perguntar. A regra da casa continua inteira:
+     * máquina nunca imprime duas vezes, pessoa pode — desde que saiba que
+     * está pedindo a segunda.
      */
-    public function reprintLabel(Order $order): JsonResponse
+    public function reprintLabel(Order $order, Request $request): JsonResponse
     {
         if ($order->status !== Order::STATUS_PAID) {
             return response()->json([
@@ -1583,6 +1643,18 @@ class DashboardAgentController extends Controller
             ]);
         }
 
+        // Já saiu papel deste pedido: pergunta antes de gastar outro.
+        $jaImpressaEm = $this->lastPrintedAt($order);
+
+        if ($jaImpressaEm && ! $request->boolean('confirmar')) {
+            return response()->json([
+                'ok' => false,
+                'needs_confirmation' => true,
+                'already_printed_at' => $jaImpressaEm,
+                'message' => "A etiqueta deste pedido já foi impressa em {$jaImpressaEm}. Confira a bancada antes de gastar outra.",
+            ], 409);
+        }
+
         $job = PrintJob::create([
             'order_id' => $order->id,
             'channel' => $shipment->channel,
@@ -1590,12 +1662,22 @@ class DashboardAgentController extends Controller
             'label_path' => $shipment->label_path,
             'raw_label_path' => $shipment->raw_label_path,
             'is_thank_you' => false,
+            'origin' => PrintJob::ORIGEM_REIMPRESSAO,
             'status' => PrintJob::STATUS_QUEUED,
         ]);
+
+        if ($jaImpressaEm) {
+            Log::info('dashboard.reimpressao_confirmada', [
+                'order_id' => $order->id,
+                'ja_impressa_em' => $jaImpressaEm,
+                'job_id' => $job->id,
+            ]);
+        }
 
         return response()->json([
             'ok' => true,
             'job_id' => $job->id,
+            'reprint_confirmed' => (bool) $jaImpressaEm,
             'message' => 'Etiqueta mandada de novo pra impressora.',
         ]);
     }

@@ -204,6 +204,87 @@ class SeparateOrderEndpointTest extends TestCase
         $this->assertSame(1, PrintJob::where('order_id', $order->id)->where('status', PrintJob::STATUS_QUEUED)->count());
     }
 
+    /**
+     * TERCEIRO relato de etiqueta duplicada (2026-09-10, "isso causa
+     * prejuízo"): a impressão automática imprime uma vez só, mas o botão
+     * "Gerar etiqueta" do card mandava outra na hora, sem avisar que a
+     * etiqueta já tinha saído. Na venda agendada é quase certo — ela sai
+     * sozinha na véspera e o operador só olha o pedido no dia da entrega.
+     */
+    public function test_reprint_asks_for_confirmation_when_the_label_already_came_out(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-13',
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-13.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        PrintJob::create([
+            'order_id' => $order->id,
+            'label_path' => "labels/{$order->id}/etiqueta-13.pdf",
+            'status' => PrintJob::STATUS_PRINTED,
+            'printed_at' => now()->subMinutes(22),
+        ]);
+
+        // Sem confirmar: recusa, diz a hora e NÃO gasta papel.
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['ok' => false, 'needs_confirmation' => true]);
+
+        $this->assertSame(1, PrintJob::where('order_id', $order->id)->count());
+
+        // Com confirmação explícita da pessoa: imprime, e fica registrado
+        // que foi reimpressão.
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", ['confirmar' => true], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['ok' => true, 'reprint_confirmed' => true]);
+
+        $this->assertSame(2, PrintJob::where('order_id', $order->id)->count());
+        $this->assertSame(
+            PrintJob::ORIGEM_REIMPRESSAO,
+            PrintJob::where('order_id', $order->id)->latest('id')->first()->origin,
+        );
+    }
+
+    /** A fila diz quando a etiqueta saiu — é o que faltava na tela do card. */
+    public function test_the_queue_tells_when_the_label_was_printed(): void
+    {
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-14',
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-14.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        PrintJob::create([
+            'order_id' => $order->id,
+            'label_path' => "labels/{$order->id}/etiqueta-14.pdf",
+            'status' => PrintJob::STATUS_PRINTED,
+            'printed_at' => now()->subHour(),
+        ]);
+
+        $resposta = $this->getJson('/api/print-agent/dashboard/queue', $this->authHeaders())->assertOk();
+
+        $cards = collect($resposta->json('queue'))->merge($resposta->json('out_of_stock'));
+        $card = $cards->firstWhere('id', $order->id);
+
+        $this->assertNotNull($card, 'o pedido tem que estar na fila');
+        $this->assertSame(now()->subHour()->format('d/m/Y H:i'), $card['label_printed_at']);
+    }
+
     public function test_reprint_does_not_stack_a_second_label_when_one_is_already_waiting(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_SHOPEE);

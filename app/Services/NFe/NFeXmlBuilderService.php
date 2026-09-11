@@ -423,7 +423,13 @@ class NFeXmlBuilderService
         }
 
         $infAdic = new stdClass();
-        $infAdic->infCpl = "Pedido #{$order->id} - KazaKora";
+        // Nota de carrinho do Mercado Livre traz itens de mais de um pedido
+        // (PackDoPedido::pedidoFiscal) — lista todos, pro contador achar a
+        // venda por qualquer um deles.
+        $pedidosNaNota = $order->items->pluck('order_id')->filter()->unique()->sort()->values();
+        $infAdic->infCpl = $pedidosNaNota->count() > 1
+            ? 'Pedidos #'.$pedidosNaNota->implode(', #')." (carrinho {$order->channel_pack_id}) - KazaKora"
+            : "Pedido #{$order->id} - KazaKora";
         $make->taginfAdic($infAdic);
 
         $xml = $make->getXML();

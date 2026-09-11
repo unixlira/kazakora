@@ -404,6 +404,10 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
         return [
             'external_order_id' => (string) $order->id,
+            // Carrinho com mais de um anúncio: o ML cria um pedido por
+            // anúncio, ligados por este pack_id, e exige UMA NF-e pro
+            // carrinho inteiro. Ver MercadoLivrePackInvoiceGate.
+            'channel_pack_id' => $order->pack_id,
             'status' => $this->mapOrderStatus($order->status),
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => round(max(0, $order->total_amount - $itemsSubtotal), 2),

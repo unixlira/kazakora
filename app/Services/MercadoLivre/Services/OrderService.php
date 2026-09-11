@@ -80,6 +80,7 @@ class OrderService
             buyer: $order['buyer'] ?? [],
             order_items: $order['order_items'] ?? [],
             shipping: $order['shipping'] ?? [],
+            pack_id: isset($order['pack_id']) ? (string) $order['pack_id'] : null,
         );
     }
 

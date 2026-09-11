@@ -117,6 +117,12 @@ class OrderImportService
                 $existing->update($changed);
             }
 
+            // Pedido importado antes da coluna existir ganha o pack_id no
+            // primeiro webhook reentregue.
+            if (! empty($data['channel_pack_id']) && ! $existing->channel_pack_id) {
+                $existing->update(['channel_pack_id' => $data['channel_pack_id']]);
+            }
+
             $buyerFields = $this->resolveBuyerFieldUpdates($existing, $data);
 
             if ($buyerFields) {
@@ -335,6 +341,7 @@ class OrderImportService
                 // VENDA_PERDIDA_APOS_MINUTOS no canal.
                 'auto_print_blocked' => $viaVarredura && $this->vendaJaEsfriou($data['placed_at'] ?? null),
                 'external_order_id' => $data['external_order_id'],
+                'channel_pack_id' => $data['channel_pack_id'] ?? null,
                 'buyer_document' => $data['buyer_document'] ?? null,
                 'shipping_name' => $data['buyer_name'],
                 // Só exibição (ver migration

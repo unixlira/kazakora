@@ -80,6 +80,7 @@ class Order extends Model
         'status',
         'origin',
         'external_order_id',
+        'channel_pack_id',
         'fiscal_operation_type',
         'fiscal_nature_operation',
         'fiscal_finality',

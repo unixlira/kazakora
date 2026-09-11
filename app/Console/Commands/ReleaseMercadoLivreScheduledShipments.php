@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
@@ -279,7 +280,9 @@ class ReleaseMercadoLivreScheduledShipments extends Command
         $invoice = $order->invoice;
 
         if (! $invoice) {
-            return true;
+            // Pedido de carrinho coberto pela nota de outro pedido do mesmo
+            // carrinho não tem (nem terá) nota própria.
+            return app(PackDoPedido::class)->cobertoPor($order) === null;
         }
 
         return in_array($invoice->status, [

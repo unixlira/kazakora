@@ -20,5 +20,6 @@ class OrderDTO extends Data
         public array $buyer = [],
         public array $order_items = [],
         public array $shipping = [],
+        public ?string $pack_id = null,
     ) {}
 }

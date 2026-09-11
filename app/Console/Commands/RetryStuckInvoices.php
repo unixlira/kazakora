@@ -7,6 +7,7 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -52,6 +53,7 @@ class RetryStuckInvoices extends Command
     public function handle(): int
     {
         $espera = now()->subMinutes((int) $this->option('minutos'));
+        $pack = app(PackDoPedido::class);
         $delegadosAoBling = (array) config('services.bling.invoice_issuer_channels', []);
         $canal = $this->option('canal');
 
@@ -92,7 +94,12 @@ class RetryStuckInvoices extends Command
             ->filter(fn (Order $order) => $this->option('forcar')
                 || $order->invoice === null
                 || $order->invoice->updated_at === null
-                || $order->invoice->updated_at->lt($espera));
+                || $order->invoice->updated_at->lt($espera))
+            // Carrinho do Mercado Livre: o pedido coberto pela nota de outro
+            // pedido do carrinho nunca tem nota própria, e o carrinho
+            // bloqueado espera o contador — nenhum dos dois é nota travada,
+            // e sem isto ocupariam o teto da rodada a cada 15 min.
+            ->reject(fn (Order $order) => $pack->cobertoPor($order) || $pack->motivoDeBloqueio($order));
 
         // TRAVA REAL 2026-09-07, aprendida na primeira execução: rodei isto
         // com BLING_INVOICE_ISSUER_CHANNELS vazio e ele varreu 94 notas do

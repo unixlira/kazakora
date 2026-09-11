@@ -10,7 +10,9 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use Illuminate\Bus\Queueable;
@@ -19,6 +21,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use NFePHP\Common\Exception\ValidatorException;
 use Throwable;
@@ -100,7 +104,55 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         $orderImport->refreshBuyerInfo($order);
         $order->refresh();
 
+        $travaDoCarrinho = null;
+
         try {
+            // Carrinho do Mercado Livre: uma NF-e só, no pedido titular, com
+            // os itens de todos (ver PackDoPedido). Resolvido só pra pedido
+            // do ML — os outros canais nem tocam na API do ML.
+            if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
+                $gate = app(MercadoLivrePackInvoiceGate::class);
+
+                if ($packId = $gate->packId($order)) {
+                    // Os pedidos do carrinho chegam juntos e cada um dispara
+                    // este job: sem a trava, dois deles montariam a nota do
+                    // carrinho ao mesmo tempo e sairiam duas.
+                    $travaDoCarrinho = Cache::lock("nfe:pack:{$packId}", 300);
+
+                    if (! $travaDoCarrinho->get()) {
+                        $travaDoCarrinho = null;
+                        $this->release(60);
+
+                        return;
+                    }
+
+                    $pack = app(PackDoPedido::class);
+
+                    if (! $pack->cobertoPor($order) && $order->invoice?->status !== Invoice::STATUS_AUTHORIZED) {
+                        $gate->garantirCompleto($order, $packId);
+                    }
+
+                    if ($motivo = $pack->motivoDeBloqueio($order)) {
+                        $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $motivo);
+                        Log::warning('nfe.pack.bloqueado', ['order_id' => $order->id, 'pack_id' => $packId, 'motivo' => $motivo]);
+
+                        return;
+                    }
+
+                    $titular = $pack->titular($order);
+
+                    if ($titular && $titular->id !== $order->id) {
+                        $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Carrinho do Mercado Livre: a NF-e deste pedido sai junto com a do pedido #{$titular->id}.");
+
+                        if (! in_array($titular->invoice?->status, [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_DENIED], true)) {
+                            self::dispatch($titular->id);
+                        }
+
+                        return;
+                    }
+                }
+            }
+
             $invoice = $invoices->issue($order);
 
             $isTerminalSuccess = in_array($invoice->status, [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL], true);
@@ -190,6 +242,8 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             }
 
             throw $exception;
+        } finally {
+            $travaDoCarrinho?->release();
         }
 
         SendOrderReceiptEmailJob::dispatch($order->id);

@@ -4,6 +4,7 @@ namespace App\Modules\Fiscal\Services;
 
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Services\NFe\NFeCertificateService;
 use App\Services\NFe\NFeDanfeService;
 use App\Services\NFe\NFeWebserviceService;
@@ -35,6 +36,7 @@ class InvoiceService
         private readonly NFeCertificateService $certificateService,
         private readonly NFeWebserviceService $webservice,
         private readonly NFeDanfeService $danfeService,
+        private readonly PackDoPedido $pack,
     ) {
     }
 
@@ -107,6 +109,12 @@ class InvoiceService
             // ficava rejeitada pra sempre mesmo depois do dado corrigido.
             return $order->invoice;
         }
+
+        // Carrinho do Mercado Livre: daqui pra baixo o pedido titular é
+        // enxergado com os itens e o valor de todos os pedidos do carrinho —
+        // toda montagem de XML (primeira, rebuild, 539) sai completa. Ver
+        // PackDoPedido::pedidoFiscal().
+        $order = $this->pack->pedidoFiscal($order);
 
         // Pedido antigo que ficou marcado como STATUS_EXTERNAL (Mercado
         // Livre, antes da mudança 2026-08-22 acima) nunca teve XML/numero
@@ -250,6 +258,7 @@ class InvoiceService
                 'status' => Invoice::STATUS_PENDING,
                 'serie' => (int) config('nfe.serie'),
                 'numero' => $numero,
+                'valor_total' => $order->total,
                 'chave_acesso' => $chave,
                 'xml_path' => $xmlPath,
                 'motivo_rejeicao' => null,
@@ -275,7 +284,9 @@ class InvoiceService
 
         $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
         Storage::disk('local')->put($xmlPath, $xml);
-        $invoice->update(['chave_acesso' => $chave, 'xml_path' => $xmlPath]);
+        // valor_total junto: numa nota de carrinho o rebuild pode ter mudado
+        // o que entra nela (irmão chegou ou foi cancelado).
+        $invoice->update(['chave_acesso' => $chave, 'xml_path' => $xmlPath, 'valor_total' => $order->total]);
 
         return $invoice->fresh();
     }
@@ -317,7 +328,9 @@ class InvoiceService
             // (ex: retry manual cruzando com o automático). unique(order_id)
             // barra a segunda no banco — em vez de quebrar, reaproveita a
             // linha que a primeira já criou.
-            $existing = $order->fresh()->invoice;
+            // Por order_id, não $order->fresh(): o pedido de um carrinho
+            // chega aqui como modelo não persistido (PackDoPedido::pedidoFiscal).
+            $existing = Invoice::query()->where('order_id', $order->id)->first();
 
             if (! $existing) {
                 throw $exception;

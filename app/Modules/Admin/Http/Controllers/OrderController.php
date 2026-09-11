@@ -9,6 +9,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -642,6 +643,13 @@ class OrderController extends Controller
     private function cancelInvoiceIfAuthorized(Order $order, InvoiceService $invoices): ?string
     {
         $order->loadMissing('invoice');
+
+        // Carrinho do Mercado Livre: a nota é uma só pro carrinho inteiro.
+        // Cancelar ela junto com UM pedido derrubaria a nota dos itens que
+        // continuam vendidos — avisa e não mexe.
+        if ($avisoDoCarrinho = app(PackDoPedido::class)->avisoDeCancelamento($order)) {
+            return $avisoDoCarrinho;
+        }
 
         if (! $order->invoice || $order->invoice->status !== Invoice::STATUS_AUTHORIZED) {
             return null;

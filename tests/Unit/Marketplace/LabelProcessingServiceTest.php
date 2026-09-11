@@ -429,4 +429,76 @@ class LabelProcessingServiceTest extends TestCase
 
         return $pdf;
     }
+
+    private function contarPaginasDoPdf(string $pdf): int
+    {
+        $arquivo = tempnam(sys_get_temp_dir(), 'teste_pag_').'.pdf';
+        file_put_contents($arquivo, $pdf);
+
+        try {
+            return (new Fpdi)->setSourceFile($arquivo);
+        } finally {
+            @unlink($arquivo);
+        }
+    }
+
+    /**
+     * BUG REAL 2026-09-11: 150 etiquetas 2,5x5 pro Full -> Labelary 413
+     * "Maximum label count (50) exceeded" e nenhum PDF.
+     */
+    public function test_mais_de_50_etiquetas_vira_lotes_de_50_e_um_pdf_so(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        $zpl = implode("\n", array_map(fn ($i) => "^XA^PW200^LL400^FDEtiqueta {$i}^FS^XZ", range(1, 150)));
+
+        $pdf = (new LabelProcessingService)->convertZplToPdf($zpl);
+
+        $enviados = Http::recorded();
+        $this->assertCount(3, $enviados);
+        foreach ($enviados as [$request]) {
+            $this->assertSame(50, substr_count($request->body(), '^XA'));
+        }
+        $this->assertStringContainsString('Etiqueta 1^FS', $enviados[0][0]->body());
+        $this->assertStringContainsString('Etiqueta 150^FS', $enviados[2][0]->body());
+        // 1 página por resposta falsa -> 3 páginas juntadas, na ordem.
+        $this->assertSame(3, $this->contarPaginasDoPdf($pdf));
+    }
+
+    public function test_pq_de_150_copias_e_dividido_em_pq_50(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        (new LabelProcessingService)->convertZplToPdf('^XA^PW200^LL400^FDProduto^FS^PQ150,0,1,Y^XZ');
+
+        $corpos = collect(Http::recorded())->map(fn ($par) => $par[0]->body());
+        $this->assertCount(3, $corpos);
+        $corpos->each(fn ($corpo) => $this->assertStringContainsString('^PQ50,0,1,Y', $corpo));
+    }
+
+    public function test_imagem_baixada_fora_dos_blocos_vai_em_todo_lote(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        $zpl = "~DGR:LOGO.GRF,4,1,FFFF\n".implode("\n", array_fill(0, 60, '^XA^XGR:LOGO.GRF,1,1^FS^XZ'));
+
+        (new LabelProcessingService)->convertZplToPdf($zpl);
+
+        $corpos = collect(Http::recorded())->map(fn ($par) => $par[0]->body());
+        $this->assertCount(2, $corpos);
+        $corpos->each(fn ($corpo) => $this->assertStringStartsWith('~DGR:LOGO.GRF', $corpo));
+    }
+
+    public function test_ate_50_etiquetas_continua_uma_chamada_com_o_zpl_intacto(): void
+    {
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        $zpl = implode("\n", array_fill(0, 50, '^XA^FDX^FS^XZ'));
+
+        (new LabelProcessingService)->convertZplToPdf($zpl);
+
+        $enviados = Http::recorded();
+        $this->assertCount(1, $enviados);
+        $this->assertSame($zpl, $enviados[0][0]->body());
+    }
 }

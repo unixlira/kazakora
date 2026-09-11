@@ -532,10 +532,46 @@ class LabelProcessingService
         return $response->body();
     }
 
+    /**
+     * Teto da API pública da Labelary por chamada — conta blocos ^XA...^XZ
+     * E as cópias pedidas em ^PQ.
+     */
+    private const LABELARY_MAX_ETIQUETAS = 50;
+
+    /**
+     * BUG REAL 2026-09-11: 150 etiquetas 2,5x5 pro Full davam "413 — Maximum
+     * label count (50) exceeded" e nada saía. Acima de 50, o ZPL é quebrado
+     * em lotes de até 50 etiquetas, cada lote vira um PDF e as páginas são
+     * juntadas na ordem, num PDF só. Até 50 continua sendo a mesma chamada
+     * única de sempre, com o ZPL intacto.
+     */
     public function convertZplToPdf(string $zpl): string
     {
         [$width, $height] = $this->extractLabelSizeInInches($zpl);
 
+        $lotes = $this->dividirZplEmLotes($zpl, self::LABELARY_MAX_ETIQUETAS);
+
+        if (count($lotes) === 1) {
+            return $this->converterLoteNaLabelary($lotes[0], $width, $height);
+        }
+
+        $pdfs = [];
+
+        foreach ($lotes as $indice => $lote) {
+            // A Labelary pública limita requisições por segundo; lotes em
+            // rajada voltam 429.
+            if ($indice > 0) {
+                usleep(400_000);
+            }
+
+            $pdfs[] = $this->converterLoteNaLabelary($lote, $width, $height);
+        }
+
+        return $this->juntarPdfs($pdfs);
+    }
+
+    private function converterLoteNaLabelary(string $zpl, float $width, float $height): string
+    {
         $response = Http::withHeaders(['Accept' => 'application/pdf'])
             ->withBody($zpl, 'application/x-www-form-urlencoded')
             ->post("http://api.labelary.com/v1/printers/".self::DENSITY_DPMM."dpmm/labels/{$width}x{$height}/");
@@ -547,6 +583,103 @@ class LabelProcessingService
         }
 
         return $response->body();
+    }
+
+    /**
+     * Quebra o ZPL em lotes de no máximo $max etiquetas.
+     *
+     * - Cada bloco ^XA...^XZ conta como 1, ou como a quantidade do seu ^PQ.
+     * - Bloco com ^PQ maior que o espaço do lote é repetido com ^PQ menor
+     *   (^PQ150 vira ^PQ50 três vezes) — a etiqueta sai igual, só a conta
+     *   de cópias é dividida.
+     * - O que está FORA dos blocos (download de imagem ~DG/~DY que os
+     *   blocos usam) vai na frente de todo lote: sem ele, o lote 2 em diante
+     *   sairia sem a imagem.
+     *
+     * @return array<int, string>
+     */
+    private function dividirZplEmLotes(string $zpl, int $max): array
+    {
+        if (! preg_match_all('/\^XA.*?\^XZ/s', $zpl, $encontrados)) {
+            return [$zpl];
+        }
+
+        $blocos = $encontrados[0];
+        $quantidade = fn (string $bloco): int => preg_match('/\^PQ(\d+)/', $bloco, $pq) ? max(1, (int) $pq[1]) : 1;
+
+        if (array_sum(array_map($quantidade, $blocos)) <= $max) {
+            return [$zpl];
+        }
+
+        $fora = trim(str_replace($blocos, '', $zpl));
+        $prefixo = $fora !== '' ? $fora."\n" : '';
+
+        $lotes = [];
+        $atual = [];
+        $noLote = 0;
+
+        foreach ($blocos as $bloco) {
+            $restante = $quantidade($bloco);
+
+            while ($restante > 0) {
+                if ($noLote === $max) {
+                    $lotes[] = $atual;
+                    $atual = [];
+                    $noLote = 0;
+                }
+
+                $parte = min($restante, $max - $noLote);
+                $atual[] = $parte === $quantidade($bloco)
+                    ? $bloco
+                    : (preg_match('/\^PQ\d+/', $bloco)
+                        ? preg_replace('/\^PQ\d+/', "^PQ{$parte}", $bloco, 1)
+                        : $bloco);
+                $noLote += $parte;
+                $restante -= $parte;
+            }
+        }
+
+        if ($atual !== []) {
+            $lotes[] = $atual;
+        }
+
+        return array_map(fn (array $lote) => $prefixo.implode("\n", $lote), $lotes);
+    }
+
+    /**
+     * Junta os PDFs dos lotes na ordem, página por página, mantendo o
+     * tamanho de cada página (etiqueta 2,5x5 continua 2,5x5).
+     *
+     * @param  array<int, string>  $pdfs
+     */
+    private function juntarPdfs(array $pdfs): string
+    {
+        $final = new Fpdi();
+        $final->SetAutoPageBreak(false);
+        $temporarios = [];
+
+        try {
+            foreach ($pdfs as $bytes) {
+                $arquivo = tempnam(sys_get_temp_dir(), 'labelary_lote_').'.pdf';
+                file_put_contents($arquivo, $bytes);
+                $temporarios[] = $arquivo;
+
+                $paginas = $final->setSourceFile($arquivo);
+
+                for ($pagina = 1; $pagina <= $paginas; $pagina++) {
+                    $modelo = $final->importPage($pagina);
+                    $tamanho = $final->getTemplateSize($modelo);
+                    $final->AddPage($tamanho['orientation'], [$tamanho['width'], $tamanho['height']]);
+                    $final->useTemplate($modelo, 0, 0, $tamanho['width'], $tamanho['height']);
+                }
+            }
+
+            return $final->Output('S');
+        } finally {
+            foreach ($temporarios as $arquivo) {
+                @unlink($arquivo);
+            }
+        }
     }
 
     /**

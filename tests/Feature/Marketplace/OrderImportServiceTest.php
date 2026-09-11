@@ -69,6 +69,32 @@ class OrderImportServiceTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * Pedido #2028 (2026-09-11): a varredura horária pegou a venda 3 minutos
+     * depois da compra, antes do webhook, e a trava de "venda perdida"
+     * bloqueou a impressão de uma venda fresca. Só venda velha é perdida.
+     */
+    public function test_sweep_only_blocks_auto_print_for_an_old_sale(): void
+    {
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_SHOPEE);
+        $service = app(OrderImportService::class);
+
+        $fresca = $service->importNormalized(MarketplaceAccount::CHANNEL_SHOPEE, $this->normalizedData([
+            'status' => Order::STATUS_PAID,
+            'channel_status' => 'READY_TO_SHIP',
+            'placed_at' => now()->subMinutes(3)->toIso8601String(),
+        ]), dispatchShippingConfirmation: false, viaVarredura: true);
+
+        $perdida = $service->importNormalized(MarketplaceAccount::CHANNEL_SHOPEE, $this->normalizedData([
+            'status' => Order::STATUS_PAID,
+            'channel_status' => 'READY_TO_SHIP',
+            'placed_at' => now()->subHours(5)->toIso8601String(),
+        ]), dispatchShippingConfirmation: false, viaVarredura: true);
+
+        $this->assertFalse($fresca->auto_print_blocked, 'venda de 3 minutos atrás não está perdida');
+        $this->assertTrue($perdida->auto_print_blocked, 'venda de 5 horas atrás recuperada pela varredura não imprime sozinha');
+    }
+
     public function test_shopee_order_with_pending_payment_creates_no_order(): void
     {
         $data = $this->normalizedData();

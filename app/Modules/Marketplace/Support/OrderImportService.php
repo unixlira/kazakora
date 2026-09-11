@@ -34,6 +34,14 @@ use Illuminate\Support\Facades\Notification;
  */
 class OrderImportService
 {
+    /**
+     * Venda trazida por varredura só conta como "perdida" (sem impressão
+     * automática) passado este tempo desde a compra. 2h: o webhook chega em
+     * segundos, e venda com menos que isso sem etiqueta ainda não foi
+     * despachada por fora — imprimir é o certo. Ver createOrder().
+     */
+    private const VENDA_PERDIDA_APOS_MINUTOS = 120;
+
     public function __construct(
         private readonly MarketplaceDriverManager $manager,
         private readonly StockManager $stock,
@@ -316,7 +324,16 @@ class OrderImportService
                 // até IMPRIMIR a etiqueta de um pedido que já estava a
                 // caminho. Varredura acha o que se perdeu; quem decide
                 // gastar papel é a bancada.
-                'auto_print_blocked' => $viaVarredura,
+                //
+                // ERRO MEU DE NOVO 2026-09-11 (pedido #2028, Shopee
+                // 260911Q4CJMQRK, relato do usuário "por que não foi
+                // impresso"): a varredura HORÁRIA pegou a venda às 00:03:11,
+                // 3 minutos depois da compra e 7 segundos antes do webhook
+                // chegar — e a trava tratou venda fresca como venda perdida.
+                // Ficou sem etiqueta a noite inteira. Perdida é venda VELHA:
+                // só trava quando a venda tem mais de
+                // VENDA_PERDIDA_APOS_MINUTOS no canal.
+                'auto_print_blocked' => $viaVarredura && $this->vendaJaEsfriou($data['placed_at'] ?? null),
                 'external_order_id' => $data['external_order_id'],
                 'buyer_document' => $data['buyer_document'] ?? null,
                 'shipping_name' => $data['buyer_name'],
@@ -1106,6 +1123,19 @@ class OrderImportService
      *   hoje, mexeria no faturamento do dia e ainda dispararia o som de
      *   venda nova — foi exatamente a reclamação do usuário.
      */
+    /**
+     * A venda que a varredura trouxe já é "perdida" (e por isso não imprime
+     * sozinha)? Só se for velha: o webhook chega em segundos, e a varredura
+     * horária disputa com ele toda venda feita perto da virada da hora.
+     * Sem data da venda, trava — na dúvida, a bancada decide.
+     */
+    private function vendaJaEsfriou(mixed $placedAt): bool
+    {
+        $data = $this->dataDaVenda($placedAt);
+
+        return $data === null || $data->lt(now()->subMinutes(self::VENDA_PERDIDA_APOS_MINUTOS));
+    }
+
     private function dataDaVenda(mixed $placedAt): ?\Illuminate\Support\Carbon
     {
         if (empty($placedAt)) {

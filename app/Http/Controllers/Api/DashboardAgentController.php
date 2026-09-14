@@ -14,6 +14,7 @@ use App\Modules\Content\Models\DailyText;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Support\TipoDeEnvio;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -617,7 +618,12 @@ class DashboardAgentController extends Controller
         // Mercado Livre vão na MESMA caixa (carrinho — ver
         // groupOrdersShippedTogether()). Sem ele no select, a coluna
         // vem null e o agrupamento silenciosamente nunca acontece.
-        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id',
+        // shipping_method a mais (2026-09-14): é o tipo de envio que o card
+        // mostra — Flex, Mercado Envios, Full, Shopee Xpress, coleta do
+        // TikTok. Fora do select a coluna vem null e todo pedido apareceria
+        // como "Envio não informado", que é exatamente o bug que o
+        // external_shipment_id já causou aqui antes.
+        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method',
     ];
 
     public function queue(): JsonResponse
@@ -1074,10 +1080,21 @@ class DashboardAgentController extends Controller
         $order = $group->first();
         $stockShortage = $group->flatMap(fn (Order $item) => $shortages[$item->id] ?? [])->values()->all();
 
+        // Como a caixa sai da loja (Flex, Mercado Envios, Full, Shopee
+        // Xpress, coleta...). Canal sozinho não responde isso, e é a
+        // primeira coisa que o operador precisa saber pra separar — ver
+        // TipoDeEnvio. Num carrinho do ML todos os pedidos vão na mesma
+        // caixa, com um envio só, então o do titular vale pra caixa.
+        $envio = TipoDeEnvio::doPedido($order);
+
         return [
             'id' => $order->id,
             'external_order_id' => $order->external_order_id,
             'channel' => $order->origin,
+            'shipping_method' => $order->channelShipment?->shipping_method,
+            'shipping_type' => $envio['tipo'],
+            'shipping_type_label' => $envio['label'],
+            'shipping_type_short' => $envio['curto'],
             'customer_name' => $this->queueCustomerName($order),
             // Carrinho do ML: quantos pedidos vão nesta caixa (1 no caso
             // normal) e os outros números de pedido, pro operador conferir
@@ -1902,27 +1919,34 @@ class DashboardAgentController extends Controller
             ->filter(fn (ChannelShipment $shipment) => $shipment->order !== null)
             ->values();
 
-        $result = $shipments->map(fn (ChannelShipment $shipment) => [
-            'order_id' => $shipment->order_id,
-            'external_order_id' => $shipment->order->external_order_id,
-            'channel' => $shipment->channel,
-            'customer_name' => $shipment->order->shipping_name,
-            'shipping_method' => $shipment->shipping_method,
-            'scheduled_for' => $shipment->scheduled_for,
-            // Data real da venda (pedido explícito 2026-08-29: "Data do
-            // Pedido... Criado:", pro card da aba Mercado Livre no
-            // KoraSync) — mesmo campo já exposto em queue() (ver
-            // mapQueueOrder), só que essa aba nunca tinha exposto antes.
-            'created_at' => $shipment->order->created_at,
-            // Pra já vir pronto pro KoraSync destacar visualmente quem já
-            // passou da data prometida sem liberar — não é o mesmo alerta
-            // que "vai liberar em breve".
-            'is_overdue' => $shipment->scheduled_for->isPast(),
-            'products' => $shipment->order->items->map(fn ($item) => [
-                'name' => $item->product_name,
-                'quantity' => $item->quantity,
-            ]),
-        ]);
+        $result = $shipments->map(function (ChannelShipment $shipment) {
+            $envioAgendado = TipoDeEnvio::montar($shipment->channel, $shipment->shipping_method);
+
+            return [
+                'order_id' => $shipment->order_id,
+                'external_order_id' => $shipment->order->external_order_id,
+                'channel' => $shipment->channel,
+                'customer_name' => $shipment->order->shipping_name,
+                'shipping_method' => $shipment->shipping_method,
+                'shipping_type' => $envioAgendado['tipo'],
+                'shipping_type_label' => $envioAgendado['label'],
+                'shipping_type_short' => $envioAgendado['curto'],
+                'scheduled_for' => $shipment->scheduled_for,
+                // Data real da venda (pedido explícito 2026-08-29: "Data do
+                // Pedido... Criado:", pro card da aba Mercado Livre no
+                // KoraSync) — mesmo campo já exposto em queue() (ver
+                // mapQueueOrder), só que essa aba nunca tinha exposto antes.
+                'created_at' => $shipment->order->created_at,
+                // Pra já vir pronto pro KoraSync destacar visualmente quem já
+                // passou da data prometida sem liberar — não é o mesmo alerta
+                // que "vai liberar em breve".
+                'is_overdue' => $shipment->scheduled_for->isPast(),
+                'products' => $shipment->order->items->map(fn ($item) => [
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                ]),
+            ];
+        });
 
         return response()->json(['scheduled_shipments' => $result]);
     }

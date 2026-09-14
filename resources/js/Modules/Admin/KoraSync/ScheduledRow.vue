@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { shippingBadge } from './shippingBadge';
 
 /**
  * Linha da aba "Vendas futuras" (scheduled-shipments) — venda com entrega
@@ -17,6 +18,10 @@ const scheduledDate = computed(() => {
 
     return new Date(props.shipment.scheduled_for).toLocaleDateString('pt-BR');
 });
+
+// Antes esta linha mostrava o shipping_method cru ("xd_drop_off") no
+// rodapé do card — código de API, não informação pro operador.
+const envio = computed(() => shippingBadge(props.shipment));
 
 const createdDate = computed(() => {
     if (!props.shipment.created_at) return '—';
@@ -50,8 +55,20 @@ const createdDate = computed(() => {
                 <i class="fas fa-calendar-day mr-1"></i>
                 Agendado {{ scheduledDate }}
             </span>
+            <span
+                class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-bold"
+                :title="envio.titulo"
+                :style="{
+                    background: `color-mix(in srgb, ${envio.cor} 16%, transparent)`,
+                    borderColor: `color-mix(in srgb, ${envio.cor} 55%, transparent)`,
+                    color: envio.cor,
+                }"
+            >
+                <i class="fas text-[10px]" :class="envio.icone"></i>
+                {{ envio.texto }}
+            </span>
             <span v-if="shipment.is_overdue" class="text-xs font-semibold" style="color: var(--ks-error)">Venceu — canal ainda não liberou</span>
-            <span v-else class="text-xs" style="color: var(--ks-text-secondary)">{{ shipment.shipping_method || 'Aguardando liberação' }}</span>
+            <span v-else class="text-xs" style="color: var(--ks-text-secondary)">Aguardando liberação</span>
         </div>
     </div>
 </template>

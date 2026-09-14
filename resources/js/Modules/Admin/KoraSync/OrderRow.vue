@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { channelBrand } from './channelBrand';
+import { shippingBadge } from './shippingBadge';
 
 /**
  * Linha de pedido da fila — mesmo template visual do card do app desktop
@@ -29,6 +30,10 @@ const isPacked = computed(() => !!props.order.packed_at);
 const isAwaitingLabel = computed(() => !!props.order.scheduled_for && isPacked.value && !props.order.label_ready);
 
 const brand = computed(() => channelBrand(props.order.channel));
+
+// Tipo de envio (Flex / Mercado Envios / Full / Xpress / coleta...): canal
+// sozinho não diz como a caixa sai da loja — ver TipoDeEnvio no backend.
+const envio = computed(() => shippingBadge(props.order));
 
 const statusPillText = computed(() => {
     if (isAwaitingLabel.value) return 'Aguardando etiqueta';
@@ -143,10 +148,25 @@ function handlePack() {
 
             <!-- Canal + status + botão -->
             <div class="flex shrink-0 items-center justify-between gap-4 md:justify-end">
-                <span
-                    class="rounded-full px-2.5 py-1 text-xs font-bold"
-                    :style="{ background: `color-mix(in srgb, ${brand.color} 22%, transparent)`, color: brand.color }"
-                >{{ brand.short }}</span>
+                <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span
+                        class="rounded-full px-2.5 py-1 text-xs font-bold"
+                        :style="{ background: `color-mix(in srgb, ${brand.color} 22%, transparent)`, color: brand.color }"
+                    >{{ brand.short }}</span>
+
+                    <span
+                        class="flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-bold"
+                        :title="envio.titulo"
+                        :style="{
+                            background: `color-mix(in srgb, ${envio.cor} 16%, transparent)`,
+                            borderColor: `color-mix(in srgb, ${envio.cor} 55%, transparent)`,
+                            color: envio.cor,
+                        }"
+                    >
+                        <i class="fas text-[10px]" :class="envio.icone"></i>
+                        {{ envio.texto }}
+                    </span>
+                </div>
 
                 <span v-if="isCancelled" class="rounded-md border px-2 py-1 text-xs font-bold"
                     style="background: color-mix(in srgb, var(--ks-error) 15%, transparent); border-color: var(--ks-error); color: var(--ks-error)"

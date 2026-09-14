@@ -671,13 +671,32 @@ class DashboardAgentController extends Controller
         // NÃO era detectar o status (isso já funciona), era a fila parar
         // de mostrar pedido nesse status "pra auditoria" — decisão
         // 2026-08-15 revertida especificamente pra esses 2 status agora.
+        // Pedido do FULL: o estoque é do Mercado Livre e quem embala é o ML.
+        // Pedido explícito 2026-09-14: ele APARECE na fila, mas só pra
+        // contabilizar a venda do dia — o pessoal dá baixa quando vê. Por
+        // isso entra aqui (exibição) e fica FORA de $actionableOrders
+        // (conta de estoque e de separação pendente) logo abaixo: separar
+        // não é trabalho nosso, e pedir reposição de um produto que nem sai
+        // daqui só sujaria a aba Sem Estoque.
+        $ehFull = fn ($query) => $query->where('shipping_method', ChannelShipment::METHOD_FULFILLMENT);
+
         $displayOnlyOrders = Order::query()
             ->nonPurchaseReturn()
             ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
-            ->where(function ($query) {
-                $query->whereNotNull('packed_at')->orWhere('status', '!=', Order::STATUS_PAID);
+            // Pedido explícito 2026-09-14 ("se já foram entregues, deve
+            // sumir da fila de embalado ou entrega futura"): quando o CANAL
+            // confirma que o pacote saiu — coleta escaneada ou entrega
+            // feita — não há mais nada a fazer aqui, mesmo que o status
+            // local ainda não tenha virado. Complementa a regra de
+            // SHIPPED/COMPLETED do whereNotIn acima, que depende do nosso
+            // status; esta olha o que o canal respondeu.
+            ->whereDoesntHave('channelShipment', fn ($query) => $query->jaSaiu())
+            ->where(function ($query) use ($ehFull) {
+                $query->whereNotNull('packed_at')
+                    ->orWhere('status', '!=', Order::STATUS_PAID)
+                    ->orWhereHas('channelShipment', $ehFull);
             })
-            ->where(function ($query) use ($yesterday, $tomorrow) {
+            ->where(function ($query) use ($yesterday, $tomorrow, $ehFull) {
                 // BUG REAL 2026-09-01 (relatado pelo usuário: "mercado livre
                 // tá marcando mais de 40 pedidos", 18 pedidos reais sumidos
                 // de TODA tela — #927/931/932/939/973/980/989/990/1006/1023/
@@ -691,7 +710,21 @@ class DashboardAgentController extends Controller
                 // bem quando o pedido tem só 2-3 dias). Mesmo princípio já
                 // aplicado a pedido agendado vencido (ver isInTodayWindow):
                 // não resolvido = sempre visível, não importa a idade.
-                $query->where('status', Order::STATUS_PAID)
+                // Pedido explícito 2026-09-14: pedido já embalado fica na
+                // tela pelo dia (contagem do dia e conferência de quem deu
+                // baixa) e depois sai. Antes a regra era "pago = sempre
+                // visível, não importa a idade" — mas ela foi escrita pra
+                // trabalho PENDENTE, e acabou segurando também o que já
+                // estava embalado: a aba Separados tinha 478 pedidos em
+                // 14/09, 429 deles do TikTok, com baixa de até um mês atrás.
+                // Quem procura um pedido velho usa a busca (bloco "No
+                // histórico"), não a fila.
+                //
+                // A janela é sobre packed_at, não created_at: baixa de hoje
+                // num pedido de cinco dias atrás é trabalho de HOJE e tem
+                // que contar no dia.
+                $query->whereBetween('packed_at', [$yesterday, $tomorrow])
+                    ->orWhereHas('channelShipment', $ehFull)
                     ->orWhere(function ($query) use ($yesterday, $tomorrow) {
                         // Resolvido de outro jeito que não seja PAID (só
                         // sobra "aguardando pagamento" aqui — cancelado/
@@ -744,6 +777,11 @@ class DashboardAgentController extends Controller
             ->nonPurchaseReturn()
             ->where('status', Order::STATUS_PAID)
             ->whereNull('packed_at')
+            // Full não é trabalho de separação nosso (ver $ehFull acima), e
+            // pedido que o canal já despachou também não — os dois ficam
+            // fora da conta de estoque e de "falta separar".
+            ->whereDoesntHave('channelShipment', $ehFull)
+            ->whereDoesntHave('channelShipment', fn ($query) => $query->jaSaiu())
             ->where(function ($query) use ($actionableSince) {
                 $query->where('created_at', '>=', $actionableSince)
                     ->orWhereHas('channelShipment', function ($query) {
@@ -1909,6 +1947,10 @@ class DashboardAgentController extends Controller
             // pedido já despachado com scheduled_for continuava aparecendo
             // pra sempre nesta lista.
             ->whereHas('order', fn ($query) => $query->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
+            // Mesma regra nova da fila (pedido explícito 2026-09-14): venda
+            // agendada que o canal já despachou ou entregou sai da aba, sem
+            // depender do status local ter virado.
+            ->aindaNaoSaiu()
             ->when(
                 $request->query('channel'),
                 fn ($query, $channel) => $query->where('channel', $channel),

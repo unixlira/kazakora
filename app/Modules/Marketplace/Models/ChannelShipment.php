@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Models;
 
 use App\Modules\Checkout\Models\Order;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -23,6 +24,15 @@ class ChannelShipment extends Model
     public const METHOD_DROP_OFF = 'drop_off';
 
     public const METHOD_FULFILLMENT = 'fulfillment';
+
+    /**
+     * Status que o CANAL devolve pro envio (`channel_status`), diferente do
+     * nosso `status` acima. Hoje só o Mercado Livre preenche — Shopee e
+     * TikTok vêm sempre null (conferido em produção 2026-09-14).
+     */
+    public const CHANNEL_STATUS_SHIPPED = 'shipped';
+
+    public const CHANNEL_STATUS_DELIVERED = 'delivered';
 
     /** Devolução conferida por uma pessoa: o produto está de volta na loja. */
     public const RETURN_BACK_IN_STORE = 'voltou';
@@ -84,6 +94,44 @@ class ChannelShipment extends Model
             'flex_alerts_notified' => 'array',
             'flex_alerts_resolved' => 'array',
         ];
+    }
+
+    /**
+     * O canal já confirmou que o pacote saiu da nossa mão — o ponto de
+     * coleta escaneou, ou a entrega foi feita.
+     *
+     * É o que tira o pedido da fila do KoraSync: depois disso não há mais
+     * nada pra separar nem pra embalar aqui. O `or` fica dentro de um grupo
+     * de propósito — usado em whereHas/whereDoesntHave, um `or` solto
+     * escaparia do agrupamento da própria relação e pegaria a tabela toda.
+     *
+     * @param  Builder<ChannelShipment>  $query
+     */
+    public function scopeJaSaiu(Builder $query): void
+    {
+        $query->where(function (Builder $query) {
+            $query->whereIn('channel_status', [self::CHANNEL_STATUS_SHIPPED, self::CHANNEL_STATUS_DELIVERED])
+                ->orWhereNotNull('channel_shipped_at')
+                ->orWhereNotNull('channel_delivered_at');
+        });
+    }
+
+    /**
+     * O contrário de jaSaiu(), escrito à mão em vez de negado: como
+     * `channel_status` é nulo na maior parte das linhas, um
+     * `whereNotIn` sozinho descartaria justamente elas (NULL NOT IN (...)
+     * não é verdadeiro em SQL).
+     *
+     * @param  Builder<ChannelShipment>  $query
+     */
+    public function scopeAindaNaoSaiu(Builder $query): void
+    {
+        $query->where(function (Builder $query) {
+            $query->whereNull('channel_status')
+                ->orWhereNotIn('channel_status', [self::CHANNEL_STATUS_SHIPPED, self::CHANNEL_STATUS_DELIVERED]);
+        })
+            ->whereNull('channel_shipped_at')
+            ->whereNull('channel_delivered_at');
     }
 
     public function order(): BelongsTo

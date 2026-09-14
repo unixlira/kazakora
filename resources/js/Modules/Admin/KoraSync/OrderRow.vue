@@ -35,6 +35,11 @@ const brand = computed(() => channelBrand(props.order.channel));
 // sozinho não diz como a caixa sai da loja — ver TipoDeEnvio no backend.
 const envio = computed(() => shippingBadge(props.order));
 
+// Full: o produto está no galpão do Mercado Livre, não no nosso. O card
+// aparece na fila pra contar a venda do dia e pro operador dar baixa quando
+// vê — sem o aviso, alguém sai procurando o produto na prateleira.
+const ehFull = computed(() => props.order.shipping_type === 'full');
+
 const statusPillText = computed(() => {
     if (isAwaitingLabel.value) return 'Aguardando etiqueta';
 
@@ -133,6 +138,17 @@ function handlePack() {
                         </p>
                     </div>
                 </div>
+
+                <p v-if="ehFull && !isCancelled" class="pt-1">
+                    <span
+                        class="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-semibold"
+                        title="Pedido Full: o Mercado Livre separa e envia. Aqui é só dar baixa pra venda contar no dia."
+                        style="background: rgba(167,139,250,0.14); border-color: rgba(167,139,250,0.45); color: #A78BFA"
+                    >
+                        <i class="fas fa-warehouse text-[10px]"></i>
+                        Full — quem separa e envia é o Mercado Livre
+                    </span>
+                </p>
 
                 <p v-if="order.stock_shortage?.length" class="flex flex-wrap gap-1.5 pt-1">
                     <span

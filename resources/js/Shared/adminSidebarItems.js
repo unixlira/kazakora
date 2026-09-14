@@ -81,6 +81,16 @@ export const sidebarSections = [
         ],
     },
     {
+        // Menu Log (pedido explícito 2026-09-14): tudo que o sistema
+        // escreve em storage/logs numa lista só, com filtro de data/hora,
+        // nível e busca por texto — pra achar um erro sem abrir SSH.
+        // Admin-only (ver SystemLogController).
+        heading: 'Log',
+        items: [
+            { label: 'Logs do Sistema', href: '/admin/logs', icon: 'fas fa-file-lines', color: 'text-error', permission: 'configuracoes.auditoria' },
+        ],
+    },
+    {
         heading: 'Configurações',
         items: [
             { label: 'Empresa', href: '/admin/empresa', icon: 'fas fa-building', color: 'text-success', permission: null },

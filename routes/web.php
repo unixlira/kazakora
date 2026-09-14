@@ -52,6 +52,7 @@ use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
+use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
@@ -441,6 +442,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');
 
         Route::get('auditoria', [AuditLogController::class, 'index'])->name('auditoria.listar');
+
+        // Menu "Log": os arquivos de storage/logs na tela, com filtro de
+        // data/hora, nível e busca por texto. Admin-only igual à auditoria —
+        // log de produção carrega dado de cliente e payload de marketplace.
+        Route::get('logs', [SystemLogController::class, 'index'])->name('logs.listar');
 
         Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
         Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');

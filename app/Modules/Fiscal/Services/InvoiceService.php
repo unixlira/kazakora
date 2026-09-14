@@ -3,14 +3,13 @@
 namespace App\Modules\Fiscal\Services;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
-use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Services\NFe\NFeCertificateService;
 use App\Services\NFe\NFeDanfeService;
 use App\Services\NFe\NFeWebserviceService;
 use App\Services\NFe\NFeXmlBuilderService;
 use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -36,23 +35,7 @@ class InvoiceService
         private readonly NFeCertificateService $certificateService,
         private readonly NFeWebserviceService $webservice,
         private readonly NFeDanfeService $danfeService,
-        private readonly PackDoPedido $pack,
     ) {
-    }
-
-    /** cStat 656 — a SEFAZ-SP bloqueia o CNPJ por excesso de requisições. */
-    private const CSTAT_CONSUMO_INDEVIDO = '656';
-
-    private const CACHE_CONSUMO_INDEVIDO = 'nfe.consumo_indevido_ate';
-
-    /**
-     * Até quando a SEFAZ está nos barrando por consumo indevido (656), ou
-     * null se está liberado. Quem emite em lote consulta isto ANTES de
-     * começar — insistir durante a punição só renova a punição.
-     */
-    public function bloqueadoPorConsumoIndevidoAte(): ?string
-    {
-        return Cache::get(self::CACHE_CONSUMO_INDEVIDO);
     }
 
     public function issue(Order $order): Invoice
@@ -110,12 +93,6 @@ class InvoiceService
             return $order->invoice;
         }
 
-        // Carrinho do Mercado Livre: daqui pra baixo o pedido titular é
-        // enxergado com os itens e o valor de todos os pedidos do carrinho —
-        // toda montagem de XML (primeira, rebuild, 539) sai completa. Ver
-        // PackDoPedido::pedidoFiscal().
-        $order = $this->pack->pedidoFiscal($order);
-
         // Pedido antigo que ficou marcado como STATUS_EXTERNAL (Mercado
         // Livre, antes da mudança 2026-08-22 acima) nunca teve XML/numero
         // real reservado — trata como se não existisse nenhuma nota ainda,
@@ -142,13 +119,7 @@ class InvoiceService
         // seguro: a chave pode mudar (tem componente aleatório), mas como
         // a SEFAZ nunca autorizou a chave antiga, não sobra nada pra
         // invalidar.
-        // Rejeição 539 (duplicidade de número) é a única em que reaproveitar
-        // o número reservado é rejeição garantida pra sempre — a SEFAZ está
-        // dizendo que aquele número já foi consumido por outra chave. Ver
-        // reserveNewNumber(); pedido #1604 ficou preso nesse laço.
-        if ($invoice->status === Invoice::STATUS_REJECTED && $this->rejeitadaPorDuplicidade($invoice)) {
-            $invoice = $this->reserveNewNumber($invoice, $order);
-        } elseif (in_array($invoice->status, [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED], true)) {
+        if (in_array($invoice->status, [Invoice::STATUS_PENDING, Invoice::STATUS_REJECTED], true)) {
             $invoice = $this->rebuildPendingInvoice($invoice, $order);
         }
 
@@ -163,109 +134,19 @@ class InvoiceService
         return $invoice->fresh();
     }
 
-    /** cStat 539 — "Duplicidade de NF-e com diferença na Chave de Acesso". */
-    private function rejeitadaPorDuplicidade(Invoice $invoice): bool
+    public function issueDetached(Order $order, string $folder): Invoice
     {
-        $motivo = (string) $invoice->motivo_rejeicao;
+        $invoice = $this->createPendingDetachedInvoice($order, trim($folder, '/'));
 
-        return str_contains($motivo, '539') || stripos($motivo, 'duplicidade') !== false;
-    }
+        if (! $this->certificateService->isConfigured()) {
+            Log::channel('stripe')->info('nfe.issue_detached.blocked_no_certificate', ['invoice_id' => $invoice->id, 'folder' => $folder]);
 
-    /**
-     * O próximo número de NF-e da série configurada.
-     *
-     * BUG REAL 2026-09-07 (pedido #1604, "a nota da Amanda não saiu"): a
-     * conta olhava só a COLUNA `numero`, e a coluna mente. O
-     * BlingInvoiceImporter sobrescrevia serie/numero de uma nota que o
-     * nosso sistema já tinha emitido e autorizado, trocando pela numeração
-     * interna do Bling — o pedido #1603 saiu autorizado na SEFAZ como
-     * série 2 nº 2037 e virou "série 3 nº 119" no banco. Com o 2037 fora do
-     * alcance de `max(numero) where serie = 2`, o pedido seguinte reservou
-     * 2037 de novo e a SEFAZ devolveu **539 — Duplicidade de NF-e com
-     * diferença na Chave de Acesso**. A etiqueta nunca saiu porque a Shopee
-     * exige a nota antes de liberar o envio.
-     *
-     * A chave de acesso não mente: série e número estão gravados DENTRO
-     * dela (posições 22-24 e 25-33), e ela é o que a SEFAZ registrou. Então
-     * o número novo é o maior entre o que a coluna diz e o que as chaves
-     * dizem.
-     *
-     * Feito em PHP, não em SQL: `SUBSTRING`/`CAST` mudam de nome entre
-     * MySQL (produção) e SQLite (testes), e a tabela inteira são ~1,2 mil
-     * linhas de uma coluna curta — o custo é irrelevante perto de emitir
-     * uma nota com número queimado.
-     */
-    private function proximoNumero(): int
-    {
-        $serie = (int) config('nfe.serie');
-        $ambiente = config('nfe.ambiente');
+            return $invoice;
+        }
 
-        $maxColuna = (int) (Invoice::query()
-            ->where('serie', $serie)
-            ->where('ambiente', $ambiente)
-            ->lockForUpdate()
-            ->max('numero') ?? 0);
+        $this->signAndSend($invoice);
 
-        $serieNaChave = str_pad((string) $serie, 3, '0', STR_PAD_LEFT);
-
-        $maxChave = Invoice::query()
-            ->where('ambiente', $ambiente)
-            ->whereNotNull('chave_acesso')
-            ->pluck('chave_acesso')
-            ->reduce(function (int $maior, ?string $chave) use ($serieNaChave) {
-                if ($chave === null || strlen($chave) !== 44 || substr($chave, 22, 3) !== $serieNaChave) {
-                    return $maior;
-                }
-
-                return max($maior, (int) substr($chave, 25, 9));
-            }, 0);
-
-        return max($maxColuna, $maxChave, (int) config('nfe.numero_inicial')) + 1;
-    }
-
-    /**
-     * Queima o número atual e reserva um novo pra MESMA linha de nota.
-     *
-     * Só pra rejeição de duplicidade (539): nesse caso — e só nesse — a
-     * SEFAZ está dizendo que o número JÁ foi consumido por outra chave, ou
-     * seja, reenviar com o mesmo número é rejeição garantida pra sempre.
-     * Em toda outra rejeição o número continua livre e o retry reaproveita
-     * ele (ver rebuildPendingInvoice()), que é o certo pra não abrir buraco
-     * na numeração fiscal à toa.
-     */
-    private function reserveNewNumber(Invoice $invoice, Order $order): Invoice
-    {
-        return DB::transaction(function () use ($invoice, $order) {
-            $numero = $this->proximoNumero();
-
-            ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
-
-            if ($invoice->xml_path) {
-                Storage::disk('local')->delete($invoice->xml_path);
-            }
-
-            $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
-            Storage::disk('local')->put($xmlPath, $xml);
-
-            Log::channel('stripe')->warning('nfe.numero_queimado_por_duplicidade', [
-                'order_id' => $order->id,
-                'invoice_id' => $invoice->id,
-                'numero_antigo' => $invoice->numero,
-                'numero_novo' => $numero,
-            ]);
-
-            $invoice->update([
-                'status' => Invoice::STATUS_PENDING,
-                'serie' => (int) config('nfe.serie'),
-                'numero' => $numero,
-                'valor_total' => $order->total,
-                'chave_acesso' => $chave,
-                'xml_path' => $xmlPath,
-                'motivo_rejeicao' => null,
-            ]);
-
-            return $invoice->fresh();
-        });
+        return $invoice->fresh();
     }
 
     /**
@@ -284,9 +165,14 @@ class InvoiceService
 
         $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
         Storage::disk('local')->put($xmlPath, $xml);
-        // valor_total junto: numa nota de carrinho o rebuild pode ter mudado
-        // o que entra nela (irmão chegou ou foi cancelado).
-        $invoice->update(['chave_acesso' => $chave, 'xml_path' => $xmlPath, 'valor_total' => $order->total]);
+        $operationType = $order->fiscal_operation_type === 'sales_return'
+            ? 'entrada'
+            : 'saida';
+        $invoice->update([
+            'operation_type' => $operationType,
+            'chave_acesso' => $chave,
+            'xml_path' => $xmlPath,
+        ]);
 
         return $invoice->fresh();
     }
@@ -300,12 +186,29 @@ class InvoiceService
     {
         try {
             return DB::transaction(function () use ($order) {
-                $numero = $this->proximoNumero();
+                $localMax = Invoice::query()
+                    ->where('serie', config('nfe.serie'))
+                    ->where('ambiente', config('nfe.ambiente'))
+                    ->lockForUpdate()
+                    ->max('numero') ?? 0;
+
+                // max(local, numero_inicial) — ver comentário em config/nfe.php.
+                $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
 
                 ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
 
+                $company = Company::query()->first();
+                $companyDocument = $company ? preg_replace('/\D/', '', (string) $company->cnpj) : null;
+                $operationType = $order->fiscal_operation_type === 'sales_return'
+                    ? 'entrada'
+                    : 'saida';
+
                 $invoice = Invoice::create([
                     'order_id' => $order->id,
+                    'origem' => Invoice::ORIGEM_PEDIDO,
+                    'operation_type' => $operationType,
+                    'emitente_nome' => $company?->razao_social,
+                    'emitente_documento' => $companyDocument,
                     'status' => Invoice::STATUS_PENDING,
                     'ambiente' => config('nfe.ambiente'),
                     'serie' => config('nfe.serie'),
@@ -328,9 +231,7 @@ class InvoiceService
             // (ex: retry manual cruzando com o automático). unique(order_id)
             // barra a segunda no banco — em vez de quebrar, reaproveita a
             // linha que a primeira já criou.
-            // Por order_id, não $order->fresh(): o pedido de um carrinho
-            // chega aqui como modelo não persistido (PackDoPedido::pedidoFiscal).
-            $existing = Invoice::query()->where('order_id', $order->id)->first();
+            $existing = $order->fresh()->invoice;
 
             if (! $existing) {
                 throw $exception;
@@ -338,6 +239,53 @@ class InvoiceService
 
             return $existing;
         }
+    }
+
+    /**
+     * Cria nota sem order_id para casos em que uma única NF-e cobre mais de
+     * um Order local do marketplace (pack/carrinho do Mercado Livre). O XML
+     * recebe um Order preparado em memória com todos os itens e totais, mas
+     * a linha fiscal não pode apontar para só um item-pedido como se fosse
+     * uma nota individual.
+     */
+    private function createPendingDetachedInvoice(Order $order, string $folder): Invoice
+    {
+        return DB::transaction(function () use ($order, $folder) {
+            $localMax = Invoice::query()
+                ->where('serie', config('nfe.serie'))
+                ->where('ambiente', config('nfe.ambiente'))
+                ->lockForUpdate()
+                ->max('numero') ?? 0;
+
+            $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
+            ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
+
+            $company = Company::query()->first();
+            $companyDocument = $company ? preg_replace('/\D/', '', (string) $company->cnpj) : null;
+            $operationType = $order->fiscal_operation_type === 'sales_return'
+                ? 'entrada'
+                : 'saida';
+
+            $invoice = Invoice::create([
+                'order_id' => null,
+                'origem' => Invoice::ORIGEM_PEDIDO,
+                'operation_type' => $operationType,
+                'emitente_nome' => $company?->razao_social,
+                'emitente_documento' => $companyDocument,
+                'status' => Invoice::STATUS_PENDING,
+                'ambiente' => config('nfe.ambiente'),
+                'serie' => config('nfe.serie'),
+                'numero' => $numero,
+                'valor_total' => $order->total,
+                'chave_acesso' => $chave,
+            ]);
+
+            $xmlPath = "{$folder}/nfe-{$chave}.xml";
+            Storage::disk('local')->put($xmlPath, $xml);
+            $invoice->update(['xml_path' => $xmlPath]);
+
+            return $invoice;
+        });
     }
 
     /**
@@ -351,15 +299,31 @@ class InvoiceService
     private function convertExternalToPending(Invoice $invoice, Order $order): Invoice
     {
         return DB::transaction(function () use ($invoice, $order) {
-            $numero = $this->proximoNumero();
+            $localMax = Invoice::query()
+                ->where('serie', config('nfe.serie'))
+                ->where('ambiente', config('nfe.ambiente'))
+                ->lockForUpdate()
+                ->max('numero') ?? 0;
+
+            $numero = max($localMax, (int) config('nfe.numero_inicial')) + 1;
 
             ['xml' => $xml, 'chave' => $chave] = $this->xmlBuilder->build($order, $numero);
 
             $xmlPath = "invoices/{$order->id}/nfe-{$chave}.xml";
             Storage::disk('local')->put($xmlPath, $xml);
 
+            $company = Company::query()->first();
+            $companyDocument = $company ? preg_replace('/\D/', '', (string) $company->cnpj) : null;
+            $operationType = $order->fiscal_operation_type === 'sales_return'
+                ? 'entrada'
+                : 'saida';
+
             $invoice->update([
                 'status' => Invoice::STATUS_PENDING,
+                'origem' => Invoice::ORIGEM_PEDIDO,
+                'operation_type' => $operationType,
+                'emitente_nome' => $company?->razao_social,
+                'emitente_documento' => $companyDocument,
                 'ambiente' => config('nfe.ambiente'),
                 'serie' => config('nfe.serie'),
                 'numero' => $numero,
@@ -370,96 +334,6 @@ class InvoiceService
 
             return $invoice->fresh();
         });
-    }
-
-    /**
-     * Pergunta à SEFAZ o que aconteceu com uma nota que ficou em `sent`.
-     *
-     * BURACO REAL, achado em 2026-09-07 nos pedidos do Mercado Livre: o
-     * envio é síncrono, mas quando a resposta vem sem protocolo
-     * reconhecível (falha de comunicação, timeout do lado da SEFAZ, lote em
-     * processamento) o código grava `sent`, lança e vai embora. **Nada
-     * nunca mais olhava pra essa nota.** Ela não é rejeitada nem
-     * autorizada: fica num limbo em que o canal não libera o envio e a
-     * etiqueta nunca sai — e reemitir às cegas arrisca duplicar uma NF-e
-     * que talvez esteja autorizada lá.
-     *
-     * A consulta por chave é a única resposta confiável. Três desfechos:
-     *
-     * - **autorizada de verdade** (cStat 100): adota o protocolo, monta o
-     *   nfeProc e a DANFE — o resto do fluxo segue como se nunca tivesse
-     *   travado.
-     * - **denegada** (110/301/302): terminal, igual ao caminho normal.
-     * - **nunca chegou lá** (217 "NF-e não consta na base"): volta pra
-     *   `pending` com o MESMO número. Esse número não foi consumido na
-     *   SEFAZ, então reenviar é seguro e não abre buraco na numeração.
-     */
-    public function reconcileSent(Invoice $invoice): Invoice
-    {
-        if ($invoice->status !== Invoice::STATUS_SENT || ! $invoice->chave_acesso) {
-            return $invoice;
-        }
-
-        $certificate = $this->certificateService->load();
-        $response = $this->webservice->consultarChave($invoice->chave_acesso, $certificate);
-
-        $result = new SimpleXMLElement($response);
-        $result->registerXPathNamespace('n', 'http://www.portalfiscal.inf.br/nfe');
-
-        $cStatConsulta = (string) ($result->xpath('//n:retConsSitNFe/n:cStat')[0] ?? $result->xpath('//cStat')[0] ?? '');
-        $xMotivoConsulta = (string) ($result->xpath('//n:retConsSitNFe/n:xMotivo')[0] ?? $result->xpath('//xMotivo')[0] ?? '');
-
-        $infProt = $result->xpath('//n:protNFe/n:infProt')[0] ?? $result->xpath('//protNFe/infProt')[0] ?? null;
-
-        Log::channel('stripe')->info('nfe.reconcile_sent', [
-            'invoice_id' => $invoice->id,
-            'order_id' => $invoice->order_id,
-            'chave' => $invoice->chave_acesso,
-            'cStat_consulta' => $cStatConsulta,
-            'tem_protocolo' => $infProt !== null,
-        ]);
-
-        // 217: a SEFAZ nunca recebeu esta nota. O número continua livre —
-        // devolve pra pendente pra reenviar com ele mesmo.
-        if ($infProt === null) {
-            $invoice->update([
-                'status' => Invoice::STATUS_PENDING,
-                'motivo_rejeicao' => $cStatConsulta !== ''
-                    ? "Não consta na SEFAZ ({$cStatConsulta} - {$xMotivoConsulta}) — será reenviada com o mesmo número."
-                    : null,
-            ]);
-
-            return $invoice->fresh();
-        }
-
-        $cStat = (string) $infProt->cStat;
-        $xMotivo = (string) $infProt->xMotivo;
-
-        if ($cStat === '100') {
-            $signedXml = Storage::disk('local')->get($invoice->xml_path);
-            $nfeProcXml = \NFePHP\NFe\Complements::toAuthorize($signedXml, $response);
-
-            $invoice->update([
-                'status' => Invoice::STATUS_AUTHORIZED,
-                'protocolo_autorizacao' => (string) $infProt->nProt,
-                'autorizada_em' => now(),
-                'motivo_rejeicao' => null,
-            ]);
-            Storage::disk('local')->put($invoice->xml_path, $nfeProcXml);
-
-            $danfePath = "invoices/{$invoice->order_id}/danfe-{$invoice->chave_acesso}.pdf";
-            Storage::disk('local')->put($danfePath, $this->danfeService->generate($nfeProcXml));
-            $invoice->update(['danfe_path' => $danfePath]);
-
-            return $invoice->fresh();
-        }
-
-        $invoice->update([
-            'status' => in_array($cStat, ['110', '301', '302'], true) ? Invoice::STATUS_DENIED : Invoice::STATUS_REJECTED,
-            'motivo_rejeicao' => "{$cStat} - {$xMotivo}",
-        ]);
-
-        return $invoice->fresh();
     }
 
     private function signAndSend(Invoice $invoice): void
@@ -480,42 +354,9 @@ class InvoiceService
         $infProt = $protNFe[0] ?? null;
 
         if (! $infProt) {
-            // Sem protNFe quase nunca é "resposta ilegível": é uma rejeição
-            // do LOTE, que vem em retEnviNFe/cStat e o código ignorava,
-            // devolvendo "resposta sem protocolo reconhecível" pra tudo.
-            //
-            // BUG REAL 2026-09-07: 4 notas do Mercado Livre ficaram em
-            // `sent` repetindo esse erro genérico. A resposta de verdade
-            // era **656 - Rejeição: Consumo Indevido** — a SEFAZ-SP tinha
-            // bloqueado o CNPJ por excesso de requisições (uma varredura
-            // minha mandou ~100 notas de uma vez). Sem ler o cStat do lote,
-            // o retry insistia e realimentava o próprio bloqueio.
-            $cStatLote = (string) ($result->xpath('//n:retEnviNFe/n:cStat')[0] ?? $result->xpath('//retEnviNFe/cStat')[0] ?? '');
-            $xMotivoLote = (string) ($result->xpath('//n:retEnviNFe/n:xMotivo')[0] ?? $result->xpath('//retEnviNFe/xMotivo')[0] ?? '');
-
-            // O lote não foi recebido, então este número NÃO foi consumido
-            // na SEFAZ: volta pra pendente e reenvia com ele mesmo depois.
-            $invoice->update([
-                'status' => Invoice::STATUS_PENDING,
-                'motivo_rejeicao' => $cStatLote !== '' ? "{$cStatLote} - {$xMotivoLote}" : null,
-            ]);
-
-            if ($cStatLote === self::CSTAT_CONSUMO_INDEVIDO) {
-                // A SEFAZ-SP libera sozinha depois de ~1h. Insistir antes
-                // disso só renova a punição, então a espera fica registrada
-                // pra qualquer caminho automático respeitar.
-                Cache::put(self::CACHE_CONSUMO_INDEVIDO, now()->addHour()->toDateTimeString(), now()->addHour());
-
-                Log::channel('stripe')->warning('nfe.consumo_indevido', [
-                    'invoice_id' => $invoice->id,
-                    'order_id' => $invoice->order_id,
-                    'liberado_em' => now()->addHour()->toDateTimeString(),
-                ]);
-            }
-
-            throw new RuntimeException($cStatLote !== ''
-                ? "SEFAZ recusou o lote: {$cStatLote} - {$xMotivoLote}"
-                : 'Resposta da SEFAZ sem protocolo reconhecível.');
+            // Resposta sem protocolo reconhecível — pode ser uma falha
+            // transitória de comunicação/parsing, vale tentar de novo.
+            throw new RuntimeException('Resposta da SEFAZ sem protocolo reconhecível.');
         }
 
         $cStat = (string) $infProt->cStat;

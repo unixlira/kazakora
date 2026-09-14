@@ -12,14 +12,11 @@ const props = defineProps({
     adSpendByChannel: { type: Array, default: () => [] },
     adSpendSeries: { type: Array, default: () => [] },
     cashFlowSeries: { type: Array, default: () => [] },
-    channelMonthlyBreakdown: { type: Array, default: () => [] },
+    settlementSummary: { type: Object, default: () => ({ available: false, month: { channels: [], totals: {} }, allTime: { channels: [], totals: {} } }) },
+    marketplaceMetrics: { type: Object, default: () => ({ month: [] }) },
 });
 
-const safeNumber = (value, fallback = 0) => {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : fallback;
-};
-const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safeNumber(value));
+const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const formatShortDate = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`));
 
 const chartData = computed(() => ({
@@ -35,36 +32,10 @@ const chartData = computed(() => ({
 const CHANNEL_STYLES = {
     shopee: { label: 'Shopee', color: '#EE4D2D' },
     mercado_livre: { label: 'Mercado Livre', color: '#2968C8' },
-    tiktok_shop: { label: 'TikTok Shop', color: '#000000' },
+    tiktok_shop: { label: 'TikTok Shop', color: '#111827' },
     amazon: { label: 'Amazon', color: '#FF9900' },
-    shein: { label: 'Shein', color: '#3D3D3D' },
-    loja: { label: 'Loja própria', color: '#04D7B6' },
+    nota_fiscal_avulsa: { label: 'NF Avulsa', color: '#64748b' },
 };
-
-const monthLabel = (month) => {
-    const [year, m] = month.split('-');
-    return new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(new Date(Number(year), Number(m) - 1, 1));
-};
-
-// Agrupado por mês (mais recente primeiro, já vem ordenado do backend),
-// cada mês com a lista de canais que tiveram pedido naquele mês —
-// pedido explícito 2026-08-31: "detalhado de cada marketplace por mês".
-const breakdownByMonth = computed(() => {
-    const months = [];
-
-    for (const row of props.channelMonthlyBreakdown) {
-        let bucket = months.find((m) => m.month === row.month);
-
-        if (!bucket) {
-            bucket = { month: row.month, rows: [] };
-            months.push(bucket);
-        }
-
-        bucket.rows.push(row);
-    }
-
-    return months;
-});
 
 const hexToRgba = (hex, alpha) => {
     const value = hex.replace('#', '');
@@ -95,6 +66,13 @@ const adSpendChartData = computed(() => ({
 }));
 
 const totalAdSpend14Days = computed(() => props.adSpendSeries.reduce((sum, item) => sum + item.shopee + item.mercado_livre, 0));
+const platformCostsMonth = computed(() => props.summary.platformCostsMonth ?? ((props.summary.marketplaceFeesMonth ?? 0) + (props.summary.flexCostMonth ?? 0)));
+const grossProfitMonth = computed(() => props.summary.grossProfitMonth ?? ((props.summary.grossRevenueMonth ?? 0) - (props.summary.productCostMonth ?? 0)));
+const netProfitMarginMonth = computed(() => props.summary.netProfitMarginMonth ?? 0);
+const formatPercent = (value) => `${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
+const settlementRows = computed(() => props.settlementSummary?.allTime?.channels ?? []);
+const settlementTotals = computed(() => props.settlementSummary?.allTime?.totals ?? {});
+const marketplaceMetricsRows = computed(() => props.marketplaceMetrics?.month ?? []);
 
 const hasCostData = computed(() => props.netProfit.productsWithCost > 0);
 
@@ -109,10 +87,17 @@ const totalWalletBalance = computed(() => {
         : null;
 });
 
-// "métrica pra saber se tá dando lucro" (pedido explícito 2026-08-09) —
-// cor muda na hora: verde quando positivo, vermelho quando negativo.
+// Pedido explícito 2026-08-27: percentual só fica vermelho quando o lucro líquido
+// estiver negativo. Margem positiva, mesmo baixa, fica verde para não sugerir prejuízo.
 const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success' : 'error'));
-const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >= 0 ? 'success' : 'error'));
+const profitMarginBadgeClass = computed(() => (
+    props.summary.profitMonth >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'
+));
+const channelStyle = (channel) => CHANNEL_STYLES[channel] ?? { label: channel, color: '#64748b' };
+const metricMarginVariant = (netProfit) => (
+    netProfit >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'
+);
+const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
 </script>
 
 <template>
@@ -121,30 +106,70 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
     <AdminLayout>
         <h1 class="mb-4 text-2xl font-bold">Financeiro</h1>
 
-        <!-- Reorganizado 2026-08-10 (usuário achou os cards confusos: nomes
-             parecidos "Bruto"/"Líquido"/"Líquido do Mês" difíceis de
-             distinguir, "Receita de Vendas"/"Lucro Líquido" repetindo os
-             mesmos valores lá embaixo, tudo solto sem agrupamento). Regra
-             adotada: cada valor aparece em UM lugar só. Esta seção é só a
-             visão geral (desde o início + do mês corrente); "Faturamento
-             Líquido do Mês" saiu daqui — ele já é um passo intermediário
-             do cálculo, mora só na seção "Como o Lucro é calculado" mais
-             abaixo, não faz sentido repetir como card solto aqui. -->
-        <h2 class="mb-3 text-xl font-bold">Visão Geral</h2>
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <CardStats stat-subtitle="FATURAMENTO BRUTO (desde o início)" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-bag-shopping" variant="info" />
-            <CardStats stat-subtitle="LUCRO LÍQUIDO (desde o início)" :stat-title="formatPrice(summary.netProfitAllTime)" stat-icon-name="fas fa-chart-line" :variant="netProfitAllTimeVariant" />
-            <CardStats stat-subtitle="FATURAMENTO BRUTO DO MÊS" :stat-title="formatPrice(summary.grossRevenueMonth)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
-            <CardStats stat-subtitle="LUCRO LÍQUIDO DO MÊS" :stat-title="formatPrice(summary.profitMonth)" stat-icon-name="fas fa-coins" :variant="profitVariant" />
-            <!-- Pedido explícito 2026-08-10: soma de todos os produtos por
-                 custo x quantidade em estoque — capital parado em mercadoria. -->
-            <CardStats stat-subtitle="VALOR DE ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
-            <!-- Pedido explícito 2026-08-10: "Saldo Atual" saiu da linha de
-                 saldo por plataforma e veio pra cá, do lado de Valor de
-                 Estoque — e o rótulo perdeu o "(Shopee + Mercado Livre)"
-                 (o detalhamento por plataforma já está na seção "Saldo em
-                 Conta" logo abaixo, não precisa repetir no nome do card). -->
-            <CardStats stat-subtitle="SALDO ATUAL" :stat-title="totalWalletBalance !== null ? formatPrice(totalWalletBalance) : 'Indisponível'" stat-icon-name="fas fa-scale-balanced" variant="primary" />
+        <!-- Pedido explícito 2026-08-27: cards do topo em duas linhas de 3,
+             para não ficar espremido. Ordem atual: valor bruto vitalício no
+             canto superior esquerdo, seguido por lucro bruto do mês. -->
+        <h2 class="mb-3 text-xl font-bold">Resumo Financeiro</h2>
+        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <CardStats stat-subtitle="VALOR BRUTO TOTAL · DESDE O INÍCIO" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-chart-line" variant="info" />
+            <CardStats stat-subtitle="LUCRO BRUTO DO MÊS" :stat-title="formatPrice(grossProfitMonth)" stat-icon-name="fas fa-scale-balanced" :variant="grossProfitMonth >= 0 ? 'success' : 'error'" />
+            <CardStats stat-subtitle="ADS + CAMPANHAS" :stat-title="formatPrice(summary.adSpendMonth)" stat-icon-name="fas fa-bullhorn" variant="warning" />
+            <CardStats stat-subtitle="TAXAS + FRETE + PLATAFORMAS" :stat-title="formatPrice(platformCostsMonth)" stat-icon-name="fas fa-receipt" variant="warning" />
+            <CardStats stat-subtitle="CUSTO PRODUTO VENDIDO" :stat-title="formatPrice(summary.productCostMonth)" stat-icon-name="fas fa-box" variant="info" />
+            <div class="relative flex min-w-0 flex-col break-words rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm transition-shadow hover:shadow-md">
+                <div class="flex items-center gap-4">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" :class="profitVariant === 'success' ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
+                        <i class="fas fa-coins text-xl"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-baseline justify-between gap-2">
+                            <p class="min-w-0 break-words text-xl font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">{{ formatPrice(summary.profitMonth) }}</p>
+                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold leading-none" :class="profitMarginBadgeClass">{{ formatPercent(netProfitMarginMonth) }}</span>
+                        </div>
+                        <p class="mt-1 text-xs font-semibold uppercase leading-snug tracking-wide text-slate-500 dark:text-slate-400 sm:text-sm">LUCRO LÍQUIDO DO MÊS</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500 shadow-sm dark:text-slate-400">
+            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }} para chegar no lucro líquido.
+        </div>
+
+        <h2 class="mb-3 text-xl font-bold">Lucro líquido por Marketplace · Mês Atual</h2>
+        <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
+            Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma e custo dos itens vendidos.
+        </p>
+        <div class="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-4">
+            <div v-for="market in marketplaceMetricsRows" :key="market.channel" class="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" :class="market.isEmpty ? 'opacity-70' : ''">
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div class="flex min-w-0 items-start gap-3">
+                        <span class="mt-1 h-4 w-4 shrink-0 rounded-full" :style="{ backgroundColor: channelStyle(market.channel).color }"></span>
+                        <div class="min-w-0">
+                            <p class="truncate text-base font-bold">{{ market.label }}</p>
+                            <p class="text-[11px] uppercase tracking-wide text-slate-400">{{ market.source }} · {{ market.ordersCount }} pedidos</p>
+                        </div>
+                    </div>
+                    <span class="shrink-0 rounded-full px-2 py-1 text-[11px] font-bold leading-none" :class="metricMarginVariant(market.netProfit)">{{ market.grossRevenue > 0 ? formatPercent(market.netMargin) : '—' }}</span>
+                </div>
+
+                <div class="mb-4 rounded-xl p-4" :style="{ background: hexToRgba(channelStyle(market.channel).color, 0.08) }">
+                    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Lucro líquido · sobra no bolso</p>
+                    <p class="mt-1 break-words text-2xl font-black leading-tight tracking-tight tabular-nums sm:text-3xl" :class="metricProfitClass(market.netProfit)">{{ formatPrice(market.netProfit) }}</p>
+                </div>
+
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Vendas líquidas</span><span class="font-semibold">{{ formatPrice(market.grossRevenue) }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) ADS/campanhas</span><span class="font-semibold text-error">{{ formatPrice(market.adSpend) }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Taxas/frete/plataforma</span><span class="font-semibold text-error">{{ formatPrice(market.platformCosts) }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Custo dos itens</span><span class="font-semibold text-error">{{ formatPrice(market.productCost) }}</span></div>
+                    <div class="flex justify-between gap-3 border-t border-[var(--surface-border)] pt-2"><span class="font-semibold">Lucro bruto</span><span class="font-bold">{{ formatPrice(market.grossProfit) }}</span></div>
+                </div>
+
+                <p v-if="market.isEmpty" class="mt-4 rounded-lg border border-dashed border-[var(--surface-border)] px-3 py-2 text-xs text-slate-400">
+                    Sem métrica confiável ainda. Mantido vazio para receber os dados quando o canal começar a operar.
+                </p>
+            </div>
         </div>
 
         <!-- Saldo disponível pra saque em cada plataforma — a soma das duas
@@ -159,7 +184,7 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                     </span>
                     <div class="min-w-0">
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Shopee</p>
-                        <p class="mt-0.5 truncate text-2xl font-bold">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
+                        <p class="mt-0.5 break-words text-xl font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
                     </div>
                 </div>
             </div>
@@ -170,7 +195,7 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                     </span>
                     <div class="min-w-0">
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Mercado Livre</p>
-                        <p class="mt-0.5 truncate text-2xl font-bold">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
+                        <p class="mt-0.5 break-words text-xl font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">{{ walletBalances.mercado_livre !== null ? formatPrice(walletBalances.mercado_livre) : 'Indisponível' }}</p>
                     </div>
                 </div>
             </div>
@@ -198,7 +223,7 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
 
         <div class="mb-3 max-w-xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
             <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">Faturamento Bruto do Mês</span>
+                <span class="text-slate-500 dark:text-slate-400">Vendas líquidas do mês</span>
                 <span class="font-semibold">{{ formatPrice(netProfit.salesRevenueMonth) }}</span>
             </div>
             <!-- Pedido explícito 2026-08-15: frete não é receita nem custo
@@ -210,16 +235,16 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 <span class="font-medium">{{ formatPrice(netProfit.shippingCostMonth) }}</span>
             </div>
             <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">(–) Gasto com Anúncio</span>
-                <span class="font-semibold text-error">{{ formatPrice(netProfit.adSpendMonth) }}</span>
+                <span class="text-slate-500 dark:text-slate-400">(–) Custo de Produto Vendido</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.productCostMonth) }}</span>
             </div>
             <div class="flex items-center justify-between border-t border-[var(--surface-border)] py-2 text-sm">
-                <span class="font-medium">(=) Faturamento Líquido do Mês</span>
-                <span class="font-semibold">{{ formatPrice(summary.netRevenueMonth) }}</span>
+                <span class="font-medium">(=) Lucro Bruto do Mês</span>
+                <span class="font-semibold">{{ formatPrice(grossProfitMonth) }}</span>
             </div>
             <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">(–) Custo de Produto</span>
-                <span class="font-semibold text-error">{{ formatPrice(netProfit.productCostMonth) }}</span>
+                <span class="text-slate-500 dark:text-slate-400">(–) ADS + Campanhas</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.adSpendMonth) }}</span>
             </div>
             <!-- Pedido explícito 2026-08-14: taxa do marketplace (comissão
                  real Shopee/ML) passou a entrar na conta — antes ficava só
@@ -228,16 +253,12 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                  custo real (~12-20% da receita), não faz sentido de fora.
                  Agora é uma linha normal do extrato, igual as outras. -->
             <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">(–) Taxa de Marketplace (Shopee/ML)</span>
-                <span class="font-semibold text-error">{{ formatPrice(netProfit.marketplaceFeeMonth) }}</span>
-            </div>
-            <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">(–) Custo Flex (Mercado Livre)</span>
-                <span class="font-semibold text-error">{{ formatPrice(netProfit.flexCostMonth) }}</span>
+                <span class="text-slate-500 dark:text-slate-400">(–) Taxas + frete + plataformas</span>
+                <span class="font-semibold text-error">{{ formatPrice(platformCostsMonth) }}</span>
             </div>
             <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">
                 <span class="font-bold">(=) Lucro Líquido do Mês</span>
-                <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }}</span>
+                <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }} · {{ formatPercent(netProfitMarginMonth) }}</span>
             </div>
 
             <Link href="/admin/integracoes/mercado-livre/flex" class="mt-3 block border-t border-dashed border-[var(--surface-border)] pt-3 text-xs text-primary hover:underline">
@@ -260,54 +281,60 @@ const netProfitAllTimeVariant = computed(() => (props.summary.netProfitAllTime >
                 "Custo de produto" está subestimado até completar o cadastro.
             </span>
         </p>
-        <!-- Receita/custo/lucro líquido por canal, mês a mês — pedido
-             explícito 2026-08-31 ("quanto eu ganhei líquido no tiktok...
-             detalhado de cada marketplace por mês"). -->
-        <h2 class="mb-3 text-xl font-bold">Por Marketplace, por Mês</h2>
 
-        <div v-if="breakdownByMonth.length" class="mb-6 space-y-5">
-            <div v-for="bucket in breakdownByMonth" :key="bucket.month">
-                <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-slate-400">{{ monthLabel(bucket.month) }}</h3>
-                <div class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-[var(--surface-border)] text-left text-xs uppercase tracking-wide text-slate-400">
-                                <th class="px-4 py-2.5">Canal</th>
-                                <th class="px-4 py-2.5 text-right">Pedidos</th>
-                                <th class="px-4 py-2.5 text-right">Receita</th>
-                                <th class="px-4 py-2.5 text-right">Custo produto</th>
-                                <th class="px-4 py-2.5 text-right">Taxa canal</th>
-                                <th class="px-4 py-2.5 text-right">Lucro líquido</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="row in bucket.rows" :key="row.channel" class="border-b border-[var(--surface-border)] last:border-0">
-                                <td class="px-4 py-2.5">
-                                    <span class="inline-block rounded-full px-2.5 py-1 text-xs font-bold"
-                                        :style="{ color: CHANNEL_STYLES[row.channel]?.color ?? '#64748B', background: hexToRgba(CHANNEL_STYLES[row.channel]?.color ?? '#64748B', 0.12) }">
-                                        {{ CHANNEL_STYLES[row.channel]?.label ?? row.channel }}
-                                    </span>
-                                </td>
-                                <td class="px-4 py-2.5 text-right text-slate-400">{{ row.orders }}</td>
-                                <td class="px-4 py-2.5 text-right font-medium">{{ formatPrice(row.revenue) }}</td>
-                                <td class="px-4 py-2.5 text-right text-slate-400">{{ formatPrice(row.productCost) }}</td>
-                                <td class="px-4 py-2.5 text-right text-slate-400">
-                                    <span v-if="row.feeAvailable">{{ formatPrice(row.marketplaceFee) }}</span>
-                                    <span v-else class="italic text-amber-600 dark:text-amber-400" title="Este canal ainda não tem captura de taxa real — lucro líquido está superestimado até essa fonte existir.">
-                                        não disponível
-                                    </span>
-                                </td>
-                                <td class="px-4 py-2.5 text-right font-bold" :class="row.netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
-                                    {{ formatPrice(row.netProfit) }}
-                                    <i v-if="!row.feeAvailable" class="fas fa-triangle-exclamation ml-1 text-xs text-amber-500" title="Sem taxa do canal descontada — número real é menor que este."></i>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+
+        <h2 class="mb-3 mt-8 text-xl font-bold">Extratos reais de Marketplace</h2>
+        <div v-if="settlementRows.length" class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+            <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                <h3 class="text-base font-semibold">Conciliação por relatório financeiro importado</h3>
+                <p class="text-xs text-slate-400">Valores liquidados pela plataforma: descontos, frete líquido, taxas, ajustes, custo conciliado e lucro conhecido.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+                <div v-for="row in settlementRows" :key="row.channel" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <span class="inline-block rounded-full px-2.5 py-1 text-xs font-bold" :style="{ color: CHANNEL_STYLES[row.channel]?.color ?? '#64748B', background: hexToRgba(CHANNEL_STYLES[row.channel]?.color ?? '#64748B', 0.12) }">
+                            {{ CHANNEL_STYLES[row.channel]?.label ?? row.channel }}
+                        </span>
+                        <span class="text-xs text-slate-400">{{ row.matchedOrders }}/{{ row.uniqueOrders }} pedidos conciliados</span>
+                    </div>
+
+                    <div class="space-y-1.5 text-sm">
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Subtotal anunciado</span><strong>{{ formatPrice(row.itemSubtotalBeforeDiscounts) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Vendas líquidas dos produtos</span><strong>{{ formatPrice(row.productNetSales) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Recebido</span><strong class="text-success">{{ formatPrice(row.paidPayoutAmount ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">A receber</span><strong class="text-warning">{{ formatPrice(row.pendingPayoutAmount ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Total liquidável</span><strong>{{ formatPrice(row.payoutAmount) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Taxas da plataforma</span><strong class="text-error">{{ formatPrice(row.platformFeesTaxes) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Descontos do vendedor</span><strong class="text-error">{{ formatPrice(row.sellerDiscounts) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Desconto produto pago pela plataforma</span><strong class="text-success">{{ formatPrice(row.platformProductDiscounts ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Cupom plataforma</span><strong class="text-success">{{ formatPrice(row.platformCouponDiscounts ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Frete líquido</span><strong>{{ formatPrice(row.netShippingImpact) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Desconto frete TikTok ao cliente</span><strong class="text-success">{{ formatPrice(row.platformShippingDiscounts ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Ajustes</span><strong>{{ formatPrice(row.adjustmentAmount) }}</strong></div>
+                        <div class="flex justify-between gap-3 border-t border-[var(--surface-border)] pt-2"><span class="text-slate-500 dark:text-slate-400">Vendas conciliadas com pedido</span><strong>{{ formatPrice(row.matchedProductNetSales) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Valor liquidado conciliado</span><strong>{{ formatPrice(row.matchedPayoutAmount) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Custo de produto conciliado</span><strong class="text-error">{{ formatPrice(row.productCostMatched) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="font-medium">Lucro bruto conhecido</span><strong>{{ formatPrice(row.grossProfitKnown) }}</strong></div>
+                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Lucro líquido conhecido</span><strong :class="row.netProfitKnown >= 0 ? 'text-success' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
+                    </div>
+
+                    <p v-if="row.missingOrders > 0 || row.costMissingItems > 0" class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-400">
+                        <i class="fas fa-triangle-exclamation mt-0.5"></i>
+                        <span>
+                            {{ row.missingOrders > 0 ? `${row.missingOrders} pedido(s) do extrato ainda não existem no KazaKora. ` : '' }}
+                            {{ row.costMissingItems > 0 ? `${row.costMissingItems} item(ns) conciliado(s) sem custo cadastrado. ` : '' }}
+                            O lucro fica conhecido só até onde houve conciliação com custo real.
+                        </span>
+                    </p>
                 </div>
             </div>
+            <div class="border-t border-[var(--surface-border)] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                Total importado: {{ settlementTotals.lineItems ?? 0 }} linhas · {{ settlementTotals.uniqueOrders ?? 0 }} pedidos · recebido {{ formatPrice(settlementTotals.paidPayoutAmount ?? 0) }} · a receber {{ formatPrice(settlementTotals.pendingPayoutAmount ?? 0) }} · total liquidável {{ formatPrice(settlementTotals.payoutAmount ?? 0) }} · desconto plataforma {{ formatPrice((settlementTotals.platformProductDiscounts ?? 0) + (settlementTotals.platformCouponDiscounts ?? 0)) }} · lucro líquido conhecido {{ formatPrice(settlementTotals.netProfitKnown ?? 0) }}.
+            </div>
         </div>
-        <p v-else class="mb-6 text-sm text-slate-400">Nenhum pedido faturado nos últimos 6 meses ainda.</p>
+        <p v-else class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-400">
+            Nenhum relatório financeiro de marketplace importado ainda.
+        </p>
 
         <!-- Gasto com anúncio por canal -->
         <h2 class="mb-3 text-xl font-bold">Gasto com Anúncio</h2>

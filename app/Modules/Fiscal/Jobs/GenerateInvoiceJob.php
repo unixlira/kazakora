@@ -202,7 +202,7 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             // envio/etiqueta daqui (isso já dispara direto na importação do
             // pedido, em paralelo, ver OrderImportService).
             if ($invoice->status === Invoice::STATUS_AUTHORIZED
-                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE], true)) {
+                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
             }
         } catch (ValidatorException $exception) {
@@ -246,7 +246,9 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             $travaDoCarrinho?->release();
         }
 
-        SendOrderReceiptEmailJob::dispatch($order->id);
+        if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+            SendOrderReceiptEmailJob::dispatch($order->id);
+        }
     }
 
     /**
@@ -268,6 +270,8 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             Notification::send($admins, new InvoiceIssuanceFailedNotification($order, $exception?->getMessage() ?? 'Erro desconhecido'));
         }
 
-        SendOrderReceiptEmailJob::dispatch($order->id);
+        if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+            SendOrderReceiptEmailJob::dispatch($order->id);
+        }
     }
 }

@@ -138,6 +138,21 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
                 stat-icon-name="fas fa-triangle-exclamation" variant="error" />
         </div>
 
+        <section class="mt-5 rounded-2xl bg-slate-950 p-6 text-white shadow-xl">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-100">Gerador de imagens de anúncio</p>
+                    <h2 class="mt-2 text-2xl font-black">Criar fotos Shopee e Mercado Livre</h2>
+                    <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-200">
+                        Acesso direto para gerar o primeiro pacote: Shopee com 9 imagens e Mercado Livre com 10 imagens. Fluxo por ChatGPT + Giovanna; Kairogen reservado para vídeos.
+                    </p>
+                </div>
+                <Link href="/admin/marketplaces/fotos-anuncio" class="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-black uppercase tracking-wide text-slate-950 transition hover:bg-orange-100">
+                    Abrir agora
+                </Link>
+            </div>
+        </section>
+
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="VISITAS HOJE" :stat-title="String(stats.visitsToday)"
                 stat-icon-name="fas fa-eye" variant="info" />
@@ -156,10 +171,8 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
                 stat-icon-name="fas fa-cart-arrow-down" variant="info" />
             <CardStats stat-subtitle="CLIQUES EM PRODUTOS" :stat-title="String(stats.productViewsCount)"
                 stat-icon-name="fas fa-computer-mouse" variant="secondary" />
-            <div class="flex min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-center text-slate-400">
-                <i class="fas fa-plus text-xl"></i>
-                <span class="text-sm">Métrica reservada</span>
-            </div>
+            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO HOJE" :stat-title="formatPrice(stats.contributionMarginToday)"
+                stat-icon-name="fas fa-wallet" variant="warning" />
         </div>
 
         <div v-if="revenueByChannel.length" class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">

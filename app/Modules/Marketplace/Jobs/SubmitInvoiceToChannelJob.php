@@ -38,7 +38,23 @@ class SubmitInvoiceToChannelJob implements ShouldQueue
 
     public function handle(ChannelInvoiceSubmissionService $service): void
     {
-        $order = Order::findOrFail($this->orderId);
+        $order = Order::with('channelShipment')->findOrFail($this->orderId);
+        $shipment = $order->channelShipment;
+
+        // Mercado Livre xd_drop_off agendado pode autorizar a NF-e local agora,
+        // mas a API rejeita o XML com "Shipment status is wrong" até perto
+        // da data de liberação do envio. Não gasta retries nem gera alerta
+        // falso: solta o job para a mesma janela em que a etiqueta será
+        // liberada, igual ao CheckShipmentLabelJob.
+        if ($order->origin === Order::ORIGIN_MERCADO_LIVRE && $shipment?->scheduled_for) {
+            $releaseAt = \Illuminate\Support\Carbon::parse($shipment->scheduled_for);
+
+            if ($releaseAt->isFuture()) {
+                $this->release(max(60, $releaseAt->getTimestamp() - now()->getTimestamp()));
+
+                return;
+            }
+        }
 
         $service->submit($order);
     }

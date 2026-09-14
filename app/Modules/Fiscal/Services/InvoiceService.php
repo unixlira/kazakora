@@ -3,6 +3,7 @@
 namespace App\Modules\Fiscal\Services;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Services\NFe\NFeCertificateService;
@@ -255,6 +256,7 @@ class InvoiceService
             ]);
 
             $invoice->update([
+                ...$this->identidadeFiscal($order),
                 'status' => Invoice::STATUS_PENDING,
                 'serie' => (int) config('nfe.serie'),
                 'numero' => $numero,
@@ -286,9 +288,40 @@ class InvoiceService
         Storage::disk('local')->put($xmlPath, $xml);
         // valor_total junto: numa nota de carrinho o rebuild pode ter mudado
         // o que entra nela (irmão chegou ou foi cancelado).
-        $invoice->update(['chave_acesso' => $chave, 'xml_path' => $xmlPath, 'valor_total' => $order->total]);
+        $invoice->update([
+            ...$this->identidadeFiscal($order),
+            'chave_acesso' => $chave,
+            'xml_path' => $xmlPath,
+            'valor_total' => $order->total,
+        ]);
 
         return $invoice->fresh();
+    }
+
+    /**
+     * Identidade fiscal que vale pra toda nota criada aqui: quem emite e se
+     * a operação é de saída ou de entrada.
+     *
+     * `entrada` é o caso da devolução de VENDA: a mercadoria volta pra cá e
+     * quem emite a nota é o próprio vendedor, então o documento é de entrada
+     * (tpNF=0 no XML, ver NFeXmlBuilderService). Todo o resto — venda comum,
+     * carrinho, nota manual — é saída.
+     *
+     * Emitente gravado na linha, e não só no XML, porque a listagem de notas
+     * precisa dizer quem emitiu sem reabrir arquivo nenhum.
+     *
+     * @return array<string, mixed>
+     */
+    private function identidadeFiscal(Order $order): array
+    {
+        $company = Company::query()->first();
+
+        return [
+            'origem' => Invoice::ORIGEM_PEDIDO,
+            'operation_type' => $order->fiscal_operation_type === 'sales_return' ? 'entrada' : 'saida',
+            'emitente_nome' => $company?->razao_social,
+            'emitente_documento' => $company ? preg_replace('/\D/', '', (string) $company->cnpj) : null,
+        ];
     }
 
     /**
@@ -306,6 +339,7 @@ class InvoiceService
 
                 $invoice = Invoice::create([
                     'order_id' => $order->id,
+                    ...$this->identidadeFiscal($order),
                     'status' => Invoice::STATUS_PENDING,
                     'ambiente' => config('nfe.ambiente'),
                     'serie' => config('nfe.serie'),
@@ -359,6 +393,7 @@ class InvoiceService
             Storage::disk('local')->put($xmlPath, $xml);
 
             $invoice->update([
+                ...$this->identidadeFiscal($order),
                 'status' => Invoice::STATUS_PENDING,
                 'ambiente' => config('nfe.ambiente'),
                 'serie' => config('nfe.serie'),

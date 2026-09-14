@@ -57,6 +57,16 @@ class NFeXmlBuilderService
         // implementado aqui). Fica a critério de quem emite.
         $allServices = $order->items->every(fn ($item) => $item->item_type === OrderItem::TYPE_SERVICE);
 
+        // Devolução (pedido fiscal técnico, ver Order::ORIGIN_*_RETURN_INVOICE):
+        // `purchase_return` é devolução ao FORNECEDOR — sai daqui, nota de
+        // saída. `sales_return` é devolução do CLIENTE — a mercadoria volta
+        // pra cá, e quem emite é o próprio vendedor, então o documento é de
+        // ENTRADA (tpNF=0). Os dois são finalidade 4 e referenciam a chave da
+        // nota de origem.
+        $isPurchaseReturn = $order->fiscal_operation_type === 'purchase_return';
+        $isSalesReturn = $order->fiscal_operation_type === 'sales_return';
+        $isFiscalReturn = $isPurchaseReturn || $isSalesReturn;
+
         $make = new Make();
 
         $cUF = (int) config('nfe.cuf');
@@ -69,22 +79,38 @@ class NFeXmlBuilderService
 
         $ide = new stdClass();
         $ide->cUF = $cUF;
-        $ide->natOp = $allServices ? 'Prestação de serviço' : 'Venda de mercadoria';
+        $ide->natOp = $order->fiscal_nature_operation
+            ?: ($isPurchaseReturn ? 'Devolução de compra' : ($isSalesReturn ? 'Devolução de venda' : ($allServices ? 'Prestação de serviço' : 'Venda de mercadoria')));
         $ide->mod = 55;
         $ide->serie = config('nfe.serie');
         $ide->nNF = $numero;
-        $ide->tpNF = 1; // saída
+        $ide->tpNF = $isSalesReturn ? 0 : 1; // devolução de venda é entrada emitida pelo próprio vendedor
         $ide->idDest = $order->shipping_state === $company->state ? 1 : 2;
         $ide->cMunFG = $cMunFG;
         $ide->tpImp = 1; // retrato
         $ide->tpEmis = 1; // emissão normal
         $ide->tpAmb = $tpAmb;
-        $ide->finNFe = 1; // normal
-        $ide->indFinal = 1; // consumidor final
-        $ide->indPres = 2; // não presencial, internet
+        $ide->finNFe = $order->fiscal_finality ?: ($isFiscalReturn ? 4 : 1); // 4 = devolução
+        $ide->indFinal = $isPurchaseReturn ? 0 : 1; // devolução ao fornecedor não é consumidor final
+        $ide->indPres = $isFiscalReturn ? 9 : 2; // devolução não é um novo checkout pela internet
         $ide->procEmi = 0;
         $ide->verProc = '1.0.0';
         $make->tagide($ide);
+
+        if ($isFiscalReturn) {
+            $referencedKey = preg_replace('/\D/', '', (string) $order->fiscal_referenced_nfe_key);
+
+            // Sem a chave da nota de origem a SEFAZ não aceita finalidade 4.
+            // Falhar aqui, antes de assinar, é melhor que queimar um número
+            // de NF-e numa rejeição garantida.
+            if (strlen($referencedKey) !== 44) {
+                throw new RuntimeException('NF-e de devolução precisa referenciar a chave da nota de origem com 44 dígitos.');
+            }
+
+            $ref = new stdClass();
+            $ref->refNFe = $referencedKey;
+            $make->tagrefNFe($ref);
+        }
 
         $emit = new stdClass();
         $emit->xNome = $company->razao_social;
@@ -286,6 +312,12 @@ class NFeXmlBuilderService
             $fiscal = $this->resolveFiscalData($item);
             $cfop = $order->shipping_state === $company->state ? $fiscal->cfop : $fiscal->cfop_outros_estados;
 
+            // Entrada por devolução de venda tem CFOP próprio (1202/2202) —
+            // o CFOP do cadastro do produto é de saída e não serve aqui.
+            if ($isSalesReturn) {
+                $cfop = $order->shipping_state === $company->state ? '1202' : '2202';
+            }
+
             if ($n === $itemsCount) {
                 $itemShipping = round($totalShipping - $allocatedShipping, 2);
                 $itemDiscount = round($totalDiscount - $allocatedDiscount, 2);
@@ -306,7 +338,10 @@ class NFeXmlBuilderService
             // Item digitado na hora não tem SKU de catálogo — "SERV-{id}"
             // como código interno, só precisa ser único/estável, a SEFAZ não
             // valida contra nada externo.
-            $prod->cProd = $item->product?->sku ?? "SERV-{$item->id}";
+            // Numa devolução de compra o item carrega o código do próprio
+            // fornecedor em external_item_id — usar o dele facilita o
+            // batimento do outro lado.
+            $prod->cProd = $item->product?->sku ?: ($item->external_item_id ?: "SERV-{$item->id}");
             $prod->cEAN = $fiscal->gtin ?: 'SEM GTIN';
             $prod->xProd = $item->product_name;
             $prod->NCM = $fiscal->ncm;
@@ -341,7 +376,11 @@ class NFeXmlBuilderService
             $icms = new stdClass();
             $icms->item = $n;
             $icms->orig = $fiscal->origem;
-            $icms->CSOSN = $fiscal->icms_situacao_tributaria;
+            // Devolução de venda sob MEI (CRT=4) foi rejeitada pela SEFAZ-SP
+            // com CSOSN 102 + CFOP 2202 (cStat 337). Na nota de entrada da
+            // devolução vai 900, pra não herdar o enquadramento da venda
+            // normal que está no cadastro do produto.
+            $icms->CSOSN = $isSalesReturn ? '900' : $fiscal->icms_situacao_tributaria;
             $make->tagICMSSN($icms);
 
             $pisAliquota = (float) ($fiscal->pis_aliquota ?? 0);
@@ -394,7 +433,14 @@ class NFeXmlBuilderService
             'boleto' => '15',
         ];
 
-        if ($order->payments->isEmpty()) {
+        if ($isFiscalReturn) {
+            // Devolução não movimenta dinheiro aqui: tPag 90 = sem pagamento.
+            $detPag = new stdClass();
+            $detPag->indPag = 0;
+            $detPag->tPag = '90';
+            $detPag->vPag = 0;
+            $make->tagdetPag($detPag);
+        } elseif ($order->payments->isEmpty()) {
             // Pedido de canal externo nunca tem Payment local — o
             // pagamento acontece do lado do marketplace, não aqui. SEFAZ
             // exige xPag (descrição) sempre que tPag=99 "outros"
@@ -427,9 +473,12 @@ class NFeXmlBuilderService
         // (PackDoPedido::pedidoFiscal) — lista todos, pro contador achar a
         // venda por qualquer um deles.
         $pedidosNaNota = $order->items->pluck('order_id')->filter()->unique()->sort()->values();
-        $infAdic->infCpl = $pedidosNaNota->count() > 1
-            ? 'Pedidos #'.$pedidosNaNota->implode(', #')." (carrinho {$order->channel_pack_id}) - KazaKora"
-            : "Pedido #{$order->id} - KazaKora";
+        // Pedido fiscal de devolução traz o texto pronto (número da nota de
+        // origem, motivo) em fiscal_additional_info — quando vem, manda.
+        $infAdic->infCpl = $order->fiscal_additional_info
+            ?: ($pedidosNaNota->count() > 1
+                ? 'Pedidos #'.$pedidosNaNota->implode(', #')." (carrinho {$order->channel_pack_id}) - KazaKora"
+                : "Pedido #{$order->id} - KazaKora");
         $make->taginfAdic($infAdic);
 
         $xml = $make->getXML();

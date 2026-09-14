@@ -8,12 +8,20 @@ use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Marketplace\Models\ChannelAdSpend;
+use App\Modules\Marketplace\Models\OrderChannelFee;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    // Use stable persisted values instead of model constants here because this
+    // controller is often hot-deployed without every model symbol changing at
+    // the same time on Hostinger.
+    private const RETURN_ORIGINS = ['nota_devolucao_compra', 'nota_devolucao_venda'];
+
     private const STATUS_LABELS = [
         Order::STATUS_PENDING => 'Pendente',
         Order::STATUS_PAID => 'Pago',
@@ -32,7 +40,7 @@ class DashboardController extends Controller
 
         return Inertia::render('Admin/Dashboard', [
             'stats' => [
-                'ordersCount' => Order::query()->count(),
+                'ordersCount' => Order::query()->nonPurchaseReturn()->count(),
                 // Achado real 2026-08-06: "FATURAMENTO" era all-time (sem
                 // filtro de data nenhum) — ao lado de "FATURADO HOJE",
                 // parecia representar um período, mas somava a loja inteira
@@ -52,7 +60,7 @@ class DashboardController extends Controller
                 // (gross_amount = subtotal); troquei 'total' por 'subtotal'
                 // aqui e em todo outro lugar que soma "receita/faturamento"
                 // pra bater com a definição já correta do Fluxo de Caixa.
-                'revenue' => (float) Order::query()
+                'revenue' => (float) Order::query()->nonPurchaseReturn()
                     ->where('created_at', '>=', $startOfMonth)
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum('subtotal'),
@@ -64,12 +72,13 @@ class DashboardController extends Controller
                 // 2026-08-07). Antes contava toda linha de site_visits (uma
                 // por página carregada), o que inflava bastante.
                 'visitsToday' => SiteVisit::query()->whereDate('created_at', $today)->distinct()->count('ip'),
-                'ordersToday' => Order::query()->whereDate('created_at', $today)->count(),
-                'ordersMonth' => Order::query()->where('created_at', '>=', $startOfMonth)->count(),
-                'revenueToday' => (float) Order::query()
+                'ordersToday' => Order::query()->nonPurchaseReturn()->whereDate('created_at', $today)->count(),
+                'ordersMonth' => Order::query()->nonPurchaseReturn()->where('created_at', '>=', $startOfMonth)->count(),
+                'revenueToday' => (float) Order::query()->nonPurchaseReturn()
                     ->whereDate('created_at', $today)
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum('subtotal'),
+                'contributionMarginToday' => $this->contributionMarginForDay($today),
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
                     ->where('created_at', '>=', $startOfMonth)
@@ -89,7 +98,7 @@ class DashboardController extends Controller
                     ->where('path', 'not like', '%/envio')
                     ->count(),
             ],
-            'recentOrders' => Order::query()
+            'recentOrders' => Order::query()->nonPurchaseReturn()
                 ->with('user:id,name')
                 ->latest()
                 ->limit(5)
@@ -104,6 +113,60 @@ class DashboardController extends Controller
             'revenueSeries' => $this->revenueSeries(),
             'revenueByChannel' => $this->revenueByChannel($startOfMonth),
         ]);
+    }
+
+    /**
+     * Margem de contribuição do dia = receita real das vendas confirmadas
+     * (subtotal, sem inflar com frete) menos custos variáveis do mesmo dia:
+     * custo de produto, taxas dos canais, ADS e frete registrado quando houver.
+     */
+    private function contributionMarginForDay(Carbon $day): float
+    {
+        $revenue = round((float) Order::query()->nonPurchaseReturn()
+            ->whereDate('created_at', $day)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum('subtotal'), 2);
+
+        $productCost = round((float) DB::table('orders')
+            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->whereDate('orders.created_at', $day)
+            ->whereIn('orders.status', self::PAID_STATUSES)
+            ->where(function ($query) {
+                $query->whereNotIn('orders.origin', self::RETURN_ORIGINS)
+                    ->orWhereNull('orders.origin');
+            })
+            ->where(function ($query) {
+                $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
+                    ->orWhereNull('orders.fiscal_operation_type');
+            })
+            ->selectRaw('COALESCE(SUM(order_items.quantity * COALESCE(order_items.manual_cost_price, products.cost_price, 0)), 0) as total')
+            ->value('total'), 2);
+
+        $platformFees = round((float) OrderChannelFee::query()
+            ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+            ->whereDate('orders.created_at', $day)
+            ->whereIn('orders.status', self::PAID_STATUSES)
+            ->where(function ($query) {
+                $query->whereNotIn('orders.origin', self::RETURN_ORIGINS)
+                    ->orWhereNull('orders.origin');
+            })
+            ->where(function ($query) {
+                $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
+                    ->orWhereNull('orders.fiscal_operation_type');
+            })
+            ->sum('order_channel_fees.fee_amount'), 2);
+
+        $adSpend = round((float) ChannelAdSpend::query()
+            ->whereDate('date', $day)
+            ->sum('spend'), 2);
+
+        $shippingCost = round((float) Order::query()->nonPurchaseReturn()
+            ->whereDate('created_at', $day)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum('shipping_cost'), 2);
+
+        return round($revenue - $productCost - $platformFees - $adSpend - $shippingCost, 2);
     }
 
     /**
@@ -123,7 +186,7 @@ class DashboardController extends Controller
     {
         // subtotal, não total — ver comentário em index() sobre frete não
         // ser receita do vendedor.
-        return Order::query()
+        return Order::query()->nonPurchaseReturn()
             ->where('created_at', '>=', $startOfMonth)
             ->selectRaw('origin, SUM(subtotal) as total')
             ->whereIn('status', self::PAID_STATUSES)
@@ -135,7 +198,7 @@ class DashboardController extends Controller
 
     private function orderStatusBreakdown(): array
     {
-        $counts = Order::query()
+        $counts = Order::query()->nonPurchaseReturn()
             ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
@@ -193,7 +256,7 @@ class DashboardController extends Controller
         // gráfico "Faturamento diário" do mês corrente dava mais que o
         // card "Faturamento" ao lado. Mesmo critério de PAID_STATUSES
         // usado em todo outro lugar que soma faturamento nesta tela.
-        $rows = Order::query()
+        $rows = Order::query()->nonPurchaseReturn()
             ->selectRaw('DATE(created_at) as date, SUM(subtotal) as total')
             ->whereIn('status', self::PAID_STATUSES)
             ->where('created_at', '>=', $start)

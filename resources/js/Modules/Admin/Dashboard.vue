@@ -156,10 +156,8 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
                 stat-icon-name="fas fa-cart-arrow-down" variant="info" />
             <CardStats stat-subtitle="CLIQUES EM PRODUTOS" :stat-title="String(stats.productViewsCount)"
                 stat-icon-name="fas fa-computer-mouse" variant="secondary" />
-            <div class="flex min-w-0 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--surface-border)] p-4 text-center text-slate-400">
-                <i class="fas fa-plus text-xl"></i>
-                <span class="text-sm">Métrica reservada</span>
-            </div>
+            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO HOJE" :stat-title="formatPrice(stats.contributionMarginToday)"
+                stat-icon-name="fas fa-wallet" variant="warning" />
         </div>
 
         <div v-if="revenueByChannel.length" class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">

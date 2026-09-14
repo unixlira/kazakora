@@ -64,6 +64,10 @@ class Order extends Model
     // finNFe=4 e chave referenciada no XML.
     public const ORIGIN_PURCHASE_RETURN_INVOICE = 'nota_devolucao_compra';
 
+    // Nota fiscal de devolução de venda/cliente. É pedido fiscal técnico,
+    // separado de venda operacional, expedição, marketplace e métricas.
+    public const ORIGIN_SALES_RETURN_INVOICE = 'nota_devolucao_venda';
+
     /**
      * TikTok Shop é operado fiscalmente fora do pipeline automático do
      * KazaKora: a venda entra para separação/estoque, mas a NF-e da venda é
@@ -214,7 +218,7 @@ class Order extends Model
     }
 
     /**
-     * Pedido fiscal de devolução de compra usa a tabela orders só como suporte
+     * Pedido fiscal de devolução usa a tabela orders só como suporte
      * técnico da NF-e. Não é venda, não deve aparecer na fila/lista operacional
      * nem inflar métricas de pedido/faturamento.
      */
@@ -222,11 +226,11 @@ class Order extends Model
     {
         return $query
             ->where(function ($query) {
-                $query->where($this->qualifyColumn('origin'), '!=', self::ORIGIN_PURCHASE_RETURN_INVOICE)
+                $query->whereNotIn($this->qualifyColumn('origin'), [self::ORIGIN_PURCHASE_RETURN_INVOICE, self::ORIGIN_SALES_RETURN_INVOICE])
                     ->orWhereNull($this->qualifyColumn('origin'));
             })
             ->where(function ($query) {
-                $query->where($this->qualifyColumn('fiscal_operation_type'), '!=', 'purchase_return')
+                $query->whereNotIn($this->qualifyColumn('fiscal_operation_type'), ['purchase_return', 'sales_return'])
                     ->orWhereNull($this->qualifyColumn('fiscal_operation_type'));
             });
     }

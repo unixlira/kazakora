@@ -5,8 +5,8 @@ namespace App\Modules\Marketplace\Support;
 use App\Modules\Checkout\Models\Order;
 
 /**
- * Como este pedido vai sair da loja — Flex, Mercado Envios, Full, Shopee
- * Xpress, coleta do TikTok, e por aí vai.
+ * Como este pedido vai sair da loja — Flex, Mercado Envios, Full,
+ * Express-Ponto Coleta (Shopee e TikTok), e por aí vai.
  *
  * Pedido explícito 2026-09-14: o KoraSync mostrava só o canal, e canal não
  * responde a pergunta que o operador faz na bancada. Duas vendas do Mercado
@@ -34,11 +34,16 @@ final class TipoDeEnvio
 
     public const MERCADO_ENVIOS = 'mercado_envios';
 
-    public const SHOPEE_XPRESS = 'shopee_xpress';
+    /**
+     * Shopee e TikTok saem do mesmo jeito daqui (pedido do usuário em
+     * 2026-09-21: "as 2 são Express-Ponto Coleta") — o pacote vai pro ponto
+     * de coleta, a transportadora leva. Eram dois tipos diferentes no selo
+     * ("Shopee Xpress" e "Coleta") pra uma coisa só na bancada, e o nome
+     * que o operador usa não era nenhum dos dois.
+     */
+    public const EXPRESS_COLETA = 'express_coleta';
 
     public const RETIRADA = 'retirada';
-
-    public const COLETA = 'coleta';
 
     public const PROPRIO = 'proprio';
 
@@ -106,15 +111,15 @@ final class TipoDeEnvio
 
         $normalizado = mb_strtolower($metodo);
 
-        if (str_contains($normalizado, 'xpress')) {
-            return [self::SHOPEE_XPRESS, 'Shopee Xpress', 'Shopee Xpress'];
-        }
-
-        // "Retirada pelo Comprador": o cliente busca na loja, não vai pra
-        // transportadora nenhuma — o pacote não pode entrar no lote de
-        // despacho junto com o resto.
+        // "Retirada pelo Comprador" vem ANTES do Xpress de propósito: o
+        // cliente busca na loja, não vai pra transportadora nenhuma — o
+        // pacote não pode entrar no lote de despacho junto com o resto.
         if (str_contains($normalizado, 'retirada')) {
             return [self::RETIRADA, 'Retirada pelo comprador', 'Retirada'];
+        }
+
+        if (str_contains($normalizado, 'xpress')) {
+            return [self::EXPRESS_COLETA, 'Shopee Xpress — Express, entrega no ponto de coleta', 'Express-Ponto Coleta'];
         }
 
         return [self::OUTRO, $metodo, $metodo];
@@ -129,10 +134,11 @@ final class TipoDeEnvio
 
         // O TikTok manda o código do serviço, não um nome ("LSV-Standard-BR
         // PICKUP", o único valor visto até hoje). O que importa pro
-        // operador é o sufixo: PICKUP = a transportadora vem buscar aqui.
-        // O código continua no label pra dar pra rastrear do outro lado.
+        // operador é o sufixo: PICKUP = vai pro ponto de coleta, igual à
+        // Shopee. O código continua no label pra dar pra rastrear do outro
+        // lado.
         if (str_contains(mb_strtoupper($metodo), 'PICKUP')) {
-            return [self::COLETA, "TikTok — coleta ({$metodo})", 'Coleta'];
+            return [self::EXPRESS_COLETA, "TikTok — Express, entrega no ponto de coleta ({$metodo})", 'Express-Ponto Coleta'];
         }
 
         return [self::OUTRO, "TikTok — {$metodo}", $metodo];

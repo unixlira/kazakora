@@ -35,8 +35,11 @@ class TipoDeEnvioTest extends TestCase
 
     public function test_traduz_shopee_tiktok_e_amazon(): void
     {
+        // Shopee e TikTok são a MESMA coisa na bancada (pedido do usuário
+        // em 2026-09-21): pacote no ponto de coleta, transportadora leva.
         $xpress = TipoDeEnvio::montar('shopee', 'Shopee Xpress');
-        $this->assertSame(TipoDeEnvio::SHOPEE_XPRESS, $xpress['tipo']);
+        $this->assertSame(TipoDeEnvio::EXPRESS_COLETA, $xpress['tipo']);
+        $this->assertSame('Express-Ponto Coleta', $xpress['curto']);
 
         $retirada = TipoDeEnvio::montar('shopee', 'Retirada pelo Comprador');
         $this->assertSame(TipoDeEnvio::RETIRADA, $retirada['tipo']);
@@ -45,8 +48,9 @@ class TipoDeEnvioTest extends TestCase
         // O TikTok manda o código do serviço; o sufixo PICKUP é o que diz
         // que a transportadora vem buscar aqui.
         $tiktok = TipoDeEnvio::montar('tiktok_shop', 'LSV-Standard-BR PICKUP');
-        $this->assertSame(TipoDeEnvio::COLETA, $tiktok['tipo']);
-        $this->assertSame('Coleta', $tiktok['curto']);
+        $this->assertSame(TipoDeEnvio::EXPRESS_COLETA, $tiktok['tipo']);
+        $this->assertSame('Express-Ponto Coleta', $tiktok['curto']);
+        $this->assertSame($xpress['curto'], $tiktok['curto'], 'os dois canais dizem a mesma coisa no selo');
         $this->assertStringContainsString('LSV-Standard-BR PICKUP', $tiktok['label']);
 
         $amazon = TipoDeEnvio::montar('amazon', 'merchant_fulfillment');

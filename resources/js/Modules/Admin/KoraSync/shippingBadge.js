@@ -15,13 +15,17 @@
  *   fila em 14/09.
  * - Retirada é verde-água: o cliente vem buscar, não pode entrar no lote
  *   que vai pra transportadora.
- * - O resto (coleta, agência, Xpress) é azul neutro: fluxo normal de
- *   despacho, não muda o que o operador faz.
+ * - O resto (Express-Ponto Coleta da Shopee/TikTok, agência e coleta do
+ *   Mercado Envios) é azul neutro: fluxo normal de despacho, não muda o
+ *   que o operador faz.
  */
 const ESTILOS = {
     flex: { cor: '#F5B301', icone: 'fa-bolt' },
     full: { cor: '#A78BFA', icone: 'fa-warehouse' },
     mercado_envios: { cor: '#4DA3FF', icone: 'fa-truck' },
+    // Shopee e TikTok são o mesmo Express-Ponto Coleta desde 2026-09-21; os
+    // slugs antigos ficam pra não virar selo cinza num payload velho.
+    express_coleta: { cor: '#4DA3FF', icone: 'fa-truck-ramp-box' },
     shopee_xpress: { cor: '#4DA3FF', icone: 'fa-truck' },
     coleta: { cor: '#4DA3FF', icone: 'fa-truck-ramp-box' },
     retirada: { cor: '#04D7B6', icone: 'fa-person-walking' },

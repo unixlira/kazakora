@@ -723,8 +723,18 @@ class DashboardAgentController extends Controller
                 // A janela é sobre packed_at, não created_at: baixa de hoje
                 // num pedido de cinco dias atrás é trabalho de HOJE e tem
                 // que contar no dia.
+                //
+                // O Full segue a MESMA janela depois da baixa (2026-09-21):
+                // enquanto ninguém deu baixa ele fica visível não importa a
+                // idade (é o pedido esperando alguém conferir), mas assim
+                // que a baixa sai ele passa a valer pelo packed_at como
+                // todo mundo. Sem isso ele nunca saía da aba Separados — o
+                // pedido #2315 deu baixa em 19/09 e ainda estava lá no dia
+                // 21, junto com todo Full que viesse depois.
                 $query->whereBetween('packed_at', [$yesterday, $tomorrow])
-                    ->orWhereHas('channelShipment', $ehFull)
+                    ->orWhere(fn ($query) => $query
+                        ->whereNull('packed_at')
+                        ->whereHas('channelShipment', $ehFull))
                     ->orWhere(function ($query) use ($yesterday, $tomorrow) {
                         // Resolvido de outro jeito que não seja PAID (só
                         // sobra "aguardando pagamento" aqui — cancelado/

@@ -106,6 +106,32 @@ class FilaFullEEntreguesTest extends TestCase
         $this->assertContains($full->id, $this->fila()['ids']);
     }
 
+    /**
+     * A baixa do Full tem que SIGNIFICAR alguma coisa (2026-09-21): depois
+     * dela o pedido segue a janela do dia como qualquer outro. Antes o Full
+     * ficava visível pra sempre — o #2315 deu baixa em 19/09 e continuava na
+     * aba Separados no dia 21, empilhando com todo Full novo que chegava.
+     */
+    public function test_full_com_baixa_velha_sai_da_lista(): void
+    {
+        $antigo = $this->pedido(['packed_at' => now()->subDays(5)], now()->subDays(5)->toDateTimeString());
+        $this->envio($antigo, ['shipping_method' => ChannelShipment::METHOD_FULFILLMENT]);
+
+        $this->assertNotContains($antigo->id, $this->fila()['ids'], 'baixa velha do Full sai como a de qualquer pedido');
+    }
+
+    /** Sem baixa, o Full continua esperando alguém conferir — não some por idade. */
+    public function test_full_sem_baixa_nunca_some_por_idade(): void
+    {
+        $esperando = $this->pedido([], now()->subDays(12)->toDateTimeString());
+        $this->envio($esperando, ['shipping_method' => ChannelShipment::METHOD_FULFILLMENT]);
+
+        $fila = $this->fila();
+
+        $this->assertContains($esperando->id, $fila['ids'], 'Full sem baixa fica até alguém dar baixa');
+        $this->assertSame(0, $fila['faltaSeparar'], 'e continua fora do contador de separação');
+    }
+
     public function test_pedido_que_o_canal_ja_despachou_ou_entregou_sai_da_fila(): void
     {
         $despachado = $this->pedido(['packed_at' => now()]);

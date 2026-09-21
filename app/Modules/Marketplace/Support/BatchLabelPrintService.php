@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Support;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\PrintJob;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -25,6 +26,10 @@ use Throwable;
  * O que NÃO entra, e por quê:
  * - TikTok Shop e Shein: etiqueta é do painel do canal, nunca da nossa
  *   impressora (ver LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA).
+ * - Pedido Full do Mercado Livre: o pacote sai do galpão do ML, com a
+ *   etiqueta deles — não existe etiqueta nossa pra imprimir, e ele ficava
+ *   contado como "sem etiqueta" em todo lote, cutucando o canal atrás de
+ *   um papel que nunca vem (o Full fica na fila até alguém dar baixa).
  * - Pedido cujo canal ainda não liberou a etiqueta: não há o que imprimir.
  *   Ele aparece no resumo como "sem etiqueta" pra não sumir calado.
  * - Pedido cuja etiqueta JÁ saiu na impressora: não sai de novo (a regra do
@@ -59,6 +64,8 @@ class BatchLabelPrintService
             ->where('status', Order::STATUS_PAID)
             ->whereNull('packed_at')
             ->whereIn('origin', self::CANAIS)
+            ->whereDoesntHave('channelShipment', fn ($query) => $query
+                ->where('shipping_method', ChannelShipment::METHOD_FULFILLMENT))
             ->with('channelShipment')
             ->orderBy('id')
             ->get();

@@ -164,6 +164,27 @@ class BatchLabelPrintTest extends TestCase
         Queue::assertPushed(CheckShipmentLabelJob::class);
     }
 
+    /**
+     * Full do Mercado Livre não tem etiqueta nossa: quem separa, etiqueta e
+     * envia é o ML. Antes ele entrava no lote como "sem etiqueta" e levava
+     * um empurrão atrás de um papel que nunca vem — e como o Full fica na
+     * fila até alguém dar baixa, isso se repetia em todo lote do dia.
+     */
+    public function test_it_never_prints_or_nudges_a_full_order(): void
+    {
+        Queue::fake();
+
+        $full = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE, labelPath: null);
+        $full->channelShipment->update(['shipping_method' => ChannelShipment::METHOD_FULFILLMENT]);
+
+        $this->postJson('/api/print-agent/dashboard/etiquetas/lote', [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['enfileiradas' => 0, 'sem_etiqueta' => 0, 'total_candidatos' => 0]);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+        Queue::assertNotPushed(CheckShipmentLabelJob::class);
+    }
+
     public function test_it_rejects_requests_without_a_valid_token(): void
     {
         $this->postJson('/api/print-agent/dashboard/etiquetas/lote')->assertStatus(401);

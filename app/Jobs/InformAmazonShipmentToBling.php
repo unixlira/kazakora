@@ -84,6 +84,22 @@ class InformAmazonShipmentToBling implements ShouldQueue, ShouldBeUnique
             throw new \RuntimeException("Pedido Amazon {$order->external_order_id} não encontrado no Bling pra informar o envio.");
         }
 
+        // Rastreio que já está no Bling e não é o nosso = alguém despachou
+        // por lá. Nunca sobrescreve envio feito à mão.
+        $jaTem = collect($pedidoBling['transporte']['volumes'] ?? [])->pluck('codigoRastreamento')->map(fn ($c) => trim((string) $c))->filter()->first();
+
+        if ($jaTem && $jaTem !== $prePostagem->codigo_objeto) {
+            $timeline->record($order, OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER, OrderFulfillmentEvent::STATUS_FAILED, "O pedido já tem o rastreio {$jaTem} no Bling (envio feito fora daqui) — o {$prePostagem->codigo_objeto} não foi gravado por cima.");
+
+            return;
+        }
+
+        if ($jaTem === $prePostagem->codigo_objeto) {
+            $prePostagem->update(['bling_informado_em' => now()]);
+
+            return;
+        }
+
         $blingOrders->informarEnvio(
             (int) $pedidoBling['id'],
             $prePostagem->codigo_objeto,

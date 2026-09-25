@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Drivers;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Drivers\Concerns\ReadsOrdersFromBling;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -16,6 +17,7 @@ use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Bling\BlingOrderService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -360,7 +362,24 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function confirmShipping(Order $order): array
     {
         if ($this->viaBling()) {
-            $prePostagem = app(CorreiosAutoShipping::class)->confirm($order);
+            $correios = app(CorreiosAutoShipping::class);
+
+            // Pedido que alguém já despachou pelo Bling (nota e envio
+            // feitos à mão — caso real de 25/09): o rastreio já está lá.
+            // Gerar pré-postagem agora seria um segundo objeto nos Correios
+            // e uma etiqueta a mais na bancada. Tira da fila e não mexe.
+            if (! $correios->geradaPara($order) && ($rastreio = $this->rastreioJaNoBling($order))) {
+                app(\App\Modules\Marketplace\Support\OrderImportService::class)->syncStatus($order, Order::STATUS_SHIPPED);
+
+                return [
+                    'external_shipment_id' => null,
+                    'tracking_code' => $rastreio,
+                    'shipping_method' => 'Enviado pelo Bling (fora do KazaKora)',
+                    'status' => 'confirmed',
+                ];
+            }
+
+            $prePostagem = $correios->confirm($order);
 
             // Rastreio de volta pra Amazon (via Bling) — o job espera a
             // etiqueta ficar pronta antes de mexer no pedido lá.
@@ -571,16 +590,25 @@ class AmazonDriver extends AbstractMarketplaceDriver
 
     /**
      * O item que chega pelo Bling traz em `codigo` o SKU do anúncio na
-     * Amazon (SellerSKU) — o mesmo SKU do nosso catálogo quando o anúncio
-     * foi criado com ele. Só casa SKU EXATO: nada de similaridade de nome
-     * como no TikTok, porque aqui o canal manda o SKU de verdade, e chutar
-     * variação vira encomenda errada na casa do cliente (ver
-     * TikTokShopDriver::matchByNameSimilarity()). Sem casar, o item fica
-     * sem produto e a notificação de sempre pede o vínculo manual.
+     * Amazon (SellerSKU). Casa, nesta ordem:
+     *
+     * 1. SKU igual ao do catálogo (sem diferenciar maiúscula/espaço).
+     * 2. NOME do item contra o catálogo, com a COR decidindo entre as
+     *    variações — achado real 2026-09-25 (pedido #2504): a Amazon mandou
+     *    códigos que não são os nossos SKUs, e os itens ficaram sem produto,
+     *    sem foto e sem SKU no KoraSync. "Mini Power Bank ... Tipo C Preto"
+     *    é o Power Bank PRETO; o nome sozinho empata as 4 cores (mesmo nome
+     *    no catálogo, ver TikTokShopDriver::matchByNameSimilarity()), mas a
+     *    cor escrita no título desempata.
+     *
+     * Sem cor no título e mais de uma variação possível, NÃO escolhe: cor
+     * errada é encomenda errada na casa do cliente. O item fica pro botão
+     * "Vincular produto" do KoraSync, uma vez só por código.
      */
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
-        $product = Product::query()->where('sku', $externalId)->first();
+        $product = Product::query()->whereRaw('UPPER(TRIM(sku)) = ?', [mb_strtoupper(trim($externalId))])->first()
+            ?? $this->casarPorNome($externalId);
 
         if (! $product) {
             return null;
@@ -597,6 +625,77 @@ class AmazonDriver extends AbstractMarketplaceDriver
         }
 
         return $product;
+    }
+
+    /** Código de rastreio que o pedido já tem no Bling, se alguém já despachou por lá. */
+    private function rastreioJaNoBling(Order $order): ?string
+    {
+        $pedido = $this->blingOrders->findByOrderNumber((string) $order->external_order_id, $this->blingOrders->amazonLojaId());
+
+        return collect($pedido['transporte']['volumes'] ?? [])
+            ->pluck('codigoRastreamento')
+            ->map(fn ($codigo) => trim((string) $codigo))
+            ->first(fn ($codigo) => $codigo !== '') ?: null;
+    }
+
+    /** Mesmos limites do TikTok (TikTokShopDriver): 55% de semelhança, empate dentro de 10 pontos. */
+    private const SEMELHANCA_MINIMA = 55.0;
+
+    private const MARGEM_DE_EMPATE = 10.0;
+
+    private function casarPorNome(string $externalId): ?Product
+    {
+        // O nome que o canal mandou fica no próprio item sem vínculo
+        // (OrderImportService grava external_name quando não acha produto)
+        // — serve tanto na importação quanto no relink de 30 em 30 minutos.
+        $nome = OrderItem::query()
+            ->where('external_item_id', $externalId)
+            ->whereNull('product_id')
+            ->whereHas('order', fn ($query) => $query->where('origin', $this->channel()))
+            ->latest('id')
+            ->value('product_name');
+
+        if (! $nome) {
+            return null;
+        }
+
+        $pontuados = Product::query()->where('is_active', true)->get(['id', 'name', 'sku', 'color'])
+            ->map(function (Product $candidato) use ($nome) {
+                similar_text(mb_strtolower($nome), mb_strtolower($candidato->name), $percentual);
+
+                return ['produto' => $candidato, 'pontos' => $percentual];
+            })
+            ->filter(fn ($linha) => $linha['pontos'] >= self::SEMELHANCA_MINIMA);
+
+        if ($pontuados->isEmpty()) {
+            return null;
+        }
+
+        $melhor = $pontuados->max('pontos');
+        $familia = $pontuados->filter(fn ($linha) => $linha['pontos'] >= $melhor - self::MARGEM_DE_EMPATE)->pluck('produto');
+
+        if ($familia->count() === 1) {
+            return $familia->first();
+        }
+
+        $titulo = ' '.Str::of($nome)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ').' ';
+        $daCor = $familia->filter(function (Product $produto) use ($titulo) {
+            $cor = trim((string) Str::of((string) $produto->color)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' '));
+
+            return $cor !== '' && str_contains($titulo, " {$cor} ");
+        });
+
+        if ($daCor->count() === 1) {
+            return $daCor->first();
+        }
+
+        Log::warning('amazon.item.variacao_ambigua', [
+            'external_id' => $externalId,
+            'nome' => $nome,
+            'candidatos' => $familia->pluck('sku')->all(),
+        ]);
+
+        return null;
     }
 
     /**

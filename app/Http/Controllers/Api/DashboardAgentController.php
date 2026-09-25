@@ -12,6 +12,7 @@ use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -27,6 +28,7 @@ use App\Modules\Marketplace\Support\OrderImageArchiveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
@@ -1237,10 +1239,26 @@ class DashboardAgentController extends Controller
             return null;
         }
 
+        $semVinculo = $order->items->whereNull('product_id');
+
+        if ($semVinculo->isNotEmpty()) {
+            return 'Item sem produto vinculado ('.$semVinculo->pluck('product_name')->map(fn ($nome) => Str::limit((string) $nome, 40))->implode('; ').') — use "Vincular produto" pra liberar a nota e a etiqueta.';
+        }
+
         $correios = app(CorreiosAutoShipping::class);
 
         if ($prePostagem = $correios->geradaPara($order)) {
             return $correios->problemaDaEtiqueta($order, $prePostagem);
+        }
+
+        $invoice = $order->invoice()->first(['id', 'order_id', 'status', 'motivo_rejeicao']);
+
+        // Nota ainda saindo não é trava — é a espera normal. Só avisa quando
+        // ela parou de vez (rejeitada/denegada/erro).
+        if ($invoice?->status !== Invoice::STATUS_AUTHORIZED) {
+            return in_array($invoice?->status, [Invoice::STATUS_REJECTED, Invoice::STATUS_DENIED, Invoice::STATUS_ERROR], true)
+                ? 'NF-e '.$invoice->status.': '.($invoice->motivo_rejeicao ?: 'ver detalhe no pedido').'.'
+                : null;
         }
 
         $shipment = $order->channelShipment;

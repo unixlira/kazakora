@@ -80,7 +80,12 @@ class ChannelShippingService
         // polling. Mercado Livre, Shopee e Amazon têm fetchLabel() real
         // implementado; TikTok/Shein ainda são stubs — disparar lá só
         // geraria falha garantida após 4h de tentativas inúteis.
-        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
+        // Pedido que o próprio confirmShipping() já deu como enviado (Amazon
+        // despachada à mão pelo Bling) não tem etiqueta nossa pra buscar —
+        // sem isto, 4h de tentativas e um alerta falso de "etiqueta não
+        // ficou disponível".
+        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)
+            && $order->fresh()?->status === Order::STATUS_PAID) {
             // BUG REAL 2026-08-14 (pedido #278): venda agendada (ver
             // MercadoLivreDriver::extractScheduledFor()) disparando o job
             // padrão martelava a API a cada 5s por até 4h só pra ouvir "não

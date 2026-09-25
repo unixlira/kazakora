@@ -183,8 +183,20 @@ class CorreiosAutoShipping
         }
 
         $order->loadMissing('items');
+        $declarados = collect($prePostagem->content_items ?? []);
+
+        // Pré-postagem sem retrato por produto (gerada antes de 25/09 à
+        // tarde, ou na tela manual do menu Correios): só dá pra conferir o
+        // total de unidades. Peso manual pode incluir embalagem, então não
+        // é comparado — ACHADO REAL: #2451/#2485 apareciam travados à toa.
+        if ($declarados->isNotEmpty() && $declarados->every(fn ($item) => ! array_key_exists('product_id', $item))) {
+            return (int) $declarados->sum('quantidade') === (int) $order->items->sum('quantity')
+                ? null
+                : "Pré-postagem {$prePostagem->codigo_objeto} declara {$declarados->sum('quantidade')} unidade(s), mas o pedido tem {$order->items->sum('quantity')}. Cancele no menu Correios e gere de novo.";
+        }
+
         $noPedido = $order->items->groupBy('product_id')->map(fn ($itens) => (int) $itens->sum('quantity'))->sortKeys()->all();
-        $naEtiqueta = collect($prePostagem->content_items ?? [])->groupBy('product_id')->map(fn ($itens) => (int) $itens->sum('quantidade'))->sortKeys()->all();
+        $naEtiqueta = $declarados->groupBy('product_id')->map(fn ($itens) => (int) $itens->sum('quantidade'))->sortKeys()->all();
 
         if ($noPedido != $naEtiqueta) {
             return "Pré-postagem {$prePostagem->codigo_objeto} foi gerada com itens/quantidades diferentes do pedido. Cancele no menu Correios e gere de novo.";

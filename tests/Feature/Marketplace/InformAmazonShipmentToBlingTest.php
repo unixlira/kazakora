@@ -102,6 +102,22 @@ class InformAmazonShipmentToBlingTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_never_overwrites_a_tracking_code_someone_put_in_bling_by_hand(): void
+    {
+        Http::fake([
+            '*/pedidos/vendas?*' => Http::response(['data' => []]),
+            '*/pedidos/vendas/'.self::BLING_ID => Http::response(['data' => [
+                'id' => self::BLING_ID, 'numeroLoja' => self::NUMERO_AMAZON,
+                'transporte' => ['volumes' => [['id' => 555, 'codigoRastreamento' => 'QB999999999BR']]],
+            ]]),
+        ]);
+        $order = $this->pedidoPostado();
+
+        dispatch_sync(new InformAmazonShipmentToBling($order->id));
+
+        Http::assertNotSent(fn (Request $request) => in_array($request->method(), ['PUT', 'PATCH', 'POST'], true));
+    }
+
     public function test_waits_for_the_label_before_touching_the_bling_order(): void
     {
         $this->fakeBling();

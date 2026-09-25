@@ -85,6 +85,28 @@ class AmazonItemMatchingAndManualShipmentTest extends TestCase
         $this->assertNull(app(AmazonDriver::class)->autoImportProduct('AMZ-X2'));
     }
 
+    /**
+     * #2504: vinculado o último item, a nota não pode esperar a rodada de
+     * 15 min — sai na hora.
+     */
+    public function test_linking_the_last_unlinked_item_issues_the_invoice_right_away(): void
+    {
+        \Illuminate\Support\Facades\Queue::fake([\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class]);
+        $order = $this->pedido();
+        $this->itemSemVinculo($order, 'AMZ-X1', 'Mini Power Bank 10000mah Para USB - C E Tipo C Preto');
+        $this->itemSemVinculo($order, 'AMZ-X2', 'Carregador portátil Celular Mini Power Bank com Suporte');
+
+        $this->artisan('marketplace:relink-unmapped-items');
+
+        // Um item continua sem cor: nada de nota ainda.
+        \Illuminate\Support\Facades\Queue::assertNotPushed(\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class);
+
+        $order->items()->whereNull('product_id')->update(['product_id' => Product::where('sku', 'CAR-CAR-SEM-POW-ROS-0001')->value('id')]);
+        \App\Modules\Fiscal\Jobs\GenerateInvoiceJob::seDestravou($order->fresh());
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Modules\Fiscal\Jobs\GenerateInvoiceJob::class, 1);
+    }
+
     public function test_sku_match_ignores_case_and_spaces(): void
     {
         $this->assertSame('CAR-CAR-SEM-POW-ROS-0001', app(AmazonDriver::class)->autoImportProduct(' car-car-sem-pow-ros-0001 ')?->sku);

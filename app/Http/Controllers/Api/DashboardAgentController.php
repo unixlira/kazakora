@@ -12,6 +12,7 @@ use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
@@ -1719,6 +1720,10 @@ class DashboardAgentController extends Controller
             OrderFulfillmentEvent::STATUS_SUCCESS,
             "Item \"{$item->product_name}\" vinculado ao produto #{$product->id} ({$product->sku}) pelo KoraSync",
         );
+
+        // Era o que faltava pra nota sair? Então sai agora.
+        Order::query()->whereIn('id', $itens->pluck('order_id')->push($order->id)->unique())->get()
+            ->each(fn (Order $destravado) => GenerateInvoiceJob::seDestravou($destravado));
 
         return response()->json([
             'result' => 'ok',

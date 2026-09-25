@@ -124,6 +124,10 @@ class RelinkUnmappedMarketplaceItems extends Command
                 $item->update(['product_id' => $product->id, 'product_name' => $product->name]);
             }
 
+            // Pedido que só esperava este vínculo pra ter nota: sai agora.
+            Order::query()->whereIn('id', $group->pluck('order_id')->unique())->get()
+                ->each(fn (Order $destravado) => \App\Modules\Fiscal\Jobs\GenerateInvoiceJob::seDestravou($destravado));
+
             $relinked += $group->count();
             $this->line("Vinculado: {$channel}/{$externalId} -> #{$product->id} {$product->name} ({$group->count()} pedido(s): {$orderRefs})");
         }

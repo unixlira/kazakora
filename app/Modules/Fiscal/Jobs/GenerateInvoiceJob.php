@@ -65,6 +65,26 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         $this->onQueue('nfe');
     }
 
+    /**
+     * Pedido que só estava travado por item sem produto vinculado: assim que
+     * o último vínculo é feito (botão do KoraSync ou relink automático), a
+     * nota sai na hora — sem esperar a rodada de 15 min do nfe:retry-stuck.
+     * Caso real #2504 (25/09): vinculado às 11:5x, nota parada desde 11:26.
+     */
+    public static function seDestravou(Order $order): void
+    {
+        $order->loadMissing('invoice', 'items');
+
+        if ($order->status !== Order::STATUS_PAID
+            || ! $order->shouldAutoGenerateInvoice()
+            || $order->invoice?->status === Invoice::STATUS_AUTHORIZED
+            || $order->items->contains(fn ($item) => $item->product_id === null)) {
+            return;
+        }
+
+        self::dispatch($order->id);
+    }
+
     public function uniqueId(): string
     {
         return (string) $this->orderId;

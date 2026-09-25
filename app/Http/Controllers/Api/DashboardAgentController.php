@@ -1251,14 +1251,30 @@ class DashboardAgentController extends Controller
             return $correios->problemaDaEtiqueta($order, $prePostagem);
         }
 
-        $invoice = $order->invoice()->first(['id', 'order_id', 'status', 'motivo_rejeicao']);
+        $invoice = $order->invoice()->first(['id', 'order_id', 'status', 'motivo_rejeicao', 'updated_at']);
 
-        // Nota ainda saindo não é trava — é a espera normal. Só avisa quando
-        // ela parou de vez (rejeitada/denegada/erro).
+        // Nota ainda saindo não é trava — é a espera normal, e nos primeiros
+        // 30 minutos não vira alerta. Depois disso o card diz em que pé ela
+        // está (pedido #2504, 25/09: "não saiu a etiqueta" sem nenhum aviso
+        // do porquê — a etiqueta espera a nota).
         if ($invoice?->status !== Invoice::STATUS_AUTHORIZED) {
-            return in_array($invoice?->status, [Invoice::STATUS_REJECTED, Invoice::STATUS_DENIED, Invoice::STATUS_ERROR], true)
-                ? 'NF-e '.$invoice->status.': '.($invoice->motivo_rejeicao ?: 'ver detalhe no pedido').'.'
-                : null;
+            if (in_array($invoice?->status, [Invoice::STATUS_REJECTED, Invoice::STATUS_DENIED, Invoice::STATUS_ERROR], true)) {
+                return 'NF-e '.$invoice->status.': '.($invoice->motivo_rejeicao ?: 'ver detalhe no pedido').'.';
+            }
+
+            $desde = $invoice?->updated_at ?? $order->updated_at;
+
+            if ($desde && $desde->lt(now()->subMinutes(30))) {
+                $situacao = match ($invoice?->status) {
+                    null => 'ainda não emitida',
+                    Invoice::STATUS_SENT => 'enviada à SEFAZ, sem resposta',
+                    default => 'pendente',
+                };
+
+                return "Etiqueta esperando a NF-e ({$situacao} desde ".$desde->timezone('America/Sao_Paulo')->format('H:i').') — o sistema tenta de novo a cada 15 min.';
+            }
+
+            return null;
         }
 
         $shipment = $order->channelShipment;

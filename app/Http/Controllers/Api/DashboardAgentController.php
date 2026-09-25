@@ -1271,7 +1271,20 @@ class DashboardAgentController extends Controller
                     default => 'pendente',
                 };
 
-                return "Etiqueta esperando a NF-e ({$situacao} desde ".$desde->timezone('America/Sao_Paulo')->format('H:i').') — o sistema tenta de novo a cada 15 min.';
+                // O porquê de verdade fica na linha do tempo do pedido
+                // (validação, SEFAZ, dado faltando) — traz a última
+                // tentativa pro card, que é onde alguém vai olhar.
+                $ultima = \App\Modules\Checkout\Models\OrderFulfillmentEvent::query()
+                    ->where('order_id', $order->id)
+                    ->where('step', \App\Modules\Checkout\Models\OrderFulfillmentEvent::STEP_INVOICE_ISSUED)
+                    ->latest('id')
+                    ->first(['id', 'status', 'message', 'created_at']);
+
+                $motivo = $ultima
+                    ? ' Última tentativa '.$ultima->created_at?->timezone('America/Sao_Paulo')->format('H:i').': '.Str::limit((string) $ultima->message, 160)
+                    : ' Nenhuma tentativa de emissão registrada.';
+
+                return "Etiqueta esperando a NF-e ({$situacao} desde ".$desde->timezone('America/Sao_Paulo')->format('H:i').').'.$motivo;
             }
 
             return null;

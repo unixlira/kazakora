@@ -10,6 +10,12 @@ class ProductFiscalData extends Model
 {
     protected $table = 'product_fiscal_data';
 
+    // Formato da embalagem na pré-postagem dos Correios (ver
+    // AmazonCorreiosShipping): envelope só precisa de peso.
+    public const EMBALAGEM_CAIXA = 'caixa';
+
+    public const EMBALAGEM_ENVELOPE = 'envelope';
+
     protected $fillable = [
         'product_id',
         'ncm',
@@ -39,6 +45,7 @@ class ProductFiscalData extends Model
         'altura_cm',
         'largura_cm',
         'profundidade_cm',
+        'formato_embalagem',
     ];
 
     protected function casts(): array

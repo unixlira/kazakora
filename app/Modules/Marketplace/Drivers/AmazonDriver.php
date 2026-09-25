@@ -10,6 +10,8 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Bling\BlingOrderService;
@@ -45,10 +47,11 @@ use RuntimeException;
  * (BlingWebhookController). Enquanto a SP-API não estiver conectada,
  * importOrder()/confirmShipping()/fetchLabel() leem o pedido no Bling,
  * exatamente como o TikTok Shop (ver ReadsOrdersFromBling) — e
- * confirmShipping() vira só CONSULTA de rastreio: sem SP-API não há compra
- * de frete MFN. Conectar a SP-API volta tudo pro caminho original sem
- * mexer em código. A NF-e continua sendo NOSSA (Order::
- * shouldAutoGenerateInvoice(), decisão do usuário no mesmo dia).
+ * o envio sai pelos CORREIOS, por conta da loja (pedido explícito
+ * 2026-09-25): nota autorizada com chave → pré-postagem com a chave →
+ * etiqueta com QR Code → impressão automática. Ver CorreiosAutoShipping.
+ * A nota é a do Bling, se ele gerou, ou a nossa (GenerateInvoiceJob).
+ * Conectar a SP-API volta tudo pro caminho original sem mexer em código.
  */
 class AmazonDriver extends AbstractMarketplaceDriver
 {
@@ -327,6 +330,18 @@ class AmazonDriver extends AbstractMarketplaceDriver
      */
     public function submitInvoice(Order $order, Invoice $invoice): array
     {
+        // Via Bling não há pra onde mandar a nota: ela segue com o objeto,
+        // com a chave na pré-postagem dos Correios. "sent" é o que faz
+        // ChannelInvoiceSubmissionService disparar a pré-postagem na hora,
+        // sem esperar o backoff do ConfirmChannelShippingJob.
+        if ($this->viaBling()) {
+            return [
+                'status' => 'sent',
+                'external_reference' => null,
+                'response' => ['info' => 'Amazon via Bling: a NF-e vai com o objeto, chave na pré-postagem dos Correios.'],
+            ];
+        }
+
         $this->ensureConfigured();
 
         throw new RuntimeException('Envio de nota fiscal pra Amazon ainda não implementado — endpoint SP-API real pra pedido MFN (não-FBA) no Brasil não confirmado na documentação pública. Ver comentário deste método.');
@@ -345,7 +360,14 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function confirmShipping(Order $order): array
     {
         if ($this->viaBling()) {
-            return $this->confirmShippingFromBling($order);
+            $prePostagem = app(CorreiosAutoShipping::class)->confirm($order);
+
+            return [
+                'external_shipment_id' => $prePostagem->correios_id,
+                'tracking_code' => $prePostagem->codigo_objeto,
+                'shipping_method' => 'Correios '.$prePostagem->service_label,
+                'status' => 'confirmed',
+            ];
         }
 
         $this->ensureConfigured();
@@ -505,7 +527,11 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function fetchLabel(Order $order): array
     {
         if ($this->viaBling()) {
-            return $this->fetchLabelFromBling($order);
+            $prePostagem = app(CorreiosAutoShipping::class)->geradaPara($order);
+
+            return $prePostagem
+                ? ['ready' => true, 'contents' => app(CorreiosLabelPdf::class)->render($prePostagem), 'content_type' => 'application/pdf']
+                : ['ready' => false, 'contents' => null, 'content_type' => null];
         }
 
         $this->ensureConfigured();
@@ -567,7 +593,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
      * nenhum dos dois, cai no caminho SP-API, que já falha com
      * MarketplaceNotConfiguredException — o mesmo erro de antes.
      */
-    private function viaBling(): bool
+    public function viaBling(): bool
     {
         return ! $this->isConfigured() && $this->blingOrders->amazonLojaId() !== null;
     }

@@ -603,6 +603,65 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         ]);
     }
 
+    /**
+     * Peso e medidas do PACOTE declarados no anúncio da Shopee — usados
+     * quando o produto não tem esses dados aqui e a pré-postagem dos
+     * Correios precisa deles (ver PackageDataResolver). `weight` e
+     * `dimension` vêm por padrão no get_item_base_info (não são campo
+     * opcional).
+     *
+     * Unidade: a doc da v2 diz kg pro `weight` — mas o docblock de
+     * fetchItemDetail() registra a dúvida kg x g. Valor acima de 30 (o teto
+     * de peso dos Correios em kg) só faz sentido em gramas, então é
+     * convertido; abaixo disso, kg. Nunca lança: sem dado, null.
+     *
+     * @return ?array{peso_bruto: ?float, altura_cm: ?float, largura_cm: ?float, profundidade_cm: ?float}
+     */
+    public function fetchPackageData(string $externalId): ?array
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            $item = $this->client->get('/api/v2/product/get_item_base_info', ['item_id_list' => $externalId])['response']['item_list'][0] ?? null;
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.package_data.lookup_failed', ['external_id' => $externalId, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        if (! $item) {
+            return null;
+        }
+
+        $peso = (float) ($item['weight'] ?? 0);
+        $dimension = $item['dimension'] ?? [];
+
+        return [
+            'peso_bruto' => $peso > 0 ? ($peso > 30 ? $peso / 1000 : $peso) : null,
+            'altura_cm' => (float) ($dimension['package_height'] ?? 0) ?: null,
+            'largura_cm' => (float) ($dimension['package_width'] ?? 0) ?: null,
+            'profundidade_cm' => (float) ($dimension['package_length'] ?? 0) ?: null,
+        ];
+    }
+
+    /** Anúncio da Shopee com este SKU — varre os anúncios ativos (caro: só como último recurso). */
+    public function findItemIdBySku(string $sku): ?string
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            return $this->findExistingItemIdBySku($sku);
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.item_by_sku.lookup_failed', ['sku' => $sku, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
+    }
+
     private function findExistingItemIdBySku(?string $sku): ?string
     {
         $sku = trim((string) $sku);

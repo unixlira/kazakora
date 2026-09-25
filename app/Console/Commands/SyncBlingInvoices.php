@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Services\Bling\BlingInvoiceImporter;
 use Illuminate\Console\Command;
 
@@ -26,6 +27,14 @@ class SyncBlingInvoices extends Command
     public function handle(BlingInvoiceImporter $importer): int
     {
         $canais = (array) config('services.bling.invoice_issuer_channels', []);
+
+        // Amazon via Bling: a nota pode ser do Bling (ver GenerateInvoiceJob)
+        // e a emissão lá é assíncrona — a nota que o Bling autorizar depois
+        // também precisa vir pra cá. Pedido com nota nossa já tem XML e fica
+        // fora da consulta abaixo.
+        if (app(AmazonDriver::class)->viaBling()) {
+            $canais[] = Order::ORIGIN_AMAZON;
+        }
 
         if ($canais === []) {
             $this->info('Nenhum canal com emissão delegada ao Bling — nada a fazer.');

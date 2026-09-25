@@ -153,6 +153,49 @@ class AmazonViaBlingWebhookTest extends TestCase
         $this->assertSame(1, Order::query()->where('origin', Order::ORIGIN_AMAZON)->count());
     }
 
+    /**
+     * Nota que o Bling já gerou é A nota do pedido: vem completa pra cá e
+     * o KazaKora não emite outra. Autorizada, ela dispara o envio ao canal
+     * (que, na Amazon via Bling, é o gatilho da pré-postagem).
+     */
+    public function test_invoice_generated_by_bling_is_imported_and_ours_is_not_issued(): void
+    {
+        Queue::fake([\App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob::class]);
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $chave = '35260965604590000107550020000017941284524944';
+
+        Http::fake([
+            '*/pedidos/vendas/'.self::BLING_ID => Http::response(['data' => [
+                'id' => self::BLING_ID, 'numeroLoja' => self::NUMERO_AMAZON, 'notaFiscal' => ['id' => 55501],
+            ]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => []]),
+            '*/nfe/55501' => Http::response(['data' => [
+                'id' => 55501, 'numero' => '1795', 'serie' => '1', 'situacao' => 5, 'chaveAcesso' => $chave, 'valorNota' => 149.90,
+            ]]),
+            '*/nfe/documento/*' => Http::response(['data' => ['xml' => '<nfeProc/>']]),
+        ]);
+
+        app(\App\Services\Bling\BlingOrderService::class)->rememberOrderId(self::NUMERO_AMAZON, self::BLING_ID);
+
+        $order = Order::create([
+            'status' => Order::STATUS_PAID, 'origin' => Order::ORIGIN_AMAZON, 'external_order_id' => self::NUMERO_AMAZON,
+            'shipping_name' => 'Maria', 'shipping_phone' => '1', 'shipping_zip' => '13010000', 'shipping_street' => 'Rua',
+            'shipping_number' => '1', 'shipping_neighborhood' => 'Centro', 'shipping_city' => 'Campinas', 'shipping_state' => 'SP',
+            'subtotal' => 149.90, 'total' => 149.90,
+        ]);
+
+        $issuer = \Mockery::mock(\App\Modules\Fiscal\Services\InvoiceService::class);
+        $issuer->shouldNotReceive('issue');
+        $this->app->instance(\App\Modules\Fiscal\Services\InvoiceService::class, $issuer);
+
+        dispatch_sync(new GenerateInvoiceJob($order->id));
+
+        $invoice = $order->fresh()->invoice;
+        $this->assertSame(\App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED, $invoice->status);
+        $this->assertSame($chave, $invoice->chave_acesso);
+        Queue::assertPushed(\App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob::class);
+    }
+
     public function test_order_deleted_in_bling_does_not_import_nor_touch_anything(): void
     {
         Http::fake();

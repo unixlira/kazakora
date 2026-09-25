@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Notifications\WebhookImportFailedNotification;
 use App\Services\Bling\Exceptions\BlingException;
@@ -310,11 +311,21 @@ class BlingInvoiceImporter
             ]);
         }
 
+        $acabouDeAutorizar = $status === Invoice::STATUS_AUTHORIZED && ! $jaAutorizadaPorNos && $invoice->getOriginal('status') !== Invoice::STATUS_AUTHORIZED;
+
         if ($status === Invoice::STATUS_AUTHORIZED && ! $invoice->autorizada_em) {
             $invoice->autorizada_em = now();
         }
 
         $invoice->save();
+
+        // Amazon: nota autorizada com chave é o gatilho da pré-postagem dos
+        // Correios (ver CorreiosAutoShipping) — passa pelo mesmo caminho da
+        // nota emitida por nós (GenerateInvoiceJob -> envio ao canal ->
+        // confirmação de envio).
+        if ($acabouDeAutorizar && $order->origin === Order::ORIGIN_AMAZON) {
+            SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
+        }
 
         if ($status === Invoice::STATUS_AUTHORIZED) {
             $this->storeDocuments($invoice, $chave, $nota);

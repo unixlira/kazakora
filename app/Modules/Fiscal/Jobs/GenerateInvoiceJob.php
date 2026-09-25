@@ -11,10 +11,12 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Notifications\InvoiceIssuanceFailedNotification;
+use App\Services\Bling\BlingInvoiceImporter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -101,6 +103,21 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         // ANTES de montar o XML, em vez de só falhar 3 vezes com o mesmo
         // erro ("não foi possível identificar o CPF/CNPJ do comprador")
         // esperando um webhook futuro consertar sozinho.
+        // Amazon via Bling (pedido explícito 2026-09-25): se o Bling já
+        // gerou a nota desse pedido, ela é a nota — importa completa (XML,
+        // DANFE) e o KazaKora NÃO emite outra. Só sem nota no Bling é que a
+        // emissão segue aqui. A autorização da nota importada dispara a
+        // pré-postagem dos Correios (ver BlingInvoiceImporter).
+        if ($order->origin === Order::ORIGIN_AMAZON && app(AmazonDriver::class)->viaBling()) {
+            $daBling = app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+            if ($daBling) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: NF-e do Bling importada (nº {$daBling->numero}, {$daBling->status}) — o KazaKora não emite outra.");
+
+                return;
+            }
+        }
+
         $orderImport->refreshBuyerInfo($order);
         $order->refresh();
 

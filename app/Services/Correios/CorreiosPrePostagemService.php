@@ -34,6 +34,16 @@ class CorreiosPrePostagemService
 
     public const FORMATO_ROLO = '3';
 
+    // Serviços do contrato (mesmos da tela manual, ver CorreiosController).
+    public const SERVICO_PAC = '03298';
+
+    public const SERVICO_SEDEX = '03220';
+
+    public const SERVICOS_CONTRATO = [
+        self::SERVICO_PAC => 'PAC (contrato)',
+        self::SERVICO_SEDEX => 'SEDEX (contrato)',
+    ];
+
     public function __construct(private readonly CorreiosTokenService $tokenService)
     {
     }
@@ -50,6 +60,7 @@ class CorreiosPrePostagemService
      *   service_code, service_label, weight_grams
      *   dimensions: [format, height, width, length, diameter] (cm)
      *   content_items: [[conteudo, quantidade, valor], ...]
+     *   invoice (opcional): [numero, chave] — NF-e que acompanha o objeto
      * @return array<string, mixed> resposta crua da API (PrePostagem)
      */
     public function create(array $input): array
@@ -80,6 +91,13 @@ class CorreiosPrePostagemService
                 'valor' => number_format((float) $item['valor'], 2, '.', ''),
             ])->all(),
             ...$this->buildDimensions($input['dimensions'] ?? []),
+            // Campos do schema real (PrePostagem.numeroNotaFiscal/chaveNFe,
+            // conferido em apihom.correios.com.br/prepostagem/v3/api-docs
+            // em 2026-09-25): objeto que viaja com NF-e leva a chave dela.
+            ...(! empty($input['invoice']['chave']) ? [
+                'numeroNotaFiscal' => (string) ($input['invoice']['numero'] ?? ''),
+                'chaveNFe' => (string) $input['invoice']['chave'],
+            ] : []),
         ];
 
         $token = $this->tokenService->tokenForPrePostagem();

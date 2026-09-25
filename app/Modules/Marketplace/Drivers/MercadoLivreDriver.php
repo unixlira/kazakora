@@ -184,6 +184,78 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             ->all();
     }
 
+    /**
+     * Peso e medidas do PACOTE no anúncio do Mercado Livre — segundo
+     * recurso da pré-postagem dos Correios, depois da Shopee (ver
+     * PackageDataResolver). Os atributos SELLER_PACKAGE_* (o que o vendedor
+     * declarou) têm prioridade; sem eles, `shipping.dimensions`
+     * ("AxLxC,peso", cm e gramas). Nunca lança: sem dado, null.
+     *
+     * @return ?array{peso_bruto: ?float, altura_cm: ?float, largura_cm: ?float, profundidade_cm: ?float}
+     */
+    public function fetchPackageData(string $externalId): ?array
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            $item = $this->client->get("items/{$externalId}");
+        } catch (MercadoLivreException $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.package_data.lookup_failed', ['external_id' => $externalId, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        if (empty($item['id'])) {
+            return null;
+        }
+
+        $atributo = function (string $id) use ($item): ?array {
+            $struct = collect($item['attributes'] ?? [])->firstWhere('id', $id)['value_struct'] ?? null;
+
+            return isset($struct['number']) ? ['valor' => (float) $struct['number'], 'unidade' => strtolower((string) ($struct['unit'] ?? ''))] : null;
+        };
+        $emCm = fn (?array $v) => $v === null ? null : ($v['unidade'] === 'mm' ? $v['valor'] / 10 : ($v['unidade'] === 'm' ? $v['valor'] * 100 : $v['valor']));
+        $emKg = fn (?array $v) => $v === null ? null : ($v['unidade'] === 'g' ? $v['valor'] / 1000 : $v['valor']);
+
+        $dados = [
+            'peso_bruto' => $emKg($atributo('SELLER_PACKAGE_WEIGHT')),
+            'altura_cm' => $emCm($atributo('SELLER_PACKAGE_HEIGHT')),
+            'largura_cm' => $emCm($atributo('SELLER_PACKAGE_WIDTH')),
+            'profundidade_cm' => $emCm($atributo('SELLER_PACKAGE_LENGTH')),
+        ];
+
+        if (preg_match('/^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)$/', (string) ($item['shipping']['dimensions'] ?? ''), $m)) {
+            $dados['altura_cm'] ??= (float) $m[1];
+            $dados['largura_cm'] ??= (float) $m[2];
+            $dados['profundidade_cm'] ??= (float) $m[3];
+            $dados['peso_bruto'] ??= (float) $m[4] / 1000;
+        }
+
+        return array_filter($dados, fn ($v) => $v !== null && $v > 0) === [] ? null : $dados;
+    }
+
+    /** Anúncio do Mercado Livre com este SKU (filtro seller_sku da busca de itens do vendedor). */
+    public function findItemIdBySku(string $sku): ?string
+    {
+        $sellerId = $this->account()?->seller_id;
+
+        if (! $this->isConfigured() || ! $sellerId) {
+            return null;
+        }
+
+        try {
+            $ids = $this->client->get("users/{$sellerId}/items/search", ['seller_sku' => $sku])['results'] ?? [];
+        } catch (MercadoLivreException $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.item_by_sku.lookup_failed', ['sku' => $sku, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        return isset($ids[0]) ? (string) $ids[0] : null;
+    }
+
     public function fetchItemDetail(string $externalId): ?array
     {
         $this->ensureConfigured();

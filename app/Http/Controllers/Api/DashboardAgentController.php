@@ -1147,6 +1147,11 @@ class DashboardAgentController extends Controller
             // dos Correios) — pedido de 2026-09-25: copiar direto do card
             // pra atualizar o painel do canal, sem abrir o menu Correios.
             'tracking_code' => $order->channelShipment?->tracking_code,
+            // Amazon: o rastreio já foi mandado pro Bling (e dele pra
+            // Amazon)? Última tentativa do InformAmazonShipmentToBling —
+            // pedido de 2026-09-25 ("por que não saiu a confirmação na
+            // Amazon"): sem isto não havia onde ver se a etapa rodou.
+            'channel_update' => $order->origin === Order::ORIGIN_AMAZON ? $this->avisoDeEnvioAoCanal($order) : null,
             'shipping_type' => $envio['tipo'],
             'shipping_type_label' => $envio['label'],
             'shipping_type_short' => $envio['curto'],
@@ -1222,6 +1227,28 @@ class DashboardAgentController extends Controller
             // nunca saiu). O KoraSync mostra no card e pergunta antes de
             // mandar outra — ver reprintLabel().
             'label_printed_at' => $group->map(fn (Order $item) => $impressas[$item->id] ?? null)->filter()->first(),
+        ];
+    }
+
+    /**
+     * @return array{status: string, message: ?string, at: ?string}|null
+     */
+    private function avisoDeEnvioAoCanal(Order $order): ?array
+    {
+        $evento = OrderFulfillmentEvent::query()
+            ->where('order_id', $order->id)
+            ->where('step', OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER)
+            ->latest('id')
+            ->first(['id', 'status', 'message', 'created_at']);
+
+        if (! $evento) {
+            return null;
+        }
+
+        return [
+            'status' => $evento->status,
+            'message' => $evento->message,
+            'at' => $evento->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
         ];
     }
 

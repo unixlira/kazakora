@@ -88,15 +88,15 @@ class CorreiosLabelPdf
         $y = $pdf->GetY() + 1.5;
         $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
 
-        // 4. Declaração (SKU | QTD) + DANFE.
+        // 4. Declaração do produto + DANFE — tudo na MESMA etiqueta (pedido
+        // do usuário 2026-09-25: a folha separada de declaração saía como
+        // uma 2ª etiqueta, "o certo é gerar só 1").
+        $yDanfe = self::ALTURA - self::MARGEM - 24;
         $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Declaração do produto', 'L');
-        $pdf->SetFont('Helvetica', 'B', 8.5);
-        $pdf->SetXY(self::MARGEM, $y + 5);
-        $pdf->MultiCell($util, 3.8, $this->t($this->declaracao($pp)), 0, 'L');
+        $this->declaracaoNaEtiqueta($pdf, $pp, $y + 5, $yDanfe - 2.5);
 
         $invoice = $pp->order?->invoice;
         $chave = preg_replace('/\D/', '', (string) $invoice?->chave_acesso);
-        $yDanfe = self::ALTURA - self::MARGEM - 24;
         $pdf->Line(self::MARGEM, $yDanfe - 1.5, self::LARGURA - self::MARGEM, $yDanfe - 1.5);
         $this->kicker($pdf, self::MARGEM, $yDanfe, $util / 2, 'Código DANFE', 'L');
         $pdf->SetFont('Helvetica', 'B', 7);
@@ -114,80 +114,81 @@ class CorreiosLabelPdf
         $pdf->SetXY(self::MARGEM, self::ALTURA - self::MARGEM - 2.5);
         $pdf->Cell($util, 3, $this->t(trim(($pp->origin ? ucfirst(str_replace('_', ' ', $pp->origin)).' ' : '').($pp->external_order_id ?? '').' · Pedido #'.$pp->order_id)), 0, 0, 'C');
 
-        $this->paginaDaDeclaracao($pdf, $pp);
-
         return $pdf->Output('S');
     }
 
     /**
-     * 2ª etiqueta, logo depois da dos Correios (pedido explícito
-     * 2026-09-25): a declaração do produto pra quem monta a caixa — nome,
-     * cor e quantidade de cada produto em destaque, SKU embaixo em fonte
-     * menor. Mais de um produto é o caso que dá erro na bancada (as cores
-     * do Power Bank têm o mesmo nome), então cada linha é um produto.
+     * Nome + COR e quantidade de cada produto, SKU embaixo em fonte menor,
+     * no espaço entre o remetente e a DANFE. Até ~3 produtos cabem no
+     * tamanho cheio; com mais, a linha encolhe; se nem assim couber, cai
+     * pra lista corrida "SKU | QTD" — nunca vira uma 2ª etiqueta.
      */
-    private function paginaDaDeclaracao(FPDF $pdf, CorreiosPrePostagem $pp): void
+    private function declaracaoNaEtiqueta(FPDF $pdf, CorreiosPrePostagem $pp, float $topo, float $base): void
     {
         $linhas = $this->linhasDaDeclaracao($pp);
+        $util = self::LARGURA - 2 * self::MARGEM;
+        $disponivel = $base - $topo;
 
-        if ($linhas === []) {
+        $tamanhos = [
+            ['altura' => 9.0, 'nome' => 8.5, 'sku' => 6.5, 'qtd' => 14],
+            ['altura' => 6.5, 'nome' => 7.0, 'sku' => 5.5, 'qtd' => 10],
+        ];
+        $tamanho = collect($tamanhos)->first(fn ($t) => count($linhas) * $t['altura'] <= $disponivel);
+
+        if (! $tamanho || $linhas === []) {
+            $pdf->SetFont('Helvetica', 'B', 7);
+            $pdf->SetXY(self::MARGEM, $topo);
+            $pdf->MultiCell($util, 3.2, $this->t($this->declaracao($pp)), 0, 'L');
+
             return;
         }
 
-        $util = self::LARGURA - 2 * self::MARGEM;
-        $larguraQtd = 22.0;
-        $larguraNome = $util - $larguraQtd - 2;
-        $novaPagina = function () use ($pdf, $pp, $util, $linhas) {
-            $pdf->AddPage();
-            $pdf->SetFont('Helvetica', 'B', 13);
-            $pdf->SetXY(self::MARGEM, self::MARGEM);
-            $pdf->Cell($util, 6, $this->t('DECLARAÇÃO DO PRODUTO'), 0, 1, 'C');
-            $pdf->SetFont('Helvetica', '', 8);
-            $pdf->SetX(self::MARGEM);
-            $pdf->Cell($util, 4, $this->t(trim(($pp->codigo_objeto ? $pp->codigo_objeto.' · ' : '').'Pedido #'.$pp->order_id.($pp->external_order_id ? ' · '.$pp->external_order_id : ''))), 0, 1, 'C');
-            $pdf->SetX(self::MARGEM);
-            $pdf->Cell($util, 4, $this->t($pp->customer_name.' · '.array_sum(array_column($linhas, 'quantidade')).' unidade(s)'), 0, 1, 'C');
-            $pdf->Line(self::MARGEM, $pdf->GetY() + 1.5, self::LARGURA - self::MARGEM, $pdf->GetY() + 1.5);
-            $pdf->SetY($pdf->GetY() + 3.5);
-        };
+        $larguraQtd = 14.0;
+        $larguraNome = $util - $larguraQtd - 1.5;
+        $y = $topo;
 
-        $novaPagina();
+        foreach ($linhas as $i => $linha) {
+            // A cor nunca é cortada (é ela que separa as variações de mesmo
+            // nome); quem encolhe é o nome.
+            $cor = $linha['cor'] ? $this->t(' — '.mb_strtoupper($linha['cor'])) : '';
 
-        foreach ($linhas as $linha) {
-            $titulo = $linha['nome'].($linha['cor'] ? ' — '.mb_strtoupper($linha['cor']) : '');
+            $pdf->SetFont('Helvetica', 'B', $tamanho['nome']);
+            $pdf->SetXY(self::MARGEM, $y);
+            $pdf->Cell($larguraNome, $tamanho['altura'] * 0.5, $this->caber($pdf, $linha['nome'], $larguraNome - $pdf->GetStringWidth($cor)).$cor, 0, 0, 'L');
 
-            // Linha que não cabe no que sobra da página vai pra próxima.
-            $pdf->SetFont('Helvetica', 'B', 11);
-            $alturaNome = 5.0 * max(1, (int) ceil($pdf->GetStringWidth($this->t($titulo)) / ($larguraNome - 1)));
+            $pdf->SetFont('Helvetica', '', $tamanho['sku']);
+            $pdf->SetXY(self::MARGEM, $y + $tamanho['altura'] * 0.5);
+            $pdf->Cell($larguraNome, $tamanho['altura'] * 0.4, $this->t('SKU '.($linha['sku'] ?: '—')), 0, 0, 'L');
 
-            if ($pdf->GetY() + $alturaNome + 8 > self::ALTURA - self::MARGEM) {
-                $novaPagina();
+            // Quantidade em destaque à direita — é o número que confere a caixa.
+            $pdf->SetFont('Helvetica', 'B', $tamanho['qtd']);
+            $pdf->SetXY(self::LARGURA - self::MARGEM - $larguraQtd, $y);
+            $pdf->Cell($larguraQtd, $tamanho['altura'] - 1, $this->t($linha['quantidade'].'x'), 0, 0, 'R');
+
+            if ($i < count($linhas) - 1) {
+                $pdf->SetLineWidth(0.15);
+                $pdf->Line(self::MARGEM, $y + $tamanho['altura'] - 0.6, self::LARGURA - self::MARGEM, $y + $tamanho['altura'] - 0.6);
+                $pdf->SetLineWidth(0.6);
             }
 
-            $y = $pdf->GetY();
-
-            $pdf->SetXY(self::MARGEM, $y);
-            $pdf->MultiCell($larguraNome, 5, $this->t($titulo), 0, 'L');
-            $pdf->SetFont('Helvetica', '', 7.5);
-            $pdf->SetX(self::MARGEM);
-            $pdf->Cell($larguraNome, 3.8, $this->t('SKU '.($linha['sku'] ?: '—')), 0, 1, 'L');
-            $fim = max($pdf->GetY(), $y + 12);
-
-            // Quantidade grande à direita, numa caixa — é o número que
-            // confere a caixa.
-            $pdf->Rect(self::LARGURA - self::MARGEM - $larguraQtd, $y, $larguraQtd, 12);
-            $pdf->SetFont('Helvetica', 'B', 6.5);
-            $pdf->SetXY(self::LARGURA - self::MARGEM - $larguraQtd, $y + 0.8);
-            $pdf->Cell($larguraQtd, 3, 'QTD', 0, 0, 'C');
-            $pdf->SetFont('Helvetica', 'B', 18);
-            $pdf->SetXY(self::LARGURA - self::MARGEM - $larguraQtd, $y + 3.8);
-            $pdf->Cell($larguraQtd, 7, (string) $linha['quantidade'], 0, 0, 'C');
-
-            $pdf->SetLineWidth(0.2);
-            $pdf->Line(self::MARGEM, $fim + 1.5, self::LARGURA - self::MARGEM, $fim + 1.5);
-            $pdf->SetLineWidth(0.6);
-            $pdf->SetY($fim + 3);
+            $y += $tamanho['altura'];
         }
+    }
+
+    /** Corta com reticências o que não cabe numa linha da largura dada. */
+    private function caber(FPDF $pdf, string $texto, float $largura): string
+    {
+        $convertido = $this->t($texto);
+
+        if ($pdf->GetStringWidth($convertido) <= $largura) {
+            return $convertido;
+        }
+
+        while ($convertido !== '' && $pdf->GetStringWidth($convertido.'...') > $largura) {
+            $convertido = substr($convertido, 0, -1);
+        }
+
+        return rtrim($convertido).'...';
     }
 
     /**

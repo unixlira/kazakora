@@ -294,11 +294,11 @@ class AmazonCorreiosShippingTest extends TestCase
     }
 
     /**
-     * Pedido explícito 2026-09-25: depois da etiqueta dos Correios, uma 2ª
-     * etiqueta com a declaração do produto — nome, cor e quantidade de cada
-     * produto, SKU embaixo.
+     * Pedido explícito 2026-09-25: a declaração do produto (nome, cor,
+     * quantidade, SKU embaixo) vai DENTRO da etiqueta dos Correios — uma
+     * etiqueta só por pedido, não duas folhas.
      */
-    public function test_label_pdf_has_a_second_page_with_the_product_declaration(): void
+    public function test_label_pdf_is_a_single_page_with_the_product_declaration(): void
     {
         $order = $this->pedido([]);
 
@@ -322,7 +322,7 @@ class AmazonCorreiosShippingTest extends TestCase
 
         $pdf = app(CorreiosLabelPdf::class)->render($prePostagem);
 
-        $this->assertSame(2, preg_match_all('#/Type\s*/Page[^s]#', $pdf), 'Etiqueta dos Correios + declaração.');
+        $this->assertSame(1, preg_match_all('#/Type\s*/Page[^s]#', $pdf), 'Uma etiqueta só, com a declaração dentro.');
     }
 
     public function test_label_pdf_is_generated_for_the_printer(): void

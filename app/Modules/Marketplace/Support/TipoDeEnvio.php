@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 
 /**
  * Como este pedido vai sair da loja — Flex, Mercado Envios, Full,
@@ -84,11 +85,22 @@ final class TipoDeEnvio
      */
     public static function doPedido(Order $order): array
     {
-        return self::montar(
-            $order->origin,
-            $order->channelShipment?->shipping_method,
-            $order->shipping_carrier_name,
-        );
+        $metodo = $order->channelShipment?->shipping_method;
+
+        // Amazon com pré-postagem feita pela tela do menu Correios (não pelo
+        // fluxo automático): o serviço está só na pré-postagem, o envio do
+        // canal ficou sem método — caso real do pedido #2451 em 25/09.
+        if ($order->origin === 'amazon' && ! $metodo) {
+            $servico = CorreiosPrePostagem::query()
+                ->where('order_id', $order->id)
+                ->where('status', CorreiosPrePostagem::STATUS_GERADA)
+                ->latest('id')
+                ->value('service_label');
+
+            $metodo = $servico ? "Correios {$servico}" : null;
+        }
+
+        return self::montar($order->origin, $metodo, $order->shipping_carrier_name);
     }
 
     /**

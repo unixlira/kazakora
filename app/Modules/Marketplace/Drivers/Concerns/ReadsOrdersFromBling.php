@@ -155,6 +155,13 @@ trait ReadsOrdersFromBling
             // que now() pra backfill (ver o mesmo argumento em
             // MercadoLivreDriver::importOrder()/ShopeeDriver::importOrder()
             // sobre created_at errado inflar métricas do dia errado).
+            // Comissão da plataforma que o próprio canal cobrou — o Bling
+            // traz em `taxas.taxaComissao` (valor em R$, schema oficial
+            // VendasTaxaDTO). Só entra quando veio de verdade (> 0): sem ela
+            // a taxa fica DESCONHECIDA no Fluxo de Caixa, nunca zero.
+            ...((float) ($order['taxas']['taxaComissao'] ?? 0) > 0
+                ? ['marketplace_fee' => round((float) $order['taxas']['taxaComissao'], 2)]
+                : []),
             'placed_at' => isset($order['data']) ? \Illuminate\Support\Carbon::parse($order['data'], config('app.timezone')) : null,
             'items' => $items,
         ];

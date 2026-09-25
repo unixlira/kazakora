@@ -89,9 +89,10 @@ const filteredSales = computed(() => (platformFilter.value ? props.sales.filter(
 const salesTotals = computed(() => filteredSales.value.reduce((acc, sale) => {
     acc.cost += sale.product_cost;
     acc.fee += sale.platform_fee;
+    acc.shipping += sale.shipping_cost ?? 0;
     acc.netProfit += sale.net_profit;
     return acc;
-}, { cost: 0, fee: 0, netProfit: 0 }));
+}, { cost: 0, fee: 0, shipping: 0, netProfit: 0 }));
 
 // Comissão editável direto na tabela — pedido explícito 2026-08-14: "editavel
 // na propria tabela o valor de comissao ... clicar no enter ai ele atualiza".
@@ -169,7 +170,7 @@ const salesColumns = [
         cell: ({ row }) => h('div', {}, [
             h('span', {}, row.original.product_name),
             !row.original.has_cost
-                ? h('span', { class: 'ml-2 text-xs text-amber-500', title: 'Produto sem custo cadastrado — lucro abaixo do real' }, '⚠ sem custo')
+                ? h('span', { class: 'ml-2 text-xs text-amber-500', title: 'Produto sem custo cadastrado — margem acima do real' }, '⚠ sem custo')
                 : null,
         ]),
     },
@@ -215,8 +216,15 @@ const salesColumns = [
         }),
     },
     {
+        // Frete que a loja pagou (Correios da pré-postagem, Flex), já
+        // descontado o frete recebido do comprador quando é da loja (Amazon).
+        accessorKey: 'shipping_cost',
+        header: 'Frete (loja)',
+        cell: ({ row }) => h('span', { class: 'text-slate-500' }, formatPrice(row.original.shipping_cost ?? 0)),
+    },
+    {
         accessorKey: 'net_profit',
-        header: 'Lucro líquido',
+        header: 'Margem de contribuição',
         cell: ({ row }) => h('div', {}, [
             h('span', { class: row.original.net_profit >= 0 ? 'text-success font-semibold' : 'text-error font-semibold' }, formatPrice(row.original.net_profit)),
             !row.original.has_fee_data
@@ -289,8 +297,8 @@ const salesColumns = [
         />
 
         <div class="mt-8 mb-4">
-            <h2 class="text-lg font-bold">Lucro por Venda</h2>
-            <p class="text-sm text-slate-400">Produto a produto: quanto custou no fornecedor, quanto ficou de comissão na plataforma e quanto sobrou de lucro.</p>
+            <h2 class="text-lg font-bold">Margem de Contribuição por Venda</h2>
+            <p class="text-sm text-slate-400">Produto a produto: quanto custou no fornecedor, quanto ficou de comissão na plataforma, quanto a loja pagou de frete e quanto sobrou no bolso (sem ADS, que sai no total do mês no Financeiro).</p>
         </div>
 
         <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
@@ -320,10 +328,11 @@ const salesColumns = [
             </div>
         </div>
 
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="PAGO AO FORNECEDOR" :stat-title="formatPrice(salesTotals.cost)" stat-icon-name="fas fa-truck-loading" variant="primary" />
             <CardStats stat-subtitle="COMISSÃO DAS PLATAFORMAS" :stat-title="formatPrice(salesTotals.fee)" stat-icon-name="fas fa-percent" variant="primary" />
-            <CardStats stat-subtitle="LUCRO LÍQUIDO" :stat-title="formatPrice(salesTotals.netProfit)" stat-icon-name="fas fa-sack-dollar" :variant="salesTotals.netProfit >= 0 ? 'success' : 'error'" />
+            <CardStats stat-subtitle="FRETE PAGO PELA LOJA" :stat-title="formatPrice(salesTotals.shipping)" stat-icon-name="fas fa-truck" variant="primary" />
+            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO" :stat-title="formatPrice(salesTotals.netProfit)" stat-icon-name="fas fa-sack-dollar" :variant="salesTotals.netProfit >= 0 ? 'success' : 'error'" />
         </div>
 
         <DataTable

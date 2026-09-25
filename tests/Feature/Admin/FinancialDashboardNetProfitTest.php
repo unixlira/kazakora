@@ -238,4 +238,51 @@ class FinancialDashboardNetProfitTest extends TestCase
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page->where('netProfit.productCostMonth', 0));
     }
+
+    /**
+     * Pedido explícito 2026-09-25: a margem de contribuição da Amazon com
+     * dado real — taxa que veio do Bling, frete dos Correios da nossa
+     * pré-postagem, e o frete que o comprador pagou entrando nas vendas
+     * (envio é da loja). Antes o card da Amazon era forçado a zero.
+     */
+    public function test_amazon_contribution_margin_uses_bling_fee_and_correios_postage(): void
+    {
+        $product = Product::factory()->create(['cost_price' => 30.25]);
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_AMAZON, 'subtotal' => 100.5, 'shipping_cost' => 20.25, 'total' => 120.75]);
+        $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 50.25, 'quantity' => 2, 'subtotal' => 100.5]);
+        OrderChannelFee::create(['order_id' => $order->id, 'channel' => 'amazon', 'gross_amount' => 100.5, 'fee_amount' => 15.25, 'source' => OrderChannelFee::SOURCE_API, 'computed_at' => now()]);
+        \App\Modules\Marketplace\Models\CorreiosPrePostagem::create([
+            'order_id' => $order->id, 'origin' => 'amazon', 'customer_name' => 'Maria', 'zip' => '13010000', 'street' => 'Rua',
+            'number' => '1', 'neighborhood' => 'Centro', 'city' => 'Campinas', 'state' => 'SP', 'service_code' => '03298',
+            'service_label' => 'PAC (contrato)', 'postage_price' => 22.75, 'weight_grams' => 400, 'dimension_format' => '2',
+            'content_items' => [], 'status' => \App\Modules\Marketplace\Models\CorreiosPrePostagem::STATUS_GERADA,
+        ]);
+
+        // receita 100,50 + 20,25 = 120,75 · custo 60,50 · taxa 15,25 · Correios 22,75
+        // margem = 120,75 − 60,50 − 15,25 − 22,75 = 22,25
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertInertia(fn ($page) => $page
+            ->where('netProfit.correiosCostMonth', 22.75)
+            ->where('netProfit.netProfitMonth', 22.25)
+            ->where('marketplaceMetrics.month', fn ($canais) => collect($canais)->firstWhere('channel', 'amazon')['netProfit'] === 22.25
+                && collect($canais)->firstWhere('channel', 'amazon')['isEmpty'] === false));
+
+        // Painel inicial e KoraSync fazem a MESMA conta.
+        $this->assertSame(22.25, app(\App\Modules\Marketplace\Support\ContributionMargin::class)->periodo(now()->startOfDay(), now()->startOfDay()->addDay())['margem']);
+    }
+
+    /**
+     * Custo digitado à mão em item sem produto é o TOTAL da linha — a
+     * soma não pode multiplicar pela quantidade de novo.
+     */
+    public function test_manual_line_cost_is_not_multiplied_by_quantity(): void
+    {
+        $order = $this->makeOrder(['subtotal' => 100.5, 'total' => 100.5]);
+        $order->items()->create(['product_id' => null, 'product_name' => 'Avulso', 'product_price' => 33.5, 'quantity' => 3, 'subtotal' => 100.5, 'manual_cost_price' => 45.25]);
+
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertInertia(fn ($page) => $page->where('summary.productCostMonth', 45.25));
+    }
 }

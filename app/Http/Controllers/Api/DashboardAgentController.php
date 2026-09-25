@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use Illuminate\Support\Facades\DB;
+use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Catalog\Models\Product;
@@ -123,14 +125,14 @@ class DashboardAgentController extends Controller
         $revenueMonthByChannel = Order::query()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, SUM(subtotal) as total')
+            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
             ->groupBy('origin')
             ->pluck('total', 'origin');
 
         $revenueTodayByChannel = Order::query()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, SUM(subtotal) as total')
+            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
             ->groupBy('origin')
             ->pluck('total', 'origin');
 
@@ -257,25 +259,25 @@ class DashboardAgentController extends Controller
         // 'subtotal' é o valor real dos produtos, o mesmo que aparece no
         // Seller Center do canal — ver comentário completo em
         // FinancialDashboardController::index().
-        $revenueToday = (float) Order::query()
+        $revenueToday = (float) Order::query()->nonPurchaseReturn()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('subtotal');
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueYesterday = (float) Order::query()
+        $revenueYesterday = (float) Order::query()->nonPurchaseReturn()
             ->whereBetween('created_at', [$yesterday, $today])
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('subtotal');
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueMonth = (float) Order::query()
+        $revenueMonth = (float) Order::query()->nonPurchaseReturn()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('subtotal');
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueMonthPrev = (float) Order::query()
+        $revenueMonthPrev = (float) Order::query()->nonPurchaseReturn()
             ->whereBetween('created_at', [$prevMonthStart, $prevMonthToDate])
             ->whereIn('status', self::PAID_STATUSES)
-            ->sum('subtotal');
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
 
         // Achado real 2026-08-15: "Pedidos hoje" mostrava 17 quando o
         // usuário contava 18 pedidos recebidos no dia — a diferença era 1
@@ -341,24 +343,12 @@ class DashboardAgentController extends Controller
             ->where('updated_at', '>=', now()->subMinutes((int) config('session.lifetime')))
             ->sum('items_count');
 
-        // "Lucro líquido" É UMA APROXIMAÇÃO, não lucro real — o sistema não
-        // tem custo de produto cadastrado em lugar nenhum (só preço de
-        // venda), então isso é só faturamento menos a taxa real do
-        // marketplace (hoje só o Mercado Livre tem taxa capturada de
-        // verdade — ver OrderChannelFee/MercadoLivreDriver::importOrder()).
-        // Pedidos sem taxa capturada (site próprio, Shopee, TikTok Shop)
-        // entram no cálculo sem desconto nenhum. Confirmado explicitamente
-        // com o usuário como aceitável até custo de produto ser cadastrado.
-        $todaysPaidOrderIds = Order::query()
-            ->where('created_at', '>=', $today)
-            ->whereIn('status', self::PAID_STATUSES)
-            ->pluck('id');
-
-        $marketplaceFeesToday = (float) OrderChannelFee::query()
-            ->whereIn('order_id', $todaysPaidOrderIds)
-            ->sum('fee_amount');
-
-        $netProfitToday = $revenueToday - $marketplaceFeesToday;
+        // Margem de contribuição de hoje — a MESMA conta do painel e do
+        // Financeiro (ver ContributionMargin): receita − custo dos produtos
+        // − taxa da plataforma − frete pago pela loja − ADS. Até 25/09 isto
+        // era receita − taxa só, sem custo de produto nenhum.
+        $margemHoje = app(ContributionMargin::class)->periodo($today, $today->copy()->addDay());
+        $netProfitToday = $margemHoje['margem'];
 
         // "Cancelamentos e devoluções do mês" do KoraSync v2.0 (pedido
         // explícito 2026-08-29) — soma cancelamento (canal cancelou o
@@ -398,7 +388,10 @@ class DashboardAgentController extends Controller
             'cancelled_today' => $cancelledToday,
             'refunded_today' => $refundedToday,
             'cart_items_count' => $cartItemsCount,
+            // Nome antigo mantido pro KoraSync desktop, que desserializa
+            // este campo; o valor já é a margem de contribuição.
             'net_profit_today' => $netProfitToday,
+            'contribution_margin_today' => $margemHoje,
             'revenue_month' => $revenueMonth,
             'revenue_month_variation_pct' => $this->variationPct($revenueMonth, $revenueMonthPrev),
             'revenue_today_variation_pct' => $this->variationPct($revenueToday, $revenueYesterday),

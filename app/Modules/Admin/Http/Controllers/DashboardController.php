@@ -2,6 +2,7 @@
 
 namespace App\Modules\Admin\Http\Controllers;
 
+use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Http\Controllers\Controller;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Cart\Models\CartSnapshot;
@@ -63,7 +64,7 @@ class DashboardController extends Controller
                 'revenue' => (float) Order::query()->nonPurchaseReturn()
                     ->where('created_at', '>=', $startOfMonth)
                     ->whereIn('status', self::PAID_STATUSES)
-                    ->sum('subtotal'),
+                    ->sum(DB::raw(ContributionMargin::receitaSql())),
                 'productsCount' => Product::query()->where('is_active', true)->count(),
                 'lowStockCount' => Product::query()->where('stock', '<=', 5)->count(),
                 // "Visita" = IP diferente, não pageview — um mesmo visitante
@@ -77,7 +78,7 @@ class DashboardController extends Controller
                 'revenueToday' => (float) Order::query()->nonPurchaseReturn()
                     ->whereDate('created_at', $today)
                     ->whereIn('status', self::PAID_STATUSES)
-                    ->sum('subtotal'),
+                    ->sum(DB::raw(ContributionMargin::receitaSql())),
                 'contributionMarginToday' => $this->contributionMarginForDay($today),
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
@@ -116,57 +117,16 @@ class DashboardController extends Controller
     }
 
     /**
-     * Margem de contribuição do dia = receita real das vendas confirmadas
-     * (subtotal, sem inflar com frete) menos custos variáveis do mesmo dia:
-     * custo de produto, taxas dos canais, ADS e frete registrado quando houver.
+     * Margem de contribuição do dia — a conta única do sistema (ver
+     * ContributionMargin). Até 25/09 isto subtraía orders.shipping_cost, o
+     * frete que o COMPRADOR paga ao canal; agora sai o frete que a loja
+     * paga de verdade (pré-postagem dos Correios, Flex).
      */
     private function contributionMarginForDay(Carbon $day): float
     {
-        $revenue = round((float) Order::query()->nonPurchaseReturn()
-            ->whereDate('created_at', $day)
-            ->whereIn('status', self::PAID_STATUSES)
-            ->sum('subtotal'), 2);
+        $inicio = $day->copy()->startOfDay();
 
-        $productCost = round((float) DB::table('orders')
-            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
-            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
-            ->whereDate('orders.created_at', $day)
-            ->whereIn('orders.status', self::PAID_STATUSES)
-            ->where(function ($query) {
-                $query->whereNotIn('orders.origin', self::RETURN_ORIGINS)
-                    ->orWhereNull('orders.origin');
-            })
-            ->where(function ($query) {
-                $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
-                    ->orWhereNull('orders.fiscal_operation_type');
-            })
-            ->selectRaw('COALESCE(SUM(order_items.quantity * COALESCE(order_items.manual_cost_price, products.cost_price, 0)), 0) as total')
-            ->value('total'), 2);
-
-        $platformFees = round((float) OrderChannelFee::query()
-            ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
-            ->whereDate('orders.created_at', $day)
-            ->whereIn('orders.status', self::PAID_STATUSES)
-            ->where(function ($query) {
-                $query->whereNotIn('orders.origin', self::RETURN_ORIGINS)
-                    ->orWhereNull('orders.origin');
-            })
-            ->where(function ($query) {
-                $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
-                    ->orWhereNull('orders.fiscal_operation_type');
-            })
-            ->sum('order_channel_fees.fee_amount'), 2);
-
-        $adSpend = round((float) ChannelAdSpend::query()
-            ->whereDate('date', $day)
-            ->sum('spend'), 2);
-
-        $shippingCost = round((float) Order::query()->nonPurchaseReturn()
-            ->whereDate('created_at', $day)
-            ->whereIn('status', self::PAID_STATUSES)
-            ->sum('shipping_cost'), 2);
-
-        return round($revenue - $productCost - $platformFees - $adSpend - $shippingCost, 2);
+        return app(ContributionMargin::class)->periodo($inicio, $inicio->copy()->addDay())['margem'];
     }
 
     /**
@@ -188,7 +148,7 @@ class DashboardController extends Controller
         // ser receita do vendedor.
         return Order::query()->nonPurchaseReturn()
             ->where('created_at', '>=', $startOfMonth)
-            ->selectRaw('origin, SUM(subtotal) as total')
+            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
             ->whereIn('status', self::PAID_STATUSES)
             ->groupBy('origin')
             ->get()

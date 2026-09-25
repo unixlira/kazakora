@@ -79,6 +79,7 @@ class AmazonViaBlingWebhookTest extends TestCase
                 'situacao' => ['id' => 6],
                 'contato' => ['id' => 1111, 'nome' => 'Maria Compradora', 'numeroDocumento' => '123.456.789-09'],
                 'desconto' => ['valor' => 0],
+                'taxas' => ['taxaComissao' => 18.5, 'custoFrete' => 0, 'valorBase' => 149.90],
                 'itens' => [[
                     'codigo' => 'KZ-GARRAFA-001',
                     'descricao' => 'Garrafa Térmica 500ml',
@@ -131,6 +132,10 @@ class AmazonViaBlingWebhookTest extends TestCase
         $this->assertSame(149.90, (float) $order->total);
         $this->assertSame('12345678909', $order->buyer_document);
         $this->assertSame($product->id, $order->items->first()->product_id, 'SKU exato do Bling casa com o catálogo.');
+
+        // Comissão da Amazon que o Bling informou (taxas.taxaComissao) vira a
+        // taxa do pedido — é ela que entra na margem de contribuição.
+        $this->assertSame(18.5, (float) \App\Modules\Marketplace\Models\OrderChannelFee::where('order_id', $order->id)->value('fee_amount'));
 
         // NF-e é nossa pra Amazon — e nada de buscar nota no Bling (nota em dobro).
         Queue::assertPushed(GenerateInvoiceJob::class);

@@ -530,7 +530,7 @@ class OrderController extends Controller
         $cost = DB::table('order_items as oi')
             ->leftJoin('products as p', 'p.id', '=', 'oi.product_id')
             ->where('oi.order_id', $order->id)
-            ->selectRaw('COALESCE(SUM(oi.quantity * COALESCE(oi.manual_cost_price, p.cost_price, 0)), 0) as product_cost,
+            ->selectRaw('COALESCE(SUM(COALESCE(oi.quantity * p.cost_price, oi.manual_cost_price, 0)), 0) as product_cost,
                 SUM(CASE WHEN oi.id IS NOT NULL AND COALESCE(oi.manual_cost_price, p.cost_price) IS NULL THEN 1 ELSE 0 END) as cost_missing_items')
             ->first();
 

@@ -112,7 +112,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
         <h2 class="mb-3 text-xl font-bold">Resumo Financeiro</h2>
         <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <CardStats stat-subtitle="VALOR BRUTO TOTAL · DESDE O INÍCIO" :stat-title="formatPrice(summary.grossRevenueAllTime)" stat-icon-name="fas fa-chart-line" variant="info" />
-            <CardStats stat-subtitle="LUCRO BRUTO DO MÊS" :stat-title="formatPrice(grossProfitMonth)" stat-icon-name="fas fa-scale-balanced" :variant="grossProfitMonth >= 0 ? 'success' : 'error'" />
+            <CardStats stat-subtitle="LUCRO BRUTO DO MÊS · VENDAS − CUSTO DO PRODUTO" :stat-title="formatPrice(grossProfitMonth)" stat-icon-name="fas fa-scale-balanced" :variant="grossProfitMonth >= 0 ? 'success' : 'error'" />
             <CardStats stat-subtitle="ADS + CAMPANHAS" :stat-title="formatPrice(summary.adSpendMonth)" stat-icon-name="fas fa-bullhorn" variant="warning" />
             <CardStats stat-subtitle="TAXAS + FRETE + PLATAFORMAS" :stat-title="formatPrice(platformCostsMonth)" stat-icon-name="fas fa-receipt" variant="warning" />
             <CardStats stat-subtitle="CUSTO PRODUTO VENDIDO" :stat-title="formatPrice(summary.productCostMonth)" stat-icon-name="fas fa-box" variant="info" />
@@ -126,17 +126,17 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                             <p class="min-w-0 break-words text-xl font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">{{ formatPrice(summary.profitMonth) }}</p>
                             <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold leading-none" :class="profitMarginBadgeClass">{{ formatPercent(netProfitMarginMonth) }}</span>
                         </div>
-                        <p class="mt-1 text-xs font-semibold uppercase leading-snug tracking-wide text-slate-500 dark:text-slate-400 sm:text-sm">LUCRO LÍQUIDO DO MÊS</p>
+                        <p class="mt-1 text-xs font-semibold uppercase leading-snug tracking-wide text-slate-500 dark:text-slate-400 sm:text-sm">MARGEM DE CONTRIBUIÇÃO DO MÊS · SOBRA NO BOLSO</p>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500 shadow-sm dark:text-slate-400">
-            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }} para chegar no lucro líquido.
+            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }} para chegar na margem de contribuição — o que sobra no bolso.
         </div>
 
-        <h2 class="mb-3 text-xl font-bold">Lucro líquido por Marketplace · Mês Atual</h2>
+        <h2 class="mb-3 text-xl font-bold">Margem de contribuição por Marketplace · Mês Atual</h2>
         <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
             Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma e custo dos itens vendidos.
         </p>
@@ -154,7 +154,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                 </div>
 
                 <div class="mb-4 rounded-xl p-4" :style="{ background: hexToRgba(channelStyle(market.channel).color, 0.08) }">
-                    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Lucro líquido · sobra no bolso</p>
+                    <p class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Margem de contribuição · sobra no bolso</p>
                     <p class="mt-1 break-words text-2xl font-black leading-tight tracking-tight tabular-nums sm:text-3xl" :class="metricProfitClass(market.netProfit)">{{ formatPrice(market.netProfit) }}</p>
                 </div>
 
@@ -219,7 +219,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
              "Faturamento Líquido do Mês" e "Lucro Líquido do Mês": aqui
              fica claro que um é passo intermediário do outro, não duas
              coisas soltas parecidas. -->
-        <h2 class="mb-3 mt-8 text-xl font-bold">Como o Lucro Líquido do Mês é calculado</h2>
+        <h2 class="mb-3 mt-8 text-xl font-bold">Como a Margem de Contribuição do Mês é calculada</h2>
 
         <div class="mb-3 max-w-xl rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
             <div class="flex items-center justify-between py-1.5 text-sm">
@@ -231,7 +231,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                  Shopee Xpress etc.), então fica fora da conta de cima pra
                  baixo — mas visível, pra quem quiser conferir. -->
             <div class="flex items-center justify-between py-1.5 text-sm text-slate-400 dark:text-slate-500">
-                <span>Frete do Mês (informativo — não afeta o lucro)</span>
+                <span>Frete pago pelo comprador (informativo — não afeta a margem; na Amazon ele já entra nas vendas)</span>
                 <span class="font-medium">{{ formatPrice(netProfit.shippingCostMonth) }}</span>
             </div>
             <div class="flex items-center justify-between py-1.5 text-sm">
@@ -253,11 +253,17 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                  custo real (~12-20% da receita), não faz sentido de fora.
                  Agora é uma linha normal do extrato, igual as outras. -->
             <div class="flex items-center justify-between py-1.5 text-sm">
-                <span class="text-slate-500 dark:text-slate-400">(–) Taxas + frete + plataformas</span>
-                <span class="font-semibold text-error">{{ formatPrice(platformCostsMonth) }}</span>
+                <span class="text-slate-500 dark:text-slate-400">(–) Taxas das plataformas</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.marketplaceFeeMonth) }}</span>
+            </div>
+            <!-- Frete que a LOJA paga (2026-09-25): pré-postagem dos Correios
+                 (Amazon), entregas Flex e frete cobrado no extrato. -->
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">(–) Frete pago pela loja (Correios {{ formatPrice(netProfit.correiosCostMonth ?? 0) }} · Flex {{ formatPrice(netProfit.flexCostMonth ?? 0) }} · extrato {{ formatPrice(netProfit.settlementShippingCostMonth ?? 0) }})</span>
+                <span class="font-semibold text-error">{{ formatPrice((netProfit.correiosCostMonth ?? 0) + (netProfit.flexCostMonth ?? 0) + (netProfit.settlementShippingCostMonth ?? 0)) }}</span>
             </div>
             <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">
-                <span class="font-bold">(=) Lucro Líquido do Mês</span>
+                <span class="font-bold">(=) Margem de Contribuição do Mês</span>
                 <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }} · {{ formatPercent(netProfitMarginMonth) }}</span>
             </div>
 
@@ -270,7 +276,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
             <i class="fas fa-triangle-exclamation mt-0.5"></i>
             <span>
                 Nenhum produto ativo tem preço de custo cadastrado ainda ({{ netProfit.productsWithCost }} de {{ netProfit.productsActive }}) —
-                "Custo de produto" e "Lucro líquido" estão contando custo zero, não é o valor real. Preencha o custo em
+                "Custo de produto" e "Margem de contribuição" estão contando custo zero, não é o valor real. Preencha o custo em
                 cada produto (aba Dados fiscais) pra esses números ficarem precisos sozinhos.
             </span>
         </p>
@@ -315,7 +321,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Valor liquidado conciliado</span><strong>{{ formatPrice(row.matchedPayoutAmount) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Custo de produto conciliado</span><strong class="text-error">{{ formatPrice(row.productCostMatched) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="font-medium">Lucro bruto conhecido</span><strong>{{ formatPrice(row.grossProfitKnown) }}</strong></div>
-                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Lucro líquido conhecido</span><strong :class="row.netProfitKnown >= 0 ? 'text-success' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
+                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Margem de contribuição conhecida</span><strong :class="row.netProfitKnown >= 0 ? 'text-success' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
                     </div>
 
                     <p v-if="row.missingOrders > 0 || row.costMissingItems > 0" class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-400">
@@ -329,7 +335,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                 </div>
             </div>
             <div class="border-t border-[var(--surface-border)] px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                Total importado: {{ settlementTotals.lineItems ?? 0 }} linhas · {{ settlementTotals.uniqueOrders ?? 0 }} pedidos · recebido {{ formatPrice(settlementTotals.paidPayoutAmount ?? 0) }} · a receber {{ formatPrice(settlementTotals.pendingPayoutAmount ?? 0) }} · total liquidável {{ formatPrice(settlementTotals.payoutAmount ?? 0) }} · desconto plataforma {{ formatPrice((settlementTotals.platformProductDiscounts ?? 0) + (settlementTotals.platformCouponDiscounts ?? 0)) }} · lucro líquido conhecido {{ formatPrice(settlementTotals.netProfitKnown ?? 0) }}.
+                Total importado: {{ settlementTotals.lineItems ?? 0 }} linhas · {{ settlementTotals.uniqueOrders ?? 0 }} pedidos · recebido {{ formatPrice(settlementTotals.paidPayoutAmount ?? 0) }} · a receber {{ formatPrice(settlementTotals.pendingPayoutAmount ?? 0) }} · total liquidável {{ formatPrice(settlementTotals.payoutAmount ?? 0) }} · desconto plataforma {{ formatPrice((settlementTotals.platformProductDiscounts ?? 0) + (settlementTotals.platformCouponDiscounts ?? 0)) }} · margem de contribuição conhecida {{ formatPrice(settlementTotals.netProfitKnown ?? 0) }}.
             </div>
         </div>
         <p v-else class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-400">

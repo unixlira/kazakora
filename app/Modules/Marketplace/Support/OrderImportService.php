@@ -129,6 +129,23 @@ class OrderImportService
                 $existing->update($buyerFields);
             }
 
+            // Taxa do canal que só chega depois (Amazon/TikTok pelo Bling:
+            // a comissão aparece no pedido quando o canal liquida) ou que
+            // mudou. Taxa lançada à mão no Fluxo de Caixa nunca é
+            // sobrescrita — quem digitou sabe mais que a API.
+            if (($data['marketplace_fee'] ?? null) !== null) {
+                $taxa = OrderChannelFee::query()->firstOrNew(['order_id' => $existing->id, 'channel' => $channel]);
+
+                if ($taxa->source !== OrderChannelFee::SOURCE_MANUAL && (float) $taxa->fee_amount !== (float) $data['marketplace_fee']) {
+                    $taxa->fill([
+                        'gross_amount' => $data['subtotal'] ?? $existing->subtotal,
+                        'fee_amount' => $data['marketplace_fee'],
+                        'source' => OrderChannelFee::SOURCE_API,
+                        'computed_at' => now(),
+                    ])->save();
+                }
+            }
+
             $this->reconcileMissingItems($existing, $channel, $data['items'] ?? []);
 
             return $this->syncStatus($existing, $data['status'], $data['channel_status'] ?? null);

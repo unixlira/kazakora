@@ -9,7 +9,9 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Support\FlexDeliveryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -105,14 +107,24 @@ class CashFlowController extends Controller
      */
     private function salesBreakdown(?Carbon $start, ?Carbon $end): array
     {
+        // Frete pago pela LOJA por pedido (margem de contribuição, ver
+        // ContributionMargin): pré-postagem dos Correios e entrega Flex.
+        $correiosPorPedido = CorreiosPrePostagem::query()
+            ->where('status', CorreiosPrePostagem::STATUS_GERADA)
+            ->whereNotNull('order_id')
+            ->selectRaw('order_id, COALESCE(SUM(postage_price), 0) as total')
+            ->groupBy('order_id')
+            ->pluck('total', 'order_id');
+        $custoFlex = app(FlexDeliveryService::class)->costPerDelivery();
+
         return Order::query()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->when($start, fn ($query) => $query->where('created_at', '>=', $start))
             ->when($end, fn ($query) => $query->where('created_at', '<=', $end))
-            ->with(['items.product:id,cost_price', 'channelFee'])
+            ->with(['items.product:id,cost_price', 'channelFee', 'channelShipment:id,order_id,channel,shipping_method'])
             ->latest('created_at')
             ->get()
-            ->flatMap(function (Order $order) {
+            ->flatMap(function (Order $order) use ($correiosPorPedido, $custoFlex) {
                 // Sem OrderChannelFee (canal não devolveu a taxa real, ou
                 // pedido anterior à integração), a comissão é DESCONHECIDA —
                 // nunca 0. Mesmo critério já usado em
@@ -123,9 +135,17 @@ class CashFlowController extends Controller
                 $hasFeeData = $order->channelFee !== null;
                 $fee = (float) ($order->channelFee?->fee_amount ?? 0);
                 $orderSubtotal = (float) $order->subtotal;
+                $freteLoja = (float) ($correiosPorPedido[$order->id] ?? 0)
+                    + ($order->channelShipment?->channel === MarketplaceAccount::CHANNEL_MERCADO_LIVRE && $order->channelShipment?->shipping_method === 'self_service' ? $custoFlex : 0);
+                // Amazon: o frete que o comprador paga vem pra loja (envio
+                // pelos Correios da loja) — mesma regra de ContributionMargin::receitaSql().
+                $freteRecebido = $order->origin === Order::ORIGIN_AMAZON ? (float) $order->shipping_cost : 0.0;
 
-                return $order->items->map(function ($item) use ($order, $fee, $hasFeeData, $orderSubtotal) {
+                return $order->items->map(function ($item) use ($order, $fee, $hasFeeData, $orderSubtotal, $freteLoja, $freteRecebido) {
                     $itemSubtotal = (float) $item->subtotal;
+                    $proporcao = $orderSubtotal > 0 ? $itemSubtotal / $orderSubtotal : 0.0;
+                    $itemFreteLoja = round($freteLoja * $proporcao, 2);
+                    $itemFreteRecebido = round($freteRecebido * $proporcao, 2);
                     // Comissão da plataforma é lançada por pedido, não por
                     // item — rateia proporcionalmente ao valor de cada
                     // item quando o pedido tem mais de um produto.
@@ -148,7 +168,9 @@ class CashFlowController extends Controller
                     // Lucro líquido sem dado de comissão não desconta taxa
                     // nenhuma — mostrado como incompleto no front (mesmo
                     // aviso do "sem custo"), não como se a taxa fosse zero.
-                    $netProfit = round($itemSubtotal - $productCost - ($hasFeeData ? $itemFee : 0), 2);
+                    // Margem de contribuição da linha: ADS não entra aqui (não
+                    // é por venda — sai no total do mês no Financeiro).
+                    $netProfit = round($itemSubtotal + $itemFreteRecebido - $productCost - ($hasFeeData ? $itemFee : 0) - $itemFreteLoja, 2);
 
                     return [
                         'date' => $order->created_at->toDateString(),
@@ -158,6 +180,7 @@ class CashFlowController extends Controller
                         'product_cost' => $productCost,
                         'has_cost' => $hasCost,
                         'platform_fee' => $itemFee,
+                        'shipping_cost' => round($itemFreteLoja - $itemFreteRecebido, 2),
                         'has_fee_data' => $hasFeeData,
                         'platform' => self::CHANNEL_LABELS[$order->origin] ?? ucfirst(str_replace('_', ' ', $order->origin)),
                         'net_profit' => $netProfit,

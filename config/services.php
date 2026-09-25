@@ -222,7 +222,9 @@ return [
 
         // Loja do Bling conectada à Amazon (ver BlingOrderService::
         // amazonLojaId()) — metadata da conta Bling tem prioridade.
-        'amazon_loja_id' => env('BLING_AMAZON_LOJA_ID'),
+        // 206308488 = loja "KoraMix Shop" da conta real, ligada por padrão
+        // (pedido explícito 2026-09-25). BLING_AMAZON_LOJA_ID=0 desliga.
+        'amazon_loja_id' => env('BLING_AMAZON_LOJA_ID', 206308488),
 
         'invoice_issuer_channels' => array_values(array_filter(array_map(
             'trim',

@@ -39,23 +39,23 @@
     --radius-tw: 12px;
 
     /*
-     * Storefront palette (terracota + preto) — separate from the admin's
+     * Storefront palette (marrom café + preto) — separate from the admin's
      * blue/violet so `bg-store-accent` etc. resolve independently. Defaults
      * below are light-mode; overridden for dark inside `.storefront-shell`
      * further down so the storefront keeps a consistent brand palette.
      */
-    --color-store-bg: #f7f3ef;
+    --color-store-bg: #f6f0eb;
     --color-store-bg-raised: #ffffff;
-    --color-store-bg-sunken: #efe5de;
+    --color-store-bg-sunken: #ece0d8;
     --color-store-fg: #111111;
-    --color-store-fg-muted: #5f5a56;
-    --color-store-fg-faint: #8c837d;
+    --color-store-fg-muted: #5d554f;
+    --color-store-fg-faint: #887d75;
     --color-store-accent: #111111;
-    --color-store-accent-strong: #b85f45;
-    --color-store-accent-soft: #f3ded6;
+    --color-store-accent-strong: #5a3328;
+    --color-store-accent-soft: #eadbd4;
     --color-store-accent-contrast: #ffffff;
-    --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 14%, transparent);
-    --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 26%, transparent);
+    --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 16%, transparent);
+    --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 30%, transparent);
 }
 
 /*
@@ -102,18 +102,18 @@
 
 @media (prefers-color-scheme: dark) {
     .storefront-shell {
-        --color-store-bg: #f7f3ef;
+        --color-store-bg: #f6f0eb;
         --color-store-bg-raised: #ffffff;
-        --color-store-bg-sunken: #efe5de;
+        --color-store-bg-sunken: #ece0d8;
         --color-store-fg: #111111;
-        --color-store-fg-muted: #5f5a56;
-        --color-store-fg-faint: #8c837d;
+        --color-store-fg-muted: #5d554f;
+        --color-store-fg-faint: #887d75;
         --color-store-accent: #111111;
-        --color-store-accent-strong: #b85f45;
-        --color-store-accent-soft: #f3ded6;
+        --color-store-accent-strong: #5a3328;
+        --color-store-accent-soft: #eadbd4;
         --color-store-accent-contrast: #ffffff;
-        --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 14%, transparent);
-        --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 26%, transparent);
+        --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 16%, transparent);
+        --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 30%, transparent);
         --store-shadow: rgba(17, 17, 17, 0.16);
     }
 }

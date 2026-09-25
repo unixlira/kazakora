@@ -47,6 +47,7 @@ class CorreiosPrePostagem extends Model
         'qr_payload',
         'raw_response',
         'error_message',
+        'bling_informado_em',
     ];
 
     protected function casts(): array
@@ -54,6 +55,7 @@ class CorreiosPrePostagem extends Model
         return [
             'content_items' => 'array',
             'raw_response' => 'array',
+            'bling_informado_em' => 'datetime',
         ];
     }
 

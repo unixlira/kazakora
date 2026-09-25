@@ -12,6 +12,7 @@ use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Support\TipoDeEnvio;
@@ -20,6 +21,7 @@ use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\BatchLabelPrintService;
+use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\LabelFetchService;
 use App\Modules\Marketplace\Support\OrderImageArchiveService;
 use Illuminate\Http\JsonResponse;
@@ -613,7 +615,7 @@ class DashboardAgentController extends Controller
         // stock a mais que a versão anterior buscava — é o dado que
         // partitionByStock() usa pra decidir a aba. SKU continua vindo
         // junto, pro payload de shortage.
-        'items.product:id,sku,stock',
+        'items.product:id,sku,stock,color',
         // external_shipment_id a mais: é a prova de que 2 pedidos do
         // Mercado Livre vão na MESMA caixa (carrinho — ver
         // groupOrdersShippedTogether()). Sem ele no select, a coluna
@@ -623,7 +625,7 @@ class DashboardAgentController extends Controller
         // TikTok. Fora do select a coluna vem null e todo pedido apareceria
         // como "Envio não informado", que é exatamente o bug que o
         // external_shipment_id já causou aqui antes.
-        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method',
+        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method,error_message',
     ];
 
     public function queue(): JsonResponse
@@ -1126,6 +1128,11 @@ class DashboardAgentController extends Controller
     private function mapQueueOrder(\Illuminate\Support\Collection $group, array $shortages, array $impressas = []): array
     {
         $order = $group->first();
+        $itensDaCaixa = $group->flatMap(fn (Order $packOrder) => $packOrder->items);
+        // Nomes que se repetem na mesma caixa (as 4 cores do Power Bank têm
+        // o MESMO nome no catálogo — a cor só existe no SKU): sem algo que
+        // diferencie, o card mostrava 3 SKUs diferentes como o mesmo item.
+        $nomesRepetidos = $itensDaCaixa->countBy('product_name')->filter(fn ($n) => $n > 1)->keys()->all();
         $stockShortage = $group->flatMap(fn (Order $item) => $shortages[$item->id] ?? [])->values()->all();
 
         // Como a caixa sai da loja (Flex, Mercado Envios, Full, Shopee
@@ -1166,7 +1173,7 @@ class DashboardAgentController extends Controller
             // (ver queueOrderProductImage() abaixo), não mais 1 foto só
             // pro pedido inteiro. Num carrinho do ML, são os itens de
             // TODOS os pedidos da caixa, na ordem dos pedidos.
-            'products' => $group->flatMap(fn (Order $packOrder) => $packOrder->items)->map(fn ($item) => [
+            'products' => $itensDaCaixa->map(fn ($item) => [
                 // id do PRÓPRIO item do pedido (não do produto): um pedido
                 // pode ter 2 itens apontando pro MESMO product_id (2
                 // variações do mesmo anúncio do Mercado Livre, que a
@@ -1180,9 +1187,19 @@ class DashboardAgentController extends Controller
                 'id' => $item->id,
                 'product_id' => $item->product_id,
                 'name' => $item->product_name,
+                // Linha de baixo do nome no card (o KoraSync web já exibe
+                // `variation_name`): a cor do produto, ou o SKU inteiro
+                // quando o nome se repete na caixa e não há cor cadastrada.
+                'variation_name' => $item->product?->color
+                    ?: (in_array($item->product_name, $nomesRepetidos, true) ? $item->product?->sku : null),
                 'quantity' => $item->quantity,
                 'sku' => $item->product?->sku,
             ]),
+            // Pedido parado por logística incompleta (produto sem peso/
+            // medida, sem vínculo, ou pré-postagem que não bate mais com o
+            // pedido). Presente ⇒ o KoraSync mostra o alerta no card em vez
+            // de deixar o operador esperando uma etiqueta que não vem.
+            'logistics_block' => $this->bloqueioLogistico($order),
             'created_at' => $order->created_at,
             // Null pra pedido normal (sem entrega programada). Presente ⇒
             // KoraSync trata como "venda agendada" — 3º estado do botão
@@ -1206,6 +1223,29 @@ class DashboardAgentController extends Controller
             // mandar outra — ver reprintLabel().
             'label_printed_at' => $group->map(fn (Order $item) => $impressas[$item->id] ?? null)->filter()->first(),
         ];
+    }
+
+    /**
+     * Motivo de um pedido Amazon (via Bling) não ter etiqueta dos Correios:
+     * pré-postagem que não bate com o pedido, ou a última tentativa de
+     * gerá-la falhou (produto sem peso/medida, sem vínculo, Correios
+     * recusou). null = nada travado. Outros canais: sempre null.
+     */
+    private function bloqueioLogistico(Order $order): ?string
+    {
+        if ($order->origin !== Order::ORIGIN_AMAZON || $order->status !== Order::STATUS_PAID || ! app(AmazonDriver::class)->viaBling()) {
+            return null;
+        }
+
+        $correios = app(CorreiosAutoShipping::class);
+
+        if ($prePostagem = $correios->geradaPara($order)) {
+            return $correios->problemaDaEtiqueta($order, $prePostagem);
+        }
+
+        $shipment = $order->channelShipment;
+
+        return $shipment?->status === ChannelShipment::STATUS_ERROR ? $shipment->error_message : null;
     }
 
     /**
@@ -1750,6 +1790,29 @@ class DashboardAgentController extends Controller
         }
 
         $shipment = $order->loadMissing('channelShipment')->channelShipment;
+
+        // Amazon via Bling: a etiqueta é a da pré-postagem dos Correios, e
+        // ela só sai se ainda descreve o pacote (relatório técnico
+        // 2026-09-25: pré-postagem com peso/quantidade errada não
+        // reimprime — cancela e gera de novo).
+        if ($order->origin === Order::ORIGIN_AMAZON && app(AmazonDriver::class)->viaBling()) {
+            if ($bloqueio = $this->bloqueioLogistico($order)) {
+                return response()->json(['ok' => false, 'logistics_blocked' => true, 'message' => $bloqueio], 409);
+            }
+
+            $prePostagem = app(CorreiosAutoShipping::class)->geradaPara($order);
+
+            // Sem pré-postagem válida, ou a etiqueta guardada é de uma que
+            // já foi cancelada: pede uma nova em vez de imprimir a velha.
+            if (! $prePostagem || $shipment?->external_shipment_id !== $prePostagem->correios_id) {
+                ConfirmChannelShippingJob::dispatch($order->id);
+
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Gerando a pré-postagem dos Correios deste pedido — tente de novo em instantes.',
+                ], 409);
+            }
+        }
 
         // Sem etiqueta baixada não há o que mandar pra impressora — mas
         // devolver só "não tem" é beco sem saída pra quem está com a caixa

@@ -226,6 +226,24 @@ return [
         // (pedido explícito 2026-09-25). BLING_AMAZON_LOJA_ID=0 desliga.
         'amazon_loja_id' => env('BLING_AMAZON_LOJA_ID', 206308488),
 
+        // Postagem da Amazon de volta pro Bling (e dele pra Amazon), assim
+        // que a pré-postagem dos Correios sai — ver InformAmazonShipmentToBling.
+        // - informar: liga/desliga o envio do rastreio (padrão ligado).
+        // - logistica_servico_id: serviço de logística "Correios" cadastrado
+        //   no Bling. Com ele, o rastreio vira um objeto de logística
+        //   (POST logisticas/objetos); sem ele, vai no volume do pedido
+        //   (PUT pedidos/vendas/{id}).
+        // - situacao_id: situação do pedido no Bling depois de postado
+        //   Padrão 9 = "Atendido" de fábrica do Bling (existe em toda conta,
+        //   como o 12 = Cancelado usado em ReadsOrdersFromBling); 0 = não
+        //   muda a situação. É a situação "Atendido" que faz a integração do
+        //   Bling avisar a Amazon que o pedido foi enviado.
+        'amazon_envio' => [
+            'informar' => filter_var(env('BLING_AMAZON_INFORMAR_ENVIO', true), FILTER_VALIDATE_BOOLEAN),
+            'logistica_servico_id' => env('BLING_AMAZON_LOGISTICA_SERVICO_ID') ? (int) env('BLING_AMAZON_LOGISTICA_SERVICO_ID') : null,
+            'situacao_id' => (int) env('BLING_AMAZON_SITUACAO_ENVIADO_ID', 9) ?: null,
+        ],
+
         'invoice_issuer_channels' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('BLING_INVOICE_ISSUER_CHANNELS', '')),

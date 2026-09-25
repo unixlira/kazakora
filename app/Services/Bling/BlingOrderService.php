@@ -137,6 +137,53 @@ class BlingOrderService
         return $response['data'] ?? null;
     }
 
+    /**
+     * Coloca o rastreio dos Correios no pedido do Bling e, se configurado,
+     * muda a situação dele — é com a situação "Atendido" + transportadora +
+     * rastreio que a integração nativa do Bling avisa o marketplace que o
+     * pedido foi enviado (ajuda do Bling). Endpoints e campos conferidos
+     * no OpenAPI oficial (developer.bling.com.br) em 2026-09-25.
+     *
+     * Sem serviço de logística configurado, usa o volume do próprio
+     * pedido: o PUT do Bling SUBSTITUI o pedido inteiro (itens, parcelas,
+     * contato e datas são obrigatórios), então reenvia o pedido exatamente
+     * como veio do GET, trocando só os volumes.
+     */
+    public function informarEnvio(int $blingOrderId, string $codigoRastreio, string $servico, ?int $notaFiscalId = null): void
+    {
+        $config = (array) config('services.bling.amazon_envio', []);
+        $url = 'https://rastreamento.correios.com.br/app/index.php?objetos='.$codigoRastreio;
+
+        if (! empty($config['logistica_servico_id'])) {
+            $this->client->post('logisticas/objetos', array_filter([
+                'pedidoVenda' => ['id' => $blingOrderId],
+                'notaFiscal' => $notaFiscalId ? ['id' => $notaFiscalId] : null,
+                'servico' => ['id' => (int) $config['logistica_servico_id']],
+                'rastreamento' => ['codigo' => $codigoRastreio, 'url' => $url],
+                'dataSaida' => now()->toDateString(),
+            ]));
+        } else {
+            $pedido = $this->client->get("pedidos/vendas/{$blingOrderId}")['data'] ?? null;
+
+            if (! $pedido) {
+                throw new BlingException("Pedido {$blingOrderId} não encontrado no Bling pra gravar o rastreio.", 404);
+            }
+
+            $volumeAtual = $pedido['transporte']['volumes'][0]['id'] ?? null;
+            $pedido['transporte']['volumes'] = [array_filter([
+                'id' => $volumeAtual,
+                'servico' => $servico,
+                'codigoRastreamento' => $codigoRastreio,
+            ])];
+
+            $this->client->put("pedidos/vendas/{$blingOrderId}", $pedido);
+        }
+
+        if (! empty($config['situacao_id'])) {
+            $this->client->patch("pedidos/vendas/{$blingOrderId}/situacoes/".(int) $config['situacao_id']);
+        }
+    }
+
     private function orderIdCacheKey(string $orderNumber): string
     {
         return 'bling.order_id.'.$orderNumber;

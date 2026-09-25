@@ -198,6 +198,101 @@ class AmazonCorreiosShippingTest extends TestCase
         $this->assertSame(0.3, (float) $fiscal->peso_bruto);
     }
 
+    /**
+     * Relatório técnico 2026-09-25: 10 carregadores de 90 g = 900 g, e a
+     * declaração com quantidade 10 — nunca "1 unidade".
+     */
+    public function test_ten_units_weigh_ten_times_and_are_declared_as_ten(): void
+    {
+        $carregador = $this->produto('KZ-POWERBANK-PRE', ['peso_bruto' => 0.09, 'formato_embalagem' => ProductFiscalData::EMBALAGEM_ENVELOPE]);
+        $order = $this->pedido([[$carregador, 10]]);
+
+        $correios = $this->fakeCorreios();
+        $correios->shouldReceive('create')->once()->withArgs(fn (array $input) => $input['weight_grams'] === 900
+            && $input['content_items'][0]['quantidade'] === 10)
+            ->andReturn(['id' => 'PP1', 'codigoObjeto' => 'AA000000001BR']);
+
+        $prePostagem = app(CorreiosAutoShipping::class)->confirm($order);
+
+        $this->assertSame(900, $prePostagem->weight_grams);
+        $this->assertSame(10, $prePostagem->content_items[0]['quantidade']);
+        $this->assertSame(90, $prePostagem->content_items[0]['peso_unitario_g']);
+    }
+
+    public function test_several_skus_with_several_units_are_consolidated_in_one_package(): void
+    {
+        $preto = $this->produto('KZ-PB-PRE', ['peso_bruto' => 0.2, 'altura_cm' => 3, 'largura_cm' => 7, 'profundidade_cm' => 14]);
+        $rosa = $this->produto('KZ-PB-ROSA', ['peso_bruto' => 0.2, 'altura_cm' => 3, 'largura_cm' => 7, 'profundidade_cm' => 14]);
+        $cabo = $this->produto('KZ-CABO', ['peso_bruto' => 0.05, 'altura_cm' => 2, 'largura_cm' => 12, 'profundidade_cm' => 10]);
+        $order = $this->pedido([[$preto, 2], [$rosa, 3], [$cabo, 4]]);
+
+        $pacote = app(PackageDataResolver::class)->forOrder($order);
+
+        // 0,2x2 + 0,2x3 + 0,05x4 = 1,2 kg
+        $this->assertSame(1200, $pacote['weight_grams']);
+        $this->assertSame(3.0, $pacote['height']);
+        $this->assertSame(12.0, $pacote['width']);
+        // 14x2 + 14x3 + 10x4
+        $this->assertSame(110.0, $pacote['length']);
+        $this->assertSame([2, 3, 4], array_column($pacote['items'], 'quantidade'));
+    }
+
+    public function test_item_without_linked_product_blocks_the_pre_postagem(): void
+    {
+        $caneca = $this->produto('KZ-CANECA', ['peso_bruto' => 0.4, 'altura_cm' => 10, 'largura_cm' => 12, 'profundidade_cm' => 9]);
+        $order = $this->pedido([[$caneca, 1]]);
+        $order->items()->create(['product_id' => null, 'product_name' => 'Item Amazon sem vínculo', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $correios = $this->fakeCorreios();
+        $correios->shouldNotReceive('create');
+
+        $this->expectExceptionMessage('sem produto vinculado');
+
+        app(CorreiosAutoShipping::class)->confirm($order->fresh());
+    }
+
+    public function test_product_without_weight_anywhere_blocks_instead_of_guessing(): void
+    {
+        $semPeso = $this->produto('KZ-SEM-PESO', []);
+        $order = $this->pedido([[$semPeso, 1]]);
+
+        $vazio = Mockery::mock(ShopeeDriver::class);
+        $vazio->shouldReceive('findItemIdBySku')->andReturn(null);
+        $manager = Mockery::mock(MarketplaceDriverManager::class);
+        $manager->shouldReceive('driver')->andReturn($vazio);
+        $this->app->instance(MarketplaceDriverManager::class, $manager);
+
+        $correios = $this->fakeCorreios();
+        $correios->shouldNotReceive('create');
+
+        $this->expectExceptionMessage('sem peso_bruto');
+
+        app(CorreiosAutoShipping::class)->confirm($order);
+    }
+
+    /**
+     * Pré-postagem gerada e o pedido mudou depois (quantidade): etiqueta
+     * não sai nem reimprime — cancela e gera de novo.
+     */
+    public function test_label_is_blocked_when_the_pre_postagem_no_longer_matches_the_order(): void
+    {
+        config(['services.bling.amazon_loja_id' => 206308488]);
+        $carregador = $this->produto('KZ-POWERBANK-PRE', ['peso_bruto' => 0.09, 'formato_embalagem' => ProductFiscalData::EMBALAGEM_ENVELOPE]);
+        $order = $this->pedido([[$carregador, 1]]);
+
+        $correios = $this->fakeCorreios();
+        $correios->shouldReceive('create')->once()->andReturn(['id' => 'PP1', 'codigoObjeto' => 'AA000000001BR']);
+        $servico = app(CorreiosAutoShipping::class);
+        $servico->confirm($order);
+
+        $this->assertNull($servico->problemaDaEtiqueta($order->fresh()));
+
+        $order->items()->first()->update(['quantity' => 10]);
+
+        $this->assertStringContainsString('quantidades diferentes', (string) $servico->problemaDaEtiqueta($order->fresh()));
+        $this->assertFalse(app(\App\Modules\Marketplace\Drivers\AmazonDriver::class)->fetchLabel($order->fresh())['ready']);
+    }
+
     public function test_label_pdf_is_generated_for_the_printer(): void
     {
         $caneca = $this->produto('KZ-CANECA-PRE', []);

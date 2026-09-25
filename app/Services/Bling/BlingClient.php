@@ -53,6 +53,15 @@ class BlingClient
     }
 
     /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public function patch(string $uri, array $data = []): array
+    {
+        return $this->request('PATCH', $uri, ['json' => $data]);
+    }
+
+    /**
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
      */
@@ -69,6 +78,7 @@ class BlingClient
             'GET' => $pending->get(ltrim($uri, '/'), $options['query'] ?? []),
             'POST' => $pending->asJson()->post(ltrim($uri, '/'), $options['json'] ?? []),
             'PUT' => $pending->asJson()->put(ltrim($uri, '/'), $options['json'] ?? []),
+            'PATCH' => $pending->asJson()->patch(ltrim($uri, '/'), $options['json'] ?? []),
             default => throw new BlingException("Método HTTP não suportado pelo BlingClient: {$method}"),
         };
 

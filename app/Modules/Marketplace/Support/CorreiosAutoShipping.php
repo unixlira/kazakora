@@ -59,6 +59,12 @@ class CorreiosAutoShipping
     private function confirmarSemConcorrencia(Order $order): CorreiosPrePostagem
     {
         if ($gerada = $this->geradaPara($order)) {
+            // Pacote mudou depois de gerar (item/quantidade/peso): a antiga
+            // não serve e uma nova não sai sozinha — são dois objetos pagos.
+            if ($problema = $this->problemaDaEtiqueta($order, $gerada)) {
+                throw new RuntimeException($problema);
+            }
+
             return $gerada;
         }
 
@@ -95,11 +101,22 @@ class CorreiosAutoShipping
                 'width' => $pacote['width'],
                 'length' => $pacote['length'],
             ],
-            'content_items' => $order->items->map(fn ($item) => [
-                'conteudo' => $item->product_name,
-                'quantidade' => $item->quantity,
-                'valor' => (float) $item->product_price,
-            ])->all(),
+            // Declaração com a quantidade REAL de cada item (10 carregadores
+            // = quantidade 10) — e, junto, o retrato do que foi pesado
+            // (produto, SKU, peso unitário), que é o que problemaDaEtiqueta()
+            // compara depois pra barrar etiqueta de pacote que mudou.
+            'content_items' => $order->items->map(function ($item) use ($pacote) {
+                $pesado = collect($pacote['items'])->firstWhere('product_id', $item->product_id);
+
+                return [
+                    'conteudo' => $item->product_name,
+                    'quantidade' => (int) $item->quantity,
+                    'valor' => (float) $item->product_price,
+                    'product_id' => $item->product_id,
+                    'sku' => $pesado['sku'] ?? null,
+                    'peso_unitario_g' => $pesado['peso_unitario_g'] ?? null,
+                ];
+            })->all(),
             'invoice' => ['numero' => $invoice->numero, 'chave' => $invoice->chave_acesso],
         ];
 
@@ -148,6 +165,42 @@ class CorreiosAutoShipping
         $registro->save();
 
         return $registro;
+    }
+
+    /**
+     * A pré-postagem GERADA ainda descreve este pedido? Compara o retrato
+     * gravado (produto x quantidade, peso total) com o pedido e o cadastro
+     * de agora. Qualquer diferença = etiqueta errada: não imprime nem
+     * reimprime — alguém cancela no menu Correios e gera de novo
+     * (relatório técnico 2026-09-25). null = etiqueta confere.
+     */
+    public function problemaDaEtiqueta(Order $order, ?CorreiosPrePostagem $prePostagem = null): ?string
+    {
+        $prePostagem ??= $this->geradaPara($order);
+
+        if (! $prePostagem) {
+            return null;
+        }
+
+        $order->loadMissing('items');
+        $noPedido = $order->items->groupBy('product_id')->map(fn ($itens) => (int) $itens->sum('quantity'))->sortKeys()->all();
+        $naEtiqueta = collect($prePostagem->content_items ?? [])->groupBy('product_id')->map(fn ($itens) => (int) $itens->sum('quantidade'))->sortKeys()->all();
+
+        if ($noPedido != $naEtiqueta) {
+            return "Pré-postagem {$prePostagem->codigo_objeto} foi gerada com itens/quantidades diferentes do pedido. Cancele no menu Correios e gere de novo.";
+        }
+
+        try {
+            $peso = $this->pacotes->forOrder($order, consultarCanais: false)['weight_grams'];
+        } catch (\Throwable $exception) {
+            return $exception->getMessage();
+        }
+
+        if ($peso !== (int) $prePostagem->weight_grams) {
+            return "Pré-postagem {$prePostagem->codigo_objeto} declara {$prePostagem->weight_grams} g, mas o pedido pesa {$peso} g. Cancele no menu Correios e gere de novo.";
+        }
+
+        return null;
     }
 
     /**

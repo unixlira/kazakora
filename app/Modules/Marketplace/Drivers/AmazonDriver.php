@@ -362,6 +362,10 @@ class AmazonDriver extends AbstractMarketplaceDriver
         if ($this->viaBling()) {
             $prePostagem = app(CorreiosAutoShipping::class)->confirm($order);
 
+            // Rastreio de volta pra Amazon (via Bling) — o job espera a
+            // etiqueta ficar pronta antes de mexer no pedido lá.
+            \App\Jobs\InformAmazonShipmentToBling::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
+
             return [
                 'external_shipment_id' => $prePostagem->correios_id,
                 'tracking_code' => $prePostagem->codigo_objeto,
@@ -527,7 +531,15 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function fetchLabel(Order $order): array
     {
         if ($this->viaBling()) {
-            $prePostagem = app(CorreiosAutoShipping::class)->geradaPara($order);
+            $correios = app(CorreiosAutoShipping::class);
+            $prePostagem = $correios->geradaPara($order);
+
+            // Etiqueta que não descreve mais o pacote não vai pra impressora.
+            if ($prePostagem && ($problema = $correios->problemaDaEtiqueta($order, $prePostagem))) {
+                \Illuminate\Support\Facades\Log::warning('correios.etiqueta_bloqueada', ['order_id' => $order->id, 'motivo' => $problema]);
+
+                return ['ready' => false, 'contents' => null, 'content_type' => null];
+            }
 
             return $prePostagem
                 ? ['ready' => true, 'contents' => app(CorreiosLabelPdf::class)->render($prePostagem), 'content_type' => 'application/pdf']

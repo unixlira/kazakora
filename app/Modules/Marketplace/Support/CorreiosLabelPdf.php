@@ -114,7 +114,117 @@ class CorreiosLabelPdf
         $pdf->SetXY(self::MARGEM, self::ALTURA - self::MARGEM - 2.5);
         $pdf->Cell($util, 3, $this->t(trim(($pp->origin ? ucfirst(str_replace('_', ' ', $pp->origin)).' ' : '').($pp->external_order_id ?? '').' · Pedido #'.$pp->order_id)), 0, 0, 'C');
 
+        $this->paginaDaDeclaracao($pdf, $pp);
+
         return $pdf->Output('S');
+    }
+
+    /**
+     * 2ª etiqueta, logo depois da dos Correios (pedido explícito
+     * 2026-09-25): a declaração do produto pra quem monta a caixa — nome,
+     * cor e quantidade de cada produto em destaque, SKU embaixo em fonte
+     * menor. Mais de um produto é o caso que dá erro na bancada (as cores
+     * do Power Bank têm o mesmo nome), então cada linha é um produto.
+     */
+    private function paginaDaDeclaracao(FPDF $pdf, CorreiosPrePostagem $pp): void
+    {
+        $linhas = $this->linhasDaDeclaracao($pp);
+
+        if ($linhas === []) {
+            return;
+        }
+
+        $util = self::LARGURA - 2 * self::MARGEM;
+        $larguraQtd = 22.0;
+        $larguraNome = $util - $larguraQtd - 2;
+        $novaPagina = function () use ($pdf, $pp, $util, $linhas) {
+            $pdf->AddPage();
+            $pdf->SetFont('Helvetica', 'B', 13);
+            $pdf->SetXY(self::MARGEM, self::MARGEM);
+            $pdf->Cell($util, 6, $this->t('DECLARAÇÃO DO PRODUTO'), 0, 1, 'C');
+            $pdf->SetFont('Helvetica', '', 8);
+            $pdf->SetX(self::MARGEM);
+            $pdf->Cell($util, 4, $this->t(trim(($pp->codigo_objeto ? $pp->codigo_objeto.' · ' : '').'Pedido #'.$pp->order_id.($pp->external_order_id ? ' · '.$pp->external_order_id : ''))), 0, 1, 'C');
+            $pdf->SetX(self::MARGEM);
+            $pdf->Cell($util, 4, $this->t($pp->customer_name.' · '.array_sum(array_column($linhas, 'quantidade')).' unidade(s)'), 0, 1, 'C');
+            $pdf->Line(self::MARGEM, $pdf->GetY() + 1.5, self::LARGURA - self::MARGEM, $pdf->GetY() + 1.5);
+            $pdf->SetY($pdf->GetY() + 3.5);
+        };
+
+        $novaPagina();
+
+        foreach ($linhas as $linha) {
+            $titulo = $linha['nome'].($linha['cor'] ? ' — '.mb_strtoupper($linha['cor']) : '');
+
+            // Linha que não cabe no que sobra da página vai pra próxima.
+            $pdf->SetFont('Helvetica', 'B', 11);
+            $alturaNome = 5.0 * max(1, (int) ceil($pdf->GetStringWidth($this->t($titulo)) / ($larguraNome - 1)));
+
+            if ($pdf->GetY() + $alturaNome + 8 > self::ALTURA - self::MARGEM) {
+                $novaPagina();
+            }
+
+            $y = $pdf->GetY();
+
+            $pdf->SetXY(self::MARGEM, $y);
+            $pdf->MultiCell($larguraNome, 5, $this->t($titulo), 0, 'L');
+            $pdf->SetFont('Helvetica', '', 7.5);
+            $pdf->SetX(self::MARGEM);
+            $pdf->Cell($larguraNome, 3.8, $this->t('SKU '.($linha['sku'] ?: '—')), 0, 1, 'L');
+            $fim = max($pdf->GetY(), $y + 12);
+
+            // Quantidade grande à direita, numa caixa — é o número que
+            // confere a caixa.
+            $pdf->Rect(self::LARGURA - self::MARGEM - $larguraQtd, $y, $larguraQtd, 12);
+            $pdf->SetFont('Helvetica', 'B', 6.5);
+            $pdf->SetXY(self::LARGURA - self::MARGEM - $larguraQtd, $y + 0.8);
+            $pdf->Cell($larguraQtd, 3, 'QTD', 0, 0, 'C');
+            $pdf->SetFont('Helvetica', 'B', 18);
+            $pdf->SetXY(self::LARGURA - self::MARGEM - $larguraQtd, $y + 3.8);
+            $pdf->Cell($larguraQtd, 7, (string) $linha['quantidade'], 0, 0, 'C');
+
+            $pdf->SetLineWidth(0.2);
+            $pdf->Line(self::MARGEM, $fim + 1.5, self::LARGURA - self::MARGEM, $fim + 1.5);
+            $pdf->SetLineWidth(0.6);
+            $pdf->SetY($fim + 3);
+        }
+    }
+
+    /**
+     * Um produto por linha (itens repetidos do mesmo produto somam), na
+     * ordem do pedido. Cor do cadastro do produto; nome sem a cor no fim,
+     * pra ela não aparecer duas vezes.
+     *
+     * @return list<array{nome: string, cor: ?string, sku: ?string, quantidade: int}>
+     */
+    private function linhasDaDeclaracao(CorreiosPrePostagem $pp): array
+    {
+        $itens = $pp->order?->items ?? collect();
+
+        if ($itens->isEmpty()) {
+            return collect($pp->content_items ?? [])->map(fn ($i) => [
+                'nome' => (string) ($i['conteudo'] ?? 'Produto'),
+                'cor' => null,
+                'sku' => $i['sku'] ?? null,
+                'quantidade' => (int) ($i['quantidade'] ?? 1),
+            ])->values()->all();
+        }
+
+        return $itens
+            ->groupBy(fn ($item) => $item->product_id ?? 'n:'.$item->product_name)
+            ->map(function ($grupo) {
+                $produto = $grupo->first()->product;
+                $nome = (string) ($produto?->name ?? $grupo->first()->product_name);
+                $cor = $produto?->color ? trim($produto->color) : null;
+
+                if ($cor && str_ends_with(mb_strtolower($nome), ' '.mb_strtolower($cor))) {
+                    $nome = trim(mb_substr($nome, 0, mb_strlen($nome) - mb_strlen($cor)));
+                }
+
+                return ['nome' => $nome, 'cor' => $cor, 'sku' => $produto?->sku, 'quantidade' => (int) $grupo->sum('quantity')];
+            })
+            ->values()
+            ->all();
     }
 
     private function qr(FPDF $pdf, string $conteudo, float $x, float $y, float $lado): void

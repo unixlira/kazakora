@@ -293,6 +293,38 @@ class AmazonCorreiosShippingTest extends TestCase
         $this->assertFalse(app(\App\Modules\Marketplace\Drivers\AmazonDriver::class)->fetchLabel($order->fresh())['ready']);
     }
 
+    /**
+     * Pedido explícito 2026-09-25: depois da etiqueta dos Correios, uma 2ª
+     * etiqueta com a declaração do produto — nome, cor e quantidade de cada
+     * produto, SKU embaixo.
+     */
+    public function test_label_pdf_has_a_second_page_with_the_product_declaration(): void
+    {
+        $order = $this->pedido([]);
+
+        foreach (['Rosa' => [2, 'ROS'], 'Branco' => [4, 'BRA'], 'Preto' => [4, 'PRE']] as $cor => [$quantidade, $sigla]) {
+            $produto = Product::factory()->create([
+                'name' => "Carregador Portátil Power Bank 10000mah Para iPhone E Tipo C {$cor}",
+                'sku' => "CAR-CAR-SEM-POW-{$sigla}-0001",
+                'color' => $cor,
+            ]);
+            $order->items()->create(['product_id' => $produto->id, 'product_name' => $produto->name, 'product_price' => 50, 'quantity' => $quantidade, 'subtotal' => 50 * $quantidade]);
+        }
+
+        $prePostagem = CorreiosPrePostagem::create([
+            'order_id' => $order->id, 'origin' => 'amazon', 'external_order_id' => '701-2931770-8321845',
+            'customer_name' => 'Maria Claudia Taborda Masiero', 'zip' => '13010000', 'street' => 'Rua das Flores', 'number' => '10',
+            'neighborhood' => 'Centro', 'city' => 'Campinas', 'state' => 'SP',
+            'service_code' => '03298', 'service_label' => 'PAC (contrato)', 'weight_grams' => 2000,
+            'dimension_format' => '2', 'content_items' => [], 'status' => CorreiosPrePostagem::STATUS_GERADA,
+            'correios_id' => 'PP9', 'codigo_objeto' => 'AP540000000BR', 'qr_payload' => 'AP540000000BR',
+        ]);
+
+        $pdf = app(CorreiosLabelPdf::class)->render($prePostagem);
+
+        $this->assertSame(2, preg_match_all('#/Type\s*/Page[^s]#', $pdf), 'Etiqueta dos Correios + declaração.');
+    }
+
     public function test_label_pdf_is_generated_for_the_printer(): void
     {
         $caneca = $this->produto('KZ-CANECA-PRE', []);

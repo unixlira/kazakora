@@ -1,7 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ShippingFiscalLabel from '@/Modules/Admin/Correios/Components/ShippingFiscalLabel.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 const props = defineProps({
     item: { type: Object, required: true },
@@ -10,6 +10,13 @@ const props = defineProps({
 const orderLabel = props.item.externalOrderId || (props.item.orderId ? `#${props.item.orderId}` : null);
 
 const printLabel = () => window.print();
+
+// Cancela nos Correios (DELETE da pré-postagem na API deles) — só enquanto
+// não foi postada. Depois disso ela sai do custo de frete e do pedido.
+const cancelar = () => {
+    if (!window.confirm(`Cancelar a pré-postagem ${props.item.codigoObjeto || ''} nos Correios? Isso não tem volta.`)) return;
+    router.post(`/admin/correios/${props.item.id}/cancelar`, {}, { preserveScroll: true });
+};
 </script>
 
 <template>
@@ -28,6 +35,12 @@ const printLabel = () => window.print();
                 @click="printLabel">
                 <i class="fas fa-print mr-1.5"></i>
                 Imprimir etiqueta 10×15
+            </button>
+            <button v-if="item.status === 'gerada'" type="button"
+                class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/30"
+                @click="cancelar">
+                <i class="fas fa-ban mr-1.5"></i>
+                Cancelar nos Correios
             </button>
             <Link v-if="item.status === 'erro'" :href="`/admin/correios/${item.id}/editar`"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">

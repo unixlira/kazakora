@@ -511,6 +511,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('correios', [CorreiosController::class, 'store'])->name('correios.armazenar')->middleware('permission:operacional.create');
         Route::put('correios/{correio}', [CorreiosController::class, 'update'])->name('correios.atualizar')->middleware('permission:operacional.create');
         Route::delete('correios/{correio}', [CorreiosController::class, 'destroy'])->name('correios.excluir')->middleware('permission:operacional.delete');
+        Route::post('correios/{correio}/cancelar', [CorreiosController::class, 'cancel'])->name('correios.cancelar')->middleware('permission:operacional.delete');
 
         Route::get('etiquetas-manuais/nova', [ManualLabelController::class, 'create'])->name('etiquetas-manuais.nova');
         Route::post('etiquetas-manuais', [ManualLabelController::class, 'store'])->name('etiquetas-manuais.armazenar');

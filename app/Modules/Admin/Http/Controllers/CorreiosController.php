@@ -360,6 +360,22 @@ class CorreiosController extends Controller
         ]);
     }
 
+    /**
+     * Cancela nos Correios (pedido explícito 2026-09-25: pré-postagem que
+     * sobrou de um pedido despachado à mão). Depois disso ela não conta
+     * mais como etiqueta do pedido nem como frete na margem.
+     */
+    public function cancel(CorreiosPrePostagem $correio): RedirectResponse
+    {
+        try {
+            app(\App\Modules\Marketplace\Support\CorreiosCancelamento::class)->cancelar($correio);
+        } catch (CorreiosException|\RuntimeException $exception) {
+            return back()->with('error', 'Os Correios não cancelaram: '.$exception->getMessage());
+        }
+
+        return back()->with('success', "Pré-postagem {$correio->codigo_objeto} cancelada nos Correios.");
+    }
+
     public function destroy(CorreiosPrePostagem $correio): RedirectResponse
     {
         $correio->delete();

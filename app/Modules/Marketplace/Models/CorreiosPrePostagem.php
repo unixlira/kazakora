@@ -15,6 +15,9 @@ class CorreiosPrePostagem extends Model
 
     public const STATUS_ERRO = 'erro';
 
+    /** Cancelada nos Correios (ver CorreiosCancelamento) — não é mais etiqueta nem custo. */
+    public const STATUS_CANCELADA = 'cancelada';
+
     protected $fillable = [
         'order_id',
         'created_by',

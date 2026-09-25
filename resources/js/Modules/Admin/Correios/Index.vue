@@ -13,6 +13,7 @@ const props = defineProps({
 const STATUS_META = {
     gerada: { label: 'Gerada', color: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' },
     erro: { label: 'Falhou', color: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' },
+    cancelada: { label: 'Cancelada', color: 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
 };
 
 const monthFilter = ref(props.filters.mes ?? '');

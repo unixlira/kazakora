@@ -125,6 +125,30 @@ class CorreiosPrePostagemService
     }
 
     /**
+     * Cancela a pré-postagem nos Correios — DELETE /v1/prepostagens/{id}
+     * (schema oficial conferido em 2026-09-25). Só pré-postagem ainda não
+     * postada pode ser cancelada; a recusa dos Correios sobe como
+     * CorreiosException com a mensagem deles.
+     */
+    public function cancel(string $correiosId): void
+    {
+        if (! $this->isConfigured()) {
+            throw new CorreiosNotConfiguredException('Credenciais dos Correios não configuradas.');
+        }
+
+        $response = Http::withToken($this->tokenService->tokenForPrePostagem())
+            ->acceptJson()
+            ->timeout(30)
+            ->delete(rtrim((string) config('services.correios.api_base_url'), '/').'/v1/prepostagens/'.rawurlencode($correiosId));
+
+        Log::channel('correios')->info('correios.prepostagem_cancel', ['id' => $correiosId, 'status' => $response->status()]);
+
+        if ($response->failed()) {
+            throw new CorreiosException($this->extractErrorMessage($response), $response->status());
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function buildRemetente(): array

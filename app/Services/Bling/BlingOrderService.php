@@ -9,13 +9,13 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Pedidos de venda do Bling, filtrados pra só trazer os que vieram do
- * TikTok Shop — Bling é usado como PONTE (ver BlingAuthService), então uma
- * mesma conta Bling pode ter vários canais conectados (loja própria,
- * Mercado Livre, Shopee, TikTok Shop...), e este serviço só quer o que veio
- * de um canal específico: a "loja" (número interno do Bling) que o usuário
- * já configurou como TikTok Shop dentro do próprio painel do Bling (ver
- * "Configuração do TikTok Shop" na ajuda do Bling).
+ * Pedidos de venda do Bling, filtrados pra só trazer os que vieram de um
+ * canal que importamos por ele (TikTok Shop e, desde 2026-09-25, Amazon) —
+ * Bling é usado como PONTE (ver BlingAuthService), então uma mesma conta
+ * Bling pode ter vários canais conectados (loja própria, Mercado Livre,
+ * Shopee, TikTok Shop, Amazon...), e este serviço só quer o que veio de um
+ * canal específico: a "loja" (número interno do Bling) daquele canal (ver
+ * lojaIdForChannel()).
  */
 class BlingOrderService
 {
@@ -38,16 +38,66 @@ class BlingOrderService
     }
 
     /**
+     * ID da loja do Bling conectada à Amazon (loja "KoraMix Shop",
+     * 206308488 na conta real em 2026-09-25). Mesmo papel do
+     * tiktokLojaId(): sem ele, nenhum pedido do Bling é tratado como
+     * Amazon. Metadata da conta Bling primeiro (mesmo lugar do TikTok),
+     * BLING_AMAZON_LOJA_ID como padrão.
+     */
+    public function amazonLojaId(): ?int
+    {
+        $metadata = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_BLING)->value('metadata');
+        $lojaId = $metadata['amazon_loja_id'] ?? config('services.bling.amazon_loja_id');
+
+        return $lojaId ? (int) $lojaId : null;
+    }
+
+    /**
+     * Loja do Bling por onde entram os pedidos do canal — null pra canal
+     * que não passa pelo Bling.
+     */
+    public function lojaIdForChannel(string $channel): ?int
+    {
+        return match ($channel) {
+            MarketplaceAccount::CHANNEL_TIKTOK_SHOP => $this->tiktokLojaId(),
+            MarketplaceAccount::CHANNEL_AMAZON => $this->amazonLojaId(),
+            default => null,
+        };
+    }
+
+    /**
+     * Inverso de lojaIdForChannel(): de qual canal é um pedido do Bling,
+     * pela `loja.id` que vem no próprio pedido/webhook. null = loja que não
+     * importamos (loja própria, lançamento manual etc.).
+     */
+    public function channelForLojaId(mixed $lojaId): ?string
+    {
+        if ($lojaId === null || (int) $lojaId <= 0) {
+            return null;
+        }
+
+        foreach ([MarketplaceAccount::CHANNEL_TIKTOK_SHOP, MarketplaceAccount::CHANNEL_AMAZON] as $channel) {
+            if ($this->lojaIdForChannel($channel) === (int) $lojaId) {
+                return $channel;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Números de pedido (numeroLoja — o próprio número do pedido no
      * TikTok Shop, não o id interno do Bling) da loja do TikTok Shop num
      * intervalo de datas. Pagina de verdade (a API do Bling devolve
      * `data` vazio quando a página passa do fim, não um total explícito).
      *
+     * $lojaId null = loja do TikTok Shop (o único canal antes da Amazon).
+     *
      * @return array<int, string>
      */
-    public function listRecentOrderNumbers(Carbon $from, Carbon $to): array
+    public function listRecentOrderNumbers(Carbon $from, Carbon $to, ?int $lojaId = null): array
     {
-        return collect($this->listOrders($from, $to))
+        return collect($this->listOrders($from, $to, $lojaId))
             ->pluck('numeroLoja')
             ->filter()
             ->map(fn ($n) => (string) $n)
@@ -111,7 +161,7 @@ class BlingOrderService
      *
      * @return array<string, mixed>|null
      */
-    public function findByOrderNumber(string $orderNumber): ?array
+    public function findByOrderNumber(string $orderNumber, ?int $lojaId = null): ?array
     {
         // Candidatos, em ordem de preferência:
         // 1) o atalho alimentado pelo webhook (ProcessBlingOrderWebhook já
@@ -125,7 +175,7 @@ class BlingOrderService
             $ids[] = (int) $blingId;
         }
 
-        foreach (collect($this->listOrders(now()->subDays(60), now()))
+        foreach (collect($this->listOrders(now()->subDays(60), now(), $lojaId))
             ->filter(fn ($order) => (string) ($order['numeroLoja'] ?? '') === $orderNumber)
             ->sortByDesc('id') as $encontrado) {
             $ids[] = (int) $encontrado['id'];
@@ -162,9 +212,9 @@ class BlingOrderService
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function listOrders(Carbon $from, Carbon $to): array
+    private function listOrders(Carbon $from, Carbon $to, ?int $lojaId = null): array
     {
-        $lojaId = $this->tiktokLojaId();
+        $lojaId ??= $this->tiktokLojaId();
 
         if (! $lojaId) {
             return [];

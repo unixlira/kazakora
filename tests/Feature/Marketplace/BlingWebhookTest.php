@@ -118,6 +118,30 @@ class BlingWebhookTest extends TestCase
     }
 
     /**
+     * A Amazon (loja "KoraMix Shop") entra pelo mesmo webhook desde
+     * 2026-09-25 — e o log fica no canal Amazon, que é onde alguém vai
+     * procurar.
+     */
+    public function test_event_of_the_amazon_store_is_accepted_and_queued_as_amazon(): void
+    {
+        Queue::fake();
+        config(['services.bling.amazon_loja_id' => 206308488]);
+
+        $payload = $this->payload(['eventId' => 'evento-amazon-1']);
+        $payload['data']['numeroLoja'] = '701-1234567-1234567';
+        $payload['data']['loja']['id'] = 206308488;
+
+        $this->postWebhook($payload)->assertOk()->assertJson(['status' => 'received']);
+
+        Queue::assertPushed(ProcessBlingOrderWebhook::class);
+        $this->assertDatabaseHas('channel_webhook_logs', [
+            'channel' => MarketplaceAccount::CHANNEL_AMAZON,
+            'event_type' => 'order.created',
+            'status' => ChannelWebhookLog::STATUS_RECEIVED,
+        ]);
+    }
+
+    /**
      * O webhook dispara pra toda a conta Bling, não só pra loja do TikTok
      * Shop. Descartar com 2xx, senão o Bling retenta por 3 dias um evento
      * que nunca vamos querer.

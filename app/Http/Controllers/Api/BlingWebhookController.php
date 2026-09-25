@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\Log;
 /**
  * Webhook do Bling — pedidos do TikTok Shop em tempo real (pedido explícito
  * 2026-09-02: "temos que ter o webhook, o polling é consumo de máquina
- * desnecessário"). Substitui o poll de 2 em 2 minutos como caminho
+ * desnecessário"), e da Amazon desde 2026-09-25 (loja "KoraMix Shop"
+ * conectada ao Bling, ver AmazonDriver). Substitui o poll de 2 em 2 minutos como caminho
  * principal; a varredura horária continua como rede de segurança, porque o
  * Bling DESLIGA a configuração do webhook depois de 3 dias falhando
  * entrega e ela só volta com reativação manual na tela do aplicativo.
@@ -36,8 +37,8 @@ use Illuminate\Support\Facades\Log;
  *   secret do aplicativo, no header `X-Bling-Signature-256`, prefixado com
  *   "sha256=". Conferido antes de qualquer parse/normalização de JSON.
  *
- * O payload já traz `data.loja` e `data.situacao`, então o filtro da loja
- * do TikTok Shop sai direto do corpo, sem gastar uma chamada de API (o
+ * O payload já traz `data.loja` e `data.situacao`, então o filtro por loja
+ * (qual canal é) sai direto do corpo, sem gastar uma chamada de API (o
  * teto do Bling é 3 req/s pra CONTA inteira — a mesma fila da emissão de
  * nota e da busca de etiqueta).
  */
@@ -118,25 +119,23 @@ class BlingWebhookController extends Controller
             return response()->json(['status' => 'ignored']);
         }
 
-        $lojaId = $payload['data']['loja']['id'] ?? null;
-        $tiktokLojaId = $blingOrders->tiktokLojaId();
-        $isTiktokStore = $tiktokLojaId !== null && (int) $lojaId === (int) $tiktokLojaId;
+        $channel = $blingOrders->channelForLojaId($payload['data']['loja']['id'] ?? null);
 
         $log = ChannelWebhookLog::create([
-            'channel' => MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+            'channel' => $channel ?? MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
             'event_type' => $event,
             'payload' => $payload,
             'headers' => $request->headers->all(),
             'signature_valid' => true,
-            'status' => $isTiktokStore ? ChannelWebhookLog::STATUS_RECEIVED : ChannelWebhookLog::STATUS_IGNORED,
-            'error_message' => $isTiktokStore ? null : 'Evento de outra loja do Bling — não é do TikTok Shop.',
+            'status' => $channel ? ChannelWebhookLog::STATUS_RECEIVED : ChannelWebhookLog::STATUS_IGNORED,
+            'error_message' => $channel ? null : 'Evento de outra loja do Bling — não é TikTok Shop nem Amazon.',
         ]);
 
         // O webhook dispara pra TODO pedido de venda da conta Bling, não só
-        // do TikTok Shop. Pedido de outra loja é descartado aqui mesmo (com
-        // 2xx, senão o Bling retenta por 3 dias um evento que nunca vamos
-        // querer).
-        if (! $isTiktokStore) {
+        // dos canais que importamos por ele. Pedido de outra loja é
+        // descartado aqui mesmo (com 2xx, senão o Bling retenta por 3 dias
+        // um evento que nunca vamos querer).
+        if (! $channel) {
             return response()->json(['status' => 'ignored']);
         }
 

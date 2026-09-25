@@ -22,7 +22,9 @@ use Throwable;
 /**
  * Import de verdade do pedido que chegou pelo webhook do Bling — fora do
  * ciclo da requisição porque o Bling exige resposta em 5 segundos (ver
- * BlingWebhookController).
+ * BlingWebhookController). O canal (TikTok Shop ou Amazon) sai da
+ * `data.loja.id` do próprio payload — ver BlingOrderService::
+ * channelForLojaId().
  *
  * Fila "default" de propósito: o cron do homolog roda `queue:work` sem
  * `--queue=`, então fila nomeada nunca é drenada (mesmo motivo documentado
@@ -67,11 +69,14 @@ class ProcessBlingOrderWebhook implements ShouldQueue, ShouldBeUnique
         $log = ChannelWebhookLog::find($this->webhookLogId);
         $externalOrderId = $this->externalOrderId();
         $event = (string) ($this->payload['event'] ?? '');
+        // Fallback TikTok: job enfileirado antes da Amazon entrar só podia
+        // ser do TikTok (o controller descartava qualquer outra loja).
+        $channel = $blingOrders->channelForLojaId($this->payload['data']['loja']['id'] ?? null) ?? Order::ORIGIN_TIKTOK_SHOP;
 
         if ($externalOrderId === null) {
             // Pedido de venda sem numeroLoja não é venda de marketplace
             // (lançamento manual dentro do Bling, por exemplo) — não tem o
-            // que importar como pedido do TikTok Shop.
+            // que importar como pedido do canal.
             $log?->update(['status' => ChannelWebhookLog::STATUS_IGNORED, 'error_message' => 'Evento sem numeroLoja — não é pedido de marketplace.']);
 
             return;
@@ -81,10 +86,11 @@ class ProcessBlingOrderWebhook implements ShouldQueue, ShouldBeUnique
         // chega como `updated`, não como `deleted`). O pedido não existe
         // mais lá pra reconsultar, então nada de import — e cancelar por
         // conta própria seria arriscado demais: pedido apagado no ERP não
-        // quer dizer venda cancelada no TikTok. Registra alto pra alguém
+        // quer dizer venda cancelada no canal. Registra alto pra alguém
         // olhar.
         if ($event === 'order.deleted') {
             Log::warning('bling.webhook.order_deleted', [
+                'channel' => $channel,
                 'external_order_id' => $externalOrderId,
                 'bling_order_id' => $this->payload['data']['id'] ?? null,
             ]);
@@ -104,14 +110,19 @@ class ProcessBlingOrderWebhook implements ShouldQueue, ShouldBeUnique
             $blingOrders->rememberOrderId($externalOrderId, (int) $blingId);
         }
 
-        $order = $importer->import(Order::ORIGIN_TIKTOK_SHOP, $externalOrderId);
+        $order = $importer->import($channel, $externalOrderId);
 
-        // A nota deste canal é emitida PELO BLING (ver
+        // A nota do TikTok é emitida PELO BLING (ver
         // services.bling.invoice_issuer_channels): traz ela pra cá, com XML
         // e DANFE, senão o pedido ficaria sem registro nenhum de NF-e do
         // nosso lado. Pedido ainda sem nota lá volta null e a próxima
         // varredura tenta de novo — a emissão no Bling é assíncrona.
-        if ($order) {
+        // A Amazon só entra aqui se também for delegada ao Bling: hoje a
+        // nota dela é NOSSA, e importar a do Bling criaria nota em dobro.
+        $bringsBlingInvoice = $channel === Order::ORIGIN_TIKTOK_SHOP
+            || in_array($channel, (array) config('services.bling.invoice_issuer_channels', []), true);
+
+        if ($order && $bringsBlingInvoice) {
             app(BlingInvoiceImporter::class)->syncForOrder($order);
         }
 
@@ -129,14 +140,14 @@ class ProcessBlingOrderWebhook implements ShouldQueue, ShouldBeUnique
 
         if ($admins->isNotEmpty()) {
             Notification::send($admins, new WebhookImportFailedNotification(
-                Order::ORIGIN_TIKTOK_SHOP,
+                app(BlingOrderService::class)->channelForLojaId($this->payload['data']['loja']['id'] ?? null) ?? Order::ORIGIN_TIKTOK_SHOP,
                 $this->externalOrderId(),
                 (string) $exception?->getMessage(),
             ));
         }
     }
 
-    /** numeroLoja é o número do pedido no TikTok Shop — o external_order_id do nosso lado. */
+    /** numeroLoja é o número do pedido no canal (TikTok/Amazon) — o external_order_id do nosso lado. */
     private function externalOrderId(): ?string
     {
         $numeroLoja = $this->payload['data']['numeroLoja'] ?? null;

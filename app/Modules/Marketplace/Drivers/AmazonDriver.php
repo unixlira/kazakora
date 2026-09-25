@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Drivers;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Marketplace\Drivers\Concerns\ReadsOrdersFromBling;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
@@ -11,6 +12,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
+use App\Services\Bling\BlingOrderService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -36,12 +38,28 @@ use RuntimeException;
  * pública, um endpoint SP-API pra um vendedor MFN brasileiro enviar NF-e** —
  * ver o comentário do método pra o que foi de fato checado (Feeds API,
  * Invoices API, Shipment Invoicing API) antes de concluir isso.
+ *
+ * VIA BLING (pedido explícito 2026-09-25): a conta Amazon real (loja
+ * "KoraMix Shop") NÃO está conectada por SP-API aqui — ela está conectada
+ * ao Bling, que importa os pedidos sozinho e avisa pelo webhook
+ * (BlingWebhookController). Enquanto a SP-API não estiver conectada,
+ * importOrder()/confirmShipping()/fetchLabel() leem o pedido no Bling,
+ * exatamente como o TikTok Shop (ver ReadsOrdersFromBling) — e
+ * confirmShipping() vira só CONSULTA de rastreio: sem SP-API não há compra
+ * de frete MFN. Conectar a SP-API volta tudo pro caminho original sem
+ * mexer em código. A NF-e continua sendo NOSSA (Order::
+ * shouldAutoGenerateInvoice(), decisão do usuário no mesmo dia).
  */
 class AmazonDriver extends AbstractMarketplaceDriver
 {
+    use ReadsOrdersFromBling;
+
     private const LISTINGS_API_VERSION = '2021-08-01';
 
-    public function __construct(private readonly AmazonClient $client) {}
+    public function __construct(
+        private readonly AmazonClient $client,
+        private readonly BlingOrderService $blingOrders,
+    ) {}
 
     public function channel(): string
     {
@@ -89,6 +107,10 @@ class AmazonDriver extends AbstractMarketplaceDriver
      */
     public function importOrder(string $externalOrderId): array
     {
+        if ($this->viaBling()) {
+            return $this->importOrderFromBling($externalOrderId);
+        }
+
         $this->ensureConfigured();
 
         $order = $this->client->get("/orders/v0/orders/{$externalOrderId}")['payload'] ?? null;
@@ -322,6 +344,10 @@ class AmazonDriver extends AbstractMarketplaceDriver
      */
     public function confirmShipping(Order $order): array
     {
+        if ($this->viaBling()) {
+            return $this->confirmShippingFromBling($order);
+        }
+
         $this->ensureConfigured();
 
         $orderItemsResponse = $this->client->get("/orders/v0/orders/{$order->external_order_id}/orderItems");
@@ -478,6 +504,10 @@ class AmazonDriver extends AbstractMarketplaceDriver
      */
     public function fetchLabel(Order $order): array
     {
+        if ($this->viaBling()) {
+            return $this->fetchLabelFromBling($order);
+        }
+
         $this->ensureConfigured();
 
         $shipmentId = $this->resolveShipmentId($order);
@@ -499,6 +529,57 @@ class AmazonDriver extends AbstractMarketplaceDriver
             'contents' => base64_decode((string) $label['Contents']),
             'content_type' => Str::contains(strtolower((string) ($label['FileType'] ?? '')), 'pdf') ? 'application/pdf' : 'application/octet-stream',
         ];
+    }
+
+    /**
+     * O item que chega pelo Bling traz em `codigo` o SKU do anúncio na
+     * Amazon (SellerSKU) — o mesmo SKU do nosso catálogo quando o anúncio
+     * foi criado com ele. Só casa SKU EXATO: nada de similaridade de nome
+     * como no TikTok, porque aqui o canal manda o SKU de verdade, e chutar
+     * variação vira encomenda errada na casa do cliente (ver
+     * TikTokShopDriver::matchByNameSimilarity()). Sem casar, o item fica
+     * sem produto e a notificação de sempre pede o vínculo manual.
+     */
+    public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
+    {
+        $product = Product::query()->where('sku', $externalId)->first();
+
+        if (! $product) {
+            return null;
+        }
+
+        try {
+            ProductChannelListing::query()->firstOrCreate(
+                ['channel' => $this->channel(), 'external_id' => $externalId],
+                ['product_id' => $product->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
+            );
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Produto já tem listing Amazon com outro SKU — o vínculo é só
+            // atalho, o produto certo já foi achado (mesmo caso do TikTok).
+        }
+
+        return $product;
+    }
+
+    /**
+     * Pedido pelo Bling enquanto a SP-API não estiver conectada E houver
+     * loja Amazon configurada no Bling (ver docblock da classe). Sem
+     * nenhum dos dois, cai no caminho SP-API, que já falha com
+     * MarketplaceNotConfiguredException — o mesmo erro de antes.
+     */
+    private function viaBling(): bool
+    {
+        return ! $this->isConfigured() && $this->blingOrders->amazonLojaId() !== null;
+    }
+
+    protected function blingBuyerFallbackName(): string
+    {
+        return 'Comprador Amazon';
+    }
+
+    protected function blingShippingMethodFallback(): string
+    {
+        return 'Amazon';
     }
 
     private function labelCacheKey(string $shipmentId): string

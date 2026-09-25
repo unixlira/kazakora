@@ -220,6 +220,10 @@ return [
             array_filter(array_map('trim', explode(',', (string) env('BLING_SITUACOES_ENVIADO', '')))),
         ))),
 
+        // Loja do Bling conectada à Amazon (ver BlingOrderService::
+        // amazonLojaId()) — metadata da conta Bling tem prioridade.
+        'amazon_loja_id' => env('BLING_AMAZON_LOJA_ID'),
+
         'invoice_issuer_channels' => array_values(array_filter(array_map(
             'trim',
             explode(',', (string) env('BLING_INVOICE_ISSUER_CHANNELS', '')),

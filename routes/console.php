@@ -63,7 +63,13 @@ foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
 
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
-Schedule::command('orders:sync-amazon')->hourly();
+// Amazon via Bling (2026-09-25): o webhook é o caminho principal; isto é
+// só a rede de segurança. Janela de 2 dias, NÃO o mês inteiro como os
+// outros canais: pedido Amazon entra como pago e a NF-e dele é NOSSA — um
+// passe do mês inteiro emitiria nota automática pra toda venda antiga que
+// o Bling já tinha antes da integração existir. Carga de período maior só
+// na mão, conferindo antes (orders:sync-amazon --desde=...).
+Schedule::command('orders:sync-amazon --desde='.now()->subDays(2)->toDateString())->hourly()->withoutOverlapping(30);
 
 // Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
 // "pedido embalado continua na fila mesmo depois do ponto de coleta

@@ -98,7 +98,7 @@ class BlingInvoiceImporter
             return null;
         }
 
-        $blingOrder = $this->orders->findByOrderNumber($order->external_order_id);
+        $blingOrder = $this->orders->findByOrderNumber($order->external_order_id, $this->orders->lojaIdForChannel((string) $order->origin));
         $nfeId = (int) ($blingOrder['notaFiscal']['id'] ?? 0);
 
         // 0 = pedido ainda sem nota no Bling. Não é erro: a emissão lá é

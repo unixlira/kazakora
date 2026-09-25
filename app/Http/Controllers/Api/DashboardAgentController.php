@@ -621,7 +621,7 @@ class DashboardAgentController extends Controller
         // TikTok. Fora do select a coluna vem null e todo pedido apareceria
         // como "Envio não informado", que é exatamente o bug que o
         // external_shipment_id já causou aqui antes.
-        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method,error_message',
+        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method,error_message,tracking_code',
     ];
 
     public function queue(): JsonResponse
@@ -1143,6 +1143,10 @@ class DashboardAgentController extends Controller
             'external_order_id' => $order->external_order_id,
             'channel' => $order->origin,
             'shipping_method' => $order->channelShipment?->shipping_method,
+            // Código de rastreio do envio (na Amazon, o código de postagem
+            // dos Correios) — pedido de 2026-09-25: copiar direto do card
+            // pra atualizar o painel do canal, sem abrir o menu Correios.
+            'tracking_code' => $order->channelShipment?->tracking_code,
             'shipping_type' => $envio['tipo'],
             'shipping_type_label' => $envio['label'],
             'shipping_type_short' => $envio['curto'],

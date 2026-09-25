@@ -64,11 +64,33 @@ class TipoDeEnvioTest extends TestCase
         $this->assertSame(TipoDeEnvio::OUTRO, $novo['tipo']);
         $this->assertSame('metodo_que_ainda_nao_existe', $novo['curto'], 'método novo aparece cru, não vira palpite');
 
-        foreach (['mercado_livre', 'shopee', 'tiktok_shop', 'amazon', 'loja', null] as $canal) {
+        // Amazon fica de fora: sem método ela já é Correios (ver o teste
+        // de Correios abaixo).
+        foreach (['mercado_livre', 'shopee', 'tiktok_shop', 'loja', null] as $canal) {
             $vazio = TipoDeEnvio::montar($canal, null);
             $this->assertSame(TipoDeEnvio::DESCONHECIDO, $vazio['tipo'], (string) $canal);
             $this->assertSame('—', $vazio['curto'], (string) $canal);
         }
+    }
+
+    /**
+     * Pedido explícito 2026-09-25: o card do KoraSync diz "Correios - PAC"
+     * ou "Correios - SEDEX" pra Amazon que sai pela pré-postagem da loja.
+     */
+    public function test_amazon_pelos_correios_mostra_pac_ou_sedex(): void
+    {
+        $pac = TipoDeEnvio::montar('amazon', 'Correios PAC (contrato)');
+        $this->assertSame(TipoDeEnvio::CORREIOS_PAC, $pac['tipo']);
+        $this->assertSame('Correios - PAC', $pac['curto']);
+
+        $sedex = TipoDeEnvio::montar('amazon', 'Correios SEDEX (contrato)');
+        $this->assertSame(TipoDeEnvio::CORREIOS_SEDEX, $sedex['tipo']);
+        $this->assertSame('Correios - SEDEX', $sedex['curto']);
+
+        // Nota ainda saindo: já sabe que é Correios, o serviço ainda não.
+        $antes = TipoDeEnvio::montar('amazon', null);
+        $this->assertSame(TipoDeEnvio::CORREIOS, $antes['tipo']);
+        $this->assertSame('Correios', $antes['curto']);
     }
 
     public function test_loja_usa_a_transportadora_do_pedido(): void

@@ -45,6 +45,20 @@ final class TipoDeEnvio
 
     public const RETIRADA = 'retirada';
 
+    /**
+     * Correios pela pré-postagem da própria loja (Amazon via Bling desde
+     * 2026-09-25, ver CorreiosAutoShipping). PAC e SEDEX em tipos
+     * separados: pedido explícito do usuário — o card tem que dizer
+     * "Correios - PAC" ou "Correios - SEDEX", que é o que decide pra qual
+     * lote o pacote vai.
+     */
+    public const CORREIOS_PAC = 'correios_pac';
+
+    public const CORREIOS_SEDEX = 'correios_sedex';
+
+    /** Correios, mas o serviço só é escolhido (o mais barato) quando a pré-postagem sai. */
+    public const CORREIOS = 'correios';
+
     public const PROPRIO = 'proprio';
 
     public const OUTRO = 'outro';
@@ -147,8 +161,16 @@ final class TipoDeEnvio
     /** @return array{0: string, 1: string, 2: string} */
     private static function amazon(string $metodo): array
     {
+        // Amazon pelo Bling sai sempre pelos Correios da loja; antes da
+        // pré-postagem (nota ainda saindo) o serviço ainda não foi escolhido.
         if ($metodo === '') {
-            return self::naoInformado($metodo);
+            return [self::CORREIOS, 'Correios — PAC ou SEDEX, o mais barato, escolhido na pré-postagem', 'Correios'];
+        }
+
+        // CorreiosAutoShipping grava "Correios PAC (contrato)" /
+        // "Correios SEDEX (contrato)".
+        if ($correios = self::correios($metodo)) {
+            return $correios;
         }
 
         // AmazonDriver::confirmShipping() grava o CarrierName do
@@ -160,6 +182,22 @@ final class TipoDeEnvio
         }
 
         return [self::OUTRO, "Amazon — {$metodo}", $metodo];
+    }
+
+    /** @return array{0: string, 1: string, 2: string}|null */
+    private static function correios(string $metodo): ?array
+    {
+        $normalizado = mb_strtolower($metodo);
+
+        if (! str_contains($normalizado, 'correios')) {
+            return null;
+        }
+
+        return match (true) {
+            str_contains($normalizado, 'sedex') => [self::CORREIOS_SEDEX, 'Correios - SEDEX', 'Correios - SEDEX'],
+            str_contains($normalizado, 'pac') => [self::CORREIOS_PAC, 'Correios - PAC', 'Correios - PAC'],
+            default => [self::CORREIOS, 'Correios', 'Correios'],
+        };
     }
 
     /** @return array{0: string, 1: string, 2: string} */

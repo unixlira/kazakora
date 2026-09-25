@@ -384,6 +384,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
             // Rastreio de volta pra Amazon (via Bling) — o job espera a
             // etiqueta ficar pronta antes de mexer no pedido lá.
             \App\Jobs\InformAmazonShipmentToBling::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
+            \App\Jobs\ConfirmAmazonShipment::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
 
             return [
                 'external_shipment_id' => $prePostagem->correios_id,
@@ -699,14 +700,55 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * Pedido pelo Bling enquanto a SP-API não estiver conectada E houver
-     * loja Amazon configurada no Bling (ver docblock da classe). Sem
-     * nenhum dos dois, cai no caminho SP-API, que já falha com
-     * MarketplaceNotConfiguredException — o mesmo erro de antes.
+     * Pedido, nota e etiqueta pelo Bling + Correios da loja sempre que
+     * houver loja Amazon configurada no Bling — MESMO com a SP-API
+     * conectada. Mudança de 2026-09-25: a SP-API entra só pra confirmar o
+     * envio na Amazon (confirmarEnvio()); antes, conectar a SP-API
+     * trocaria o fluxo inteiro pro caminho MFN (compra de frete na
+     * Amazon), que não é como a loja trabalha.
      */
     public function viaBling(): bool
     {
-        return ! $this->isConfigured() && $this->blingOrders->amazonLojaId() !== null;
+        return $this->blingOrders->amazonLojaId() !== null;
+    }
+
+    /**
+     * Confirma o envio na Amazon pela SP-API — o pedido vira "Enviado" lá
+     * e o comprador recebe o rastreio. Pedido explícito 2026-09-25: o
+     * Bling NÃO repassa rastreio pra Amazon (a integração dele só importa
+     * vendas e taxas), então esta é a única ponte automática.
+     *
+     * POST /orders/v0/orders/{id}/shipmentConfirmation (Orders API v0).
+     * carrierCode "Other" + carrierName "Correios": o nome da
+     * transportadora vai escrito, sem depender de "Correios" estar na
+     * lista fechada de códigos da Amazon.
+     */
+    public function confirmarEnvio(Order $order, string $rastreio, string $servico): void
+    {
+        $this->ensureConfigured();
+
+        $itens = collect($this->client->get("/orders/v0/orders/{$order->external_order_id}/orderItems")['payload']['OrderItems'] ?? [])
+            ->filter(fn ($item) => isset($item['OrderItemId']))
+            ->map(fn ($item) => ['orderItemId' => (string) $item['OrderItemId'], 'quantity' => (int) ($item['QuantityOrdered'] ?? 1)])
+            ->values()
+            ->all();
+
+        if ($itens === []) {
+            throw new RuntimeException("A Amazon não devolveu os itens do pedido {$order->external_order_id} pra confirmar o envio.");
+        }
+
+        $this->client->post("/orders/v0/orders/{$order->external_order_id}/shipmentConfirmation", [
+            'marketplaceId' => config('services.amazon.marketplace_id'),
+            'packageDetail' => [
+                'packageReferenceId' => '1',
+                'carrierCode' => 'Other',
+                'carrierName' => 'Correios',
+                'shippingMethod' => $servico,
+                'trackingNumber' => $rastreio,
+                'shipDate' => now()->utc()->format('Y-m-d\TH:i:s\Z'),
+                'orderItems' => $itens,
+            ],
+        ]);
     }
 
     protected function blingBuyerFallbackName(): string

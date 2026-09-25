@@ -51,6 +51,7 @@ class CorreiosPrePostagem extends Model
         'raw_response',
         'error_message',
         'bling_informado_em',
+        'amazon_confirmado_em',
     ];
 
     protected function casts(): array
@@ -59,6 +60,7 @@ class CorreiosPrePostagem extends Model
             'content_items' => 'array',
             'raw_response' => 'array',
             'bling_informado_em' => 'datetime',
+            'amazon_confirmado_em' => 'datetime',
         ];
     }
 

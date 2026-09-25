@@ -71,6 +71,11 @@ Schedule::command('orders:sync-shopee')->hourly();
 // na mão, conferindo antes (orders:sync-amazon --desde=...).
 Schedule::command('orders:sync-amazon --desde='.now()->subDays(2)->toDateString())->hourly()->withoutOverlapping(30);
 
+// Confirmação de envio na Amazon pela SP-API (ver ConfirmAmazonShipment):
+// pega os que ficaram pendentes — principalmente os postados antes da
+// conta SP-API ser conectada. Sem conta conectada, não faz nada.
+Schedule::command('amazon:confirmar-envios')->hourly()->withoutOverlapping(30);
+
 // Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
 // "pedido embalado continua na fila mesmo depois do ponto de coleta
 // escanear o pacote... preferir webhook, mas manter verificação periódica

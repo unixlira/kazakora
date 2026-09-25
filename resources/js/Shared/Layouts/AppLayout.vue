@@ -75,7 +75,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
         <header class="sticky top-0 z-40 border-b border-store-border bg-store-bg/90 backdrop-blur">
             <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
                 <Link href="/" class="whitespace-nowrap font-display text-2xl font-semibold text-store-fg no-underline">
-                    Kaza<span class="text-store-accent">Kora</span>
+                    KazaKora
                 </Link>
 
                 <nav class="ml-auto hidden items-center gap-7 lg:flex">
@@ -178,11 +178,11 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
         </main>
 
         <!-- Footer -->
-        <footer class="mt-20 bg-store-accent-strong text-store-accent-contrast">
+        <footer class="mt-20 border-t border-store-border bg-white text-store-fg">
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
                     <div class="lg:max-w-xs lg:shrink-0">
-                        <span class="font-display text-xl font-semibold">Kaza<span class="text-store-accent">Kora</span></span>
+                        <span class="font-display text-xl font-semibold text-store-fg">KazaKora</span>
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
@@ -244,7 +244,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     </div>
                 </div>
 
-                <div class="mt-12 border-t border-store-accent-contrast/15 pt-6 text-center text-xs opacity-70">
+                <div class="mt-12 border-t border-store-border pt-6 text-center text-xs opacity-70">
                     <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
                 </div>
             </div>

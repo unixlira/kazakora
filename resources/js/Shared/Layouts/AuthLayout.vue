@@ -7,7 +7,7 @@ import { Link } from '@inertiajs/vue3';
         <!-- Form side -->
         <div class="flex w-full flex-col items-center justify-center bg-store-bg-raised px-4 py-12 lg:w-1/2">
             <Link href="/" class="mb-8 no-underline">
-                <span class="font-display text-2xl font-semibold text-store-fg">Kaza<span class="text-store-accent">Kora</span></span>
+                <span class="font-display text-2xl font-semibold text-store-fg">KazaKora</span>
             </Link>
 
             <div class="w-full" style="max-width: 24rem;">
@@ -17,7 +17,7 @@ import { Link } from '@inertiajs/vue3';
 
         <!-- Illustration / brand side -->
         <div class="relative hidden w-1/2 items-center justify-center overflow-hidden lg:flex"
-            style="background: linear-gradient(135deg, var(--color-store-accent-strong) 0%, #0d1826 100%);">
+            style="background: linear-gradient(135deg, var(--color-store-accent-strong) 0%, #111111 100%);">
             <div class="px-10 text-center text-store-accent-contrast" style="max-width: 26rem;">
                 <i class="fas fa-bag-shopping mb-4 text-6xl text-store-accent"></i>
                 <h2 class="mb-3 font-display text-2xl font-semibold text-white">Sua casa, do seu jeito</h2>

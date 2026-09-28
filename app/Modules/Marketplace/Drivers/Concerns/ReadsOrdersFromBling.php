@@ -7,6 +7,7 @@ use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
 use App\Services\Bling\BlingOrderService;
 use App\Services\Bling\Exceptions\BlingException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -120,7 +121,7 @@ trait ReadsOrdersFromBling
             }
         }
 
-        $address = $order['transporte']['etiqueta'] ?? [];
+        $address = $this->enderecoDeEntregaDoBling($order, $contact);
         $trackingCode = $order['transporte']['volumes'][0]['codigoRastreamento'] ?? null;
 
         return [
@@ -143,13 +144,13 @@ trait ReadsOrdersFromBling
             'buyer_phone' => $contact['celular'] ?? $contact['telefone'] ?? null,
             'buyer_email' => $contact['email'] ?? null,
             'buyer_whatsapp' => null,
-            'shipping_zip' => $address['cep'] ?? '00000000',
-            'shipping_street' => $address['endereco'] ?? 'Não informado',
-            'shipping_number' => $address['numero'] ?? 'S/N',
-            'shipping_complement' => $address['complemento'] ?? null,
-            'shipping_neighborhood' => $address['bairro'] ?? 'Não informado',
-            'shipping_city' => $address['municipio'] ?? 'Não informado',
-            'shipping_state' => $address['uf'] ?? 'SP',
+            'shipping_zip' => $address['cep'] ?: '00000000',
+            'shipping_street' => $address['endereco'] ?: 'Não informado',
+            'shipping_number' => $address['numero'] ?: 'S/N',
+            'shipping_complement' => $address['complemento'] ?: null,
+            'shipping_neighborhood' => $address['bairro'] ?: 'Não informado',
+            'shipping_city' => $address['municipio'] ?: 'Não informado',
+            'shipping_state' => $address['uf'] ?: 'SP',
             'external_shipment_id' => $trackingCode,
             // Bling só dá a DATA (sem hora) do pedido — mesmo assim melhor
             // que now() pra backfill (ver o mesmo argumento em
@@ -299,5 +300,87 @@ trait ReadsOrdersFromBling
             'contents' => $response->body(),
             'content_type' => $response->header('Content-Type') ?: 'application/pdf',
         ];
+    }
+    /**
+     * Relê no Bling o endereço de um pedido que foi gravado sem número —
+     * chamado antes de emitir a NF-e (GenerateInvoiceJob). Só mexe no
+     * endereço quando o Bling já tem o número; senão deixa como está.
+     * Nunca derruba a emissão: falha do Bling só registra e segue.
+     */
+    public function atualizarEnderecoPeloBling(Order $order): bool
+    {
+        if (! in_array(mb_strtoupper(trim((string) $order->shipping_number)), ['', 'S/N', 'SN'], true)) {
+            return false;
+        }
+
+        try {
+            $pedido = $this->blingOrders->findByOrderNumber((string) $order->external_order_id, $this->blingLojaId());
+            $contato = isset($pedido['contato']['id']) ? $this->blingOrders->findContact((int) $pedido['contato']['id']) : null;
+        } catch (BlingException $exception) {
+            Log::warning('bling.order.address_refresh_failed', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
+
+            return false;
+        }
+
+        if (! $pedido) {
+            return false;
+        }
+
+        $endereco = $this->enderecoDeEntregaDoBling($pedido, $contato);
+
+        if ($endereco['numero'] === '' || $endereco['endereco'] === '') {
+            return false;
+        }
+
+        $antes = $order->only(['shipping_street', 'shipping_number', 'shipping_complement', 'shipping_neighborhood', 'shipping_city', 'shipping_state', 'shipping_zip']);
+
+        $order->forceFill([
+            'shipping_street' => $endereco['endereco'],
+            'shipping_number' => $endereco['numero'],
+            'shipping_complement' => $endereco['complemento'] ?: null,
+            'shipping_neighborhood' => $endereco['bairro'] ?: $order->shipping_neighborhood,
+            'shipping_city' => $endereco['municipio'] ?: $order->shipping_city,
+            'shipping_state' => $endereco['uf'] ?: $order->shipping_state,
+            'shipping_zip' => $endereco['cep'] ?: $order->shipping_zip,
+        ])->save();
+
+        Log::info('bling.order.address_refreshed', ['order_id' => $order->id, 'antes' => $antes, 'depois' => $endereco]);
+
+        return true;
+    }
+
+    /**
+     * Endereço de entrega do pedido do Bling (`transporte.etiqueta`), com o
+     * que faltar completado pelo cadastro do contato.
+     *
+     * Achado real 2026-09-28 (Amazon #2565/#2586/#2609/#2636): logo que o
+     * pedido chega, a etiqueta do Bling vem montada pelo CEP — rua da base
+     * dos Correios e `numero` VAZIO (""). O `?? 'S/N'` não pegava string
+     * vazia, o pedido era gravado sem número e a NF-e nunca saía (E05
+     * `nro` obrigatório), segurando pré-postagem e etiqueta por dias.
+     * Minutos depois o Bling recebe o endereço digitado pelo comprador.
+     *
+     * @param  array<string, mixed>  $order
+     * @param  array<string, mixed>|null  $contact
+     * @return array{cep: string, endereco: string, numero: string, complemento: string, bairro: string, municipio: string, uf: string}
+     */
+    public function enderecoDeEntregaDoBling(array $order, ?array $contact = null): array
+    {
+        $etiqueta = $order['transporte']['etiqueta'] ?? [];
+        $doContato = $contact['endereco']['geral'] ?? $contact['endereco'] ?? [];
+        $campo = fn (array $origem, string $chave) => trim((string) ($origem[$chave] ?? ''));
+
+        // Etiqueta sem número = ainda a versão montada pelo CEP: o contato,
+        // se tiver número, é o endereço que o comprador digitou.
+        $base = $campo($etiqueta, 'numero') === '' && $campo($doContato, 'numero') !== '' ? $doContato : $etiqueta;
+        $outra = $base === $etiqueta ? $doContato : $etiqueta;
+
+        $endereco = [];
+
+        foreach (['cep', 'endereco', 'numero', 'complemento', 'bairro', 'municipio', 'uf'] as $chave) {
+            $endereco[$chave] = $campo($base, $chave) !== '' ? $campo($base, $chave) : $campo($outra, $chave);
+        }
+
+        return $endereco;
     }
 }

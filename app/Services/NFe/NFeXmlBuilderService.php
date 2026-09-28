@@ -254,7 +254,10 @@ class NFeXmlBuilderService
         // (bug real em produção, pedidos #15/#16, 2026-08-03).
         $enderDest = new stdClass();
         $enderDest->xLgr = Str::limit((string) $order->shipping_street, 60, '');
-        $enderDest->nro = $order->shipping_number;
+        // Sem número a SEFAZ recusa o XML inteiro (E05 `nro` obrigatório) e
+        // a nota, a pré-postagem e a etiqueta ficam paradas — "S/N" é o
+        // valor aceito pra endereço sem número (achado 2026-09-28, Amazon).
+        $enderDest->nro = trim((string) $order->shipping_number) !== '' ? $order->shipping_number : 'S/N';
         $enderDest->xCpl = Str::limit((string) $order->shipping_complement, 60, '');
         $enderDest->xBairro = Str::limit((string) $order->shipping_neighborhood, 60, '');
         $enderDest->cMun = $cMunDest;

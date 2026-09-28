@@ -136,6 +136,13 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
 
                 return;
             }
+
+            // Pedido que entrou antes do Bling ter o endereço digitado pelo
+            // comprador fica sem número e a nota não sai (ver
+            // ReadsOrdersFromBling::enderecoDeEntregaDoBling()).
+            if (app(AmazonDriver::class)->atualizarEnderecoPeloBling($order)) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: endereço sem número atualizado pelo Bling ({$order->shipping_street}, {$order->shipping_number}) antes da NF-e.");
+            }
         }
 
         $orderImport->refreshBuyerInfo($order);

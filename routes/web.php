@@ -506,6 +506,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             Route::get('correios/nova', [CorreiosController::class, 'create'])->name('correios.nova');
             Route::get('correios/buscar-pedido', [CorreiosController::class, 'buscarPedido'])->name('correios.buscar-pedido');
             Route::get('correios/{correio}', [CorreiosController::class, 'show'])->name('correios.ver');
+            Route::get('correios/{correio}/etiqueta.pdf', [CorreiosController::class, 'etiqueta'])->name('correios.etiqueta');
             Route::get('correios/{correio}/editar', [CorreiosController::class, 'edit'])->name('correios.editar');
         });
         Route::post('correios', [CorreiosController::class, 'store'])->name('correios.armazenar')->middleware('permission:operacional.create');

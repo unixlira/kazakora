@@ -9,7 +9,11 @@ const props = defineProps({
 
 const orderLabel = props.item.externalOrderId || (props.item.orderId ? `#${props.item.orderId}` : null);
 
-const printLabel = () => window.print();
+// A etiqueta gerada é o PDF do servidor (CorreiosLabelPdf) — o mesmo
+// arquivo que a impressão automática manda pra térmica. Abre no leitor de
+// PDF do navegador, que imprime no tamanho exato 10x15.
+const pdfUrl = `/admin/correios/${props.item.id}/etiqueta.pdf`;
+const printLabel = () => window.open(pdfUrl, '_blank');
 
 // Cancela nos Correios (DELETE da pré-postagem na API deles) — só enquanto
 // não foi postada. Depois disso ela sai do custo de frete e do pedido.
@@ -54,7 +58,12 @@ const cancelar = () => {
             <strong>Falhou:</strong> {{ item.errorMessage }}
         </div>
 
-        <div class="print-area mx-auto max-w-3xl">
+        <div v-if="item.status === 'gerada'" class="mx-auto max-w-md">
+            <iframe :src="`${pdfUrl}#toolbar=0&view=Fit`" title="Etiqueta 10x15"
+                class="aspect-[2/3] w-full rounded-lg border border-[var(--surface-border)] bg-white"></iframe>
+        </div>
+
+        <div v-else class="print-area mx-auto max-w-3xl">
             <ShippingFiscalLabel
                 :recipient="item.recipient"
                 :sender="item.sender"
@@ -70,7 +79,7 @@ const cancelar = () => {
         </div>
 
         <p class="mx-auto mt-4 max-w-md text-center text-xs text-slate-400 print:hidden">
-            Imprima em papel/etiqueta 10×15 em modo paisagem. A etiqueta tem três áreas: QR/código/CEP, remetente KazaKora e identificação fiscal com DANFE, código de barras e declaração genérica do produto.
+            Etiqueta 10×15 em retrato, igual à que sai sozinha na impressora: QR/código/CEP, destinatário, remetente, declaração do produto e DANFE.
         </p>
     </AdminLayout>
 </template>

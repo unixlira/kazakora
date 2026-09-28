@@ -8,12 +8,14 @@ use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
+use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Services\Correios\CorreiosPrePostagemService;
 use App\Services\Correios\Exceptions\CorreiosException;
 use App\Services\Correios\Exceptions\CorreiosNotConfiguredException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -357,6 +359,21 @@ class CorreiosController extends Controller
 
         return Inertia::render('Admin/Correios/Show', [
             'item' => $this->presentDetail($correio),
+        ]);
+    }
+
+    /**
+     * A etiqueta definitiva em PDF — a mesma que a automação manda pra
+     * impressora (CorreiosLabelPdf). A tela e a impressão automática não
+     * podem sair com layouts diferentes.
+     */
+    public function etiqueta(CorreiosPrePostagem $correio, CorreiosLabelPdf $pdf): HttpResponse
+    {
+        abort_unless($correio->status === CorreiosPrePostagem::STATUS_GERADA, 404);
+
+        return response($pdf->render($correio), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="etiqueta-'.($correio->codigo_objeto ?: $correio->id).'.pdf"',
         ]);
     }
 

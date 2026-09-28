@@ -167,6 +167,25 @@ class CorreiosControllerTest extends TestCase
             ->where('editing.errorMessage', 'CEP inválido'));
     }
 
+    public function test_etiqueta_serves_the_same_pdf_as_the_automatic_print(): void
+    {
+        $this->makeCompany();
+        $record = CorreiosPrePostagem::create($this->recordAttributes(['status' => CorreiosPrePostagem::STATUS_GERADA]));
+
+        $response = $this->actingAs($this->admin())->get("/admin/correios/{$record->id}/etiqueta.pdf");
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'application/pdf');
+        $this->assertStringStartsWith('%PDF', $response->getContent());
+    }
+
+    public function test_etiqueta_is_404_while_the_pre_postagem_has_no_qr(): void
+    {
+        $record = CorreiosPrePostagem::create($this->recordAttributes(['status' => CorreiosPrePostagem::STATUS_ERRO]));
+
+        $this->actingAs($this->admin())->get("/admin/correios/{$record->id}/etiqueta.pdf")->assertNotFound();
+    }
+
     public function test_edit_redirects_when_status_is_not_erro(): void
     {
         $admin = $this->admin();

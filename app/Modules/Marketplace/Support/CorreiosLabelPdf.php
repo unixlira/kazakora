@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Support;
 
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use Com\Tecnick\Barcode\Barcode;
@@ -9,9 +10,10 @@ use FPDF;
 
 /**
  * Etiqueta 10x15 da pré-postagem dos Correios em PDF, gerada no servidor
- * pra entrar na impressão automática (LabelFetchService) — a tela do menu
- * Correios desenha a mesma etiqueta no navegador (ShippingFiscalLabel.vue),
- * mas o agente de impressão só recebe arquivo.
+ * pra entrar na impressão automática (LabelFetchService). É o layout
+ * definitivo (usuário, 2026-09-28): a tela do menu Correios mostra e
+ * imprime este mesmo PDF (CorreiosController::etiqueta); o
+ * ShippingFiscalLabel.vue ficou só como prévia do formulário, antes do QR.
  *
  * Mesmas três áreas da etiqueta da tela: QR + código de postagem + CEP;
  * remetente; declaração + DANFE (Code128 da chave). Acrescenta o
@@ -25,6 +27,9 @@ class CorreiosLabelPdf
     private const ALTURA = 150.0;
 
     private const MARGEM = 4.0;
+
+    /** Logo 287x89 px → 18 x 5,6 mm. */
+    private const LOGO_LARGURA = 18.0;
 
     public function render(CorreiosPrePostagem $pp): string
     {
@@ -59,11 +64,20 @@ class CorreiosLabelPdf
         $y = self::MARGEM + $qrLado + 2;
         $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
 
-        // 2. Destinatário.
-        $this->kicker($pdf, self::MARGEM, $y + 1, $util, 'Destinatário', 'L');
+        // 2. Destinatário. Pedido da Amazon leva o logo (versão só preto,
+        // que a térmica imprime limpo) no canto; o nome encolhe pra não
+        // passar por baixo dele.
+        $larguraNome = $util;
+
+        if ($this->ehAmazon($pp) && is_file($logo = resource_path('etiquetas/amazon.png'))) {
+            $pdf->Image($logo, self::LARGURA - self::MARGEM - self::LOGO_LARGURA, $y + 1.5, self::LOGO_LARGURA);
+            $larguraNome = $util - self::LOGO_LARGURA - 2;
+        }
+
+        $this->kicker($pdf, self::MARGEM, $y + 1, $larguraNome, 'Destinatário', 'L');
         $pdf->SetFont('Helvetica', 'B', 10);
         $pdf->SetXY(self::MARGEM, $y + 5);
-        $pdf->Cell($util, 4.5, $this->t($pp->customer_name), 0, 1);
+        $pdf->Cell($larguraNome, 4.5, $this->caber($pdf, (string) $pp->customer_name, $larguraNome), 0, 1);
         $pdf->SetFont('Helvetica', '', 8);
         foreach ($this->enderecoDestinatario($pp) as $linha) {
             $pdf->SetX(self::MARGEM);
@@ -173,6 +187,11 @@ class CorreiosLabelPdf
 
             $y += $tamanho['altura'];
         }
+    }
+
+    private function ehAmazon(CorreiosPrePostagem $pp): bool
+    {
+        return ($pp->origin ?: $pp->order?->origin) === Order::ORIGIN_AMAZON;
     }
 
     /** Corta com reticências o que não cabe numa linha da largura dada. */

@@ -84,6 +84,9 @@ Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 // e entregue separadamente (ver Admin\ApiPartnerController::issueToken()).
 Route::view('/api/documentacao', 'api.documentation')->name('api.documentacao');
 
+// Minigame público, isolado da loja/checkout. Usa só créditos fictícios no navegador.
+Route::view('/frute-jogo', 'frute-jogo')->name('frute-jogo');
+
 Route::get('/favoritos', [FavoriteController::class, 'index'])
     ->middleware('auth')
     ->name('favoritos.listar');
@@ -275,6 +278,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')
+        ->middleware('permission:pedidos.edit');
+    Route::patch('pedidos/{order}/itens', [AdminOrderController::class, 'updateItems'])
+        ->name('pedidos.itens.atualizar')
         ->middleware('permission:pedidos.edit');
     Route::post('pedidos/{order}/verificar-etiqueta', [AdminOrderController::class, 'checkLabel'])
         ->name('pedidos.verificar-etiqueta')

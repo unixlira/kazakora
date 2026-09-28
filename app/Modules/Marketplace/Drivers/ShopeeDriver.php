@@ -276,18 +276,30 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             // SKU na Shopee faria o firstOrCreate() abaixo tentar inserir
             // uma segunda linha e estourar a constraint única, derrubando
             // o pedido inteiro.
-            $listingExistsForOtherListing = ProductChannelListing::query()
+            //
+            // Achado real 2026-09-15: a Shopee pode devolver a venda do mesmo
+            // item sem model_id (0/vazio), mesmo com o anúncio já vinculado no
+            // KazaKora por external_model_id. Como a tabela tem unique por
+            // (product_id, channel), tentar criar outro vínculo para o mesmo
+            // produto/canal derruba a importação do pedido antes da NF-e.
+            // Se já existe qualquer vínculo desse produto com a Shopee,
+            // reaproveita o produto e não tenta criar outro registro.
+            $existingListing = ProductChannelListing::query()
                 ->where('product_id', $existing->id)
                 ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
-                ->where('external_id', '!=', $externalId)
-                ->exists();
+                ->first();
 
-            if ($listingExistsForOtherListing) {
-                Log::channel('shopee')->warning('shopee.order_import.duplicate_listing_for_product', [
-                    'product_id' => $existing->id,
-                    'sku' => $item['sku'],
-                    'new_external_id' => $externalId,
-                ]);
+            if ($existingListing) {
+                if ((string) $existingListing->external_id !== $externalId || (string) ($existingListing->external_model_id ?? '') !== (string) ($externalModelId ?? '')) {
+                    Log::channel('shopee')->warning('shopee.order_import.reusing_existing_product_listing', [
+                        'product_id' => $existing->id,
+                        'sku' => $item['sku'],
+                        'existing_external_id' => $existingListing->external_id,
+                        'existing_external_model_id' => $existingListing->external_model_id,
+                        'new_external_id' => $externalId,
+                        'new_external_model_id' => $externalModelId,
+                    ]);
+                }
             } else {
                 ProductChannelListing::query()->firstOrCreate(
                     ['channel' => MarketplaceAccount::CHANNEL_SHOPEE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
@@ -788,9 +800,9 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         rsort($values, SORT_NUMERIC);
 
         return [
-            'package_length' => $values[0],
-            'package_width' => $values[1],
-            'package_height' => $values[2],
+            'package_length' => (int) ceil($values[0]),
+            'package_width' => (int) ceil($values[1]),
+            'package_height' => (int) ceil($values[2]),
         ];
     }
 
@@ -884,6 +896,10 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
         if ($unsupported->isNotEmpty()) {
             throw new RuntimeException('A categoria Shopee possui atributos obrigatórios ainda não mapeados: '.$unsupported->pluck('attribute_id')->implode(', '));
+        }
+
+        if ($mandatory->isEmpty() || empty($attributes['assembly_required'])) {
+            return [];
         }
 
         return [[

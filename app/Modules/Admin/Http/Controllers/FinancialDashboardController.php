@@ -119,6 +119,15 @@ class FinancialDashboardController extends Controller
         // productCostMonth/salesRevenueMonth logo acima.
         $marketplaceFeeMonthFromOrders = round((float) OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where(function ($query) {
+                $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
+                    ->orWhereNull('orders.origin');
+            })
+            ->where(function ($query) {
+                $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
+                    ->orWhereNull('orders.fiscal_operation_type');
+            })
             ->where('orders.created_at', '>=', $startOfMonth)
             ->when($hasSettlementDetails, function ($query) use ($startOfMonth) {
                 $query->whereNotExists(function ($settlement) use ($startOfMonth) {
@@ -240,6 +249,7 @@ class FinancialDashboardController extends Controller
 
         $marketplaceFeeAllTimeFromOrders = round((float) OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where(function ($query) {
                 $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
                     ->orWhereNull('orders.origin');
@@ -491,6 +501,7 @@ class FinancialDashboardController extends Controller
 
         $fees = OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $startOfMonth)
             ->where(function ($query) {
                 $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
@@ -508,13 +519,14 @@ class FinancialDashboardController extends Controller
         $unsettledFees = Schema::hasTable('marketplace_settlement_details')
             ? OrderChannelFee::query()
                 ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+                ->whereIn('orders.status', self::REVENUE_STATUSES)
                 ->where('orders.created_at', '>=', $startOfMonth)
                 ->where(function ($query) {
                     $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
                         ->orWhereNull('orders.origin');
                 })
                 ->where(function ($query) {
-                    $query->where('orders.fiscal_operation_type', '!=', 'purchase_return')
+                    $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
                         ->orWhereNull('orders.fiscal_operation_type');
                 })
                 ->whereNotExists(function ($settlement) use ($startOfMonth) {

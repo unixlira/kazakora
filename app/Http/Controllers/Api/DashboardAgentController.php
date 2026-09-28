@@ -13,11 +13,13 @@ use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
-use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Support\TipoDeEnvio;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
@@ -1783,6 +1785,12 @@ class DashboardAgentController extends Controller
             ]);
         }
 
+        $fiscalBlock = $this->labelFiscalBlock($order, true);
+
+        if ($fiscalBlock) {
+            return response()->json($fiscalBlock);
+        }
+
         $job = PrintJob::query()
             ->where('order_id', $order->id)
             ->where('is_thank_you', false)
@@ -1888,6 +1896,16 @@ class DashboardAgentController extends Controller
                     'message' => 'Gerando a pré-postagem dos Correios deste pedido — tente de novo em instantes.',
                 ], 409);
             }
+        }
+
+        $fiscalBlock = $this->labelFiscalBlock($order, true);
+
+        if ($fiscalBlock) {
+            return response()->json([
+                'ok' => false,
+                'state' => $fiscalBlock['state'],
+                'message' => $fiscalBlock['message'],
+            ], 409);
         }
 
         // Sem etiqueta baixada não há o que mandar pra impressora — mas
@@ -2053,6 +2071,135 @@ class DashboardAgentController extends Controller
                     : "Pedido marcado como embalado no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
             );
         }
+    }
+
+    /**
+     * A mensagem genérica "canal ainda não liberou" era falsa para Shopee/ML
+     * quando o bloqueio real vinha antes: NF-e inexistente, pendente ou ainda
+     * não aceita pelo canal. Nessa condição, pedir etiqueta só martela o endpoint
+     * errado; aqui o botão/status mostra a ação correta e empurra o próximo passo
+     * seguro do pipeline fiscal.
+     *
+     * @return array{state:string,message:string}|null
+     */
+    private function labelFiscalBlock(Order $order, bool $nudgePipeline = false): ?array
+    {
+        if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
+            return null;
+        }
+
+        $order->loadMissing(['invoice', 'items.product.fiscalData']);
+        $invoice = $order->invoice;
+        $submission = ChannelInvoiceSubmission::query()
+            ->where('order_id', $order->id)
+            ->latest('id')
+            ->first();
+
+        if ($invoice?->status === Invoice::STATUS_AUTHORIZED
+            && $submission
+            && in_array($submission->status, [ChannelInvoiceSubmission::STATUS_SENT, ChannelInvoiceSubmission::STATUS_ACCEPTED], true)) {
+            return null;
+        }
+
+        if ($invoice?->status === Invoice::STATUS_AUTHORIZED) {
+            if ($nudgePipeline && $order->status === Order::STATUS_PAID) {
+                SubmitInvoiceToChannelJob::dispatch($order->id);
+            }
+
+            $detail = $submission?->error_message
+                ? ' Último retorno do canal: '.mb_substr($submission->error_message, 0, 140).'.'
+                : '';
+
+            return [
+                'state' => 'invoice_not_sent_to_channel',
+                'message' => 'A etiqueta ainda não está liberada porque a NF-e foi autorizada, mas o canal ainda não aceitou essa nota. Reenviei a NF-e para o canal agora; tente de novo em instantes.'.$detail,
+            ];
+        }
+
+        $missingFiscal = $this->missingFiscalFieldsForLabel($order);
+
+        if ($missingFiscal !== []) {
+            return [
+                'state' => 'fiscal_action_required',
+                'message' => 'A etiqueta não está travada no canal; ela está bloqueada antes disso porque a NF-e ainda não saiu. Corrija o fiscal do produto: '.$this->summarizeMissingFiscal($missingFiscal).'. Depois o sistema emite a NF-e, envia para o canal e busca a etiqueta sozinho.',
+            ];
+        }
+
+        if ($nudgePipeline && $order->status === Order::STATUS_PAID && $order->shouldAutoGenerateInvoice()) {
+            GenerateInvoiceJob::dispatch($order->id);
+        }
+
+        $status = $invoice?->status;
+        $reason = $invoice?->motivo_rejeicao ? ' Motivo atual: '.mb_substr($invoice->motivo_rejeicao, 0, 140).'.' : '';
+        $prefix = match ($status) {
+            Invoice::STATUS_PENDING => 'A NF-e deste pedido ainda está pendente.',
+            Invoice::STATUS_REJECTED => 'A NF-e deste pedido foi rejeitada.',
+            Invoice::STATUS_SENT => 'A NF-e foi enviada à SEFAZ e está em conferência.',
+            null => 'Este pedido ainda não tem NF-e emitida.',
+            default => "A NF-e deste pedido está em status {$status}.",
+        };
+
+        return [
+            'state' => 'invoice_not_ready',
+            'message' => $prefix.' Reprocessei o fluxo fiscal agora; quando a nota autorizar e o canal aceitar, a etiqueta entra na fila automaticamente.'.$reason,
+        ];
+    }
+
+    /**
+     * @return array<int, array{sku:string, missing:array<int, string>}>
+     */
+    private function missingFiscalFieldsForLabel(Order $order): array
+    {
+        return $order->items
+            ->map(function (OrderItem $item): ?array {
+                $product = $item->product;
+                $fiscal = $product?->fiscalData;
+
+                $missing = [];
+
+                if (! $fiscal) {
+                    $missing[] = 'cadastro fiscal completo';
+                } else {
+                    $fields = [
+                        'NCM' => $fiscal->ncm,
+                        'CFOP' => $fiscal->cfop,
+                        'CSOSN/ICMS' => $fiscal->icms_situacao_tributaria,
+                        'PIS' => $fiscal->pis_situacao_tributaria,
+                        'COFINS' => $fiscal->cofins_situacao_tributaria,
+                        'peso bruto/líquido' => $fiscal->peso_bruto ?: $fiscal->peso_liquido,
+                        'profundidade/comprimento' => $fiscal->profundidade_cm,
+                    ];
+
+                    foreach ($fields as $label => $value) {
+                        if (! filled($value)) {
+                            $missing[] = $label;
+                        }
+                    }
+                }
+
+                if ($missing === []) {
+                    return null;
+                }
+
+                return [
+                    'sku' => $product?->sku ?: mb_substr($item->product_name, 0, 35),
+                    'missing' => $missing,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array{sku:string, missing:array<int, string>}>  $missingFiscal
+     */
+    private function summarizeMissingFiscal(array $missingFiscal): string
+    {
+        return collect($missingFiscal)
+            ->take(3)
+            ->map(fn (array $row) => $row['sku'].' sem '.implode(', ', array_slice($row['missing'], 0, 7)))
+            ->implode('; ');
     }
 
     /**

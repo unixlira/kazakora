@@ -1797,6 +1797,18 @@ class DashboardAgentController extends Controller
             ->latest('id')
             ->first();
 
+        $shipment = $order->loadMissing('channelShipment')->channelShipment;
+
+        if (! $job
+            && $shipment?->status === ChannelShipment::STATUS_LABEL_READY
+            && $shipment->label_path
+            && \Illuminate\Support\Facades\Storage::disk('local')->exists($shipment->label_path)) {
+            return response()->json([
+                'state' => 'ready_not_queued',
+                'message' => 'Etiqueta pronta no KazaKora, mas sem fila de impressão. Use "Imprimir de novo" ou gere o lote; isto não é atraso do marketplace.',
+            ], 409);
+        }
+
         if ($job?->status === PrintJob::STATUS_PRINTED) {
             return response()->json([
                 'state' => 'printed',
@@ -2070,7 +2082,71 @@ class DashboardAgentController extends Controller
                     ? 'Pedido marcado como embalado no KoraSync'
                     : "Pedido marcado como embalado no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
             );
+
+            $this->enqueueReadyLabelAfterPacked($packOrder);
         }
+    }
+
+    /**
+     * Correção 2026-09-29: pedido recuperado por varredura pode ficar com
+     * auto_print_blocked=1. Se a etiqueta já estava pronta e o operador deu
+     * baixa no KoraSync, não pode ficar silencioso sem PrintJob.
+     */
+    private function enqueueReadyLabelAfterPacked(Order $order): void
+    {
+        $order->loadMissing('channelShipment');
+        $shipment = $order->channelShipment;
+
+        if (! $shipment
+            || $shipment->status !== ChannelShipment::STATUS_LABEL_READY
+            || ! $shipment->label_path
+            || in_array($shipment->channel, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)
+            || in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
+            return;
+        }
+
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($shipment->label_path)) {
+            Log::warning('korasync.pack.ready_label_missing_file', [
+                'order_id' => $order->id,
+                'label_path' => $shipment->label_path,
+            ]);
+
+            return;
+        }
+
+        $exists = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->whereIn('status', [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED, PrintJob::STATUS_PRINTED])
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => $shipment->channel ?: $order->origin,
+            'tracking_code' => $shipment->tracking_code,
+            'is_thank_you' => false,
+            'origin' => PrintJob::ORIGEM_LOTE,
+            'label_path' => $shipment->label_path,
+            'raw_label_path' => $shipment->raw_label_path,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        Log::warning('korasync.pack.ready_label_enqueued_after_packed_without_print_job', [
+            'order_id' => $order->id,
+            'print_job_id' => $job->id,
+            'auto_print_blocked' => (bool) $order->auto_print_blocked,
+        ]);
+
+        app(OrderFulfillmentTimeline::class)->record(
+            $order,
+            OrderFulfillmentEvent::STEP_LABEL_GENERATED,
+            OrderFulfillmentEvent::STATUS_SUCCESS,
+            'Etiqueta pronta estava sem fila; enfileirada automaticamente ao marcar embalado no KoraSync',
+        );
     }
 
     /**

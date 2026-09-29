@@ -2,7 +2,6 @@
 
 namespace App\Modules\Admin\Http\Controllers;
 
-use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
@@ -11,6 +10,7 @@ use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\ChannelWalletBalance;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Modules\Marketplace\Support\FlexDeliveryService;
 use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
@@ -87,7 +87,8 @@ class FinancialDashboardController extends Controller
                         ->where('settlement_check.order_created_at', '>=', $startOfMonth->toDateString());
                 });
             })
-            ->sum(DB::raw(ContributionMargin::receitaSql()));
+            ->selectRaw('COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as total')
+            ->value('total');
 
         $salesRevenueMonthFromSettlements = $hasSettlementDetails
             ? (float) DB::table('marketplace_settlement_details')
@@ -103,7 +104,7 @@ class FinancialDashboardController extends Controller
             ->where('orders.created_at', '>=', $startOfMonth)
             ->join('order_items', 'order_items.order_id', '=', 'orders.id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
-            ->selectRaw('COALESCE(SUM(COALESCE(order_items.quantity * products.cost_price, order_items.manual_cost_price, 0)), 0) as total')
+            ->selectRaw('COALESCE(SUM('.ContributionMargin::custoSql().'), 0) as total')
             ->value('total'), 2);
 
         // BUG REAL 2026-08-14: filtrava por computed_at (quando a taxa foi
@@ -119,15 +120,6 @@ class FinancialDashboardController extends Controller
         // productCostMonth/salesRevenueMonth logo acima.
         $marketplaceFeeMonthFromOrders = round((float) OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
-            ->whereIn('orders.status', self::REVENUE_STATUSES)
-            ->where(function ($query) {
-                $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
-                    ->orWhereNull('orders.origin');
-            })
-            ->where(function ($query) {
-                $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
-                    ->orWhereNull('orders.fiscal_operation_type');
-            })
             ->where('orders.created_at', '>=', $startOfMonth)
             ->when($hasSettlementDetails, function ($query) use ($startOfMonth) {
                 $query->whereNotExists(function ($settlement) use ($startOfMonth) {
@@ -178,11 +170,7 @@ class FinancialDashboardController extends Controller
         // TikTok Income já inclui afiliados dentro de "Taxas e impostos".
         // Mantemos afiliados como detalhe visual, mas não somamos de novo no
         // custo da plataforma para não derrubar margem/lucro em duplicidade.
-        // Frete que a LOJA pagou nos Correios (pré-postagem, hoje Amazon via
-        // Bling) — custo real da venda, pedido explícito 2026-09-25: "o
-        // custo de frete dos Correios tem que vir da nossa pré-postagem".
-        $correiosCostMonth = ContributionMargin::correios($startOfMonth);
-        $platformCostsMonth = round($marketplaceFeeMonth + $flexCostMonth + $settlementShippingCostMonth + $correiosCostMonth, 2);
+        $platformCostsMonth = round($marketplaceFeeMonth + $flexCostMonth + $settlementShippingCostMonth, 2);
         $grossProfitMonth = round($salesRevenueMonth - $productCostMonth, 2);
 
         // Pedido explícito 2026-08-15: frete continua fora da conta de
@@ -230,7 +218,8 @@ class FinancialDashboardController extends Controller
                         ->whereColumn('settlement_check.external_order_id', 'orders.external_order_id');
                 });
             })
-            ->sum(DB::raw(ContributionMargin::receitaSql()));
+            ->selectRaw('COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as total')
+            ->value('total');
 
         $salesRevenueAllTimeFromSettlements = $hasSettlementDetails
             ? (float) DB::table('marketplace_settlement_details')
@@ -244,12 +233,11 @@ class FinancialDashboardController extends Controller
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->join('order_items', 'order_items.order_id', '=', 'orders.id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
-            ->selectRaw('COALESCE(SUM(COALESCE(order_items.quantity * products.cost_price, order_items.manual_cost_price, 0)), 0) as total')
+            ->selectRaw('COALESCE(SUM('.ContributionMargin::custoSql().'), 0) as total')
             ->value('total'), 2);
 
         $marketplaceFeeAllTimeFromOrders = round((float) OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
-            ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where(function ($query) {
                 $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
                     ->orWhereNull('orders.origin');
@@ -286,19 +274,8 @@ class FinancialDashboardController extends Controller
 
         $adSpendAllTime = round((float) ChannelAdSpend::query()->sum('spend') + $settlementAdSpendAllTime, 2);
 
-        // Mesmos custos do mês (antes o frete do extrato e o dos Correios
-        // ficavam de fora do "desde o início", e as duas contas divergiam).
-        $settlementShippingCostAllTime = $hasSettlementDetails
-            ? round((float) DB::table('marketplace_settlement_details')
-                ->where('transaction_type', 'Pedido')
-                ->selectRaw('COALESCE(SUM(CASE WHEN net_shipping_cost < 0 THEN ABS(net_shipping_cost) ELSE 0 END), 0) as total')
-                ->value('total'), 2)
-            : 0.0;
-        $correiosCostAllTime = ContributionMargin::correios(null);
-        $freteLojaAllTime = round($flexCostAllTime + $settlementShippingCostAllTime + $correiosCostAllTime, 2);
-
-        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $freteLojaAllTime, 2);
-        $netRevenueAfterDeductionsAllTime = round($salesRevenueAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $freteLojaAllTime, 2);
+        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime, 2);
+        $netRevenueAfterDeductionsAllTime = round($salesRevenueAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime, 2);
         $netRevenueAfterDeductionsMonth = round($salesRevenueMonth - $platformCostsMonth - $adSpendMonth, 2);
         $settlementSummary = $this->settlementSummary($startOfMonth);
         $marketplaceMetricsMonth = $this->marketplaceMetrics($startOfMonth, $flexCostMonth, $settlementSummary['month']['channels'] ?? []);
@@ -310,6 +287,8 @@ class FinancialDashboardController extends Controller
         $stockValue = round((float) Product::query()
             ->selectRaw('COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0) as total')
             ->value('total'), 2);
+
+        $walletBalances = $this->walletBalances($shopeeWallet);
 
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'summary' => [
@@ -356,7 +335,8 @@ class FinancialDashboardController extends Controller
             // Pago — precisa de escopo de pagamentos que o app não tem
             // hoje, não um bug local; fica null (indisponível) até isso
             // ser resolvido do lado do cadastro do app na Mercado Livre.
-            'walletBalances' => $this->walletBalances($shopeeWallet),
+            'walletBalances' => $walletBalances,
+            'receivableProjection' => $this->receivableProjection($walletBalances),
             'netProfit' => [
                 'salesRevenueMonth' => $salesRevenueMonth,
                 'productCostMonth' => $productCostMonth,
@@ -372,8 +352,6 @@ class FinancialDashboardController extends Controller
                 // Custo do Mercado Envios Flex do mês — pedido explícito
                 // 2026-08-10, ver FlexDeliveryService.
                 'flexCostMonth' => $flexCostMonth,
-                // Pré-postagens dos Correios pagas pela loja (ver acima).
-                'correiosCostMonth' => $correiosCostMonth,
                 'netProfitMonth' => $netProfitMonth,
                 // Informativo — pedido explícito 2026-08-15. NÃO entra em
                 // nenhuma soma/subtração do extrato (nem custo, nem
@@ -387,7 +365,7 @@ class FinancialDashboardController extends Controller
                 'productsActive' => $productsActive,
                 // Taxas reais por pedido quando o canal devolve ou quando um
                 // extrato financeiro real foi importado/conciliado.
-                'feeTrackedChannels' => ['mercado_livre', 'shopee', 'tiktok_shop', 'amazon'],
+                'feeTrackedChannels' => ['mercado_livre', 'shopee', 'tiktok_shop'],
             ],
             'adSpendByChannel' => $this->adSpendByChannel($startOfMonth),
             'adSpendSeries' => $this->adSpendSeries($start14),
@@ -397,6 +375,110 @@ class FinancialDashboardController extends Controller
                 'month' => $marketplaceMetricsMonth,
             ],
         ]);
+    }
+
+    /**
+     * Receita local usada só no Financeiro: produto líquido de desconto, com
+     * exceção Amazon onde o frete recebido pelo comprador entra no repasse.
+     * KoraSync/dashboard operacional continuam brutos por contrato.
+     */
+    private function localOrderRevenueSql(string $orders = 'orders'): string
+    {
+        return "(COALESCE({$orders}.subtotal, 0) - COALESCE({$orders}.discount_amount, 0) + CASE WHEN {$orders}.origin = 'amazon' THEN COALESCE({$orders}.shipping_cost, 0) ELSE 0 END)";
+    }
+
+    /**
+     * Projeção de recebíveis por janelas de 15 dias. Usa data de liquidação
+     * quando o extrato financeiro da plataforma já foi importado; saldo atual
+     * vem das carteiras disponíveis e fica separado da previsão futura.
+     *
+     * @param array{shopee: float|null, mercado_livre: float|null, mercado_livre_as_of: string|null} $walletBalances
+     */
+    private function receivableProjection(array $walletBalances): array
+    {
+        $today = Carbon::today();
+        $channels = [
+            'shopee' => 'Shopee',
+            'mercado_livre' => 'Mercado Livre',
+            'tiktok_shop' => 'TikTok Shop',
+            'amazon' => 'Amazon',
+        ];
+
+        $periods = collect(range(0, 3))->map(function (int $index) use ($today) {
+            $start = $today->copy()->addDays($index * 15);
+            $end = $today->copy()->addDays((($index + 1) * 15) - 1);
+
+            return [
+                'index' => $index,
+                'label' => $index === 0 ? 'Próximos 15 dias' : 'Dias '.(($index * 15) + 1).'–'.(($index + 1) * 15),
+                'startDate' => $start->toDateString(),
+                'endDate' => $end->toDateString(),
+                'total' => 0.0,
+                'channels' => [],
+            ];
+        });
+
+        $availableNow = collect($channels)->map(function (string $label, string $channel) use ($walletBalances) {
+            return [
+                'channel' => $channel,
+                'label' => $label,
+                'amount' => isset($walletBalances[$channel]) && $walletBalances[$channel] !== null ? round((float) $walletBalances[$channel], 2) : null,
+            ];
+        })->values()->all();
+
+        if (Schema::hasTable('marketplace_settlement_details')) {
+            $horizon = $today->copy()->addDays(59);
+            $rows = DB::table('marketplace_settlement_details')
+                ->whereNotNull('settlement_date')
+                ->where('settlement_date', '<=', $horizon->toDateString())
+                ->where(function ($query) {
+                    $query->whereNull('status')
+                        ->orWhere('status', '<>', 'Pagos');
+                })
+                ->selectRaw('channel, settlement_date, COALESCE(SUM(payout_amount), 0) as amount')
+                ->groupBy('channel', 'settlement_date')
+                ->get();
+
+            foreach ($rows as $row) {
+                $settlementDate = Carbon::parse($row->settlement_date);
+                $daysUntilSettlement = (int) floor($today->diffInDays($settlementDate, false));
+                $index = intdiv(max(0, $daysUntilSettlement), 15);
+
+                if ($index < 0 || $index > 3) {
+                    continue;
+                }
+
+                $amount = round((float) $row->amount, 2);
+                $period = $periods[$index];
+                $current = collect($period['channels'])->firstWhere('channel', $row->channel);
+
+                if ($current) {
+                    $period['channels'] = collect($period['channels'])->map(function ($channelRow) use ($row, $amount) {
+                        if ($channelRow['channel'] === $row->channel) {
+                            $channelRow['amount'] = round($channelRow['amount'] + $amount, 2);
+                        }
+
+                        return $channelRow;
+                    })->values()->all();
+                } else {
+                    $period['channels'][] = [
+                        'channel' => $row->channel,
+                        'label' => $channels[$row->channel] ?? $row->channel,
+                        'amount' => $amount,
+                    ];
+                }
+
+                $period['total'] = round($period['total'] + $amount, 2);
+                $periods[$index] = $period;
+            }
+        }
+
+        return [
+            'asOf' => $today->toDateString(),
+            'availableNow' => $availableNow,
+            'periods' => $periods->values()->all(),
+            'source' => Schema::hasTable('marketplace_settlement_details') ? 'Extratos financeiros importados + carteiras disponíveis' : 'Carteiras disponíveis',
+        ];
     }
 
     /**
@@ -444,8 +526,8 @@ class FinancialDashboardController extends Controller
             'shopee' => 'Shopee',
             'mercado_livre' => 'Mercado Livre',
             'tiktok_shop' => 'TikTok Shop',
-            // Amazon com dado real desde 2026-09-25: pedidos e taxa pelo
-            // Bling, frete pela pré-postagem dos Correios da loja.
+            // Amazon fica sempre visível, mesmo zerada, porque ainda não há
+            // métrica/settlement confiável; é um espaço reservado intencional.
             'amazon' => 'Amazon',
         ];
 
@@ -455,7 +537,7 @@ class FinancialDashboardController extends Controller
         $orders = Order::query()->nonPurchaseReturn()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
-            ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.ContributionMargin::receitaSql().'), 0) as revenue')
+            ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
             ->groupBy('origin')
             ->get()
             ->keyBy('channel');
@@ -475,7 +557,7 @@ class FinancialDashboardController extends Controller
                         ->whereColumn('settlement_check.external_order_id', 'orders.external_order_id')
                         ->where('settlement_check.order_created_at', '>=', $startOfMonth->toDateString());
                 })
-                ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.ContributionMargin::receitaSql().'), 0) as revenue')
+                ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
                 ->groupBy('origin')
                 ->get()
                 ->keyBy('channel')
@@ -494,14 +576,13 @@ class FinancialDashboardController extends Controller
                     ->orWhereNull('o.fiscal_operation_type');
             })
             ->where('o.created_at', '>=', $startOfMonth)
-            ->selectRaw('o.origin as channel, COALESCE(SUM(COALESCE(oi.quantity * p.cost_price, oi.manual_cost_price, 0)), 0) as product_cost')
+            ->selectRaw('o.origin as channel, COALESCE(SUM('.ContributionMargin::custoSql('oi', 'p').'), 0) as product_cost')
             ->groupBy('o.origin')
             ->get()
             ->keyBy('channel');
 
         $fees = OrderChannelFee::query()
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
-            ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $startOfMonth)
             ->where(function ($query) {
                 $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
@@ -519,14 +600,13 @@ class FinancialDashboardController extends Controller
         $unsettledFees = Schema::hasTable('marketplace_settlement_details')
             ? OrderChannelFee::query()
                 ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
-                ->whereIn('orders.status', self::REVENUE_STATUSES)
                 ->where('orders.created_at', '>=', $startOfMonth)
                 ->where(function ($query) {
                     $query->whereNotIn('orders.origin', [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])
                         ->orWhereNull('orders.origin');
                 })
                 ->where(function ($query) {
-                    $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
+                    $query->where('orders.fiscal_operation_type', '!=', 'purchase_return')
                         ->orWhereNull('orders.fiscal_operation_type');
                 })
                 ->whereNotExists(function ($settlement) use ($startOfMonth) {
@@ -558,9 +638,7 @@ class FinancialDashboardController extends Controller
                 ->keyBy('channel')
             : collect();
 
-        $correiosPorCanal = ContributionMargin::correios($startOfMonth, null, porCanal: true);
-
-        return collect($channels)->map(function ($label, $channel) use ($orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth, $correiosPorCanal) {
+        return collect($channels)->map(function ($label, $channel) use ($orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
             $settlement = $settlementsByChannel->get($channel);
             $hasSettlement = $settlement !== null;
             $orderRow = $orders->get($channel);
@@ -568,6 +646,9 @@ class FinancialDashboardController extends Controller
 
             $source = 'Sem dados no mês';
 
+            // Amazon NÃO é mais forçada a zero (pedido explícito 2026-09-25,
+            // reaplicado em 2026-09-29): tem pedidos e taxa reais vindos do
+            // Bling, então segue o mesmo cálculo por pedidos locais.
             if ($hasSettlement) {
                 $settlementRevenue = round((float) ($settlement['productNetSales'] ?? 0), 2);
                 $localPendingRevenue = round((float) ($localPendingRow?->revenue ?? 0), 2);
@@ -580,8 +661,7 @@ class FinancialDashboardController extends Controller
                 $platformCosts = round(
                     (float) ($settlement['platformFeesTaxes'] ?? 0)
                     + $shippingCost
-                    + (float) ($unsettledFees->get($channel)?->fee_amount ?? 0)
-                    + (float) ($correiosPorCanal[$channel] ?? 0),
+                    + (float) ($unsettledFees->get($channel)?->fee_amount ?? 0),
                     2
                 );
                 $adSpend = round((float) ($settlementAds->get($channel)?->spend ?? 0) + (float) ($ads->get($channel)?->spend ?? 0), 2);
@@ -591,7 +671,7 @@ class FinancialDashboardController extends Controller
                 $ordersCount = (int) ($orderRow?->orders_count ?? 0);
                 $productCost = round((float) ($productCosts->get($channel)?->product_cost ?? 0), 2);
                 $adSpend = round((float) ($ads->get($channel)?->spend ?? 0), 2);
-                $platformCosts = round((float) ($fees->get($channel)?->fee_amount ?? 0) + (float) ($correiosPorCanal[$channel] ?? 0), 2);
+                $platformCosts = round((float) ($fees->get($channel)?->fee_amount ?? 0), 2);
 
                 // O Flex é custo operacional do Mercado Livre, então fica no card dele.
                 if ($channel === 'mercado_livre') {
@@ -600,7 +680,7 @@ class FinancialDashboardController extends Controller
 
                 $source = ($ordersCount > 0 || $revenue != 0.0 || $adSpend != 0.0 || $platformCosts != 0.0 || $productCost != 0.0)
                     ? 'Pedidos locais/API'
-                    : 'Sem dados no mês';
+                    : ($channel === 'amazon' ? 'Aguardando dados' : 'Sem dados no mês');
             }
 
             $grossProfit = round($revenue - $productCost, 2);
@@ -704,7 +784,7 @@ class FinancialDashboardController extends Controller
                 ->whereIn('o.external_order_id', $externalIds)
                 ->selectRaw('o.origin as channel,
                     COUNT(DISTINCT o.id) as matched_orders,
-                    COALESCE(SUM(COALESCE(oi.quantity * p.cost_price, oi.manual_cost_price, 0)), 0) as product_cost,
+                    COALESCE(SUM('.ContributionMargin::custoSql('oi', 'p').'), 0) as product_cost,
                     SUM(CASE WHEN oi.id IS NOT NULL AND COALESCE(oi.manual_cost_price, p.cost_price) IS NULL THEN 1 ELSE 0 END) as cost_missing_items')
                 ->groupBy('o.origin')
                 ->get()

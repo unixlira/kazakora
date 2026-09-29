@@ -258,15 +258,16 @@ class FinancialDashboardNetProfitTest extends TestCase
             'content_items' => [], 'status' => \App\Modules\Marketplace\Models\CorreiosPrePostagem::STATUS_GERADA,
         ]);
 
-        // receita 100,50 + 20,25 = 120,75 · custo 60,50 · taxa 15,25 · Correios 22,75
-        // margem = 120,75 − 60,50 − 15,25 − 22,75 = 22,25
+        // Decisão do usuário 2026-09-29: o dashboard financeiro fica na
+        // versão feita no servidor (Naia, 29/09), que NÃO abate o frete dos
+        // Correios — só o painel inicial e o KoraSync (ContributionMargin)
+        // abatem. Dashboard: 120,75 − 60,50 − 15,25 = 45,00.
         $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
 
         $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.correiosCostMonth', 22.75)
-            ->where('netProfit.netProfitMonth', 22.25)
-            ->where('marketplaceMetrics.month', fn ($canais) => collect($canais)->firstWhere('channel', 'amazon')['netProfit'] === 22.25
-                && collect($canais)->firstWhere('channel', 'amazon')['isEmpty'] === false));
+            ->missing('netProfit.correiosCostMonth')
+            ->where('netProfit.netProfitMonth', 45)
+            ->where('marketplaceMetrics.month', fn ($canais) => collect($canais)->firstWhere('channel', 'amazon')['isEmpty'] === false));
 
         // Painel inicial e KoraSync fazem a MESMA conta.
         $this->assertSame(22.25, app(\App\Modules\Marketplace\Support\ContributionMargin::class)->periodo(now()->startOfDay(), now()->startOfDay()->addDay())['margem']);

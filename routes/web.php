@@ -44,6 +44,7 @@ use App\Modules\Admin\Http\Controllers\ProductImageController;
 use App\Modules\Admin\Http\Controllers\ProductLogisticsController;
 use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
+use App\Modules\Admin\Http\Controllers\VideoDownloadController;
 use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
 use App\Modules\Admin\Http\Controllers\ReportController;
 use App\Modules\Admin\Http\Controllers\ReviewController as AdminReviewController;
@@ -359,6 +360,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     // Operacional
     Route::get('estoque', [StockMovementController::class, 'index'])->name('estoque.listar')->middleware('permission:operacional.view');
+    Route::get('download-videos', [VideoDownloadController::class, 'index'])
+        ->name('download-videos.index')
+        ->middleware('permission:operacional.create');
+    Route::post('download-videos', [VideoDownloadController::class, 'store'])
+        ->middleware(['permission:operacional.create', 'throttle:5,1'])
+        ->name('download-videos.store');
 
     Route::resource('pedidos-de-compra', PurchaseOrderController::class)->except(['edit', 'update'])
         ->parameters(['pedidos-de-compra' => 'purchase_order'])

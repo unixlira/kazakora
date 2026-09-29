@@ -44,6 +44,7 @@ export const sidebarSections = [
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', color: 'text-success', permission: 'operacional.view' },
             { label: 'Logística', href: '/admin/logistica', icon: 'fas fa-truck', color: 'text-primary', permission: 'operacional.view' },
             { label: 'Correios', href: '/admin/correios', icon: 'fas fa-qrcode', color: 'text-secondary', permission: 'operacional.view' },
+            { label: 'Download vídeos', href: '/admin/download-videos', icon: 'fas fa-download', color: 'text-primary', permission: 'operacional.create' },
         ],
     },
     {

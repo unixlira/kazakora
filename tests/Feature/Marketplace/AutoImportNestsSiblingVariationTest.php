@@ -3,12 +3,14 @@
 namespace Tests\Feature\Marketplace;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Marketplace\Drivers\ShopeeDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\OrderImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -72,6 +74,11 @@ class AutoImportNestsSiblingVariationTest extends TestCase
      */
     private function importOrder(string $orderSn): \App\Modules\Checkout\Models\Order
     {
+        // Pedido pago dispara GenerateInvoiceJob, que na fila sync do
+        // phpunit rodaria inline e tentaria montar a NF-e de verdade
+        // (exige Company/certificado) — fora do escopo deste teste.
+        Queue::fake([GenerateInvoiceJob::class]);
+
         $data = app(ShopeeDriver::class)->importOrder($orderSn);
 
         return app(OrderImportService::class)->importNormalized(

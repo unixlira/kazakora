@@ -55,6 +55,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.partner.active' => EnsureApiPartnerIsActive::class,
         ]);
 
+        // log.api precisa rodar POR FORA do auth pra registrar os 401/403
+        // da API pública (ver LogApiRequest). Só listar ele primeiro na
+        // rota não basta: o Laravel reordena os middlewares pela lista de
+        // prioridade, e o SubstituteBindings do grupo 'api' puxava o
+        // Authenticate pra frente do log — token inválido nunca entrava na
+        // trilha de auditoria.
+        $middleware->prependToPriorityList(
+            before: \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            prepend: LogApiRequest::class,
+        );
+
         // The 'api' group has no session/CSRF middleware to begin with, but the
         // webhook is listed explicitly so it stays exempt even if it's ever
         // moved under the 'web' group.

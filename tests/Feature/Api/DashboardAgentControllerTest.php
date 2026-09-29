@@ -126,7 +126,10 @@ class DashboardAgentControllerTest extends TestCase
         $response->assertOk();
         $response->assertJson([
             'revenue_today' => 280.0,
-            'sales_today' => 3,
+            // Todo pedido do dia menos o cancelado (d3efd5f, 2026-09-05):
+            // pago + concluído + devolvido + aguardando pagamento — este
+            // último ainda pode virar venda e continua contando.
+            'sales_today' => 4,
             'sales_yesterday' => 0,
             'cancelled_today' => 1,
             'refunded_today' => 1,
@@ -284,8 +287,9 @@ class DashboardAgentControllerTest extends TestCase
         $newest->items()->create(['product_name' => 'Produto C', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
 
         // Pedido explícito 2026-08-15 ("quero todos os pedidos aparecendo
-        // hoje"): já enviado TEM que aparecer agora — só status foi
-        // removido do filtro, a data continua exclusiva desse endpoint.
+        // hoje") valia pra enviado também — revertido em 2c181ab
+        // (2026-08-29): enviado/concluído sai da fila, o canal já confirmou
+        // a coleta e não sobra ação nenhuma aqui.
         $shipped = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'SHIPPED-1']);
 
         // Não deve aparecer: pedido de ANTEONTEM, fora da janela
@@ -305,24 +309,21 @@ class DashboardAgentControllerTest extends TestCase
         $response->assertOk();
         $queue = $response->json('queue');
 
-        $this->assertCount(3, $queue);
+        $this->assertCount(2, $queue);
         $this->assertFalse(collect($queue)->contains('id', $twoDaysAgo->id));
+        $this->assertFalse(collect($queue)->contains('id', $shipped->id));
 
-        $this->assertSame($shipped->id, $queue[0]['id']);
-        $this->assertSame(Order::STATUS_SHIPPED, $queue[0]['status']);
-        $this->assertSame('Enviado', $queue[0]['status_label']);
+        $this->assertSame($newest->id, $queue[0]['id']);
+        $this->assertSame('SHP-2', $queue[0]['external_order_id']);
+        $this->assertSame(Order::ORIGIN_SHOPEE, $queue[0]['channel']);
+        $this->assertSame('Cliente Novo', $queue[0]['customer_name']);
+        $this->assertSame(3, $queue[0]['units_count']);
+        $this->assertCount(2, $queue[0]['products']);
+        $this->assertSame(Order::STATUS_PAID, $queue[0]['status']);
+        $this->assertSame('Pago', $queue[0]['status_label']);
 
-        $this->assertSame($newest->id, $queue[1]['id']);
-        $this->assertSame('SHP-2', $queue[1]['external_order_id']);
-        $this->assertSame(Order::ORIGIN_SHOPEE, $queue[1]['channel']);
-        $this->assertSame('Cliente Novo', $queue[1]['customer_name']);
-        $this->assertSame(3, $queue[1]['units_count']);
-        $this->assertCount(2, $queue[1]['products']);
-        $this->assertSame(Order::STATUS_PAID, $queue[1]['status']);
-        $this->assertSame('Pago', $queue[1]['status_label']);
-
-        $this->assertSame($older->id, $queue[2]['id']);
-        $this->assertSame(1, $queue[2]['units_count']);
+        $this->assertSame($older->id, $queue[1]['id']);
+        $this->assertSame(1, $queue[1]['units_count']);
     }
 
     /**
@@ -468,17 +469,25 @@ class DashboardAgentControllerTest extends TestCase
         $unpackedYesterday->forceFill(['created_at' => now()->subDay()])->save();
 
         // Continua aparecendo mesmo já embalado (packed_at não filtra a
-        // query, pedido 2026-08-13) ou já enviado (pedido 2026-08-15) —
-        // desde que dentro da janela ontem+hoje.
+        // query, pedido 2026-08-13) — desde que dentro da janela
+        // ontem+hoje. Já enviado NÃO aparece mais (2c181ab, 2026-08-29):
+        // o canal confirmou a coleta, não há o que fazer na fila.
         $packedYesterday = $this->makeOrder(['external_order_id' => 'YESTERDAY-PACKED']);
         $packedYesterday->forceFill(['created_at' => now()->subDay(), 'packed_at' => now()->subDay()])->save();
 
         $shippedYesterday = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'YESTERDAY-SHIPPED']);
         $shippedYesterday->forceFill(['created_at' => now()->subDay()])->save();
 
-        // Fora da janela: anteontem, mesmo pago e não embalado.
-        $twoDaysAgo = $this->makeOrder(['external_order_id' => 'TWO-DAYS-AGO']);
+        // Fora da janela: anteontem, já resolvido de outro jeito que não
+        // seja "pago e por separar" (aqui, aguardando pagamento).
+        $twoDaysAgo = $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'external_order_id' => 'TWO-DAYS-AGO']);
         $twoDaysAgo->forceFill(['created_at' => now()->subDays(2)])->save();
+
+        // BUG REAL 2026-09-01 (18 pedidos reais sumidos de toda tela, ex.
+        // #927): pago e ainda não embalado é trabalho pendente — fica
+        // visível não importa a idade (ver isInTodayWindow()).
+        $paidTwoDaysAgo = $this->makeOrder(['external_order_id' => 'TWO-DAYS-AGO-PAID']);
+        $paidTwoDaysAgo->forceFill(['created_at' => now()->subDays(2)])->save();
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
 
@@ -488,8 +497,9 @@ class DashboardAgentControllerTest extends TestCase
         $this->assertTrue($queue->has($unpackedYesterday->id));
         $this->assertNull($queue[$unpackedYesterday->id]['packed_at']);
         $this->assertTrue($queue->has($packedYesterday->id));
-        $this->assertTrue($queue->has($shippedYesterday->id));
+        $this->assertFalse($queue->has($shippedYesterday->id));
         $this->assertFalse($queue->has($twoDaysAgo->id));
+        $this->assertTrue($queue->has($paidTwoDaysAgo->id));
     }
 
     /**
@@ -790,20 +800,27 @@ class DashboardAgentControllerTest extends TestCase
     }
 
     /**
-     * BUG REAL 2026-08-29, relatado pelo usuário (pedido #913 — venda
-     * lançada errada, cancelada de propósito pra sumir da fila): antes
-     * dessa correção, CANCELLED caía na mesma regra de "auditoria do dia"
-     * que enviado/concluído/aguardando pagamento e continuava aparecendo
-     * na Fila normal mesmo depois de cancelado.
+     * BUG REAL 2026-08-29 (pedido #913): CANCELLED saiu da regra de
+     * "auditoria do dia". Revisto em ed7b96f (BUG REAL 2026-08-31, venda
+     * do ML cancelada horas depois sumia da tela e quase foi enviada):
+     * cancelado nas últimas ~48h (updated_at) volta a vir em 'queue', com
+     * status "cancelled", pro KoraSync mover o card pra aba "Cancelados"
+     * — nunca em 'out_of_stock'. Cancelado há mais tempo não vem.
      */
-    public function test_cancelled_order_does_not_appear_in_the_queue_even_within_todays_window(): void
+    public function test_recently_cancelled_order_comes_in_the_queue_marked_cancelled_but_old_ones_do_not(): void
     {
         $cancelled = $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'external_order_id' => 'CANCELLED-913']);
+
+        $oldCancelled = $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'external_order_id' => 'CANCELLED-OLD']);
+        $oldCancelled->forceFill(['created_at' => now()->subDays(5), 'updated_at' => now()->subDays(3)])->saveQuietly();
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
 
         $response->assertOk();
-        $this->assertFalse(collect($response->json('queue'))->contains('id', $cancelled->id));
+        $queue = collect($response->json('queue'))->keyBy('id');
+        $this->assertTrue($queue->has($cancelled->id));
+        $this->assertSame(Order::STATUS_CANCELLED, $queue[$cancelled->id]['status']);
+        $this->assertFalse($queue->has($oldCancelled->id));
         $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $cancelled->id));
     }
 
@@ -911,10 +928,12 @@ class DashboardAgentControllerTest extends TestCase
     /**
      * Pedido explícito 2026-08-15: foto do produto pro card do KoraSync —
      * a mesma imagem local usada pra publicar nos marketplaces (ver
-     * OrderImageArchiveService), servida como PNG, e arquivada em disco na
-     * hierarquia Ano/Mês/Dia/Canal/id_pedido.png.
+     * OrderImageArchiveService), arquivada em disco na hierarquia
+     * t320/Ano/Mês/Dia/Canal/id_pedido.jpg. Era PNG no tamanho original;
+     * virou miniatura JPEG de até 320px (BUG REAL 2026-09-06, "foto sem
+     * aparecer" — ver constantes de OrderImageArchiveService).
      */
-    public function test_queue_order_image_returns_the_products_primary_image_as_png(): void
+    public function test_queue_order_image_returns_the_products_primary_image_as_jpeg(): void
     {
         Storage::fake('public');
         Storage::fake('local');
@@ -946,10 +965,10 @@ class DashboardAgentControllerTest extends TestCase
             ->get("/api/print-agent/dashboard/queue/{$order->id}/image");
 
         $response->assertOk();
-        $response->assertHeader('Content-Type', 'image/png');
-        $this->assertStringStartsWith("\x89PNG", $response->getContent());
+        $response->assertHeader('Content-Type', 'image/jpeg');
+        $this->assertStringStartsWith("\xFF\xD8\xFF", $response->getContent());
 
-        $expectedPath = sprintf('order-images/%s/%s/%s/shopee/%d.png', $order->created_at->format('Y'), $order->created_at->format('m'), $order->created_at->format('d'), $order->id);
+        $expectedPath = sprintf('order-images/t320/%s/%s/%s/shopee/%d.jpg', $order->created_at->format('Y'), $order->created_at->format('m'), $order->created_at->format('d'), $order->id);
         Storage::disk('local')->assertExists($expectedPath);
     }
 

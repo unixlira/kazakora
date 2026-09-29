@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
+use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
@@ -21,6 +22,9 @@ class GuestCheckoutTest extends TestCase
 
     private function mockStripe(): void
     {
+        // Mercado Pago virou o gateway padrão (PaymentGateway, 2026-07-31) —
+        // este teste cobre o fluxo do Stripe, então fixa o Stripe como ativo.
+        PaymentGateway::setActive(PaymentGateway::STRIPE);
         $this->mock(StripePaymentService::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
             $mock->shouldReceive('createIntent')->andReturn(PaymentIntent::constructFrom(['id' => 'pi_test_'.uniqid(), 'client_secret' => 'secret_test_'.uniqid()]));

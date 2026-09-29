@@ -199,9 +199,14 @@ class ProductController extends Controller
         // createWithGeneratedSku() já resolve sozinho, gerando outro.
         // Aqui em update() é o valor de verdade que será salvo, então a
         // checagem de unicidade importa de verdade.
+        // `?? null`: validate() só devolve as chaves presentes na requisição
+        // — um envio SEM o campo sku (cliente que não manda o campo) dava
+        // "Undefined array key" e 500 ANTES do ajuste de estoque ser
+        // aplicado. Campo ausente = mesmo tratamento de campo em branco
+        // abaixo (mantém o SKU existente).
         $validated['sku'] = $request->validate([
             'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($product->id)],
-        ])['sku'];
+        ])['sku'] ?? null;
 
         if ($validated['name'] !== $product->name) {
             $validated['slug'] = $this->uniqueSlug($validated['name'], $product->id);

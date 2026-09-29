@@ -85,7 +85,9 @@ class MercadoLivreFlexControllerTest extends TestCase
             ->where('deliveries.0.customerName', 'Cliente Teste')
             ->where('deliveries.0.address', 'Rua das Flores 123 — Centro — São Paulo/SP — 01000-000')
             ->where('deliveries.0.products.0.name', 'Produto Flex')
-            ->where('deliveries.0.total', 100.0));
+            // 100, não 100.0: o assertInertia passa as props por JSON, e
+            // json_encode tira o ".0" de float redondo.
+            ->where('deliveries.0.total', 100));
     }
 
     public function test_index_filters_deliveries_by_month(): void

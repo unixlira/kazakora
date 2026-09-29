@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
+use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Stripe\PaymentIntent;
 use Tests\TestCase;
@@ -17,6 +18,9 @@ class PendingOrderResumeTest extends TestCase
 
     private function mockStripe(): void
     {
+        // Mercado Pago virou o gateway padrão (PaymentGateway, 2026-07-31) —
+        // este teste cobre o fluxo do Stripe, então fixa o Stripe como ativo.
+        PaymentGateway::setActive(PaymentGateway::STRIPE);
         $this->mock(StripePaymentService::class, function ($mock) {
             $mock->shouldReceive('isConfigured')->andReturn(true);
             $mock->shouldReceive('createIntent')->andReturn(

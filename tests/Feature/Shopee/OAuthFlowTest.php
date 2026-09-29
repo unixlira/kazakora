@@ -85,7 +85,7 @@ class OAuthFlowTest extends TestCase
 
         $response = $this->actingAs($admin)->get('/api/shopee/callback?code=abc123&shop_id=564186623');
 
-        $response->assertRedirect('/admin/empresa');
+        $response->assertRedirect('/admin/integracoes');
 
         $account = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
         $this->assertNotNull($account);
@@ -107,7 +107,7 @@ class OAuthFlowTest extends TestCase
 
         $response = $this->actingAs($admin)->get('/api/shopee/callback?code=abc123&shop_id=564186623');
 
-        $response->assertRedirect('/admin/empresa');
+        $response->assertRedirect('/admin/integracoes');
         $response->assertSessionHas('error');
         $this->assertSame(0, MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->count());
     }

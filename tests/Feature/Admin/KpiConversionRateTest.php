@@ -46,8 +46,11 @@ class KpiConversionRateTest extends TestCase
 
     public function test_conversion_rate_ignores_marketplace_orders_that_never_visited_the_store(): void
     {
-        SiteVisit::create(['ip' => '10.0.0.1', 'path' => '/']);
-        SiteVisit::create(['ip' => '10.0.0.2', 'path' => '/']);
+        // visitor_id é NOT NULL desde a criação de site_visits (o
+        // TrackSiteVisit sempre preenche via cookie) — a fixture precisa
+        // mandar, mesmo que a métrica conte por IP distinto.
+        SiteVisit::create(['visitor_id' => 'visitor-1', 'ip' => '10.0.0.1', 'path' => '/']);
+        SiteVisit::create(['visitor_id' => 'visitor-2', 'ip' => '10.0.0.2', 'path' => '/']);
 
         // 5 pedidos Shopee — comprador nunca visitou o site, não pode
         // contar como "conversão" desse funil.
@@ -61,15 +64,16 @@ class KpiConversionRateTest extends TestCase
         $response->assertInertia(fn ($page) => $page
             ->where('kpis.uniqueVisitorsMonth', 2)
             ->where('kpis.ordersMonth', 5)
-            ->where('kpis.conversionRate', 0.0));
+            // JSON do Inertia serializa 0.0 como 0 (int) — compara o valor, não o tipo.
+            ->where('kpis.conversionRate', 0));
     }
 
     public function test_conversion_rate_counts_only_store_orders_against_site_visitors(): void
     {
-        SiteVisit::create(['ip' => '10.0.0.1', 'path' => '/']);
-        SiteVisit::create(['ip' => '10.0.0.2', 'path' => '/']);
-        SiteVisit::create(['ip' => '10.0.0.3', 'path' => '/']);
-        SiteVisit::create(['ip' => '10.0.0.4', 'path' => '/']);
+        SiteVisit::create(['visitor_id' => 'visitor-1', 'ip' => '10.0.0.1', 'path' => '/']);
+        SiteVisit::create(['visitor_id' => 'visitor-2', 'ip' => '10.0.0.2', 'path' => '/']);
+        SiteVisit::create(['visitor_id' => 'visitor-3', 'ip' => '10.0.0.3', 'path' => '/']);
+        SiteVisit::create(['visitor_id' => 'visitor-4', 'ip' => '10.0.0.4', 'path' => '/']);
 
         $this->makeOrder(['origin' => Order::ORIGIN_STORE]);
         $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-1']);
@@ -78,6 +82,7 @@ class KpiConversionRateTest extends TestCase
 
         $response->assertOk();
         // 1 pedido da loja / 4 visitantes = 25%, o pedido Shopee não entra.
-        $response->assertInertia(fn ($page) => $page->where('kpis.conversionRate', 25.0));
+        $response->assertInertia(fn ($page) => $page->where('kpis.conversionRate', 25));
+        // (25 e não 25.0: o JSON do Inertia serializa float inteiro como int.)
     }
 }

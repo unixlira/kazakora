@@ -4,11 +4,13 @@ namespace Tests\Feature\Shopee;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\OrderImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -68,6 +70,11 @@ class OrderChannelFeeGrossAmountTest extends TestCase
                 ['external_id' => '111', 'quantity' => 1, 'unit_price' => 44.99],
             ],
         ];
+
+        // Pedido pago dispara GenerateInvoiceJob, que na fila sync do
+        // phpunit rodaria inline e tentaria montar a NF-e de verdade
+        // (exige Company/certificado) — fora do escopo deste teste.
+        Queue::fake([GenerateInvoiceJob::class]);
 
         app(OrderImportService::class)->importNormalized(
             MarketplaceAccount::CHANNEL_SHOPEE,

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\Stripe\StripePaymentService;
+use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Stripe\PaymentIntent;
 use Tests\TestCase;
@@ -16,6 +17,9 @@ class StripeIdempotencyTest extends TestCase
 
     public function test_payment_intent_creation_is_called_with_a_deterministic_idempotency_key(): void
     {
+        // Mercado Pago virou o gateway padrão (PaymentGateway, 2026-07-31) —
+        // este teste cobre o fluxo do Stripe, então fixa o Stripe como ativo.
+        PaymentGateway::setActive(PaymentGateway::STRIPE);
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
         $product = Product::factory()->create(['price' => 100, 'stock' => 10, 'is_active' => true]);
         $shippingMethod = ShippingMethod::factory()->create(['price' => 0, 'is_active' => true]);

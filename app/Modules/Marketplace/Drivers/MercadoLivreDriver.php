@@ -387,8 +387,14 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
                 break;
             } catch (QueryException $exception) {
+                // MySQL (produção) cita o nome do índice
+                // (products_sku_unique); SQLite (testes) cita a coluna
+                // ("UNIQUE constraint failed: products.slug") — sem o 2º
+                // formato a colisão nunca era reconhecida fora do MySQL.
                 $isUniqueCollision = str_contains($exception->getMessage(), 'products_sku_unique')
-                    || str_contains($exception->getMessage(), 'products_slug_unique');
+                    || str_contains($exception->getMessage(), 'products_slug_unique')
+                    || str_contains($exception->getMessage(), 'products.sku')
+                    || str_contains($exception->getMessage(), 'products.slug');
 
                 if ($attempt === 5 || ! $isUniqueCollision) {
                     throw $exception;

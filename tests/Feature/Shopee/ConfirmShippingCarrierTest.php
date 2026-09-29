@@ -4,7 +4,9 @@ namespace Tests\Feature\Shopee;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Drivers\ShopeeDriver;
+use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -41,7 +43,7 @@ class ConfirmShippingCarrierTest extends TestCase
     {
         $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
-        return Order::create([
+        $order = Order::create([
             'user_id' => $user->id,
             'origin' => Order::ORIGIN_SHOPEE,
             'external_order_id' => 'SHOPEE-ORDER-1',
@@ -57,6 +59,22 @@ class ConfirmShippingCarrierTest extends TestCase
             'subtotal' => 100,
             'total' => 100,
         ]);
+
+        // Regra de negócio desde 2026-08-08 (pedido #188, ver
+        // ShopeeDriver::confirmShipping()): a Shopee só libera o envio com
+        // a NF-e já enviada ao canal — sem isso confirmShipping() recusa
+        // antes de chamar ship_order. Este teste é sobre o transportador,
+        // então parte de uma nota já enviada.
+        $invoice = Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_AUTHORIZED, 'numero' => 1]);
+        ChannelInvoiceSubmission::create([
+            'order_id' => $order->id,
+            'invoice_id' => $invoice->id,
+            'channel' => MarketplaceAccount::CHANNEL_SHOPEE,
+            'status' => ChannelInvoiceSubmission::STATUS_SENT,
+            'submitted_at' => now(),
+        ]);
+
+        return $order;
     }
 
     private function fakeLogisticsCalls(string $carrier): void

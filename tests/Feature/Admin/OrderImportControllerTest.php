@@ -21,13 +21,19 @@ class OrderImportControllerTest extends TestCase
     {
         $driver = Mockery::mock(MarketplaceChannelDriver::class);
         $driver->shouldReceive('importOrder')->once()->andReturn($importOrderResult);
+        // Item sem anúncio local vinculado cai em autoImportProduct() (o
+        // import passou a tentar trazer o produto do canal) — aqui o
+        // "canal" é mock, então devolve null: pedido segue sem produto
+        // vinculado, igual ao comportamento de antes dessa etapa existir.
+        $driver->shouldReceive('autoImportProduct')->andReturnNull();
 
         $manager = Mockery::mock(MarketplaceDriverManager::class);
-        $manager->shouldReceive('driver')->with($channel)->once()->andReturn($driver);
+        $manager->shouldReceive('driver')->with($channel)->atLeast()->once()->andReturn($driver);
         $manager->shouldReceive('channels')->andReturn([
             MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
             MarketplaceAccount::CHANNEL_SHOPEE,
             MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
+            MarketplaceAccount::CHANNEL_AMAZON,
         ]);
 
         $this->app->instance(MarketplaceDriverManager::class, $manager);
@@ -46,8 +52,10 @@ class OrderImportControllerTest extends TestCase
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
+        // Amazon ganhou driver de verdade (via Bling, 2026-09) — Shein
+        // continua só com a constante de canal, sem driver registrado.
         $this->actingAs($admin)->post('/admin/importar-pedido', [
-            'channel' => MarketplaceAccount::CHANNEL_AMAZON,
+            'channel' => MarketplaceAccount::CHANNEL_SHEIN,
             'external_order_id' => '123',
         ])->assertSessionHasErrors('channel');
     }

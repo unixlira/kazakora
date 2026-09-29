@@ -456,7 +456,7 @@ class LabelFetchServiceTest extends TestCase
 
         // O item de makeShipment() não tem product_id (sem SKU cadastrado),
         // então cai no fallback pro nome do produto.
-        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
 
         // Sobreposição na mesma página, NUNCA página extra — pedido
         // explícito 2026-08-15.
@@ -484,7 +484,7 @@ class LabelFetchServiceTest extends TestCase
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertStringContainsString('ORG-KIT-BEGE-0001 | QTD: 03', $labelContents);
+        $this->assertStringContainsString('ORG-KIT-BEGE-0001 | QTD: 03', self::textoDoPdf($labelContents));
     }
 
     /**
@@ -501,6 +501,10 @@ class LabelFetchServiceTest extends TestCase
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        // makeShipment() cria Flex (self_service), que desde df6cba9
+        // (2026-08-30) não estampa SKU/QTD — a declaração do ML só vale
+        // pro não-Flex (etiqueta + DANFE simplificada).
+        $shipment->update(['shipping_method' => ChannelShipment::METHOD_DROP_OFF]);
         $rawPdf = self::minimalPdf();
         $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
 
@@ -510,7 +514,7 @@ class LabelFetchServiceTest extends TestCase
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
         $this->assertNotSame($rawPdf, $labelContents);
-        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
 
         // A etiqueta original intacta (com a eventual DANFE) continua
         // arquivada à parte, sem passar por nenhum processamento.
@@ -535,6 +539,10 @@ class LabelFetchServiceTest extends TestCase
     {
         Storage::fake('local');
         $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        // makeShipment() cria Flex (self_service), que desde df6cba9
+        // (2026-08-30) não estampa SKU/QTD — a declaração do ML só vale
+        // pro não-Flex (etiqueta + DANFE simplificada).
+        $shipment->update(['shipping_method' => ChannelShipment::METHOD_DROP_OFF]);
         $rawPdf = self::minimalTwoPagePdf();
         $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
 
@@ -544,7 +552,7 @@ class LabelFetchServiceTest extends TestCase
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
         $this->assertNotSame($rawPdf, $labelContents);
-        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $labelContents);
@@ -554,6 +562,24 @@ class LabelFetchServiceTest extends TestCase
         } finally {
             @unlink($tempPath);
         }
+    }
+
+    /**
+     * Pedido explícito 2026-08-30 (df6cba9): etiqueta Flex do Mercado
+     * Livre é 1 página só (sem DANFE simplificada) — estampar SKU/QTD
+     * nela colidia com o layout da etiqueta real. Sai crua.
+     */
+    public function test_attempt_leaves_the_mercado_livre_flex_label_untouched(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // Mercado Livre Flex (self_service)
+        $rawPdf = self::minimalPdf();
+        $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $this->assertSame($rawPdf, Storage::disk('local')->get($shipment->fresh()->label_path));
     }
 
     /**
@@ -568,6 +594,10 @@ class LabelFetchServiceTest extends TestCase
         Storage::fake('local');
         $scheduledFor = now()->addDays(3)->setTime(0, 0);
         $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $scheduledFor);
+        // makeShipment() cria Flex (self_service), que desde df6cba9
+        // (2026-08-30) não estampa SKU/QTD — a declaração do ML só vale
+        // pro não-Flex (etiqueta + DANFE simplificada).
+        $shipment->update(['shipping_method' => ChannelShipment::METHOD_DROP_OFF]);
         $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf']);
 
         $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
@@ -575,12 +605,12 @@ class LabelFetchServiceTest extends TestCase
         $this->assertTrue($ready);
         $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
 
-        $this->assertStringContainsString('Produto teste | QTD: 01', $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
         // "nº" tem "º" (ordinal), que sai convertido pro Latin-1 do FPDF —
         // checa o texto ao redor da data/nº sem depender do byte exato do
         // símbolo.
-        $this->assertStringContainsString('Pedido agendado dia '.$scheduledFor->format('d/m/Y'), $labelContents);
-        $this->assertStringContainsString((string) $shipment->order_id, $labelContents);
+        $this->assertStringContainsString('Pedido agendado dia '.$scheduledFor->format('d/m/Y'), self::textoDoPdf($labelContents));
+        $this->assertStringContainsString((string) $shipment->order_id, self::textoDoPdf($labelContents));
 
         // Sobreposição na mesma página, nunca página extra — mesma garantia
         // já exigida pro caso Shopee.
@@ -611,6 +641,27 @@ class LabelFetchServiceTest extends TestCase
         unlink($tempPath);
 
         return $bytes;
+    }
+
+    /**
+     * O FPDF comprime os content streams (FlateDecode) sempre que o PHP
+     * tem zlib — o texto desenhado na etiqueta não aparece cru nos bytes
+     * do PDF. Descomprime cada stream e desfaz o escape de string do PDF
+     * (\( \) \\) pra os asserts checarem o texto de verdade, com ou sem
+     * compressão.
+     */
+    private static function textoDoPdf(string $pdf): string
+    {
+        $texto = $pdf;
+
+        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+
+        foreach ($streams[1] as $stream) {
+            $descomprimido = @gzuncompress($stream);
+            $texto .= "\n".($descomprimido === false ? $stream : $descomprimido);
+        }
+
+        return strtr($texto, ['\\(' => '(', '\\)' => ')', '\\\\' => '\\']);
     }
 
     private static function minimalPdf(): string

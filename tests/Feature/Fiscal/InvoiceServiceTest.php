@@ -38,15 +38,39 @@ class InvoiceServiceTest extends TestCase
         ], $attributes));
     }
 
-    public function test_issue_skips_emission_for_mercado_livre_orders_and_marks_invoice_as_external(): void
+    /**
+     * Desde 2026-08-22 (commit c4e950b, pedido explícito do usuário) pedido
+     * do Mercado Livre segue o MESMO fluxo de emissão própria de qualquer
+     * outro canal — a conta ML foi reconfigurada pra emissor próprio e o
+     * envio fica travado lá (invoice_pending) sem a nossa nota. Antes disto
+     * os testes aqui esperavam STATUS_EXTERNAL (ML emitindo a nota), regra
+     * que deixou de valer.
+     */
+    private function fakeXmlWithoutCertificate(): void
     {
+        Storage::fake('local');
+
+        $xmlBuilder = Mockery::mock(NFeXmlBuilderService::class);
+        $xmlBuilder->shouldReceive('build')->andReturn(['xml' => '<xml>ml</xml>', 'chave' => str_repeat('5', 44)]);
+        $this->app->instance(NFeXmlBuilderService::class, $xmlBuilder);
+
+        // Corta antes de signAndSend — aqui só interessa que a nota própria
+        // foi reservada (pendente), não o envio à SEFAZ.
+        $certificateService = Mockery::mock(NFeCertificateService::class);
+        $certificateService->shouldReceive('isConfigured')->andReturn(false);
+        $this->app->instance(NFeCertificateService::class, $certificateService);
+    }
+
+    public function test_issue_emits_our_own_invoice_for_mercado_livre_orders_instead_of_marking_it_external(): void
+    {
+        $this->fakeXmlWithoutCertificate();
         $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-99']);
 
         $invoice = app(InvoiceService::class)->issue($order);
 
-        $this->assertSame(Invoice::STATUS_EXTERNAL, $invoice->status);
-        $this->assertNull($invoice->chave_acesso);
-        $this->assertDatabaseHas('invoices', [
+        $this->assertSame(Invoice::STATUS_PENDING, $invoice->status);
+        $this->assertSame(str_repeat('5', 44), $invoice->chave_acesso);
+        $this->assertDatabaseMissing('invoices', [
             'order_id' => $order->id,
             'status' => Invoice::STATUS_EXTERNAL,
         ]);
@@ -54,6 +78,7 @@ class InvoiceServiceTest extends TestCase
 
     public function test_issue_is_idempotent_for_mercado_livre_orders_and_does_not_duplicate_the_invoice_row(): void
     {
+        $this->fakeXmlWithoutCertificate();
         $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-100']);
 
         $service = app(InvoiceService::class);
@@ -61,6 +86,7 @@ class InvoiceServiceTest extends TestCase
         $second = $service->issue($order->fresh());
 
         $this->assertSame($first->id, $second->id);
+        $this->assertSame($first->numero, $second->numero, 'retry nunca reserva outro número de NF-e');
         $this->assertSame(1, Invoice::query()->where('order_id', $order->id)->count());
     }
 

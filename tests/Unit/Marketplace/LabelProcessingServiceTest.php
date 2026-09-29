@@ -9,6 +9,27 @@ use Tests\TestCase;
 
 class LabelProcessingServiceTest extends TestCase
 {
+    /**
+     * O FPDF comprime os content streams (FlateDecode) sempre que o PHP
+     * tem zlib — o texto desenhado na etiqueta não aparece cru nos bytes
+     * do PDF. Descomprime cada stream e desfaz o escape de string do PDF
+     * (\( \) \\) pra os asserts checarem o texto de verdade, com ou sem
+     * compressão.
+     */
+    private static function textoDoPdf(string $pdf): string
+    {
+        $texto = $pdf;
+
+        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+
+        foreach ($streams[1] as $stream) {
+            $descomprimido = @gzuncompress($stream);
+            $texto .= "\n".($descomprimido === false ? $stream : $descomprimido);
+        }
+
+        return strtr($texto, ['\\(' => '(', '\\)' => ')', '\\\\' => '\\']);
+    }
+
     private static function minimalPdf(): string
     {
         $objects = [
@@ -106,15 +127,15 @@ class LabelProcessingServiceTest extends TestCase
         // em vez do byte único Latin-1 (0xE7) que o FPDF sabe desenhar.
         $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), ['SKU-ÁÇÃO | QTD: 01']);
 
-        $this->assertStringNotContainsString("\xC3\xA7", $result);
-        $this->assertStringContainsString("\xE7", $result);
+        $this->assertStringNotContainsString("\xC3\xA7", self::textoDoPdf($result));
+        $this->assertStringContainsString("\xE7", self::textoDoPdf($result));
     }
 
     public function test_declaration_footer_shows_the_sku_and_quantity_token(): void
     {
         $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), ['SKU-1 | QTD: 02']);
 
-        $this->assertStringContainsString('SKU-1 | QTD: 02', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 02', self::textoDoPdf($result));
     }
 
     /**
@@ -125,7 +146,7 @@ class LabelProcessingServiceTest extends TestCase
     {
         $result = (new LabelProcessingService)->overlayDeclarationFooter(self::minimalPdf(), ['SKU-1 | QTD: 02', 'SKU-2 | QTD: 01']);
 
-        $this->assertStringContainsString('SKU-1 | QTD: 02, SKU-2 | QTD: 01', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 02, SKU-2 | QTD: 01', self::textoDoPdf($result));
     }
 
     /**
@@ -193,9 +214,9 @@ class LabelProcessingServiceTest extends TestCase
             'Pedido agendado dia 20/08/2026 | Pedido no 305',
         );
 
-        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
-        $this->assertStringContainsString('Pedido agendado dia 20/08/2026', $result);
-        $this->assertStringContainsString('305', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 01', self::textoDoPdf($result));
+        $this->assertStringContainsString('Pedido agendado dia 20/08/2026', self::textoDoPdf($result));
+        $this->assertStringContainsString('305', self::textoDoPdf($result));
     }
 
     /**
@@ -240,7 +261,7 @@ class LabelProcessingServiceTest extends TestCase
             targetPage: 'last',
         );
 
-        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 01', self::textoDoPdf($result));
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $result);
@@ -267,7 +288,7 @@ class LabelProcessingServiceTest extends TestCase
             targetPage: 'last',
         );
 
-        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
+        $this->assertStringContainsString('SKU-1 | QTD: 01', self::textoDoPdf($result));
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $result);
@@ -294,8 +315,10 @@ class LabelProcessingServiceTest extends TestCase
             ['SKU-1 | QTD: 01'],
         );
 
-        $this->assertStringContainsString('DECLARA', $result); // "DECLARAÇÃO" sai em Latin-1
-        $this->assertStringContainsString('SKU-1 | QTD: 01', $result);
+        $this->assertStringContainsString('DECLARA', self::textoDoPdf($result)); // "DECLARAÇÃO" sai em Latin-1
+        // O painel ganha um espaço depois de cada hífen só pra exibição
+        // (ponto de quebra do MultiCell, ver teste do SKU hifenizado abaixo).
+        $this->assertStringContainsString('SKU- 1 | QTD: 01', self::textoDoPdf($result));
 
         $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
         file_put_contents($tempPath, $result);
@@ -313,7 +336,7 @@ class LabelProcessingServiceTest extends TestCase
         $result = (new LabelProcessingService)->composeSideBySideLabel(self::minimalPdf(), []);
 
         $this->assertStringStartsWith('%PDF', $result);
-        $this->assertStringContainsString('(sem produtos)', $result);
+        $this->assertStringContainsString('(sem produtos)', self::textoDoPdf($result));
     }
 
     /**
@@ -393,8 +416,8 @@ class LabelProcessingServiceTest extends TestCase
             ['ORG-DIS-LCK-ABS-INOX-0001 | QTD: 01'],
         );
 
-        $this->assertStringNotContainsString('ABS-IN', $result, 'não pode quebrar no meio de "INOX"');
-        $this->assertStringContainsString('ORG-', $result);
+        $this->assertStringNotContainsString('ABS-IN', self::textoDoPdf($result), 'não pode quebrar no meio de "INOX"');
+        $this->assertStringContainsString('ORG-', self::textoDoPdf($result));
     }
 
     private static function minimalTwoPagePdf(): string

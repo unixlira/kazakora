@@ -47,7 +47,11 @@ Route::post('/login', [AuthController::class, 'login'])
     ->middleware('throttle:10,1')
     ->name('api.v1.login');
 
-Route::middleware(['auth:sanctum,jwt_partner', 'api.partner.active', 'log.api', 'throttle:api'])->group(function () {
+// log.api vem PRIMEIRO de propósito: ele envolve o request inteiro, então
+// só enxerga os 401/403 (token inválido, parceiro desativado) se estiver
+// por fora do auth/api.partner.active — depois deles, uma rejeição nunca
+// chegava no log e a trilha de auditoria só registrava sucesso.
+Route::middleware(['log.api', 'auth:sanctum,jwt_partner', 'api.partner.active', 'throttle:api'])->group(function () {
     Route::get('/me', [MeController::class, 'show'])->name('api.v1.me');
 
     Route::middleware('ability:'.Permissions::CADASTROS_VIEW)->group(function () {

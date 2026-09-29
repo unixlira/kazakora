@@ -28,6 +28,13 @@ class NFeXmlBuilderDestNameLengthTest extends TestCase
 
     public function test_dest_name_longer_than_sixty_characters_is_truncated_instead_of_breaking_the_xml(): void
     {
+        // Produção de propósito: em homologação (default do config/nfe.php)
+        // o próprio sped-nfe troca QUALQUER xNome do destinatário por "NF-E
+        // EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL" (exigência
+        // da SEFAZ), e o nome truncado nunca chegaria no XML pra ser
+        // conferido. Só monta o XML — nada é transmitido.
+        config(['nfe.ambiente' => 'producao']);
+
         Http::fake([
             'servicodados.ibge.gov.br/*' => Http::response([
                 ['id' => 3550308, 'nome' => 'São Paulo'],
@@ -92,7 +99,9 @@ class NFeXmlBuilderDestNameLengthTest extends TestCase
         $result = app(NFeXmlBuilderService::class)->build($order->fresh(), 1);
 
         $this->assertMatchesRegularExpression('#<dest>.*?<xNome>(.{1,60})</xNome>#s', $result['xml']);
-        $this->assertStringContainsString('<xNome>'.mb_substr($longName, 0, 60).'</xNome>', $result['xml']);
+        // rtrim: o 60º caractere desse nome é um espaço, e tanto o
+        // Str::limit quanto o sped-nfe tiram espaço sobrando no fim.
+        $this->assertStringContainsString('<xNome>'.rtrim(mb_substr($longName, 0, 60)).'</xNome>', $result['xml']);
         $this->assertStringNotContainsString('<xNome>'.$longName.'</xNome>', $result['xml']);
     }
 }

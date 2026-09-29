@@ -97,6 +97,15 @@ class ApiAuthenticationTest extends TestCase
         $token = $partner->createToken('teste', $partner->allowedAbilities())->plainTextToken;
 
         $this->withHeader('Authorization', "Bearer {$token}")->getJson('/api/v1/produtos');
+
+        // Nos testes a MESMA instância da aplicação atende os dois
+        // requests, e o RequestGuard do Sanctum guarda em memória o
+        // parceiro resolvido no primeiro — sem esquecer os guards, o
+        // segundo request (token inválido) "herdaria" o parceiro e
+        // voltaria 200. Em produção cada request sobe a app do zero
+        // (php-fpm), então isso é só artefato do ambiente de teste.
+        $this->app['auth']->forgetGuards();
+
         $this->withHeader('Authorization', 'Bearer token-invalido')->getJson('/api/v1/produtos');
 
         $this->assertDatabaseHas('api_request_logs', ['api_partner_id' => $partner->id, 'status_code' => 200]);

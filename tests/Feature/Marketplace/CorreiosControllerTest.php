@@ -79,7 +79,9 @@ class CorreiosControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('Admin/Correios/Index')
+            // false: as páginas ficam em resources/js/Modules (ver app.js),
+            // não no resources/js/pages que o Inertia confere por padrão.
+            ->component('Admin/Correios/Index', false)
             ->has('items.data', 1)
             ->where('items.data.0.customerName', 'Cliente Deste Mês'));
     }
@@ -161,7 +163,7 @@ class CorreiosControllerTest extends TestCase
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('Admin/Correios/Create')
+            ->component('Admin/Correios/Create', false)
             ->where('editing.id', $record->id)
             ->where('editing.customer.name', 'Cliente Teste')
             ->where('editing.errorMessage', 'CEP inválido'));

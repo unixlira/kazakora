@@ -4,6 +4,8 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -51,6 +53,33 @@ class SeparateOrderEndpointTest extends TestCase
             'shipping_state' => 'SP',
             'subtotal' => 100,
             'total' => 100,
+        ]);
+    }
+
+    /**
+     * Desde 2f5469d (2026-09-28) etiqueta-status e reimprimir de ML/Shopee/
+     * Amazon passam antes pelo portão fiscal (labelFiscalBlock): sem NF-e
+     * autorizada E aceita pelo canal, respondem o estado da nota em vez de
+     * falar da etiqueta. Os testes de impressão partem de um pedido com a
+     * nota já resolvida — o portão em si tem teste próprio lá embaixo.
+     */
+    private function liberarNotaNoCanal(Order $order): void
+    {
+        $invoice = Invoice::create([
+            'order_id' => $order->id,
+            'origem' => Invoice::ORIGEM_PEDIDO,
+            'status' => Invoice::STATUS_AUTHORIZED,
+            'ambiente' => Invoice::AMBIENTE_PRODUCAO,
+            'serie' => 1,
+            'numero' => 1000 + $order->id,
+            'valor_total' => 100,
+        ]);
+
+        ChannelInvoiceSubmission::create([
+            'order_id' => $order->id,
+            'invoice_id' => $invoice->id,
+            'channel' => $order->origin,
+            'status' => ChannelInvoiceSubmission::STATUS_ACCEPTED,
         ]);
     }
 
@@ -174,6 +203,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_reprint_requeues_the_same_label_after_a_printer_failure(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $this->liberarNotaNoCanal($order);
         $order->forceFill(['packed_at' => now()])->save();
 
         ChannelShipment::create([
@@ -214,6 +244,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_reprint_asks_for_confirmation_when_the_label_already_came_out(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->liberarNotaNoCanal($order);
 
         ChannelShipment::create([
             'order_id' => $order->id,
@@ -288,6 +319,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_reprint_does_not_stack_a_second_label_when_one_is_already_waiting(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $this->liberarNotaNoCanal($order);
         $order->forceFill(['packed_at' => now()])->save();
 
         ChannelShipment::create([
@@ -324,6 +356,7 @@ class SeparateOrderEndpointTest extends TestCase
         Queue::fake();
 
         $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->liberarNotaNoCanal($order);
         $order->forceFill(['packed_at' => now()])->save();
 
         ChannelShipment::create([
@@ -351,6 +384,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_reprint_works_before_the_separation(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->liberarNotaNoCanal($order);
 
         ChannelShipment::create([
             'order_id' => $order->id,
@@ -475,6 +509,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_label_status_without_a_job_reports_pending_and_creates_nothing(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->liberarNotaNoCanal($order);
 
         $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
             ->assertOk()
@@ -486,6 +521,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_label_status_reports_a_job_already_queued_for_the_printer(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->liberarNotaNoCanal($order);
         PrintJob::create([
             'order_id' => $order->id,
             'channel' => Order::ORIGIN_MERCADO_LIVRE,
@@ -504,6 +540,7 @@ class SeparateOrderEndpointTest extends TestCase
     public function test_label_status_reports_an_already_printed_label(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->liberarNotaNoCanal($order);
         PrintJob::create([
             'order_id' => $order->id,
             'channel' => Order::ORIGIN_MERCADO_LIVRE,
@@ -516,5 +553,45 @@ class SeparateOrderEndpointTest extends TestCase
         $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
             ->assertOk()
             ->assertJson(['state' => 'printed']);
+    }
+
+    /**
+     * Portão fiscal (2f5469d, 2026-09-28): pedido do ML sem NF-e não fala
+     * de etiqueta — explica que espera a nota e empurra a emissão, sem
+     * criar PrintJob nenhum.
+     */
+    public function test_label_status_without_an_invoice_reports_the_fiscal_wait_and_creates_nothing(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'invoice_not_ready']);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    public function test_reprint_is_refused_while_the_invoice_was_not_accepted_by_the_channel(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => 'SHIP-90',
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'label_path' => "labels/{$order->id}/etiqueta-90.pdf",
+            'label_ready_at' => now(),
+        ]);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['ok' => false, 'state' => 'invoice_not_ready']);
+
+        $this->assertDatabaseCount('print_jobs', 0);
     }
 }

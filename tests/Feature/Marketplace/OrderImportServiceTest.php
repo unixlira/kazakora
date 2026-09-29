@@ -76,6 +76,10 @@ class OrderImportServiceTest extends TestCase
      */
     public function test_sweep_only_blocks_auto_print_for_an_old_sale(): void
     {
+        // Mesmo isolamento dos outros testes deste arquivo: com a fila sync
+        // do phpunit, GenerateInvoiceJob rodaria inline (NF-e de verdade,
+        // exige Company/certificado) — fora do escopo deste teste.
+        Queue::fake();
         $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_SHOPEE);
         $service = app(OrderImportService::class);
 
@@ -114,6 +118,7 @@ class OrderImportServiceTest extends TestCase
     public function test_shopee_order_creates_normally_once_payment_confirms(): void
     {
         Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_SHOPEE);
 
         $externalOrderId = 'SN-'.uniqid();
 
@@ -334,6 +339,9 @@ class OrderImportServiceTest extends TestCase
      */
     public function test_mercado_livre_order_with_pending_payment_still_creates_the_order(): void
     {
+        Queue::fake();
+        $this->mapItemToLocalProduct(MarketplaceAccount::CHANNEL_MERCADO_LIVRE);
+
         $result = app(OrderImportService::class)->importNormalized(
             MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
             $this->normalizedData(),

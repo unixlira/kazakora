@@ -47,13 +47,16 @@ class MercadoLivreSalesControllerTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin/integracoes/mercado-livre/vendas');
 
         $response->assertOk();
+        // Inteiros, não 100.0: o assertInertia faz ida e volta por JSON
+        // (json_encode tira o ".0" de float redondo), então valor inteiro
+        // sempre chega como int — é o mesmo número que o front recebe.
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.0.gross', 100.0)
-            ->where('orders.0.fee', 15.0)
-            ->where('orders.0.net', 85.0)
-            ->where('summary.grossTotal', 100.0)
-            ->where('summary.feeTotal', 15.0)
-            ->where('summary.netTotal', 85.0)
+            ->where('orders.0.gross', 100)
+            ->where('orders.0.fee', 15)
+            ->where('orders.0.net', 85)
+            ->where('summary.grossTotal', 100)
+            ->where('summary.feeTotal', 15)
+            ->where('summary.netTotal', 85)
             ->where('summary.withFeeDataCount', 1));
     }
 
@@ -65,10 +68,10 @@ class MercadoLivreSalesControllerTest extends TestCase
         $response = $this->actingAs($admin)->get('/admin/integracoes/mercado-livre/vendas');
 
         $response->assertInertia(fn ($page) => $page
-            ->where('orders.0.gross', 50.0)
+            ->where('orders.0.gross', 50)
             ->where('orders.0.fee', null)
             ->where('orders.0.net', null)
-            ->where('summary.feeTotal', 0.0)
+            ->where('summary.feeTotal', 0)
             ->where('summary.withFeeDataCount', 0));
     }
 

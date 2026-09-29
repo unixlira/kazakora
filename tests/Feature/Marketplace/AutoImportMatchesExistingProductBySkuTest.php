@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Marketplace;
 
+use App\Models\MercadoLivreToken;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Drivers\MercadoLivreDriver;
 use App\Modules\Marketplace\Drivers\ShopeeDriver;
@@ -9,6 +10,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -94,6 +96,19 @@ class AutoImportMatchesExistingProductBySkuTest extends TestCase
 
     public function test_mercado_livre_reuses_the_existing_product_when_the_real_sku_matches(): void
     {
+        // O MercadoLivreClient tira o token de MercadoLivreToken (OAuth), não
+        // de MarketplaceAccount — sem ele fetchItemDetail() engole o "nenhuma
+        // conta conectada" e devolve null antes de chegar no Http::fake().
+        MercadoLivreToken::query()->create([
+            'id' => (string) Str::uuid(),
+            'ml_user_id' => 654321,
+            'ml_nickname' => 'LOJA_KAZAKORA',
+            'access_token' => 'fake-access-token',
+            'refresh_token' => 'fake-refresh-token',
+            'token_expires_at' => now()->addHours(6),
+            'scopes' => ['offline_access', 'read', 'write'],
+        ]);
+
         MarketplaceAccount::create([
             'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
             'status' => MarketplaceAccount::STATUS_CONNECTED,

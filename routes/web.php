@@ -24,6 +24,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\InvoiceManualController;
 use App\Modules\Admin\Http\Controllers\KpiController;
+use App\Modules\Admin\Http\Controllers\MarketplaceAdPhotoController;
 use App\Modules\Admin\Http\Controllers\ManualLabelController;
 use App\Modules\Admin\Http\Controllers\CustomerController;
 use App\Modules\Admin\Http\Controllers\ManualOrderController;
@@ -343,6 +344,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
         Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
+        // Gerador de fotos de anúncio (Naia, 28-30/08) — feito direto no
+        // servidor, apagado por um deploy e restaurado em 2026-09-29.
+        Route::get('marketplaces/fotos-anuncio', [MarketplaceAdPhotoController::class, 'index'])->name('marketplaces.fotos-anuncio');
+        Route::get('marketplaces/fotos-anuncio/criar', [MarketplaceAdPhotoController::class, 'create'])->name('marketplaces.fotos-anuncio.criar');
+        Route::post('marketplaces/fotos-anuncio', [MarketplaceAdPhotoController::class, 'generate'])
+            ->middleware('throttle:10,1')
+            ->name('marketplaces.fotos-anuncio.gerar');
+        Route::get('marketplaces/fotos-anuncio/{brief}', [MarketplaceAdPhotoController::class, 'show'])->name('marketplaces.fotos-anuncio.exibir');
+        Route::patch('marketplaces/fotos-anuncio/{brief}/aprovar', [MarketplaceAdPhotoController::class, 'approve'])->name('marketplaces.fotos-anuncio.aprovar');
+        Route::patch('marketplaces/fotos-anuncio/{brief}/reprovar', [MarketplaceAdPhotoController::class, 'reject'])->name('marketplaces.fotos-anuncio.reprovar');
+        Route::post('marketplaces/fotos-anuncio/{brief}/gerar-criativos', [MarketplaceAdPhotoController::class, 'startGeneration'])->name('marketplaces.fotos-anuncio.gerar-criativos');
     });
 
     Route::middleware('permission:financeiro.view')->group(function () {

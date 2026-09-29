@@ -2,8 +2,13 @@
 
 namespace App\Modules\Marketplace\Support;
 
+use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\ProductMediaBackfillService;
 use App\Modules\Checkout\Models\Order;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 /**
  * Arquiva uma cópia local da foto do produto de um pedido, pra exibição no
@@ -13,15 +18,16 @@ use Illuminate\Support\Facades\Storage;
  * (ver drivers de canal, publishProduct()), não uma consulta ao vivo na API
  * do canal.
  *
- * Hierarquia de pastas Ano/Mês/Dia/Canal/id_pedido.png (pedido explícito) —
+ * Hierarquia de pastas t320/Ano/Mês/Dia/Canal/id_pedido.jpg (pedido explícito) —
  * mesmo espírito do SalesArchiveService (arquivo de etiqueta por
  * Mês/Canal/Dia), mas indexado por pedido em vez de por rastreio, porque
  * aqui o consumidor (endpoint de imagem) já sabe o id do pedido, não
  * precisa varrer pasta nenhuma.
  *
- * Convertida sempre pra PNG (GD, já disponível no host — sem dependência
- * nova) independente do formato original (jpg/webp) — formato pedido
- * explicitamente, e simplifica o content-type de quem serve o arquivo.
+ * Convertida sempre pra um formato só (GD, já disponível no host — sem
+ * dependência nova) independente do original (jpg/webp), o que simplifica
+ * o content-type de quem serve o arquivo. Era PNG; hoje é miniatura JPEG
+ * de até 320px — ver LADO_MAXIMO e QUALIDADE_JPEG abaixo pro porquê.
  */
 class OrderImageArchiveService
 {
@@ -90,6 +96,8 @@ class OrderImageArchiveService
         $sourceDisk = Storage::disk('public');
 
         if (! $sourceDisk->exists($image->path)) {
+            $this->repararFotoSumida((int) $image->product_id);
+
             return null;
         }
 
@@ -118,6 +126,41 @@ class OrderImageArchiveService
         Storage::disk(self::DISK)->put($path, $bytes);
 
         return $path;
+    }
+
+    /**
+     * Foto cadastrada cujo arquivo sumiu do disco (BUG REAL 2026-09-29, bike
+     * ergométrica: 9 linhas em product_images, pasta vazia) — rebaixa do
+     * anúncio, via ProductMediaBackfillService, em vez de deixar o card sem
+     * imagem até alguém perceber.
+     *
+     * Depois da resposta, pra não segurar o card esperando o download; e no
+     * máximo 1x a cada 6h por produto, porque este caminho roda a cada poll
+     * do KoraSync (~2s) e o produto pode simplesmente não ter foto em canal
+     * nenhum. Enquanto isso, o card mostra o placeholder como antes.
+     */
+    private function repararFotoSumida(int $productId): void
+    {
+        if (! Cache::add("order-image-repair:{$productId}", true, now()->addHours(6))) {
+            return;
+        }
+
+        dispatch(function () use ($productId) {
+            $product = Product::query()->find($productId);
+
+            if ($product === null) {
+                return;
+            }
+
+            try {
+                app(ProductMediaBackfillService::class)->fill($product);
+            } catch (Throwable $exception) {
+                Log::warning('order_image.repair_failed', [
+                    'product_id' => $productId,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        })->afterResponse();
     }
 
     /**

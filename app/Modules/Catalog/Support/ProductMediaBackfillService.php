@@ -29,7 +29,15 @@ use Throwable;
  * continua sendo o caminho da Shopee. Este cobre o caso geral, canal a
  * canal, e serve de rede pra quem não tem serviço próprio.
  *
- * NUNCA sobrescreve foto existente — só age em produto com zero imagens.
+ * NUNCA sobrescreve foto existente — só age em produto sem nenhuma foto
+ * de verdade no disco.
+ *
+ * BUG REAL 2026-09-29 (bike ergométrica sem foto no card): os produtos 82
+ * e 141 tinham 9 linhas em product_images cada, mas nenhum arquivo em
+ * storage/app/public/products/{id}. Como "tem linha" contava como "tem
+ * foto", este serviço pulava justamente os dois. Agora produto cujas
+ * linhas apontam TODAS pra arquivo inexistente conta como sem foto; as
+ * linhas quebradas só saem depois que as fotos novas chegaram.
  */
 class ProductMediaBackfillService
 {
@@ -40,7 +48,11 @@ class ProductMediaBackfillService
      */
     public function fill(Product $product): int
     {
-        if ($product->images()->exists()) {
+        $existentes = $product->images()->get();
+        $quebradas = $existentes->reject(fn ($imagem) => Storage::disk('public')->exists($imagem->path));
+
+        // Uma foto que abre já basta: o card e a vitrine têm o que mostrar.
+        if ($existentes->count() > $quebradas->count()) {
             return 0;
         }
 
@@ -61,10 +73,13 @@ class ProductMediaBackfillService
             // Primeiro canal que devolveu foto encerra a busca: as fotos
             // são do mesmo produto, misturar canais só geraria duplicata.
             if ($salvas > 0) {
+                $quebradas->each->delete();
+
                 Log::info('catalog.media_backfill.filled', [
                     'product_id' => $product->id,
                     'channel' => $listing->channel,
                     'images' => $salvas,
+                    'broken_replaced' => $quebradas->count(),
                 ]);
 
                 return $salvas;

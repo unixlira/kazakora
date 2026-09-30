@@ -10,6 +10,7 @@ use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Marketplace\Support\ChannelInvoiceSubmissionService;
 use App\Services\NFe\NFeCertificateNotConfiguredException;
 use App\Services\NFe\NFeDistribuicaoService;
+use App\Support\Http\TableSort;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -21,25 +22,117 @@ use Throwable;
 
 class InvoiceController extends Controller
 {
-    public function index(): Response
+    private const PER_PAGE = 50;
+
+    /**
+     * Abas da listagem → status reais. Mesmos grupos que a tela já usava
+     * quando filtrava no navegador.
+     */
+    private const TAB_STATUSES = [
+        'authorized' => [Invoice::STATUS_AUTHORIZED],
+        'cancelled' => [Invoice::STATUS_CANCELLED],
+        'pending_group' => [Invoice::STATUS_PENDING, Invoice::STATUS_SIGNED, Invoice::STATUS_SENT],
+        'failed_group' => [Invoice::STATUS_REJECTED, Invoice::STATUS_DENIED, Invoice::STATUS_ERROR],
+    ];
+
+    // Mesmos rótulos de ORIGIN_STYLES em Invoices/Index.vue.
+    private const ORIGIN_LABELS = [
+        'loja' => 'Loja',
+        'mercado_livre' => 'Mercado Livre',
+        'shopee' => 'Shopee',
+        'amazon' => 'Amazon',
+        'tiktok_shop' => 'TikTok Shop',
+        'shein' => 'Shein',
+        'nota_fiscal_avulsa' => 'Emissão manual',
+    ];
+
+    public function index(Request $request): Response
     {
+        // Paginado no servidor — antes a tela recebia TODAS as notas
+        // (~2000, 1,7 MB de HTML medido em produção 2026-09-29) só pra
+        // aba/busca/ordenação rodarem no navegador. Aba, busca e ordenação
+        // viraram query param tratado aqui, nada que dava pra fazer antes
+        // se perdeu.
+        $tab = array_key_exists($request->string('status')->toString(), self::TAB_STATUSES) ? $request->string('status')->toString() : 'all';
+        $search = TableSort::likeTerm($request->string('search')->toString());
+        // "123/1" (número/série, como a coluna Nota mostra) — tratado à
+        // parte porque concatenar no SQL muda entre MySQL e SQLite.
+        preg_match('/^\s*(\d+)\s*\/\s*(\d+)\s*$/', $request->string('search')->toString(), $numeroSerie);
+        // A busca do navegador também casava o nome da plataforma mostrado
+        // na coluna ("Shopee", "Mercado Livre"...) — mantém isso mapeando o
+        // texto digitado pros origins cujo rótulo contém o termo.
+        $searchText = mb_strtolower(trim($request->string('search')->toString()));
+        $matchingOrigins = $searchText === '' ? [] : array_keys(array_filter(
+            self::ORIGIN_LABELS,
+            fn (string $label) => str_contains(mb_strtolower($label), $searchText),
+        ));
+        $sort = TableSort::resolve($request, [
+            'numero' => 'numero',
+            'valor_total' => 'valor_total',
+            'status' => 'status',
+            'chave_acesso' => 'chave_acesso',
+            'autorizada_em' => 'autorizada_em',
+            'origin' => 'origin',
+            'external_order_id' => 'external_order_id',
+        ], 'created_at');
+
         // Sem eager-load de order.user aqui — a coluna "Cliente" saiu da
         // listagem (pedido explícito 2026-08-09, fica só na tela de view),
         // então só precisa do essencial pra pintar a plataforma colorida.
         $invoices = Invoice::query()
             ->with('order:id,origin,external_order_id')
-            ->latest('created_at')
-            ->get();
+            ->when($tab !== 'all', fn ($query) => $query->whereIn('status', self::TAB_STATUSES[$tab]))
+            ->when($search, function ($query) use ($search, $numeroSerie, $matchingOrigins) {
+                $query->where(function ($query) use ($search, $numeroSerie, $matchingOrigins) {
+                    $query->where('numero', 'like', $search)
+                        ->when($numeroSerie, fn ($query) => $query->orWhere(fn ($query) => $query->where('numero', (int) $numeroSerie[1])->where('serie', (int) $numeroSerie[2])))
+                        ->orWhere('chave_acesso', 'like', $search)
+                        ->orWhere('destinatario_nome', 'like', $search)
+                        ->orWhereHas('order', fn ($order) => $order->where('external_order_id', 'like', $search)->orWhere('id', 'like', $search))
+                        ->when($matchingOrigins, fn ($query) => $query->orWhereHas('order', fn ($order) => $order->whereIn('origin', $matchingOrigins)));
+                });
+            })
+            ->when(
+                in_array($sort['column'], ['origin', 'external_order_id'], true),
+                // Plataforma/pedido na plataforma moram em orders — ordena
+                // por subquery em vez de join pra não duplicar/colidir
+                // colunas do select de invoices.
+                fn ($query) => $query->orderBy(Order::query()->select($sort['column'])->whereColumn('orders.id', 'invoices.order_id'), $sort['direction']),
+                fn ($query) => $query->orderBy($sort['column'], $sort['direction']),
+            )
+            ->orderByDesc('id')
+            ->paginate(self::PER_PAGE)
+            ->withQueryString();
+
+        // Cards do topo sempre contam TODAS as notas (independente de aba e
+        // busca, como já era) — agregado direto no SQL, sem carregar linha.
+        $pendingStatuses = self::TAB_STATUSES['pending_group'];
+        $failedStatuses = self::TAB_STATUSES['failed_group'];
+        $totals = Invoice::query()
+            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as authorized_count', [Invoice::STATUS_AUTHORIZED])
+            ->selectRaw('SUM(CASE WHEN status = ? THEN valor_total ELSE 0 END) as authorized_total', [Invoice::STATUS_AUTHORIZED])
+            ->selectRaw('SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as cancelled_count', [Invoice::STATUS_CANCELLED])
+            ->selectRaw('SUM(CASE WHEN status = ? THEN valor_total ELSE 0 END) as cancelled_total', [Invoice::STATUS_CANCELLED])
+            ->selectRaw('SUM(CASE WHEN status IN (?, ?, ?) THEN 1 ELSE 0 END) as pending_count', $pendingStatuses)
+            ->selectRaw('SUM(CASE WHEN status IN (?, ?, ?) THEN 1 ELSE 0 END) as failed_count', $failedStatuses)
+            ->toBase()
+            ->first();
 
         return Inertia::render('Admin/Invoices/Index', [
             'invoices' => $invoices,
+            'filters' => [
+                'status' => $tab,
+                'search' => $request->string('search')->toString(),
+                'sort' => $sort['key'],
+                'direction' => $sort['direction'],
+            ],
             'summary' => [
-                'authorized_count' => $invoices->where('status', Invoice::STATUS_AUTHORIZED)->count(),
-                'authorized_total' => $invoices->where('status', Invoice::STATUS_AUTHORIZED)->sum('valor_total'),
-                'cancelled_count' => $invoices->where('status', Invoice::STATUS_CANCELLED)->count(),
-                'cancelled_total' => $invoices->where('status', Invoice::STATUS_CANCELLED)->sum('valor_total'),
-                'pending_count' => $invoices->whereIn('status', [Invoice::STATUS_PENDING, Invoice::STATUS_SIGNED, Invoice::STATUS_SENT])->count(),
-                'failed_count' => $invoices->whereIn('status', [Invoice::STATUS_REJECTED, Invoice::STATUS_DENIED, Invoice::STATUS_ERROR])->count(),
+                'authorized_count' => (int) ($totals->authorized_count ?? 0),
+                'authorized_total' => round((float) ($totals->authorized_total ?? 0), 2),
+                'cancelled_count' => (int) ($totals->cancelled_count ?? 0),
+                'cancelled_total' => round((float) ($totals->cancelled_total ?? 0), 2),
+                'pending_count' => (int) ($totals->pending_count ?? 0),
+                'failed_count' => (int) ($totals->failed_count ?? 0),
             ],
         ]);
     }

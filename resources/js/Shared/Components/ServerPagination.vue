@@ -6,6 +6,12 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    // Dentro do card do DataTable (modo servidor) — sem borda/sombra
+    // própria, só a linha divisória de cima.
+    embedded: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const hasPages = () => Array.isArray(props.paginator?.links) && props.paginator.links.length > 3;
@@ -14,7 +20,8 @@ const hasPages = () => Array.isArray(props.paginator?.links) && props.paginator.
 <template>
     <nav
         v-if="hasPages()"
-        class="mt-4 flex flex-col items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 text-sm shadow-sm sm:flex-row"
+        class="flex flex-col items-center justify-between gap-3 px-4 py-3 text-sm sm:flex-row"
+        :class="embedded ? 'border-t border-[var(--surface-border)]' : 'mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm'"
         aria-label="Paginação"
     >
         <p class="text-slate-500">

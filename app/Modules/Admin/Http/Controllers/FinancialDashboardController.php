@@ -14,6 +14,7 @@ use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Modules\Marketplace\Support\FlexDeliveryService;
 use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
@@ -23,6 +24,8 @@ use Throwable;
 class FinancialDashboardController extends Controller
 {
     private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
+    private const WALLET_CACHE_MINUTES = 5;
 
     public function index(ShopeeWalletService $shopeeWallet, FlexDeliveryService $flexDelivery): Response
     {
@@ -486,12 +489,25 @@ class FinancialDashboardController extends Controller
      */
     private function walletBalances(ShopeeWalletService $shopeeWallet): array
     {
-        $shopeeConnected = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first()?->isConnected();
+        $shopeeAccount = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
         $shopee = null;
 
-        if ($shopeeConnected) {
+        if ($shopeeAccount?->isConnected()) {
             try {
-                $shopee = $shopeeWallet->currentBalance();
+                // A chamada ao vivo na Shopee custava ~1,2s em TODO carregamento
+                // do dashboard (medido em produção 2026-09-29) — o saldo da
+                // carteira não muda a cada segundo, então fica em cache por
+                // alguns minutos por loja. Exceção não é cacheada (sai do
+                // remember antes do put) e null (sem transação na janela)
+                // também não fica preso: Cache::remember recalcula quando o
+                // valor guardado é null. ?refresh=1 força buscar de novo.
+                $cacheKey = 'shopee:wallet_balance:'.$shopeeAccount->seller_id;
+
+                if (request()->boolean('refresh')) {
+                    Cache::forget($cacheKey);
+                }
+
+                $shopee = Cache::remember($cacheKey, now()->addMinutes(self::WALLET_CACHE_MINUTES), fn () => $shopeeWallet->currentBalance());
             } catch (Throwable) {
                 // Best-effort — o dashboard não pode ficar indisponível só
                 // porque a consulta de saldo ao vivo falhou.

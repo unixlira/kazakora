@@ -4,17 +4,43 @@ import CardStats from '@/Shared/Components/CardStats.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
+import { useServerTable, toTableSort } from '@/Shared/useServerTable';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, h, ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
+// Lançamentos e vendas chegam paginados do servidor (~50 por página cada,
+// paginators do Laravel) — busca, ordenação, período e plataforma são query
+// param tratados em CashFlowController@index. Os totais das vendas também
+// vêm prontos de lá (salesTotals), somados sobre o conjunto filtrado todo.
 const props = defineProps({
-    entries: { type: Array, default: () => [] },
+    entries: { type: Object, default: () => ({ data: [] }) },
     costCenters: { type: Array, default: () => [] },
     summary: { type: Object, required: true },
-    sales: { type: Array, default: () => [] },
+    sales: { type: Object, default: () => ({ data: [] }) },
+    salesTotals: { type: Object, default: () => ({ cost: 0, fee: 0, shipping: 0, netProfit: 0 }) },
+    salesPlatforms: { type: Array, default: () => [] },
     salesFilter: { type: Object, required: true },
+    entriesFilter: { type: Object, default: () => ({}) },
 });
+
+// Um único conjunto de query params pras duas tabelas — mudar o filtro de
+// uma não pode apagar o da outra. Página não entra aqui de propósito:
+// qualquer filtro novo volta as duas pra primeira página.
+const { visit, sortParams } = useServerTable('/admin/fluxo-de-caixa', {
+    start: props.salesFilter.start ?? null,
+    end: props.salesFilter.end ?? null,
+    platform: props.salesFilter.platform ?? null,
+    search: props.salesFilter.search ?? null,
+    sort: props.salesFilter.sort ?? null,
+    direction: props.salesFilter.sort ? props.salesFilter.direction : null,
+    entries_search: props.entriesFilter.search ?? null,
+    entries_sort: props.entriesFilter.sort ?? null,
+    entries_direction: props.entriesFilter.sort ? props.entriesFilter.direction : null,
+});
+
+const entryRows = computed(() => props.entries?.data ?? []);
+const salesRows = computed(() => props.sales?.data ?? []);
 
 const { can } = usePermissions();
 const showForm = ref(false);
@@ -43,7 +69,7 @@ const salesRangeStart = ref(props.salesFilter.start ?? '');
 const salesRangeEnd = ref(props.salesFilter.end ?? '');
 
 const applySalesRange = () => {
-    router.get('/admin/fluxo-de-caixa', { start: salesRangeStart.value || undefined, end: salesRangeEnd.value || undefined }, { preserveScroll: true, preserveState: true });
+    visit({ start: salesRangeStart.value || null, end: salesRangeEnd.value || null });
 };
 
 const toDateInput = (date) => date.toISOString().slice(0, 10);
@@ -77,22 +103,10 @@ const applyPreset = (preset) => {
     applySalesRange();
 };
 
-// Filtro por plataforma — pedido explícito 2026-08-14.
-const platformFilter = ref('');
-const availablePlatforms = computed(() => [...new Set(props.sales.map((sale) => sale.platform))].sort());
-const filteredSales = computed(() => (platformFilter.value ? props.sales.filter((sale) => sale.platform === platformFilter.value) : props.sales));
-
-// Totais da listagem de vendas — soma sempre calculada no front, mesmo
-// vazia (0,00), pra nunca deixar a área em branco sem explicação. Pedido
-// explícito 2026-08-14: "se não tiver dado colocar 0,00". Segue o filtro de
-// plataforma acima, pra bater com o que está na tabela.
-const salesTotals = computed(() => filteredSales.value.reduce((acc, sale) => {
-    acc.cost += sale.product_cost;
-    acc.fee += sale.platform_fee;
-    acc.shipping += sale.shipping_cost ?? 0;
-    acc.netProfit += sale.net_profit;
-    return acc;
-}, { cost: 0, fee: 0, shipping: 0, netProfit: 0 }));
+// Filtro por plataforma — pedido explícito 2026-08-14. O valor é o origin
+// do pedido (salesPlatforms vem do servidor com o rótulo de cada um).
+const platformFilter = ref(props.salesFilter.platform ?? '');
+const applyPlatform = () => visit({ platform: platformFilter.value || null });
 
 // Comissão editável direto na tabela — pedido explícito 2026-08-14: "editavel
 // na propria tabela o valor de comissao ... clicar no enter ai ele atualiza".
@@ -291,9 +305,14 @@ const salesColumns = [
 
         <DataTable
             :columns="columns"
-            :data="props.entries"
+            :data="entryRows"
+            :paginator="entries"
+            :search="entriesFilter.search ?? ''"
+            :sort="toTableSort(entriesFilter.sort, entriesFilter.direction)"
             search-placeholder="Buscar lançamento..."
             empty-message="Nenhum lançamento registrado."
+            @update:search="visit({ entries_search: $event })"
+            @update:sort="visit(sortParams($event, 'entries_'))"
         />
 
         <div class="mt-8 mb-4">
@@ -315,9 +334,9 @@ const salesColumns = [
             </button>
             <div>
                 <label class="block text-xs font-medium text-slate-400">Plataforma</label>
-                <select v-model="platformFilter" class="mt-1 rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
+                <select v-model="platformFilter" class="mt-1 rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm" @change="applyPlatform">
                     <option value="">Todas</option>
-                    <option v-for="platform in availablePlatforms" :key="platform" :value="platform">{{ platform }}</option>
+                    <option v-for="platform in salesPlatforms" :key="platform.value" :value="platform.value">{{ platform.label }}</option>
                 </select>
             </div>
             <div class="ml-auto flex gap-2">
@@ -337,9 +356,15 @@ const salesColumns = [
 
         <DataTable
             :columns="salesColumns"
-            :data="filteredSales"
-            search-placeholder="Buscar produto ou plataforma..."
+            :data="salesRows"
+            :paginator="sales"
+            :search="salesFilter.search ?? ''"
+            :sort="toTableSort(salesFilter.sort, salesFilter.direction)"
+            row-key="item_id"
+            search-placeholder="Buscar produto, plataforma ou nº do pedido..."
             empty-message="Nenhuma venda no período."
+            @update:search="visit({ search: $event })"
+            @update:sort="visit(sortParams($event))"
         />
     </AdminLayout>
 </template>

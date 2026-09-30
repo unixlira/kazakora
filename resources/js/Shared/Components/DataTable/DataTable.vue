@@ -1,9 +1,10 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { FlexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useVueTable } from '@tanstack/vue-table';
 import DataTableToolbar from './DataTableToolbar.vue';
 import DataTablePagination from './DataTablePagination.vue';
 import DataTableColumnHeader from './DataTableColumnHeader.vue';
+import ServerPagination from '../ServerPagination.vue';
 
 const props = defineProps({
     // TanStack column defs: [{ accessorKey, header, cell?, enableSorting? }]
@@ -22,12 +23,31 @@ const props = defineProps({
     showPagination: { type: Boolean, default: true },
     hideSearch: { type: Boolean, default: false },
     initialActiveTab: { type: String, default: 'all' },
+    // Modo servidor — quando vem um paginator do Laravel (paginate()), a
+    // busca, a ordenação e a paginação deixam de ser feitas no navegador
+    // sobre a lista inteira e viram query param tratado no backend. Criado
+    // porque telas como Notas Fiscais/Clientes/Fluxo de Caixa mandavam
+    // milhares de linhas por página (1,7 MB de HTML em Notas Fiscais,
+    // medido em produção 2026-09-29) só pra a tabela filtrar no front.
+    // `data` continua sendo só as linhas da página atual (paginator.data).
+    paginator: { type: Object, default: null },
+    // Valor inicial da busca/ordenação no modo servidor (vem dos filtros
+    // que o controller devolveu, pra tela reabrir do jeito que estava).
+    search: { type: String, default: '' },
+    sort: { type: Object, default: null },
 });
 
-const emit = defineEmits(['update:activeTab']);
+const emit = defineEmits(['update:activeTab', 'update:search', 'update:sort']);
 
-const globalFilter = ref('');
-const sorting = ref([]);
+const serverSide = computed(() => props.paginator !== null);
+
+const globalFilter = ref(props.paginator ? (props.search ?? '') : '');
+const sorting = ref(props.paginator && props.sort?.id ? [{ id: props.sort.id, desc: Boolean(props.sort.desc) }] : []);
+
+// Debounce da busca no modo servidor — cada letra digitada não pode virar
+// uma requisição nova ao backend.
+let searchTimer = null;
+onBeforeUnmount(() => clearTimeout(searchTimer));
 const rowSelection = ref({});
 const activeTab = ref(props.initialActiveTab || 'all');
 const showToolbar = computed(() => !props.hideSearch || Boolean(props.createLabel && props.createHref) || props.filterTabs.length > 0);
@@ -60,11 +80,19 @@ const table = useVueTable({
         },
     },
     enableRowSelection: props.selectable,
+    manualFiltering: serverSide.value,
+    manualSorting: serverSide.value,
+    manualPagination: serverSide.value,
     onGlobalFilterChange: (updater) => {
         globalFilter.value = typeof updater === 'function' ? updater(globalFilter.value) : updater;
     },
     onSortingChange: (updater) => {
         sorting.value = typeof updater === 'function' ? updater(sorting.value) : updater;
+
+        if (serverSide.value) {
+            const [first] = sorting.value;
+            emit('update:sort', first ? { id: first.id, desc: Boolean(first.desc) } : null);
+        }
     },
     onRowSelectionChange: (updater) => {
         rowSelection.value = typeof updater === 'function' ? updater(rowSelection.value) : updater;
@@ -76,6 +104,15 @@ const table = useVueTable({
     globalFilterFn: 'includesString',
 });
 
+const updateGlobalFilter = (value) => {
+    globalFilter.value = value;
+
+    if (serverSide.value) {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => emit('update:search', value), 350);
+    }
+};
+
 const setActiveTab = (value) => {
     activeTab.value = value;
     emit('update:activeTab', value);
@@ -86,7 +123,8 @@ const setActiveTab = (value) => {
     <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
         <slot name="stats" />
 
-        <DataTableToolbar v-if="showToolbar" v-model:global-filter="globalFilter" :search-placeholder="searchPlaceholder"
+        <DataTableToolbar v-if="showToolbar" :global-filter="globalFilter" @update:global-filter="updateGlobalFilter"
+            :search-placeholder="searchPlaceholder"
             :filter-tabs="filterTabs" :active-tab="activeTab" :create-label="createLabel" :create-href="createHref"
             :hide-search="hideSearch"
             @update:active-tab="setActiveTab" />
@@ -133,6 +171,7 @@ const setActiveTab = (value) => {
             </table>
         </div>
 
-        <DataTablePagination v-if="showPagination" :table="table" />
+        <ServerPagination v-if="showPagination && serverSide" :paginator="paginator" embedded />
+        <DataTablePagination v-else-if="showPagination" :table="table" />
     </div>
 </template>

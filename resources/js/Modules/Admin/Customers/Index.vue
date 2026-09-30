@@ -3,15 +3,30 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { maskCpfCnpj, maskPhone } from '@/Shared/useMasks';
+import { useServerTable, toTableSort } from '@/Shared/useServerTable';
 import { Head, Link } from '@inertiajs/vue3';
-import { h } from 'vue';
+import { computed, h } from 'vue';
 
 const props = defineProps({
+    // Paginator do Laravel (~50 por página) — busca e ordenação são query
+    // param tratados em CustomerController@index/CustomerAggregator::paginate().
     customers: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [] }),
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
     },
 });
+
+const { visit, sortParams } = useServerTable('/admin/clientes', {
+    search: props.filters.search ?? null,
+    sort: props.filters.sort ?? null,
+    direction: props.filters.sort ? props.filters.direction : null,
+});
+
+const customerRows = computed(() => props.customers?.data ?? []);
 
 // Mesmas cores já usadas em Admin/Orders/Index.vue pra canal — reaproveitar
 // aqui deixa "Shopee" com a mesma cor em qualquer tela do admin.
@@ -40,6 +55,7 @@ const columns = [
     {
         id: 'contact',
         header: 'Contato',
+        enableSorting: false,
         cell: ({ row }) => h('div', { class: 'text-sm' }, [
             h('div', {}, row.original.email ?? '—'),
             h('div', { class: 'text-xs text-slate-400' }, row.original.phone ? maskPhone(row.original.phone) : '—'),
@@ -87,9 +103,14 @@ const columns = [
 
         <DataTable
             :columns="columns"
-            :data="props.customers"
-            search-placeholder="Buscar cliente..."
+            :data="customerRows"
+            :paginator="customers"
+            :search="filters.search ?? ''"
+            :sort="toTableSort(filters.sort, filters.direction)"
+            search-placeholder="Buscar por nome, e-mail, telefone ou CPF/CNPJ..."
             empty-message="Nenhum cliente encontrado."
+            @update:search="visit({ search: $event })"
+            @update:sort="visit(sortParams($event))"
         />
     </AdminLayout>
 </template>

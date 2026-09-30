@@ -37,7 +37,18 @@ class ProductController extends Controller
             // listagem fica com 3 linhas soltas sem relação visível
             // nenhuma pro mesmo caso que motivou a feature (Ring Light
             // 8"/10" como 2 produtos desconectados).
-            'products' => Product::query()->with(['category:id,name', 'parent:id,name'])->withCount('children')->latest()->get(),
+            //
+            // Só as colunas que a listagem mostra (Products/Index.vue), sem
+            // os appends do model (video_url/final_price/has_discount) —
+            // antes ia o produto inteiro (descrição, SEO, fiscal...), ~440 KB
+            // de HTML medido em produção 2026-09-29, pra tela usar 9 campos.
+            'products' => Product::query()
+                ->select(['id', 'name', 'sku', 'category_id', 'parent_product_id', 'price', 'cost_price', 'stock', 'is_active', 'created_at'])
+                ->with(['category:id,name', 'parent:id,name'])
+                ->withCount('children')
+                ->latest()
+                ->get()
+                ->each(fn (Product $product) => $product->setAppends([])),
         ]);
     }
 

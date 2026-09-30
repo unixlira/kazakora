@@ -3,13 +3,20 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
+import { useServerTable, toTableSort } from '@/Shared/useServerTable';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, h, ref } from 'vue';
 
 const props = defineProps({
+    // Paginator do Laravel (paginado no servidor, ~50 por página) — aba,
+    // busca e ordenação são query param tratados em InvoiceController@index.
     invoices: {
-        type: Array,
-        default: () => [],
+        type: Object,
+        default: () => ({ data: [] }),
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
     },
     summary: {
         type: Object,
@@ -77,22 +84,14 @@ const tabs = [
     { label: 'Com problema', value: 'failed_group' },
 ];
 
-const activeTab = ref('all');
-
-const filteredInvoices = computed(() => {
-    switch (activeTab.value) {
-        case 'authorized':
-            return props.invoices.filter((invoice) => invoice.status === 'authorized');
-        case 'cancelled':
-            return props.invoices.filter((invoice) => invoice.status === 'cancelled');
-        case 'pending_group':
-            return props.invoices.filter((invoice) => ['pending', 'signed', 'sent'].includes(invoice.status));
-        case 'failed_group':
-            return props.invoices.filter((invoice) => ['rejected', 'denied', 'error'].includes(invoice.status));
-        default:
-            return props.invoices;
-    }
+const { visit, sortParams } = useServerTable('/admin/notas-fiscais', {
+    status: props.filters.status && props.filters.status !== 'all' ? props.filters.status : null,
+    search: props.filters.search ?? null,
+    sort: props.filters.sort ?? null,
+    direction: props.filters.sort ? props.filters.direction : null,
 });
+
+const invoiceRows = computed(() => props.invoices?.data ?? []);
 
 const columns = [
     {
@@ -212,13 +211,19 @@ const columns = [
 
         <DataTable
             :columns="columns"
-            :data="filteredInvoices"
+            :data="invoiceRows"
+            :paginator="invoices"
+            :search="filters.search ?? ''"
+            :sort="toTableSort(filters.sort, filters.direction)"
+            :initial-active-tab="filters.status ?? 'all'"
             :filter-tabs="tabs"
             search-placeholder="Buscar por número, chave de acesso, pedido na plataforma..."
             empty-message="Nenhuma nota fiscal encontrada."
             :create-label="can('pedidos.edit') ? 'Emitir nota fiscal' : null"
             :create-href="can('pedidos.edit') ? '/admin/notas-fiscais/emitir' : null"
-            @update:active-tab="activeTab = $event"
+            @update:active-tab="visit({ status: $event === 'all' ? null : $event })"
+            @update:search="visit({ search: $event })"
+            @update:sort="visit(sortParams($event))"
         />
     </AdminLayout>
 </template>

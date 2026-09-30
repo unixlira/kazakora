@@ -8,6 +8,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\Shopee\ShopeeAdsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,14 +25,27 @@ class AdsRechargeController extends Controller
 {
     private const CHANNELS = [MarketplaceAccount::CHANNEL_SHOPEE, MarketplaceAccount::CHANNEL_MERCADO_LIVRE];
 
-    public function index(ShopeeAdsService $shopeeAds): Response
+    public function index(Request $request, ShopeeAdsService $shopeeAds): Response
     {
-        $shopeeConnected = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first()?->isConnected();
+        $shopeeAccount = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
         $shopeeBalance = null;
 
-        if ($shopeeConnected) {
+        if ($shopeeAccount?->isConnected()) {
             try {
-                $shopeeBalance = $shopeeAds->currentBalance();
+                // get_total_balance ao vivo custava ~1,2s em todo carregamento
+                // da tela (medido em produção 2026-09-29) — saldo de anúncio
+                // de referência não precisa ser do segundo exato, fica em
+                // cache por alguns minutos por loja. Exceção não é cacheada
+                // (sai do remember antes de gravar). ?refresh=1 força buscar
+                // de novo; registrar/remover recarga também limpa o cache,
+                // já que é exatamente quando o saldo acabou de mudar.
+                $cacheKey = self::balanceCacheKey($shopeeAccount);
+
+                if ($request->boolean('refresh')) {
+                    Cache::forget($cacheKey);
+                }
+
+                $shopeeBalance = Cache::remember($cacheKey, now()->addMinutes(5), fn () => $shopeeAds->currentBalance());
             } catch (Throwable) {
                 // Best-effort — a lista de recargas não pode ficar
                 // indisponível só porque a consulta de saldo ao vivo falhou.
@@ -63,6 +77,7 @@ class AdsRechargeController extends Controller
         $validated['created_by'] = $request->user()->id;
 
         AdsRecharge::create($validated);
+        self::forgetBalanceCache();
 
         return back()->with('success', 'Recarga registrada.');
     }
@@ -70,7 +85,22 @@ class AdsRechargeController extends Controller
     public function destroy(AdsRecharge $adsRecharge): RedirectResponse
     {
         $adsRecharge->delete();
+        self::forgetBalanceCache();
 
         return back()->with('success', 'Recarga removida.');
+    }
+
+    private static function balanceCacheKey(MarketplaceAccount $account): string
+    {
+        return 'shopee:ads_balance:'.$account->seller_id;
+    }
+
+    private static function forgetBalanceCache(): void
+    {
+        $account = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
+
+        if ($account) {
+            Cache::forget(self::balanceCacheKey($account));
+        }
     }
 }

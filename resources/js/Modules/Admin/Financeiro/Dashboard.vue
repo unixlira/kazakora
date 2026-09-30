@@ -186,6 +186,11 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                     <div class="min-w-0">
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Shopee</p>
                         <p class="mt-0.5 break-words text-xl font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
+                        <!-- Saldo fica em cache por 5 min (a consulta ao vivo na Shopee
+                             levava ~1,2s em todo carregamento) — ?refresh=1 busca agora. -->
+                        <Link href="/admin/dashboard-financeiro?refresh=1" preserve-scroll class="mt-1 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary">
+                            <i class="fas fa-rotate-right text-[10px]"></i> Atualizar saldo
+                        </Link>
                     </div>
                 </div>
             </div>

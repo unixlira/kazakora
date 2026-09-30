@@ -4,7 +4,7 @@ import CardStats from '@/Shared/Components/CardStats.vue';
 import { DataTable } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { h, ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
@@ -104,11 +104,15 @@ const columns = [
             Nenhuma das duas plataformas expõe um extrato de recarga consultável por API — só o saldo <strong>atual</strong>
             da Shopee (abaixo, direto da API) está disponível ao vivo. O histórico de quando/quanto você recarregou é
             registrado manualmente aqui.
+            <!-- Saldo da Shopee fica em cache por 5 min (a consulta ao vivo
+                 levava ~1,2s em todo carregamento) — ?refresh=1 busca agora. -->
+            O saldo da Shopee é atualizado a cada 5 minutos —
+            <Link href="/admin/anuncios/recargas?refresh=1" preserve-scroll class="font-medium text-primary hover:underline">atualizar agora</Link>.
         </p>
 
         <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <CardStats
-                stat-subtitle="SALDO ATUAL SHOPEE ADS (AO VIVO)"
+                stat-subtitle="SALDO ATUAL SHOPEE ADS"
                 :stat-title="shopeeBalance !== null ? formatPrice(shopeeBalance) : 'Indisponível'"
                 stat-icon-name="fas fa-wallet" variant="primary"
             />

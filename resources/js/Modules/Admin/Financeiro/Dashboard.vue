@@ -134,7 +134,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
         </div>
 
         <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500 shadow-sm dark:text-slate-400">
-            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }} para chegar no lucro líquido.
+            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> para chegar no lucro líquido.
         </div>
 
         <h2 class="mb-3 text-xl font-bold">Lucro líquido por Marketplace · Mês Atual</h2>

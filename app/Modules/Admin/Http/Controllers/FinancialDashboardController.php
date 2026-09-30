@@ -173,7 +173,12 @@ class FinancialDashboardController extends Controller
         // TikTok Income já inclui afiliados dentro de "Taxas e impostos".
         // Mantemos afiliados como detalhe visual, mas não somamos de novo no
         // custo da plataforma para não derrubar margem/lucro em duplicidade.
-        $platformCostsMonth = round($marketplaceFeeMonth + $flexCostMonth + $settlementShippingCostMonth, 2);
+        // Frete que a LOJA pagou nos Correios (pré-postagem, hoje Amazon via
+        // Bling) é custo real da venda. Pedido explícito 2026-09-25,
+        // reafirmado 2026-09-29: "precisa descontar frete, se for lucro
+        // líquido" — a versão refeita no servidor em 29/09 tinha tirado.
+        $correiosCostMonth = ContributionMargin::correios($startOfMonth);
+        $platformCostsMonth = round($marketplaceFeeMonth + $flexCostMonth + $settlementShippingCostMonth + $correiosCostMonth, 2);
         $grossProfitMonth = round($salesRevenueMonth - $productCostMonth, 2);
 
         // Pedido explícito 2026-08-15: frete continua fora da conta de
@@ -277,8 +282,9 @@ class FinancialDashboardController extends Controller
 
         $adSpendAllTime = round((float) ChannelAdSpend::query()->sum('spend') + $settlementAdSpendAllTime, 2);
 
-        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime, 2);
-        $netRevenueAfterDeductionsAllTime = round($salesRevenueAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime, 2);
+        $correiosCostAllTime = ContributionMargin::correios(null);
+        $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime - $correiosCostAllTime, 2);
+        $netRevenueAfterDeductionsAllTime = round($salesRevenueAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime - $correiosCostAllTime, 2);
         $netRevenueAfterDeductionsMonth = round($salesRevenueMonth - $platformCostsMonth - $adSpendMonth, 2);
         $settlementSummary = $this->settlementSummary($startOfMonth);
         $marketplaceMetricsMonth = $this->marketplaceMetrics($startOfMonth, $flexCostMonth, $settlementSummary['month']['channels'] ?? []);
@@ -329,6 +335,8 @@ class FinancialDashboardController extends Controller
                 'productCostMonth' => $productCostMonth,
                 'flexCostAllTime' => $flexCostAllTime,
                 'flexCostMonth' => $flexCostMonth,
+                'correiosCostAllTime' => $correiosCostAllTime,
+                'correiosCostMonth' => $correiosCostMonth,
                 'stockValue' => $stockValue,
             ],
             // Saldo disponível pra saque nas plataformas — pedido explícito
@@ -346,6 +354,7 @@ class FinancialDashboardController extends Controller
                 'marketplaceFeeMonth' => $marketplaceFeeMonth,
                 'platformCostsMonth' => $platformCostsMonth,
                 'settlementShippingCostMonth' => $settlementShippingCostMonth,
+                'correiosCostMonth' => $correiosCostMonth,
                 'settlementAffiliateCostMonth' => $settlementAffiliateCostMonth,
                 'adSpendMonth' => $adSpendMonth,
                 'baseAdSpendMonth' => $baseAdSpendMonth,
@@ -355,6 +364,8 @@ class FinancialDashboardController extends Controller
                 // Custo do Mercado Envios Flex do mês — pedido explícito
                 // 2026-08-10, ver FlexDeliveryService.
                 'flexCostMonth' => $flexCostMonth,
+                'correiosCostAllTime' => $correiosCostAllTime,
+                'correiosCostMonth' => $correiosCostMonth,
                 'netProfitMonth' => $netProfitMonth,
                 // Informativo — pedido explícito 2026-08-15. NÃO entra em
                 // nenhuma soma/subtração do extrato (nem custo, nem
@@ -654,7 +665,9 @@ class FinancialDashboardController extends Controller
                 ->keyBy('channel')
             : collect();
 
-        return collect($channels)->map(function ($label, $channel) use ($orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
+        $correiosPorCanal = ContributionMargin::correios($startOfMonth, null, porCanal: true);
+
+        return collect($channels)->map(function ($label, $channel) use ($correiosPorCanal, $orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
             $settlement = $settlementsByChannel->get($channel);
             $hasSettlement = $settlement !== null;
             $orderRow = $orders->get($channel);
@@ -677,7 +690,8 @@ class FinancialDashboardController extends Controller
                 $platformCosts = round(
                     (float) ($settlement['platformFeesTaxes'] ?? 0)
                     + $shippingCost
-                    + (float) ($unsettledFees->get($channel)?->fee_amount ?? 0),
+                    + (float) ($unsettledFees->get($channel)?->fee_amount ?? 0)
+                    + (float) ($correiosPorCanal[$channel] ?? 0),
                     2
                 );
                 $adSpend = round((float) ($settlementAds->get($channel)?->spend ?? 0) + (float) ($ads->get($channel)?->spend ?? 0), 2);
@@ -687,7 +701,7 @@ class FinancialDashboardController extends Controller
                 $ordersCount = (int) ($orderRow?->orders_count ?? 0);
                 $productCost = round((float) ($productCosts->get($channel)?->product_cost ?? 0), 2);
                 $adSpend = round((float) ($ads->get($channel)?->spend ?? 0), 2);
-                $platformCosts = round((float) ($fees->get($channel)?->fee_amount ?? 0), 2);
+                $platformCosts = round((float) ($fees->get($channel)?->fee_amount ?? 0) + (float) ($correiosPorCanal[$channel] ?? 0), 2);
 
                 // O Flex é custo operacional do Mercado Livre, então fica no card dele.
                 if ($channel === 'mercado_livre') {

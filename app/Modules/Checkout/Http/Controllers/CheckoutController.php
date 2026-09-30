@@ -11,6 +11,7 @@ use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
+use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
@@ -328,6 +329,11 @@ class CheckoutController extends Controller
 
         try {
             [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data, $useMercadoPago) {
+                // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
+                // conta de convidado, pedido ou qualquer cobrança — ver
+                // lockProductsForCart().
+                $lockedProducts = $this->lockProductsForCart($cartItems);
+
                 $user = $request->user() ?? $this->createGuestAccount($draft['guest']);
 
                 $address = ! empty($draft['address_id'])
@@ -355,7 +361,7 @@ class CheckoutController extends Controller
                     'total' => $total,
                 ]);
 
-                $this->createOrderItems($order, $cartItems);
+                $this->createOrderItems($order, $cartItems, $lockedProducts);
 
                 $primaryMethod = $methods[0];
                 $isSplit = count($methods) > 1;
@@ -430,6 +436,13 @@ class CheckoutController extends Controller
 
                 return [$order, $intent];
             });
+        } catch (CartStockChangedException $exception) {
+            // BUG REAL 2026-09-29: transação já fez rollback — nenhum
+            // pedido/cobrança criado. Cliente revisa o carrinho (que já
+            // mostra a quantidade limitada ao estoque atual).
+            Log::warning('checkout.storePayment.stock_changed', ['products' => $exception->productNames]);
+
+            return redirect()->route('carrinho.ver')->withErrors(['cart' => $exception->getMessage()]);
         } catch (GuestEmailAlreadyExistsException) {
             return redirect()->route('finalizacao.pagamento')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
         } catch (ApiErrorException $exception) {
@@ -860,7 +873,19 @@ class CheckoutController extends Controller
         return round($original - $actual, 2);
     }
 
-    private function createOrderItems(Order $order, $cartItems): void
+    /**
+     * BUG REAL 2026-09-29: o valor cobrado (subtotal/total) sai das
+     * quantidades do carrinho lidas SEM lock; antes, createOrderItems() fazia
+     * min(qtd, estoque) sob lock e pulava item zerado — dois compradores da
+     * última unidade (ou venda de marketplace no meio do checkout) e o
+     * segundo pagava cheio e recebia menos/nada (NF-e rejeitada: vProd !=
+     * vNF). Agora trava os produtos logo no início da transação e, se
+     * qualquer item seria reduzido/pulado (ou mudou de preço), aborta o
+     * pedido inteiro — nada de conta de convidado, pedido ou cobrança.
+     *
+     * @return \Illuminate\Support\Collection<int, Product>
+     */
+    private function lockProductsForCart($cartItems)
     {
         $products = Product::query()
             ->whereIn('id', $cartItems->pluck('product.id'))
@@ -869,9 +894,34 @@ class CheckoutController extends Controller
             ->get()
             ->keyBy('id');
 
+        $changed = [];
+
         foreach ($cartItems as $item) {
             $product = $products->get($item['product']->id);
-            $quantity = min($item['quantity'], $product->stock);
+
+            // quantity < 1: CartManager::items() já limitou ao estoque (zerado)
+            // na leitura — seguir criaria um pedido sem esse item (ou só com o
+            // frete, se era o único), então também conta como "mudou".
+            if (! $product || $item['quantity'] < 1 || $product->stock < $item['quantity']
+                || round($product->unitPriceForQuantity($item['quantity']) * $item['quantity'], 2) !== round((float) $item['subtotal'], 2)) {
+                $changed[] = $product?->name ?? $item['product']->name;
+            }
+        }
+
+        if ($changed !== []) {
+            throw new CartStockChangedException($changed);
+        }
+
+        return $products;
+    }
+
+    private function createOrderItems(Order $order, $cartItems, $products): void
+    {
+        foreach ($cartItems as $item) {
+            $product = $products->get($item['product']->id);
+            // Estoque já validado em lockProductsForCart() (ainda sob o
+            // mesmo lock) — aqui a quantidade é exatamente a do carrinho.
+            $quantity = $item['quantity'];
 
             if ($quantity < 1) {
                 continue;

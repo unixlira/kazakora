@@ -104,6 +104,33 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
     {
         $order = Order::findOrFail($this->orderId);
 
+        // BUG REAL 2026-09-29: o job é enfileirado com o pedido pago, mas só
+        // roda depois (backoff de retry, release(60) do carrinho do ML,
+        // nfe:retry-stuck). Se nesse meio-tempo o canal cancelou a venda,
+        // nada aqui olhava o status e a NF-e era AUTORIZADA mesmo assim —
+        // nota de venda inexistente, que alguém ainda tem que lembrar de
+        // cancelar na SEFAZ em 24h. Relê o status na hora de emitir.
+        //
+        // Bloqueia só o que NÃO é venda paga (cancelado / ainda não pago),
+        // e não "tudo que não é PAID": pedido que já foi enviado/concluído
+        // antes de a nota sair continua precisando dela (emissão manual do
+        // admin aceita esses status), e as notas técnicas (avulsa,
+        // devolução de compra/venda) já nascem concluídas.
+        $origemTecnica = in_array($order->origin, [Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true);
+
+        if (! $origemTecnica && in_array($order->status, [Order::STATUS_CANCELLED, Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT], true)) {
+            Log::warning('nfe.emissao_ignorada_pedido_nao_pago', ['order_id' => $order->id, 'status' => $order->status, 'origin' => $order->origin]);
+
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                OrderFulfillmentEvent::STATUS_FAILED,
+                "NF-e não emitida: o pedido está \"{$order->status}\" na hora da emissão (cancelado ou ainda não pago).",
+            );
+
+            return;
+        }
+
         if (! $order->shouldAutoGenerateInvoice()) {
             $timeline->record(
                 $order,

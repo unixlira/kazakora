@@ -975,6 +975,7 @@ class OrderImportService
             return $order;
         }
 
+        $previousStatus = $order->status;
         $wasCancelled = $order->status === Order::STATUS_CANCELLED;
         $wasPaid = $order->status === Order::STATUS_PAID;
         // Pedido explícito 2026-08-29 ("registrar log quando um pedido
@@ -1001,8 +1002,22 @@ class OrderImportService
             );
         }
 
-        if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled) {
+        // BUG REAL 2026-09-29: devolvia o estoque sem olhar o status
+        // anterior — pedido já ENVIADO entrando em devolução na Shopee
+        // (TO_RETURN → cancelado, ver ShopeeDriver::mapOrderStatus()) ganhava
+        // +qty na hora, com o produto ainda na mão do comprador (estoque
+        // fantasma). Mesma regra do cancelamento pelo admin
+        // (Admin OrderController::update): se já saiu, só volta ao estoque
+        // quando a devolução chegar de fato (reversão manual, ex.:
+        // MercadoLivreClaimsController).
+        $alreadyShipped = in_array($previousStatus, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
+
+        if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled && ! $alreadyShipped) {
             $this->finalizer->restoreStockIfNeeded($order, 'Pedido cancelado no canal de origem');
+        }
+
+        if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled) {
+            $this->avisarNotaAutorizadaDePedidoCancelado($order);
         }
 
         if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
@@ -1061,6 +1076,59 @@ class OrderImportService
         $this->recordReturnClaimIfNeeded($order, $channelStatus);
 
         return $order;
+    }
+
+    /**
+     * BUG REAL 2026-09-29: o canal cancelava a venda depois de a NF-e já
+     * estar autorizada e ninguém ficava sabendo — a nota seguia valendo (e
+     * contando no faturamento/teto do MEI) até estourar o prazo de 24h de
+     * cancelamento na SEFAZ. NÃO cancela sozinho: cancelamento na SEFAZ é
+     * irreversível (e o canal pode reabrir a venda — ver isStaleStatus()),
+     * então quem decide é o usuário. Aqui só registra e avisa os admins.
+     */
+    private function avisarNotaAutorizadaDePedidoCancelado(Order $order): void
+    {
+        // Carrinho do ML: a nota fica no pedido titular, então o pedido
+        // cancelado pode não ter nota própria e mesmo assim estar coberto
+        // por uma autorizada. pedidos() inclui os cancelados (este já está
+        // cancelado aqui) e, fora de carrinho, é só o próprio pedido.
+        $pack = app(\App\Modules\Fiscal\Support\PackDoPedido::class);
+
+        $invoice = \App\Modules\Fiscal\Models\Invoice::query()
+            ->whereIn('order_id', $pack->pedidos($order)->pluck('id'))
+            ->where('status', \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED)
+            ->first();
+
+        if (! $invoice) {
+            return;
+        }
+
+        // Carrinho com outros pedidos ainda ativos: a nota cobre itens que
+        // continuam vendidos — o aviso é outro (devolução parcial, contador),
+        // nunca "cancele em 24h".
+        $avisoDoCarrinho = $pack->avisoDeCancelamento($order);
+
+        Log::warning('marketplace.order_import.cancelled_with_authorized_invoice', [
+            'order_id' => $order->id,
+            'channel' => $order->origin,
+            'invoice_id' => $invoice->id,
+            'numero' => $invoice->numero,
+            'autorizada_em' => $invoice->autorizada_em?->toIso8601String(),
+        ]);
+
+        $this->timeline->record(
+            $order,
+            OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+            OrderFulfillmentEvent::STATUS_FAILED,
+            $avisoDoCarrinho
+                ?? "Pedido cancelado no canal com a NF-e nº {$invoice->numero} já autorizada — precisa ser cancelada manualmente em até 24h da autorização.",
+        );
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new \App\Notifications\CancelledOrderWithAuthorizedInvoiceNotification($order, $invoice, $avisoDoCarrinho));
+        }
     }
 
     /**

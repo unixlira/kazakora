@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Coordena o "tudo ou nada" do split de pagamento: só marca o pedido como
@@ -110,17 +111,57 @@ class OrderPaymentFinalizer
             return;
         }
 
-        $order->loadMissing('items.product');
+        DB::transaction(function () use ($order, $reason) {
+            // BUG REAL 2026-09-29: o check acima olha só o modelo EM
+            // MEMÓRIA — webhook de cancelamento + varredura horária (ou o
+            // admin cancelando ao mesmo tempo) carregavam o mesmo pedido
+            // com stock_restored_at nulo e os dois devolviam o estoque. O
+            // UPDATE condicional é a trava de verdade: só quem vira a marca
+            // de nulo pra preenchida (affected = 1) devolve. Na mesma
+            // transação da devolução — se ela falhar no meio, a marca volta
+            // a ser nula e a próxima tentativa refaz tudo.
+            $now = now();
+            $claimed = Order::query()
+                ->whereKey($order->id)
+                ->whereNull('stock_restored_at')
+                ->update(['stock_restored_at' => $now]);
 
-        foreach ($order->items as $item) {
-            if (! $item->product) {
-                continue;
+            $order->forceFill(['stock_restored_at' => $now])->syncOriginalAttribute('stock_restored_at');
+
+            if ($claimed !== 1) {
+                return;
             }
 
-            $this->stock->adjust($item->product, $item->quantity, StockMovement::TYPE_RETURN, reason: $reason, reference: $order);
-        }
+            $order->loadMissing('items.product');
 
-        $order->update(['stock_restored_at' => now()]);
+            // BUG REAL 2026-09-29: devolvia a quantidade CHEIA do item, mas
+            // StockManager::adjust() clampa em 0 — venda de 3 com estoque 1
+            // só debitou 1, e o cancelamento devolvia 3 (estoque fantasma
+            // de 2 unidades que não existem). Agora devolve só o que este
+            // pedido de fato ainda segura daquele produto: a soma (negativa)
+            // dos movimentos com reference = este pedido — débito da venda,
+            // correções do admin (updateItems), re-débito de cancelamento
+            // revertido, tudo já referencia o pedido. Limitado à quantidade
+            // dos itens por segurança (movimentos antigos, de antes desta
+            // correção, gravavam o delta cheio).
+            $byProduct = $order->items
+                ->filter(fn ($item) => $item->product)
+                ->groupBy('product_id');
+
+            foreach ($byProduct as $productId => $items) {
+                $netMovements = (int) StockMovement::query()
+                    ->where('product_id', $productId)
+                    ->where('reference_type', $order->getMorphClass())
+                    ->where('reference_id', $order->id)
+                    ->sum('quantity');
+
+                $toRestore = min(max(0, -$netMovements), (int) $items->sum('quantity'));
+
+                if ($toRestore > 0) {
+                    $this->stock->adjust($items->first()->product, $toRestore, StockMovement::TYPE_RETURN, reason: $reason, reference: $order);
+                }
+            }
+        });
     }
 
     /**

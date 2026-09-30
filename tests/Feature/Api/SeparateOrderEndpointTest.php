@@ -4,6 +4,8 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
@@ -557,8 +559,9 @@ class SeparateOrderEndpointTest extends TestCase
 
     /**
      * Portão fiscal (2f5469d, 2026-09-28): pedido do ML sem NF-e não fala
-     * de etiqueta — explica que espera a nota e empurra a emissão, sem
-     * criar PrintJob nenhum.
+     * de etiqueta — explica que espera a nota, sem criar PrintJob nenhum.
+     * (Desde 2026-09-29 a consulta não empurra mais a emissão — só o POST
+     * reimprimir; ver test_label_status_is_side_effect_free_without_an_invoice.)
      */
     public function test_label_status_without_an_invoice_reports_the_fiscal_wait_and_creates_nothing(): void
     {
@@ -593,5 +596,84 @@ class SeparateOrderEndpointTest extends TestCase
             ->assertJson(['ok' => false, 'state' => 'invoice_not_ready']);
 
         $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /**
+     * BUG REAL 2026-09-29: etiqueta-status é consultado a cada 2s pelo
+     * KoraSync e dizia "SÓ CONSULTA", mas o portão fiscal enfileirava
+     * GenerateInvoiceJob/SubmitInvoiceToChannelJob a cada chamada — o log
+     * de produção mostrava a mesma recusa do canal a cada ~2s. A consulta
+     * não enfileira mais nada; quem empurra o fluxo é o POST reimprimir.
+     */
+    public function test_label_status_is_side_effect_free_without_an_invoice(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        $response = $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'invoice_not_ready']);
+
+        $this->assertStringNotContainsString('Reprocessei', $response->json('message'));
+        Queue::assertNotPushed(GenerateInvoiceJob::class);
+        Queue::assertNotPushed(SubmitInvoiceToChannelJob::class);
+    }
+
+    public function test_label_status_does_not_resubmit_an_invoice_the_channel_has_not_accepted(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        Invoice::create([
+            'order_id' => $order->id,
+            'origem' => Invoice::ORIGEM_PEDIDO,
+            'status' => Invoice::STATUS_AUTHORIZED,
+            'ambiente' => Invoice::AMBIENTE_PRODUCAO,
+            'serie' => 1,
+            'numero' => 777,
+            'valor_total' => 100,
+        ]);
+
+        $response = $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'invoice_not_sent_to_channel']);
+
+        $this->assertStringNotContainsString('Reenviei', $response->json('message'));
+        Queue::assertNotPushed(SubmitInvoiceToChannelJob::class);
+    }
+
+    public function test_reprint_still_pushes_the_fiscal_pipeline(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$order->id}/reimprimir", [], $this->authHeaders())
+            ->assertStatus(409)
+            ->assertJson(['state' => 'invoice_not_ready']);
+
+        Queue::assertPushed(GenerateInvoiceJob::class, fn (GenerateInvoiceJob $job) => $job->orderId === $order->id);
+    }
+
+    /**
+     * BUG REAL 2026-09-29: no carrinho do Mercado Livre só o pedido titular
+     * tem NF-e (PackDoPedido::cobertoPor()). O portão lia a nota do próprio
+     * pedido, então o secundário ficava pra sempre em "ainda não tem NF-e"
+     * e o reimprimir disparava GenerateInvoiceJob inútil pra ele.
+     */
+    public function test_secondary_pack_order_uses_the_titular_invoice(): void
+    {
+        Queue::fake();
+        $titular = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $titular->update(['channel_pack_id' => 'PACK-77', 'external_order_id' => '999888776']);
+        $secundario = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $secundario->update(['channel_pack_id' => 'PACK-77']);
+        $this->liberarNotaNoCanal($titular);
+
+        $this->getJson("/api/print-agent/dashboard/queue/{$secundario->id}/etiqueta-status", $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['state' => 'pending']);
+
+        $this->postJson("/api/print-agent/dashboard/queue/{$secundario->id}/reimprimir", [], $this->authHeaders());
+
+        Queue::assertNotPushed(GenerateInvoiceJob::class);
     }
 }

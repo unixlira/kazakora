@@ -1192,7 +1192,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     /**
      * Vocabulário real de `order_status` da Shopee: UNPAID, READY_TO_SHIP,
      * PROCESSED, SHIPPED, TO_CONFIRM_RECEIVE, COMPLETED, CANCELLED,
-     * TO_RETURN, IN_CANCEL. Mapeamento conservador — qualquer coisa não
+     * TO_RETURN, IN_CANCEL, INVOICE_PENDING, RETRY_SHIP. Mapeamento conservador — qualquer coisa não
      * reconhecida cai em "aguardando pagamento" em vez de assumir que já
      * foi pago (mesma cautela que MercadoLivreDriver::mapOrderStatus() já
      * aplica).
@@ -1213,11 +1213,26 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      */
     private function mapOrderStatus(string $status): string
     {
+        // BUG REAL 2026-09-29 (revisão de código):
+        // - IN_CANCEL é só o comprador PEDINDO o cancelamento — o vendedor
+        //   pode recusar e a venda segue. Mapear pra cancelado devolvia o
+        //   estoque e tirava o pedido da fila por uma venda que continua de
+        //   pé. Fica pago; se a Shopee aceitar, o status vira CANCELLED de
+        //   verdade e aí sim cancela (syncStatus). Pedido já enviado não
+        //   regride (trava isStaleStatus()).
+        // - INVOICE_PENDING (específico do Brasil: pago, esperando a NOSSA
+        //   NF-e pra liberar o envio) e RETRY_SHIP (reenvio) caíam no default
+        //   "aguardando pagamento" — e a Shopee em aguardando pagamento nem
+        //   vira Order (OrderImportService::importNormalized), então pedido
+        //   em INVOICE_PENDING nunca era importado e a nota nunca saía.
+        // - TO_RETURN continua cancelado (ciclo de vida do pedido), mas
+        //   syncStatus() não devolve estoque se o pedido já tinha sido
+        //   enviado — o produto ainda está com o comprador.
         return match ($status) {
-            'READY_TO_SHIP', 'PROCESSED' => Order::STATUS_PAID,
+            'READY_TO_SHIP', 'PROCESSED', 'INVOICE_PENDING', 'RETRY_SHIP', 'IN_CANCEL' => Order::STATUS_PAID,
             'SHIPPED', 'TO_CONFIRM_RECEIVE' => Order::STATUS_SHIPPED,
             'COMPLETED' => Order::STATUS_COMPLETED,
-            'CANCELLED', 'IN_CANCEL', 'TO_RETURN' => Order::STATUS_CANCELLED,
+            'CANCELLED', 'TO_RETURN' => Order::STATUS_CANCELLED,
             default => Order::STATUS_AWAITING_PAYMENT,
         };
     }

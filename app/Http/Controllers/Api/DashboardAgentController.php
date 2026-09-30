@@ -15,6 +15,7 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Content\Models\DailyText;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
@@ -1785,7 +1786,12 @@ class DashboardAgentController extends Controller
             ]);
         }
 
-        $fiscalBlock = $this->labelFiscalBlock($order, true);
+        // BUG REAL 2026-09-29: isto era labelFiscalBlock($order, true) — o
+        // KoraSync consulta este endpoint a cada 2s por até 3 min, e cada
+        // consulta enfileirava SubmitInvoiceToChannelJob/GenerateInvoiceJob
+        // (log de produção: a mesma recusa do canal a cada ~2s). Consulta é
+        // consulta: o empurrão do fluxo fiscal fica só no POST reimprimir.
+        $fiscalBlock = $this->labelFiscalBlock($order, false);
 
         if ($fiscalBlock) {
             return response()->json($fiscalBlock);
@@ -2165,9 +2171,17 @@ class DashboardAgentController extends Controller
         }
 
         $order->loadMissing(['invoice', 'items.product.fiscalData']);
-        $invoice = $order->invoice;
+
+        // BUG REAL 2026-09-29: no carrinho do Mercado Livre a NF-e fica só
+        // no pedido titular (PackDoPedido::cobertoPor()). Lendo a nota do
+        // próprio pedido, o secundário ficava pra sempre em "ainda não tem
+        // NF-e" e cada reimprimir disparava um GenerateInvoiceJob inútil
+        // pra ele. Nota e envio ao canal são os do titular.
+        $fiscal = app(PackDoPedido::class)->cobertoPor($order) ?? $order;
+        $fiscal->loadMissing('invoice');
+        $invoice = $fiscal->invoice;
         $submission = ChannelInvoiceSubmission::query()
-            ->where('order_id', $order->id)
+            ->where('order_id', $fiscal->id)
             ->latest('id')
             ->first();
 
@@ -2179,7 +2193,7 @@ class DashboardAgentController extends Controller
 
         if ($invoice?->status === Invoice::STATUS_AUTHORIZED) {
             if ($nudgePipeline && $order->status === Order::STATUS_PAID) {
-                SubmitInvoiceToChannelJob::dispatch($order->id);
+                SubmitInvoiceToChannelJob::dispatch($fiscal->id);
             }
 
             $detail = $submission?->error_message
@@ -2188,7 +2202,9 @@ class DashboardAgentController extends Controller
 
             return [
                 'state' => 'invoice_not_sent_to_channel',
-                'message' => 'A etiqueta ainda não está liberada porque a NF-e foi autorizada, mas o canal ainda não aceitou essa nota. Reenviei a NF-e para o canal agora; tente de novo em instantes.'.$detail,
+                'message' => 'A etiqueta ainda não está liberada porque a NF-e foi autorizada, mas o canal ainda não aceitou essa nota.'
+                    .($nudgePipeline ? ' Reenviei a NF-e para o canal agora; tente de novo em instantes.' : ' O envio da nota ao canal segue em andamento.')
+                    .$detail,
             ];
         }
 
@@ -2201,8 +2217,8 @@ class DashboardAgentController extends Controller
             ];
         }
 
-        if ($nudgePipeline && $order->status === Order::STATUS_PAID && $order->shouldAutoGenerateInvoice()) {
-            GenerateInvoiceJob::dispatch($order->id);
+        if ($nudgePipeline && $order->status === Order::STATUS_PAID && $fiscal->shouldAutoGenerateInvoice()) {
+            GenerateInvoiceJob::dispatch($fiscal->id);
         }
 
         $status = $invoice?->status;
@@ -2217,7 +2233,9 @@ class DashboardAgentController extends Controller
 
         return [
             'state' => 'invoice_not_ready',
-            'message' => $prefix.' Reprocessei o fluxo fiscal agora; quando a nota autorizar e o canal aceitar, a etiqueta entra na fila automaticamente.'.$reason,
+            'message' => $prefix
+                .($nudgePipeline ? ' Reprocessei o fluxo fiscal agora.' : '')
+                .' Quando a nota autorizar e o canal aceitar, a etiqueta entra na fila automaticamente.'.$reason,
         ];
     }
 

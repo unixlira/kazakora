@@ -37,9 +37,15 @@ class StockManager
             $locked->update(['stock' => $newStock]);
             $product->setAttribute('stock', $newStock);
 
+            // BUG REAL 2026-09-29: o movimento gravava o $delta PEDIDO, não
+            // o que de fato mexeu no estoque. Com o clamp em 0 acima (venda
+            // de 3 com estoque 1), o movimento dizia -3 quando só 1 unidade
+            // saiu — e a devolução do cancelamento (restoreStockIfNeeded,
+            // que agora soma estes movimentos) criava estoque fantasma.
+            // O aviso de oversell abaixo continua usando o $delta pedido.
             $movement = $locked->stockMovements()->create([
                 'type' => $type,
-                'quantity' => $delta,
+                'quantity' => $newStock - $availableBefore,
                 'stock_after' => $newStock,
                 'reason' => $reason,
                 'user_id' => Auth::id(),

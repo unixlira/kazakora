@@ -75,8 +75,13 @@ class MercadoLivreClaimsControllerTest extends TestCase
     public function test_revert_stock_restores_quantity_and_is_idempotent(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $product = Product::factory()->create(['stock' => 5]);
+        // Fluxo real: a venda debitou as 2 unidades (7 → 5) com reference =
+        // o pedido. Desde 2026-09-29 a devolução só repõe o que o pedido de
+        // fato debitou (ver OrderPaymentFinalizer::restoreStockIfNeeded).
+        $product = Product::factory()->create(['stock' => 7]);
         $order = $this->makeOrderWithItem($product, quantity: 2);
+        app(\App\Modules\Inventory\Support\StockManager::class)->adjust($product, -2, StockMovement::TYPE_SALE, reference: $order);
+        $this->assertSame(5, $product->fresh()->stock);
         $claim = MarketplaceClaim::create([
             'order_id' => $order->id,
             'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,

@@ -250,4 +250,64 @@ class GenerateInvoiceJobTest extends TestCase
         $this->assertSame(1, Invoice::where('order_id', $order->id)->count());
         $this->assertSame(Invoice::STATUS_AUTHORIZED, $result->status);
     }
+
+    /**
+     * BUG REAL 2026-09-29: job enfileirado com o pedido pago (backoff,
+     * release do carrinho, nfe:retry-stuck) rodava depois de o canal já ter
+     * cancelado a venda e autorizava a NF-e mesmo assim — nota de venda que
+     * não existe mais, que depois alguém tem que lembrar de cancelar.
+     */
+    public function test_handle_does_not_issue_invoice_when_order_was_cancelled_before_the_job_ran(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder();
+        $order->update(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SH-1', 'status' => Order::STATUS_CANCELLED]);
+
+        $invoices = Mockery::mock(InvoiceService::class);
+        $invoices->shouldNotReceive('issue');
+
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
+
+        $this->assertDatabaseMissing('invoices', ['order_id' => $order->id]);
+        Queue::assertNotPushed(SubmitInvoiceToChannelJob::class);
+        Queue::assertNotPushed(SendOrderReceiptEmailJob::class);
+    }
+
+    public function test_handle_does_not_issue_invoice_when_order_is_still_awaiting_payment(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder();
+        $order->update(['status' => Order::STATUS_AWAITING_PAYMENT]);
+
+        $invoices = Mockery::mock(InvoiceService::class);
+        $invoices->shouldNotReceive('issue');
+
+        (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
+
+        Queue::assertNotPushed(SendOrderReceiptEmailJob::class);
+    }
+
+    /**
+     * Pedido que já saiu (enviado/concluído) antes de a nota sair continua
+     * precisando dela — mercadoria em trânsito sem NF-e é o problema
+     * oposto. E a nota avulsa já nasce "concluída".
+     */
+    public function test_handle_still_issues_invoice_for_shipped_orders_and_manual_invoices(): void
+    {
+        Queue::fake();
+
+        foreach ([
+            ['status' => Order::STATUS_SHIPPED, 'origin' => Order::ORIGIN_SHOPEE],
+            ['status' => Order::STATUS_COMPLETED, 'origin' => Order::ORIGIN_MANUAL_INVOICE],
+        ] as $i => $attrs) {
+            $order = $this->makeOrder();
+            $order->update($attrs + ['external_order_id' => 'X-'.$i]);
+            $invoice = Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_AUTHORIZED, 'numero' => 10 + $i]);
+
+            $invoices = Mockery::mock(InvoiceService::class);
+            $invoices->shouldReceive('issue')->once()->andReturn($invoice);
+
+            (new GenerateInvoiceJob($order->id))->handle($invoices, new OrderFulfillmentTimeline(), $this->fakeOrderImportService());
+        }
+    }
 }

@@ -274,6 +274,18 @@ class OrderController extends Controller
             return back()->with('error', 'Este pedido já tem NF-e assinada/enviada/autorizada. Para não deixar nota e pedido divergentes, os itens não foram alterados.');
         }
 
+        // BUG REAL 2026-09-29: sem trava de status, editar itens de um
+        // pedido cancelado (estoque já devolvido por restoreStockIfNeeded)
+        // ou que já nasceu cancelado (nunca debitou — ver OrderImportService)
+        // movia estoque de novo, sobre unidades que este pedido não segura
+        // mais. Só pedido pago, com o estoque ainda debitado, tem o que
+        // corrigir aqui. Rechecado dentro da transação, com lock, abaixo.
+        $itemsEditableError = 'Só dá pra corrigir itens de pedido pago com o estoque ainda debitado — este pedido está cancelado/enviado ou já teve o estoque devolvido. Os itens não foram alterados.';
+
+        if (! $this->itemsAreEditable($order)) {
+            return back()->with('error', $itemsEditableError);
+        }
+
         $validated = $request->validate([
             'items' => ['required', 'array', 'min:1'],
             'items.*.id' => ['required', 'integer', 'distinct'],
@@ -288,7 +300,16 @@ class OrderController extends Controller
             return back()->with('error', 'A lista de itens mudou enquanto você editava. Recarregue o pedido e tente novamente.');
         }
 
-        DB::transaction(function () use ($order, $validated, $stock) {
+        $edited = DB::transaction(function () use ($order, $validated, $stock) {
+            // Mesmo check de cima, agora com o pedido travado — um
+            // cancelamento chegando (webhook/varredura) entre a validação e
+            // aqui devolveria o estoque e esta edição mexeria nele de novo.
+            $lockedOrder = Order::query()->whereKey($order->id)->lockForUpdate()->first();
+
+            if (! $lockedOrder || ! $this->itemsAreEditable($lockedOrder)) {
+                return false;
+            }
+
             $items = $order->items()->lockForUpdate()->get()->keyBy('id');
             $oldValues = $items->map(fn ($item) => [
                 'id' => $item->id,
@@ -363,9 +384,24 @@ class OrderController extends Controller
                 'new_values' => ['items' => $newValues],
                 'created_at' => now(),
             ]);
+
+            return true;
         });
 
+        if (! $edited) {
+            return back()->with('error', $itemsEditableError);
+        }
+
         return back()->with('success', 'Itens do pedido atualizados. Produto, quantidade, totais e estoque local foram corrigidos.');
+    }
+
+    /**
+     * Ver updateItems() — BUG REAL 2026-09-29: só pedido pago com o estoque
+     * ainda debitado (stock_restored_at nulo) pode ter itens corrigidos.
+     */
+    private function itemsAreEditable(Order $order): bool
+    {
+        return $order->status === Order::STATUS_PAID && $order->stock_restored_at === null;
     }
 
     /**

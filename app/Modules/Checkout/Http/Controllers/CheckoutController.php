@@ -161,7 +161,13 @@ class CheckoutController extends Controller
         $data = $validator->validated();
 
         if ($request->user() && ! empty($data['address_id'])) {
-            $address = $request->user()->addresses()->findOrFail($data['address_id']);
+            // find, não findOrFail: endereço apagado ou de rascunho antigo
+            // virava uma página 404 no meio da compra.
+            $address = $request->user()->addresses()->find($data['address_id']);
+
+            if (! $address) {
+                return redirect()->route('finalizacao.entrega')->withErrors(['address_id' => 'Esse endereço não está mais na sua conta. Escolha outro ou cadastre um novo.']);
+            }
         }
 
         if (! $request->user() && User::where('email', $data['guest']['email'])->exists()) {

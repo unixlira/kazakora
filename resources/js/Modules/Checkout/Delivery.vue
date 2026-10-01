@@ -26,8 +26,15 @@ const formatPrice = (value) =>
 
 const defaultAddress = computed(() => props.addresses[0] ?? null);
 
+// Rascunho da sessão pode apontar pra endereço que já não existe na conta
+// (apagado, ou rascunho de outro login): o botão ficava habilitado e o
+// servidor respondia 404 no findOrFail.
+const draftAddressId = props.addresses.some((address) => address.id === props.draft?.address_id)
+    ? props.draft.address_id
+    : null;
+
 const form = useForm({
-    address_id: props.draft?.address_id ?? defaultAddress.value?.id ?? null,
+    address_id: draftAddressId ?? defaultAddress.value?.id ?? null,
     new_address: props.draft?.new_address ?? {
         label: '',
         recipient_name: '',
@@ -190,16 +197,18 @@ const canContinue = computed(() => hasValidAddress.value && hasValidGuestInfo.va
 
 const finalTotal = computed(() => props.total + shippingCost.value);
 
+// Zera o lado não usado só no payload (transform), nunca no form: zerar
+// form.new_address quebrava a tela inteira (template e hasValidAddress
+// leem campos dele) quando o servidor devolvia erro e a pessoa ia em
+// "Cadastrar novo endereço".
 const submit = () => {
-    if (! useNewAddress.value) {
-        form.new_address = null;
-    } else {
-        form.address_id = null;
-    }
-
     // form.shipping_quote já é mantido em sincronia pelo watch acima —
     // não recalcula aqui de novo (evita os dois ficarem defasados entre si).
-    form.post('/finalizacao/entrega', {
+    form.transform((data) => ({
+        ...data,
+        address_id: useNewAddress.value ? null : data.address_id,
+        new_address: useNewAddress.value ? data.new_address : null,
+    })).post('/finalizacao/entrega', {
         onError: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
     });
 };
@@ -225,6 +234,9 @@ const submit = () => {
                     <p v-if="form.errors.session" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.session }}
                         <Link href="/entrar" class="ml-1 font-semibold underline">Fazer login</Link>
+                    </p>
+                    <p v-if="form.errors.address_id" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.address_id }}
                     </p>
                     <p v-if="form.errors.shipping_method_id" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.shipping_method_id }}

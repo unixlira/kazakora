@@ -5,6 +5,8 @@ namespace App\Services\NFe;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Company;
+use App\Modules\Fiscal\Models\ProductFiscalData;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use NFePHP\NFe\Make;
 use RuntimeException;
@@ -389,7 +391,7 @@ class NFeXmlBuilderService
             $pisAliquota = (float) ($fiscal->pis_aliquota ?? 0);
             $pis = new stdClass();
             $pis->item = $n;
-            $pis->CST = $fiscal->pis_situacao_tributaria;
+            $pis->CST = $this->cstPisCofins($fiscal->pis_situacao_tributaria, 'pis_situacao_tributaria', $item);
             $pis->vBC = $pisAliquota > 0 ? (float) $item->subtotal : 0;
             $pis->pPIS = $pisAliquota;
             $pis->vPIS = round((float) $item->subtotal * $pisAliquota / 100, 2);
@@ -398,7 +400,7 @@ class NFeXmlBuilderService
             $cofinsAliquota = (float) ($fiscal->cofins_aliquota ?? 0);
             $cofins = new stdClass();
             $cofins->item = $n;
-            $cofins->CST = $fiscal->cofins_situacao_tributaria;
+            $cofins->CST = $this->cstPisCofins($fiscal->cofins_situacao_tributaria, 'cofins_situacao_tributaria', $item);
             $cofins->vBC = $cofinsAliquota > 0 ? (float) $item->subtotal : 0;
             $cofins->pCOFINS = $cofinsAliquota;
             $cofins->vCOFINS = round((float) $item->subtotal * $cofinsAliquota / 100, 2);
@@ -494,6 +496,40 @@ class NFeXmlBuilderService
             'xml' => $xml,
             'chave' => $make->getChave(),
         ];
+    }
+
+    /**
+     * BUG REAL 2026-10-01 (2 vendas da Shopee sem nota e sem etiqueta):
+     * produto com cadastro fiscal criado só com peso/medidas
+     * (PackageDataResolver, tela de logística) fica com o CST de PIS/COFINS
+     * vazio, e o tagPIS do nfephp só monta o grupo filho para CST que ele
+     * conhece: com vazio (ou "8" sem o zero) saía <PIS/> oco e a SEFAZ
+     * recusava o XML inteiro ("Element PIS: Missing child element(s)").
+     * Sem nota a Shopee não libera a etiqueta.
+     *
+     * Vazio cai no padrão da empresa (o mesmo das notas já autorizadas, ver
+     * ProductFiscalData::defaultMeiAttributes) e fica registrado no log pra
+     * o cadastro do produto ser completado.
+     */
+    private function cstPisCofins(?string $cst, string $campo, OrderItem $item): string
+    {
+        $cst = trim((string) $cst);
+
+        if ($cst !== '' && ctype_digit($cst)) {
+            return str_pad($cst, 2, '0', STR_PAD_LEFT);
+        }
+
+        $padrao = ProductFiscalData::defaultMeiAttributes()[$campo];
+
+        Log::warning('nfe.cst_pis_cofins_padrao', [
+            'order_item_id' => $item->id,
+            'product_id' => $item->product_id,
+            'campo' => $campo,
+            'valor_cadastrado' => $cst,
+            'usado' => $padrao,
+        ]);
+
+        return $padrao;
     }
 
     /**

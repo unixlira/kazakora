@@ -11,11 +11,13 @@ class DigitalMarketingResearchServiceTest extends TestCase
     {
         $snapshot = app(DigitalMarketingResearchService::class)->scanAndCache(dryRun: true);
 
-        $this->assertGreaterThanOrEqual(10, $snapshot['summary']['mappedCreatives']);
+        $this->assertGreaterThanOrEqual(4, $snapshot['summary']['mappedCreatives']);
+        $this->assertGreaterThanOrEqual(4, $snapshot['summary']['verifiedEvidenceLinks']);
+        $this->assertGreaterThanOrEqual(82, $snapshot['summary']['minimumScore']);
         $this->assertGreaterThanOrEqual(4, $snapshot['summary']['paymentRegions']);
         $this->assertNotEmpty($snapshot['regionPlaybooks']);
         $this->assertNotEmpty($snapshot['sourceSearches']);
-        $this->assertStringContainsString('Meta Ads Library', $snapshot['providerStatus']['name']);
+        $this->assertStringContainsString('PDFs', $snapshot['providerStatus']['name']);
     }
 
     public function test_gateway_matrix_prioritizes_latin_america_for_brl_receiving(): void

@@ -101,6 +101,8 @@ class DigitalMarketingResearchService
             'summary' => [
                 'mappedCreatives' => count($mappedCreatives),
                 'pdfOpportunities' => $pdfSnapshot['summary']['totalOpportunities'] ?? 0,
+                'verifiedEvidenceLinks' => $pdfSnapshot['summary']['verifiedEvidenceLinks'] ?? 0,
+                'minimumScore' => $pdfSnapshot['summary']['minimumScore'] ?? 82,
                 'paymentRegions' => count($gateways),
                 'priorityRegions' => collect($gateways)->where('priority', '<=', 2)->count(),
                 'lastScanAt' => now()->format('d/m/Y H:i'),
@@ -109,16 +111,16 @@ class DigitalMarketingResearchService
             'regionPlaybooks' => $this->regionPlaybooks($gateways),
             'paymentGateways' => $gateways,
             'sourceSearches' => $this->sourceSearches(),
-            'operatingRules' => [
+            'operatingRules' => array_merge([
                 'Listar somente criativos ligados a PDFs/produtos digitais; excluir produtos físicos, afiliados Shopee e e-commerce físico deste radar.',
                 'Modelar estrutura, promessa e funil; nunca copiar texto, arte, PDF, páginas internas ou identidade visual de terceiros.',
                 'Conversão real e ROAS não são públicos: longevidade de anúncio, repetição de criativo e destino ativo são proxies, não prova absoluta.',
                 'Antes de escalar tráfego fora do Brasil, validar checkout, impostos, reembolso, idioma e payout em reais.',
-            ],
+            ], $pdfSnapshot['qualityGate'] ?? []),
             'providerStatus' => [
-                'name' => 'Meta Ads Library + curadoria exclusiva de PDFs + matriz regional de checkout',
-                'status' => 'Radar inicial pronto para operação',
-                'detail' => 'A cron noturna atualiza cache e snapshot local. O radar exclui criativos de produtos físicos e mantém apenas oportunidades de PDF, app simples ou site como entregáveis.',
+                'name' => 'Curadoria criteriosa de PDFs + páginas/conteúdos acessáveis',
+                'status' => 'Somente score alto com links de evidência',
+                'detail' => 'Meta Ads Library virou auditoria secundária. O radar agora prioriza links que abrem página de conversão, preview, PDF, conteúdo ou fonte oficial para moldar no nosso formato.',
             ],
         ];
     }
@@ -128,20 +130,31 @@ class DigitalMarketingResearchService
         $pdfBenchmarks = collect($pdfSnapshot['benchmarks'] ?? [])->map(function (array $ad): array {
             return [
                 'id' => 'pdf-'.$ad['creativeId'],
+                'rank' => $ad['rank'] ?? null,
+                'opportunityRank' => $ad['opportunityRank'] ?? null,
+                'opportunityScore' => $ad['opportunityScore'] ?? null,
+                'opportunityScoreLabel' => $ad['opportunityScoreLabel'] ?? null,
                 'type' => 'PDF / produto digital',
                 'region' => 'América Latina',
                 'market' => 'Brasil',
-                'source' => 'Meta Ads Library',
+                'source' => 'Página/PDF acessável + Meta secundária',
                 'creativeId' => $ad['creativeId'],
                 'brand' => $ad['advertiser'] ?? 'Benchmark externo',
-                'title' => Str::limit($ad['hook'] ?? 'Criativo PDF mapeado', 86),
+                'title' => Str::limit($ad['opportunityTitle'] ?? $ad['hook'] ?? 'Criativo PDF mapeado', 86),
                 'hook' => $ad['hook'] ?? null,
                 'activeDays' => (int) ($ad['activeDays'] ?? 0),
                 'versions' => $ad['versions'] ?? null,
                 'landingPageDomain' => $ad['landingPageDomain'] ?? null,
                 'adLibraryUrl' => $ad['adLibraryUrl'] ?? null,
                 'landingPageUrl' => $ad['landingPageUrl'] ?? null,
-                'action' => 'Modelar promessa, oferta, bônus e mecanismo de entrega em PDF autoral.',
+                'primaryAccessUrl' => $ad['primaryAccessUrl'] ?? ($ad['landingPageUrl'] ?? null),
+                'accessLinks' => $ad['accessLinks'] ?? [],
+                'evidenceCount' => $ad['evidenceCount'] ?? 0,
+                'deliverable' => $ad['deliverable'] ?? 'PDF autoral',
+                'priceBand' => $ad['priceBand'] ?? null,
+                'niche' => $ad['niche'] ?? null,
+                'auditNote' => $ad['auditNote'] ?? 'Usar links acessáveis antes da Meta.',
+                'action' => 'Abrir a página/conteúdo, estudar estrutura, prova, oferta e entrega; depois recriar em PDF autoral sem copiar texto/arte.',
             ];
         });
 

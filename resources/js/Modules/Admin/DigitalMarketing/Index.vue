@@ -15,9 +15,22 @@ const props = defineProps({
 
 const selectedRegion = ref('Todas');
 const selectedType = ref('Todos');
+const selectedEvidence = ref('Todos');
 const regionFilters = computed(() => ['Todas', ...new Set(props.mappedCreatives.map((item) => item.region).filter(Boolean))]);
 const typeFilters = computed(() => ['Todos', ...new Set(props.mappedCreatives.map((item) => item.type).filter(Boolean))]);
-const filteredCreatives = computed(() => props.mappedCreatives.filter((item) => (selectedRegion.value === 'Todas' || item.region === selectedRegion.value) && (selectedType.value === 'Todos' || item.type === selectedType.value)));
+const evidenceFilters = ['Todos', 'Score 90+', 'Tem página', 'Tem conteúdo/PDF', 'Tem Meta secundária'];
+const hasLinkKind = (item, kinds) => (item.accessLinks || []).some((link) => kinds.includes(link.kind));
+const filteredCreatives = computed(() => props.mappedCreatives.filter((item) => {
+    const evidenceOk = selectedEvidence.value === 'Todos'
+        || (selectedEvidence.value === 'Score 90+' && Number(item.opportunityScore || 0) >= 90)
+        || (selectedEvidence.value === 'Tem página' && hasLinkKind(item, ['conversion_page', 'product_page', 'checkout']))
+        || (selectedEvidence.value === 'Tem conteúdo/PDF' && hasLinkKind(item, ['sample_pdf', 'content_source', 'product_preview', 'official_source', 'checkout']))
+        || (selectedEvidence.value === 'Tem Meta secundária' && hasLinkKind(item, ['ad_archive']));
+
+    return (selectedRegion.value === 'Todas' || item.region === selectedRegion.value)
+        && (selectedType.value === 'Todos' || item.type === selectedType.value)
+        && evidenceOk;
+}));
 const refreshResearch = () => router.post('/admin/mkt-digital/atualizar', {}, { preserveScroll: true });
 const formatNumber = (value) => Number(value ?? 0).toLocaleString('pt-BR');
 </script>
@@ -40,12 +53,13 @@ const formatNumber = (value) => Number(value ?? 0).toLocaleString('pt-BR');
             </div>
         </section>
 
-        <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div v-for="card in [
-                ['Criativos', formatNumber(summary.mappedCreatives), 'benchmarks mapeados', 'text-slate-900'],
-                ['PDFs', formatNumber(summary.pdfOpportunities), 'oportunidades autorais', 'text-fuchsia-700'],
+                ['Criativos', formatNumber(summary.mappedCreatives), 'benchmarks com links úteis', 'text-slate-900'],
+                ['PDFs', formatNumber(summary.pdfOpportunities), 'oportunidades acima do corte', 'text-fuchsia-700'],
+                ['Evidências', formatNumber(summary.verifiedEvidenceLinks), 'página/PDF/conteúdo', 'text-emerald-600'],
+                ['Score mín.', summary.minimumScore || 82, 'filtro de qualidade', 'text-amber-600'],
                 ['Regiões', formatNumber(summary.paymentRegions), 'matriz de checkout', 'text-amber-600'],
-                ['Prioridade', formatNumber(summary.priorityRegions), 'regiões para começar', 'text-emerald-600'],
                 ['Atualizado', summary.lastScanAt, 'cache/cron do radar', 'text-slate-900'],
             ]" :key="card[0]" class="rounded-2xl bg-white p-5 shadow-lg shadow-slate-200/80">
                 <p class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ card[0] }}</p>
@@ -82,23 +96,30 @@ const formatNumber = (value) => Number(value ?? 0).toLocaleString('pt-BR');
                     <select v-model="selectedType" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
                         <option v-for="type in typeFilters" :key="type">{{ type }}</option>
                     </select>
+                    <select v-model="selectedEvidence" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                        <option v-for="filter in evidenceFilters" :key="filter">{{ filter }}</option>
+                    </select>
                 </div>
             </div>
 
             <div class="mt-6 grid gap-4 xl:grid-cols-2">
                 <article v-for="creative in filteredCreatives" :key="creative.id" class="rounded-3xl border border-slate-100 bg-[#fffdfa] p-5">
                     <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black uppercase text-white">#{{ creative.opportunityRank || creative.rank }}</span>
+                        <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 ring-1 ring-emerald-100">Score {{ creative.opportunityScore || '—' }}</span>
                         <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black uppercase text-white">{{ creative.type }}</span>
                         <span class="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500 ring-1 ring-slate-200">{{ creative.region }}</span>
-                        <span v-if="creative.activeDays" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">{{ creative.activeDays }} dias ativo</span>
+                        <span v-if="creative.activeDays" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-100">{{ creative.activeDays }} dias ativo</span>
+                        <span class="rounded-full bg-fuchsia-50 px-3 py-1 text-xs font-bold text-fuchsia-700 ring-1 ring-fuchsia-100">{{ creative.evidenceCount }} links úteis</span>
                     </div>
                     <h3 class="mt-4 text-lg font-black text-slate-900">{{ creative.title }}</h3>
-                    <p class="mt-1 text-xs font-bold uppercase tracking-wide text-fuchsia-700">{{ creative.brand }} · {{ creative.market }}</p>
+                    <p class="mt-1 text-xs font-bold uppercase tracking-wide text-fuchsia-700">{{ creative.brand }} · {{ creative.market }} · {{ creative.priceBand }}</p>
+                    <p class="mt-2 text-xs font-semibold text-slate-500">Entregável: {{ creative.deliverable }}</p>
                     <p class="mt-3 text-sm leading-6 text-slate-600 whitespace-pre-line">{{ creative.hook }}</p>
                     <p class="mt-4 rounded-2xl bg-white p-3 text-sm font-semibold leading-6 text-slate-700">{{ creative.action }}</p>
+                    <p class="mt-2 text-xs font-semibold text-slate-500">{{ creative.auditNote }}</p>
                     <div class="mt-4 flex flex-wrap gap-2">
-                        <a v-if="creative.adLibraryUrl" :href="creative.adLibraryUrl" target="_blank" rel="noopener" class="rounded-xl bg-slate-950 px-4 py-2 text-xs font-black uppercase tracking-wide text-white">Meta</a>
-                        <a v-if="creative.landingPageUrl" :href="creative.landingPageUrl" target="_blank" rel="noopener" class="rounded-xl bg-fuchsia-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-fuchsia-700">{{ creative.landingPageDomain || 'Landing' }}</a>
+                        <a v-for="link in creative.accessLinks" :key="`${creative.id}-${link.url}-${link.label}`" :href="link.url" target="_blank" rel="noopener" class="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide" :class="link.kind === 'ad_archive' ? 'bg-slate-100 text-slate-500' : 'bg-fuchsia-50 text-fuchsia-700'">{{ link.label }}</a>
                     </div>
                 </article>
             </div>

@@ -2,6 +2,7 @@
 
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
+use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Cart\Http\Controllers\CartController;
@@ -26,6 +27,8 @@ Route::prefix('checkout')->name('checkout.')->middleware('auth')->group(function
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('mkt-digital', [DigitalMarketingController::class, 'index'])->name('digital-marketing.index');
+    Route::post('mkt-digital/atualizar', [DigitalMarketingController::class, 'refresh'])->name('digital-marketing.refresh');
 
     Route::resource('products', ProductController::class)->except('show');
     Route::resource('categories', CategoryController::class)->except('show');

@@ -11,6 +11,7 @@ const userMenuOpen = ref(false);
 
 const navItems = [
     { href: '/admin', label: 'Dashboard', icon: 'fas fa-tv' },
+    { href: '/admin/mkt-digital', label: 'MKT Digital', icon: 'fas fa-globe' },
     { href: '/admin/products', label: 'Produtos', icon: 'fas fa-couch' },
     { href: '/admin/categories', label: 'Categorias', icon: 'fas fa-tags' },
     { href: '/admin/orders', label: 'Pedidos', icon: 'fas fa-receipt' },

@@ -13,7 +13,6 @@ class DigitalMarketingResearchService
 
     public function __construct(
         private readonly PdfOpportunityResearchService $pdfResearch,
-        private readonly MetaConversionPageResearchService $metaResearch,
     ) {
     }
 
@@ -64,9 +63,9 @@ class DigitalMarketingResearchService
                 'countries' => 'Brasil, México, Colômbia, Chile, Peru e Argentina',
                 'gateway' => 'Hotmart para operação internacional + Kiwify/Eduzz/Monetizze no Brasil quando o foco for nacional',
                 'receivesInBrl' => 'Mais favorável para criador brasileiro: vender fora e liquidar/receber em reais depende da plataforma e cadastro.',
-                'bestFor' => 'PDFs em português/espanhol, religião, renda extra, educação infantil, organização e receitas.',
+                'bestFor' => 'PDFs em português/espanhol, renda extra documental, educação infantil, organização e receitas.',
                 'conversionNotes' => 'Pix no Brasil aumenta conversão; parcelamento ajuda ticket de R$ 47+; em espanhol testar checkout local e cartão.',
-                'risk' => 'Compliance de promessas sensíveis: renda, saúde, espiritualidade e educação precisam de linguagem cuidadosa.',
+                'risk' => 'Compliance de promessas sensíveis: renda, saúde e educação precisam de linguagem cuidadosa.',
                 'priority' => 1,
             ],
             [
@@ -74,7 +73,7 @@ class DigitalMarketingResearchService
                 'countries' => 'Portugal, Espanha, França, Alemanha, Itália e Reino Unido',
                 'gateway' => 'Hotmart internacional, Stripe/PayPal, Paddle, Gumroad ou Payhip',
                 'receivesInBrl' => 'Possível por plataforma intermediária ou conversão bancária; confirmar impostos, VAT/IVA e payout.',
-                'bestFor' => 'Guias práticos, estudo bíblico/histórico, organização, imigração, idioma e templates profissionais.',
+                'bestFor' => 'Guias práticos, arqueologia documental, manuscritos preservados, organização, imigração, idioma e templates profissionais.',
                 'conversionNotes' => 'Checkout com VAT/IVA claro, prova editorial forte e idioma local. Portugal é ponte natural para começar.',
                 'risk' => 'LGPD/GDPR, VAT/IVA e regras de consumidor digital; evitar promessas absolutas.',
                 'priority' => 3,
@@ -84,7 +83,7 @@ class DigitalMarketingResearchService
                 'countries' => 'Índia, Filipinas, Singapura, Japão e audiência em inglês',
                 'gateway' => 'PayPal, Stripe onde disponível, Paddle/Gumroad/Payhip como merchant of record ou marketplace digital',
                 'receivesInBrl' => 'Normalmente indireto, por payout da plataforma e conversão posterior.',
-                'bestFor' => 'Templates, estudo, produtividade, planners, inglês e guias religiosos/históricos em inglês.',
+                'bestFor' => 'Templates, estudo, produtividade, planners, inglês e guias histórico-documentais em inglês.',
                 'conversionNotes' => 'Preço baixo e prova visual são críticos; começar por mercados com inglês forte antes de traduzir.',
                 'risk' => 'Muitos países têm métodos locais fortes; sem gateway local a conversão pode cair.',
                 'priority' => 4,
@@ -95,8 +94,7 @@ class DigitalMarketingResearchService
     private function buildSnapshot(): array
     {
         $pdfSnapshot = $this->pdfResearch->snapshot();
-        $metaSnapshot = $this->metaResearch->snapshot();
-        $mappedCreatives = $this->mappedCreatives($pdfSnapshot, $metaSnapshot);
+        $mappedCreatives = $this->mappedCreatives($pdfSnapshot);
         $gateways = $this->paymentGatewayMatrix();
 
         return [
@@ -112,19 +110,20 @@ class DigitalMarketingResearchService
             'paymentGateways' => $gateways,
             'sourceSearches' => $this->sourceSearches(),
             'operatingRules' => [
+                'Listar somente criativos ligados a PDFs/produtos digitais; excluir produtos físicos, afiliados Shopee e e-commerce físico deste radar.',
                 'Modelar estrutura, promessa e funil; nunca copiar texto, arte, PDF, páginas internas ou identidade visual de terceiros.',
                 'Conversão real e ROAS não são públicos: longevidade de anúncio, repetição de criativo e destino ativo são proxies, não prova absoluta.',
                 'Antes de escalar tráfego fora do Brasil, validar checkout, impostos, reembolso, idioma e payout em reais.',
             ],
             'providerStatus' => [
-                'name' => 'Meta Ads Library + curadoria PDF + matriz regional de checkout',
+                'name' => 'Meta Ads Library + curadoria exclusiva de PDFs + matriz regional de checkout',
                 'status' => 'Radar inicial pronto para operação',
-                'detail' => 'A cron noturna atualiza cache e snapshot local. Fontes públicas podem bloquear scraping; nesses casos a curadoria verificada permanece como fallback.',
+                'detail' => 'A cron noturna atualiza cache e snapshot local. O radar exclui criativos de produtos físicos e mantém apenas oportunidades de PDF, app simples ou site como entregáveis.',
             ],
         ];
     }
 
-    private function mappedCreatives(array $pdfSnapshot, array $metaSnapshot): array
+    private function mappedCreatives(array $pdfSnapshot): array
     {
         $pdfBenchmarks = collect($pdfSnapshot['benchmarks'] ?? [])->map(function (array $ad): array {
             return [
@@ -146,28 +145,7 @@ class DigitalMarketingResearchService
             ];
         });
 
-        $metaItems = collect($metaSnapshot['items'] ?? [])->map(function (array $item): array {
-            return [
-                'id' => 'meta-'.$item['creativeId'],
-                'type' => 'Criativo / página de conversão',
-                'region' => 'América Latina',
-                'market' => 'Brasil',
-                'source' => 'Meta Ads Library',
-                'creativeId' => $item['creativeId'],
-                'brand' => $item['brand'] ?? 'Benchmark externo',
-                'title' => $item['title'] ?? 'Criativo mapeado',
-                'hook' => $item['hook'] ?? null,
-                'activeDays' => (int) ($item['activeDays'] ?? 0),
-                'versions' => $item['versions'] ?? null,
-                'landingPageDomain' => $item['landingPageDomain'] ?? null,
-                'adLibraryUrl' => $item['adLibraryUrl'] ?? null,
-                'landingPageUrl' => $item['landingPageUrl'] ?? null,
-                'action' => $item['recommendation'] ?? 'Usar como referência de ângulo, não como cópia.',
-            ];
-        });
-
         return $pdfBenchmarks
-            ->merge($metaItems)
             ->unique('id')
             ->sortByDesc('activeDays')
             ->values()
@@ -189,17 +167,17 @@ class DigitalMarketingResearchService
             'checkout' => $gateway['gateway'],
             'moneyBackToBrazil' => $gateway['receivesInBrl'],
             'adAngles' => match ($gateway['region']) {
-                'América Latina' => ['renda extra', 'organização da casa', 'religião/mistérios bíblicos', 'educação infantil'],
-                'América' => ['templates prontos', 'Bible mysteries', 'printable planners', 'side hustle guides'],
-                'Europa' => ['guias práticos', 'Portugal/idioma', 'história bíblica', 'produtividade'],
-                default => ['study templates', 'productivity', 'English learning', 'faith/history explainer'],
+                'América Latina' => ['renda extra em PDF', 'organização em PDF', 'arqueologia documental', 'educação infantil'],
+                'América' => ['templates prontos', 'biblical archaeology evidence', 'printable planners', 'side hustle PDF guides'],
+                'Europa' => ['guias práticos', 'Portugal/idioma', 'manuscritos preservados', 'produtividade'],
+                default => ['study templates', 'productivity', 'English learning', 'history/documentary explainer'],
             },
         ])->sortBy('region')->values()->all();
     }
 
     private function sourceSearches(): array
     {
-        $keywords = ['pdf ebook', 'printable planner', 'bible mystery ebook', 'renda extra pdf', 'atividades alfabetização pdf'];
+        $keywords = ['pdf ebook', 'printable planner', 'biblical archaeology ebook', 'renda extra pdf', 'atividades alfabetização pdf', 'museum manuscripts ebook'];
         $countries = [
             'BR' => 'Brasil',
             'US' => 'Estados Unidos',

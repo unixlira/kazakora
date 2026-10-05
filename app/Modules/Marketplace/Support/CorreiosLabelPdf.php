@@ -55,11 +55,19 @@ class CorreiosLabelPdf
         $pdf->SetFont('Helvetica', 'B', 8);
         $pdf->SetX($x);
         $pdf->Cell($w, 4, $this->t($pp->service_label.' · '.$pp->weight_grams.' g'), 0, 1, 'C');
-        $pdf->Line($x, 28, self::LARGURA - self::MARGEM, 28);
-        $this->kicker($pdf, $x, 29.5, $w, 'CEP destinatário');
-        $pdf->SetFont('Helvetica', 'B', 18);
-        $pdf->SetXY($x, 34);
-        $pdf->Cell($w, 8, $this->t($this->cep($pp->zip)), 0, 0, 'C');
+        // CEP em código de barras (pedido dos Correios, 2026-10-05). O
+        // número fica escrito no título, pra digitar se a leitura falhar.
+        $pdf->Line($x, 21, self::LARGURA - self::MARGEM, 21);
+        $this->kicker($pdf, $x, 22.5, $w, 'CEP destinatário '.$this->cep($pp->zip));
+        $digitosCep = preg_replace('/\D/', '', (string) $pp->zip);
+
+        if (strlen($digitosCep) === 8) {
+            $this->cepEmBarras($pdf, $digitosCep, $x, 27, $w, 16);
+        } else {
+            $pdf->SetFont('Helvetica', 'B', 18);
+            $pdf->SetXY($x, 30);
+            $pdf->Cell($w, 8, $this->t($this->cep($pp->zip)), 0, 0, 'C');
+        }
 
         $y = self::MARGEM + $qrLado + 2;
         $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
@@ -273,6 +281,19 @@ class CorreiosLabelPdf
         foreach ($codigo->getBarsArray('XYWH') as [$bx, , $bw]) {
             $pdf->Rect($x + $bx * $modulo, $y, $bw * $modulo, $altura, 'F');
         }
+    }
+
+    /**
+     * Code128 do CEP centralizado na faixa. Barra de 0,5 mm = 4 pontos
+     * exatos na térmica de 203 dpi, pra o leitor dos Correios pegar sem
+     * borrão; o que sobra dos lados é a zona quieta.
+     */
+    private function cepEmBarras(FPDF $pdf, string $digitos, float $x, float $y, float $largura, float $altura): void
+    {
+        $colunas = (new Barcode)->getBarcodeObj('C128C', $digitos, -1, -1)->getArray()['ncols'];
+        $larguraBarras = min($largura, $colunas * 0.5);
+
+        $this->code128($pdf, $digitos, $x + ($largura - $larguraBarras) / 2, $y, $larguraBarras, $altura);
     }
 
     private function kicker(FPDF $pdf, float $x, float $y, float $w, string $texto, string $alinhamento = 'C'): void

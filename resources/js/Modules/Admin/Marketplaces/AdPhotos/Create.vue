@@ -69,12 +69,12 @@ const submit = () => {
     <AdminLayout>
         <section class="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-2xl shadow-slate-300">
             <div class="relative px-6 py-8 sm:px-8 lg:px-10">
-                <div class="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-orange-400/25 blur-3xl"></div>
-                <div class="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-emerald-400/10 blur-3xl"></div>
+                <div class="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-purple-400/25 blur-3xl"></div>
+                <div class="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-fuchsia-400/10 blur-3xl"></div>
 
                 <div class="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
                     <div class="max-w-4xl">
-                        <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-orange-100 ring-1 ring-white/15">
+                        <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-purple-100 ring-1 ring-white/15">
                             Novo produto · Matriz automática
                         </span>
                         <h1 class="mt-5 text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
@@ -109,7 +109,7 @@ const submit = () => {
 
                 <label class="block">
                     <span class="text-sm font-black text-slate-700">Marketplace principal</span>
-                    <select v-model="form.marketplace" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100">
+                    <select v-model="form.marketplace" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100">
                         <option v-for="(marketplace, key) in marketplaces" :key="key" :value="key">
                             {{ marketplace.label }} · {{ marketplace.imageCount }} imagens
                         </option>
@@ -120,13 +120,13 @@ const submit = () => {
 
                 <label class="block">
                     <span class="text-sm font-black text-slate-700">Nome do produto</span>
-                    <input v-model="form.product_name" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Ex: Organizador dobrável multiuso">
+                    <input v-model="form.product_name" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100" placeholder="Ex: Organizador dobrável multiuso">
                     <p v-if="form.errors.product_name" class="mt-2 text-xs font-bold text-red-600">{{ form.errors.product_name }}</p>
                 </label>
 
                 <label class="block">
                     <span class="text-sm font-black text-slate-700">Categoria</span>
-                    <input v-model="form.category_hint" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Ex: Casa e Decoração · Organizadores">
+                    <input v-model="form.category_hint" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100" placeholder="Ex: Casa e Decoração · Organizadores">
                     <p v-if="form.errors.category_hint" class="mt-2 text-xs font-bold text-red-600">{{ form.errors.category_hint }}</p>
                 </label>
 
@@ -134,7 +134,7 @@ const submit = () => {
                     <span class="text-sm font-black text-slate-700">Foto do produto</span>
                     <label
                         class="mt-2 flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed bg-slate-50 p-5 text-center transition"
-                        :class="dragActive ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300'"
+                        :class="dragActive ? 'border-purple-400 bg-purple-50' : 'border-slate-200 hover:border-purple-300'"
                         @dragover.prevent="dragActive = true"
                         @dragleave.prevent="dragActive = false"
                         @drop.prevent="onDrop"
@@ -157,7 +157,7 @@ const submit = () => {
                         Descrição e ficha técnica
                         <small class="font-bold text-slate-400">{{ descriptionCount }}/{{ limits.description }}</small>
                     </span>
-                    <textarea v-model="form.description" rows="9" :maxlength="limits.description" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Cole a descrição completa, medidas, materiais, benefícios, compatibilidades e observações comerciais."></textarea>
+                    <textarea v-model="form.description" rows="9" :maxlength="limits.description" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100" placeholder="Cole a descrição completa, medidas, materiais, benefícios, compatibilidades e observações comerciais."></textarea>
                     <p v-if="form.errors.description" class="mt-2 text-xs font-bold text-red-600">{{ form.errors.description }}</p>
                 </label>
 
@@ -166,7 +166,7 @@ const submit = () => {
                         O que não pode mudar
                         <small class="font-bold text-slate-400">{{ immutableCount }}/{{ limits.immutableNotes }}</small>
                     </span>
-                    <textarea v-model="form.immutable_notes" rows="4" :maxlength="limits.immutableNotes" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Ex: cor real, formato, proporção, embalagem, rótulo, tecido, medidas, ferragens, modelo..."></textarea>
+                    <textarea v-model="form.immutable_notes" rows="4" :maxlength="limits.immutableNotes" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100" placeholder="Ex: cor real, formato, proporção, embalagem, rótulo, tecido, medidas, ferragens, modelo..."></textarea>
                     <p v-if="form.errors.immutable_notes" class="mt-2 text-xs font-bold text-red-600">{{ form.errors.immutable_notes }}</p>
                 </label>
 
@@ -175,7 +175,7 @@ const submit = () => {
                         Links e referências
                         <small class="font-bold text-slate-400">{{ referenceCount }}/{{ limits.referenceLinks }}</small>
                     </span>
-                    <textarea v-model="form.reference_links" rows="3" :maxlength="limits.referenceLinks" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Cole anúncio atual, fornecedor, concorrentes ou referências visuais."></textarea>
+                    <textarea v-model="form.reference_links" rows="3" :maxlength="limits.referenceLinks" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-100" placeholder="Cole anúncio atual, fornecedor, concorrentes ou referências visuais."></textarea>
                     <p v-if="form.errors.reference_links" class="mt-2 text-xs font-bold text-red-600">{{ form.errors.reference_links }}</p>
                 </label>
 

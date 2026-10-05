@@ -11,6 +11,9 @@ use App\Modules\Admin\Http\Controllers\CompetitorAnalysisController;
 use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
+use App\Modules\Admin\Http\Controllers\ConversionPageController;
+use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
+use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
@@ -355,6 +358,18 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::patch('marketplaces/fotos-anuncio/{brief}/aprovar', [MarketplaceAdPhotoController::class, 'approve'])->name('marketplaces.fotos-anuncio.aprovar');
         Route::patch('marketplaces/fotos-anuncio/{brief}/reprovar', [MarketplaceAdPhotoController::class, 'reject'])->name('marketplaces.fotos-anuncio.reprovar');
         Route::post('marketplaces/fotos-anuncio/{brief}/gerar-criativos', [MarketplaceAdPhotoController::class, 'startGeneration'])->name('marketplaces.fotos-anuncio.gerar-criativos');
+        Route::get('mkt-digital', [DigitalMarketingController::class, 'index'])->name('mkt-digital');
+        Route::post('mkt-digital/atualizar', [DigitalMarketingController::class, 'refresh'])
+            ->middleware('throttle:4,1')
+            ->name('mkt-digital.atualizar');
+        Route::get('paginas-de-conversao', [ConversionPageController::class, 'index'])->name('paginas-de-conversao');
+        Route::post('paginas-de-conversao/atualizar', [ConversionPageController::class, 'refresh'])
+            ->middleware('throttle:4,1')
+            ->name('paginas-de-conversao.atualizar');
+        Route::get('pdf-oportunidades', [PdfOpportunityController::class, 'index'])->name('pdf-oportunidades');
+        Route::post('pdf-oportunidades/atualizar', [PdfOpportunityController::class, 'refresh'])
+            ->middleware('throttle:4,1')
+            ->name('pdf-oportunidades.atualizar');
     });
 
     Route::middleware('permission:financeiro.view')->group(function () {

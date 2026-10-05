@@ -50,7 +50,7 @@ const formatShortDate = (date) =>
     new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`));
 
 // Same hues as the CSS design tokens (--color-primary/secondary/success/warning/error/info).
-const chartPalette = ['#5d87ff', '#49beff', '#13deb9', '#f6b51e', '#ef4444', '#8754ec'];
+const chartPalette = ['#6d28d9', '#a855f7', '#c084fc', '#8b5cf6', '#dc2626', '#7c3aed'];
 
 const orderStatusChartData = computed(() => ({
     labels: props.orderStatusBreakdown.map((item) => item.label),
@@ -92,16 +92,16 @@ const visitsChartData = computed(() => ({
         {
             label: 'Visualizações',
             data: props.visitsSeries.map((item) => item.views),
-            borderColor: '#5d87ff',
-            backgroundColor: '#5d87ff33',
+            borderColor: '#6d28d9',
+            backgroundColor: '#6d28d933',
             fill: true,
             tension: 0.4,
         },
         {
             label: 'Visitantes únicos',
             data: props.visitsSeries.map((item) => item.visitors),
-            borderColor: '#8754ec',
-            backgroundColor: '#8754ec33',
+            borderColor: '#a855f7',
+            backgroundColor: '#a855f733',
             fill: true,
             tension: 0.4,
         },
@@ -114,7 +114,7 @@ const revenueChartData = computed(() => ({
         {
             label: 'Faturamento',
             data: props.revenueSeries.map((item) => item.revenue),
-            backgroundColor: '#13deb9',
+            backgroundColor: '#7c3aed',
             borderRadius: 6,
         },
     ],

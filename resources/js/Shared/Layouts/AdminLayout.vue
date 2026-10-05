@@ -12,8 +12,6 @@ const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const notifications = computed(() => page.props.notifications?.items ?? []);
 const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
-// Contador por item do menu (ex.: alertas abertos dos Envios Flex).
-const sidebarBadge = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
 const { can } = usePermissions();
@@ -117,7 +115,7 @@ watch(
 
                 <div class="hidden w-full items-center justify-between md:flex">
                     <Link href="/admin" class="inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-primary">
-                        <i class="fas fa-leaf"></i>
+                        <i class="fas fa-gem"></i>
                         <span v-if="!sidebarCollapsed" class="ml-2">KazaKora Admin</span>
                     </Link>
                     <button type="button" class="text-slate-400 hover:text-primary" @click="toggleSidebar">
@@ -126,7 +124,7 @@ watch(
                 </div>
 
                 <Link href="/admin" class="mr-0 inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-primary md:hidden">
-                    <i class="fas fa-leaf me-2"></i> KazaKora Admin
+                    <i class="fas fa-gem me-2"></i> KazaKora Admin
                 </Link>
 
                 <!-- Bug real reportado 2026-08-09: esse painel não tinha
@@ -152,11 +150,6 @@ watch(
                                         : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'">
                                     <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? item.color : 'text-slate-400']"></i>
                                     <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
-                                    <span v-if="sidebarBadge(item) > 0"
-                                        class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
-                                        :title="`${sidebarBadge(item)} pendência(s)`">
-                                        {{ sidebarBadge(item) }}
-                                    </span>
                                 </Link>
                             </li>
                         </ul>

@@ -21,6 +21,14 @@ export const sidebarSections = [
         ],
     },
     {
+        heading: 'MKT Digital',
+        items: [
+            { label: 'Criativos Mapeados', href: '/admin/mkt-digital', icon: 'fas fa-globe', color: 'text-primary', permission: 'relatorios.view' },
+            { label: 'Páginas de Conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', color: 'text-error', permission: 'relatorios.view' },
+            { label: 'PDF Oportunidades', href: '/admin/pdf-oportunidades', icon: 'fas fa-file-pdf', color: 'text-warning', permission: 'relatorios.view' },
+        ],
+    },
+    {
         heading: 'Cadastros',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', color: 'text-info', permission: 'cadastros.view' },

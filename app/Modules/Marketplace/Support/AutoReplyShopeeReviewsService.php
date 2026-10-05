@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Notifications\ShopeeReviewReplyFailedNotification;
 use App\Services\Shopee\Exceptions\ShopeeException;
+use App\Services\Shopee\ShopeeClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -124,7 +126,10 @@ class AutoReplyShopeeReviewsService
         'Obrigado pela avaliação! Dica rápida: quando a saúde da bateria está abaixo de 80%, o próprio aparelho pode limitar o carregamento turbo e ele deixa de carregar rápido. Qualquer dúvida, chama a gente.',
     ];
 
-    public function __construct(private readonly MarketplaceDriverManager $drivers) {}
+    public function __construct(
+        private readonly MarketplaceDriverManager $drivers,
+        private readonly ShopeeClient $shopeeClient,
+    ) {}
 
     /**
      * @return array{checked: int, sent: int, failed: int, skipped: int}
@@ -212,7 +217,85 @@ class AutoReplyShopeeReviewsService
                 }
             });
 
+        if ($summary['checked'] < $limit) {
+            $this->replyUnansweredShopeeApiComments($driver, $limit, $summary);
+        }
+
         return $summary;
+    }
+
+    private function replyUnansweredShopeeApiComments(object $driver, int $limit, array &$summary): void
+    {
+        $remaining = $limit - $summary['checked'];
+
+        if ($remaining <= 0) {
+            return;
+        }
+
+        $itemIds = ProductChannelListing::query()
+            ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
+            ->whereNotNull('external_id')
+            ->where('external_id', '!=', '')
+            ->distinct()
+            ->pluck('external_id')
+            ->map(fn ($value) => (string) $value)
+            ->values();
+
+        foreach ($itemIds as $itemId) {
+            $cursor = '';
+
+            do {
+                try {
+                    $page = $this->shopeeClient->get('/api/v2/product/get_comment', array_filter([
+                        'item_id' => $itemId,
+                        'cursor' => $cursor,
+                        'page_size' => 100,
+                    ], fn ($value) => $value !== ''));
+                } catch (Throwable $exception) {
+                    Log::channel('reviews')->warning('Falha ao consultar comentários da Shopee para fallback de resposta', [
+                        'item_id' => $itemId,
+                        'erro' => mb_substr($exception->getMessage(), 0, 180),
+                    ]);
+
+                    break;
+                }
+
+                foreach ($page['response']['item_comment_list'] ?? [] as $comment) {
+                    if ($summary['checked'] >= $limit) {
+                        return;
+                    }
+
+                    $commentId = (string) ($comment['comment_id'] ?? '');
+                    $existingReply = trim((string) ($comment['comment_reply']['reply'] ?? ''));
+                    $rating = (int) ($comment['rating_star'] ?? 0);
+
+                    if ($commentId === '' || $rating < 1 || $rating > 5 || $existingReply !== '') {
+                        continue;
+                    }
+
+                    $summary['checked']++;
+                    $reply = $this->pickApiTemplate($commentId, $rating, (string) ($comment['comment'] ?? ''));
+
+                    try {
+                        $driver->replyReview($commentId, $reply);
+                        $summary['sent']++;
+                    } catch (Throwable $exception) {
+                        $duplicate = $this->isDuplicateReplyException($exception);
+                        Log::channel('reviews')->warning('Falha no fallback de resposta direta da avaliação Shopee', [
+                            'comment_id' => $commentId,
+                            'item_id' => $itemId,
+                            'duplicada' => $duplicate,
+                            'erro' => $this->friendlyErrorMessage($exception),
+                        ]);
+
+                        $summary[$duplicate ? 'sent' : 'failed']++;
+                    }
+                }
+
+                $more = (bool) ($page['response']['more'] ?? false);
+                $cursor = (string) ($page['response']['next_cursor'] ?? '');
+            } while ($more && $cursor !== '');
+        }
     }
 
     private function notifyAdmins(Review $review, string $errorMessage): void
@@ -316,9 +399,29 @@ class AutoReplyShopeeReviewsService
         return $templates[$index];
     }
 
+    private function pickApiTemplate(string $commentId, int $rating, string $comment): string
+    {
+        $templates = $this->templatesByRating[$rating] ?? $this->templatesByRating[3];
+        $wordGroup = $this->reviewWordGroupFromText($comment);
+
+        if ($rating <= 3 && $wordGroup !== null) {
+            $templates = $this->supportTemplatesByKeywordGroup[$wordGroup] ?? $templates;
+        }
+
+        $seed = $commentId.'|'.$rating.'|'.($wordGroup ?? 'generic').'|api-fallback';
+        $index = abs(crc32($seed)) % count($templates);
+
+        return $templates[$index];
+    }
+
     private function reviewWordGroup(Review $review): ?string
     {
-        $text = $this->normalizedSearchText((string) $review->comment);
+        return $this->reviewWordGroupFromText((string) $review->comment);
+    }
+
+    private function reviewWordGroupFromText(string $text): ?string
+    {
+        $text = $this->normalizedSearchText($text);
 
         if ($this->containsAny($text, ['atraso', 'atrasou', 'demora', 'demorou', 'entrega', 'transportadora', 'correio'])) {
             return 'delivery';

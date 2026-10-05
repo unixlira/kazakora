@@ -23,7 +23,7 @@ const formatShortDate = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-dig
 const chartData = computed(() => ({
     labels: props.cashFlowSeries.map((item) => formatShortDate(item.date)),
     datasets: [
-        { label: 'Entradas', data: props.cashFlowSeries.map((item) => item.income), backgroundColor: '#13deb9' },
+        { label: 'Entradas', data: props.cashFlowSeries.map((item) => item.income), backgroundColor: '#7c3aed' },
         { label: 'Saídas', data: props.cashFlowSeries.map((item) => item.expense), backgroundColor: '#ef4444' },
     ],
 }));
@@ -33,7 +33,7 @@ const chartData = computed(() => ({
 const CHANNEL_STYLES = {
     shopee: { label: 'Shopee', color: '#EE4D2D' },
     mercado_livre: { label: 'Mercado Livre', color: '#2968C8' },
-    tiktok_shop: { label: 'TikTok Shop', color: '#111827' },
+    tiktok_shop: { label: 'TikTok Shop', color: '#321a4a' },
     amazon: { label: 'Amazon', color: '#FF9900' },
     nota_fiscal_avulsa: { label: 'NF Avulsa', color: '#64748b' },
 };
@@ -134,7 +134,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
         </div>
 
         <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500 shadow-sm dark:text-slate-400">
-            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> para chegar no lucro líquido.
+            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }} para chegar no lucro líquido.
         </div>
 
         <h2 class="mb-3 text-xl font-bold">Lucro líquido por Marketplace · Mês Atual</h2>
@@ -186,11 +186,6 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                     <div class="min-w-0">
                         <p class="text-xs uppercase tracking-wide text-slate-400">Saldo disponível — Shopee</p>
                         <p class="mt-0.5 break-words text-xl font-bold leading-tight tracking-tight tabular-nums sm:text-2xl">{{ walletBalances.shopee !== null ? formatPrice(walletBalances.shopee) : 'Indisponível' }}</p>
-                        <!-- Saldo fica em cache por 5 min (a consulta ao vivo na Shopee
-                             levava ~1,2s em todo carregamento) — ?refresh=1 busca agora. -->
-                        <Link href="/admin/dashboard-financeiro?refresh=1" preserve-scroll class="mt-1 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-primary">
-                            <i class="fas fa-rotate-right text-[10px]"></i> Atualizar saldo
-                        </Link>
                     </div>
                 </div>
             </div>

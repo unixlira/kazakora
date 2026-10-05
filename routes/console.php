@@ -188,6 +188,12 @@ Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverla
 // tinha sido agendado.
 Schedule::command('koraflex:limpar-recibos')->dailyAt('03:40');
 
+// Radar de MKT Digital: alimenta a tela Admin > MKT Digital com criativos
+// mapeados, oportunidades de PDF e matriz regional de checkout. Roda de
+// madrugada para não disputar rede com operação e mantém cache/arquivo local
+// mesmo quando fontes públicas bloqueiam scraping ao vivo.
+Schedule::command('digital-marketing:scan')->dailyAt('03:20')->withoutOverlapping(60);
+
 // Vendas agendadas pelo canal (Coleta/Places do Mercado Livre, etiqueta só
 // liberada perto de uma data futura) — pedido explícito 2026-08-14, depois
 // do pedido #278 (agendado pro dia 17, ninguém do time sabia por que a

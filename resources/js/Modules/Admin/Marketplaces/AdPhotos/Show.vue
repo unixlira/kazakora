@@ -43,7 +43,7 @@ const dueLabel = computed(() => {
 
 const statusClass = (status) => ({
     ready_for_approval: 'bg-amber-50 text-amber-700 ring-amber-100',
-    approved: 'bg-sky-50 text-sky-700 ring-sky-100',
+    approved: 'bg-purple-50 text-purple-700 ring-purple-100',
     queued: 'bg-violet-50 text-violet-700 ring-violet-100',
     generating: 'bg-violet-50 text-violet-700 ring-violet-100',
     completed: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
@@ -86,12 +86,12 @@ onUnmounted(() => {
     <AdminLayout>
         <section class="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-2xl shadow-slate-300">
             <div class="relative px-6 py-8 sm:px-8 lg:px-10">
-                <div class="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-orange-400/25 blur-3xl"></div>
-                <div class="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-emerald-400/10 blur-3xl"></div>
+                <div class="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-purple-400/25 blur-3xl"></div>
+                <div class="absolute bottom-0 left-1/3 h-52 w-52 rounded-full bg-fuchsia-400/10 blur-3xl"></div>
 
                 <div class="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
                     <div class="max-w-4xl">
-                        <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-orange-100 ring-1 ring-white/15">
+                        <span class="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.24em] text-purple-100 ring-1 ring-white/15">
                             {{ brief.marketplaceLabel }} · Produto automático
                         </span>
                         <h1 class="mt-5 text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
@@ -128,7 +128,7 @@ onUnmounted(() => {
                     </div>
 
                     <div class="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
-                        <div class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500" :style="{ width: `${progressPercent}%` }"></div>
+                        <div class="h-full rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500" :style="{ width: `${progressPercent}%` }"></div>
                     </div>
 
                     <div class="mt-5 grid gap-3 sm:grid-cols-3">
@@ -147,10 +147,10 @@ onUnmounted(() => {
                     </div>
 
                     <div class="mt-5 flex flex-col gap-3 sm:flex-row">
-                        <button type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="brief.approvalStatus === 'approved'" @click="approve">
+                        <button type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="brief.approvalStatus === 'approved'" @click="approve">
                             {{ brief.approvalStatus === 'approved' ? 'Matriz aprovada' : 'Aprovar matriz' }}
                         </button>
-                        <button type="button" class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50" :disabled="isRunning || brief.status === 'completed'" @click="startGeneration">
+                        <button type="button" class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="isRunning || brief.status === 'completed'" @click="startGeneration">
                             {{ isRunning ? 'Fila rodando...' : 'Gerar criativos em background' }}
                         </button>
                         <button type="button" class="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black uppercase tracking-wide text-slate-700 transition hover:bg-slate-200" @click="copyPack">
@@ -167,7 +167,7 @@ onUnmounted(() => {
                         <details v-for="item in brief.matrix" :key="item.key" class="group rounded-2xl border border-slate-100 bg-slate-50 p-4 open:bg-white open:shadow-sm">
                             <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
                                 <div>
-                                    <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Arte {{ item.key }} · {{ item.status || 'pending' }}</p>
+                                    <p class="text-xs font-black uppercase tracking-[0.2em] text-purple-700">Arte {{ item.key }} · {{ item.status || 'pending' }}</p>
                                     <h3 class="mt-1 text-base font-black text-slate-900">{{ item.title }}</h3>
                                     <p class="mt-1 text-sm leading-6 text-slate-500">{{ item.function }}</p>
                                 </div>
@@ -251,7 +251,7 @@ onUnmounted(() => {
                     </div>
                 </article>
 
-                <Link href="/admin/marketplaces/fotos-anuncio" class="block rounded-2xl bg-slate-950 px-5 py-4 text-center text-sm font-black uppercase tracking-wide text-white shadow-xl transition hover:bg-emerald-700">
+                <Link href="/admin/marketplaces/fotos-anuncio" class="block rounded-2xl bg-slate-950 px-5 py-4 text-center text-sm font-black uppercase tracking-wide text-white shadow-xl transition hover:bg-purple-700">
                     Voltar para listagem
                 </Link>
             </aside>

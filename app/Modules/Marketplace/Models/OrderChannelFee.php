@@ -25,15 +25,35 @@ class OrderChannelFee extends Model
         'channel',
         'gross_amount',
         'fee_amount',
+        'commission_fee',
+        'service_fee',
+        'shipping_fee',
+        'seller_discount',
+        'platform_discount',
+        'payout_amount',
+        'breakdown',
         'source',
         'computed_at',
     ];
+
+    /**
+     * Componentes da taxa que o driver pode devolver em
+     * `marketplace_fee_breakdown` (ver ShopeeDriver/MercadoLivreDriver).
+     */
+    public const COMPONENTES = ['commission_fee', 'service_fee', 'shipping_fee', 'seller_discount', 'platform_discount', 'payout_amount', 'breakdown'];
 
     protected function casts(): array
     {
         return [
             'gross_amount' => 'decimal:2',
             'fee_amount' => 'decimal:2',
+            'commission_fee' => 'decimal:2',
+            'service_fee' => 'decimal:2',
+            'shipping_fee' => 'decimal:2',
+            'seller_discount' => 'decimal:2',
+            'platform_discount' => 'decimal:2',
+            'payout_amount' => 'decimal:2',
+            'breakdown' => 'array',
             'computed_at' => 'datetime',
         ];
     }

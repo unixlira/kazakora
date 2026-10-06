@@ -135,11 +135,15 @@ class OrderImportService
             // sobrescrita — quem digitou sabe mais que a API.
             if (($data['marketplace_fee'] ?? null) !== null) {
                 $taxa = OrderChannelFee::query()->firstOrNew(['order_id' => $existing->id, 'channel' => $channel]);
+                $componentes = self::componentesDaTaxa($data);
+                $mudou = (float) $taxa->fee_amount !== (float) $data['marketplace_fee']
+                    || collect($componentes)->contains(fn ($valor, $campo) => $campo !== 'breakdown' && (string) $taxa->{$campo} !== (string) ($valor === null ? null : number_format((float) $valor, 2, '.', '')));
 
-                if ($taxa->source !== OrderChannelFee::SOURCE_MANUAL && (float) $taxa->fee_amount !== (float) $data['marketplace_fee']) {
+                if ($taxa->source !== OrderChannelFee::SOURCE_MANUAL && $mudou) {
                     $taxa->fill([
                         'gross_amount' => $data['subtotal'] ?? $existing->subtotal,
                         'fee_amount' => $data['marketplace_fee'],
+                        ...$componentes,
                         'source' => OrderChannelFee::SOURCE_API,
                         'computed_at' => now(),
                     ])->save();
@@ -636,6 +640,7 @@ class OrderImportService
                     [
                         'gross_amount' => $data['subtotal'],
                         'fee_amount' => $data['marketplace_fee'],
+                        ...self::componentesDaTaxa($data),
                         'source' => OrderChannelFee::SOURCE_API,
                         'computed_at' => now(),
                     ],
@@ -1241,5 +1246,19 @@ class OrderImportService
         }
 
         return $data->isToday() ? now() : $data;
+    }
+
+    /**
+     * Quebra da taxa que o driver mandou (comissão, serviço, frete da loja,
+     * descontos, repasse) — só as colunas conhecidas, nada a mais. Driver
+     * que não manda quebra (Amazon/TikTok pelo Bling) devolve vazio e as
+     * colunas ficam como estão.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function componentesDaTaxa(array $data): array
+    {
+        return array_intersect_key($data['marketplace_fee_breakdown'] ?? [], array_flip(OrderChannelFee::COMPONENTES));
     }
 }

@@ -87,4 +87,74 @@ class ImportOrderMarketplaceFeeTest extends TestCase
 
         $this->assertArrayNotHasKey('marketplace_fee', $data);
     }
+
+    /**
+     * Pedido do usuário 2026-10-06: taxa = venda − repasse real, com a
+     * quebra. Números do pedido real #2802.
+     */
+    public function test_breakdown_uses_the_real_payout_and_splits_the_components(): void
+    {
+        $this->connectShopee();
+
+        Http::fake([
+            '*/api/v2/payment/get_escrow_detail*' => Http::response([
+                'response' => [
+                    'order_income' => [
+                        'commission_fee' => 11.34, 'service_fee' => 17.26, 'escrow_amount' => 61.39,
+                        'actual_shipping_fee' => 13.25, 'shopee_shipping_rebate' => 13.25,
+                        'pix_discount' => 4.49, 'voucher_from_seller' => 0, 'seller_discount' => 74.28,
+                    ],
+                ],
+            ]),
+        ]);
+
+        $quebra = app(ShopeeDriver::class)->resolveFeeBreakdown('SN123', 89.99);
+
+        $this->assertSame(28.60, $quebra['fee_amount']);
+        $this->assertSame(61.39, $quebra['payout_amount']);
+        $this->assertSame(11.34, $quebra['commission_fee']);
+        $this->assertSame(17.26, $quebra['service_fee']);
+        $this->assertSame(0.0, $quebra['shipping_fee'], 'Frete coberto pela Shopee não é custo da loja.');
+        $this->assertSame(4.49, $quebra['platform_discount']);
+    }
+
+    /** Frete que a Shopee não subsidiou e cupom da loja entram na taxa. */
+    public function test_breakdown_counts_unsubsidized_shipping_and_seller_voucher(): void
+    {
+        $this->connectShopee();
+
+        Http::fake([
+            '*/api/v2/payment/get_escrow_detail*' => Http::response([
+                'response' => [
+                    'order_income' => [
+                        'commission_fee' => 10, 'service_fee' => 5, 'escrow_amount' => 70,
+                        'actual_shipping_fee' => 12, 'shopee_shipping_rebate' => 4, 'voucher_from_seller' => 5,
+                    ],
+                ],
+            ]),
+        ]);
+
+        $quebra = app(ShopeeDriver::class)->resolveFeeBreakdown('SN123', 100.0);
+
+        $this->assertSame(30.0, $quebra['fee_amount']);
+        $this->assertSame(8.0, $quebra['shipping_fee']);
+        $this->assertSame(5.0, $quebra['seller_discount']);
+    }
+
+    /** Sem repasse fechado ainda: cai pra comissão + serviço, como antes. */
+    public function test_breakdown_without_payout_falls_back_to_commission_plus_service(): void
+    {
+        $this->connectShopee();
+
+        Http::fake([
+            '*/api/v2/payment/get_escrow_detail*' => Http::response([
+                'response' => ['order_income' => ['commission_fee' => 8.82, 'service_fee' => 4.98, 'escrow_amount' => 0]],
+            ]),
+        ]);
+
+        $quebra = app(ShopeeDriver::class)->resolveFeeBreakdown('SN123', 50.0);
+
+        $this->assertSame(13.80, $quebra['fee_amount']);
+        $this->assertNull($quebra['payout_amount']);
+    }
 }

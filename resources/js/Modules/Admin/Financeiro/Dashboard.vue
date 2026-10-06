@@ -163,9 +163,20 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Vendas líquidas</span><span class="font-semibold">{{ formatPrice(market.grossRevenue) }}</span></div>
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) ADS/campanhas</span><span class="font-semibold text-error">{{ formatPrice(market.adSpend) }}</span></div>
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Taxas/frete/plataforma</span><span class="font-semibold text-error">{{ formatPrice(market.platformCosts) }}</span></div>
+                    <div v-if="market.feeBreakdown?.pedidosComQuebra" class="space-y-1 border-l-2 border-[var(--surface-border)] pl-3 text-xs">
+                        <div class="flex justify-between gap-3"><span class="text-slate-400">comissão + serviço</span><span>{{ formatPrice(market.feeBreakdown.comissao) }}</span></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-400">frete pago pela loja</span><span>{{ formatPrice(market.feeBreakdown.freteLoja) }}</span></div>
+                        <div v-if="market.feeBreakdown.descontoLoja" class="flex justify-between gap-3"><span class="text-slate-400">descontos bancados pela loja</span><span>{{ formatPrice(market.feeBreakdown.descontoLoja) }}</span></div>
+                        <div v-if="market.feeBreakdown.descontoPlataforma" class="flex justify-between gap-3"><span class="text-slate-400">desconto bancado pelo canal (não sai do bolso)</span><span class="text-slate-400">{{ formatPrice(market.feeBreakdown.descontoPlataforma) }}</span></div>
+                    </div>
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Custo dos itens</span><span class="font-semibold text-error">{{ formatPrice(market.productCost) }}</span></div>
                     <div class="flex justify-between gap-3 border-t border-[var(--surface-border)] pt-2"><span class="font-semibold">Lucro bruto</span><span class="font-bold">{{ formatPrice(market.grossProfit) }}</span></div>
                 </div>
+
+                <p v-if="!market.isEmpty && market.ordersWithoutRealFee > 0" class="mt-4 rounded-lg border border-warning bg-lightwarning px-3 py-2 text-xs text-warning-emphasis">
+                    <i class="fas fa-triangle-exclamation me-1"></i>
+                    Estimado: {{ market.ordersWithoutRealFee }} de {{ market.ordersCount }} pedidos sem taxa real do canal — a margem está maior do que a real.
+                </p>
 
                 <p v-if="market.isEmpty" class="mt-4 rounded-lg border border-dashed border-[var(--surface-border)] px-3 py-2 text-xs text-slate-400">
                     Sem métrica confiável ainda. Mantido vazio para receber os dados quando o canal começar a operar.

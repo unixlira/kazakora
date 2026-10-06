@@ -455,6 +455,8 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             ];
         }
 
+        $feeBreakdown = $this->resolveFeeBreakdown($order, round($itemsSubtotal, 2), round($marketplaceFee, 2));
+
         $buyer = $order->buyer;
         $buyerName = trim(($buyer['first_name'] ?? '').' '.($buyer['last_name'] ?? '')) ?: ($buyer['nickname'] ?? 'Comprador Mercado Livre');
 
@@ -490,7 +492,8 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => round(max(0, $order->total_amount - $itemsSubtotal), 2),
             'total' => round($order->total_amount, 2),
-            'marketplace_fee' => round($marketplaceFee, 2),
+            'marketplace_fee' => $feeBreakdown['fee_amount'],
+            'marketplace_fee_breakdown' => $feeBreakdown,
             'buyer_name' => $buyerName,
             // Pedido explícito 2026-09-01 ("colocar destinatario e o nome
             // do usuario entre parenteses"): o KoraSync mostra
@@ -824,6 +827,85 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // entregue no trabalho etc.). Só exibição; o nome que vai na
             // NF-e continua sendo o do comprador (ver importOrder()).
             'recipient' => $receiver['receiver_name'] ?? null,
+        ];
+    }
+
+    /**
+     * Mesma quebra do importOrder(), a partir só do número do pedido — usada
+     * pelo orders:recalcular-taxas pra corrigir pedido já importado sem
+     * passar pelo import inteiro de novo.
+     *
+     * @return array<string, mixed>
+     */
+    public function feeBreakdownFor(string $externalOrderId): array
+    {
+        $this->ensureConfigured();
+        $order = $this->orders->getOrder($externalOrderId);
+        $subtotal = 0.0;
+        $comissao = 0.0;
+
+        foreach ($order->order_items as $item) {
+            $quantidade = (int) ($item['quantity'] ?? 0);
+            $subtotal += (float) ($item['unit_price'] ?? 0) * $quantidade;
+            $comissao += (float) ($item['sale_fee'] ?? 0) * $quantidade;
+        }
+
+        return $this->resolveFeeBreakdown($order, round($subtotal, 2), round($comissao, 2));
+    }
+
+    /**
+     * Taxa real do pedido = comissão (sale_fee) + frete pago pelo vendedor.
+     * Pedido do usuário 2026-10-06 ("margem oficial e fidedigna"): até aqui
+     * só a comissão entrava. Achado real no pedido #2700 (R$ 78,99):
+     * comissão 13,43, mas o ML também cobrava R$ 14,45 de frete do vendedor
+     * (shipments/{id}/costs → senders[].cost), que ficava fora da margem.
+     *
+     * No carrinho (pack) o envio é um só pra vários pedidos — o frete é
+     * dividido igualmente entre eles pra não ser contado N vezes. Se a
+     * consulta do frete falhar, fica só a comissão (frete nulo, não zero) e
+     * o próximo sync do pedido tenta de novo.
+     *
+     * @return array{fee_amount: float, commission_fee: float, service_fee: null, shipping_fee: ?float, seller_discount: null, platform_discount: null, payout_amount: ?float, breakdown: array<string, mixed>}
+     */
+    private function resolveFeeBreakdown(\App\Services\MercadoLivre\DTOs\OrderDTO $order, float $subtotal, float $comissao): array
+    {
+        $frete = null;
+        $detalhe = [];
+        $shipmentId = $order->shipping['id'] ?? null;
+
+        if ($shipmentId) {
+            try {
+                $custos = $this->client->get("shipments/{$shipmentId}/costs");
+                $remetente = $custos['senders'][0] ?? [];
+                $frete = max(0.0, round((float) ($remetente['cost'] ?? 0) - (float) ($remetente['compensation'] ?? 0), 2));
+                $detalhe['frete_envio_inteiro'] = $frete;
+
+                if ($order->pack_id && $frete > 0) {
+                    $pedidosNoPack = max(1, count($this->client->get("packs/{$order->pack_id}")['orders'] ?? []));
+                    $frete = round($frete / $pedidosNoPack, 2);
+                    $detalhe['pedidos_no_pack'] = $pedidosNoPack;
+                }
+            } catch (MercadoLivreException $exception) {
+                $frete = null;
+                Log::channel('mercadolivre')->warning('mercadolivre.shipment_costs.lookup_failed', [
+                    'order_id' => $order->id,
+                    'shipment_id' => $shipmentId,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+        }
+
+        $taxa = round($comissao + ($frete ?? 0), 2);
+
+        return [
+            'fee_amount' => $taxa,
+            'commission_fee' => $comissao,
+            'service_fee' => null,
+            'shipping_fee' => $frete,
+            'seller_discount' => null,
+            'platform_discount' => null,
+            'payout_amount' => $frete !== null ? round($subtotal - $taxa, 2) : null,
+            'breakdown' => $detalhe,
         ];
     }
 

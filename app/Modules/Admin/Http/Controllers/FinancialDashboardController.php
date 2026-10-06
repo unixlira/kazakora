@@ -667,7 +667,40 @@ class FinancialDashboardController extends Controller
 
         $correiosPorCanal = ContributionMargin::correios($startOfMonth, null, porCanal: true);
 
-        return collect($channels)->map(function ($label, $channel) use ($correiosPorCanal, $orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
+        // Quebra da taxa real (pedido do usuário 2026-10-06, margem "oficial
+        // e fidedigna") e quantos pedidos do mês ainda não têm taxa real —
+        // sem taxa do canal (nem no pedido, nem em extrato importado) a
+        // margem daquele canal é estimativa, e a tela diz isso.
+        $quebra = OrderChannelFee::query()
+            ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $startOfMonth)
+            ->selectRaw('orders.origin as channel,
+                COALESCE(SUM(COALESCE(order_channel_fees.commission_fee, 0) + COALESCE(order_channel_fees.service_fee, 0)), 0) as comissao,
+                COALESCE(SUM(order_channel_fees.shipping_fee), 0) as frete_loja,
+                COALESCE(SUM(order_channel_fees.seller_discount), 0) as desconto_loja,
+                COALESCE(SUM(order_channel_fees.platform_discount), 0) as desconto_plataforma,
+                SUM(CASE WHEN order_channel_fees.commission_fee IS NOT NULL THEN 1 ELSE 0 END) as com_quebra')
+            ->groupBy('orders.origin')
+            ->get()
+            ->keyBy('channel');
+
+        $semTaxaReal = Order::query()->nonPurchaseReturn()
+            ->whereIn('status', self::REVENUE_STATUSES)
+            ->where('created_at', '>=', $startOfMonth)
+            ->whereDoesntHave('channelFee', fn ($taxa) => $taxa->where('fee_amount', '>', 0))
+            ->when(Schema::hasTable('marketplace_settlement_details'), fn ($q) => $q->whereNotExists(function ($settlement) {
+                $settlement->selectRaw('1')
+                    ->from('marketplace_settlement_details as settlement_check')
+                    ->where('settlement_check.transaction_type', 'Pedido')
+                    ->whereColumn('settlement_check.channel', 'orders.origin')
+                    ->whereColumn('settlement_check.external_order_id', 'orders.external_order_id');
+            }))
+            ->selectRaw('origin as channel, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'channel');
+
+        return collect($channels)->map(function ($label, $channel) use ($quebra, $semTaxaReal, $correiosPorCanal, $orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
             $settlement = $settlementsByChannel->get($channel);
             $hasSettlement = $settlement !== null;
             $orderRow = $orders->get($channel);
@@ -737,6 +770,14 @@ class FinancialDashboardController extends Controller
                 'netProfit' => $netProfit,
                 'netMargin' => $margin,
                 'isEmpty' => $isEmpty,
+                'feeBreakdown' => [
+                    'comissao' => round((float) ($quebra->get($channel)?->comissao ?? 0), 2),
+                    'freteLoja' => round((float) ($quebra->get($channel)?->frete_loja ?? 0), 2),
+                    'descontoLoja' => round((float) ($quebra->get($channel)?->desconto_loja ?? 0), 2),
+                    'descontoPlataforma' => round((float) ($quebra->get($channel)?->desconto_plataforma ?? 0), 2),
+                    'pedidosComQuebra' => (int) ($quebra->get($channel)?->com_quebra ?? 0),
+                ],
+                'ordersWithoutRealFee' => (int) ($semTaxaReal[$channel] ?? 0),
             ];
         })->values()->all();
     }

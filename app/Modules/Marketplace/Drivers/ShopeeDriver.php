@@ -1085,7 +1085,8 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         // OrderImportService simplesmente não grava OrderChannelFee ainda
         // pra este pedido (mesmo padrão que os outros campos "quando
         // disponível" deste driver).
-        $marketplaceFee = $this->resolveMarketplaceFee((string) ($order['order_sn'] ?? $externalOrderId));
+        $feeBreakdown = $this->resolveFeeBreakdown((string) ($order['order_sn'] ?? $externalOrderId), round($itemsSubtotal, 2));
+        $marketplaceFee = $feeBreakdown['fee_amount'] ?? null;
 
         return [
             'external_order_id' => (string) ($order['order_sn'] ?? $externalOrderId),
@@ -1151,7 +1152,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 ? \Illuminate\Support\Carbon::createFromTimestamp((int) $order['create_time'], config('app.timezone'))
                 : null,
             'items' => $items,
-            ...($marketplaceFee !== null ? ['marketplace_fee' => $marketplaceFee] : []),
+            ...($marketplaceFee !== null ? ['marketplace_fee' => $marketplaceFee, 'marketplace_fee_breakdown' => $feeBreakdown] : []),
         ];
     }
 
@@ -1173,15 +1174,65 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      */
     public function resolveMarketplaceFee(string $orderSn): ?float
     {
+        $income = $this->escrowIncome($orderSn);
+
+        if (! $income || ! isset($income['commission_fee'], $income['service_fee'])) {
+            return null;
+        }
+
+        return round((float) $income['commission_fee'] + (float) $income['service_fee'], 2);
+    }
+
+    /**
+     * Quebra real da taxa a partir do extrato do pedido (get_escrow_detail),
+     * pedido do usuário 2026-10-06 ("margem oficial e fidedigna"). Conferido
+     * no pedido real #2802: venda 89,99, comissão 11,34, serviço 17,26,
+     * frete 13,25 coberto pela Shopee, repasse (escrow_amount) 61,39.
+     *
+     * A taxa total passa a ser venda − repasse: é o dinheiro que de fato não
+     * cai na conta, e pega junto o que comissão + serviço não cobriam (cupom
+     * bancado pela loja, frete que a Shopee não subsidiou, ajustes). Sem
+     * repasse ainda (escrow aberto), cai pra comissão + serviço como antes.
+     *
+     * @return array{fee_amount: float, commission_fee: ?float, service_fee: ?float, shipping_fee: ?float, seller_discount: ?float, platform_discount: ?float, payout_amount: ?float, breakdown: array<string, float>}|null
+     */
+    public function resolveFeeBreakdown(string $orderSn, float $subtotal): ?array
+    {
+        $income = $this->escrowIncome($orderSn);
+
+        if (! $income || ! isset($income['commission_fee'], $income['service_fee'])) {
+            return null;
+        }
+
+        $valor = fn (string ...$chaves) => round(array_sum(array_map(fn ($c) => (float) ($income[$c] ?? 0), $chaves)), 2);
+
+        $comissao = $valor('commission_fee');
+        $servico = $valor('service_fee');
+        // Frete que a loja paga: o que a Shopee cobrou do envio menos o que
+        // ela mesma subsidiou e o que o comprador pagou.
+        $frete = max(0.0, round($valor('actual_shipping_fee') - $valor('shopee_shipping_rebate', 'buyer_paid_shipping_fee', 'shipping_fee_discount_from_3pl'), 2));
+        $repasse = isset($income['escrow_amount']) && (float) $income['escrow_amount'] > 0 ? $valor('escrow_amount') : null;
+
+        return [
+            'fee_amount' => $repasse !== null ? round($subtotal - $repasse, 2) : round($comissao + $servico, 2),
+            'commission_fee' => $comissao,
+            'service_fee' => $servico,
+            'shipping_fee' => $frete,
+            'seller_discount' => $valor('voucher_from_seller', 'seller_coin_cash_back'),
+            // Só informativo: desconto que a Shopee bancou, não sai do repasse.
+            'platform_discount' => $valor('voucher_from_shopee', 'shopee_discount', 'pix_discount', 'coins', 'credit_card_promotion'),
+            'payout_amount' => $repasse,
+            'breakdown' => array_map('floatval', array_filter($income, fn ($v) => is_numeric($v) && (float) $v != 0)),
+        ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function escrowIncome(string $orderSn): ?array
+    {
         try {
             $response = $this->client->get('/api/v2/payment/get_escrow_detail', ['order_sn' => $orderSn]);
-            $income = $response['response']['order_income'] ?? null;
 
-            if (! $income || ! isset($income['commission_fee'], $income['service_fee'])) {
-                return null;
-            }
-
-            return round((float) $income['commission_fee'] + (float) $income['service_fee'], 2);
+            return $response['response']['order_income'] ?? null;
         } catch (ShopeeException $exception) {
             Log::channel('shopee')->warning('shopee.escrow_detail.lookup_failed', ['order_sn' => $orderSn, 'message' => $exception->getMessage()]);
 

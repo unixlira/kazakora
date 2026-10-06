@@ -286,4 +286,30 @@ class FinancialDashboardNetProfitTest extends TestCase
 
         $response->assertInertia(fn ($page) => $page->where('summary.productCostMonth', 45.25));
     }
+
+    /**
+     * Pedido do usuário 2026-10-06: o card do canal mostra a quebra da taxa
+     * real e avisa quando há pedido sem taxa do canal (margem estimada).
+     */
+    public function test_marketplace_card_shows_fee_breakdown_and_flags_orders_without_real_fee(): void
+    {
+        $comTaxa = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SN1']);
+        OrderChannelFee::create([
+            'order_id' => $comTaxa->id, 'channel' => 'shopee', 'gross_amount' => 100, 'fee_amount' => 30,
+            'commission_fee' => 12, 'service_fee' => 10, 'shipping_fee' => 8, 'seller_discount' => 0, 'platform_discount' => 4.49,
+            'payout_amount' => 70, 'source' => OrderChannelFee::SOURCE_API, 'computed_at' => now(),
+        ]);
+        $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SN2']);
+
+        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+
+        $response->assertInertia(fn ($page) => $page->where('marketplaceMetrics.month', function ($canais) {
+            $shopee = collect($canais)->firstWhere('channel', 'shopee');
+
+            return $shopee['feeBreakdown']['comissao'] == 22
+                && $shopee['feeBreakdown']['freteLoja'] == 8
+                && $shopee['feeBreakdown']['descontoPlataforma'] == 4.49
+                && $shopee['ordersWithoutRealFee'] === 1;
+        }));
+    }
 }

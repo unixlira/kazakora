@@ -107,16 +107,14 @@ class DashboardController extends Controller
                     ->where('path', 'not like', '%/envio')
                     ->count(),
             ],
-            'recentOrders' => Order::query()->nonPurchaseReturn()
-                ->with('user:id,name')
-                ->latest()
-                ->limit(5)
-                ->get(['id', 'user_id', 'status', 'total', 'created_at']),
-            'lowStockProducts' => Product::query()
-                ->where('stock', '<=', 5)
-                ->orderBy('stock')
-                ->limit(5)
-                ->get(['id', 'name', 'stock']),
+            // Pedidos recentes e Estoque baixo saíram (pedido do usuário
+            // 2026-10-06) — no lugar, mais vendidos e curva ABC.
+            'topProducts' => $this->vendasPorProduto(Carbon::today()->subDays(29))
+                ->sortByDesc('quantity')
+                ->take(10)
+                ->values()
+                ->all(),
+            'abcCurve' => $this->curvaAbc(Carbon::today()->subDays(89)),
             'orderStatusBreakdown' => $this->orderStatusBreakdown(),
             'visitsSeries' => $this->visitsSeries(),
             'revenueSeries' => $this->revenueSeries(),
@@ -150,6 +148,69 @@ class DashboardController extends Controller
      *
      * @return array<int, array{origin: string, total: float}>
      */
+    /**
+     * Unidades e faturamento de cada produto vendido desde $desde (pedidos
+     * pagos/enviados/concluídos, sem notas de devolução). Variação conta
+     * como produto próprio — é ela que tem estoque. Item sem produto
+     * cadastrado agrupa pelo nome.
+     *
+     * @return \Illuminate\Support\Collection<int, array{id: ?int, name: string, color: ?string, quantity: int, revenue: float}>
+     */
+    private function vendasPorProduto(Carbon $desde): \Illuminate\Support\Collection
+    {
+        $pedidos = Order::query()->nonPurchaseReturn()
+            ->whereIn('status', self::PAID_STATUSES)
+            ->where('created_at', '>=', $desde)
+            ->select('id');
+
+        return DB::table('order_items')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->whereIn('order_items.order_id', $pedidos)
+            ->selectRaw('order_items.product_id as id, COALESCE(products.name, order_items.product_name) as name, products.color as color,
+                SUM(order_items.quantity) as quantity, SUM(order_items.subtotal) as revenue')
+            ->groupBy('order_items.product_id', DB::raw('COALESCE(products.name, order_items.product_name)'), 'products.color')
+            ->get()
+            ->map(fn ($linha) => [
+                'id' => $linha->id !== null ? (int) $linha->id : null,
+                'name' => (string) $linha->name,
+                // Variações têm o mesmo nome e a cor no fim, que a tela corta.
+                'color' => $linha->color ? trim((string) $linha->color) : null,
+                'quantity' => (int) $linha->quantity,
+                'revenue' => round((float) $linha->revenue, 2),
+            ]);
+    }
+
+    /**
+     * Curva ABC pelo faturamento: do produto que mais fatura pro que menos,
+     * somando — A até 80% do faturamento, B até 95%, o resto é C (não vai
+     * pra tela). O produto que cruza o limite fica na faixa de cima.
+     *
+     * @return array{total: float, a: list<array>, b: list<array>}
+     */
+    private function curvaAbc(Carbon $desde): array
+    {
+        $produtos = $this->vendasPorProduto($desde)->where('revenue', '>', 0)->sortByDesc('revenue')->values();
+        $total = round((float) $produtos->sum('revenue'), 2);
+        $curva = ['total' => $total, 'a' => [], 'b' => []];
+        $acumulado = 0.0;
+
+        foreach ($produtos as $produto) {
+            $antes = $total > 0 ? $acumulado / $total * 100 : 100;
+            $acumulado += $produto['revenue'];
+            $produto['share'] = $total > 0 ? round($produto['revenue'] / $total * 100, 1) : 0.0;
+
+            if ($antes < 80) {
+                $curva['a'][] = $produto;
+            } elseif ($antes < 95) {
+                $curva['b'][] = $produto;
+            } else {
+                break;
+            }
+        }
+
+        return $curva;
+    }
+
     private function revenueByChannel(Carbon $startOfMonth): array
     {
         // subtotal, não total — ver comentário em index() sobre frete não

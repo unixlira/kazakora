@@ -10,13 +10,13 @@ const props = defineProps({
         type: Object,
         required: true,
     },
-    recentOrders: {
+    topProducts: {
         type: Array,
         default: () => [],
     },
-    lowStockProducts: {
-        type: Array,
-        default: () => [],
+    abcCurve: {
+        type: Object,
+        default: () => ({ total: 0, a: [], b: [] }),
     },
     orderStatusBreakdown: {
         type: Array,
@@ -35,6 +35,13 @@ const props = defineProps({
         default: () => [],
     },
 });
+
+// Curva ABC (pedido do usuário 2026-10-06): A = produtos que somam até 80%
+// do faturamento, B = os seguintes até 95%. Ver DashboardController::curvaAbc().
+const abcCards = computed(() => [
+    { key: 'a', description: 'Somam 80% do faturamento', items: props.abcCurve?.a ?? [] },
+    { key: 'b', description: 'Os próximos 15% do faturamento', items: props.abcCurve?.b ?? [] },
+]);
 
 const CHANNEL_LABELS = {
     loja: 'Site',
@@ -159,82 +166,55 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
             </div>
         </div>
 
-        <div class="mt-8 flex flex-wrap">
-            <div :class="chartCardClass">
-                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-lg font-semibold">Pedidos por status</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Distribuição de todos os pedidos</p>
-                    </div>
-                    <div class="p-4">
-                        <ChartCanvas type="pie" :data="orderStatusChartData" :options="orderStatusChartOptions" />
-                    </div>
+        <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                    <h3 class="text-base font-semibold">Produtos mais vendidos</h3>
+                    <p class="text-xs text-slate-400">Unidades vendidas nos últimos 30 dias</p>
+                </div>
+                <div class="p-4">
+                    <p v-if="topProducts.length === 0" class="text-sm text-slate-500">Nenhuma venda nos últimos 30 dias.</p>
+                    <ol v-else class="space-y-2 text-sm">
+                        <li v-for="(product, index) in topProducts" :key="`${product.id}-${product.name}`"
+                            class="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] pb-2">
+                            <span class="min-w-0 truncate">
+                                <span class="me-1 text-slate-400">{{ index + 1 }}.</span>
+                                <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
+                                <span v-else>{{ product.name }}</span>
+                                <span v-if="product.color" class="block text-xs font-semibold uppercase text-slate-500">{{ product.color }}</span>
+                            </span>
+                            <span class="shrink-0 text-right">
+                                <span class="block font-semibold">{{ product.quantity }} un.</span>
+                                <span class="block text-xs text-slate-400">{{ formatPrice(product.revenue) }}</span>
+                            </span>
+                        </li>
+                    </ol>
                 </div>
             </div>
 
-            <div :class="chartCardClass">
-                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-lg font-semibold">Visitas</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 3 meses</p>
-                    </div>
-                    <div class="p-4">
-                        <ChartCanvas type="line" :data="visitsChartData" />
-                    </div>
+            <div v-for="curva in abcCards" :key="curva.key"
+                class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
+                <div class="border-b border-[var(--surface-border)] px-4 py-4">
+                    <h3 class="text-base font-semibold">Produtos curva {{ curva.key.toUpperCase() }}</h3>
+                    <p class="text-xs text-slate-400">{{ curva.description }} · últimos 90 dias</p>
                 </div>
-            </div>
-
-            <div :class="chartCardClass">
-                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-lg font-semibold">Faturamento diário</h3>
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Últimos 3 meses</p>
-                    </div>
-                    <div class="p-4">
-                        <ChartCanvas type="bar" :data="revenueChartData" />
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="mt-8 flex flex-wrap">
-            <div class="w-full px-4 lg:w-6/12">
-                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-base font-semibold">Pedidos recentes</h3>
-                    </div>
-                    <div class="p-4">
-                        <p v-if="recentOrders.length === 0" class="text-sm text-slate-500">Nenhum pedido ainda.</p>
-                        <ul v-else class="space-y-2 text-sm">
-                            <li v-for="order in recentOrders" :key="order.id"
-                                class="flex justify-between border-b border-[var(--surface-border)] pb-2">
-                                <Link :href="`/admin/pedidos/${order.id}`" class="hover:text-primary hover:underline">
-                                    #{{ order.id }} — {{ order.user?.name }}
-                                </Link>
-                                <span class="font-medium">{{ formatPrice(order.total) }}</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <div class="w-full px-4 lg:w-6/12">
-                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition-shadow hover:shadow-md">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-4">
-                        <h3 class="text-base font-semibold">Estoque baixo</h3>
-                    </div>
-                    <div class="p-4">
-                        <p v-if="lowStockProducts.length === 0" class="text-sm text-slate-500">Nenhum produto com estoque baixo.</p>
-                        <ul v-else class="space-y-2 text-sm">
-                            <li v-for="product in lowStockProducts" :key="product.id"
-                                class="flex justify-between border-b border-[var(--surface-border)] pb-2">
-                                <Link :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">
-                                    {{ product.name }}
-                                </Link>
-                                <span class="font-medium text-error">{{ product.stock }} un.</span>
-                            </li>
-                        </ul>
-                    </div>
+                <div class="p-4">
+                    <p v-if="curva.items.length === 0" class="text-sm text-slate-500">Nenhum produto nesta curva.</p>
+                    <ul v-else class="space-y-2 text-sm">
+                        <li v-for="product in curva.items.slice(0, 10)" :key="`${product.id}-${product.name}`"
+                            class="flex items-center justify-between gap-3 border-b border-[var(--surface-border)] pb-2">
+                            <span class="min-w-0 truncate">
+                                <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
+                                <span v-else>{{ product.name }}</span>
+                                <span v-if="product.color" class="block text-xs font-semibold uppercase text-slate-500">{{ product.color }}</span>
+                            </span>
+                            <span class="shrink-0 text-right">
+                                <span class="block font-semibold">{{ formatPrice(product.revenue) }}</span>
+                                <span class="block text-xs text-slate-400">{{ product.share.toLocaleString('pt-BR') }}% do faturamento</span>
+                            </span>
+                        </li>
+                    </ul>
+                    <p v-if="curva.items.length > 10" class="mt-2 text-xs text-slate-400">+ {{ curva.items.length - 10 }} produto(s) nesta curva</p>
                 </div>
             </div>
         </div>

@@ -688,7 +688,7 @@ class FinancialDashboardController extends Controller
         $semTaxaReal = Order::query()->nonPurchaseReturn()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
-            ->whereDoesntHave('channelFee', fn ($taxa) => $taxa->where('fee_amount', '>', 0))
+            ->whereDoesntHave('channelFee', fn ($taxa) => $taxa->where('fee_amount', '>', 0)->where('source', '!=', OrderChannelFee::SOURCE_ESTIMATE))
             ->when(Schema::hasTable('marketplace_settlement_details'), fn ($q) => $q->whereNotExists(function ($settlement) {
                 $settlement->selectRaw('1')
                     ->from('marketplace_settlement_details as settlement_check')

@@ -108,6 +108,12 @@ Schedule::command('orders:sync-tiktok --desde='.now()->toDateString())
 
 Schedule::command('orders:sync-tiktok')->hourly();
 
+// Taxa estimada do TikTok (o Bling não traz a comissão) até o extrato
+// real chegar — ver TikTokFeeEstimator. Pedido do usuário 2026-10-06.
+Schedule::command('orders:estimar-taxas-tiktok')
+    ->everyTenMinutes()
+    ->withoutOverlapping(10);
+
 // A NF-e do TikTok Shop é emitida pelo Bling desde 02/09/2026 (ver
 // services.bling.invoice_issuer_channels), e a emissão lá é assíncrona —
 // quando o pedido chega pelo webhook a nota quase nunca existe ainda.

@@ -20,6 +20,11 @@ class OrderChannelFee extends Model
     // explícito 2026-08-14.
     public const SOURCE_MANUAL = 'manual';
 
+    // Taxa ESTIMADA (TikTok Shop, enquanto o extrato real não chega — ver
+    // TikTokFeeEstimator). É a única que pode ser sobrescrita por qualquer
+    // dado real; a tela marca a margem do canal como estimada.
+    public const SOURCE_ESTIMATE = 'estimate';
+
     protected $fillable = [
         'order_id',
         'channel',

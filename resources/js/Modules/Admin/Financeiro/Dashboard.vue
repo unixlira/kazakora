@@ -175,7 +175,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
 
                 <p v-if="!market.isEmpty && market.ordersWithoutRealFee > 0" class="mt-4 rounded-lg border border-warning bg-lightwarning px-3 py-2 text-xs text-warning-emphasis">
                     <i class="fas fa-triangle-exclamation me-1"></i>
-                    Estimado: {{ market.ordersWithoutRealFee }} de {{ market.ordersCount }} pedidos sem taxa real do canal — a margem está maior do que a real.
+                    Estimado: {{ market.ordersWithoutRealFee }} de {{ market.ordersCount }} pedidos ainda sem a taxa real do canal (usando taxa estimada ou nenhuma) — a margem muda quando o extrato chegar.
                 </p>
 
                 <p v-if="market.isEmpty" class="mt-4 rounded-lg border border-dashed border-[var(--surface-border)] px-3 py-2 text-xs text-slate-400">

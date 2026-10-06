@@ -130,12 +130,12 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
                 stat-icon-name="fas fa-receipt" variant="primary" />
+            <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
+                stat-icon-name="fas fa-calendar-check" variant="secondary" />
             <CardStats stat-subtitle="FATURAMENTO NO MÊS" :stat-title="formatPrice(stats.revenue)"
                 stat-icon-name="fas fa-sack-dollar" variant="success" />
-            <CardStats stat-subtitle="PRODUTOS" :stat-title="String(stats.productsCount)"
-                stat-icon-name="fas fa-couch" variant="secondary" />
-            <CardStats stat-subtitle="ESTOQUE BAIXO" :stat-title="String(stats.lowStockCount)"
-                stat-icon-name="fas fa-triangle-exclamation" variant="error" />
+            <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
+                stat-icon-name="fas fa-rotate-left" variant="warning" />
         </div>
 
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -143,19 +143,8 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
                 stat-icon-name="fas fa-eye" variant="info" />
             <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
                 stat-icon-name="fas fa-cart-shopping" variant="primary" />
-            <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
-                stat-icon-name="fas fa-calendar-check" variant="secondary" />
             <CardStats stat-subtitle="FATURADO HOJE" :stat-title="formatPrice(stats.revenueToday)"
                 stat-icon-name="fas fa-money-bill-wave" variant="success" />
-        </div>
-
-        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
-                stat-icon-name="fas fa-rotate-left" variant="warning" />
-            <CardStats stat-subtitle="CARRINHOS ATIVOS" :stat-title="String(stats.activeCartsCount)"
-                stat-icon-name="fas fa-cart-arrow-down" variant="info" />
-            <CardStats stat-subtitle="CLIQUES EM PRODUTOS" :stat-title="String(stats.productViewsCount)"
-                stat-icon-name="fas fa-computer-mouse" variant="secondary" />
             <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO HOJE" :stat-title="formatPrice(stats.contributionMarginToday)"
                 stat-icon-name="fas fa-wallet" variant="warning" />
         </div>

@@ -128,25 +128,25 @@ const chartCardClass = 'w-full px-4 xl:w-4/12';
 
     <AdminLayout>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <CardStats stat-subtitle="FATURAMENTO TOTAL" :stat-title="formatPrice(stats.revenueTotal)"
+                stat-icon-name="fas fa-sack-dollar" variant="success" />
+            <CardStats stat-subtitle="FATURAMENTO DO MÊS" :stat-title="formatPrice(stats.revenue)"
+                stat-icon-name="fas fa-calendar-days" variant="primary" />
+            <CardStats stat-subtitle="FATURAMENTO HOJE" :stat-title="formatPrice(stats.revenueToday)"
+                stat-icon-name="fas fa-money-bill-wave" variant="info" />
+            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO DO MÊS" :stat-title="formatPrice(stats.contributionMarginMonth)"
+                stat-icon-name="fas fa-wallet" variant="warning" />
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
                 stat-icon-name="fas fa-receipt" variant="primary" />
             <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
                 stat-icon-name="fas fa-calendar-check" variant="secondary" />
-            <CardStats stat-subtitle="FATURAMENTO NO MÊS" :stat-title="formatPrice(stats.revenue)"
-                stat-icon-name="fas fa-sack-dollar" variant="success" />
-            <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
-                stat-icon-name="fas fa-rotate-left" variant="warning" />
-        </div>
-
-        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <CardStats stat-subtitle="VISITAS HOJE" :stat-title="String(stats.visitsToday)"
-                stat-icon-name="fas fa-eye" variant="info" />
             <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
                 stat-icon-name="fas fa-cart-shopping" variant="primary" />
-            <CardStats stat-subtitle="FATURADO HOJE" :stat-title="formatPrice(stats.revenueToday)"
-                stat-icon-name="fas fa-money-bill-wave" variant="success" />
-            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO HOJE" :stat-title="formatPrice(stats.contributionMarginToday)"
-                stat-icon-name="fas fa-wallet" variant="warning" />
+            <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
+                stat-icon-name="fas fa-rotate-left" variant="warning" />
         </div>
 
         <div v-if="revenueByChannel.length" class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">

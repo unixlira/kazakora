@@ -80,6 +80,14 @@ class DashboardController extends Controller
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum(DB::raw(ContributionMargin::receitaSql())),
                 'contributionMarginToday' => $this->contributionMarginForDay($today),
+                // Faturamento de todos os canais desde o primeiro pedido e
+                // margem do mês corrente — cards de valor do topo (pedido do
+                // usuário 2026-10-06), mesma conta dos cards do mês/hoje.
+                'revenueTotal' => (float) Order::query()->nonPurchaseReturn()
+                    ->whereIn('status', self::PAID_STATUSES)
+                    ->sum(DB::raw(ContributionMargin::receitaSql())),
+                'contributionMarginMonth' => app(ContributionMargin::class)
+                    ->periodo($startOfMonth, $today->copy()->addDay())['margem'],
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
                     ->where('created_at', '>=', $startOfMonth)

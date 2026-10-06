@@ -21,10 +21,11 @@ use Throwable;
  * DashboardAgentController::separateOrder().
  *
  * O que entra no lote: pedido ainda PAGO, ainda NÃO separado (packed_at
- * nulo), de Shopee ou Mercado Livre, com a etiqueta JÁ baixada do canal.
+ * nulo), de Shopee, Mercado Livre ou TikTok Shop (este desde 2026-10-05),
+ * com a etiqueta JÁ baixada do canal.
  *
  * O que NÃO entra, e por quê:
- * - TikTok Shop e Shein: etiqueta é do painel do canal, nunca da nossa
+ * - Shein: etiqueta é do painel do canal, nunca da nossa
  *   impressora (ver LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA).
  * - Pedido Full do Mercado Livre: o pacote sai do galpão do ML, com a
  *   etiqueta deles — não existe etiqueta nossa pra imprimir, e ele ficava
@@ -45,6 +46,7 @@ class BatchLabelPrintService
     private const CANAIS = [
         Order::ORIGIN_MERCADO_LIVRE,
         Order::ORIGIN_SHOPEE,
+        Order::ORIGIN_TIKTOK_SHOP,
     ];
 
     public function __construct(private readonly LabelFetchService $labels) {}

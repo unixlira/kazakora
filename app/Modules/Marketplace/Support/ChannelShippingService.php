@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
 use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
 use App\Modules\Marketplace\Models\ChannelShipment;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Throwable;
 
@@ -78,12 +79,22 @@ class ChannelShippingService
         // Dispara o retry orientado a evento assim que o envio existe do
         // lado do canal — não espera o próximo webhook nem um ciclo de
         // polling. Mercado Livre, Shopee e Amazon têm fetchLabel() real
-        // implementado; TikTok/Shein ainda são stubs — disparar lá só
+        // implementado; Shein ainda é stub — disparar lá só
         // geraria falha garantida após 4h de tentativas inúteis.
         // Pedido que o próprio confirmShipping() já deu como enviado (Amazon
         // despachada à mão pelo Bling) não tem etiqueta nossa pra buscar —
         // sem isto, 4h de tentativas e um alerta falso de "etiqueta não
         // ficou disponível".
+        //
+        // TikTok Shop entrou em 2026-10-05 (pedido do usuário): a etiqueta
+        // vem do Bling (logisticas/etiquetas, confirmado com PDF real) e só
+        // existe depois que o Bling emite a NF-e e o TikTok a recebe — pode
+        // levar horas, e cada consulta gasta a cota de 3 req/s do Bling.
+        // Por isso consulta de minuto em minuto, com prazo de 24h.
+        if ($order->origin === Order::ORIGIN_TIKTOK_SHOP && $order->fresh()?->status === Order::STATUS_PAID) {
+            CheckShipmentLabelJob::dispatch($shipment->id, CarbonImmutable::now()->addHours(24), 60)->afterCommit();
+        }
+
         if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)
             && $order->fresh()?->status === Order::STATUS_PAID) {
             // BUG REAL 2026-08-14 (pedido #278): venda agendada (ver

@@ -129,11 +129,22 @@ class BatchLabelPrintTest extends TestCase
         $this->assertNotNull($response->json('detalhe.ja_impressas.0.impressa_em'));
     }
 
-    /**
-     * TikTok e Shein nunca saem pela nossa impressora — a trava do canal
-     * vale aqui como vale em todo lugar que cria PrintJob.
-     */
-    public function test_it_never_prints_tiktok_or_shein(): void
+    /** Shein nunca sai pela nossa impressora — nem no lote. */
+    public function test_it_never_prints_shein(): void
+    {
+        Queue::fake();
+
+        $this->makeOrder(Order::ORIGIN_SHEIN);
+
+        $this->postJson('/api/print-agent/dashboard/etiquetas/lote', [], $this->authHeaders())
+            ->assertOk()
+            ->assertJson(['enfileiradas' => 0, 'total_candidatos' => 0]);
+
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /** TikTok entra no lote desde 2026-10-05 (etiqueta vem do Bling). */
+    public function test_it_prints_tiktok(): void
     {
         Queue::fake();
 
@@ -141,9 +152,9 @@ class BatchLabelPrintTest extends TestCase
 
         $this->postJson('/api/print-agent/dashboard/etiquetas/lote', [], $this->authHeaders())
             ->assertOk()
-            ->assertJson(['enfileiradas' => 0, 'total_candidatos' => 0]);
+            ->assertJson(['enfileiradas' => 1, 'total_candidatos' => 1]);
 
-        $this->assertDatabaseCount('print_jobs', 0);
+        $this->assertDatabaseCount('print_jobs', 1);
     }
 
     /**

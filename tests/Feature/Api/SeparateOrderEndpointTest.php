@@ -469,30 +469,30 @@ class SeparateOrderEndpointTest extends TestCase
         $this->assertDatabaseCount('print_jobs', 0);
     }
 
-    public function test_label_status_for_tiktok_says_the_label_comes_from_the_channel(): void
+    /**
+     * Desde 2026-10-05 a etiqueta do TikTok (via Bling) sai pela nossa
+     * impressora como Shopee e Mercado Livre — não é mais "só no canal".
+     */
+    public function test_label_status_for_tiktok_goes_through_our_flow(): void
     {
         $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
 
         $this->getJson("/api/print-agent/dashboard/queue/{$order->id}/etiqueta-status", $this->authHeaders())
             ->assertOk()
-            ->assertJson(['state' => 'channel_only']);
+            ->assertJsonMissing(['state' => 'channel_only']);
 
         $this->assertDatabaseCount('print_jobs', 0);
     }
 
-    /**
-     * A trava que o usuário pediu duas vezes: etiqueta do TikTok é do Bling
-     * e sai no painel dele. Se sair pela nossa impressora, trava a
-     * impressora.
-     */
-    public function test_reprint_is_refused_for_tiktok(): void
+    /** Shein continua sem etiqueta nossa: reimprimir é recusado. */
+    public function test_reprint_is_refused_for_shein(): void
     {
-        $order = $this->makeOrder(Order::ORIGIN_TIKTOK_SHOP);
+        $order = $this->makeOrder(Order::ORIGIN_SHEIN);
         $order->forceFill(['packed_at' => now()])->save();
 
         ChannelShipment::create([
             'order_id' => $order->id,
-            'channel' => 'tiktok_shop',
+            'channel' => 'shein',
             'external_shipment_id' => 'SHIP-14',
             'shipping_method' => 'standard',
             'status' => ChannelShipment::STATUS_LABEL_READY,

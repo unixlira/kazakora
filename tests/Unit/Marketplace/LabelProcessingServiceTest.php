@@ -603,4 +603,46 @@ class LabelProcessingServiceTest extends TestCase
 
         (new LabelProcessingService)->zplParaTspl('isto não é uma etiqueta');
     }
+
+    /** Tamanho em mm de cada página de um PDF. */
+    private static function paginasEmMm(string $pdf): array
+    {
+        $arquivo = tempnam(sys_get_temp_dir(), 'teste_').'.pdf';
+        file_put_contents($arquivo, $pdf);
+        $leitor = new Fpdi();
+        $tamanhos = [];
+
+        for ($i = 1, $n = $leitor->setSourceFile($arquivo); $i <= $n; $i++) {
+            $t = $leitor->getTemplateSize($leitor->importPage($i));
+            $tamanhos[] = [round($t['width'], 1), round($t['height'], 1)];
+        }
+
+        unlink($arquivo);
+
+        return $tamanhos;
+    }
+
+    /**
+     * Etiqueta do TikTok via Bling: 105,1 x 148,2 mm, mais larga que o
+     * rolo de 4" — travava a térmica. Tem que sair em 101,6 x 152,4.
+     */
+    public function test_encaixar_na_folha_shrinks_a_label_wider_than_the_roll(): void
+    {
+        $origem = new \FPDF('P', 'mm', [105.1, 148.2]);
+        $origem->AddPage();
+        $origem->Rect(0, 0, 105.1, 148.2, 'F');
+
+        $pdf = (new LabelProcessingService)->encaixarNaFolha($origem->Output('S'));
+
+        $this->assertSame([[101.6, 152.4]], self::paginasEmMm($pdf));
+    }
+
+    public function test_encaixar_na_folha_leaves_a_label_that_already_fits_untouched(): void
+    {
+        $origem = new \FPDF('P', 'mm', [100, 150]);
+        $origem->AddPage();
+        $bytes = $origem->Output('S');
+
+        $this->assertSame($bytes, (new LabelProcessingService)->encaixarNaFolha($bytes));
+    }
 }

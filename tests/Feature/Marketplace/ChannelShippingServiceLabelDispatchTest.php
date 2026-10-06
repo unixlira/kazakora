@@ -18,8 +18,8 @@ use Tests\TestCase;
  * Confirma o gatilho novo (2026-08-05): assim que o frete é confirmado no
  * canal, o retry orientado a evento já dispara na hora, sem esperar
  * webhook nem polling — pra Mercado Livre e Shopee (2026-08-06, quando
- * ShopeeDriver::fetchLabel() deixou de ser stub), não pra TikTok/Amazon/
- * Shein (ainda são stubs, disparar lá só geraria falha garantida).
+ * ShopeeDriver::fetchLabel() deixou de ser stub), Amazon e TikTok (este
+ * desde 2026-10-05, etiqueta via Bling); não pra Shein (ainda é stub).
  */
 class ChannelShippingServiceLabelDispatchTest extends TestCase
 {
@@ -90,9 +90,9 @@ class ChannelShippingServiceLabelDispatchTest extends TestCase
     public function test_confirm_does_not_dispatch_for_channels_without_real_fetch_label(): void
     {
         Queue::fake();
-        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
-        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_TIKTOK_SHOP, [
-            'external_shipment_id' => 'TT-1',
+        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_SHEIN);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_SHEIN, [
+            'external_shipment_id' => 'SH-1',
             'shipping_method' => 'standard',
             'status' => 'confirmed',
         ]);
@@ -100,5 +100,27 @@ class ChannelShippingServiceLabelDispatchTest extends TestCase
         app(ChannelShippingService::class)->confirm($order);
 
         Queue::assertNotPushed(CheckShipmentLabelJob::class);
+    }
+
+    /**
+     * TikTok busca a etiqueta no Bling, que só a libera depois da NF-e
+     * chegar no TikTok: consulta de minuto em minuto (cota de 3 req/s do
+     * Bling), por até 24h.
+     */
+    public function test_confirm_dispatches_a_slow_label_check_for_tiktok(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_TIKTOK_SHOP, [
+            'external_shipment_id' => 'TT-1',
+            'shipping_method' => 'LSV-Standard-BR PICKUP',
+            'status' => 'pending',
+        ]);
+
+        $shipment = app(ChannelShippingService::class)->confirm($order);
+
+        Queue::assertPushed(CheckShipmentLabelJob::class, fn (CheckShipmentLabelJob $job) => $job->shipmentId === $shipment->id
+            && $job->retryIntervalSeconds === 60
+            && $job->deadline->greaterThan(now()->addHours(23)));
     }
 }

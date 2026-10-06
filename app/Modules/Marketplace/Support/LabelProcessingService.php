@@ -759,6 +759,77 @@ class LabelProcessingService
     }
 
     /**
+     * Encolhe cada página que passa do rolo de 4x6" (101,6 x 152,4 mm) pra
+     * caber nele, centralizada, sem distorcer. Página que já cabe sai igual.
+     *
+     * Motivo real (2026-10-05): a etiqueta do TikTok que o Bling devolve
+     * tem 105,1 x 148,2 mm — 3,5 mm mais larga que o papel, o que travava
+     * a térmica. Encolher 3,3% mantém os códigos de barras legíveis.
+     *
+     * Esse PDF é 1.7 com xref comprimido, que o FPDI gratuito não abre
+     * (testado com a etiqueta real) — aí quem encaixa é o Ghostscript do
+     * servidor, que mantém tudo vetorial.
+     */
+    public function encaixarNaFolha(string $pdfBytes, float $largura = 101.6, float $altura = 152.4): string
+    {
+        $arquivo = tempnam(sys_get_temp_dir(), 'label_encaixe_').'.pdf';
+        file_put_contents($arquivo, $pdfBytes);
+
+        try {
+            return $this->encaixarComFpdi($arquivo, $pdfBytes, $largura, $altura);
+        } catch (\setasign\Fpdi\PdfParser\PdfParserException) {
+            return $this->encaixarComGhostscript($arquivo, $largura, $altura);
+        } finally {
+            @unlink($arquivo);
+        }
+    }
+
+    private function encaixarComGhostscript(string $arquivo, float $largura, float $altura): string
+    {
+        $saida = $arquivo.'.gs.pdf';
+        $pontos = fn (float $mm) => (string) round($mm / 25.4 * 72);
+
+        try {
+            $resultado = \Illuminate\Support\Facades\Process::timeout(30)->run([
+                is_executable('/usr/bin/gs') ? '/usr/bin/gs' : 'gs', '-q', '-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=pdfwrite',
+                '-dCompatibilityLevel=1.4', '-dFIXEDMEDIA', '-dPDFFitPage',
+                '-dDEVICEWIDTHPOINTS='.$pontos($largura), '-dDEVICEHEIGHTPOINTS='.$pontos($altura),
+                '-o', $saida, $arquivo,
+            ]);
+
+            if ($resultado->failed() || ! is_file($saida) || ! str_starts_with((string) file_get_contents($saida, false, null, 0, 5), '%PDF-')) {
+                throw new \RuntimeException('Ghostscript não conseguiu encaixar a etiqueta: '.mb_substr($resultado->errorOutput(), 0, 300));
+            }
+
+            return (string) file_get_contents($saida);
+        } finally {
+            @unlink($saida);
+        }
+    }
+
+    private function encaixarComFpdi(string $arquivo, string $pdfBytes, float $largura, float $altura): string
+    {
+        $final = new Fpdi();
+        $final->SetAutoPageBreak(false);
+        $paginas = $final->setSourceFile($arquivo);
+        $mudou = false;
+
+        for ($pagina = 1; $pagina <= $paginas; $pagina++) {
+            $modelo = $final->importPage($pagina);
+            $tamanho = $final->getTemplateSize($modelo);
+            $escala = min(1, $largura / $tamanho['width'], $altura / $tamanho['height']);
+            $mudou = $mudou || $escala < 1;
+            $w = $tamanho['width'] * $escala;
+            $h = $tamanho['height'] * $escala;
+
+            $final->AddPage('P', [$largura, $altura]);
+            $final->useTemplate($modelo, ($largura - $w) / 2, ($altura - $h) / 2, $w, $h);
+        }
+
+        return $mudou ? $final->Output('S') : $pdfBytes;
+    }
+
+    /**
      * Junta os PDFs dos lotes na ordem, página por página, mantendo o
      * tamanho de cada página (etiqueta 2,5x5 continua 2,5x5).
      *

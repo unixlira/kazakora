@@ -63,17 +63,19 @@ class LabelFetchService
      */
     /**
      * Canais cuja etiqueta NUNCA sai pela nossa impressora — ela é emitida
-     * e impressa no painel do próprio marketplace.
+     * e impressa no painel do próprio marketplace. A trava mora aqui, no
+     * único ponto que cria PrintJob, pra nenhum caminho novo conseguir
+     * furar isso: nem a separação, nem o botão de reimprimir, nem uma
+     * varredura futura.
      *
-     * Decisão do usuário, repetida em 2026-09-06 depois de eu ter religado
-     * o TikTok por engano e queimado 2 etiquetas: **"do TikTok é do Bling,
-     * essas não imprimem pelo nosso fluxo, só Shopee e Mercado Livre — se
-     * não, trava a impressora"**. A trava mora aqui, no único ponto que
-     * cria PrintJob, pra nenhum caminho novo conseguir furar isso: nem a
-     * separação, nem o botão de reimprimir, nem uma varredura futura.
+     * TikTok Shop SAIU daqui em 2026-10-05, pedido explícito do usuário
+     * ("a gente pega etiqueta do Bling e depois imprime automático"). Até
+     * então era proibido (06/09, 07/09 e 10/09: "trava a impressora") — a
+     * causa era a etiqueta do Bling ter 105 mm de largura num rolo de 4";
+     * agora ela passa por LabelProcessingService::encaixarNaFolha() antes
+     * de chegar na impressora (ver attempt()).
      */
     public const CANAIS_SEM_IMPRESSAO_NOSSA = [
-        MarketplaceAccount::CHANNEL_TIKTOK_SHOP,
         MarketplaceAccount::CHANNEL_SHEIN,
     ];
 
@@ -187,6 +189,21 @@ class LabelFetchService
         }
 
         $isPdf = str_starts_with($contents, '%PDF-');
+
+        // Etiqueta do TikTok (via Bling) vem com 105 mm de largura, mais
+        // larga que o rolo de 4" — era isso que travava a térmica. Encaixa
+        // no papel antes de guardar/imprimir. Se falhar, segue com a
+        // original em vez de travar o pedido.
+        if ($isPdf && $shipment->channel === MarketplaceAccount::CHANNEL_TIKTOK_SHOP) {
+            try {
+                $contents = $this->processor->encaixarNaFolha($contents);
+            } catch (Throwable $exception) {
+                Log::warning('marketplace.label_fetch.encaixe_falhou', [
+                    'shipment_id' => $shipment->id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
+        }
 
         // Reativado 2026-08-15, pedido explícito — mas só pra Shopee/TikTok
         // Shop (CHANNELS_WITH_DECLARATION abaixo), não geral como antes de
@@ -452,7 +469,7 @@ class LabelFetchService
             return false;
         }
 
-        // A trava do TikTok/Shein (ver CANAIS_SEM_IMPRESSAO_NOSSA). Vale
+        // A trava da Shein (ver CANAIS_SEM_IMPRESSAO_NOSSA). Vale
         // pelo canal do ENVIO e pela origem do pedido: os dois já foram
         // vistos divergindo em pedido criado por ponte.
         if (in_array($shipment->channel, self::CANAIS_SEM_IMPRESSAO_NOSSA, true)

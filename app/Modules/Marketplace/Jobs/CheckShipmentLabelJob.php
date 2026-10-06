@@ -50,8 +50,16 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
 
     public CarbonImmutable $deadline;
 
-    public function __construct(public readonly int $shipmentId, ?CarbonImmutable $deadline = null)
-    {
+    /**
+     * Intervalo entre tentativas. TikTok passa pelo Bling, que tem limite
+     * de 3 req/s pra conta inteira — lá a consulta é de minuto em minuto
+     * (ver ChannelShippingService::confirm()), não de 5 em 5 segundos.
+     */
+    public function __construct(
+        public readonly int $shipmentId,
+        ?CarbonImmutable $deadline = null,
+        public readonly int $retryIntervalSeconds = self::RETRY_INTERVAL_SECONDS,
+    ) {
         $this->deadline = $deadline ?? CarbonImmutable::now()->addHours(self::RETRY_WINDOW_HOURS);
     }
 
@@ -85,7 +93,7 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
 
     public function backoff(): int
     {
-        return self::RETRY_INTERVAL_SECONDS;
+        return $this->retryIntervalSeconds;
     }
 
     public function handle(LabelFetchService $service): void
@@ -112,7 +120,7 @@ class CheckShipmentLabelJob implements ShouldQueue, ShouldBeUnique
             // handler de exceptions. Quando retryUntil() vence, o worker
             // falha o job por conta própria e failed() roda igual antes,
             // com MaxAttemptsExceededException no lugar da nossa.
-            $this->release(self::RETRY_INTERVAL_SECONDS);
+            $this->release($this->retryIntervalSeconds);
         }
     }
 

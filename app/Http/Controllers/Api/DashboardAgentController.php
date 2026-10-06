@@ -1777,8 +1777,8 @@ class DashboardAgentController extends Controller
      */
     public function labelStatus(Order $order): JsonResponse
     {
-        // TikTok Shop e Shein: a etiqueta sai no painel do próprio canal
-        // (no TikTok, pela ponte do Bling), nunca pela nossa impressora.
+        // Shein: a etiqueta sai no painel do próprio canal, nunca pela
+        // nossa impressora (TikTok saiu dessa lista em 2026-10-05).
         if (in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
             return response()->json([
                 'state' => 'channel_only',

@@ -135,16 +135,12 @@ class LabelFetchServiceTest extends TestCase
         ]);
     }
 
-    /**
-     * Trava pedida pelo usuário duas vezes (a segunda em 2026-09-06, depois
-     * de eu religar o canal por engano): etiqueta do TikTok é do Bling e sai
-     * no painel dele. Mandar pra nossa impressora trava a impressora.
-     */
-    public function test_queue_print_never_creates_a_job_for_tiktok(): void
+    /** Shein continua sem etiqueta nossa: nunca vira PrintJob. */
+    public function test_queue_print_never_creates_a_job_for_shein(): void
     {
         Storage::fake('local');
-        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_TIKTOK_SHOP, packedAt: now());
-        $shipment->forceFill(['label_path' => 'labels/tiktok.pdf'])->save();
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHEIN, packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/shein.pdf'])->save();
 
         $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
         $this->assertDatabaseCount('print_jobs', 0);

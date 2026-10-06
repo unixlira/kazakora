@@ -48,6 +48,10 @@ export const sidebarSections = [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', color: 'text-warning', permission: 'pedidos.view' },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', color: 'text-primary', permission: 'pedidos.view' },
             { label: 'Notas Fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', color: 'text-info', permission: 'pedidos.view' },
+            // Devoluções e reclamações de todas as plataformas (2026-10-06):
+            // o número é quantos casos têm pendência (prazo, conferência,
+            // encerrada sem o produto voltar).
+            { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', color: 'text-error', permission: 'operacional.view', badgeKey: 'devolucoes' },
             { label: 'Pedidos de Compra', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', color: 'text-info', permission: 'operacional.view' },
             { label: 'Ordens de Serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', color: 'text-secondary', permission: 'operacional.view' },
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', color: 'text-success', permission: 'operacional.view' },

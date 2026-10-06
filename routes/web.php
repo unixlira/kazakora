@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\KoraSyncController;
 use App\Modules\Admin\Http\Controllers\EnviosFlexController;
+use App\Modules\Admin\Http\Controllers\DevolucoesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreFlexController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
@@ -473,6 +474,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('envios-flex/{envio}/sincronizar', [EnviosFlexController::class, 'sincronizar'])->name('envios-flex.sincronizar');
         Route::post('envios-flex/recibos/{recibo}/reter', [EnviosFlexController::class, 'reter'])->name('envios-flex.reter');
         Route::delete('envios-flex/recibos/{recibo}/reter', [EnviosFlexController::class, 'liberar'])->name('envios-flex.liberar');
+    });
+
+    // Devoluções — controle de devoluções e reclamações de todas as
+    // plataformas (pedido do usuário 2026-10-06). Ver DevolucoesController.
+    Route::get('devolucoes', [DevolucoesController::class, 'index'])->name('devolucoes.listar')->middleware('permission:operacional.view');
+    Route::middleware('permission:operacional.edit')->group(function () {
+        Route::post('devolucoes', [DevolucoesController::class, 'store'])->name('devolucoes.registrar');
+        Route::post('devolucoes/sincronizar', [DevolucoesController::class, 'sincronizar'])->name('devolucoes.sincronizar');
+        Route::post('devolucoes/{devolucao}', [DevolucoesController::class, 'update'])->whereNumber('devolucao')->name('devolucoes.atualizar');
     });
 
     Route::middleware('admin')->group(function () {

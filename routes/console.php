@@ -188,6 +188,11 @@ Schedule::command('flex:check-billing-cycle')->dailyAt('07:00');
 // os alertas (o de "entregador não iniciou a rota" depende só do relógio).
 Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverlapping(25);
 
+// Controle de devoluções (2026-10-06): reconsulta ML e Shopee e recalcula
+// prazos e alertas. O webhook do ML já traz reclamação nova na hora; isto
+// é a rede de segurança e o que pega a Shopee (sem push de devolução).
+Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverlapping(25);
+
 // Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido
 // no consentimento, MENOS recibo retido como prova ou com pendência aberta
 // (ver PurgeKoraFlexReceiptImages). Existia desde 2026-09-10, mas nunca

@@ -90,5 +90,14 @@ class ClaimService
                 'claim_updated_at' => $claim['last_updated'] ?? null,
             ],
         );
+
+        // Controle de devoluções (2026-10-06): reclamação nova ou mudada
+        // entra na hora, sem esperar a varredura de 30 min. Falha aqui não
+        // derruba o webhook — a varredura pega depois.
+        try {
+            app(\App\Modules\Marketplace\Support\ReturnsSyncService::class)->sincronizarClaimMercadoLivre($claimId);
+        } catch (\Throwable $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.webhook.post_purchase.devolucao_falhou', ['claim' => $claimId, 'erro' => $exception->getMessage()]);
+        }
     }
 }

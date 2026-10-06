@@ -80,7 +80,10 @@ class HandleInertiaRequests extends Middleware
             // adminSidebarItems.js). Só dentro de /admin e só pra equipe; o
             // número vem de cache de 5 min, recalculado quando um alerta muda.
             'sidebarBadges' => fn () => $request->is('admin*') && $request->user()?->isStaff()
-                ? ['flexAlertas' => app(\App\Modules\Marketplace\Support\FlexControlService::class)->contagemDeAlertas()]
+                ? [
+                    'flexAlertas' => app(\App\Modules\Marketplace\Support\FlexControlService::class)->contagemDeAlertas(),
+                    'devolucoes' => \App\Modules\Admin\Http\Controllers\DevolucoesController::contagemDeAlertas(),
+                ]
                 : [],
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),

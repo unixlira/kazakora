@@ -7,7 +7,7 @@ import { Link } from '@inertiajs/vue3';
         <!-- Form side -->
         <div class="flex w-full flex-col items-center justify-center bg-store-bg-raised px-4 py-12 lg:w-1/2">
             <Link href="/" class="mb-8 no-underline">
-                <span class="font-display text-2xl font-semibold text-store-fg">Kaza<span class="text-store-accent">Kora</span></span>
+                <span class="font-display text-2xl font-semibold text-store-fg">KazaKora</span>
             </Link>
 
             <div class="w-full" style="max-width: 24rem;">

@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 use RuntimeException;
 
 /**
@@ -358,8 +359,14 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
                 break;
             } catch (QueryException $exception) {
+                // MySQL (produção) cita o nome do índice
+                // (products_sku_unique); SQLite (testes) cita a coluna
+                // ("UNIQUE constraint failed: products.slug") — sem o 2º
+                // formato a colisão nunca era reconhecida fora do MySQL.
                 $isUniqueCollision = str_contains($exception->getMessage(), 'products_sku_unique')
-                    || str_contains($exception->getMessage(), 'products_slug_unique');
+                    || str_contains($exception->getMessage(), 'products_slug_unique')
+                    || str_contains($exception->getMessage(), 'products.sku')
+                    || str_contains($exception->getMessage(), 'products.slug');
 
                 if ($attempt === 5 || ! $isUniqueCollision) {
                     throw $exception;
@@ -377,7 +384,32 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             'last_synced_at' => now(),
         ]);
 
-        $this->importFiscalData($product, $item['tax_info'] ?? null);
+        // MELHOR-ESFORÇO, e essa é a lição cara de 2026-09-10: dado fiscal
+        // do produto NUNCA pode derrubar a importação da venda.
+        //
+        // A venda 260910M2M4KAK5 se perdeu porque uma exception aqui dentro
+        // (método inexistente) subiu pela transação de
+        // OrderImportService::createOrder() e matou o pedido INTEIRO —
+        // Order, OrderItem, Product, tudo desfeito, nas 3 tentativas do
+        // webhook. Resultado: venda sem nota, sem etiqueta, invisível no
+        // sistema, descoberta só no painel da Shopee. O mesmo formato de
+        // estrago já tinha acontecido em 2026-08-08 (ver o comentário sobre
+        // tipo_operacao dentro de importFiscalData) — duas vezes é padrão,
+        // não azar.
+        //
+        // Produto sem dado fiscal é um problema pequeno e VISÍVEL: a nota
+        // fica pendente por falta de NCM e aparece na tela fiscal. Venda
+        // que nunca entrou é um problema grande e INVISÍVEL. Entre os dois,
+        // fica sempre com o visível.
+        try {
+            $this->importFiscalData($product, $item['tax_info'] ?? null);
+        } catch (Throwable $exception) {
+            Log::channel('shopee')->error('shopee.fiscal_data.import_failed', [
+                'product_id' => $product->id,
+                'external_id' => $externalId,
+                'message' => $exception->getMessage(),
+            ]);
+        }
 
         return $product;
     }
@@ -454,6 +486,17 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      *
      * @return array{images: array<int, string>, video: ?array{url: string, duration: ?int}}
      */
+    /**
+     * Só a fatia de imagens do fetchItemMedia() abaixo, pro contrato comum
+     * que ProductMediaBackfillService usa em todos os canais.
+     *
+     * @return array<int, string>
+     */
+    public function fetchItemImages(string $externalId, ?string $externalModelId = null): array
+    {
+        return array_values($this->fetchItemMedia($externalId)['images'] ?? []);
+    }
+
     public function fetchItemMedia(string $externalId): array
     {
         $this->ensureConfigured();
@@ -576,6 +619,65 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Peso e medidas do PACOTE declarados no anúncio da Shopee — usados
+     * quando o produto não tem esses dados aqui e a pré-postagem dos
+     * Correios precisa deles (ver PackageDataResolver). `weight` e
+     * `dimension` vêm por padrão no get_item_base_info (não são campo
+     * opcional).
+     *
+     * Unidade: a doc da v2 diz kg pro `weight` — mas o docblock de
+     * fetchItemDetail() registra a dúvida kg x g. Valor acima de 30 (o teto
+     * de peso dos Correios em kg) só faz sentido em gramas, então é
+     * convertido; abaixo disso, kg. Nunca lança: sem dado, null.
+     *
+     * @return ?array{peso_bruto: ?float, altura_cm: ?float, largura_cm: ?float, profundidade_cm: ?float}
+     */
+    public function fetchPackageData(string $externalId): ?array
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            $item = $this->client->get('/api/v2/product/get_item_base_info', ['item_id_list' => $externalId])['response']['item_list'][0] ?? null;
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.package_data.lookup_failed', ['external_id' => $externalId, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        if (! $item) {
+            return null;
+        }
+
+        $peso = (float) ($item['weight'] ?? 0);
+        $dimension = $item['dimension'] ?? [];
+
+        return [
+            'peso_bruto' => $peso > 0 ? ($peso > 30 ? $peso / 1000 : $peso) : null,
+            'altura_cm' => (float) ($dimension['package_height'] ?? 0) ?: null,
+            'largura_cm' => (float) ($dimension['package_width'] ?? 0) ?: null,
+            'profundidade_cm' => (float) ($dimension['package_length'] ?? 0) ?: null,
+        ];
+    }
+
+    /** Anúncio da Shopee com este SKU — varre os anúncios ativos (caro: só como último recurso). */
+    public function findItemIdBySku(string $sku): ?string
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            return $this->findExistingItemIdBySku($sku);
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.item_by_sku.lookup_failed', ['sku' => $sku, 'message' => $exception->getMessage()]);
+
+            return null;
+        }
     }
 
     private function findExistingItemIdBySku(?string $sku): ?string
@@ -1090,7 +1192,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
     /**
      * Vocabulário real de `order_status` da Shopee: UNPAID, READY_TO_SHIP,
      * PROCESSED, SHIPPED, TO_CONFIRM_RECEIVE, COMPLETED, CANCELLED,
-     * TO_RETURN, IN_CANCEL. Mapeamento conservador — qualquer coisa não
+     * TO_RETURN, IN_CANCEL, INVOICE_PENDING, RETRY_SHIP. Mapeamento conservador — qualquer coisa não
      * reconhecida cai em "aguardando pagamento" em vez de assumir que já
      * foi pago (mesma cautela que MercadoLivreDriver::mapOrderStatus() já
      * aplica).
@@ -1111,11 +1213,26 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      */
     private function mapOrderStatus(string $status): string
     {
+        // BUG REAL 2026-09-29 (revisão de código):
+        // - IN_CANCEL é só o comprador PEDINDO o cancelamento — o vendedor
+        //   pode recusar e a venda segue. Mapear pra cancelado devolvia o
+        //   estoque e tirava o pedido da fila por uma venda que continua de
+        //   pé. Fica pago; se a Shopee aceitar, o status vira CANCELLED de
+        //   verdade e aí sim cancela (syncStatus). Pedido já enviado não
+        //   regride (trava isStaleStatus()).
+        // - INVOICE_PENDING (específico do Brasil: pago, esperando a NOSSA
+        //   NF-e pra liberar o envio) e RETRY_SHIP (reenvio) caíam no default
+        //   "aguardando pagamento" — e a Shopee em aguardando pagamento nem
+        //   vira Order (OrderImportService::importNormalized), então pedido
+        //   em INVOICE_PENDING nunca era importado e a nota nunca saía.
+        // - TO_RETURN continua cancelado (ciclo de vida do pedido), mas
+        //   syncStatus() não devolve estoque se o pedido já tinha sido
+        //   enviado — o produto ainda está com o comprador.
         return match ($status) {
-            'READY_TO_SHIP', 'PROCESSED' => Order::STATUS_PAID,
+            'READY_TO_SHIP', 'PROCESSED', 'INVOICE_PENDING', 'RETRY_SHIP', 'IN_CANCEL' => Order::STATUS_PAID,
             'SHIPPED', 'TO_CONFIRM_RECEIVE' => Order::STATUS_SHIPPED,
             'COMPLETED' => Order::STATUS_COMPLETED,
-            'CANCELLED', 'IN_CANCEL', 'TO_RETURN' => Order::STATUS_CANCELLED,
+            'CANCELLED', 'TO_RETURN' => Order::STATUS_CANCELLED,
             default => Order::STATUS_AWAITING_PAYMENT,
         };
     }

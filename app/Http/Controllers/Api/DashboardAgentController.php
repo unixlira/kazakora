@@ -2345,7 +2345,7 @@ class DashboardAgentController extends Controller
                 $request->query('channel'),
                 fn ($query, $channel) => $query->where('channel', $channel),
             )
-            ->with(['order:id,external_order_id,origin,shipping_name,created_at', 'order.items:id,order_id,product_name,quantity'])
+            ->with(['order:id,external_order_id,origin,shipping_name,created_at', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
             ->orderBy('scheduled_for')
             ->get()
             ->filter(fn (ChannelShipment $shipment) => $shipment->order !== null)
@@ -2373,7 +2373,13 @@ class DashboardAgentController extends Controller
                 // passou da data prometida sem liberar — não é o mesmo alerta
                 // que "vai liberar em breve".
                 'is_overdue' => $shipment->scheduled_for->isPast(),
+                // id/product_id/sku: mesmos campos da fila — sem eles o
+                // card de Vendas futuras do KoraSync não acha a foto de
+                // cada item (2026-10-07, "está sem imagem").
                 'products' => $shipment->order->items->map(fn ($item) => [
+                    'id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'sku' => $item->product?->sku,
                     'name' => $item->product_name,
                     'quantity' => $item->quantity,
                 ]),

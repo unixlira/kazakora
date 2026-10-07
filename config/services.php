@@ -362,5 +362,10 @@ return [
         'secret' => env('API_PARTNER_JWT_SECRET'),
     ],
 
+    // Leitura da duração de vídeo (evidências de devolução). Vazio = procura
+    // ~/bin/ffprobe e depois o PATH — ver DuracaoDeVideo.
+    'ffprobe' => [
+        'path' => env('FFPROBE_PATH'),
+    ],
 
 ];

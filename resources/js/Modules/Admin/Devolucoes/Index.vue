@@ -89,6 +89,67 @@ const agir = (acao, dados = {}) => router.post(`/admin/devolucoes/${aberto.value
     onSuccess: (page) => { aberto.value = page.props.casos.find((c) => c.id === aberto.value.id) ?? null; nota.value = ''; },
 });
 
+// ---- Evidências (fotos e vídeos) -----------------------------------------
+// Pedido do usuário 2026-10-07: até 30 MB por arquivo e vídeo de até 1
+// minuto. A conferência aqui só poupa o upload — o servidor mede de novo.
+const MAX_MB = 30;
+const MAX_SEGUNDOS = 60;
+const enviandoEvidencia = ref(false);
+const progressoEvidencia = ref(0);
+const erroEvidencia = ref('');
+const inputEvidencia = ref(null);
+
+const tamanho = (bytes) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+
+const duracaoDoVideo = (arquivo) => new Promise((resolve) => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(arquivo);
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(Number.isFinite(video.duration) ? video.duration : null); };
+    video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    video.src = url;
+});
+
+const anexarEvidencias = async (evento) => {
+    const arquivos = Array.from(evento.target.files ?? []);
+    evento.target.value = '';
+    erroEvidencia.value = '';
+    if (!arquivos.length) return;
+
+    const duracoes = [];
+    for (const arquivo of arquivos) {
+        if (arquivo.size > MAX_MB * 1048576) {
+            erroEvidencia.value = `${arquivo.name} tem ${tamanho(arquivo.size)} — o máximo é ${MAX_MB} MB.`;
+            return;
+        }
+        const segundos = arquivo.type.startsWith('video/') ? await duracaoDoVideo(arquivo) : null;
+        if (segundos !== null && segundos > MAX_SEGUNDOS + 0.5) {
+            erroEvidencia.value = `${arquivo.name} tem ${Math.round(segundos)} segundos — o máximo é 1 minuto.`;
+            return;
+        }
+        duracoes.push(segundos ?? '');
+    }
+
+    enviandoEvidencia.value = true;
+    progressoEvidencia.value = 0;
+    router.post(`/admin/devolucoes/${aberto.value.id}/evidencias`, { arquivos, duracoes }, {
+        forceFormData: true,
+        preserveScroll: true,
+        onProgress: (p) => { progressoEvidencia.value = p?.percentage ?? 0; },
+        onSuccess: (page) => { aberto.value = page.props.casos.find((c) => c.id === aberto.value.id) ?? null; },
+        onError: (erros) => { erroEvidencia.value = Object.values(erros)[0] ?? 'Não consegui enviar.'; },
+        onFinish: () => { enviandoEvidencia.value = false; },
+    });
+};
+
+const removerEvidencia = (evidencia) => {
+    if (!confirm(`Remover ${evidencia.tipo === 'video' ? 'o vídeo' : 'a foto'} ${evidencia.nome ?? ''}?`)) return;
+    router.delete(`/admin/devolucoes/${aberto.value.id}/evidencias/${evidencia.id}`, {
+        preserveScroll: true,
+        onSuccess: (page) => { aberto.value = page.props.casos.find((c) => c.id === aberto.value.id) ?? null; },
+    });
+};
+
 // ---- Registro manual (TikTok/Amazon) ----------------------------------
 const registrando = ref(false);
 const form = ref({ channel: 'tiktok_shop', pedido: '', kind: 'devolucao', reason_label: '', situacao: 'aguardando_resposta', tracking_number: '', respond_due_at: '' });
@@ -272,6 +333,37 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                         <input v-model="nota" type="text" placeholder="Anotar algo no histórico" class="flex-1 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm" />
                         <button type="submit" class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm font-semibold">Anotar</button>
                     </form>
+                </div>
+
+                <!-- Evidências: foto e vídeo do que chegou -->
+                <h3 class="mt-5 text-sm font-semibold">Evidências <span class="font-normal text-slate-400">· foto ou vídeo, até {{ MAX_MB }} MB, vídeo até 1 min</span></h3>
+                <div v-if="aberto.evidencias?.length" class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div v-for="evidencia in aberto.evidencias" :key="evidencia.id" class="group relative overflow-hidden rounded-lg border border-[var(--surface-border)] bg-black/5">
+                        <video v-if="evidencia.tipo === 'video'" :src="evidencia.url" controls preload="metadata" class="aspect-square w-full bg-black object-contain"></video>
+                        <a v-else :href="evidencia.url" target="_blank" rel="noopener">
+                            <img :src="evidencia.url" :alt="evidencia.nome ?? 'Evidência'" loading="lazy" class="aspect-square w-full object-cover" />
+                        </a>
+                        <p class="truncate px-2 py-1 text-[11px] text-slate-500" :title="evidencia.nome">
+                            <i :class="evidencia.tipo === 'video' ? 'fas fa-video' : 'fas fa-image'" class="me-1"></i>
+                            {{ evidencia.duracao ? `${evidencia.duracao}s · ` : '' }}{{ tamanho(evidencia.tamanho) }}{{ evidencia.quem ? ` · ${evidencia.quem}` : '' }}
+                        </p>
+                        <button v-if="podeEditar" type="button" title="Remover"
+                            class="absolute right-1 top-1 rounded-full bg-black/60 px-2 py-1 text-xs text-white opacity-80 hover:opacity-100" @click="removerEvidencia(evidencia)">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <p v-else class="mt-2 text-sm text-slate-400">Nenhuma evidência anexada.</p>
+
+                <div v-if="podeEditar" class="mt-2">
+                    <input ref="inputEvidencia" type="file" accept="image/*,video/*" multiple class="hidden" @change="anexarEvidencias" />
+                    <button type="button" :disabled="enviandoEvidencia"
+                        class="w-full rounded-lg border border-dashed border-[var(--surface-border)] px-3 py-3 text-sm font-semibold hover:bg-black/5 disabled:opacity-60"
+                        @click="inputEvidencia?.click()">
+                        <template v-if="enviandoEvidencia"><i class="fas fa-spinner fa-spin me-1"></i> Enviando… {{ progressoEvidencia }}%</template>
+                        <template v-else><i class="fas fa-camera me-1"></i> Anexar fotos ou vídeos</template>
+                    </button>
+                    <p v-if="erroEvidencia" class="mt-1 text-xs text-error"><i class="fas fa-circle-exclamation me-1"></i>{{ erroEvidencia }}</p>
                 </div>
 
                 <!-- Histórico: nenhum status se perde -->

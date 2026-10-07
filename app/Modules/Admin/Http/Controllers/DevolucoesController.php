@@ -6,13 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Marketplace\Models\MarketplaceReturn;
+use App\Modules\Marketplace\Models\MarketplaceReturnEvidence;
+use App\Modules\Marketplace\Support\DuracaoDeVideo;
 use App\Modules\Marketplace\Support\ReturnsSyncService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
 
 /**
@@ -42,7 +47,7 @@ class DevolucoesController extends Controller
         $busca = trim((string) $request->string('busca')) ?: null;
 
         $casos = MarketplaceReturn::query()
-            ->with(['order:id,shipping_name,total,stock_restored_at', 'order.items:id,order_id,product_id,product_name,quantity', 'events.user:id,name', 'receivedBy:id,name', 'verdictBy:id,name'])
+            ->with(['order:id,shipping_name,total,stock_restored_at', 'order.items:id,order_id,product_id,product_name,quantity', 'events.user:id,name', 'evidencias.user:id,name', 'receivedBy:id,name', 'verdictBy:id,name'])
             ->when($canal, fn ($q) => $q->where('channel', $canal))
             ->when($busca, fn ($q) => $q->where(fn ($q) => $q
                 ->where('external_order_id', 'like', "%{$busca}%")
@@ -189,6 +194,93 @@ class DevolucoesController extends Controller
         return back()->with('success', 'Devolução atualizada.');
     }
 
+    /**
+     * Evidência (foto ou vídeo) do que chegou — pedido do usuário
+     * 2026-10-07: até 30 MB, e vídeo de até 1 minuto. A duração é medida
+     * aqui com o ffprobe; sem ffprobe, vale a que o navegador leu.
+     */
+    public function anexarEvidencia(Request $request, MarketplaceReturn $devolucao, DuracaoDeVideo $duracao): RedirectResponse
+    {
+        $dados = $request->validate([
+            'arquivos' => ['required', 'array', 'max:10'],
+            'arquivos.*' => ['required', 'file', 'max:'.(MarketplaceReturnEvidence::MAX_MB * 1024), 'mimes:jpg,jpeg,png,webp,heic,heif,mp4,mov,webm,m4v,3gp'],
+            'duracoes' => ['nullable', 'array'],
+            'duracoes.*' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'arquivos.*.max' => 'Cada arquivo pode ter no máximo '.MarketplaceReturnEvidence::MAX_MB.' MB.',
+            'arquivos.*.mimes' => 'Envie foto (JPG, PNG, WEBP, HEIC) ou vídeo (MP4, MOV, WEBM).',
+        ]);
+
+        $anexados = 0;
+
+        foreach ($dados['arquivos'] as $i => $arquivo) {
+            $video = str_starts_with((string) $arquivo->getMimeType(), 'video/')
+                || in_array(strtolower($arquivo->getClientOriginalExtension()), ['mp4', 'mov', 'webm', 'm4v', '3gp'], true);
+            $segundos = null;
+
+            if ($video) {
+                $segundos = $duracao->segundos($arquivo->getRealPath()) ?? (isset($dados['duracoes'][$i]) ? (float) $dados['duracoes'][$i] : null);
+
+                // Meio segundo de folga: celular grava "1:00" com 60,3 s.
+                if ($segundos !== null && $segundos > MarketplaceReturnEvidence::MAX_SEGUNDOS + 0.5) {
+                    return back()->with('error', "O vídeo {$arquivo->getClientOriginalName()} tem ".(int) round($segundos).' segundos — o máximo é 1 minuto.');
+                }
+            }
+
+            $extensao = strtolower($arquivo->getClientOriginalExtension() ?: ($video ? 'mp4' : 'jpg'));
+            $path = $arquivo->storeAs("devolucoes/{$devolucao->id}", Str::random(24).".{$extensao}", 'local');
+
+            $devolucao->evidencias()->create([
+                'tipo' => $video ? MarketplaceReturnEvidence::VIDEO : MarketplaceReturnEvidence::FOTO,
+                'path' => $path,
+                'nome_original' => Str::limit($arquivo->getClientOriginalName(), 250, ''),
+                'mime' => $arquivo->getMimeType(),
+                'tamanho' => $arquivo->getSize(),
+                'duracao_segundos' => $segundos !== null ? (int) round($segundos) : null,
+                'user_id' => $request->user()->id,
+            ]);
+
+            $anexados++;
+        }
+
+        $devolucao->events()->create([
+            'situacao' => $devolucao->situacao,
+            'description' => $anexados === 1 ? 'Evidência anexada' : "{$anexados} evidências anexadas",
+            'user_id' => $request->user()->id,
+            'happened_at' => now(),
+        ]);
+
+        return back()->with('success', $anexados === 1 ? 'Evidência anexada.' : "{$anexados} evidências anexadas.");
+    }
+
+    /** Serve o arquivo (disco privado). BinaryFileResponse aceita Range — o vídeo dá pra avançar no player. */
+    public function evidencia(MarketplaceReturn $devolucao, MarketplaceReturnEvidence $evidencia): BinaryFileResponse
+    {
+        abort_unless($evidencia->marketplace_return_id === $devolucao->id && Storage::disk('local')->exists($evidencia->path), 404);
+
+        return response()->file(Storage::disk('local')->path($evidencia->path), [
+            'Content-Type' => $evidencia->mime ?: 'application/octet-stream',
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
+    }
+
+    public function removerEvidencia(Request $request, MarketplaceReturn $devolucao, MarketplaceReturnEvidence $evidencia): RedirectResponse
+    {
+        abort_unless($evidencia->marketplace_return_id === $devolucao->id, 404);
+
+        Storage::disk('local')->delete($evidencia->path);
+        $evidencia->delete();
+
+        $devolucao->events()->create([
+            'situacao' => $devolucao->situacao,
+            'description' => 'Evidência removida: '.($evidencia->nome_original ?? $evidencia->tipo),
+            'user_id' => $request->user()->id,
+            'happened_at' => now(),
+        ]);
+
+        return back()->with('success', 'Evidência removida.');
+    }
+
     /** Reconsulta na hora (botão "Atualizar agora"). */
     public function sincronizar(ReturnsSyncService $sync): RedirectResponse
     {
@@ -253,6 +345,16 @@ class DevolucoesController extends Controller
             'vereditoEm' => $caso->verdict_at?->toIso8601String(),
             'vereditoPor' => $caso->verdictBy?->name,
             'alertas' => $caso->alertas(),
+            'evidencias' => $caso->evidencias->map(fn (MarketplaceReturnEvidence $evidencia) => [
+                'id' => $evidencia->id,
+                'tipo' => $evidencia->tipo,
+                'url' => "/admin/devolucoes/{$caso->id}/evidencias/{$evidencia->id}",
+                'nome' => $evidencia->nome_original,
+                'tamanho' => $evidencia->tamanho,
+                'duracao' => $evidencia->duracao_segundos,
+                'quem' => $evidencia->user?->name,
+                'quando' => $evidencia->created_at?->toIso8601String(),
+            ])->values(),
             'historico' => $caso->events->take(30)->map(fn ($evento) => [
                 'quando' => $evento->happened_at?->toIso8601String(),
                 'texto' => $evento->description,

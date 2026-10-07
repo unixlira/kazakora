@@ -91,6 +91,11 @@ class MarketplaceReturn extends Model
         return $this->belongsTo(Order::class);
     }
 
+    public function evidencias(): HasMany
+    {
+        return $this->hasMany(MarketplaceReturnEvidence::class)->orderBy('id');
+    }
+
     public function events(): HasMany
     {
         return $this->hasMany(MarketplaceReturnEvent::class)->orderByDesc('happened_at')->orderByDesc('id');

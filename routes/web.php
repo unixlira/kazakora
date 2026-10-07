@@ -479,10 +479,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Devoluções — controle de devoluções e reclamações de todas as
     // plataformas (pedido do usuário 2026-10-06). Ver DevolucoesController.
     Route::get('devolucoes', [DevolucoesController::class, 'index'])->name('devolucoes.listar')->middleware('permission:operacional.view');
+    Route::get('devolucoes/{devolucao}/evidencias/{evidencia}', [DevolucoesController::class, 'evidencia'])->whereNumber(['devolucao', 'evidencia'])->name('devolucoes.evidencias.ver')->middleware('permission:operacional.view');
     Route::middleware('permission:operacional.edit')->group(function () {
         Route::post('devolucoes', [DevolucoesController::class, 'store'])->name('devolucoes.registrar');
         Route::post('devolucoes/sincronizar', [DevolucoesController::class, 'sincronizar'])->name('devolucoes.sincronizar');
         Route::post('devolucoes/{devolucao}', [DevolucoesController::class, 'update'])->whereNumber('devolucao')->name('devolucoes.atualizar');
+        Route::post('devolucoes/{devolucao}/evidencias', [DevolucoesController::class, 'anexarEvidencia'])->whereNumber('devolucao')->name('devolucoes.evidencias.anexar');
+        Route::delete('devolucoes/{devolucao}/evidencias/{evidencia}', [DevolucoesController::class, 'removerEvidencia'])->whereNumber(['devolucao', 'evidencia'])->name('devolucoes.evidencias.remover');
     });
 
     Route::middleware('admin')->group(function () {

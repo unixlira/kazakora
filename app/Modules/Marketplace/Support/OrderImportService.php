@@ -3,12 +3,15 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
+use App\Modules\Catalog\Jobs\CompleteImportedProductJob;
 use App\Modules\Catalog\Support\ProductMediaBackfillService;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
@@ -18,8 +21,10 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\MarketplaceClaim;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Notifications\CancelledOrderWithAuthorizedInvoiceNotification;
 use App\Notifications\ProductAutoImportedNotification;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
@@ -47,13 +52,12 @@ class OrderImportService
         private readonly StockManager $stock,
         private readonly OrderPaymentFinalizer $finalizer,
         private readonly OrderFulfillmentTimeline $timeline,
-    ) {
-    }
+    ) {}
 
     /**
      * @return Order|null null quando o pedido não foi (e não devia ser)
-     *                     criado — ver importNormalized() pro único caso
-     *                     disso hoje (Shopee com pagamento pendente).
+     *                    criado — ver importNormalized() pro único caso
+     *                    disso hoje (Shopee com pagamento pendente).
      */
     /**
      * @param  bool  $viaVarredura  true quando quem chamou foi uma varredura
@@ -78,9 +82,9 @@ class OrderImportService
      *
      * @param  array<string, mixed>  $data
      * @return Order|null null só no caso descrito no bloco logo abaixo do
-     *                     check de $existing (Shopee com pagamento
-     *                     pendente, pedido novo) — em todo outro caso
-     *                     sempre devolve um Order de verdade.
+     *                    check de $existing (Shopee com pagamento
+     *                    pendente, pedido novo) — em todo outro caso
+     *                    sempre devolve um Order de verdade.
      */
     public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true, bool $viaVarredura = false): ?Order
     {
@@ -213,7 +217,6 @@ class OrderImportService
             return $this->syncStatus($order, $data['status'], $data['channel_status'] ?? null);
         }
     }
-
 
     /**
      * BUG REAL 2026-09-01 (pedido #894, Mercado Livre): pedido existente com
@@ -461,7 +464,11 @@ class OrderImportService
                 // "atual" que ele buscar no canal — ver comentário lá:
                 // sem isso, a baixa abaixo contaria esta venda 2x.
                 if (! $product) {
-                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity'], $externalModelId);
+                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity'], $externalModelId)
+                        // Canal que não cadastra produto sozinho (TikTok,
+                        // Amazon): procura o mesmo SKU no ML/Shopee e
+                        // importa de lá — ver CrossChannelProductImporter.
+                        ?? app(CrossChannelProductImporter::class)->import($channel, $item['external_id']);
                     $autoImported = (bool) $product;
 
                     if ($product) {
@@ -486,6 +493,16 @@ class OrderImportService
                                 'product_id' => $product->id,
                                 'message' => $exception->getMessage(),
                             ]);
+                        }
+
+                        // O resto do cadastro (descrição, marca, modelo,
+                        // cor, GTIN, vídeo) vem na fila, depois que o
+                        // pedido já entrou — pedido explícito 2026-10-07:
+                        // produto que nasce de venda entra COMPLETO. Só pro
+                        // produto criado agora: casado por SKU já é o
+                        // cadastro de alguém, não se mexe.
+                        if ($product->wasRecentlyCreated) {
+                            CompleteImportedProductJob::dispatch($product->id)->afterCommit();
                         }
 
                         // Pedido explícito 2026-08-17 (variações de
@@ -1097,11 +1114,11 @@ class OrderImportService
         // cancelado pode não ter nota própria e mesmo assim estar coberto
         // por uma autorizada. pedidos() inclui os cancelados (este já está
         // cancelado aqui) e, fora de carrinho, é só o próprio pedido.
-        $pack = app(\App\Modules\Fiscal\Support\PackDoPedido::class);
+        $pack = app(PackDoPedido::class);
 
-        $invoice = \App\Modules\Fiscal\Models\Invoice::query()
+        $invoice = Invoice::query()
             ->whereIn('order_id', $pack->pedidos($order)->pluck('id'))
-            ->where('status', \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED)
+            ->where('status', Invoice::STATUS_AUTHORIZED)
             ->first();
 
         if (! $invoice) {
@@ -1132,7 +1149,7 @@ class OrderImportService
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
 
         if ($admins->isNotEmpty()) {
-            Notification::send($admins, new \App\Notifications\CancelledOrderWithAuthorizedInvoiceNotification($order, $invoice, $avisoDoCarrinho));
+            Notification::send($admins, new CancelledOrderWithAuthorizedInvoiceNotification($order, $invoice, $avisoDoCarrinho));
         }
     }
 
@@ -1198,7 +1215,7 @@ class OrderImportService
             return false;
         }
 
-        return \Illuminate\Support\Carbon::parse($placedAt)->format('H:i:s') !== '00:00:00';
+        return Carbon::parse($placedAt)->format('H:i:s') !== '00:00:00';
     }
 
     /**
@@ -1233,13 +1250,13 @@ class OrderImportService
         return $data === null || $data->lt(now()->subMinutes(self::VENDA_PERDIDA_APOS_MINUTOS));
     }
 
-    private function dataDaVenda(mixed $placedAt): ?\Illuminate\Support\Carbon
+    private function dataDaVenda(mixed $placedAt): ?Carbon
     {
         if (empty($placedAt)) {
             return null;
         }
 
-        $data = \Illuminate\Support\Carbon::parse($placedAt);
+        $data = Carbon::parse($placedAt);
 
         if ($data->format('H:i:s') !== '00:00:00') {
             return $data;

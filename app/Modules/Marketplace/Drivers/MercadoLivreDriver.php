@@ -8,6 +8,7 @@ use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Services\MercadoLivre\DTOs\OrderDTO;
 use App\Services\MercadoLivre\DTOs\ProductDTO;
 use App\Services\MercadoLivre\Exceptions\MercadoLivreException;
 use App\Services\MercadoLivre\MercadoLivreClient;
@@ -15,6 +16,7 @@ use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
 use App\Services\MercadoLivre\Services\ShipmentService;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -137,10 +139,8 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * antes de gravar.
      *
      * `description` não vem no payload de /items/{id} (endpoint separado,
-     * /items/{id}/description, que a Shopee não exige mas o ML sim) —
-     * deixado de fora de propósito em vez de arriscar um valor errado; o
-     * produto nasce sem descrição, igual já acontece hoje pra publicação
-     * manual quando o vendedor não preenche nada.
+     * /items/{id}/description) — fica pro fetchItemContent(), chamado
+     * depois pelo ProductCompletionService, fora da importação do pedido.
      *
      * Sem `tax_info` equivalente ao da Shopee: a API do ML não expõe
      * NCM/CFOP/CSOSN por anúncio (confirmado — nenhum endpoint documentado
@@ -149,7 +149,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * primeira nota — mesmo estado que a Shopee já deixa quando o vendedor
      * não cadastrou tax_info lá.
      *
-     * @return ?array{external_id: string, name: string, price: ?float, stock: ?int, sku: ?string}
+     * @return ?array{external_id: string, name: string, price: ?float, stock: ?int, sku: ?string, color: ?string}
      */
     /**
      * Fotos do anúncio. `items/{id}` já era chamado por fetchItemDetail()
@@ -177,11 +177,90 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             return [];
         }
 
-        return collect($item['pictures'] ?? [])
+        // Variação vendida com fotos próprias (a cor certa): só as dela.
+        // Sem variação, ou variação sem foto própria, todas do anúncio.
+        $pictures = collect($item['pictures'] ?? []);
+        $pictureIds = $this->variationOf($item, $externalModelId)['picture_ids'] ?? [];
+
+        if ($pictureIds !== []) {
+            $daVariacao = $pictures->filter(fn ($picture) => in_array($picture['id'] ?? null, $pictureIds, true));
+            $pictures = $daVariacao->isNotEmpty() ? $daVariacao : $pictures;
+        }
+
+        return $pictures
             ->map(fn ($picture) => (string) ($picture['secure_url'] ?? $picture['url'] ?? ''))
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * Conteúdo do anúncio pra completar um produto criado a partir de uma
+     * venda (ver ProductCompletionService): descrição, marca, modelo, cor
+     * e GTIN. A descrição mora num endpoint separado
+     * (/items/{id}/description) — era por isso que o produto do ML nascia
+     * sem descrição. Vídeo não entra: o ML só expõe `video_id` do YouTube,
+     * não um arquivo que dê pra baixar. Nunca lança: sem dado, [].
+     *
+     * @return array{description?: string, brand?: string, model?: string, color?: string, gtin?: string}
+     */
+    public function fetchItemContent(string $externalId, ?string $externalModelId = null): array
+    {
+        if (! $this->isConfigured()) {
+            return [];
+        }
+
+        try {
+            $item = $this->client->get("items/{$externalId}", ['include_attributes' => 'all']);
+        } catch (MercadoLivreException $exception) {
+            Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.item_content.lookup_failed', ['external_id' => $externalId, 'message' => $exception->getMessage()]);
+
+            return [];
+        }
+
+        if (empty($item['id'])) {
+            return [];
+        }
+
+        try {
+            $description = trim((string) ($this->client->get("items/{$externalId}/description")['plain_text'] ?? ''));
+        } catch (MercadoLivreException) {
+            $description = '';
+        }
+
+        $variation = $this->variationOf($item, $externalModelId);
+        $atributo = fn (string $id): string => trim((string) (
+            collect($variation['attributes'] ?? [])->firstWhere('id', $id)['value_name']
+            ?? collect($item['attributes'] ?? [])->firstWhere('id', $id)['value_name']
+            ?? ''
+        ));
+
+        return array_filter([
+            'description' => $description,
+            'brand' => $atributo('BRAND'),
+            'model' => $atributo('MODEL'),
+            'color' => $this->variationColor($variation) ?? $atributo('COLOR'),
+            'gtin' => $atributo('GTIN'),
+        ], fn ($valor) => $valor !== null && $valor !== '');
+    }
+
+    /** A variação vendida dentro do anúncio (null sem variação ou id desconhecido). */
+    private function variationOf(array $item, ?string $externalModelId): ?array
+    {
+        if ($externalModelId === null) {
+            return null;
+        }
+
+        return collect($item['variations'] ?? [])->first(fn ($variation) => (string) ($variation['id'] ?? '') === $externalModelId);
+    }
+
+    /** Cor (ou o 1º valor da combinação) da variação: "Rosa", "Preto"... */
+    private function variationColor(?array $variation): ?string
+    {
+        $combinacoes = collect($variation['attribute_combinations'] ?? []);
+        $valor = $combinacoes->firstWhere('id', 'COLOR')['value_name'] ?? $combinacoes->first()['value_name'] ?? null;
+
+        return $valor !== null && trim((string) $valor) !== '' ? trim((string) $valor) : null;
     }
 
     /**
@@ -256,12 +335,15 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         return isset($ids[0]) ? (string) $ids[0] : null;
     }
 
-    public function fetchItemDetail(string $externalId): ?array
+    public function fetchItemDetail(string $externalId, ?string $externalModelId = null): ?array
     {
         $this->ensureConfigured();
 
         try {
-            $item = $this->client->get("items/{$externalId}");
+            // include_attributes=all: sem isso o ML não devolve os
+            // `attributes` de cada variação, e é lá que mora o SELLER_SKU
+            // da cor vendida.
+            $item = $this->client->get("items/{$externalId}", ['include_attributes' => 'all']);
         } catch (MercadoLivreException $exception) {
             Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.item_detail.lookup_failed', [
                 'external_id' => $externalId,
@@ -282,13 +364,29 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         // Usado por autoImportProduct() pra achar um produto local JÁ
         // existente com esse mesmo SKU antes de criar um produto novo.
         $sellerSkuAttribute = collect($item['attributes'] ?? [])->firstWhere('id', 'SELLER_SKU');
+        $sku = trim((string) ($sellerSkuAttribute['value_name'] ?? ''));
+
+        // Anúncio com variação: SKU, preço e estoque são os da variação
+        // vendida (mesma regra do model_sku da Shopee). O SKU da variação
+        // vem no atributo SELLER_SKU dela ou, em anúncio antigo, no
+        // seller_custom_field.
+        $variation = $this->variationOf($item, $externalModelId);
+
+        if ($variation) {
+            $skuDaVariacao = trim((string) (collect($variation['attributes'] ?? [])->firstWhere('id', 'SELLER_SKU')['value_name'] ?? $variation['seller_custom_field'] ?? ''));
+            $sku = $skuDaVariacao !== '' ? $skuDaVariacao : $sku;
+        }
+
+        $price = $variation['price'] ?? $item['price'] ?? null;
+        $stock = $variation['available_quantity'] ?? $item['available_quantity'] ?? null;
 
         return [
             'external_id' => (string) $item['id'],
             'name' => (string) ($item['title'] ?? ''),
-            'price' => isset($item['price']) ? (float) $item['price'] : null,
-            'stock' => isset($item['available_quantity']) ? (int) $item['available_quantity'] : null,
-            'sku' => trim((string) ($sellerSkuAttribute['value_name'] ?? '')) ?: null,
+            'price' => $price !== null ? (float) $price : null,
+            'stock' => $stock !== null ? (int) $stock : null,
+            'sku' => $sku !== '' ? $sku : null,
+            'color' => $this->variationColor($variation),
         ];
     }
 
@@ -317,7 +415,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      */
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {
-        $item = $this->fetchItemDetail($externalId);
+        $item = $this->fetchItemDetail($externalId, $externalModelId);
 
         if (! $item || $item['name'] === '' || $item['price'] === null) {
             return null;
@@ -382,6 +480,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
                     'slug' => $slugBase.$suffix,
                     'price' => $item['price'],
                     'stock' => $initialStock,
+                    'color' => $item['color'],
                     'is_active' => false,
                 ]);
 
@@ -447,8 +546,16 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // real 2026-08-06: sem isso, um item não mapeado importava
             // como "Item {id} (sem produto local mapeado)" mesmo tendo o
             // nome disponível no payload o tempo todo).
+            // variation_id: anúncio com variação (cor/tamanho) — sem ele o
+            // auto-import não sabe QUAL variação foi vendida e cadastraria
+            // o SKU/foto da variação errada. Listing já existente sem
+            // variação continua casando (OrderImportService cai pro
+            // listing genérico quando não acha o da variação).
+            $variationId = $item['item']['variation_id'] ?? null;
+
             $items[] = [
                 'external_id' => $externalId,
+                'external_model_id' => $variationId ? (string) $variationId : null,
                 'external_name' => $item['item']['title'] ?? null,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -550,7 +657,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // (00h-01h de SP) ficava gravado ainda no dia anterior, e por
             // tabela sumia da fila "só hoje" do KoraSync
             // (DashboardAgentController::queue()) em vez de aparecer nela.
-            'placed_at' => \Illuminate\Support\Carbon::parse($order->date_created)->setTimezone(config('app.timezone')),
+            'placed_at' => Carbon::parse($order->date_created)->setTimezone(config('app.timezone')),
             'items' => $items,
         ];
     }
@@ -675,7 +782,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      * futuro — um buffering já vencido não é um agendamento pendente, é só
      * metadado velho do canal.
      */
-    private function extractScheduledFor(array $shipment): ?\Illuminate\Support\Carbon
+    private function extractScheduledFor(array $shipment): ?Carbon
     {
         $bufferingDate = $shipment['shipping_option']['buffering']['date'] ?? null;
 
@@ -683,7 +790,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             return null;
         }
 
-        $date = \Illuminate\Support\Carbon::parse($bufferingDate);
+        $date = Carbon::parse($bufferingDate);
 
         if ($date->isFuture()) {
             return $date;
@@ -698,7 +805,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         if (($shipment['status'] ?? null) === 'pending' && ($shipment['substatus'] ?? null) === 'buffered') {
             $datePart = substr((string) $bufferingDate, 0, 10);
 
-            return \Illuminate\Support\Carbon::createFromFormat('Y-m-d H:i:s', "{$datePart} 00:00:00", config('app.timezone'));
+            return Carbon::createFromFormat('Y-m-d H:i:s', "{$datePart} 00:00:00", config('app.timezone'));
         }
 
         return null;
@@ -867,7 +974,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
      *
      * @return array{fee_amount: float, commission_fee: float, service_fee: null, shipping_fee: ?float, seller_discount: null, platform_discount: null, payout_amount: ?float, breakdown: array<string, mixed>}
      */
-    private function resolveFeeBreakdown(\App\Services\MercadoLivre\DTOs\OrderDTO $order, float $subtotal, float $comissao): array
+    private function resolveFeeBreakdown(OrderDTO $order, float $subtotal, float $comissao): array
     {
         $frete = null;
         $detalhe = [];

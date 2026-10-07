@@ -36,6 +36,18 @@ abstract class AbstractMarketplaceDriver implements MarketplaceChannelDriver
     }
 
     /**
+     * Descrição, marca, modelo, cor, GTIN e vídeo do anúncio, pra completar
+     * produto criado a partir de uma venda (ProductCompletionService).
+     * Default vazio: canal sem forma de consultar o anúncio.
+     *
+     * @return array{description?: string, brand?: string, model?: string, color?: string, gtin?: string, video?: array{url: string, duration: ?int}}
+     */
+    public function fetchItemContent(string $externalId, ?string $externalModelId = null): array
+    {
+        return [];
+    }
+
+    /**
      * Default: canal ainda sem busca de avaliações implementada (só a
      * Shopee tem, por enquanto — ver ShopeeDriver::fetchReviews()).
      * Lançar, e não devolver [], porque ReviewImportService precisa

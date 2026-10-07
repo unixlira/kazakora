@@ -2,10 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Catalog\Jobs\CompleteImportedProductJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Support\CrossChannelProductImporter;
 use Illuminate\Console\Command;
 
 /**
@@ -104,7 +107,14 @@ class RelinkUnmappedMarketplaceItems extends Command
                     continue;
                 }
 
-                $product = $manager->driver($channel)->autoImportProduct($externalId, 0, $externalModelId);
+                $product = $manager->driver($channel)->autoImportProduct($externalId, 0, $externalModelId)
+                    ?? app(CrossChannelProductImporter::class)->import($channel, $externalId);
+
+                // Produto criado agora: completa descrição, fotos e vídeo
+                // (mesma regra da importação do pedido).
+                if ($product?->wasRecentlyCreated) {
+                    CompleteImportedProductJob::dispatch($product->id);
+                }
             }
 
             if (! $product) {
@@ -126,7 +136,7 @@ class RelinkUnmappedMarketplaceItems extends Command
 
             // Pedido que só esperava este vínculo pra ter nota: sai agora.
             Order::query()->whereIn('id', $group->pluck('order_id')->unique())->get()
-                ->each(fn (Order $destravado) => \App\Modules\Fiscal\Jobs\GenerateInvoiceJob::seDestravou($destravado));
+                ->each(fn (Order $destravado) => GenerateInvoiceJob::seDestravou($destravado));
 
             $relinked += $group->count();
             $this->line("Vinculado: {$channel}/{$externalId} -> #{$product->id} {$product->name} ({$group->count()} pedido(s): {$orderRefs})");

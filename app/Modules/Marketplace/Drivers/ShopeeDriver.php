@@ -11,13 +11,15 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Shopee\Exceptions\ShopeeException;
 use App\Services\Shopee\ShopeeClient;
+use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Throwable;
 use RuntimeException;
+use Throwable;
 
 /**
  * Shopee — API docs: https://open.shopee.com (Open Platform, partner approval required).
@@ -536,6 +538,64 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         return ['images' => $images, 'video' => $video];
     }
 
+    /**
+     * Conteúdo do anúncio pra completar um produto criado a partir de uma
+     * venda (ver ProductCompletionService): descrição, marca, cor da
+     * variação vendida e o vídeo. Nunca lança: sem dado, [].
+     *
+     * @return array{description?: string, brand?: string, color?: string, video?: array{url: string, duration: ?int}}
+     */
+    public function fetchItemContent(string $externalId, ?string $externalModelId = null): array
+    {
+        if (! $this->isConfigured()) {
+            return [];
+        }
+
+        try {
+            $item = $this->client->get('/api/v2/product/get_item_base_info', [
+                'item_id_list' => $externalId,
+                'response_optional_fields' => 'description,video_info',
+            ])['response']['item_list'][0] ?? null;
+        } catch (ShopeeException $exception) {
+            Log::channel('shopee')->warning('shopee.item_content.lookup_failed', ['external_id' => $externalId, 'message' => $exception->getMessage()]);
+
+            return [];
+        }
+
+        if (! $item) {
+            return [];
+        }
+
+        $brand = trim((string) ($item['brand']['original_brand_name'] ?? ''));
+        $videoInfo = $item['video_info'][0] ?? null;
+
+        return array_filter([
+            'description' => trim((string) ($item['description'] ?? '')),
+            // "NoBrand" é o que a Shopee grava quando o vendedor não escolhe marca.
+            'brand' => strcasecmp($brand, 'NoBrand') === 0 ? '' : $brand,
+            'color' => $externalModelId !== null ? $this->modelOptionName($externalId, $externalModelId) : null,
+            'video' => ! empty($videoInfo['video_url'])
+                ? ['url' => (string) $videoInfo['video_url'], 'duration' => isset($videoInfo['duration']) ? (int) $videoInfo['duration'] : null]
+                : null,
+        ], fn ($valor) => $valor !== null && $valor !== '');
+    }
+
+    /** Nome da opção da variação ("Rosa", "8 polegadas") a partir do tier_index do model. */
+    private function modelOptionName(string $externalId, string $externalModelId): ?string
+    {
+        try {
+            $response = $this->client->get('/api/v2/product/get_model_list', ['item_id' => $externalId])['response'] ?? [];
+        } catch (ShopeeException) {
+            return null;
+        }
+
+        $model = collect($response['model'] ?? [])->first(fn ($candidate) => (string) ($candidate['model_id'] ?? '') === $externalModelId);
+        $tier = $model['tier_index'][0] ?? null;
+        $option = $tier !== null ? ($response['tier_variation'][0]['option_list'][$tier]['option'] ?? null) : null;
+
+        return $option !== null && trim((string) $option) !== '' ? trim((string) $option) : null;
+    }
+
     public function publishProduct(Product $product, ProductChannelListing $listing): string
     {
         $this->ensureConfigured();
@@ -944,7 +1004,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      *
      * @return array<int, string>
      */
-    public function listOrderSns(\Carbon\CarbonInterface $from, \Carbon\CarbonInterface $to): array
+    public function listOrderSns(CarbonInterface $from, CarbonInterface $to): array
     {
         $this->ensureConfigured();
 
@@ -1149,7 +1209,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
             // já que Shopee é canal ativo (ao contrário do Amazon, ainda em
             // sandbox).
             'placed_at' => isset($order['create_time'])
-                ? \Illuminate\Support\Carbon::createFromTimestamp((int) $order['create_time'], config('app.timezone'))
+                ? Carbon::createFromTimestamp((int) $order['create_time'], config('app.timezone'))
                 : null,
             'items' => $items,
             ...($marketplaceFee !== null ? ['marketplace_fee' => $marketplaceFee, 'marketplace_fee_breakdown' => $feeBreakdown] : []),
@@ -1469,7 +1529,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         // funciona igual, a Shopee que decide o ponto sozinha). Antes disso
         // travava aqui achando que faltava dado, quando na verdade só
         // faltava mandar o dropoff sem branch_id.
-        $dropoff = $branchId ? ['branch_id' => $branchId] : new \stdClass();
+        $dropoff = $branchId ? ['branch_id' => $branchId] : new \stdClass;
 
         try {
             $this->client->post('/api/v2/logistics/ship_order', [
@@ -1709,7 +1769,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                         isset($comment['model_id']) ? [$comment['model_id']] : [],
                     )), fn ($modelId) => $modelId !== '' && $modelId !== '0'))),
                     'created_at' => isset($comment['create_time'])
-                        ? \Illuminate\Support\Carbon::createFromTimestamp((int) $comment['create_time'], config('app.timezone'))
+                        ? Carbon::createFromTimestamp((int) $comment['create_time'], config('app.timezone'))
                         : null,
                 ];
             }

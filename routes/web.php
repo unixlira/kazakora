@@ -266,6 +266,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('produtos/{product}/video', [ProductVideoController::class, 'store'])->name('produtos.video.adicionar');
     Route::delete('produtos/{product}/video', [ProductVideoController::class, 'destroy'])->name('produtos.video.remover');
     Route::put('produtos/{product}/canais/{channel}', [ProductChannelController::class, 'update'])->name('produtos.canais.atualizar');
+    Route::put('produtos/{product}/canais/{channel}/preco', [ProductChannelController::class, 'updatePrice'])->name('produtos.canais.preco');
     Route::post('produtos/{product}/canais/{channel}/sincronizar', [ProductChannelController::class, 'sync'])->name('produtos.canais.sincronizar');
     Route::delete('produtos/{product}/canais/{channel}', [ProductChannelController::class, 'destroy'])->name('produtos.canais.excluir');
     Route::post('produtos/{product}/variacoes/vincular', [ProductController::class, 'attachVariation'])->name('produtos.variacoes.vincular');

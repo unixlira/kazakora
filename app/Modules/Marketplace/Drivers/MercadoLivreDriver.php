@@ -55,7 +55,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         // item on Mercado Livre each time).
         if ($listing->external_id) {
             $this->products->updateItem($listing->external_id, [
-                'price' => (float) $product->final_price,
+                'price' => $listing->precoDeVenda($product),
                 'available_quantity' => $product->stock,
             ]);
 
@@ -68,7 +68,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
 
         $dto = new ProductDTO(
             category_id: $categoryId,
-            price: (float) $product->final_price,
+            price: $listing->precoDeVenda($product),
             available_quantity: $product->stock,
             title: $product->name,
             description: $product->description,
@@ -98,7 +98,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // nome truncado do que a publicação inteira falhar.
             $retryDto = new ProductDTO(
                 category_id: $categoryId,
-                price: (float) $product->final_price,
+                price: $listing->precoDeVenda($product),
                 available_quantity: $product->stock,
                 description: $product->description,
                 pictures: $pictures,

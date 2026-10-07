@@ -766,7 +766,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         $weight = $this->resolvePackageWeight($product);
         $logisticInfo = $this->resolveLogisticInfo($dimension, $weight);
         $attributeList = $this->resolveAttributeList($categoryId, $listing);
-        $price = round((float) $product->final_price, 2);
+        $price = round($listing->precoDeVenda($product), 2);
 
         if ($price <= 0) {
             throw new RuntimeException('Produto sem preço final válido para publicar na Shopee.');

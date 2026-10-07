@@ -65,6 +65,17 @@ const submit = (channel) => {
     );
 };
 
+// Preço próprio de cada canal (pedido do usuário 2026-10-07). "Salvar
+// preço" só grava aqui — o marketplace recebe na próxima sincronização.
+const precos = Object.fromEntries(props.channels.map((channel) => [channel, useForm({ price: listingFor(channel)?.price ?? '' })]));
+const precoBase = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(props.product.final_price ?? props.product.price ?? 0));
+
+const salvarPreco = (channel) => {
+    precos[channel]
+        .transform((data) => ({ price: data.price === '' || data.price === null ? null : Number(data.price) }))
+        .put(`/admin/produtos/${props.product.id}/canais/${channel}/preco`, { preserveScroll: true });
+};
+
 const sync = (channel) => {
     router.post(`/admin/produtos/${props.product.id}/canais/${channel}/sincronizar`, {}, { preserveScroll: true });
 };
@@ -104,6 +115,29 @@ const remove = async (channel) => {
             <p v-if="listingFor(channel)?.last_error" class="mt-2 rounded bg-red-50 p-2 text-xs text-red-600">
                 {{ listingFor(channel).last_error }}
             </p>
+
+            <div class="mt-3">
+                <label :for="`preco-${channel}`" class="block text-xs font-medium uppercase text-slate-400">
+                    Preço neste canal
+                </label>
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                    <div class="relative">
+                        <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">R$</span>
+                        <input :id="`preco-${channel}`" v-model="precos[channel].price" type="number" step="0.01" min="0.01"
+                            :placeholder="precoBase.replace('R$', '').trim()"
+                            class="w-36 rounded border border-slate-300 py-1.5 pl-8 pr-2 text-sm" />
+                    </div>
+                    <button type="button" :disabled="precos[channel].processing"
+                        class="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                        @click="salvarPreco(channel)">
+                        Salvar preço
+                    </button>
+                    <a href="/admin/precificacao" target="_blank" class="text-xs text-primary hover:underline">Calcular margem</a>
+                </div>
+                <p class="mt-1 text-xs text-slate-400">
+                    Vazio = usa o preço do produto ({{ precoBase }}). Salvar o preço não envia nada ao marketplace; ele vai na próxima sincronização.
+                </p>
+            </div>
 
             <div class="mt-3">
                 <label class="block text-xs font-medium uppercase text-slate-400">

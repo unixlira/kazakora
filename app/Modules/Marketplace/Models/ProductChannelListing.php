@@ -23,6 +23,7 @@ class ProductChannelListing extends Model
         'status',
         'external_id',
         'external_model_id',
+        'price',
         'attributes',
         'last_synced_at',
         'last_error',
@@ -32,9 +33,21 @@ class ProductChannelListing extends Model
     {
         return [
             'is_enabled' => 'boolean',
+            'price' => 'decimal:2',
             'attributes' => 'array',
             'last_synced_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Preço de venda NESTE canal — pedido do usuário 2026-10-07: cada canal
+     * tem seu preço (comissão e frete mudam de um pra outro, e o preço do
+     * site mandado pro Mercado Livre já deu anúncio vendendo no prejuízo).
+     * Sem preço próprio, vale o do produto, como sempre foi.
+     */
+    public function precoDeVenda(Product $product): float
+    {
+        return $this->price !== null ? (float) $this->price : (float) $product->final_price;
     }
 
     public function product(): BelongsTo

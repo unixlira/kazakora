@@ -79,6 +79,26 @@ class ProductChannelController extends Controller
         return back()->with('success', 'Canal atualizado.');
     }
 
+    /**
+     * Grava só o preço do canal, sem publicar nada — pedido do usuário
+     * 2026-10-07 ("não manda pro Mercado Livre"). O preço vai pro
+     * marketplace na próxima vez que alguém sincronizar ou salvar o canal.
+     */
+    public function updatePrice(Request $request, Product $product, string $channel): RedirectResponse
+    {
+        if (! in_array($channel, $this->drivers->channels(), true)) {
+            abort(404);
+        }
+
+        $price = $request->validate(['price' => ['nullable', 'numeric', 'min:0.01', 'max:999999.99']])['price'] ?? null;
+
+        $product->channelListings()->updateOrCreate(['channel' => $channel], ['price' => $price]);
+
+        return back()->with('success', $price !== null
+            ? 'Preço do canal salvo: R$ '.number_format((float) $price, 2, ',', '.').'. Ele só vai pro marketplace quando você sincronizar o anúncio.'
+            : 'Preço do canal removido — o canal volta a usar o preço do produto.');
+    }
+
     public function sync(Product $product, string $channel): RedirectResponse
     {
         if (! in_array($channel, $this->drivers->channels(), true)) {

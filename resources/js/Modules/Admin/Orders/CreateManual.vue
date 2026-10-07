@@ -68,15 +68,30 @@ const onCepInput = async (event) => {
 
 const itemFilters = ref([]);
 
-const filteredProducts = (index) => {
-    const term = (itemFilters.value[index] ?? '').trim().toLowerCase();
+// Tira acento e baixa a caixa, pra "portatil" achar "Portátil".
+const normalize = (value) =>
+    (value ?? '')
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '');
 
-    if (!term) {
+const filteredProducts = (index) => {
+    const raw = (itemFilters.value[index] ?? '').trim();
+
+    if (!raw) {
         return props.products;
     }
 
-    return props.products.filter((product) =>
-        product.name.toLowerCase().includes(term) || (product.sku ?? '').toLowerCase().includes(term));
+    // Casa por palavra, em qualquer ordem: "10000mah branco carregador"
+    // acha o mesmo que "carregador branco 10000mah".
+    const terms = normalize(raw).split(/\s+/).filter(Boolean);
+
+    return props.products.filter((product) => {
+        const haystack = `${normalize(product.name)} ${normalize(product.sku)}`;
+
+        return terms.every((term) => haystack.includes(term));
+    });
 };
 
 const addItem = () => {

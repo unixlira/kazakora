@@ -258,9 +258,7 @@ class OrderImageArchiveService
             return null;
         }
 
-        $product->loadMissing('images');
-
-        return $product->images->firstWhere('is_primary', true) ?? $product->images->first();
+        return $this->fotoDoProduto($product);
     }
 
     /**
@@ -270,12 +268,32 @@ class OrderImageArchiveService
      */
     private function resolveProductImageById(int $productId): ?object
     {
-        $product = \App\Modules\Catalog\Models\Product::query()->with('images')->find($productId);
+        $product = \App\Modules\Catalog\Models\Product::query()->find($productId);
 
         if ($product === null) {
             return null;
         }
 
-        return $product->images->firstWhere('is_primary', true) ?? $product->images->first();
+        return $this->fotoDoProduto($product);
+    }
+
+    /**
+     * Variação sem foto própria usa a do produto pai. ACHADO REAL
+     * 2026-09-30 (pedido Amazon #2694): o item casou com a variação
+     * "Preto" (#207), que tem 0 fotos — as 8 estão no pai (#174) — e o
+     * card do KoraSync ficava sem foto com o produto certo vinculado.
+     */
+    private function fotoDoProduto(Product $product): ?object
+    {
+        $product->loadMissing('images');
+        $foto = $product->images->firstWhere('is_primary', true) ?? $product->images->first();
+
+        if ($foto !== null || $product->parent_product_id === null) {
+            return $foto;
+        }
+
+        $pai = $product->parent()->with('images')->first();
+
+        return $pai?->images->firstWhere('is_primary', true) ?? $pai?->images->first();
     }
 }

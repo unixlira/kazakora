@@ -37,6 +37,11 @@ class CatalogController extends Controller
         $baseQuery = Product::query()
             ->forCard()
             ->where('is_active', true)
+            // Variações continuam com página própria e compra própria, mas
+            // não podem aparecer como cards soltos na vitrine: o cliente
+            // precisa ver um anúncio/produto e escolher a variação dentro
+            // dele, estilo Shopee/Mercado Livre.
+            ->whereNull('parent_product_id')
             ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
             ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
             ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true));
@@ -51,14 +56,15 @@ class CatalogController extends Controller
             'featuredProducts' => Product::query()
                 ->forCard()
                 ->where('is_active', true)
+                ->whereNull('parent_product_id')
                 ->where('is_featured', true)
                 ->latest()
                 ->take(5)
                 ->get(),
             'products' => $products,
             'categories' => Category::query()
-                ->whereHas('products', fn ($query) => $query->where('is_active', true))
-                ->withCount(['products' => fn ($query) => $query->where('is_active', true)])
+                ->whereHas('products', fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id'))
+                ->withCount(['products' => fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id')])
                 ->orderByDesc('products_count')
                 ->get(['id', 'name', 'slug', 'image_path']),
             'favoriteIds' => $request->user()
@@ -100,6 +106,7 @@ class CatalogController extends Controller
         $relatedProducts = Product::query()
             ->forCard()
             ->where('is_active', true)
+            ->whereNull('parent_product_id')
             ->where('id', '!=', $product->id)
             ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
             ->inRandomOrder()
@@ -113,6 +120,7 @@ class CatalogController extends Controller
                 Product::query()
                     ->forCard()
                     ->where('is_active', true)
+                    ->whereNull('parent_product_id')
                     ->whereNotIn('id', $excludeIds)
                     ->latest()
                     ->take(5 - $relatedProducts->count())
@@ -144,7 +152,15 @@ class CatalogController extends Controller
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
                 ->orderBy('price')
-                ->get(['id', 'name', 'estimated_days', 'price']),
+                ->get(['id', 'name', 'estimated_days', 'price'])
+                ->map(fn (ShippingMethod $method) => [
+                    'id' => $method->id,
+                    'name' => $method->name,
+                    'estimated_days' => (int) $method->estimated_days,
+                    'price' => 0.0,
+                    'actual_price' => (float) $method->price,
+                    'free_shipping' => true,
+                ]),
             'isFavorite' => $user
                 ? Favorite::query()->where('user_id', $user->id)->where('product_id', $product->id)->exists()
                 : false,

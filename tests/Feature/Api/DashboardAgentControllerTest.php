@@ -702,11 +702,11 @@ class DashboardAgentControllerTest extends TestCase
         $earlyThisMonth->forceFill(['created_at' => now()->startOfMonth()])->save();
         $earlyThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
 
-        // 2 dias antes do início do mês (folga de propósito, pra nunca
-        // colidir com o carry-over de "ontem" perto da virada — ver teste
-        // de virada de mês logo abaixo) — não deve aparecer em lugar nenhum.
+        // Fora da janela de 30 dias corridos (a regra deixou de ser "só o
+        // mês corrente" em 2026-09-01, ver $actionableSince no controller):
+        // não deve aparecer em lugar nenhum.
         $beforeThisMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-BEFORE-MONTH']);
-        $beforeThisMonth->forceFill(['created_at' => now()->startOfMonth()->subDays(2)])->save();
+        $beforeThisMonth->forceFill(['created_at' => now()->subDays(31)])->save();
         $beforeThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
 
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
@@ -970,6 +970,38 @@ class DashboardAgentControllerTest extends TestCase
 
         $expectedPath = sprintf('order-images/t320/%s/%s/%s/shopee/%d.jpg', $order->created_at->format('Y'), $order->created_at->format('m'), $order->created_at->format('d'), $order->id);
         Storage::disk('local')->assertExists($expectedPath);
+    }
+
+    /** ACHADO REAL 2026-09-30 (Amazon #2694): variação "Preto" sem foto, as fotos estão no pai. */
+    public function test_queue_product_image_falls_back_to_the_parent_when_the_variation_has_no_photo(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+
+        $pai = \App\Modules\Catalog\Models\Product::factory()->create();
+        $variacao = \App\Modules\Catalog\Models\Product::factory()->create(['parent_product_id' => $pai->id]);
+        $foto = \App\Modules\Catalog\Models\ProductImage::create([
+            'product_id' => $pai->id,
+            'path' => 'products/'.$pai->id.'/primary.jpg',
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $fakeJpeg = imagecreate(4, 4);
+        ob_start();
+        imagejpeg($fakeJpeg);
+        Storage::disk('public')->put($foto->path, ob_get_clean());
+        imagedestroy($fakeJpeg);
+
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_AMAZON]);
+        $order->items()->create(['product_id' => $variacao->id, 'product_name' => 'Preto', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        foreach (["/image", "/image/{$variacao->id}"] as $rota) {
+            $this->withHeaders($this->authHeaders())
+                ->get("/api/print-agent/dashboard/queue/{$order->id}{$rota}")
+                ->assertOk()
+                ->assertHeader('Content-Type', 'image/jpeg');
+        }
     }
 
     public function test_queue_order_image_returns_404_when_the_order_has_no_product_image(): void

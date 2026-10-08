@@ -90,6 +90,7 @@ export const sidebarSections = [
     {
         heading: 'WhatsApp',
         items: [
+            { label: 'Conversas', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', color: 'text-success', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
             { label: 'Configurações', href: '/admin/whatsapp', icon: 'fab fa-whatsapp', color: 'text-success', permission: 'configuracoes.integracoes' },
             { label: 'Disparos', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', color: 'text-primary', permission: 'configuracoes.integracoes' },
         ],

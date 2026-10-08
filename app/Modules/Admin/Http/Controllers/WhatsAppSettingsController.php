@@ -31,6 +31,7 @@ class WhatsAppSettingsController extends Controller
                 'businessAccountId' => filled(config('services.whatsapp.business_account_id')),
                 'appSecret' => filled(config('services.whatsapp.app_secret')),
                 'readyToSend' => $settings->isReadyToSend(),
+                'manuelaRemote' => filled(config('services.whatsapp.manuela_url')) && filled(config('services.whatsapp.manuela_token')),
             ],
             'stats' => [
                 'conversations' => WhatsAppConversation::query()->count(),
@@ -59,6 +60,7 @@ class WhatsAppSettingsController extends Controller
             'forbidden_promises' => ['required', 'string', 'max:1000'],
             'business_hours' => ['nullable', 'string', 'max:255'],
             'verify_token' => ['required', 'string', 'min:20', 'max:120'],
+            'agent_instructions' => ['required', 'string', 'max:3000'],
         ]);
 
         $settings->setMany($validated);

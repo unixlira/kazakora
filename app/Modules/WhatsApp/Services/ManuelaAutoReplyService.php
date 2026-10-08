@@ -4,15 +4,68 @@ namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class ManuelaAutoReplyService
 {
-    public function __construct(private readonly WhatsAppSettings $settings)
-    {
+    public function __construct(
+        private readonly WhatsAppSettings $settings,
+        private readonly ManuelaAgentClient $agent,
+    ) {
     }
 
+    /**
+     * Com MANUELA_AGENT_URL configurada, quem responde é a Manuela da Naia
+     * (Hermes). Se o Hermes cair ou demorar, cai nas regras locais abaixo pra
+     * cliente nunca ficar sem resposta.
+     */
     public function buildReply(WhatsAppConversation $conversation, string $message): array
+    {
+        if ($this->agent->isConfigured()) {
+            try {
+                $remote = $this->agent->reply($conversation, $this->systemPrompt());
+
+                return [
+                    'intent' => 'manuela_hermes',
+                    'confidence' => 1.0,
+                    'reply' => $remote['reply'],
+                    'needs_human' => $remote['needs_human'] || $this->needsHuman(Str::lower(Str::ascii($message)), $this->settings->all()),
+                    'needs_data' => [],
+                    'suggested_next_action' => $remote['needs_human'] ? 'handoff' : 'reply',
+                    'sales_stage' => 'atendimento',
+                    'source' => 'hermes',
+                ];
+            } catch (Throwable $exception) {
+                Log::warning('manuela_hermes_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
+            }
+        }
+
+        return $this->ruleBasedReply($message) + ['source' => 'regras'];
+    }
+
+    public function systemPrompt(): string
+    {
+        $s = $this->settings->all();
+        $tag = ManuelaAgentClient::HANDOFF_TAG;
+
+        return <<<PROMPT
+{$s['agent_instructions']}
+
+Loja: {$s['brand_name']} ({$s['store_base_url']}). Seu nome: {$s['attendant_name']}. Tom: {$s['tone']}.
+Horário de atendimento humano: {$s['business_hours']}.
+Categorias prioritárias: {$s['priority_categories']}.
+Proibido: {$s['forbidden_promises']}.
+Faça no máximo {$s['max_questions_before_close']} perguntas antes de sugerir o próximo passo de compra.
+
+Regras de formato:
+- Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.
+- Se o assunto envolver {$s['handoff_keywords']}, ou se você não tiver certeza da informação, comece a resposta com {$tag} e diga ao cliente que uma pessoa do time vai acompanhar.
+PROMPT;
+    }
+
+    private function ruleBasedReply(string $message): array
     {
         $settings = $this->settings->all();
         $normalized = Str::lower(Str::ascii($message));

@@ -26,6 +26,7 @@ const form = useForm({
     handoff_keywords: props.settings.handoff_keywords ?? '',
     priority_categories: props.settings.priority_categories ?? '',
     forbidden_promises: props.settings.forbidden_promises ?? '',
+    agent_instructions: props.settings.agent_instructions ?? '',
     business_hours: props.settings.business_hours ?? '',
     verify_token: props.settings.verify_token ?? '',
 });
@@ -43,6 +44,7 @@ const credentialItems = computed(() => [
     { key: 'phoneNumberId', label: 'Phone Number ID', description: 'Identifica o número oficial que envia e recebe mensagens.' },
     { key: 'businessAccountId', label: 'WABA ID', description: 'Identifica a conta comercial da Meta/WhatsApp.' },
     { key: 'appSecret', label: 'App Secret', description: 'Reforça a validação de assinatura dos webhooks recebidos.' },
+    { key: 'manuelaRemote', label: 'Manuela (Naia/Hermes)', description: 'MANUELA_AGENT_URL + MANUELA_AGENT_TOKEN: API server do Hermes no alphakora. Sem isso, a Manuela responde pelas regras locais.' },
 ]);
 
 const integrationStatus = computed(() => {
@@ -312,6 +314,11 @@ const copyToClipboard = async (value, key) => {
                                     <label class="text-sm font-semibold">Promessas proibidas</label>
                                     <textarea v-model="form.forbidden_promises" rows="4" class="mt-2 w-full rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm"></textarea>
                                     <p class="mt-2 text-xs text-amber-600">A Manuela nunca deve pedir senha, código de autenticação, cartão completo, token ou documento completo pelo WhatsApp.</p>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="text-sm font-semibold">Instrução para a Manuela da Naia (Hermes)</label>
+                                    <textarea v-model="form.agent_instructions" rows="4" class="mt-2 w-full rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm"></textarea>
+                                    <p class="mt-2 text-xs text-slate-500">Vai no começo de toda conversa enviada ao Hermes, junto com as regras acima. É o que faz a Naia atender como a subagente Manuela.</p>
                                 </div>
                             </div>
                         </div>

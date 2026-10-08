@@ -24,6 +24,8 @@ class WhatsAppMessage extends Model
         'payload',
         'sent_at',
         'received_at',
+        'sent_by',
+        'user_id',
     ];
 
     protected $casts = [
@@ -35,5 +37,33 @@ class WhatsAppMessage extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(WhatsAppConversation::class, 'conversation_id');
+    }
+
+    /** Texto curto pra lista de conversas (igual ao WhatsApp: "📷 Foto"). */
+    public function preview(): string
+    {
+        $label = match ($this->type) {
+            'image' => '📷 Foto',
+            'video' => '🎥 Vídeo',
+            'audio' => '🎤 Áudio',
+            'document' => '📄 Documento',
+            'sticker' => 'Figurinha',
+            'location' => '📍 Localização',
+            'template' => '📣 Modelo',
+            default => null,
+        };
+
+        $body = trim((string) $this->body);
+        $text = $label && $body !== '' ? "{$label}: {$body}" : ($label ?? $body);
+
+        return mb_strimwidth($text !== '' ? $text : 'Mensagem', 0, 250, '…');
+    }
+
+    /** ID da mídia na Meta (imagem, áudio, vídeo, documento, figurinha). */
+    public function mediaId(): ?string
+    {
+        $payload = $this->payload ?? [];
+
+        return $payload[$this->type]['id'] ?? null;
     }
 }

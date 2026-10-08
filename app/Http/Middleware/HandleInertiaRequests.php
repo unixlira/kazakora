@@ -83,6 +83,8 @@ class HandleInertiaRequests extends Middleware
                 ? [
                     'flexAlertas' => app(\App\Modules\Marketplace\Support\FlexControlService::class)->contagemDeAlertas(),
                     'devolucoes' => \App\Modules\Admin\Http\Controllers\DevolucoesController::contagemDeAlertas(),
+                    // Conversas com mensagem não lida (WhatsApp > Conversas).
+                    'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],
             'flash' => fn () => [

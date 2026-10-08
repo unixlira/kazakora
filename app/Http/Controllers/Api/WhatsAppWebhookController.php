@@ -3,17 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
-use App\Modules\WhatsApp\Services\ManuelaAutoReplyService;
-use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
-use Throwable;
 
 class WhatsAppWebhookController extends Controller
 {
@@ -30,12 +27,8 @@ class WhatsAppWebhookController extends Controller
         return response('Invalid verify token', 403)->header('Content-Type', 'text/plain');
     }
 
-    public function handle(
-        Request $request,
-        WhatsAppSettings $settings,
-        ManuelaAutoReplyService $manuela,
-        WhatsAppCloudApiClient $client,
-    ): JsonResponse {
+    public function handle(Request $request, WhatsAppSettings $settings): JsonResponse
+    {
         if (! $this->signatureIsValid($request)) {
             return response()->json(['error' => 'invalid_signature'], 403);
         }
@@ -54,11 +47,16 @@ class WhatsAppWebhookController extends Controller
 
                 foreach ($value['messages'] ?? [] as $message) {
                     $contact = collect($value['contacts'] ?? [])->firstWhere('wa_id', $message['from'] ?? null) ?? [];
-                    $conversation = $this->storeInboundMessage($message, $contact, $payload);
+                    [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload);
                     $handled++;
 
-                    if ($settings->bool('enabled') && $settings->bool('auto_reply_enabled') && ! $conversation->needs_human) {
-                        $this->autoReply($conversation, $message, $manuela, $client, $settings);
+                    // Reentrega da Meta (mesmo wa_message_id) não responde de novo.
+                    if ($stored->wasRecentlyCreated
+                        && $settings->bool('enabled')
+                        && $settings->bool('auto_reply_enabled')
+                        && $conversation->ai_enabled
+                        && ! $conversation->needs_human) {
+                        ReplyWithManuela::dispatch($conversation->id, $stored->id)->afterResponse();
                     }
                 }
             }
@@ -67,29 +65,39 @@ class WhatsAppWebhookController extends Controller
         return response()->json(['status' => 'ok', 'handled' => $handled]);
     }
 
-    private function storeInboundMessage(array $message, array $contact, array $payload): WhatsAppConversation
+    /** @return array{0: WhatsAppConversation, 1: WhatsAppMessage} */
+    private function storeInboundMessage(array $message, array $contact, array $payload): array
     {
-        $body = $message['text']['body'] ?? $message['button']['text'] ?? $message['interactive']['button_reply']['title'] ?? null;
+        $type = $message['type'] ?? 'unknown';
+        $body = $message['text']['body']
+            ?? $message['button']['text']
+            ?? $message['interactive']['button_reply']['title']
+            ?? $message['interactive']['list_reply']['title']
+            ?? $message[$type]['caption']
+            ?? $message['document']['filename']
+            ?? (isset($message['location']) ? trim(($message['location']['name'] ?? '').' '.($message['location']['address'] ?? '')) ?: null : null);
         $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp']) : now();
         $waId = $message['from'];
 
-        $conversation = WhatsAppConversation::query()->updateOrCreate(
-            ['wa_id' => $waId],
-            [
-                'phone' => $waId,
-                'profile_name' => $contact['profile']['name'] ?? null,
-                'last_message_at' => $receivedAt,
-                'last_customer_message_at' => $receivedAt,
-                'metadata' => ['last_payload_object' => $payload['object'] ?? null],
-            ],
-        );
+        $conversation = WhatsAppConversation::query()->firstOrNew(['wa_id' => $waId]);
+        $conversation->fill([
+            'phone' => $waId,
+            'profile_name' => $contact['profile']['name'] ?? $conversation->profile_name,
+            'last_customer_message_at' => $receivedAt,
+            'metadata' => ['last_payload_object' => $payload['object'] ?? null],
+        ]);
+        // Conversa encerrada volta pra fila quando o cliente escreve de novo.
+        if ($conversation->status === 'resolved') {
+            $conversation->status = 'open';
+        }
+        $conversation->save();
 
-        WhatsAppMessage::query()->firstOrCreate(
+        $stored = WhatsAppMessage::query()->firstOrCreate(
             ['wa_message_id' => $message['id'] ?? null],
             [
                 'conversation_id' => $conversation->id,
                 'direction' => 'inbound',
-                'type' => $message['type'] ?? 'unknown',
+                'type' => $type,
                 'body' => $body,
                 'status' => 'received',
                 'payload' => $message,
@@ -97,7 +105,11 @@ class WhatsAppWebhookController extends Controller
             ],
         );
 
-        return $conversation->fresh();
+        if ($stored->wasRecentlyCreated) {
+            $conversation->registerMessage($stored);
+        }
+
+        return [$conversation->fresh(), $stored];
     }
 
     private function storeStatus(array $status, array $payload): void
@@ -127,68 +139,6 @@ class WhatsAppWebhookController extends Controller
             'payload' => ['status' => $status, 'webhook' => $payload['object'] ?? null],
             'received_at' => now(),
         ]);
-    }
-
-    private function autoReply(
-        WhatsAppConversation $conversation,
-        array $message,
-        ManuelaAutoReplyService $manuela,
-        WhatsAppCloudApiClient $client,
-        WhatsAppSettings $settings,
-    ): void {
-        $body = $message['text']['body'] ?? null;
-
-        if (! filled($body)) {
-            $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
-            return;
-        }
-
-        $reply = $manuela->buildReply($conversation, $body);
-
-        if ($reply['needs_human'] ?? false) {
-            $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
-        }
-
-        if (! $settings->isReadyToSend()) {
-            WhatsAppMessage::query()->create([
-                'conversation_id' => $conversation->id,
-                'direction' => 'outbound',
-                'type' => 'text',
-                'body' => $reply['reply'],
-                'status' => 'draft_no_token',
-                'payload' => $reply,
-            ]);
-            return;
-        }
-
-        try {
-            $response = $client->sendText($conversation->wa_id, $reply['reply']);
-            $waMessageId = $response['messages'][0]['id'] ?? null;
-
-            WhatsAppMessage::query()->create([
-                'conversation_id' => $conversation->id,
-                'wa_message_id' => $waMessageId,
-                'direction' => 'outbound',
-                'type' => 'text',
-                'body' => $reply['reply'],
-                'status' => 'sent',
-                'payload' => ['manuela' => $reply, 'meta_response' => $response],
-                'sent_at' => now(),
-            ]);
-
-            $conversation->update(['last_auto_reply_at' => now(), 'last_message_at' => now()]);
-        } catch (Throwable $exception) {
-            Log::warning('whatsapp_auto_reply_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
-
-            WhatsAppMessage::query()->create([
-                'conversation_id' => $conversation->id,
-                'direction' => 'outbound',
-                'type' => 'text',
-                'body' => $reply['reply'],
-                'status' => 'failed',
-                'payload' => ['manuela' => $reply, 'error' => $exception->getMessage()],
-            ]);
-        }
     }
 
     private function signatureIsValid(Request $request): bool

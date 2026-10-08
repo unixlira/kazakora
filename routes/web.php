@@ -42,6 +42,7 @@ use App\Modules\Admin\Http\Controllers\PrintTestController;
 use App\Modules\Admin\Http\Controllers\WebhookLogController;
 use App\Modules\Admin\Http\Controllers\WebhookTestController;
 use App\Modules\Admin\Http\Controllers\WhatsAppCampaignController;
+use App\Modules\Admin\Http\Controllers\WhatsAppInboxController;
 use App\Modules\Admin\Http\Controllers\WhatsAppSettingsController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
@@ -487,6 +488,21 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('devolucoes/{devolucao}', [DevolucoesController::class, 'update'])->whereNumber('devolucao')->name('devolucoes.atualizar');
         Route::post('devolucoes/{devolucao}/evidencias', [DevolucoesController::class, 'anexarEvidencia'])->whereNumber('devolucao')->name('devolucoes.evidencias.anexar');
         Route::delete('devolucoes/{devolucao}/evidencias/{evidencia}', [DevolucoesController::class, 'removerEvidencia'])->whereNumber(['devolucao', 'evidencia'])->name('devolucoes.evidencias.remover');
+    });
+
+    // WhatsApp > Conversas: atendimento é de quem cuida de pedido, não só do
+    // admin (as rotas de configuração do WhatsApp continuam admin-only abaixo).
+    Route::middleware('permission:pedidos.view')->group(function () {
+        Route::get('whatsapp/conversas', [WhatsAppInboxController::class, 'index'])->name('whatsapp.conversas');
+        Route::get('whatsapp/conversas/atualizacoes', [WhatsAppInboxController::class, 'updates'])->name('whatsapp.conversas.atualizacoes');
+        Route::get('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'messages'])->whereNumber('conversation')->name('whatsapp.conversas.mensagens');
+        Route::get('whatsapp/conversas/midia/{message}', [WhatsAppInboxController::class, 'media'])->whereNumber('message')->name('whatsapp.conversas.midia');
+        Route::post('whatsapp/conversas/{conversation}/lida', [WhatsAppInboxController::class, 'markRead'])->whereNumber('conversation')->name('whatsapp.conversas.lida');
+    });
+    Route::middleware('permission:pedidos.edit')->group(function () {
+        Route::post('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'send'])->whereNumber('conversation')->name('whatsapp.conversas.enviar');
+        Route::post('whatsapp/conversas/{conversation}/manuela', [WhatsAppInboxController::class, 'toggleManuela'])->whereNumber('conversation')->name('whatsapp.conversas.manuela');
+        Route::post('whatsapp/conversas/{conversation}/status', [WhatsAppInboxController::class, 'updateStatus'])->whereNumber('conversation')->name('whatsapp.conversas.status');
     });
 
     Route::middleware('admin')->group(function () {

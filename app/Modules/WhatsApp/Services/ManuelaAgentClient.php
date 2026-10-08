@@ -86,6 +86,12 @@ class ManuelaAgentClient
             $contents[] = ['role' => $role, 'parts' => [['text' => $message['content']]]];
         }
 
+        // E não aceita terminar com a fala dela (achado ao vivo: HTTP 400
+        // "Requests ending with a model turn are not supported").
+        while ($contents !== [] && end($contents)['role'] === 'model') {
+            array_pop($contents);
+        }
+
         if ($contents === []) {
             throw new RuntimeException('Conversa sem mensagem do cliente pra responder.');
         }

@@ -59,12 +59,23 @@ class GeminiClient
 
     public function transcribe(string $audio, string $mimeType): string
     {
-        return $this->generate((string) config('services.gemini.audio_model'), [[
+        $contents = [[
             'role' => 'user',
             'parts' => [
                 ['inline_data' => ['mime_type' => Str::before($mimeType, ';') ?: 'audio/ogg', 'data' => base64_encode($audio)]],
                 ['text' => 'Transcreva este áudio de WhatsApp em português do Brasil, exatamente como foi falado. Responda só com a transcrição, sem comentários.'],
             ],
-        ]], null, 1024);
+        ]];
+
+        try {
+            return $this->generate((string) config('services.gemini.audio_model'), $contents, null, 1024);
+        } catch (RuntimeException $exception) {
+            // Modelo de áudio fora do ar ou recusando: o de conversa também ouve áudio.
+            if (config('services.gemini.audio_model') === config('services.gemini.chat_model')) {
+                throw $exception;
+            }
+
+            return $this->generate((string) config('services.gemini.chat_model'), $contents, null, 1024);
+        }
     }
 }

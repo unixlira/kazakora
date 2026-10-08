@@ -33,7 +33,7 @@ class GeminiClient
         $models = array_values(array_unique(array_filter([
             $model,
             (string) config('services.gemini.chat_model'),
-            (string) config('services.gemini.fallback_model'),
+            ...(array) config('services.gemini.fallback_models', []),
         ])));
         $last = null;
 
@@ -41,7 +41,7 @@ class GeminiClient
             for ($attempt = 1; $attempt <= 2; $attempt++) {
                 try {
                     return $this->generateOnce($candidate, $contents, $systemInstruction, $maxOutputTokens);
-                } catch (GeminiUnavailableException $exception) {
+                } catch (GeminiUnavailableException|\Illuminate\Http\Client\ConnectionException $exception) {
                     $last = $exception;
 
                     if ($attempt === 1) {

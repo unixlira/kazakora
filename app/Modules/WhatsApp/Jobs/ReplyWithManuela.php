@@ -22,7 +22,7 @@ class ReplyWithManuela
 {
     use Dispatchable;
 
-    public function __construct(public int $conversationId, public int $inboundMessageId)
+    public function __construct(public int $conversationId, public int $inboundMessageId, public bool $isRetry = false)
     {
     }
 
@@ -66,6 +66,18 @@ class ReplyWithManuela
         }
 
         $reply = $manuela->buildReply($conversation, $text !== '' ? $text : $inbound->preview());
+
+        // IA configurada mas o Google não respondeu (sobrecarga): em vez da
+        // mensagem robótica do roteiro fixo, tenta de novo em 1 minuto pela
+        // fila. Achado real 2026-10-08: áudio sobre a caixa de ferramentas
+        // recebeu "vou chamar uma pessoa" porque todos os modelos falharam.
+        if (($reply['source'] ?? null) === 'regras' && $agent->isConfigured() && ! $this->isRetry) {
+            $conversationId = $this->conversationId;
+            $inboundId = $this->inboundMessageId;
+            dispatch(static fn () => self::dispatchSync($conversationId, $inboundId, true))->delay(now()->addMinute());
+
+            return;
+        }
 
         // Uma pessoa assumiu enquanto a Manuela pensava: não atropela.
         if (! $conversation->fresh()->ai_enabled) {

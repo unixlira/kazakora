@@ -32,7 +32,7 @@ class WhatsAppInboxTest extends TestCase
             'services.gemini.api_key' => null,
             'services.gemini.chat_model' => 'gemini-test',
             'services.gemini.audio_model' => 'gemini-audio-test',
-            'services.gemini.fallback_model' => 'gemini-reserva-test',
+            'services.gemini.fallback_models' => ['gemini-reserva-test'],
             'services.gemini.retry_delay_ms' => 0,
         ]);
 
@@ -370,6 +370,21 @@ class WhatsAppInboxTest extends TestCase
 
         $this->assertSame('Oi! Eu sou a Manuela, da KazaKora.', WhatsAppMessage::query()->where('direction', 'outbound')->value('body'));
         Http::assertSentCount(4);
+    }
+
+    public function test_google_fora_do_ar_tenta_de_novo_em_vez_de_mandar_mensagem_robotica(): void
+    {
+        $this->useGemini();
+        \Illuminate\Support\Facades\Queue::fake();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(['error' => ['code' => 503]], 503),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.X1']]]),
+        ]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.DOWN1', 'Vi a caixa de ferramentas de 168 peças'))->assertOk();
+
+        $this->assertSame(0, WhatsAppMessage::query()->where('direction', 'outbound')->count());
+        \Illuminate\Support\Facades\Queue::assertPushed(\Illuminate\Queue\CallQueuedClosure::class);
     }
 
     public function test_precisa_de_humano_nao_cala_a_manuela(): void

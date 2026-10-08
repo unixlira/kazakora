@@ -358,12 +358,15 @@ return [
     // configurado, e transcreve os áudios do WhatsApp (pedido 2026-10-08).
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
-        'chat_model' => env('GEMINI_CHAT_MODEL', 'gemini-flash-latest'),
-        'audio_model' => env('GEMINI_AUDIO_MODEL', 'gemini-flash-latest'),
-        // Último recurso quando os de cima estão sobrecarregados (503).
-        'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-2.5-flash'),
+        // gemini-3.5-flash: testado ao vivo em 2026-10-08, ~2s. O
+        // gemini-flash-latest levava 22s e dava 503; o gemini-2.5-flash não
+        // está mais liberado pra conta (404).
+        'chat_model' => env('GEMINI_CHAT_MODEL', 'gemini-3.5-flash'),
+        'audio_model' => env('GEMINI_AUDIO_MODEL', 'gemini-3.5-flash'),
+        // Reservas, em ordem, quando os de cima estão sobrecarregados (503).
+        'fallback_models' => array_filter(array_map('trim', explode(',', (string) env('GEMINI_FALLBACK_MODELS', 'gemini-flash-latest,gemini-flash-lite-latest')))),
         'retry_delay_ms' => (int) env('GEMINI_RETRY_DELAY_MS', 1500),
-        'timeout' => (int) env('GEMINI_TIMEOUT', 45),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 30),
     ],
 
     // Pra quem manda o e-mail de fechamento quinzenal do Mercado Envios

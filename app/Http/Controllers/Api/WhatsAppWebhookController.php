@@ -47,13 +47,13 @@ class WhatsAppWebhookController extends Controller
 
                 foreach ($value['messages'] ?? [] as $message) {
                     $contact = collect($value['contacts'] ?? [])->firstWhere('wa_id', $message['from'] ?? null) ?? [];
-                    [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload);
+                    [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
                     $handled++;
 
-                    // Reentrega da Meta (mesmo wa_message_id) não responde de novo.
+                    // A chave da conversa é quem manda (pedido 2026-10-08: "a Manu
+                    // não está respondendo depois de ticar a chave"). Reentrega
+                    // da Meta (mesmo wa_message_id) não responde de novo.
                     if ($stored->wasRecentlyCreated
-                        && $settings->bool('enabled')
-                        && $settings->bool('auto_reply_enabled')
                         && $conversation->ai_enabled
                         && ! $conversation->needs_human) {
                         ReplyWithManuela::dispatch($conversation->id, $stored->id)->afterResponse();
@@ -66,7 +66,7 @@ class WhatsAppWebhookController extends Controller
     }
 
     /** @return array{0: WhatsAppConversation, 1: WhatsAppMessage} */
-    private function storeInboundMessage(array $message, array $contact, array $payload): array
+    private function storeInboundMessage(array $message, array $contact, array $payload, WhatsAppSettings $settings): array
     {
         $type = $message['type'] ?? 'unknown';
         $body = $message['text']['body']
@@ -86,6 +86,11 @@ class WhatsAppWebhookController extends Controller
             'last_customer_message_at' => $receivedAt,
             'metadata' => ['last_payload_object' => $payload['object'] ?? null],
         ]);
+        // Conversa nova já nasce com a chave da Manuela no padrão escolhido
+        // em Configurações > "Resposta automática".
+        if (! $conversation->exists) {
+            $conversation->ai_enabled = $settings->bool('auto_reply_enabled');
+        }
         // Conversa encerrada volta pra fila quando o cliente escreve de novo.
         if ($conversation->status === 'resolved') {
             $conversation->status = 'open';

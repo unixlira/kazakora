@@ -218,6 +218,49 @@ class WhatsAppInboxTest extends TestCase
             ->assertJsonPath('messages.0.name', 'Maria Souza');
     }
 
+    public function test_ligar_a_chave_faz_a_manuela_responder_quem_esta_esperando(): void
+    {
+        Http::fake([
+            'alphakora.test/*' => Http::response(['choices' => [['message' => ['content' => 'Oi! Sou a Manuela.']]]]),
+            'graph.facebook.com/*' => Http::sequence()
+                ->push(['messages' => [['id' => 'wamid.M1']]])
+                ->push(['messages' => [['id' => 'wamid.M2']]]),
+        ]);
+
+        // Resposta automática desligada: conversa nova nasce com a chave desligada.
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.K1', 'Tenho uma dúvida'))->assertOk();
+        $conversation = WhatsAppConversation::query()->firstOrFail();
+        $this->assertFalse($conversation->ai_enabled);
+        $this->assertSame(0, WhatsAppMessage::query()->where('direction', 'outbound')->count());
+
+        $this->actingAs($this->admin())
+            ->postJson("/admin/whatsapp/conversas/{$conversation->id}/manuela", ['ai_enabled' => true])
+            ->assertJsonPath('conversation.aiEnabled', true);
+
+        $reply = WhatsAppMessage::query()->where('direction', 'outbound')->firstOrFail();
+        $this->assertSame('manuela', $reply->sent_by);
+        $this->assertSame('Oi! Sou a Manuela.', $reply->body);
+
+        // Com a chave ligada, a próxima mensagem já é respondida direto.
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.K2', 'E o prazo?'))->assertOk();
+        $this->assertSame(2, WhatsAppMessage::query()->where('direction', 'outbound')->count());
+    }
+
+    public function test_apagar_conversa_tira_ela_e_as_mensagens(): void
+    {
+        Http::fake();
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.D1', 'Oi'))->assertOk();
+        $conversation = WhatsAppConversation::query()->firstOrFail();
+
+        $this->actingAs($this->admin())
+            ->deleteJson("/admin/whatsapp/conversas/{$conversation->id}")
+            ->assertOk()
+            ->assertJsonPath('deleted', $conversation->id);
+
+        $this->assertSame(0, WhatsAppConversation::query()->count());
+        $this->assertSame(0, WhatsAppMessage::query()->count());
+    }
+
     public function test_quem_nao_ve_pedidos_nao_acessa_conversas(): void
     {
         $customer = User::factory()->create();

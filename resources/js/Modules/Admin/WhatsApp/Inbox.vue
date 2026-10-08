@@ -357,6 +357,20 @@ async function toggleManuela(conversation) {
     }
 }
 
+async function deleteConversation() {
+    const target = active.value;
+    menuOpen.value = false;
+    if (!target || !window.confirm(`Apagar a conversa com ${target.name || target.phone}? As mensagens somem daqui (o cliente continua com elas no celular).`)) return;
+
+    try {
+        await request(`/admin/whatsapp/conversas/${target.id}`, { method: 'DELETE' });
+        closeConversation();
+        conversations.value = conversations.value.filter((c) => c.id !== target.id);
+    } catch (error) {
+        actionError.value = error.message;
+    }
+}
+
 async function toggleResolved() {
     if (!active.value) return;
     menuOpen.value = false;
@@ -614,14 +628,14 @@ function linkify(text) {
                 </div>
             </header>
 
-            <div v-if="!status.readyToSend || !status.enabled || !status.autoReply" class="shrink-0 px-3 pb-2">
+            <div v-if="!status.readyToSend || !status.autoReply" class="shrink-0 px-3 pb-2">
                 <div v-if="!status.readyToSend" class="wa-banner wa-banner-warn">
                     <i class="fas fa-key"></i>
                     <span>Falta o token da Meta: dá pra ver e responder aqui, mas nada é entregue ainda.</span>
                 </div>
                 <div v-else class="wa-banner wa-banner-info">
                     <i class="fas fa-robot"></i>
-                    <span>A resposta automática está desligada nas configurações: mesmo com a chave ligada, a {{ attendant }} não responde.</span>
+                    <span>Conversas novas começam com a {{ attendant }} desligada. Ligue a chave na conversa, ou ative "Resposta automática" nas configurações pra todas começarem com ela.</span>
                 </div>
             </div>
 
@@ -749,6 +763,7 @@ function linkify(text) {
                             </button>
                             <button type="button" class="wa-menu-item" @click="toggleResolved">{{ active.status === 'resolved' ? 'Reabrir conversa' : 'Encerrar conversa' }}</button>
                             <button type="button" class="wa-menu-item" @click="closeConversation">Fechar conversa</button>
+                            <button type="button" class="wa-menu-item wa-menu-danger" @click="deleteConversation">Apagar conversa</button>
                         </div>
                     </div>
                 </header>
@@ -949,6 +964,10 @@ function linkify(text) {
                         <i :class="active.status === 'resolved' ? 'fas fa-rotate-left' : 'fas fa-circle-check'" class="w-6"></i>
                         {{ active.status === 'resolved' ? 'Reabrir conversa' : 'Encerrar conversa' }}
                     </button>
+                    <button type="button" class="wa-drawer-action" @click="deleteConversation">
+                        <i class="fas fa-trash-can w-6"></i>
+                        Apagar conversa
+                    </button>
                 </section>
             </div>
         </aside>
@@ -1039,6 +1058,7 @@ function linkify(text) {
 .wa-head-sub { font-size: 13px; line-height: 20px; color: var(--wa-muted); }
 .wa-menu { background: var(--wa-menu); border-radius: 3px; box-shadow: 0 2px 5px rgba(11, 20, 26, 0.26), 0 2px 10px rgba(11, 20, 26, 0.16); }
 .wa-menu-item { display: block; width: 100%; padding: 9px 24px; text-align: left; font-size: 14.5px; color: var(--wa-text); }
+.wa-menu-item.wa-menu-danger { color: #ea0038; }
 .wa-menu-item:hover { background: var(--wa-hover); }
 
 .wa-wallpaper { background-color: var(--wa-wall); }

@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
@@ -11,6 +12,7 @@ use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -168,6 +170,8 @@ class WhatsAppInboxController extends Controller
     {
         $validated = $request->validate(['ai_enabled' => ['required', 'boolean']]);
 
+        $wasEnabled = (bool) $conversation->ai_enabled;
+
         $conversation->update([
             'ai_enabled' => $validated['ai_enabled'],
             // Devolver pra Manuela tira o alerta de "precisa de humano".
@@ -175,7 +179,28 @@ class WhatsAppInboxController extends Controller
             'status' => $validated['ai_enabled'] && $conversation->status === 'needs_human' ? 'open' : $conversation->status,
         ]);
 
+        // Ligou a chave com o cliente esperando resposta: a Manuela responde
+        // a última mensagem dele na hora (dentro da janela de 24h da Meta).
+        if (! $wasEnabled && $conversation->ai_enabled && $conversation->insideServiceWindow()) {
+            $last = $conversation->messages()->whereIn('direction', ['inbound', 'outbound'])->orderByDesc('id')->first();
+
+            if ($last?->direction === 'inbound') {
+                ReplyWithManuela::dispatch($conversation->id, $last->id)->afterResponse();
+            }
+        }
+
         return response()->json(['conversation' => $this->conversationPayload($conversation->fresh())]);
+    }
+
+    /** Apaga a conversa e todas as mensagens dela (só deste lado: o cliente continua com o histórico no celular). */
+    public function destroy(WhatsAppConversation $conversation): JsonResponse
+    {
+        DB::transaction(function () use ($conversation) {
+            $conversation->messages()->delete();
+            $conversation->delete();
+        });
+
+        return response()->json(['deleted' => $conversation->id]);
     }
 
     public function updateStatus(Request $request, WhatsAppConversation $conversation): JsonResponse

@@ -3,7 +3,9 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
+use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\RedirectResponse;
@@ -31,8 +33,9 @@ class WhatsAppSettingsController extends Controller
                 'businessAccountId' => filled(config('services.whatsapp.business_account_id')),
                 'appSecret' => filled(config('services.whatsapp.app_secret')),
                 'readyToSend' => $settings->isReadyToSend(),
-                'manuelaRemote' => filled(config('services.whatsapp.manuela_url')) && filled(config('services.whatsapp.manuela_token')),
+                'manuelaRemote' => app(ManuelaAgentClient::class)->isConfigured(),
             ],
+            'aiUsage' => $this->aiUsage(),
             'stats' => [
                 'conversations' => WhatsAppConversation::query()->count(),
                 'needsHuman' => WhatsAppConversation::query()->where('needs_human', true)->count(),
@@ -82,5 +85,39 @@ class WhatsAppSettingsController extends Controller
         }
 
         return back()->with('success', 'Mensagem de teste enviada pela API oficial do WhatsApp.');
+    }
+
+    /**
+     * Consumo do Gemini pra conferir com o painel do Google (pedido
+     * 2026-10-08: "monitorar os créditos").
+     *
+     * @return array<string, mixed>
+     */
+    private function aiUsage(): array
+    {
+        $periodo = fn ($desde) => GeminiUsageLog::query()
+            ->where('created_at', '>=', $desde)
+            ->selectRaw('COUNT(*) as calls, COALESCE(SUM(prompt_tokens), 0) as prompt, COALESCE(SUM(output_tokens), 0) as output, COALESCE(SUM(total_tokens), 0) as total')
+            ->first();
+        $formatar = fn ($linha) => [
+            'calls' => (int) $linha->calls,
+            'prompt' => (int) $linha->prompt,
+            'output' => (int) $linha->output,
+            'total' => (int) $linha->total,
+        ];
+
+        return [
+            'today' => $formatar($periodo(now()->startOfDay())),
+            'week' => $formatar($periodo(now()->subDays(6)->startOfDay())),
+            'month' => $formatar($periodo(now()->startOfMonth())),
+            'byModel' => GeminiUsageLog::query()
+                ->where('created_at', '>=', now()->startOfMonth())
+                ->selectRaw('model, purpose, COUNT(*) as calls, SUM(prompt_tokens) as prompt, SUM(output_tokens) as output, SUM(total_tokens) as total')
+                ->groupBy('model', 'purpose')
+                ->orderByDesc('total')
+                ->get()
+                ->map(fn ($linha) => ['model' => $linha->model, 'purpose' => $linha->purpose] + $formatar($linha))
+                ->all(),
+        ];
     }
 }

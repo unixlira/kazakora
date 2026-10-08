@@ -301,7 +301,10 @@ class WhatsAppInboxTest extends TestCase
 
     private function geminiText(string $text): array
     {
-        return ['candidates' => [['content' => ['parts' => [['text' => 'pensando...', 'thought' => true], ['text' => $text]]]]]];
+        return [
+            'candidates' => [['content' => ['parts' => [['text' => 'pensando...', 'thought' => true], ['text' => $text]]]]],
+            'usageMetadata' => ['promptTokenCount' => 1200, 'candidatesTokenCount' => 40, 'thoughtsTokenCount' => 60, 'totalTokenCount' => 1300],
+        ];
     }
 
     public function test_manuela_responde_pelo_gemini_com_a_persona_e_o_catalogo(): void
@@ -317,6 +320,17 @@ class WhatsAppInboxTest extends TestCase
 
         $reply = WhatsAppMessage::query()->where('direction', 'outbound')->firstOrFail();
         $this->assertSame('Oi! Eu sou a Manuela, da KazaKora. Temos sim a Campainha Sem Fio Câmera.', $reply->body);
+
+        $usage = \App\Modules\WhatsApp\Models\GeminiUsageLog::query()->sole();
+        $this->assertSame(['gemini-test', 'resposta', 1200, 100, 1300], [$usage->model, $usage->purpose, $usage->prompt_tokens, $usage->output_tokens, $usage->total_tokens]);
+
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))
+            ->get('/admin/whatsapp')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Admin/WhatsApp/Index', false)
+                ->where('aiUsage.today.calls', 1)
+                ->where('aiUsage.today.total', 1300)
+                ->where('aiUsage.byModel.0.model', 'gemini-test'));
         $this->assertSame('gemini', $reply->payload['manuela']['source']);
 
         Http::assertSent(fn ($request) => str_contains($request->url(), 'models/gemini-test:generateContent')
@@ -344,6 +358,8 @@ class WhatsAppInboxTest extends TestCase
         $payload['entry'][0]['changes'][0]['value']['messages'][0]['audio'] = ['id' => 'media-audio-1', 'mime_type' => 'audio/ogg; codecs=opus', 'voice' => true];
 
         $this->postJson('/api/whatsapp/webhook', $payload)->assertOk();
+
+        $this->assertSame(['transcricao', 'resposta'], \App\Modules\WhatsApp\Models\GeminiUsageLog::query()->orderBy('id')->pluck('purpose')->all());
 
         $audio = WhatsAppMessage::query()->where('direction', 'inbound')->firstOrFail();
         $this->assertSame('Qual o prazo pra Campinas?', $audio->payload['transcription']);

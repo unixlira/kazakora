@@ -9,7 +9,21 @@ const props = defineProps({
     requestedCallbackUrl: { type: String, required: true },
     credentials: { type: Object, required: true },
     stats: { type: Object, required: true },
+    aiUsage: { type: Object, default: () => ({ today: {}, week: {}, month: {}, byModel: [] }) },
 });
+
+const usagePeriods = computed(() => [
+    { key: 'today', label: 'Hoje', data: props.aiUsage.today },
+    { key: 'week', label: 'Últimos 7 dias', data: props.aiUsage.week },
+    { key: 'month', label: 'Este mês', data: props.aiUsage.month },
+]);
+
+function tokens(value) {
+    const n = Number(value || 0);
+    if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi`;
+    if (n >= 1_000) return `${(n / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+    return n.toLocaleString('pt-BR');
+}
 
 const form = useForm({
     enabled: Boolean(props.settings.enabled),
@@ -174,6 +188,36 @@ const copyToClipboard = async (value, key) => {
                                 <p v-if="form.errors.verify_token" class="mt-1 text-xs text-error">{{ form.errors.verify_token }}</p>
                             </div>
                         </div>
+                    </section>
+
+                    <section class="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm sm:p-6">
+                        <h2 class="text-lg font-semibold">Consumo do Gemini</h2>
+                        <p class="mt-1 text-sm text-slate-500">Tokens que o Google informou em cada resposta da Manuela e em cada áudio transcrito. Compare com o painel do Google AI Studio.</p>
+
+                        <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div v-for="period in usagePeriods" :key="period.key" class="rounded-xl border border-[var(--surface-border)] p-4">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ period.label }}</p>
+                                <p class="mt-1 text-2xl font-bold">{{ tokens(period.data.total) }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ (period.data.calls || 0).toLocaleString('pt-BR') }} chamadas · entrada {{ tokens(period.data.prompt) }} · saída {{ tokens(period.data.output) }}</p>
+                            </div>
+                        </div>
+
+                        <div v-if="aiUsage.byModel.length" class="mt-4 overflow-x-auto">
+                            <table class="w-full min-w-[420px] text-left text-sm">
+                                <thead class="text-xs uppercase text-slate-500">
+                                    <tr><th class="py-2 pr-3">Modelo (mês)</th><th class="py-2 pr-3">Uso</th><th class="py-2 pr-3 text-right">Chamadas</th><th class="py-2 text-right">Tokens</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="row in aiUsage.byModel" :key="`${row.model}-${row.purpose}`" class="border-t border-[var(--surface-border)]">
+                                        <td class="py-2 pr-3 font-mono text-xs">{{ row.model }}</td>
+                                        <td class="py-2 pr-3">{{ row.purpose === 'transcricao' ? 'Transcrição de áudio' : 'Resposta' }}</td>
+                                        <td class="py-2 pr-3 text-right">{{ row.calls.toLocaleString('pt-BR') }}</td>
+                                        <td class="py-2 text-right">{{ tokens(row.total) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p v-else class="mt-4 text-sm text-slate-500">Nenhuma chamada ao Gemini registrada neste mês ainda.</p>
                     </section>
 
                     <section class="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm sm:p-6">

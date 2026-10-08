@@ -2,6 +2,7 @@
 
 namespace App\Modules\WhatsApp\Services;
 
+use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -28,7 +29,7 @@ class GeminiClient
      *
      * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
      */
-    public function generate(string $model, array $contents, ?string $systemInstruction = null, int $maxOutputTokens = 2048): string
+    public function generate(string $model, array $contents, ?string $systemInstruction = null, int $maxOutputTokens = 2048, string $purpose = GeminiUsageLog::PURPOSE_REPLY): string
     {
         $models = array_values(array_unique(array_filter([
             $model,
@@ -40,7 +41,7 @@ class GeminiClient
         foreach ($models as $candidate) {
             for ($attempt = 1; $attempt <= 2; $attempt++) {
                 try {
-                    return $this->generateOnce($candidate, $contents, $systemInstruction, $maxOutputTokens);
+                    return $this->generateOnce($candidate, $contents, $systemInstruction, $maxOutputTokens, $purpose);
                 } catch (GeminiUnavailableException|\Illuminate\Http\Client\ConnectionException $exception) {
                     $last = $exception;
 
@@ -70,13 +71,13 @@ class GeminiClient
                 ['inline_data' => ['mime_type' => Str::before($mimeType, ';') ?: 'audio/ogg', 'data' => base64_encode($audio)]],
                 ['text' => 'Transcreva este áudio de WhatsApp em português do Brasil, exatamente como foi falado. Responda só com a transcrição, sem comentários.'],
             ],
-        ]], null, 1024);
+        ]], null, 1024, GeminiUsageLog::PURPOSE_TRANSCRIPTION);
     }
 
     /**
      * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
      */
-    private function generateOnce(string $model, array $contents, ?string $systemInstruction, int $maxOutputTokens): string
+    private function generateOnce(string $model, array $contents, ?string $systemInstruction, int $maxOutputTokens, string $purpose): string
     {
         $body = [
             'contents' => $contents,
@@ -100,6 +101,8 @@ class GeminiClient
             throw new RuntimeException("Gemini ({$model}) respondeu HTTP {$response->status()}: ".Str::limit($response->body(), 300));
         }
 
+        $this->recordUsage($model, $purpose, $response->json('usageMetadata') ?? []);
+
         // Partes de raciocínio (thought) não vão pro cliente.
         $text = collect($response->json('candidates.0.content.parts') ?? [])
             ->reject(fn ($part) => ($part['thought'] ?? false) === true)
@@ -112,5 +115,22 @@ class GeminiClient
         }
 
         return trim($text);
+    }
+
+    /**
+     * Tokens que o Google cobra nesta chamada. O raciocínio (thoughts) é
+     * cobrado como saída. Nunca derruba a resposta ao cliente.
+     *
+     * @param  array<string, mixed>  $usage
+     */
+    private function recordUsage(string $model, string $purpose, array $usage): void
+    {
+        rescue(fn () => GeminiUsageLog::query()->create([
+            'model' => $model,
+            'purpose' => $purpose,
+            'prompt_tokens' => (int) ($usage['promptTokenCount'] ?? 0),
+            'output_tokens' => (int) ($usage['candidatesTokenCount'] ?? 0) + (int) ($usage['thoughtsTokenCount'] ?? 0),
+            'total_tokens' => (int) ($usage['totalTokenCount'] ?? 0),
+        ]), report: false);
     }
 }

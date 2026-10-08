@@ -7,6 +7,7 @@ import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { sidebarSections } from '@/Shared/adminSidebarItems';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
+import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
@@ -70,7 +71,19 @@ const toggleSidebar = () => {
     localStorage.setItem('admin_sidebar_collapsed', sidebarCollapsed.value ? '1' : '0');
 };
 
-const isActive = (href) => (href === '/admin' ? page.url === '/admin' : page.url.startsWith(href));
+// Só o item de href mais específico fica marcado: em /admin/whatsapp/conversas,
+// "Conversas" acende e "Configurações" (/admin/whatsapp) não — antes os dois
+// ficavam selecionados porque um href é prefixo do outro.
+const urlPath = computed(() => page.url.split(/[?#]/)[0]);
+const matchesPath = (href) => urlPath.value === href || urlPath.value.startsWith(`${href}/`);
+const activeHref = computed(() => {
+    if (urlPath.value === '/admin') return '/admin';
+    return sidebarSections
+        .flatMap((section) => section.items.map((item) => item.href))
+        .filter((href) => href !== '/admin' && matchesPath(href))
+        .sort((a, b) => b.length - a.length)[0] ?? null;
+});
+const isActive = (href) => href === activeHref.value;
 
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
@@ -321,5 +334,6 @@ watch(
         </div>
 
         <LowStockAlertModal />
+        <WhatsAppToasts v-if="can('pedidos.view')" />
     </div>
 </template>

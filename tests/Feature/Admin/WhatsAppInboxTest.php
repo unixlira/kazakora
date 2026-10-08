@@ -198,6 +198,26 @@ class WhatsAppInboxTest extends TestCase
         $this->actingAs($admin)->postJson("/admin/whatsapp/conversas/{$conversation->id}/lida")->assertJsonPath('conversation.unread', 0);
     }
 
+    public function test_avisos_do_admin_trazem_so_mensagens_recebidas_depois_do_ultimo_id(): void
+    {
+        Http::fake();
+        $admin = $this->admin();
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.T1', 'antiga'))->assertOk();
+
+        $first = $this->actingAs($admin)->getJson('/admin/whatsapp/conversas/chegando')
+            ->assertOk()
+            ->assertJsonCount(0, 'messages')
+            ->assertJsonPath('unreadConversations', 1);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.T2', 'nova chegando'))->assertOk();
+
+        $this->actingAs($admin)->getJson('/admin/whatsapp/conversas/chegando?after='.$first->json('lastId'))
+            ->assertOk()
+            ->assertJsonCount(1, 'messages')
+            ->assertJsonPath('messages.0.preview', 'nova chegando')
+            ->assertJsonPath('messages.0.name', 'Maria Souza');
+    }
+
     public function test_quem_nao_ve_pedidos_nao_acessa_conversas(): void
     {
         $customer = User::factory()->create();

@@ -99,6 +99,45 @@ class WhatsAppInboxController extends Controller
         ]);
     }
 
+    /**
+     * Avisos de mensagem nova no admin inteiro (toasts no canto superior
+     * direito, ver WhatsAppToasts.vue). Sem `after`, só devolve o último id
+     * pra não despejar mensagem antiga quando a pessoa abre o painel.
+     */
+    public function incoming(Request $request): JsonResponse
+    {
+        $unread = WhatsAppConversation::query()->where('unread_count', '>', 0)->count();
+
+        if (! $request->filled('after')) {
+            return response()->json([
+                'lastId' => (int) WhatsAppMessage::query()->max('id'),
+                'messages' => [],
+                'unreadConversations' => $unread,
+            ]);
+        }
+
+        $messages = WhatsAppMessage::query()
+            ->with('conversation:id,profile_name,phone,wa_id')
+            ->where('id', '>', (int) $request->query('after'))
+            ->where('direction', 'inbound')
+            ->orderBy('id')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'lastId' => max((int) $request->query('after'), (int) WhatsAppMessage::query()->max('id')),
+            'unreadConversations' => $unread,
+            'messages' => $messages->map(fn (WhatsAppMessage $m) => [
+                'id' => $m->id,
+                'conversationId' => $m->conversation_id,
+                'name' => $m->conversation?->profile_name,
+                'phone' => $m->conversation?->phone ?? $m->conversation?->wa_id,
+                'preview' => $m->preview(),
+                'at' => ($m->received_at ?? $m->created_at)?->toISOString(),
+            ]),
+        ]);
+    }
+
     public function send(Request $request, WhatsAppConversation $conversation, WhatsAppOutbox $outbox): JsonResponse
     {
         $validated = $request->validate([

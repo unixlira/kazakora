@@ -495,6 +495,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:pedidos.view')->group(function () {
         Route::get('whatsapp/conversas', [WhatsAppInboxController::class, 'index'])->name('whatsapp.conversas');
         Route::get('whatsapp/conversas/atualizacoes', [WhatsAppInboxController::class, 'updates'])->name('whatsapp.conversas.atualizacoes');
+        Route::get('whatsapp/conversas/chegando', [WhatsAppInboxController::class, 'incoming'])->name('whatsapp.conversas.chegando');
         Route::get('whatsapp/conversas/{conversation}/mensagens', [WhatsAppInboxController::class, 'messages'])->whereNumber('conversation')->name('whatsapp.conversas.mensagens');
         Route::get('whatsapp/conversas/midia/{message}', [WhatsAppInboxController::class, 'media'])->whereNumber('message')->name('whatsapp.conversas.midia');
         Route::post('whatsapp/conversas/{conversation}/lida', [WhatsAppInboxController::class, 'markRead'])->whereNumber('conversation')->name('whatsapp.conversas.lida');

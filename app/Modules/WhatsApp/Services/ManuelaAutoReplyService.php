@@ -10,6 +10,8 @@ use Throwable;
 
 class ManuelaAutoReplyService
 {
+    public const HANDOFF_REPLY = 'Vou chamar uma pessoa do time pra continuar com você. Já já te respondemos por aqui.';
+
     public function __construct(
         private readonly WhatsAppSettings $settings,
         private readonly ManuelaAgentClient $agent,
@@ -54,7 +56,8 @@ class ManuelaAutoReplyService
             $reply = [
                 'intent' => $reply['intent'],
                 'confidence' => 0.5,
-                'reply' => 'Vou chamar uma pessoa do time pra continuar com você. Já já te respondemos por aqui.',
+                // Já avisou que vai chamar alguém: não manda o aviso de novo.
+                'reply' => $lastManuela === self::HANDOFF_REPLY ? '' : self::HANDOFF_REPLY,
                 'needs_human' => true,
                 'needs_data' => [],
                 'suggested_next_action' => 'handoff',

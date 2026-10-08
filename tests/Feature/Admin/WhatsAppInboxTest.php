@@ -152,6 +152,12 @@ class WhatsAppInboxTest extends TestCase
         $this->assertNotSame($replies[0], $replies[1]);
         $this->assertStringContainsString('pessoa do time', $replies[1]);
         $this->assertTrue(WhatsAppConversation::query()->first()->needs_human);
+
+        // Alguém religou a chave sem responder: o aviso de "vou chamar uma
+        // pessoa" não sai de novo.
+        WhatsAppConversation::query()->first()->update(['needs_human' => false]);
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.S3', 'Ok'))->assertOk();
+        $this->assertSame(2, WhatsAppMessage::query()->where('direction', 'outbound')->count());
     }
 
     public function test_atendente_responde_e_assume_a_conversa(): void

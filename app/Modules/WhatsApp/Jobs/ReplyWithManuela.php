@@ -61,6 +61,10 @@ class ReplyWithManuela
             $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
         }
 
+        if (! filled($reply['reply'])) {
+            return;
+        }
+
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
         $conversation->update(['last_auto_reply_at' => now()]);
     }

@@ -338,7 +338,9 @@ async function toggleManuela(conversation) {
 
     const target = conversations.value.find((c) => c.id === conversation.id);
     const next = !target.aiEnabled;
+    const hadAlert = target.needsHuman;
     target.aiEnabled = next;
+    target.needsHuman = false;
     toggling.value = new Set(toggling.value).add(target.id);
 
     try {
@@ -352,6 +354,7 @@ async function toggleManuela(conversation) {
         upsertConversation(data.conversation);
     } catch (error) {
         target.aiEnabled = !next;
+        target.needsHuman = hadAlert;
         actionError.value = error.message;
         const done = new Set(toggling.value);
         done.delete(target.id);

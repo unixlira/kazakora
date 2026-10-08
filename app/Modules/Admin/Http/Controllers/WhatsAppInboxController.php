@@ -146,8 +146,14 @@ class WhatsAppInboxController extends Controller
             'body' => ['required', 'string', 'max:4096'],
         ]);
 
-        // Pessoa respondeu: a Manuela sai da conversa até alguém devolver.
-        $conversation->update(['ai_enabled' => false, 'unread_count' => 0]);
+        // Pessoa respondeu: a Manuela sai da conversa até alguém devolver, e o
+        // alerta de "precisa de humano" está atendido.
+        $conversation->update([
+            'ai_enabled' => false,
+            'unread_count' => 0,
+            'needs_human' => false,
+            'status' => $conversation->status === 'needs_human' ? 'open' : $conversation->status,
+        ]);
 
         $message = $outbox->sendText($conversation, $validated['body'], $request->user()->name, $request->user()->id);
 
@@ -172,11 +178,13 @@ class WhatsAppInboxController extends Controller
 
         $wasEnabled = (bool) $conversation->ai_enabled;
 
+        // Mexer na chave resolve o alerta de "precisa de humano" nos dois
+        // sentidos: humano assumiu (pedido 2026-10-08: "após ticar a flag com
+        // humano, remover a badge vermelha") ou devolveu pra Manuela.
         $conversation->update([
             'ai_enabled' => $validated['ai_enabled'],
-            // Devolver pra Manuela tira o alerta de "precisa de humano".
-            'needs_human' => $validated['ai_enabled'] ? false : $conversation->needs_human,
-            'status' => $validated['ai_enabled'] && $conversation->status === 'needs_human' ? 'open' : $conversation->status,
+            'needs_human' => false,
+            'status' => $conversation->status === 'needs_human' ? 'open' : $conversation->status,
         ]);
 
         // Ligou a chave com o cliente esperando resposta: a Manuela responde

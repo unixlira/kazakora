@@ -417,6 +417,26 @@ class WhatsAppInboxTest extends TestCase
         $this->assertSame('Entendi, já avisei o time e sigo aqui com você.', WhatsAppMessage::query()->where('direction', 'outbound')->value('body'));
     }
 
+    public function test_humano_assumir_tira_o_alerta_de_precisa_de_humano(): void
+    {
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.H1']]])]);
+        $admin = $this->admin();
+        $alerta = ['ai_enabled' => true, 'needs_human' => true, 'status' => 'needs_human', 'last_message_preview' => 'Oi'];
+        $chave = WhatsAppConversation::query()->create(['wa_id' => '5511911110000', 'phone' => '5511911110000'] + $alerta);
+        $resposta = WhatsAppConversation::query()->create(['wa_id' => '5511922220000', 'phone' => '5511922220000'] + $alerta);
+
+        $this->actingAs($admin)
+            ->postJson("/admin/whatsapp/conversas/{$chave->id}/manuela", ['ai_enabled' => false])
+            ->assertJsonPath('conversation.aiEnabled', false)
+            ->assertJsonPath('conversation.needsHuman', false)
+            ->assertJsonPath('conversation.status', 'open');
+
+        $this->actingAs($admin)
+            ->postJson("/admin/whatsapp/conversas/{$resposta->id}/mensagens", ['body' => 'Oi, aqui é do time'])
+            ->assertJsonPath('conversation.needsHuman', false)
+            ->assertJsonPath('conversation.status', 'open');
+    }
+
     public function test_quem_nao_ve_pedidos_nao_acessa_conversas(): void
     {
         $customer = User::factory()->create();

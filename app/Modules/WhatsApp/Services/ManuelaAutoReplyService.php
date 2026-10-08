@@ -42,7 +42,27 @@ class ManuelaAutoReplyService
             }
         }
 
-        return $this->ruleBasedReply($message) + ['source' => 'regras'];
+        $reply = $this->ruleBasedReply($message);
+
+        // Roteiro fixo não conversa: achado real 2026-10-08, cliente
+        // perguntou de amostra e de câmera e recebeu a mesma saudação duas
+        // vezes. Se a resposta seria repetida, ou se ele não entendeu de novo,
+        // chama uma pessoa em vez de insistir.
+        $lastManuela = $conversation->messages()->where('direction', 'outbound')->where('sent_by', 'manuela')->latest('id')->value('body');
+
+        if (! $reply['needs_human'] && $lastManuela !== null && ($reply['reply'] === $lastManuela || $reply['intent'] === 'outro')) {
+            $reply = [
+                'intent' => $reply['intent'],
+                'confidence' => 0.5,
+                'reply' => 'Vou chamar uma pessoa do time pra continuar com você. Já já te respondemos por aqui.',
+                'needs_human' => true,
+                'needs_data' => [],
+                'suggested_next_action' => 'handoff',
+                'sales_stage' => $reply['sales_stage'],
+            ];
+        }
+
+        return $reply + ['source' => 'regras'];
     }
 
     public function systemPrompt(): string

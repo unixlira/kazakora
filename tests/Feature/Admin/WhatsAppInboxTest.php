@@ -136,6 +136,24 @@ class WhatsAppInboxTest extends TestCase
         $this->assertSame('regras', $reply->payload['manuela']['source']);
     }
 
+    public function test_regras_nao_repetem_a_saudacao_e_chamam_uma_pessoa(): void
+    {
+        config(['services.whatsapp.manuela_url' => null]);
+        $this->enableManuela();
+        Http::fake(['graph.facebook.com/*' => Http::sequence()
+            ->push(['messages' => [['id' => 'wamid.R1']]])
+            ->push(['messages' => [['id' => 'wamid.R2']]])]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.S1', 'Oie, vc libera amostra grátis?'))->assertOk();
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.S2', 'Camera para computador'))->assertOk();
+
+        $replies = WhatsAppMessage::query()->where('direction', 'outbound')->orderBy('id')->pluck('body');
+        $this->assertCount(2, $replies);
+        $this->assertNotSame($replies[0], $replies[1]);
+        $this->assertStringContainsString('pessoa do time', $replies[1]);
+        $this->assertTrue(WhatsAppConversation::query()->first()->needs_human);
+    }
+
     public function test_atendente_responde_e_assume_a_conversa(): void
     {
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.HUM']]])]);

@@ -53,9 +53,7 @@ class WhatsAppWebhookController extends Controller
                     // A chave da conversa é quem manda (pedido 2026-10-08: "a Manu
                     // não está respondendo depois de ticar a chave"). Reentrega
                     // da Meta (mesmo wa_message_id) não responde de novo.
-                    if ($stored->wasRecentlyCreated
-                        && $conversation->ai_enabled
-                        && ! $conversation->needs_human) {
+                    if ($stored->wasRecentlyCreated && $conversation->ai_enabled) {
                         ReplyWithManuela::dispatch($conversation->id, $stored->id)->afterResponse();
                     }
                 }

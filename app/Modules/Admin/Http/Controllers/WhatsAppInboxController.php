@@ -7,13 +7,13 @@ use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
+use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
@@ -221,22 +221,13 @@ class WhatsAppInboxController extends Controller
      * vira uma URL temporária que exige o token. Proxy aqui pra tela mostrar
      * sem expor o token pro navegador.
      */
-    public function media(WhatsAppMessage $message): HttpResponse
+    public function media(WhatsAppMessage $message, WhatsAppMediaDownloader $downloader): HttpResponse
     {
-        $mediaId = $message->mediaId();
-        $token = config('services.whatsapp.access_token');
+        $file = $downloader->download($message);
+        abort_unless($file, 404);
 
-        abort_unless($mediaId && filled($token), 404);
-
-        $baseUrl = rtrim(config('services.whatsapp.graph_url', 'https://graph.facebook.com/v20.0'), '/');
-        $meta = Http::withToken($token)->acceptJson()->timeout(20)->get("{$baseUrl}/{$mediaId}");
-        abort_if($meta->failed() || ! $meta->json('url'), 404);
-
-        $file = Http::withToken($token)->timeout(60)->get($meta->json('url'));
-        abort_if($file->failed(), 404);
-
-        return response($file->body(), 200, [
-            'Content-Type' => $meta->json('mime_type') ?: $file->header('Content-Type') ?: 'application/octet-stream',
+        return response($file['body'], 200, [
+            'Content-Type' => $file['mime_type'],
             'Cache-Control' => 'private, max-age=86400',
         ]);
     }
@@ -282,6 +273,7 @@ class WhatsAppInboxController extends Controller
             'hasMedia' => $m->mediaId() !== null,
             'mimeType' => $payload[$m->type]['mime_type'] ?? null,
             'fileName' => $payload['document']['filename'] ?? null,
+            'transcription' => $payload['transcription'] ?? null,
             'error' => $m->status === 'failed' ? ($payload['error'] ?? null) : null,
         ];
     }

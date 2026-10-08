@@ -9,10 +9,14 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * Fala com a Manuela de verdade: o subagente de atendimento da Naia, que roda
- * no Hermes (alphakora). O Hermes expõe um API server compatível com OpenAI
- * (`API_SERVER_ENABLED=true`, POST /v1/chat/completions, Bearer = API_SERVER_KEY).
- * Esse endpoint é sem estado, então cada chamada leva o histórico da conversa.
+ * O cérebro da Manuela. Dois caminhos, nesta ordem:
+ *
+ * 1. Hermes (MANUELA_AGENT_URL): API server compatível com OpenAI
+ *    (POST /v1/chat/completions, Bearer = API_SERVER_KEY).
+ * 2. Gemini da conta do dono (GEMINI_API_KEY) — o que está valendo desde
+ *    2026-10-08 ("vamos deixar ela respondendo tudo").
+ *
+ * Os dois são sem estado: cada chamada leva o histórico da conversa.
  *
  * Contrato da resposta: só o texto que vai pro cliente. Se precisar de uma
  * pessoa, a Manuela começa com [HUMANO] — a conversa é sinalizada na tela.
@@ -23,15 +27,73 @@ class ManuelaAgentClient
 
     private const HISTORY_LIMIT = 20;
 
+    public function __construct(private readonly GeminiClient $gemini) {}
+
     public function isConfigured(): bool
     {
-        return filled(config('services.whatsapp.manuela_url'));
+        return $this->provider() !== null;
+    }
+
+    /** 'hermes', 'gemini' ou null (cai nas regras locais). */
+    public function provider(): ?string
+    {
+        return match (true) {
+            filled(config('services.whatsapp.manuela_url')) => 'hermes',
+            $this->gemini->isConfigured() => 'gemini',
+            default => null,
+        };
     }
 
     /**
-     * @return array{reply: string, needs_human: bool}
+     * @return array{reply: string, needs_human: bool, provider: string}
      */
     public function reply(WhatsAppConversation $conversation, string $systemPrompt): array
+    {
+        $provider = $this->provider() ?? throw new RuntimeException('Manuela sem cérebro configurado (nem Hermes nem Gemini).');
+
+        $text = $provider === 'hermes'
+            ? $this->replyFromHermes($conversation, $systemPrompt)
+            : $this->replyFromGemini($conversation, $systemPrompt);
+
+        $needsHuman = Str::contains($text, self::HANDOFF_TAG);
+        $text = trim(str_replace(self::HANDOFF_TAG, '', $text));
+
+        if ($text === '') {
+            throw new RuntimeException("Manuela ({$provider}) devolveu só a marcação, sem texto pro cliente.");
+        }
+
+        return ['reply' => $text, 'needs_human' => $needsHuman, 'provider' => $provider];
+    }
+
+    private function replyFromGemini(WhatsAppConversation $conversation, string $systemPrompt): string
+    {
+        // O Gemini quer user/model alternados e começando por user.
+        $contents = [];
+
+        foreach ($this->history($conversation) as $message) {
+            $role = $message['role'] === 'user' ? 'user' : 'model';
+
+            if ($contents === [] && $role === 'model') {
+                continue;
+            }
+
+            if ($contents !== [] && end($contents)['role'] === $role) {
+                $contents[array_key_last($contents)]['parts'][0]['text'] .= "\n".$message['content'];
+
+                continue;
+            }
+
+            $contents[] = ['role' => $role, 'parts' => [['text' => $message['content']]]];
+        }
+
+        if ($contents === []) {
+            throw new RuntimeException('Conversa sem mensagem do cliente pra responder.');
+        }
+
+        return $this->gemini->generate((string) config('services.gemini.chat_model'), $contents, $systemPrompt);
+    }
+
+    private function replyFromHermes(WhatsAppConversation $conversation, string $systemPrompt): string
     {
         $response = Http::withToken((string) config('services.whatsapp.manuela_token'))
             ->acceptJson()
@@ -56,10 +118,7 @@ class ManuelaAgentClient
             throw new RuntimeException('Manuela (Hermes) devolveu resposta vazia.');
         }
 
-        $needsHuman = Str::contains($text, self::HANDOFF_TAG);
-        $text = trim(str_replace(self::HANDOFF_TAG, '', $text));
-
-        return ['reply' => $text, 'needs_human' => $needsHuman];
+        return $text;
     }
 
     /** @return array<int, array{role: string, content: string}> */
@@ -74,10 +133,24 @@ class ManuelaAgentClient
             ->reverse()
             ->map(fn (WhatsAppMessage $message) => [
                 'role' => $message->direction === 'inbound' ? 'user' : 'assistant',
-                'content' => $message->type === 'text' ? (string) $message->body : '['.$message->preview().']',
+                'content' => $this->content($message),
             ])
             ->values()
             ->all();
+    }
+
+    /** Mídia vira descrição entre colchetes; áudio transcrito vai como texto. */
+    private function content(WhatsAppMessage $message): string
+    {
+        if ($message->type === 'text') {
+            return (string) $message->body;
+        }
+
+        if ($transcription = $message->payload['transcription'] ?? null) {
+            return "[áudio do cliente, transcrito] {$transcription}";
+        }
+
+        return '[cliente enviou '.$message->preview().']';
     }
 
     private function endpoint(): string

@@ -4,9 +4,14 @@ namespace App\Modules\WhatsApp\Jobs;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
+use App\Modules\WhatsApp\Services\GeminiClient;
+use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\ManuelaAutoReplyService;
+use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Despachado com afterResponse() pelo webhook: a Meta recebe o 200 na hora
@@ -21,14 +26,17 @@ class ReplyWithManuela
     {
     }
 
-    public function handle(ManuelaAutoReplyService $manuela, WhatsAppOutbox $outbox): void
+    public function handle(ManuelaAutoReplyService $manuela, WhatsAppOutbox $outbox, ManuelaAgentClient $agent, GeminiClient $gemini, WhatsAppMediaDownloader $media): void
     {
         @set_time_limit(150);
 
         $conversation = WhatsAppConversation::query()->find($this->conversationId);
         $inbound = WhatsAppMessage::query()->find($this->inboundMessageId);
 
-        if (! $conversation || ! $inbound || ! $conversation->ai_enabled || $conversation->needs_human) {
+        // "Precisa de humano" é só o alerta na tela: a Manuela segue atendendo
+        // até uma pessoa responder (aí a chave desliga). Pedido 2026-10-08:
+        // "vamos deixar ela respondendo tudo".
+        if (! $conversation || ! $inbound || ! $conversation->ai_enabled) {
             return;
         }
 
@@ -44,13 +52,20 @@ class ReplyWithManuela
             return;
         }
 
-        if ($inbound->type !== 'text' || ! filled($inbound->body)) {
+        if ($inbound->type === 'audio' && $gemini->isConfigured()) {
+            $this->transcribe($inbound, $gemini, $media);
+        }
+
+        $text = $inbound->type === 'text' ? (string) $inbound->body : (string) ($inbound->payload['transcription'] ?? '');
+
+        // Sem IA, o roteiro fixo não entende foto/áudio: chama uma pessoa.
+        if (! $agent->isConfigured() && trim($text) === '') {
             $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
 
             return;
         }
 
-        $reply = $manuela->buildReply($conversation, $inbound->body);
+        $reply = $manuela->buildReply($conversation, $text !== '' ? $text : $inbound->preview());
 
         // Uma pessoa assumiu enquanto a Manuela pensava: não atropela.
         if (! $conversation->fresh()->ai_enabled) {
@@ -67,5 +82,33 @@ class ReplyWithManuela
 
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    /** Áudio do cliente vira texto (Gemini) e fica salvo na mensagem. */
+    private function transcribe(WhatsAppMessage $inbound, GeminiClient $gemini, WhatsAppMediaDownloader $media): void
+    {
+        if (filled($inbound->payload['transcription'] ?? null)) {
+            return;
+        }
+
+        try {
+            $file = $media->download($inbound);
+
+            if (! $file) {
+                return;
+            }
+
+            $transcription = $gemini->transcribe($file['body'], $file['mime_type']);
+            $inbound->update([
+                'body' => $transcription,
+                'payload' => array_merge($inbound->payload ?? [], ['transcription' => $transcription]),
+            ]);
+            $lastId = $inbound->conversation?->messages()->whereIn('direction', ['inbound', 'outbound'])->max('id');
+            if ((int) $lastId === $inbound->id) {
+                $inbound->conversation->update(['last_message_preview' => $inbound->preview()]);
+            }
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp.audio_transcription_failed', ['message_id' => $inbound->id, 'error' => $exception->getMessage()]);
+        }
     }
 }

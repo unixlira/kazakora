@@ -15,7 +15,13 @@ class ManuelaAutoReplyService
     public function __construct(
         private readonly WhatsAppSettings $settings,
         private readonly ManuelaAgentClient $agent,
+        private readonly ManuelaCatalog $catalog,
     ) {
+    }
+
+    private function agora(): string
+    {
+        return now()->locale('pt_BR')->translatedFormat('l, d/m/Y H:i');
     }
 
     /**
@@ -30,17 +36,17 @@ class ManuelaAutoReplyService
                 $remote = $this->agent->reply($conversation, $this->systemPrompt());
 
                 return [
-                    'intent' => 'manuela_hermes',
+                    'intent' => 'manuela_'.$remote['provider'],
                     'confidence' => 1.0,
                     'reply' => $remote['reply'],
                     'needs_human' => $remote['needs_human'] || $this->needsHuman(Str::lower(Str::ascii($message)), $this->settings->all()),
                     'needs_data' => [],
                     'suggested_next_action' => $remote['needs_human'] ? 'handoff' : 'reply',
                     'sales_stage' => 'atendimento',
-                    'source' => 'hermes',
+                    'source' => $remote['provider'],
                 ];
             } catch (Throwable $exception) {
-                Log::warning('manuela_hermes_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
+                Log::warning('manuela_remote_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
             }
         }
 
@@ -81,6 +87,10 @@ Horário de atendimento humano: {$s['business_hours']}.
 Categorias prioritárias: {$s['priority_categories']}.
 Proibido: {$s['forbidden_promises']}.
 Faça no máximo {$s['max_questions_before_close']} perguntas antes de sugerir o próximo passo de compra.
+Agora é {$this->agora()} (horário de Brasília).
+
+Produtos à venda no site (nome, preço, link). Só cite produto, preço e link desta lista; se o cliente pedir algo que não está aqui, diga que vai confirmar com o time:
+{$this->catalog->asText()}
 
 Regras de formato:
 - Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.

@@ -828,6 +828,7 @@ function linkify(text) {
                                         <i class="fas fa-paperclip mr-1"></i> Mensagem do tipo "{{ item.message.type }}"
                                     </p>
 
+                                    <span v-if="item.message.type === 'audio' && item.message.transcription" class="wa-muted block text-[12px]"><i class="fas fa-closed-captioning mr-1"></i>Transcrição do áudio</span>
                                     <span v-if="item.message.body && !(item.message.hasMedia && item.message.type === 'document')" class="wa-text whitespace-pre-wrap break-words" v-html="linkify(item.message.body)"></span>
                                     <!-- Espaço reservado pro horário não encostar no texto (técnica do WhatsApp) -->
                                     <span class="inline-block" :class="item.message.direction === 'outbound' ? 'w-[74px]' : 'w-[52px]'"></span>

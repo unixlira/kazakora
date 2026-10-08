@@ -354,6 +354,15 @@ return [
         'manuela_timeout' => (int) env('MANUELA_AGENT_TIMEOUT', 60),
     ],
 
+    // Gemini da conta do dono: responde como Manuela quando o Hermes não está
+    // configurado, e transcreve os áudios do WhatsApp (pedido 2026-10-08).
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'chat_model' => env('GEMINI_CHAT_MODEL', 'gemini-flash-latest'),
+        'audio_model' => env('GEMINI_AUDIO_MODEL', 'gemini-flash-latest'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 45),
+    ],
+
     // Pra quem manda o e-mail de fechamento quinzenal do Mercado Envios
     // Flex — pedido explícito 2026-08-10, ver CheckFlexBillingCycle.
     'mercado_livre_flex' => [

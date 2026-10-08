@@ -29,7 +29,13 @@ class WhatsAppInboxTest extends TestCase
             'services.whatsapp.phone_number_id' => '123',
             'services.whatsapp.manuela_url' => 'https://alphakora.test/v1',
             'services.whatsapp.manuela_token' => 'hermes-key',
+            'services.gemini.api_key' => null,
+            'services.gemini.chat_model' => 'gemini-test',
+            'services.gemini.audio_model' => 'gemini-audio-test',
         ]);
+
+        // Os testes antigos partem da chave desligada nas conversas novas.
+        app(WhatsAppSettings::class)->setMany(['auto_reply_enabled' => false]);
     }
 
     private function admin(): User
@@ -283,6 +289,83 @@ class WhatsAppInboxTest extends TestCase
 
         $this->assertSame(0, WhatsAppConversation::query()->count());
         $this->assertSame(0, WhatsAppMessage::query()->count());
+    }
+
+    private function useGemini(): void
+    {
+        config(['services.whatsapp.manuela_url' => null, 'services.gemini.api_key' => 'gemini-key']);
+        $this->enableManuela();
+    }
+
+    private function geminiText(string $text): array
+    {
+        return ['candidates' => [['content' => ['parts' => [['text' => 'pensando...', 'thought' => true], ['text' => $text]]]]]];
+    }
+
+    public function test_manuela_responde_pelo_gemini_com_a_persona_e_o_catalogo(): void
+    {
+        $this->useGemini();
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['name' => 'Campainha Sem Fio Câmera', 'slug' => 'campainha-sem-fio', 'price' => 199.9, 'stock' => 5, 'is_active' => true]);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->geminiText('Oi! Eu sou a Manuela, da KazaKora. Temos sim a Campainha Sem Fio Câmera.')),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.G1']]]),
+        ]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.GIN1', 'Vocês têm campainha?'))->assertOk();
+
+        $reply = WhatsAppMessage::query()->where('direction', 'outbound')->firstOrFail();
+        $this->assertSame('Oi! Eu sou a Manuela, da KazaKora. Temos sim a Campainha Sem Fio Câmera.', $reply->body);
+        $this->assertSame('gemini', $reply->payload['manuela']['source']);
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'models/gemini-test:generateContent')
+            && $request->hasHeader('x-goog-api-key', 'gemini-key')
+            && str_contains($request['systemInstruction']['parts'][0]['text'], 'Você é a Manuela')
+            && str_contains($request['systemInstruction']['parts'][0]['text'], 'Campainha Sem Fio Câmera | R$ 199,90 | https://kazakora.devlira.com.br/produtos/campainha-sem-fio')
+            && $request['contents'][0]['role'] === 'user'
+            && $request['contents'][0]['parts'][0]['text'] === 'Vocês têm campainha?');
+    }
+
+    public function test_audio_do_cliente_e_transcrito_e_respondido(): void
+    {
+        $this->useGemini();
+        Http::fake([
+            'graph.facebook.com/*/media-audio-1' => Http::response(['url' => 'https://lookaside.fbsbx.com/audio-1', 'mime_type' => 'audio/ogg; codecs=opus']),
+            'lookaside.fbsbx.com/*' => Http::response('OGG-BYTES'),
+            'generativelanguage.googleapis.com/*gemini-audio-test*' => Http::response($this->geminiText('Qual o prazo pra Campinas?')),
+            'generativelanguage.googleapis.com/*gemini-test*' => Http::response($this->geminiText('Me passa seu CEP que eu confiro!')),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.A1']]]),
+        ]);
+
+        $payload = $this->inbound('wamid.AUD1', '');
+        $payload['entry'][0]['changes'][0]['value']['messages'][0]['type'] = 'audio';
+        unset($payload['entry'][0]['changes'][0]['value']['messages'][0]['text']);
+        $payload['entry'][0]['changes'][0]['value']['messages'][0]['audio'] = ['id' => 'media-audio-1', 'mime_type' => 'audio/ogg; codecs=opus', 'voice' => true];
+
+        $this->postJson('/api/whatsapp/webhook', $payload)->assertOk();
+
+        $audio = WhatsAppMessage::query()->where('direction', 'inbound')->firstOrFail();
+        $this->assertSame('Qual o prazo pra Campinas?', $audio->payload['transcription']);
+        $this->assertSame('Me passa seu CEP que eu confiro!', WhatsAppMessage::query()->where('direction', 'outbound')->value('body'));
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'gemini-audio-test')
+            && $request['contents'][0]['parts'][0]['inline_data']['mime_type'] === 'audio/ogg'
+            && $request['contents'][0]['parts'][0]['inline_data']['data'] === base64_encode('OGG-BYTES'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'models/gemini-test:')
+            && str_contains($request['contents'][0]['parts'][0]['text'], 'Qual o prazo pra Campinas?'));
+    }
+
+    public function test_precisa_de_humano_nao_cala_a_manuela(): void
+    {
+        $this->useGemini();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->geminiText('Entendi, já avisei o time e sigo aqui com você.')),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.N1']]]),
+        ]);
+        WhatsAppConversation::query()->create(['wa_id' => '5511999990000', 'phone' => '5511999990000', 'ai_enabled' => true, 'needs_human' => true, 'status' => 'needs_human']);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.NH1', 'Ainda estou esperando'))->assertOk();
+
+        $this->assertSame('Entendi, já avisei o time e sigo aqui com você.', WhatsAppMessage::query()->where('direction', 'outbound')->value('body'));
     }
 
     public function test_quem_nao_ve_pedidos_nao_acessa_conversas(): void

@@ -64,6 +64,8 @@ const filters = [
     { key: 'resolved', label: 'Encerradas' },
 ];
 
+const humanCount = computed(() => conversations.value.filter((c) => c.needsHuman).length);
+
 const EMOJIS = ['😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😉', '🙂', '🤗', '🤩', '😎', '🤔', '😅', '😇', '🥰',
     '😢', '😭', '😡', '😱', '🙏', '👍', '👎', '👏', '🙌', '👌', '✌️', '🤝', '💪', '👋', '❤️', '🧡',
     '💛', '💚', '💙', '💜', '🔥', '✨', '⭐', '🎉', '🎁', '📦', '🚚', '🛒', '🛍️', '💳', '💰', '🏷️',
@@ -654,6 +656,7 @@ function linkify(text) {
                         @click="filter = item.key"
                     >
                         {{ item.label }}
+                        <span v-if="item.key === 'human' && humanCount" class="wa-human-count">{{ humanCount }}</span>
                     </button>
                 </div>
             </div>
@@ -670,7 +673,7 @@ function linkify(text) {
                     @keydown.enter="openConversation(conversation.id)"
                 >
                     <span class="flex h-[72px] shrink-0 items-center pl-3 pr-[15px]">
-                        <span class="flex h-[49px] w-[49px] items-center justify-center rounded-full text-[17px] font-medium text-white" :style="{ backgroundColor: avatarColor(conversation) }">
+                        <span class="flex h-[49px] w-[49px] items-center justify-center rounded-full text-[17px] font-medium text-white" :class="{ 'wa-story': conversation.needsHuman }" :style="{ backgroundColor: avatarColor(conversation) }" :title="conversation.needsHuman ? 'Precisa de humano' : undefined">
                             <template v-if="initials(conversation)">{{ initials(conversation) }}</template>
                             <svg v-else viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><circle cx="12" cy="8" r="4.2" /><path d="M3.5 21c.6-4.6 4.2-7 8.5-7s7.9 2.4 8.5 7z" /></svg>
                         </span>
@@ -683,10 +686,10 @@ function linkify(text) {
                         <span class="mt-0.5 flex items-center justify-between gap-2">
                             <span class="wa-row-preview flex min-w-0 items-center gap-1">
                                 <svg v-if="conversation.previewDirection === 'outbound'" viewBox="0 0 18 11" width="16" height="11" class="shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.8l3.3 3.4L11.2 1.6" /><path d="M7.4 8.6l.7.6L15.2 1.6" /></svg>
-                                <i v-if="conversation.needsHuman" class="fas fa-hand shrink-0 text-xs text-amber-500" title="Precisa de humano"></i>
                                 <span class="truncate">{{ conversation.preview }}</span>
                             </span>
                             <span class="flex shrink-0 items-center gap-2">
+                                <span v-if="conversation.needsHuman" class="wa-human-badge" title="A conversa precisa que uma pessoa responda"><i class="fas fa-hand"></i>Humano</span>
                                 <span v-if="conversation.unread" class="wa-unread">{{ conversation.unread }}</span>
                                 <button
                                     type="button"
@@ -719,14 +722,14 @@ function linkify(text) {
                         <i class="fas fa-arrow-left"></i>
                     </button>
                     <button type="button" class="flex min-w-0 flex-1 items-center gap-[15px] text-left" @click="drawerOpen = true">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-medium text-white" :style="{ backgroundColor: avatarColor(active) }">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-medium text-white" :class="{ 'wa-story': active.needsHuman }" :style="{ backgroundColor: avatarColor(active) }">
                             <template v-if="initials(active)">{{ initials(active) }}</template>
                             <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="12" cy="8" r="4.2" /><path d="M3.5 21c.6-4.6 4.2-7 8.5-7s7.9 2.4 8.5 7z" /></svg>
                         </span>
                         <span class="min-w-0">
                             <span class="wa-head-name block truncate">{{ displayName(active) }}</span>
                             <span class="wa-head-sub block truncate">
-                                <template v-if="active.needsHuman"><span class="text-amber-600 dark:text-amber-400">precisa de humano</span> · </template>
+                                <span v-if="active.needsHuman" class="wa-human-badge mr-1.5 align-middle"><i class="fas fa-hand"></i>Precisa de humano</span>
                                 <template v-if="active.status === 'resolved'">encerrada · </template>
                                 clique para mostrar os dados do contato
                             </span>
@@ -931,7 +934,7 @@ function linkify(text) {
             </header>
             <div class="wa-drawer-body min-h-0 flex-1 overflow-y-auto">
                 <section class="wa-drawer-card flex flex-col items-center px-6 pb-6 pt-7">
-                    <span class="flex h-[200px] w-[200px] items-center justify-center rounded-full text-6xl font-light text-white" :style="{ backgroundColor: avatarColor(active) }">
+                    <span class="flex h-[200px] w-[200px] items-center justify-center rounded-full text-6xl font-light text-white" :class="{ 'wa-story wa-story-lg': active.needsHuman }" :style="{ backgroundColor: avatarColor(active) }">
                         <template v-if="initials(active)">{{ initials(active) }}</template>
                         <svg v-else viewBox="0 0 24 24" width="110" height="110" fill="currentColor"><circle cx="12" cy="8" r="4.2" /><path d="M3.5 21c.6-4.6 4.2-7 8.5-7s7.9 2.4 8.5 7z" /></svg>
                     </span>
@@ -1038,6 +1041,24 @@ function linkify(text) {
 .wa-row-time { font-size: 12px; line-height: 20px; color: var(--wa-muted); }
 .wa-row-time-unread { color: var(--wa-unread); font-weight: 600; }
 .wa-row-preview { font-size: 14px; line-height: 20px; color: var(--wa-muted); }
+/* Precisa de humano: badge vermelha + anel de stories em volta da foto */
+.wa-human-badge { display: inline-flex; height: 20px; align-items: center; gap: 4px; border-radius: 9999px; background: #ea0038; padding: 0 8px; font-size: 11.5px; font-weight: 600; line-height: 1; color: #fff; white-space: nowrap; }
+.wa-human-badge i { font-size: 10px; }
+.wa-human-count { margin-left: 6px; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9999px; background: #ea0038; padding: 0 5px; font-size: 11px; font-weight: 700; color: #fff; }
+.wa-story { position: relative; }
+.wa-story::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    padding: 2.5px;
+    background: conic-gradient(from 200deg, #feda75, #fa7e1e, #ea0038, #d62976, #962fbf, #feda75);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+}
+.wa-story-lg::before { inset: -9px; padding: 5px; }
 .wa-unread { display: inline-flex; min-width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 9999px; background: var(--wa-unread); padding: 0 6px; font-size: 12px; font-weight: 600; color: #fff; }
 .wa-muted { color: var(--wa-muted); }
 

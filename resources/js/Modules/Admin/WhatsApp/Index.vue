@@ -44,7 +44,7 @@ const credentialItems = computed(() => [
     { key: 'phoneNumberId', label: 'Phone Number ID', description: 'Identifica o número oficial que envia e recebe mensagens.' },
     { key: 'businessAccountId', label: 'WABA ID', description: 'Identifica a conta comercial da Meta/WhatsApp.' },
     { key: 'appSecret', label: 'App Secret', description: 'Reforça a validação de assinatura dos webhooks recebidos.' },
-    { key: 'manuelaRemote', label: 'Manuela (Naia/Hermes)', description: 'MANUELA_AGENT_URL + MANUELA_AGENT_TOKEN: API server do Hermes no alphakora. Sem isso, a Manuela responde pelas regras locais.' },
+    { key: 'manuelaRemote', label: 'Manuela (IA)', description: 'GEMINI_API_KEY: a Manuela responde pelo Gemini e transcreve áudio. Sem IA configurada, ela cai nas regras fixas.' },
 ]);
 
 const integrationStatus = computed(() => {
@@ -316,9 +316,9 @@ const copyToClipboard = async (value, key) => {
                                     <p class="mt-2 text-xs text-amber-600">A Manuela nunca deve pedir senha, código de autenticação, cartão completo, token ou documento completo pelo WhatsApp.</p>
                                 </div>
                                 <div class="md:col-span-2">
-                                    <label class="text-sm font-semibold">Instrução para a Manuela da Naia (Hermes)</label>
+                                    <label class="text-sm font-semibold">Persona da Manuela (instruções da IA)</label>
                                     <textarea v-model="form.agent_instructions" rows="4" class="mt-2 w-full rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm"></textarea>
-                                    <p class="mt-2 text-xs text-slate-500">Vai no começo de toda conversa enviada ao Hermes, junto com as regras acima. É o que faz a Naia atender como a subagente Manuela.</p>
+                                    <p class="mt-2 text-xs text-slate-500">Vai no começo de toda conversa enviada à IA, junto com as regras acima e o catálogo da loja. É aqui que se define como a Manuela se apresenta e fala.</p>
                                 </div>
                             </div>
                         </div>

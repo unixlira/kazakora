@@ -345,9 +345,9 @@ return [
         'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
         'webhook_url' => env('WHATSAPP_WEBHOOK_URL', 'https://kazakora.devlira.com.br/api/webhooks/whatsapp'),
 
-        // Manuela de verdade: subagente da Naia (Hermes) exposto pelo API
-        // server OpenAI-compatível do Hermes (POST {url}/chat/completions).
-        // Sem URL, o atendimento cai nas regras locais do ManuelaAutoReplyService.
+        // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).
+        // Se preenchido, a Manuela passa a responder pelo API server
+        // OpenAI-compatível do Hermes (POST {url}/chat/completions).
         'manuela_url' => env('MANUELA_AGENT_URL'),
         'manuela_token' => env('MANUELA_AGENT_TOKEN'),
         'manuela_model' => env('MANUELA_AGENT_MODEL', 'hermes-agent'),

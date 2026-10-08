@@ -309,7 +309,7 @@ trait ReadsOrdersFromBling
      */
     public function atualizarEnderecoPeloBling(Order $order): bool
     {
-        if (! in_array(mb_strtoupper(trim((string) $order->shipping_number)), ['', 'S/N', 'SN'], true)) {
+        if (! $order->enderecoSemNumero()) {
             return false;
         }
 
@@ -328,7 +328,7 @@ trait ReadsOrdersFromBling
 
         $endereco = $this->enderecoDeEntregaDoBling($pedido, $contato);
 
-        if ($endereco['numero'] === '' || $endereco['endereco'] === '') {
+        if (Order::numeroSemDigito($endereco['numero']) || $endereco['endereco'] === '') {
             return false;
         }
 
@@ -372,7 +372,7 @@ trait ReadsOrdersFromBling
 
         // Etiqueta sem número = ainda a versão montada pelo CEP: o contato,
         // se tiver número, é o endereço que o comprador digitou.
-        $base = $campo($etiqueta, 'numero') === '' && $campo($doContato, 'numero') !== '' ? $doContato : $etiqueta;
+        $base = Order::numeroSemDigito($campo($etiqueta, 'numero')) && ! Order::numeroSemDigito($campo($doContato, 'numero')) ? $doContato : $etiqueta;
         $outra = $base === $etiqueta ? $doContato : $etiqueta;
 
         $endereco = [];

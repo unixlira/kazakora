@@ -2,7 +2,17 @@
 
 namespace Tests\Feature\Marketplace;
 
+use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Notifications\InvoiceIssuanceFailedNotification;
+use App\Services\Bling\BlingInvoiceImporter;
+use Illuminate\Queue\CallQueuedClosure;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Bling\BlingOrderService;
@@ -105,5 +115,58 @@ class AmazonBlingAddressTest extends TestCase
 
         $this->assertFalse($this->driver($semNumero)->atualizarEnderecoPeloBling($order));
         $this->assertSame('', (string) $order->fresh()->shipping_number);
+    }
+
+    public function test_number_without_digits_counts_as_missing(): void
+    {
+        $order = $this->pedidoSemNumero();
+        $comNome = self::PEDIDO_BLING;
+        $comNome['transporte']['etiqueta']['numero'] = 'Lopes';
+
+        $this->assertFalse($this->driver($comNome)->atualizarEnderecoPeloBling($order));
+        $this->assertTrue($order->fresh()->enderecoSemNumero());
+    }
+
+    /**
+     * Achado real 2026-10-08: nota e etiqueta saíam "S/N" no minuto da
+     * importação e os Correios devolveram as encomendas.
+     */
+    public function test_amazon_invoice_waits_for_the_address_number(): void
+    {
+        Queue::fake();
+        Notification::fake();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $order = $this->pedidoSemNumero();
+        $order->update(['shipping_number' => 'S/N']);
+
+        $semNumero = self::PEDIDO_BLING;
+        $semNumero['transporte']['etiqueta']['numero'] = '';
+        $this->app->instance(AmazonDriver::class, $this->driver($semNumero));
+        $importer = Mockery::mock(BlingInvoiceImporter::class);
+        $importer->shouldReceive('syncForOrder')->andReturnNull();
+        $this->app->instance(BlingInvoiceImporter::class, $importer);
+        $invoices = Mockery::mock(InvoiceService::class);
+        $invoices->shouldNotReceive('issue');
+        $this->app->instance(InvoiceService::class, $invoices);
+
+        $this->app->call([new GenerateInvoiceJob($order->id), 'handle']);
+
+        Queue::assertPushed(CallQueuedClosure::class);
+        Notification::assertNothingSent();
+
+        $this->travel(7)->hours();
+        $this->app->call([new GenerateInvoiceJob($order->id), 'handle']);
+
+        Notification::assertSentTo($admin, InvoiceIssuanceFailedNotification::class);
+    }
+
+    public function test_amazon_label_is_not_generated_without_number(): void
+    {
+        $order = $this->pedidoSemNumero();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('endereço sem número');
+
+        app(CorreiosAutoShipping::class)->confirm($order);
     }
 }

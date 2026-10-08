@@ -68,6 +68,13 @@ class CorreiosAutoShipping
             return $gerada;
         }
 
+        // Etiqueta "S/N" volta como não entregue (achado real 2026-10-08,
+        // pedidos Amazon). Sem número não gera sozinha: corrige o pedido ou
+        // gera pelo menu Correios se o endereço realmente não tiver número.
+        if ($order->origin === Order::ORIGIN_AMAZON && $order->enderecoSemNumero()) {
+            throw new RuntimeException("Pedido #{$order->id}: endereço sem número ({$order->shipping_street}, {$order->shipping_number}). Corrija o número no pedido antes de gerar a etiqueta.");
+        }
+
         $invoice = $order->invoice()->first();
 
         if (! $invoice || $invoice->status !== Invoice::STATUS_AUTHORIZED || ! $invoice->chave_acesso) {

@@ -170,6 +170,16 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             if (app(AmazonDriver::class)->atualizarEnderecoPeloBling($order)) {
                 $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: endereço sem número atualizado pelo Bling ({$order->shipping_street}, {$order->shipping_number}) antes da NF-e.");
             }
+
+            // BUG REAL 2026-10-08: a nota (e a pré-postagem, que vem logo
+            // atrás dela) saía no mesmo minuto da importação com "S/N", e os
+            // Correios devolveram as encomendas. Sem número, não emite:
+            // espera o Bling receber o endereço digitado pelo comprador.
+            if ($order->enderecoSemNumero()) {
+                $this->aguardarNumeroDoEndereco($order, $timeline);
+
+                return;
+            }
         }
 
         $orderImport->refreshBuyerInfo($order);
@@ -319,6 +329,39 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
 
         if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
             SendOrderReceiptEmailJob::dispatch($order->id);
+        }
+    }
+
+    /**
+     * Tenta de novo a cada 10 min por até 6h desde a entrada do pedido (o
+     * Bling costuma receber o endereço completo em minutos). Passou disso,
+     * avisa os admins: o número tem que ser corrigido à mão no pedido.
+     * Por idade do pedido, não por contador: o nfe:retry-stuck também
+     * redispara este job e zeraria qualquer contagem.
+     */
+    private function aguardarNumeroDoEndereco(Order $order, OrderFulfillmentTimeline $timeline): void
+    {
+        $endereco = trim("{$order->shipping_street}, {$order->shipping_number}");
+
+        if ($order->created_at && $order->created_at->gt(now()->subHours(6))) {
+            if (Cache::add("nfe:aguardando-numero:{$order->id}", true, now()->addHours(7))) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "Amazon: endereço sem número ({$endereco}). NF-e e etiqueta aguardando o Bling receber o endereço completo; nova tentativa a cada 10 min.");
+            }
+
+            $orderId = $order->id;
+            dispatch(static fn () => self::dispatch($orderId))->delay(now()->addMinutes(10))->onQueue('nfe');
+
+            return;
+        }
+
+        if (Cache::add("nfe:sem-numero-avisado:{$order->id}", true, now()->addDay())) {
+            $motivo = "endereço sem número ({$endereco}). Corrija o número no pedido e emita a nota de novo; a etiqueta só sai depois.";
+            $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "NF-e não emitida: {$motivo}");
+
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+            if ($admins->isNotEmpty()) {
+                Notification::send($admins, new InvoiceIssuanceFailedNotification($order, $motivo));
+            }
         }
     }
 

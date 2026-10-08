@@ -69,6 +69,22 @@ class Order extends Model
     public const ORIGIN_SALES_RETURN_INVOICE = 'nota_devolucao_venda';
 
     /**
+     * Número de endereço sem nenhum dígito ("", "S/N", "Lopes") — achado
+     * real 2026-10-08: pedidos Amazon saíram com nota e etiqueta "S/N" e
+     * voltaram como não entregues. Endereço sem número de verdade existe,
+     * mas é raro; nesses casos a etiqueta sai pelo menu Correios.
+     */
+    public static function numeroSemDigito(?string $numero): bool
+    {
+        return ! preg_match('/\d/', (string) $numero);
+    }
+
+    public function enderecoSemNumero(): bool
+    {
+        return self::numeroSemDigito($this->shipping_number);
+    }
+
+    /**
      * TikTok Shop é operado fiscalmente fora do pipeline automático do
      * KazaKora: a venda entra para separação/estoque, mas a NF-e da venda é
      * tratada na plataforma/Bling pelo operador. Se o KazaKora também emitir

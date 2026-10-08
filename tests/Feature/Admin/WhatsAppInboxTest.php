@@ -32,6 +32,8 @@ class WhatsAppInboxTest extends TestCase
             'services.gemini.api_key' => null,
             'services.gemini.chat_model' => 'gemini-test',
             'services.gemini.audio_model' => 'gemini-audio-test',
+            'services.gemini.fallback_model' => 'gemini-reserva-test',
+            'services.gemini.retry_delay_ms' => 0,
         ]);
 
         // Os testes antigos partem da chave desligada nas conversas novas.
@@ -352,6 +354,22 @@ class WhatsAppInboxTest extends TestCase
             && $request['contents'][0]['parts'][0]['inline_data']['data'] === base64_encode('OGG-BYTES'));
         Http::assertSent(fn ($request) => str_contains($request->url(), 'models/gemini-test:')
             && str_contains($request['contents'][0]['parts'][0]['text'], 'Qual o prazo pra Campinas?'));
+    }
+
+    public function test_gemini_sobrecarregado_tenta_de_novo_e_usa_o_modelo_reserva(): void
+    {
+        $this->useGemini();
+        $busy = ['error' => ['code' => 503, 'message' => 'This model is currently experiencing high demand.']];
+        Http::fake([
+            'generativelanguage.googleapis.com/*gemini-test*' => Http::sequence()->push($busy, 503)->push($busy, 503),
+            'generativelanguage.googleapis.com/*gemini-reserva-test*' => Http::response($this->geminiText('Oi! Eu sou a Manuela, da KazaKora.')),
+            'graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.B1']]]),
+        ]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.BUSY1', 'Oi'))->assertOk();
+
+        $this->assertSame('Oi! Eu sou a Manuela, da KazaKora.', WhatsAppMessage::query()->where('direction', 'outbound')->value('body'));
+        Http::assertSentCount(4);
     }
 
     public function test_precisa_de_humano_nao_cala_a_manuela(): void

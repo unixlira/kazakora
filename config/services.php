@@ -360,6 +360,9 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
         'chat_model' => env('GEMINI_CHAT_MODEL', 'gemini-flash-latest'),
         'audio_model' => env('GEMINI_AUDIO_MODEL', 'gemini-flash-latest'),
+        // Último recurso quando os de cima estão sobrecarregados (503).
+        'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-2.5-flash'),
+        'retry_delay_ms' => (int) env('GEMINI_RETRY_DELAY_MS', 1500),
         'timeout' => (int) env('GEMINI_TIMEOUT', 45),
     ],
 

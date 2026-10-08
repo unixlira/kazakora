@@ -307,7 +307,7 @@ class WhatsAppInboxTest extends TestCase
         ];
     }
 
-    public function test_manuela_responde_pelo_gemini_com_a_persona_e_o_catalogo(): void
+    public function test_manuela_responde_pelo_gemini_com_a_persona_e_a_busca_de_produtos(): void
     {
         $this->useGemini();
         $product = \App\Modules\Catalog\Models\Product::factory()->create(['name' => 'Campainha Sem Fio Câmera', 'slug' => 'campainha-sem-fio', 'price' => 199.9, 'stock' => 5, 'is_active' => true]);
@@ -336,7 +336,8 @@ class WhatsAppInboxTest extends TestCase
         Http::assertSent(fn ($request) => str_contains($request->url(), 'models/gemini-test:generateContent')
             && $request->hasHeader('x-goog-api-key', 'gemini-key')
             && str_contains($request['systemInstruction']['parts'][0]['text'], 'Você é a Manuela')
-            && str_contains($request['systemInstruction']['parts'][0]['text'], 'Campainha Sem Fio Câmera | R$ 199,90 | https://kazakora.devlira.com.br/produtos/campainha-sem-fio')
+            && str_contains($request['systemInstruction']['parts'][0]['text'], 'chame buscar_produto')
+            && $request['tools'][0]['functionDeclarations'][0]['name'] === 'buscar_produto'
             && $request['contents'][0]['role'] === 'user'
             && $request['contents'][0]['parts'][0]['text'] === 'Vocês têm campainha?');
     }

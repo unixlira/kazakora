@@ -315,6 +315,48 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
         return array_filter($dados, fn ($v) => $v !== null && $v > 0) === [] ? null : $dados;
     }
 
+    /**
+     * Anúncios ativos da conta no Mercado Livre (título, preço e link), pra
+     * Manuela achar no WhatsApp produto que o cliente viu lá e que não está
+     * no site. A busca do vendedor devolve só ids; o resto vem do multiget
+     * /items?ids= (até 20 por chamada).
+     *
+     * @return array<int, array{external_id: string, name: string, price: ?float, link: string}>
+     */
+    public function fetchOwnItems(): array
+    {
+        $sellerId = $this->ensureConfigured()->seller_id;
+        $ids = [];
+        $offset = 0;
+
+        do {
+            $page = $this->client->get("users/{$sellerId}/items/search", ['status' => 'active', 'limit' => 100, 'offset' => $offset]);
+            $ids = [...$ids, ...($page['results'] ?? [])];
+            $offset += 100;
+        } while (($page['results'] ?? []) !== [] && $offset < min(1000, (int) ($page['paging']['total'] ?? 0)));
+
+        $items = [];
+
+        foreach (array_chunk(array_values(array_unique($ids)), 20) as $chunk) {
+            foreach ($this->client->get('items', ['ids' => implode(',', $chunk), 'attributes' => 'id,title,price,permalink']) as $entry) {
+                $item = $entry['body'] ?? null;
+
+                if (($entry['code'] ?? null) !== 200 || empty($item['id'])) {
+                    continue;
+                }
+
+                $items[] = [
+                    'external_id' => (string) $item['id'],
+                    'name' => (string) ($item['title'] ?? ''),
+                    'price' => isset($item['price']) ? (float) $item['price'] : null,
+                    'link' => (string) ($item['permalink'] ?? ''),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
     /** Anúncio do Mercado Livre com este SKU (filtro seller_sku da busca de itens do vendedor). */
     public function findItemIdBySku(string $sku): ?string
     {

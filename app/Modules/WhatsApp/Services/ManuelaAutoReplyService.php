@@ -15,7 +15,6 @@ class ManuelaAutoReplyService
     public function __construct(
         private readonly WhatsAppSettings $settings,
         private readonly ManuelaAgentClient $agent,
-        private readonly ManuelaCatalog $catalog,
     ) {
     }
 
@@ -28,12 +27,14 @@ class ManuelaAutoReplyService
      * Com MANUELA_AGENT_URL configurada, quem responde é a Manuela da Naia
      * (Hermes). Se o Hermes cair ou demorar, cai nas regras locais abaixo pra
      * cliente nunca ficar sem resposta.
+     *
+     * @param  (callable(string): void)|null  $sendNow  manda uma mensagem na hora (o "só um minutinho" da busca)
      */
-    public function buildReply(WhatsAppConversation $conversation, string $message): array
+    public function buildReply(WhatsAppConversation $conversation, string $message, ?callable $sendNow = null): array
     {
         if ($this->agent->isConfigured()) {
             try {
-                $remote = $this->agent->reply($conversation, $this->systemPrompt());
+                $remote = $this->agent->reply($conversation, $this->systemPrompt($conversation), $sendNow);
 
                 return [
                     'intent' => 'manuela_'.$remote['provider'],
@@ -74,28 +75,45 @@ class ManuelaAutoReplyService
         return $reply + ['source' => 'regras'];
     }
 
-    public function systemPrompt(): string
+    public function systemPrompt(?WhatsAppConversation $conversation = null): string
     {
         $s = $this->settings->all();
         $tag = ManuelaAgentClient::HANDOFF_TAG;
+        $product = $conversation ? ManuelaAgentClient::productInContext($conversation) : null;
+        $productBlock = $product
+            ? "Produto em conversa com este cliente (ficha completa, é daqui que saem as respostas):\n".json_encode($product, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+            : 'Nenhum produto aberto com este cliente ainda.';
 
         return <<<PROMPT
 {$s['agent_instructions']}
 
 Loja: {$s['brand_name']} ({$s['store_base_url']}). Seu nome: {$s['attendant_name']}. Tom: {$s['tone']}.
 Horário de atendimento humano: {$s['business_hours']}.
-Categorias prioritárias: {$s['priority_categories']}.
 Proibido: {$s['forbidden_promises']}.
-Faça no máximo {$s['max_questions_before_close']} perguntas antes de sugerir o próximo passo de compra.
 Agora é {$this->agora()} (horário de Brasília).
 
-Produtos à venda no site (nome, preço, link). Só cite produto, preço e link desta lista; se o cliente pedir algo que não está aqui, diga que vai confirmar com o time:
-{$this->catalog->asText()}
+Você trabalha com vendas: o assunto da conversa são os produtos da loja. Siga este fluxo, sempre com conversa natural, simpática e humana (nunca copie as frases abaixo ao pé da letra, fale do seu jeito):
+
+1. O cliente falou de um produto (que viu no Instagram, num vídeo, ouviu falar, quer comprar, tem dúvida): chame buscar_produto com as palavras que descrevem o produto. Nunca diga que a loja não tem um produto sem ter buscado.
+2. A busca achou: pergunte se é aquele produto, citando o nome (ex: "É a Webcam Full HD 1080p? Quer mais informações sobre ela?"). Se vierem 2 ou 3 parecidos, cite os nomes e pergunte qual é. Ainda não despeje a descrição.
+3. O cliente confirmou: chame abrir_produto e pergunte qual é a dúvida dele. Se ele já tinha feito a pergunta antes, responda direto.
+4. A dúvida: responda SÓ com o que está na ficha do produto (descrição, preço, estoque, marca, modelo). Se a resposta não estiver na ficha, não chute: mande o link do produto e peça pra ele dar uma olhada na página pra ver se encontra a informação por lá.
+5. Depois do link: se ele achou ou ficou satisfeito, siga ajudando na compra (mande o link quando ele quiser comprar). Se não encontrou, continua com a dúvida, ficou insatisfeito ou pediu uma pessoa, comece a resposta com {$tag} e diga com carinho que uma pessoa do time vai continuar o atendimento.
+6. Se a busca não achar no site, o sistema já mandou ao cliente a mensagem "{$this->searchingElsewhere()}" e procurou nos anúncios da loja na Shopee e no Mercado Livre: não repita esse aviso. Achou lá: siga o mesmo fluxo, com o link do anúncio. Não achou em nenhum lugar: diga que não encontrou esse produto e comece a resposta com {$tag} pra uma pessoa do time verificar.
+7. Produto sem estoque (em_estoque falso): conte que no momento está sem estoque e ofereça pra uma pessoa do time avisar quando chegar, com {$tag}.
+
+{$productBlock}
 
 Regras de formato:
 - Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.
-- Se o assunto envolver {$s['handoff_keywords']}, ou se você não tiver certeza da informação, comece a resposta com {$tag} e diga ao cliente que uma pessoa do time vai acompanhar.
+- Preço, estoque, link e características só da ficha ou da busca. Nunca invente.
+- Se o assunto envolver {$s['handoff_keywords']}, comece a resposta com {$tag} e diga ao cliente que uma pessoa do time vai acompanhar.
 PROMPT;
+    }
+
+    private function searchingElsewhere(): string
+    {
+        return ManuelaAgentClient::SEARCHING_ELSEWHERE_REPLY;
     }
 
     private function ruleBasedReply(string $message): array

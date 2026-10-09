@@ -402,7 +402,12 @@ const cancelInvoice = () => {
                                 <span class="ml-2 font-medium">{{ FULFILLMENT_STEP_LABELS[event.step] ?? event.step }}</span>
                                 <p v-if="event.message" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.message }}</p>
                             </div>
-                            <span class="whitespace-nowrap text-xs text-slate-400">{{ formatDateTime(event.created_at) }}</span>
+                            <span class="whitespace-nowrap text-right text-xs text-slate-400">
+                                {{ formatDateTime(event.created_at) }}
+                                <span v-if="event.repeticoes > 1" class="block" :title="`Repetiu ${event.repeticoes} vezes; última em ${formatDateTime(event.updated_at)}`">
+                                    {{ event.repeticoes }}× · última {{ formatDateTime(event.updated_at) }}
+                                </span>
+                            </span>
                         </li>
                     </ul>
                     <p v-else class="mt-2 text-sm text-slate-400">Nenhum evento registrado ainda.</p>

@@ -32,5 +32,11 @@ return [
     // 480h, só com nota de devolução.
     'cancelamento_horas' => (int) env('NFE_CANCELAMENTO_HORAS', 24),
     'cancelamento_extemporaneo_horas' => (int) env('NFE_CANCELAMENTO_EXTEMPORANEO_HORAS', 480),
-    'ufesp' => (float) env('NFE_UFESP', 37.02),
+    // Só reserva: o valor de cada ano fica na tabela ufesp_valores, atualizada
+    // sozinha pelo fiscal:atualizar-ufesp (ver UfespService).
+    'ufesp' => (float) env('NFE_UFESP', 38.42),
+
+    // Quem recebe o fechamento fiscal do mês, todo dia 1º (vírgula separa
+    // mais de um). Vazio = os usuários admin.
+    'fechamento_email' => env('NFE_FECHAMENTO_EMAIL'),
 ];

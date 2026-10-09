@@ -178,12 +178,21 @@ class InvoiceServiceTest extends TestCase
         $certificateService->shouldReceive('isConfigured')->andReturn(false);
         $this->app->instance(NFeCertificateService::class, $certificateService);
 
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
         $result = app(InvoiceService::class)->issue($order->fresh());
 
         $this->assertSame(2038, $result->numero);
         $this->assertSame(Invoice::STATUS_PENDING, $result->status);
         $this->assertNull($result->motivo_rejeicao);
         Storage::disk('local')->assertMissing("invoices/{$order->id}/nfe-old.xml");
+
+        // O 2037 pulado fica registrado (painel + fechamento do mês) e o
+        // admin é avisado no sininho: a nota 2037 de alguém falta no sistema.
+        $this->assertDatabaseHas('nfe_numeracao_ocorrencias', [
+            'tipo' => 'duplicidade', 'numero_inicial' => 2037, 'order_id' => $order->id, 'resolvido_em' => null,
+        ]);
+        $this->assertStringContainsString('2037', $admin->notifications()->first()->data['message']);
     }
 
     /**

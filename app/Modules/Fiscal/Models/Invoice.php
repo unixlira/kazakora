@@ -3,6 +3,7 @@
 namespace App\Modules\Fiscal\Models;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Services\UfespService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -118,7 +119,7 @@ class Invoice extends Model
     /** Multa estimada do cancelamento fora do prazo: 1% do valor, mínimo 6 UFESPs. */
     public function multaCancelamentoExtemporaneo(): float
     {
-        return round(max((float) $this->valor_total * 0.01, 6 * (float) config('nfe.ufesp')), 2);
+        return round(max((float) $this->valor_total * 0.01, 6 * app(UfespService::class)->valor()), 2);
     }
 
     public function order(): BelongsTo

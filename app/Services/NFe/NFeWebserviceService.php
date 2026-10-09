@@ -81,4 +81,19 @@ class NFeWebserviceService
 
         return ['request' => (string) $tools->lastRequest, 'response' => $response];
     }
+
+    /**
+     * Inutilização de uma faixa de números (NfeInutilizacao4): avisa a SEFAZ
+     * que esses números nunca vão virar nota. Devolve o pedido e a resposta,
+     * que juntos formam o procInutNFe que o contador guarda.
+     *
+     * @return array{request: string, response: string}
+     */
+    public function inutilizar(int $serie, int $numeroInicial, int $numeroFinal, string $justificativa, Certificate $certificate): array
+    {
+        $tools = $this->toolsFactory->make($certificate);
+        $response = $tools->sefazInutiliza($serie, $numeroInicial, $numeroFinal, $justificativa);
+
+        return ['request' => (string) $tools->lastRequest, 'response' => $response];
+    }
 }

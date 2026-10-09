@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Collection;
 
 class OrderFulfillmentEvent extends Model
 {
@@ -43,17 +44,51 @@ class OrderFulfillmentEvent extends Model
         'status',
         'message',
         'context',
+        'repeticoes',
     ];
 
     protected function casts(): array
     {
         return [
             'context' => 'array',
+            'repeticoes' => 'integer',
         ];
     }
 
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    /**
+     * Junta as repetições de uma linha do tempo (mesma regra do
+     * OrderFulfillmentTimeline::record): evento igual ao último da mesma
+     * etapa soma no contador dele. Serve pros registros antigos, gravados
+     * antes do contador existir.
+     *
+     * @param  Collection<int, self>  $eventos  em ordem cronológica
+     * @return array{0: Collection<int, self>, 1: list<int>}  [linhas que ficam, ids repetidos]
+     */
+    public static function compactar(Collection $eventos): array
+    {
+        $ficam = [];
+        $ultimoPorEtapa = [];
+        $repetidos = [];
+
+        foreach ($eventos as $evento) {
+            $ultimo = $ultimoPorEtapa[$evento->step] ?? null;
+
+            if ($ultimo && $ultimo->status === $evento->status && $ultimo->message === $evento->message) {
+                $ultimo->repeticoes += max(1, (int) $evento->repeticoes);
+                $ultimo->updated_at = $evento->updated_at ?? $evento->created_at;
+                $repetidos[] = $evento->id;
+
+                continue;
+            }
+
+            $ficam[] = $ultimoPorEtapa[$evento->step] = $evento;
+        }
+
+        return [collect($ficam), $repetidos];
     }
 }

@@ -240,3 +240,9 @@ Schedule::command('marketplace:release-scheduled-mercadolivre')
 // falhas ficam registradas no banco, em log PT-BR e notificam administradores.
 Schedule::command('reviews:sync')->cron('*/4 * * * *');
 Schedule::command('video-downloads:clean')->hourly();
+// Fechamento fiscal do mês anterior por e-mail, pro contador (pedido
+// 2026-10-09: "todo primeiro dia após o final do mês quero o email").
+Schedule::command('fiscal:fechamento-mensal')->monthlyOn(1, '07:00')->withoutOverlapping(60);
+// UFESP do ano (multa do cancelamento fora do prazo): só consulta as
+// fontes enquanto o valor do ano não estiver gravado.
+Schedule::command('fiscal:atualizar-ufesp')->dailyAt('06:10');

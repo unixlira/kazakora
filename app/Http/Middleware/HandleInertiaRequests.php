@@ -84,6 +84,9 @@ class HandleInertiaRequests extends Middleware
                     'flexAlertas' => app(\App\Modules\Marketplace\Support\FlexControlService::class)->contagemDeAlertas(),
                     'devolucoes' => \App\Modules\Admin\Http\Controllers\DevolucoesController::contagemDeAlertas(),
                     // Conversas com mensagem não lida (WhatsApp > Conversas).
+                    // Número de NF-e pulado por duplicidade na SEFAZ ainda sem
+                    // conferência (Notas fiscais > Fechamento do mês).
+                    'fiscalDuplicidades' => rescue(fn () => \App\Modules\Fiscal\Models\NumeracaoOcorrencia::query()->duplicidadesAbertas()->count(), 0, false),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

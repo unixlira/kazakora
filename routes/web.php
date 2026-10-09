@@ -25,6 +25,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreFlexController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreListingsController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreSalesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
+use App\Modules\Admin\Http\Controllers\FiscalClosingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\InvoiceManualController;
 use App\Modules\Admin\Http\Controllers\InvoiceReturnController;
@@ -324,6 +325,29 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware('permission:pedidos.edit');
     Route::post('notas-fiscais/sincronizar', [InvoiceController::class, 'syncSefaz'])
         ->name('notas-fiscais.sincronizar')
+        ->middleware('permission:pedidos.edit');
+    Route::get('notas-fiscais/fechamento', [FiscalClosingController::class, 'index'])
+        ->name('notas-fiscais.fechamento')
+        ->middleware('permission:pedidos.view');
+    Route::get('notas-fiscais/fechamento/{mes}/zip', [FiscalClosingController::class, 'zip'])
+        ->where('mes', '\d{4}-\d{2}')
+        ->name('notas-fiscais.fechamento.zip')
+        ->middleware('permission:pedidos.view');
+    Route::get('notas-fiscais/fechamento/{mes}/csv', [FiscalClosingController::class, 'csv'])
+        ->where('mes', '\d{4}-\d{2}')
+        ->name('notas-fiscais.fechamento.csv')
+        ->middleware('permission:pedidos.view');
+    Route::post('notas-fiscais/fechamento/enviar', [FiscalClosingController::class, 'send'])
+        ->name('notas-fiscais.fechamento.enviar')
+        ->middleware('permission:pedidos.edit');
+    Route::post('notas-fiscais/fechamento/inutilizar', [FiscalClosingController::class, 'inutilize'])
+        ->name('notas-fiscais.fechamento.inutilizar')
+        ->middleware('permission:pedidos.edit');
+    Route::post('notas-fiscais/fechamento/duplicidades/{ocorrencia}/conferida', [FiscalClosingController::class, 'resolveDuplicate'])
+        ->name('notas-fiscais.fechamento.duplicidade')
+        ->middleware('permission:pedidos.edit');
+    Route::post('notas-fiscais/fechamento/ufesp', [FiscalClosingController::class, 'updateUfesp'])
+        ->name('notas-fiscais.fechamento.ufesp')
         ->middleware('permission:pedidos.edit');
     Route::get('notas-fiscais/{invoice}', [InvoiceController::class, 'show'])
         ->name('notas-fiscais.exibir')

@@ -41,7 +41,6 @@ class CancelamentoEDevolucaoTest extends TestCase
         parent::setUp();
 
         Storage::fake('local');
-        config(['nfe.ufesp' => 37.02]);
     }
 
     private function empresa(): Company
@@ -142,14 +141,14 @@ class CancelamentoEDevolucaoTest extends TestCase
         $invoice = $this->venda(['autorizada_em' => now()->subHours(30)]);
 
         $this->assertSame(Invoice::JANELA_EXTEMPORANEA, $invoice->janelaDeCancelamento());
-        // 1% de 195 = 1,95; o mínimo de 6 UFESPs (6 x 37,02) vale mais.
-        $this->assertSame(222.12, $invoice->multaCancelamentoExtemporaneo());
+        // 1% de 195 = 1,95; o mínimo de 6 UFESPs (6 x 38,42, UFESP 2026) vale mais.
+        $this->assertSame(230.52, $invoice->multaCancelamentoExtemporaneo());
 
         try {
             app(InvoiceService::class)->cancelInvoice($invoice, 'Cliente desistiu da compra antes do envio');
             $this->fail('Cancelou fora do prazo sem confirmação.');
         } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('R$ 222,12', $exception->getMessage());
+            $this->assertStringContainsString('R$ 230,52', $exception->getMessage());
         }
 
         $this->actingAs($this->admin())
@@ -267,7 +266,7 @@ class CancelamentoEDevolucaoTest extends TestCase
             ->assertInertia(fn ($page) => $page->component('Admin/Invoices/Show', false)
                 ->where('invoice.janela_cancelamento', 'extemporanea')
                 ->where('invoice.can_cancel', true)
-                ->where('invoice.multa_cancelamento', 222.12)
+                ->where('invoice.multa_cancelamento', 230.52)
                 ->where('invoice.devolucao.tipo', 'venda')
                 ->where('invoice.devolucao.canal_emite_devolucao', true)
                 ->where('invoice.devolucao.itens.0.disponivel', 2));

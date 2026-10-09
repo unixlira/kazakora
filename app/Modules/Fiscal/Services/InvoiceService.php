@@ -5,6 +5,9 @@ namespace App\Modules\Fiscal\Services;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Models\NumeracaoOcorrencia;
+use App\Models\User;
+use App\Notifications\FiscalAlertNotification;
 use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Services\NFe\NFeCertificateService;
 use App\Services\NFe\NFeDanfeService;
@@ -14,6 +17,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use SimpleXMLElement;
@@ -254,6 +258,28 @@ class InvoiceService
                 'numero_antigo' => $invoice->numero,
                 'numero_novo' => $numero,
             ]);
+
+            // Número pulado = existe na SEFAZ uma nota com ele que o sistema
+            // não tem. Fica registrado pro painel e pro fechamento do mês:
+            // o XML dela é um dos que o contador vai sentir falta.
+            NumeracaoOcorrencia::query()->create([
+                'tipo' => NumeracaoOcorrencia::TIPO_DUPLICIDADE,
+                'ambiente' => (string) config('nfe.ambiente'),
+                'serie' => (int) $invoice->serie,
+                'numero_inicial' => (int) $invoice->numero,
+                'numero_final' => (int) $invoice->numero,
+                'motivo' => $invoice->motivo_rejeicao,
+                'invoice_id' => $invoice->id,
+                'order_id' => $order->id,
+            ]);
+
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+            if ($admins->isNotEmpty()) {
+                Notification::send($admins, new FiscalAlertNotification(
+                    "NF-e nº {$invoice->numero} série {$invoice->serie} já existia na SEFAZ (duplicidade). O pedido #{$order->id} foi para o nº {$numero}. Confira de quem é a nota {$invoice->numero} no Fechamento fiscal.",
+                    route('admin.notas-fiscais.fechamento'),
+                ));
+            }
 
             $invoice->update([
                 ...$this->identidadeFiscal($order),

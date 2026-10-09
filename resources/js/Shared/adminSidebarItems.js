@@ -47,7 +47,8 @@ export const sidebarSections = [
         items: [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', color: 'text-warning', permission: 'pedidos.view' },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', color: 'text-primary', permission: 'pedidos.view' },
-            { label: 'Notas Fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', color: 'text-info', permission: 'pedidos.view' },
+            { label: 'Notas Fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', color: 'text-info', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
+            { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', color: 'text-info', permission: 'pedidos.view' },
             // Devoluções e reclamações de todas as plataformas (2026-10-06):
             // o número é quantos casos têm pendência (prazo, conferência,
             // encerrada sem o produto voltar).

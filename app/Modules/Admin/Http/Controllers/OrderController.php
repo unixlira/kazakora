@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
@@ -178,7 +179,7 @@ class OrderController extends Controller
             'statuses' => self::STATUSES,
             'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
             'emailLogs' => $order->emailLogs,
-            'fulfillmentEvents' => $order->fulfillmentEvents,
+            'fulfillmentEvents' => OrderFulfillmentEvent::compactar($order->fulfillmentEvents)[0]->values(),
             'operationStatement' => $this->operationStatement($order),
             'auditLogs' => AuditLog::query()
                 ->where('entity', class_basename(Order::class))

@@ -43,10 +43,12 @@ class ReplyWithManuela
         // Cliente mandou várias mensagens seguidas: só a última dispara
         // resposta (ela já leva o histórico inteiro pra Manuela). E se alguém
         // (Manuela ou pessoa) já respondeu depois dela, não responde de novo.
+        // O "só um minutinho" da busca não conta como resposta.
         $alreadyHandled = $conversation->messages()
             ->whereIn('direction', ['inbound', 'outbound'])
             ->where('id', '>', $inbound->id)
-            ->exists();
+            ->get(['id', 'payload'])
+            ->contains(fn (WhatsAppMessage $message) => ! ($message->payload['interim'] ?? false));
 
         if ($alreadyHandled) {
             return;
@@ -65,7 +67,14 @@ class ReplyWithManuela
             return;
         }
 
-        $reply = $manuela->buildReply($conversation, $text !== '' ? $text : $inbound->preview());
+        // Busca fora do site demora: o cliente recebe o aviso na hora.
+        $sendNow = function (string $body) use ($conversation, $outbox) {
+            if ($conversation->fresh()->ai_enabled) {
+                $outbox->sendText($conversation->fresh(), $body, 'manuela', null, ['interim' => true]);
+            }
+        };
+
+        $reply = $manuela->buildReply($conversation, $text !== '' ? $text : $inbound->preview(), $sendNow);
 
         // IA configurada mas o Google não respondeu (sobrecarga): em vez da
         // mensagem robótica do roteiro fixo, tenta de novo em 1 minuto pela

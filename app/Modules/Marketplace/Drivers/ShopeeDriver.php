@@ -47,11 +47,11 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * paginado — a loja tinha 33 itens, has_next_page=true na primeira
      * página de 20).
      *
-     * @return array<int, array{external_id: string, name: string, price: ?float}>
+     * @return array<int, array{external_id: string, name: string, price: ?float, link: string}>
      */
     public function fetchOwnItems(): array
     {
-        $this->ensureConfigured();
+        $shopId = $this->ensureConfigured()->seller_id;
 
         $itemIds = [];
         $offset = 0;
@@ -91,6 +91,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                     'price' => isset($item['price_info'][0]['current_price'])
                         ? (float) $item['price_info'][0]['current_price']
                         : null,
+                    'link' => "https://shopee.com.br/product/{$shopId}/{$item['item_id']}",
                 ];
             }
         }

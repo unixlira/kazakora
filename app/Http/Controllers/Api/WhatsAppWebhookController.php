@@ -82,7 +82,8 @@ class WhatsAppWebhookController extends Controller
             'phone' => $waId,
             'profile_name' => $contact['profile']['name'] ?? $conversation->profile_name,
             'last_customer_message_at' => $receivedAt,
-            'metadata' => ['last_payload_object' => $payload['object'] ?? null],
+            // Mescla: o metadata também guarda o produto que a Manuela abriu.
+            'metadata' => array_merge($conversation->metadata ?? [], ['last_payload_object' => $payload['object'] ?? null]),
         ]);
         // Conversa nova já nasce com a chave da Manuela no padrão escolhido
         // em Configurações > "Resposta automática".

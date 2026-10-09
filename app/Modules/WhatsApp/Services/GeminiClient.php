@@ -31,6 +31,27 @@ class GeminiClient
      */
     public function generate(string $model, array $contents, ?string $systemInstruction = null, int $maxOutputTokens = 2048, string $purpose = GeminiUsageLog::PURPOSE_REPLY): string
     {
+        $text = self::text($this->request($model, $contents, $systemInstruction, [], $maxOutputTokens, $purpose));
+
+        if ($text === '') {
+            throw new RuntimeException("Gemini ({$model}) devolveu resposta vazia.");
+        }
+
+        return $text;
+    }
+
+    /**
+     * Uma volta da conversa com ferramentas (function calling). Devolve as
+     * partes da resposta como vieram, sem as de raciocínio: texto e/ou
+     * functionCall. Quem chama devolve essas partes intactas no próximo
+     * pedido (o Gemini 3 exige a thoughtSignature de volta).
+     *
+     * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
+     * @param  array<int, array<string, mixed>>  $functionDeclarations
+     * @return array<int, array<string, mixed>>
+     */
+    public function request(string $model, array $contents, ?string $systemInstruction, array $functionDeclarations = [], int $maxOutputTokens = 2048, string $purpose = GeminiUsageLog::PURPOSE_REPLY): array
+    {
         $models = array_values(array_unique(array_filter([
             $model,
             (string) config('services.gemini.chat_model'),
@@ -41,7 +62,7 @@ class GeminiClient
         foreach ($models as $candidate) {
             for ($attempt = 1; $attempt <= 2; $attempt++) {
                 try {
-                    return $this->generateOnce($candidate, $contents, $systemInstruction, $maxOutputTokens, $purpose);
+                    return $this->generateOnce($candidate, $contents, $systemInstruction, $functionDeclarations, $maxOutputTokens, $purpose);
                 } catch (GeminiUnavailableException|\Illuminate\Http\Client\ConnectionException $exception) {
                     $last = $exception;
 
@@ -61,6 +82,12 @@ class GeminiClient
         throw $last ?? new RuntimeException('Gemini sem modelo configurado.');
     }
 
+    /** @param  array<int, array<string, mixed>>  $parts */
+    public static function text(array $parts): string
+    {
+        return trim(collect($parts)->pluck('text')->filter()->implode(''));
+    }
+
     public function transcribe(string $audio, string $mimeType): string
     {
         // Se o modelo de áudio falhar, generate() passa pro de conversa, que
@@ -76,8 +103,10 @@ class GeminiClient
 
     /**
      * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
+     * @param  array<int, array<string, mixed>>  $functionDeclarations
+     * @return array<int, array<string, mixed>>
      */
-    private function generateOnce(string $model, array $contents, ?string $systemInstruction, int $maxOutputTokens, string $purpose): string
+    private function generateOnce(string $model, array $contents, ?string $systemInstruction, array $functionDeclarations, int $maxOutputTokens, string $purpose): array
     {
         $body = [
             'contents' => $contents,
@@ -86,6 +115,10 @@ class GeminiClient
 
         if ($systemInstruction !== null) {
             $body['systemInstruction'] = ['parts' => [['text' => $systemInstruction]]];
+        }
+
+        if ($functionDeclarations !== []) {
+            $body['tools'] = [['functionDeclarations' => $functionDeclarations]];
         }
 
         $response = Http::withHeaders(['x-goog-api-key' => (string) config('services.gemini.api_key')])
@@ -104,17 +137,16 @@ class GeminiClient
         $this->recordUsage($model, $purpose, $response->json('usageMetadata') ?? []);
 
         // Partes de raciocínio (thought) não vão pro cliente.
-        $text = collect($response->json('candidates.0.content.parts') ?? [])
+        $parts = collect($response->json('candidates.0.content.parts') ?? [])
             ->reject(fn ($part) => ($part['thought'] ?? false) === true)
-            ->pluck('text')
-            ->filter()
-            ->implode('');
+            ->values()
+            ->all();
 
-        if (trim($text) === '') {
+        if (self::text($parts) === '' && ! collect($parts)->contains(fn ($part) => isset($part['functionCall']))) {
             throw new RuntimeException("Gemini ({$model}) devolveu resposta vazia (".($response->json('candidates.0.finishReason') ?? 'sem motivo').').');
         }
 
-        return trim($text);
+        return $parts;
     }
 
     /**

@@ -50,6 +50,7 @@ class WhatsAppMessage extends Model
             'sticker' => 'Figurinha',
             'location' => '📍 Localização',
             'template' => '📣 Modelo',
+            'unsupported' => '⚠️ Mensagem não suportada',
             default => null,
         };
 

@@ -27,6 +27,7 @@ use App\Modules\Admin\Http\Controllers\MercadoLivreSalesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreShippingController;
 use App\Modules\Admin\Http\Controllers\InvoiceController;
 use App\Modules\Admin\Http\Controllers\InvoiceManualController;
+use App\Modules\Admin\Http\Controllers\InvoiceReturnController;
 use App\Modules\Admin\Http\Controllers\KpiController;
 use App\Modules\Admin\Http\Controllers\MarketplaceAdPhotoController;
 use App\Modules\Admin\Http\Controllers\ManualLabelController;
@@ -336,6 +337,21 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('notas-fiscais/{invoice}/cancelar', [InvoiceController::class, 'cancelInvoice'])
         ->name('notas-fiscais.cancelar')
         ->middleware('permission:pedidos.edit');
+    Route::get('notas-fiscais/{invoice}/cancelamento-xml', [InvoiceReturnController::class, 'cancellationXml'])
+        ->name('notas-fiscais.cancelamento-xml')
+        ->middleware('permission:pedidos.view');
+    Route::get('notas-fiscais/{invoice}/declaracao-devolucao', [InvoiceReturnController::class, 'declaration'])
+        ->name('notas-fiscais.declaracao-devolucao')
+        ->middleware('permission:pedidos.view');
+    Route::post('notas-fiscais/{invoice}/devolucao', [InvoiceReturnController::class, 'store'])
+        ->name('notas-fiscais.devolucao')
+        ->middleware('permission:pedidos.edit');
+    Route::post('notas-fiscais/{invoice}/declaracao-assinada', [InvoiceReturnController::class, 'attachDeclaration'])
+        ->name('notas-fiscais.declaracao-assinada')
+        ->middleware('permission:pedidos.edit');
+    Route::get('notas-fiscais/{invoice}/declaracao-assinada', [InvoiceReturnController::class, 'downloadDeclaration'])
+        ->name('notas-fiscais.declaracao-assinada.baixar')
+        ->middleware('permission:pedidos.view');
 
     Route::get('clientes', [CustomerController::class, 'index'])->name('clientes.listar');
     Route::get('clientes/{document}', [CustomerController::class, 'show'])->name('clientes.exibir');

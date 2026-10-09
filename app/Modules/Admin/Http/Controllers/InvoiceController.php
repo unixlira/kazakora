@@ -7,6 +7,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Fiscal\Services\SalesReturnService;
 use App\Modules\Marketplace\Support\ChannelInvoiceSubmissionService;
 use App\Services\NFe\NFeCertificateNotConfiguredException;
 use App\Services\NFe\NFeDistribuicaoService;
@@ -248,9 +249,9 @@ class InvoiceController extends Controller
      * órfã trazida pela sincronização SEFAZ (origem='sefaz', sem order_id),
      * por isso a rota é /notas-fiscais/{invoice}, não aninhada em /pedidos.
      */
-    public function show(Invoice $invoice): Response
+    public function show(Invoice $invoice, SalesReturnService $returns): Response
     {
-        $invoice->loadMissing(['order:id,user_id,origin,external_order_id,total,shipping_name,status', 'order.user:id,name,email']);
+        $invoice->loadMissing(['order:id,user_id,origin,external_order_id,total,shipping_name,status,fiscal_operation_type,fiscal_referenced_nfe_key,return_declaration_path', 'order.user:id,name,email']);
 
         return Inertia::render('Admin/Invoices/Show', [
             'invoice' => [
@@ -270,8 +271,16 @@ class InvoiceController extends Controller
                 'cancelada_em' => $invoice->cancelada_em,
                 'has_xml' => (bool) ($invoice->xml_path && Storage::disk('local')->exists($invoice->xml_path)),
                 'has_danfe' => (bool) ($invoice->danfe_path && Storage::disk('local')->exists($invoice->danfe_path)),
-                'can_cancel' => $invoice->status === Invoice::STATUS_AUTHORIZED
-                    && (! $invoice->autorizada_em || $invoice->autorizada_em->diffInHours(now()) < 24),
+                'can_cancel' => in_array($invoice->janelaDeCancelamento(), [Invoice::JANELA_NORMAL, Invoice::JANELA_EXTEMPORANEA], true),
+                // Prazos de SP (contador, 2026-10-08): normal até 24h, com
+                // multa até 480h, depois só devolução.
+                'janela_cancelamento' => $invoice->janelaDeCancelamento(),
+                'cancelamento_normal_ate' => $invoice->prazosDeCancelamento()['normal_ate'],
+                'cancelamento_extemporaneo_ate' => $invoice->prazosDeCancelamento()['extemporaneo_ate'],
+                'multa_cancelamento' => $invoice->multaCancelamentoExtemporaneo(),
+                'cancelamento_extemporaneo' => (bool) $invoice->cancelamento_extemporaneo,
+                'has_xml_cancelamento' => (bool) ($invoice->xml_cancelamento_path && Storage::disk('local')->exists($invoice->xml_cancelamento_path)),
+                'devolucao' => $this->devolucao($invoice, $returns),
                 'destinatario_nome' => $invoice->order?->shipping_name ?? $invoice->destinatario_nome,
                 'destinatario_documento' => $invoice->destinatario_documento,
                 'order' => $invoice->order ? [
@@ -282,6 +291,46 @@ class InvoiceController extends Controller
                 ] : null,
             ],
         ]);
+    }
+
+    /**
+     * Devolução na tela da nota: na nota de venda, o que ainda pode voltar e
+     * as devoluções já feitas; na nota de devolução, a venda de origem e a
+     * declaração do cliente.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function devolucao(Invoice $invoice, SalesReturnService $returns): ?array
+    {
+        $order = $invoice->order;
+
+        if (! $order) {
+            return null;
+        }
+
+        if ($order->fiscal_operation_type === 'sales_return') {
+            $venda = Invoice::query()->where('chave_acesso', $order->fiscal_referenced_nfe_key)->first(['id', 'numero', 'serie']);
+
+            return [
+                'tipo' => 'entrada',
+                'venda' => $venda ? ['id' => $venda->id, 'numero' => $venda->numero, 'serie' => $venda->serie] : null,
+                'tem_declaracao' => (bool) ($order->return_declaration_path && Storage::disk('local')->exists($order->return_declaration_path)),
+            ];
+        }
+
+        $impedimento = $returns->impedimento($invoice);
+
+        return [
+            'tipo' => 'venda',
+            'impedimento' => $impedimento,
+            'itens' => $impedimento ? [] : $returns->itensDevolviveis($invoice)->all(),
+            'canal_emite_devolucao' => in_array($order->origin, SalesReturnService::CANAIS_QUE_EMITEM_DEVOLUCAO, true),
+            'devolucoes' => Invoice::query()
+                ->whereHas('order', fn ($query) => $query->where('origin', Order::ORIGIN_SALES_RETURN_INVOICE)->where('fiscal_referenced_nfe_key', $invoice->chave_acesso))
+                ->orderBy('id')
+                ->get(['id', 'numero', 'serie', 'status', 'valor_total'])
+                ->all(),
+        ];
     }
 
     public function danfeForInvoice(Invoice $invoice): HttpResponse
@@ -312,10 +361,11 @@ class InvoiceController extends Controller
     {
         $validated = $request->validate([
             'motivo' => ['required', 'string', 'min:15', 'max:500'],
+            'fora_do_prazo' => ['boolean'],
         ]);
 
         try {
-            $invoices->cancelInvoice($invoice, $validated['motivo']);
+            $invoices->cancelInvoice($invoice, $validated['motivo'], (bool) ($validated['fora_do_prazo'] ?? false));
 
             return back()->with('success', 'Nota fiscal cancelada com sucesso — cancelamento enviado à SEFAZ.');
         } catch (RuntimeException $exception) {

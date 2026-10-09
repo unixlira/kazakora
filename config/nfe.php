@@ -24,4 +24,13 @@ return [
 
     // Código Numérico da UF do emitente (SP = 35), usado na chave de acesso.
     'cuf' => (int) env('NFE_CUF', 35),
+
+    // Cancelamento em SP (orientação do contador, 2026-10-08): até 24h da
+    // autorização é normal; depois disso a SEFAZ-SP ainda aceita até 480h,
+    // desde que a mercadoria não tenha circulado, mas cabe multa (RICMS-SP
+    // art. 527, IV, z1): 1% do valor da nota, mínimo de 6 UFESPs. Passou de
+    // 480h, só com nota de devolução.
+    'cancelamento_horas' => (int) env('NFE_CANCELAMENTO_HORAS', 24),
+    'cancelamento_extemporaneo_horas' => (int) env('NFE_CANCELAMENTO_EXTEMPORANEO_HORAS', 480),
+    'ufesp' => (float) env('NFE_UFESP', 37.02),
 ];

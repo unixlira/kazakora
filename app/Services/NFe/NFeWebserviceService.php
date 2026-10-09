@@ -64,6 +64,21 @@ class NFeWebserviceService
      */
     public function cancelar(string $chave, string $justificativa, string $protocoloAutorizacao, Certificate $certificate): string
     {
-        return $this->toolsFactory->make($certificate)->sefazCancela($chave, $justificativa, $protocoloAutorizacao);
+        return $this->cancelarComEvento($chave, $justificativa, $protocoloAutorizacao, $certificate)['response'];
+    }
+
+    /**
+     * Igual cancelar(), devolvendo também o evento enviado: os dois juntos
+     * viram o procEventoNFe, o "arquivo de cancelamento" que o contador
+     * pede (2026-10-08).
+     *
+     * @return array{request: string, response: string}
+     */
+    public function cancelarComEvento(string $chave, string $justificativa, string $protocoloAutorizacao, Certificate $certificate): array
+    {
+        $tools = $this->toolsFactory->make($certificate);
+        $response = $tools->sefazCancela($chave, $justificativa, $protocoloAutorizacao);
+
+        return ['request' => (string) $tools->lastRequest, 'response' => $response];
     }
 }

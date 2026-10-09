@@ -600,7 +600,7 @@ class InvoiceService
      * nota órfã trazida da sincronização SEFAZ (sem Order, ver
      * NFeDistribuicaoService/InvoiceController::cancelStandalone()).
      */
-    public function cancel(Order $order, string $motivo): Invoice
+    public function cancel(Order $order, string $motivo, bool $foraDoPrazoConfirmado = false): Invoice
     {
         $order->loadMissing('invoice');
 
@@ -608,45 +608,70 @@ class InvoiceService
             throw new RuntimeException('Não há uma NF-e autorizada para este pedido.');
         }
 
-        return $this->cancelInvoice($order->invoice, $motivo);
+        return $this->cancelInvoice($order->invoice, $motivo, $foraDoPrazoConfirmado);
     }
 
     /**
-     * Core do cancelamento (Etapa 5) — só cancela se a nota estiver
-     * autorizada e ainda dentro do prazo de 24h da autorização. Funciona
-     * tanto pra Invoice ligada a um Order (fluxo normal) quanto pra Invoice
-     * órfã (origem='sefaz', sem order_id — trazida pela sincronização de
-     * Distribuição DFe), já que nada aqui depende de Order.
+     * Core do cancelamento (Etapa 5). Funciona tanto pra Invoice ligada a um
+     * Order quanto pra nota órfã trazida da SEFAZ, já que nada aqui depende
+     * de Order.
+     *
+     * Prazos de SP (contador, 2026-10-08), ver Invoice::janelaDeCancelamento():
+     * - até 24h da autorização: cancela normal;
+     * - de 24h a 480h: a SEFAZ aceita se a mercadoria não circulou, com
+     *   multa de 1% (mín. 6 UFESPs). Só vai com $foraDoPrazoConfirmado,
+     *   que a tela pede junto com o valor estimado da multa;
+     * - depois de 480h: não cancela, tem que emitir nota de devolução.
      */
-    public function cancelInvoice(Invoice $invoice, string $motivo): Invoice
+    public function cancelInvoice(Invoice $invoice, string $motivo, bool $foraDoPrazoConfirmado = false): Invoice
     {
-        if ($invoice->status !== Invoice::STATUS_AUTHORIZED) {
+        $janela = $invoice->janelaDeCancelamento();
+
+        if ($janela === null) {
             throw new RuntimeException('Não há uma NF-e autorizada para cancelar.');
         }
 
-        if ($invoice->autorizada_em?->diffInHours(now()) >= 24) {
-            throw new RuntimeException('Prazo de 24h para cancelamento da NF-e expirado.');
+        if ($janela === Invoice::JANELA_EXPIRADA) {
+            throw new RuntimeException('Passou o prazo de 480h para cancelar a NF-e. Registre a devolução (declaração do cliente + NF-e de entrada 1202/2202) na tela da nota.');
+        }
+
+        if ($janela === Invoice::JANELA_EXTEMPORANEA && ! $foraDoPrazoConfirmado) {
+            throw new RuntimeException('Passou o prazo de 24h para cancelar a NF-e. Até 480h a SEFAZ-SP ainda aceita, se a mercadoria não saiu, mas com multa estimada de R$ '.number_format($invoice->multaCancelamentoExtemporaneo(), 2, ',', '.').'. Cancele pela tela da nota confirmando que a mercadoria não circulou.');
         }
 
         $certificate = $this->certificateService->load();
-        $response = $this->webservice->cancelar($invoice->chave_acesso, $motivo, $invoice->protocolo_autorizacao, $certificate);
+        ['request' => $request, 'response' => $response] = $this->webservice->cancelarComEvento($invoice->chave_acesso, $motivo, $invoice->protocolo_autorizacao, $certificate);
 
         $result = new SimpleXMLElement($response);
         $result->registerXPathNamespace('n', 'http://www.portalfiscal.inf.br/nfe');
         $retEvento = $result->xpath('//n:infEvento') ?: $result->xpath('//infEvento');
         $infEvento = $retEvento[0] ?? null;
+        $cStat = $infEvento ? (string) $infEvento->cStat : '';
 
-        if ($infEvento && (string) $infEvento->cStat === '135') {
-            $invoice->update([
-                'status' => Invoice::STATUS_CANCELLED,
-                'protocolo_cancelamento' => (string) $infEvento->nProt,
-                'motivo_cancelamento' => $motivo,
-                'cancelada_em' => now(),
-            ]);
-        } else {
+        // 135 = evento registrado; 155 = cancelamento homologado fora de
+        // prazo (o que a SEFAZ devolve depois das 24h).
+        if (! in_array($cStat, ['135', '155'], true)) {
             throw new RuntimeException('SEFAZ não confirmou o cancelamento: '.($infEvento?->xMotivo ?? 'resposta inesperada'));
         }
 
+        $invoice->update([
+            'status' => Invoice::STATUS_CANCELLED,
+            'protocolo_cancelamento' => (string) $infEvento->nProt,
+            'motivo_cancelamento' => $motivo,
+            'cancelada_em' => now(),
+            'cancelamento_extemporaneo' => $janela === Invoice::JANELA_EXTEMPORANEA || $cStat === '155',
+            'xml_cancelamento_path' => $this->guardarEventoDeCancelamento($invoice, $request, $response),
+        ]);
+
         return $invoice->fresh();
+    }
+
+    /** procEventoNFe (evento + retorno da SEFAZ); se não montar, guarda o retorno puro. */
+    private function guardarEventoDeCancelamento(Invoice $invoice, string $request, string $response): ?string
+    {
+        $xml = rescue(fn () => \NFePHP\NFe\Complements::toAuthorize($request, $response), $response, report: false);
+        $path = 'invoices/'.($invoice->order_id ?? 'sefaz').'/cancelamento-'.$invoice->chave_acesso.'.xml';
+
+        return rescue(fn () => Storage::disk('local')->put($path, $xml) ? $path : null, null);
     }
 }

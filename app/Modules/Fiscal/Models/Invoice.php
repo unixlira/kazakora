@@ -64,7 +64,15 @@ class Invoice extends Model
         'protocolo_cancelamento',
         'motivo_cancelamento',
         'cancelada_em',
+        'cancelamento_extemporaneo',
+        'xml_cancelamento_path',
     ];
+
+    public const JANELA_NORMAL = 'normal';
+
+    public const JANELA_EXTEMPORANEA = 'extemporanea';
+
+    public const JANELA_EXPIRADA = 'expirada';
 
     protected function casts(): array
     {
@@ -74,7 +82,43 @@ class Invoice extends Model
             'valor_total' => 'decimal:2',
             'autorizada_em' => 'datetime',
             'cancelada_em' => 'datetime',
+            'cancelamento_extemporaneo' => 'boolean',
         ];
+    }
+
+    /**
+     * Em que prazo de cancelamento a nota está agora (null se não está
+     * autorizada). Ver config/nfe.php: até 24h normal, até 480h com multa,
+     * depois só devolução.
+     */
+    public function janelaDeCancelamento(): ?string
+    {
+        if ($this->status !== self::STATUS_AUTHORIZED) {
+            return null;
+        }
+
+        $horas = $this->autorizada_em ? $this->autorizada_em->diffInHours(now()) : 0;
+
+        return match (true) {
+            $horas < config('nfe.cancelamento_horas', 24) => self::JANELA_NORMAL,
+            $horas < config('nfe.cancelamento_extemporaneo_horas', 480) => self::JANELA_EXTEMPORANEA,
+            default => self::JANELA_EXPIRADA,
+        };
+    }
+
+    /** Até quando dá pra cancelar sem multa e com multa. */
+    public function prazosDeCancelamento(): array
+    {
+        return [
+            'normal_ate' => $this->autorizada_em?->copy()->addHours((int) config('nfe.cancelamento_horas', 24)),
+            'extemporaneo_ate' => $this->autorizada_em?->copy()->addHours((int) config('nfe.cancelamento_extemporaneo_horas', 480)),
+        ];
+    }
+
+    /** Multa estimada do cancelamento fora do prazo: 1% do valor, mínimo 6 UFESPs. */
+    public function multaCancelamentoExtemporaneo(): float
+    {
+        return round(max((float) $this->valor_total * 0.01, 6 * (float) config('nfe.ufesp')), 2);
     }
 
     public function order(): BelongsTo

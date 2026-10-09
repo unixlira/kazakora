@@ -691,8 +691,16 @@ class OrderController extends Controller
             return null;
         }
 
-        if ($order->invoice->autorizada_em?->diffInHours(now()) >= 24) {
-            return 'Pedido cancelado, mas o prazo de 24h para cancelar a NF-e já expirou. Emita uma nota fiscal de devolução para venda retornada.';
+        // Fora das 24h o cancelamento tem multa ou nem é mais possível: a
+        // decisão é de quem está na tela da nota, nunca automática.
+        $janela = $order->invoice->janelaDeCancelamento();
+
+        if ($janela === Invoice::JANELA_EXTEMPORANEA) {
+            return 'Pedido cancelado, mas a NF-e passou das 24h. Se a mercadoria não saiu, cancele pela tela da nota (até 480h, com multa estimada de R$ '.number_format($order->invoice->multaCancelamentoExtemporaneo(), 2, ',', '.').'); se saiu, registre a devolução lá.';
+        }
+
+        if ($janela === Invoice::JANELA_EXPIRADA) {
+            return 'Pedido cancelado, mas a NF-e passou de 480h e não pode mais ser cancelada. Registre a devolução na tela da nota.';
         }
 
         try {

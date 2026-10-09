@@ -12,7 +12,6 @@ const props = defineProps({
 });
 
 const { can } = usePermissions();
-const statusLabels = { open: 'Aberta', in_progress: 'Em andamento', completed: 'Concluída', cancelled: 'Cancelada' };
 
 const destroy = async (so) => {
     if (await confirmDelete({ title: `Remover a ordem de serviço #${so.id}?` })) {
@@ -27,7 +26,7 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.status, label: statusLabels[row.original.status] ?? row.original.status }),
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'service_order' }),
     },
     { id: 'assignee', header: 'Responsável', accessorFn: (row) => row.assignee?.name ?? '—' },
     {

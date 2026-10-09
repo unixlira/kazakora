@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { toRef } from 'vue';
@@ -11,13 +12,6 @@ const props = defineProps({
 });
 
 usePollWhilePending(toRef(props, 'jobs'));
-
-const STATUS_META = {
-    queued: { label: 'Na fila', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' },
-    claimed: { label: 'Imprimindo', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300' },
-    printed: { label: 'Concluída', color: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' },
-    failed: { label: 'Falhou', color: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' },
-};
 
 const destroy = async (job) => {
     if (await confirmDelete({ title: `Remover a etiqueta #${job.id}?` })) {
@@ -56,10 +50,7 @@ const destroy = async (job) => {
                         <td class="px-4 py-3 font-medium">#{{ job.id }}</td>
                         <td class="px-4 py-3">{{ job.channel }}</td>
                         <td class="px-4 py-3">
-                            <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
-                                :class="STATUS_META[job.status]?.color ?? 'bg-slate-100 text-slate-700'">
-                                {{ STATUS_META[job.status]?.label ?? job.status }}
-                            </span>
+                            <StatusBadge :status="job.status" context="print_job" />
                         </td>
                         <td class="px-4 py-3 text-slate-500">{{ job.createdAt ?? '—' }}</td>
                         <td class="px-4 py-3">

@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { confirmDelete } from '@/Shared/notify';
 import { ref } from 'vue';
@@ -10,14 +11,6 @@ const props = defineProps({
     statuses: { type: Array, default: () => [] },
     filters: { type: Object, default: () => ({}) },
 });
-
-const STATUS_META = {
-    received: { label: 'Recebido', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' },
-    processed: { label: 'Processado', color: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' },
-    ignored: { label: 'Ignorado', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-    rejected: { label: 'Rejeitado', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300' },
-    failed: { label: 'Falhou', color: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' },
-};
 
 const channelFilter = ref(props.filters.channel ?? '');
 const statusFilter = ref(props.filters.status ?? '');
@@ -90,10 +83,7 @@ const reprocess = async (log) => {
                             <td class="px-4 py-3 font-medium">{{ log.channel }}</td>
                             <td class="px-4 py-3">{{ log.eventType ?? '—' }}</td>
                             <td class="px-4 py-3">
-                                <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
-                                    :class="STATUS_META[log.status]?.color ?? 'bg-slate-100 text-slate-700'">
-                                    {{ STATUS_META[log.status]?.label ?? log.status }}
-                                </span>
+                                <StatusBadge :status="log.status" context="webhook" />
                             </td>
                             <td class="px-4 py-3 text-xs text-primary">{{ expandedId === log.id ? 'Ocultar' : 'Ver payload' }}</td>
                         </tr>

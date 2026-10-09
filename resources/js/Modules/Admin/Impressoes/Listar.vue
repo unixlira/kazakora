@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { toRef } from 'vue';
@@ -13,13 +14,6 @@ const props = defineProps({
 });
 
 usePollWhilePending(toRef(props, 'jobs'));
-
-const BADGE_STYLES = {
-    yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300',
-    purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-    green: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    red: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-};
 
 const filterByStatus = (status) => {
     router.get('/admin/impressoes/lista', status ? { status } : {}, { preserveState: true, preserveScroll: true });
@@ -86,9 +80,7 @@ const destroy = async (job) => {
                             </div>
                         </td>
                         <td class="px-4 py-3">
-                            <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium" :class="BADGE_STYLES[job.statusColor]">
-                                {{ job.statusLabel }}
-                            </span>
+                            <StatusBadge :status="job.status" context="print_job" />
                         </td>
                         <td class="space-y-0.5 px-4 py-3 text-xs text-slate-500">
                             <div>Criado: {{ job.createdAt ?? '—' }}</div>

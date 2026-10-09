@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import InputError from '@/Shared/Components/InputError.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, useForm } from '@inertiajs/vue3';
@@ -97,7 +98,7 @@ const submit = () => {
                                 </td>
                                 <td class="py-2 pr-4">
                                     <span v-if="campaign.sent_at">{{ campaign.recipients_count }}</span>
-                                    <span v-else class="text-xs text-warning">Enviando...</span>
+                                    <StatusBadge v-else status="running" label="Enviando" />
                                 </td>
                                 <td class="py-2 pr-4">{{ campaign.creator?.name ?? '—' }}</td>
                                 <td class="py-2 text-xs text-slate-400">{{ campaign.created_at }}</td>

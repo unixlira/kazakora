@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { confirmDelete } from '@/Shared/notify';
 
@@ -51,7 +52,7 @@ const destroy = async () => {
             <div>
                 <h1 class="mb-1 text-2xl font-bold">Etiqueta #{{ job.id }}</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Status: <span class="font-medium">{{ job.status }}</span>
+                    Status: <StatusBadge :status="job.status" context="print_job" />
                     <span v-if="job.errorMessage" class="text-error"> — {{ job.errorMessage }}</span>
                 </p>
             </div>

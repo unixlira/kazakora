@@ -1,36 +1,29 @@
 <script setup>
 import { computed } from 'vue';
+import { TONE_CLASSES, resolveTone, statusLabel, statusTone } from '@/Shared/statusLabels';
 
+// Badge único de status do admin. Rótulo e cor vêm do mapa central
+// (Shared/statusLabels.js), então o mesmo status sai igual em toda tela.
+//
+//   status  — valor cru do banco ('cancelled', 'authorized'...). Também
+//             aceita um nome de tom ('green', 'red'...) ou uma cor hex
+//             ('#146EB4', badge de canal com a cor da marca).
+//   label   — opcional; sobrescreve o rótulo do mapa (telas antigas que já
+//             passavam label continuam funcionando).
+//   context — opcional; entidade ('invoice', 'shipment', 'payment'...) pra
+//             quando o mesmo valor tem outro significado/concordância.
+//   tone    — opcional; força a cor (green/yellow/blue/red/purple/gray).
 const props = defineProps({
-    status: { type: String, required: true },
+    status: { type: [String, Number, Boolean], default: null },
     label: { type: String, default: null },
+    context: { type: String, default: null },
+    tone: { type: String, default: null },
 });
 
-// Palette fixed by design spec: green=success, yellow=pending, blue=info,
-// red=danger, purple=processing.
-const STYLES = {
-    completed: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    active: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    'in stock': 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    paid: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    received: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
-    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300',
-    open: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300',
-    draft: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300',
-    shipped: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-    sent: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
-    cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-    'out of stock': 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
-    processing: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-    in_progress: 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
-};
-
-// Além das cores fixas do design spec acima, aceita uma cor de marca em hex
-// (ex: '#146EB4') pra badge de canal/plataforma que precisa da cor real dela
-// em vez de reaproveitar a paleta genérica de status — mesmo padrão de tinta
-// já usado em Admin/Invoices/Index.vue, só que embutido aqui pra qualquer
-// tela poder usar (pedido explícito 2026-08-14: badges da Amazon).
-const isHexColor = computed(() => /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(props.status ?? ''));
+// Além da paleta fixa, aceita uma cor de marca em hex (ex: '#146EB4') pra
+// badge de canal/plataforma que precisa da cor real dela (pedido explícito
+// 2026-08-14: badges da Amazon).
+const isHexColor = computed(() => typeof props.status === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(props.status));
 
 const hexToRgba = (hex, alpha) => {
     let value = hex.replace('#', '');
@@ -43,17 +36,21 @@ const hexToRgba = (hex, alpha) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-const classes = computed(() => (isHexColor.value
-    ? ''
-    : STYLES[props.status?.toLowerCase()] ?? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'));
+const tone = computed(() => resolveTone(props.tone)
+    ?? resolveTone(props.status)
+    ?? statusTone(props.status, props.context));
+
+const classes = computed(() => (isHexColor.value ? '' : TONE_CLASSES[tone.value] ?? TONE_CLASSES.gray));
 
 const hexStyle = computed(() => (isHexColor.value
     ? { color: props.status, backgroundColor: hexToRgba(props.status, 0.15) }
     : null));
+
+const text = computed(() => props.label ?? statusLabel(props.status, props.context));
 </script>
 
 <template>
-    <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium" :class="classes" :style="hexStyle">
-        {{ label ?? status }}
+    <span class="inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium" :class="classes" :style="hexStyle">
+        {{ text }}
     </span>
 </template>

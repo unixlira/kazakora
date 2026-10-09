@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -246,14 +247,10 @@ const submit = () => {
 
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold uppercase text-slate-500">Certificado digital (A1)</h2>
-                <span
-                    class="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                    :class="company?.has_certificate
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700'"
-                >
-                    {{ company?.has_certificate ? 'Certificado configurado' : 'Nenhum certificado enviado' }}
-                </span>
+                <StatusBadge
+                    :tone="company?.has_certificate ? 'green' : 'yellow'"
+                    :label="company?.has_certificate ? 'Certificado configurado' : 'Nenhum certificado enviado'"
+                />
             </div>
             <p class="text-sm text-slate-500">
                 Certificado A1 (.pfx/.p12) usado para assinar e enviar as notas fiscais à SEFAZ. Comprado numa

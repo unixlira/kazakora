@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
+import { statusLabel } from '@/Shared/statusLabels';
 import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -9,7 +10,6 @@ const props = defineProps({
     statuses: { type: Array, default: () => [] },
 });
 
-const statusLabels = { open: 'Aberta', in_progress: 'Em andamento', completed: 'Concluída', cancelled: 'Cancelada' };
 
 const form = useForm({
     customer_name: props.serviceOrder.customer_name,
@@ -60,7 +60,7 @@ const submit = () => {
                 <div>
                     <label class="block text-sm font-medium">Status</label>
                     <select v-model="form.status" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2">
-                        <option v-for="status in props.statuses" :key="status" :value="status">{{ statusLabels[status] ?? status }}</option>
+                        <option v-for="status in props.statuses" :key="status" :value="status">{{ statusLabel(status, 'service_order') }}</option>
                     </select>
                 </div>
             </div>

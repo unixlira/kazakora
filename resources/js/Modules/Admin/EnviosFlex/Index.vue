@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -27,17 +28,6 @@ const quando = (iso) => (iso
     ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
     : null);
 const dinheiro = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor ?? 0);
-
-const CORES_SITUACAO = {
-    cancelada: 'bg-lighterror text-error',
-    devolvida: 'bg-lightwarning text-warning',
-    entregue: 'bg-lightsuccess text-success',
-    nao_entregue: 'bg-lighterror text-error',
-    em_rota: 'bg-lightinfo text-info',
-    com_entregador: 'bg-lightwarning text-warning',
-    pronta: 'bg-lightsecondary text-secondary',
-    na_loja: 'bg-[var(--surface-muted)] text-slate-500',
-};
 
 // --- Filtros ---------------------------------------------------------------
 const mes = ref(props.filtros.mes);
@@ -204,9 +194,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                             :class="{ 'bg-lighterror': linha.alertasAbertos > 0 }"
                             @click="abrir(linha)">
                             <td class="px-4 py-3">
-                                <span class="whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" :class="CORES_SITUACAO[linha.situacao.codigo]">
-                                    {{ linha.situacao.rotulo }}
-                                </span>
+                                <StatusBadge :status="linha.situacao.codigo" context="flex" :label="linha.situacao.rotulo" />
                             </td>
                             <td class="px-4 py-3">
                                 #{{ linha.pedido }}
@@ -264,7 +252,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                     <div>
                         <h3 class="text-lg font-semibold">
                             Pedido #{{ selecionado.pedido }}
-                            <span class="ml-2 rounded-full px-2 py-0.5 align-middle text-xs font-semibold" :class="CORES_SITUACAO[selecionado.situacao.codigo]">{{ selecionado.situacao.rotulo }}</span>
+                            <StatusBadge class="ml-2 align-middle" :status="selecionado.situacao.codigo" context="flex" :label="selecionado.situacao.rotulo" />
                         </h3>
                         <p class="text-xs text-slate-400">
                             Venda ML {{ selecionado.venda ?? '—' }} · envio {{ selecionado.envio ?? '—' }} · {{ dinheiro(selecionado.total) }}
@@ -343,7 +331,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                         <h4 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
                             Mercado Livre
                             <span class="font-normal normal-case">
-                                · {{ selecionado.canal.status ?? 'sem consulta' }}{{ selecionado.canal.substatus ? ` / ${selecionado.canal.substatus}` : '' }}
+                                · <StatusBadge class="align-middle" :status="selecionado.canal.status ?? null" :label="selecionado.canal.status ? null : 'Sem consulta'" />{{ selecionado.canal.substatus ? ` / ${selecionado.canal.substatus}` : '' }}
                                 <template v-if="selecionado.canal.conferidoEm">· conferido {{ quando(selecionado.canal.conferidoEm) }}</template>
                             </span>
                         </h4>
@@ -439,7 +427,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                     <div v-if="selecionado.reclamacoes.length" class="md:col-span-2">
                         <h4 class="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Reclamações no Mercado Livre</h4>
                         <ul>
-                            <li v-for="r in selecionado.reclamacoes" :key="r.id">{{ r.tipo }} #{{ r.id }} — {{ r.status }} (aberta {{ quando(r.abertaEm) }})</li>
+                            <li v-for="r in selecionado.reclamacoes" :key="r.id">{{ r.tipo }} #{{ r.id }} — <StatusBadge :status="r.status" context="claim" /> (aberta {{ quando(r.abertaEm) }})</li>
                         </ul>
                     </div>
                 </div>

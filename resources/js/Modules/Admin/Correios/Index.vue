@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -9,12 +10,6 @@ const props = defineProps({
     items: { type: Object, required: true },
     filters: { type: Object, default: () => ({}) },
 });
-
-const STATUS_META = {
-    gerada: { label: 'Gerada', color: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300' },
-    erro: { label: 'Falhou', color: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' },
-    cancelada: { label: 'Cancelada', color: 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
-};
 
 const monthFilter = ref(props.filters.mes ?? '');
 const searchFilter = ref(props.filters.pedido ?? '');
@@ -92,10 +87,7 @@ const destroy = async (item) => {
                         <td class="px-4 py-3">{{ item.serviceLabel ?? '—' }}</td>
                         <td class="px-4 py-3">{{ item.postagePrice != null ? `R$ ${item.postagePrice.toFixed(2)}` : '—' }}</td>
                         <td class="px-4 py-3">
-                            <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
-                                :class="STATUS_META[item.status]?.color ?? 'bg-slate-100 text-slate-700'">
-                                {{ STATUS_META[item.status]?.label ?? item.status }}
-                            </span>
+                            <StatusBadge :status="item.status" context="correios" />
                         </td>
                         <td class="px-4 py-3 text-slate-500">{{ item.createdAt ?? '—' }}</td>
                         <td class="px-4 py-3">

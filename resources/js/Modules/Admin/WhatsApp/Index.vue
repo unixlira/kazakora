@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -62,10 +63,10 @@ const credentialItems = computed(() => [
 ]);
 
 const integrationStatus = computed(() => {
-    if (!form.enabled) return { label: 'Recebimento pausado', class: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' };
-    if (!props.credentials.readyToSend) return { label: 'Credenciais incompletas', class: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' };
-    if (!form.auto_reply_enabled) return { label: 'Recebe sem responder', class: 'bg-sky-100 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300' };
-    return { label: 'Manuela ativa', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' };
+    if (!form.enabled) return { label: 'Recebimento pausado', tone: 'gray' };
+    if (!props.credentials.readyToSend) return { label: 'Credenciais incompletas', tone: 'yellow' };
+    if (!form.auto_reply_enabled) return { label: 'Recebe sem responder', tone: 'blue' };
+    return { label: 'Manuela ativa', tone: 'green' };
 });
 
 const preview = computed(() => {
@@ -138,9 +139,7 @@ const copyToClipboard = async (value, key) => {
                             </p>
                         </div>
                         <div class="w-full rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur sm:w-auto sm:min-w-64">
-                            <span class="inline-flex max-w-full rounded-full px-3 py-1 text-xs font-semibold" :class="integrationStatus.class">
-                                {{ integrationStatus.label }}
-                            </span>
+                            <StatusBadge class="max-w-full" :tone="integrationStatus.tone" :label="integrationStatus.label" />
                             <p class="mt-3 text-xs text-slate-300">
                                 {{ stats.conversations }} conversa(s) registradas · {{ stats.needsHuman }} precisam de humano
                             </p>
@@ -231,9 +230,7 @@ const copyToClipboard = async (value, key) => {
                                         <p class="text-sm font-semibold">{{ item.label }}</p>
                                         <p class="mt-1 text-xs text-slate-500">{{ item.description }}</p>
                                     </div>
-                                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" :class="credentials[item.key] ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'">
-                                        {{ credentials[item.key] ? 'Configurado' : 'Ausente' }}
-                                    </span>
+                                    <StatusBadge class="shrink-0" :tone="credentials[item.key] ? 'green' : 'yellow'" :label="credentials[item.key] ? 'Configurado' : 'Ausente'" />
                                 </div>
                             </div>
                         </div>

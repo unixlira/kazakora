@@ -19,14 +19,6 @@ const formatPrice = (value) =>
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') : '—');
 
-const shipmentStatusBadge = {
-    pending: { color: 'pending', label: 'Pendente' },
-    confirmed: { color: 'processing', label: 'Confirmado' },
-    label_ready: { color: 'shipped', label: 'Etiqueta pronta' },
-    label_downloaded: { color: 'completed', label: 'Etiqueta baixada' },
-    error: { color: 'cancelled', label: 'Erro' },
-};
-
 const filterByTipo = (tipo) => {
     router.get('/admin/integracoes/mercado-livre/envios', tipo ? { tipo } : {}, { preserveState: true });
 };
@@ -51,15 +43,12 @@ const columns = [
     {
         id: 'shippingMethod',
         header: 'Tipo de envio',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.shippingMethod ?? 'unknown', label: row.original.shippingMethodLabel }),
+        cell: ({ row }) => h(StatusBadge, { status: 'gray', label: row.original.shippingMethodLabel ?? 'Não informado' }),
     },
     {
         accessorKey: 'status',
         header: 'Status do envio',
-        cell: ({ row }) => {
-            const badge = shipmentStatusBadge[row.original.status] ?? { color: row.original.status, label: row.original.status };
-            return h(StatusBadge, { status: badge.color, label: badge.label });
-        },
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'shipment' }),
     },
     { accessorKey: 'total', header: 'Total', cell: ({ row }) => formatPrice(row.original.total) },
     { accessorKey: 'confirmedAt', header: 'Frete confirmado em', cell: ({ row }) => formatDate(row.original.confirmedAt) },

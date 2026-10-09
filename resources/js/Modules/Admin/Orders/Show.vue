@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
+import { statusOptions } from '@/Shared/statusLabels';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -42,47 +43,11 @@ const FULFILLMENT_STEP_LABELS = {
     label_printed: 'Etiqueta impressa',
 };
 
-const fulfillmentStatusBadge = {
-    success: { color: 'completed', label: 'OK' },
-    pending: { color: 'pending', label: 'Pendente' },
-    failed: { color: 'cancelled', label: 'Falhou' },
-};
-
-const STATUS_LABELS_PT = {
-    pending: 'Pendente',
-    paid: 'Pago',
-    shipped: 'Enviado',
-    completed: 'Concluído',
-    cancelled: 'Cancelado',
-};
-
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const formatDateTime = (value) => new Date(value).toLocaleString('pt-BR');
 const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
-
-const invoiceBadge = {
-    pending: { color: 'pending', label: 'Pendente' },
-    signed: { color: 'shipped', label: 'Assinada' },
-    sent: { color: 'shipped', label: 'Enviada à SEFAZ' },
-    authorized: { color: 'completed', label: 'Emitida' },
-    rejected: { color: 'cancelled', label: 'Rejeitada' },
-    denied: { color: 'cancelled', label: 'Denegada' },
-    cancelled: { color: 'cancelled', label: 'Cancelada' },
-    error: { color: 'cancelled', label: 'Erro' },
-};
-
-const emailBadge = {
-    sent: { color: 'completed', label: 'Enviado' },
-    failed: { color: 'cancelled', label: 'Falhou' },
-};
-
-const generationLogBadge = {
-    success: { color: 'completed', label: 'Sucesso' },
-    retrying: { color: 'in_progress', label: 'Tentando novamente' },
-    failed: { color: 'cancelled', label: 'Falhou' },
-};
 
 const channelBadge = {
     loja: { color: 'shipped', label: 'Site' },
@@ -90,18 +55,6 @@ const channelBadge = {
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
     amazon: { color: '#146EB4', label: 'Amazon' },
-};
-
-// Status do ENVIO no canal (Shopee/Mercado Livre) — não confundir com
-// order.status (esse aqui é sobre a etiqueta especificamente: confirmada,
-// mas etiqueta ainda não liberada pelo canal / já pronta / já baixada /
-// deu erro depois de ~4h tentando). Pedido explícito 2026-08-13.
-const shipmentBadge = {
-    pending: { color: 'pending', label: 'Aguardando confirmação' },
-    confirmed: { color: 'in_progress', label: 'Aguardando etiqueta do canal' },
-    label_ready: { color: 'completed', label: 'Etiqueta pronta' },
-    label_downloaded: { color: 'completed', label: 'Etiqueta baixada' },
-    error: { color: 'cancelled', label: 'Canal não liberou a etiqueta' },
 };
 
 // Venda AGENDADA pelo canal (pedido explícito 2026-08-14, achado no
@@ -115,14 +68,15 @@ const shipmentDisplay = () => {
     const scheduled = shipment?.scheduled_for && !['label_ready', 'label_downloaded'].includes(shipment.status);
 
     if (!scheduled) {
-        return shipmentBadge[shipment?.status] ?? { color: shipment?.status, label: shipment?.status };
+        // Rótulo e cor vêm do mapa central (contexto "shipment").
+        return { color: shipment?.status ?? null, label: null };
     }
 
     const isOverdue = new Date(shipment.scheduled_for) < new Date();
 
     return isOverdue
-        ? { color: 'cancelled', label: `Agendada pra ${formatDate(shipment.scheduled_for)} — já passou e não liberou` }
-        : { color: 'pending', label: `Venda agendada — etiqueta só sai perto de ${formatDate(shipment.scheduled_for)}` };
+        ? { color: 'red', label: `Agendada pra ${formatDate(shipment.scheduled_for)} — já passou e não liberou` }
+        : { color: 'yellow', label: `Venda agendada — etiqueta só sai perto de ${formatDate(shipment.scheduled_for)}` };
 };
 
 const LOGISTIC_TYPE_LABELS = {
@@ -209,6 +163,7 @@ const cancelInvoice = () => {
         <div class="flex flex-wrap items-center gap-3">
             <h1 class="text-2xl font-bold">Pedido #{{ order.id }}</h1>
             <StatusBadge :status="channelBadge[order.origin]?.color ?? order.origin" :label="channelBadge[order.origin]?.label ?? order.origin" />
+            <StatusBadge :status="order.status" context="order" />
             <span v-if="order.external_order_id" class="text-sm text-slate-400">Ref. no canal: {{ order.external_order_id }}</span>
         </div>
 
@@ -259,7 +214,7 @@ const cancelInvoice = () => {
                     <div v-if="order.channel_shipment" class="mt-4 border-t border-[var(--surface-border)] pt-3">
                         <div class="flex flex-wrap items-center gap-3 text-sm">
                             <span class="text-slate-500">Etiqueta:</span>
-                            <StatusBadge :status="shipmentDisplay().color" :label="shipmentDisplay().label" />
+                            <StatusBadge :status="shipmentDisplay().color" :label="shipmentDisplay().label" context="shipment" />
                             <span v-if="order.channel_shipment.tracking_code" class="font-mono text-xs text-slate-500">
                                 Rastreio: {{ order.channel_shipment.tracking_code }}
                             </span>
@@ -309,12 +264,7 @@ const cancelInvoice = () => {
                     <div class="mt-3 flex flex-wrap items-center gap-6 text-sm">
                         <div>
                             <span class="text-slate-500">Nota fiscal:</span>
-                            <StatusBadge
-                                v-if="order.invoice"
-                                :status="invoiceBadge[order.invoice.status]?.color ?? order.invoice.status"
-                                :label="invoiceBadge[order.invoice.status]?.label ?? order.invoice.status"
-                            />
-                            <span v-else class="text-slate-400">— ainda não emitida</span>
+                            <StatusBadge :status="order.invoice?.status ?? null" context="invoice" :label="order.invoice ? null : 'Ainda não emitida'" />
                         </div>
                         <div v-if="order.invoice?.chave_acesso" class="font-mono text-xs text-slate-500">
                             Chave: {{ order.invoice.chave_acesso }}
@@ -395,10 +345,7 @@ const cancelInvoice = () => {
                     <ul v-if="fulfillmentEvents.length" class="mt-2 space-y-2 text-sm">
                         <li v-for="event in fulfillmentEvents" :key="event.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
                             <div>
-                                <StatusBadge
-                                    :status="fulfillmentStatusBadge[event.status]?.color ?? event.status"
-                                    :label="fulfillmentStatusBadge[event.status]?.label ?? event.status"
-                                />
+                                <StatusBadge :status="event.status" context="fulfillment" />
                                 <span class="ml-2 font-medium">{{ FULFILLMENT_STEP_LABELS[event.step] ?? event.step }}</span>
                                 <p v-if="event.message" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ event.message }}</p>
                             </div>
@@ -416,10 +363,7 @@ const cancelInvoice = () => {
                     <ul v-if="invoiceGenerationLogs.length" class="mt-2 space-y-2 text-sm">
                         <li v-for="log in invoiceGenerationLogs" :key="log.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
                             <div>
-                                <StatusBadge
-                                    :status="generationLogBadge[log.status]?.color ?? log.status"
-                                    :label="generationLogBadge[log.status]?.label ?? log.status"
-                                />
+                                <StatusBadge :status="log.status" context="invoice_log" />
                                 <span class="ml-2 text-xs text-slate-400">tentativa {{ log.attempt }}</span>
                                 <p v-if="log.error_message" class="mt-1 text-xs text-red-600 dark:text-red-400">{{ log.error_message }}</p>
                             </div>
@@ -432,10 +376,7 @@ const cancelInvoice = () => {
                     <ul v-if="emailLogs.length" class="mt-2 space-y-2 text-sm">
                         <li v-for="log in emailLogs" :key="log.id" class="flex items-start justify-between gap-4 border-b border-[var(--surface-border)] pb-2 last:border-0">
                             <div>
-                                <StatusBadge
-                                    :status="emailBadge[log.status]?.color ?? log.status"
-                                    :label="emailBadge[log.status]?.label ?? log.status"
-                                />
+                                <StatusBadge :status="log.status" context="email" />
                                 <span class="ml-2 text-xs text-slate-400">tentativa {{ log.attempt }}</span>
                                 <span v-if="log.status === 'sent' && !log.invoice_attached" class="ml-2 text-xs text-amber-600 dark:text-amber-400">
                                     sem a nota em anexo
@@ -454,9 +395,9 @@ const cancelInvoice = () => {
                                 <span class="font-medium">{{ log.user?.name ?? 'Sistema' }}</span>
                                 <span v-if="log.old_values?.status && log.new_values?.status" class="text-slate-400">
                                     alterou o status de
-                                    <strong>{{ STATUS_LABELS_PT[log.old_values.status] ?? log.old_values.status }}</strong>
+                                    <StatusBadge :status="log.old_values.status" context="order" />
                                     para
-                                    <strong>{{ STATUS_LABELS_PT[log.new_values.status] ?? log.new_values.status }}</strong>
+                                    <StatusBadge :status="log.new_values.status" context="order" />
                                 </span>
                                 <span v-else class="text-slate-400">atualizou o pedido</span>
                             </div>
@@ -482,7 +423,7 @@ const cancelInvoice = () => {
                             v-model="form.status"
                             class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
                         >
-                            <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
+                            <option v-for="option in statusOptions(statuses, 'order')" :key="option.value" :value="option.value">{{ option.label }}</option>
                         </select>
 
                         <label for="origin" class="block pt-2 text-sm font-medium">Canal</label>

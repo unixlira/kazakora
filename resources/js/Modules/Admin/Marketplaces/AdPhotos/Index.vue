@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, reactive, toRef } from 'vue';
@@ -53,15 +54,6 @@ const clearFilters = () => {
     form.status = '';
     applyFilters();
 };
-
-const statusClass = (status) => ({
-    ready_for_approval: 'bg-amber-50 text-amber-700 ring-amber-100',
-    approved: 'bg-purple-50 text-purple-700 ring-purple-100',
-    queued: 'bg-violet-50 text-violet-700 ring-violet-100',
-    generating: 'bg-violet-50 text-violet-700 ring-violet-100',
-    completed: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-    failed: 'bg-red-50 text-red-700 ring-red-100',
-}[status] ?? 'bg-slate-50 text-slate-600 ring-slate-100');
 </script>
 
 <template>
@@ -129,9 +121,7 @@ const statusClass = (status) => ({
                         <h2 class="mt-2 text-lg font-black leading-tight text-slate-900">{{ brief.productName }}</h2>
                         <p class="mt-1 text-xs font-semibold text-slate-400">{{ brief.categoryHint || 'Sem categoria informada' }}</p>
                     </div>
-                    <span class="rounded-full px-3 py-1 text-[10px] font-black uppercase ring-1" :class="statusClass(brief.status)">
-                        {{ brief.statusLabel }}
-                    </span>
+                    <StatusBadge :status="brief.status" context="ad_photo" :label="brief.statusLabel" />
                 </div>
 
                 <div class="mt-5 grid grid-cols-2 gap-3 text-sm">

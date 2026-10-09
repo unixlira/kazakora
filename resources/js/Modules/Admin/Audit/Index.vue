@@ -11,8 +11,6 @@ const props = defineProps({
     entities: { type: Array, default: () => [] },
 });
 
-const actionLabels = { create: 'Criação', update: 'Edição', delete: 'Exclusão' };
-const actionBadge = { create: 'active', update: 'pending', delete: 'inactive' };
 
 const filterState = reactive({
     user_id: props.filters.user_id ?? '',
@@ -31,7 +29,7 @@ const columns = [
     {
         accessorKey: 'action',
         header: 'Ação',
-        cell: ({ row }) => h(StatusBadge, { status: actionBadge[row.original.action] ?? 'default', label: actionLabels[row.original.action] ?? row.original.action }),
+        cell: ({ row }) => h(StatusBadge, { status: row.original.action, context: 'audit_action' }),
     },
     { accessorKey: 'entity', header: 'Entidade' },
     { accessorKey: 'entity_id', header: 'ID do registro' },

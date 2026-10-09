@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -86,12 +87,6 @@ const messageClasses = computed(() => ({
     error: 'border-rose-200 bg-rose-50 text-rose-800',
     info: 'border-blue-200 bg-blue-50 text-blue-800',
 }[messageType.value] ?? 'border-slate-200 bg-slate-50 text-slate-700'));
-
-const statusClass = (status) => ({
-    Processando: 'bg-blue-50 text-blue-700 ring-1 ring-blue-100',
-    Concluído: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
-    Erro: 'bg-rose-50 text-rose-700 ring-1 ring-rose-100',
-}[status] ?? 'bg-slate-50 text-slate-600 ring-1 ring-slate-100');
 
 const shortUrl = (url) => (url.length > 72 ? `${url.slice(0, 69)}...` : url);
 
@@ -321,9 +316,7 @@ const submitDownload = async () => {
                                 <p class="truncate text-xs text-slate-400">{{ shortUrl(item.url) }}</p>
                             </div>
 
-                            <span class="w-fit rounded-full px-2.5 py-1 text-xs font-semibold" :class="statusClass(item.status)">
-                                {{ item.status }}
-                            </span>
+                            <StatusBadge class="w-fit" :status="item.status" context="video_download" />
                         </div>
                     </div>
                 </div>

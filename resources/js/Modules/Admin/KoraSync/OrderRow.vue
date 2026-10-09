@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { channelBrand } from './channelBrand';
 import { shippingBadge } from './shippingBadge';
 
@@ -184,9 +185,7 @@ function handlePack() {
                     </span>
                 </div>
 
-                <span v-if="isCancelled" class="rounded-md border px-2 py-1 text-xs font-bold"
-                    style="background: color-mix(in srgb, var(--ks-error) 15%, transparent); border-color: var(--ks-error); color: var(--ks-error)"
-                >CANCELADO</span>
+                <StatusBadge v-if="isCancelled" status="cancelled" context="order" />
 
                 <div v-else-if="showPackButton" class="flex flex-col items-end gap-1">
                     <span class="flex items-center gap-1.5 text-xs font-semibold" style="color: var(--ks-text)">

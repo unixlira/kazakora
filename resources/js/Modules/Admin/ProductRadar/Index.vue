@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -197,13 +198,14 @@ const airFitClass = (label) => ({
     'Monitorar antes de importar': 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
 }[label] ?? 'bg-slate-100 text-slate-600 ring-1 ring-slate-200');
 
-const providerClass = (status) => ({
-    Conectado: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
-    Fallback: 'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
-    'Crawler pendente': 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100',
-    'Estrutura pronta': 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100',
-    'Pesquisa técnica': 'bg-slate-50 text-slate-600 ring-1 ring-slate-100',
-}[status] ?? 'bg-slate-50 text-slate-600 ring-1 ring-slate-100');
+// Status das fontes já vem em português do backend; aqui só a cor do badge.
+const providerTone = (status) => ({
+    Conectado: 'green',
+    Fallback: 'yellow',
+    'Crawler pendente': 'yellow',
+    'Estrutura pronta': 'blue',
+    'Pesquisa técnica': 'gray',
+}[status] ?? 'gray');
 
 const columnShellClass = (accent) => ({
     emerald: 'border-emerald-100 bg-emerald-50/60',
@@ -302,7 +304,7 @@ const columnBadgeClass = (accent) => ({
                     <div v-for="provider in providerStatus" :key="provider.name" class="rounded-xl border border-slate-100 p-3">
                         <div class="flex items-center justify-between gap-3">
                             <p class="text-sm font-bold text-slate-700">{{ provider.name }}</p>
-                            <span class="rounded-full px-3 py-1 text-xs font-bold" :class="providerClass(provider.status)">{{ provider.status }}</span>
+                            <StatusBadge :tone="providerTone(provider.status)" :label="provider.status" />
                         </div>
                         <p class="mt-2 text-xs leading-5 text-slate-500">{{ provider.detail }}</p>
                     </div>

@@ -10,7 +10,6 @@ const props = defineProps({
 });
 
 const { can } = usePermissions();
-const statusLabels = { draft: 'Rascunho', sent: 'Enviado', received: 'Recebido', cancelled: 'Cancelado' };
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const setStatus = (status) => {
@@ -34,7 +33,7 @@ const receive = async () => {
     <AdminLayout>
         <div class="mb-4 flex items-center gap-3">
             <h1 class="text-2xl font-bold">Pedido de compra #{{ purchaseOrder.id }}</h1>
-            <StatusBadge :status="purchaseOrder.status" :label="statusLabels[purchaseOrder.status] ?? purchaseOrder.status" />
+            <StatusBadge :status="purchaseOrder.status" context="purchase_order" />
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">

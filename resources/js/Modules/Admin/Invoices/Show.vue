@@ -20,18 +20,6 @@ const formatPrice = (value) =>
 
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString('pt-BR') : '—');
 
-const invoiceBadge = {
-    pending: { color: 'pending', label: 'Pendente' },
-    signed: { color: 'shipped', label: 'Assinada' },
-    sent: { color: 'shipped', label: 'Enviada à SEFAZ' },
-    authorized: { color: 'completed', label: 'Emitida' },
-    rejected: { color: 'cancelled', label: 'Rejeitada' },
-    denied: { color: 'cancelled', label: 'Denegada' },
-    cancelled: { color: 'cancelled', label: 'Cancelada' },
-    error: { color: 'cancelled', label: 'Erro' },
-    external: { color: 'shipped', label: 'Emitida pelo canal' },
-};
-
 const originLabels = {
     loja: 'Loja',
     nota_fiscal_avulsa: 'Emissão manual',
@@ -104,7 +92,6 @@ const attachDeclaration = () => {
         onSuccess: () => declarationForm.reset(),
     });
 };
-const returnStatusLabel = (status) => invoiceBadge[status]?.label ?? status;
 </script>
 
 <template>
@@ -118,10 +105,7 @@ const returnStatusLabel = (status) => invoiceBadge[status]?.label ?? status;
                 </Link>
                 <h1 class="mt-1 text-2xl font-bold">Nota {{ invoice.numero }}/{{ invoice.serie }}</h1>
             </div>
-            <StatusBadge
-                :status="invoiceBadge[invoice.status]?.color ?? invoice.status"
-                :label="invoiceBadge[invoice.status]?.label ?? invoice.status"
-            />
+            <StatusBadge :status="invoice.status" context="invoice" />
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -405,7 +389,8 @@ const returnStatusLabel = (status) => invoiceBadge[status]?.label ?? status;
                         <Link :href="`/admin/notas-fiscais/${nota.id}`" class="text-primary hover:underline">
                             NF-e de entrada {{ nota.numero ?? '(em emissão)' }}/{{ nota.serie }}
                         </Link>
-                        <span class="text-slate-400"> · {{ formatPrice(nota.valor_total) }} · {{ returnStatusLabel(nota.status) }}</span>
+                        <span class="text-slate-400"> · {{ formatPrice(nota.valor_total) }} · </span>
+                        <StatusBadge :status="nota.status" context="invoice" />
                     </li>
                 </ul>
             </div>

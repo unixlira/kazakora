@@ -71,7 +71,7 @@ const columns = [
     {
         id: 'status',
         header: 'Status',
-        accessorFn: (row) => (row.is_active ? 'Active' : 'Inactive'),
+        accessorFn: (row) => (row.is_active ? 'Ativo' : 'Inativo'),
         cell: ({ row }) => h(StatusBadge, { status: row.original.is_active ? 'active' : 'inactive', label: row.original.is_active ? 'Ativo' : 'Inativo' }),
     },
     {

@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 
@@ -40,15 +41,6 @@ const dueLabel = computed(() => {
     const rest = (absolute % 60).toString().padStart(2, '0');
     return seconds >= 0 ? `Estimado: ${minutes}:${rest}` : `Atrasado: ${minutes}:${rest}`;
 });
-
-const statusClass = (status) => ({
-    ready_for_approval: 'bg-amber-50 text-amber-700 ring-amber-100',
-    approved: 'bg-purple-50 text-purple-700 ring-purple-100',
-    queued: 'bg-violet-50 text-violet-700 ring-violet-100',
-    generating: 'bg-violet-50 text-violet-700 ring-violet-100',
-    completed: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-    failed: 'bg-red-50 text-red-700 ring-red-100',
-}[status] ?? 'bg-slate-50 text-slate-600 ring-slate-100');
 
 const copyPack = async () => {
     if (!props.brief.copyPack) return;
@@ -122,9 +114,7 @@ onUnmounted(() => {
                             <p class="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Status da geração</p>
                             <h2 class="mt-2 text-2xl font-black text-slate-900">{{ brief.generationProgressLabel }} criativos prontos</h2>
                         </div>
-                        <span class="w-fit rounded-full px-3 py-1 text-xs font-black uppercase ring-1" :class="statusClass(brief.status)">
-                            {{ brief.statusLabel }}
-                        </span>
+                        <StatusBadge class="w-fit" :status="brief.status" context="ad_photo" :label="brief.statusLabel" />
                     </div>
 
                     <div class="mt-5 h-3 overflow-hidden rounded-full bg-slate-100">
@@ -167,7 +157,7 @@ onUnmounted(() => {
                         <details v-for="item in brief.matrix" :key="item.key" class="group rounded-2xl border border-slate-100 bg-slate-50 p-4 open:bg-white open:shadow-sm">
                             <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
                                 <div>
-                                    <p class="text-xs font-black uppercase tracking-[0.2em] text-purple-700">Arte {{ item.key }} · {{ item.status || 'pending' }}</p>
+                                    <p class="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-purple-700">Arte {{ item.key }} <StatusBadge :status="item.status || 'pending'" context="ad_photo" /></p>
                                     <h3 class="mt-1 text-base font-black text-slate-900">{{ item.title }}</h3>
                                     <p class="mt-1 text-sm leading-6 text-slate-500">{{ item.function }}</p>
                                 </div>

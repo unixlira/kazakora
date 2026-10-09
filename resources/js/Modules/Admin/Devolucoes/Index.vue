@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -20,18 +21,6 @@ const { can } = usePermissions();
 const podeEditar = computed(() => can('operacional.edit'));
 
 const CANAL_CORES = { mercado_livre: '#eda100', shopee: '#eb6834', tiktok_shop: '#2a78d6', amazon: '#c98500', loja: '#e87ba4' };
-
-// Situação -> cor do selo (texto sempre escrito, nunca só a cor).
-const SITUACAO_ESTILO = {
-    aguardando_resposta: 'bg-lighterror text-error',
-    em_mediacao: 'bg-lightwarning text-warning',
-    aguardando_envio: 'bg-lightinfo text-info',
-    em_transito: 'bg-lightprimary text-primary',
-    entregue: 'bg-lightwarning text-warning',
-    conferida: 'bg-lightsuccess text-success',
-    encerrada: 'bg-[var(--surface-muted)] text-slate-500',
-    cancelada: 'bg-[var(--surface-muted)] text-slate-500',
-};
 
 const busca = ref(props.filtros.busca ?? '');
 const filtrar = (extra = {}) => router.get('/admin/devolucoes', {
@@ -225,7 +214,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                                 <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="caso.tipo === 'reclamacao' ? 'bg-lightwarning text-warning' : 'bg-lightinfo text-info'">
                                     {{ caso.tipo === 'reclamacao' ? 'Reclamação' : 'Devolução' }}
                                 </span>
-                                <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="SITUACAO_ESTILO[caso.situacao]">{{ situacoes[caso.situacao] }}</span>
+                                <StatusBadge :status="caso.situacao" context="return" :label="situacoes[caso.situacao] ?? null" />
                             </div>
                             <p class="mt-1 truncate text-sm">
                                 <span class="font-medium">{{ caso.motivo ?? 'Motivo não informado' }}</span>
@@ -258,7 +247,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                     <div>
                         <p class="text-xs uppercase tracking-wide text-slate-400">{{ canais[aberto.canal] }} · {{ aberto.tipo === 'reclamacao' ? 'Reclamação' : 'Devolução' }} {{ aberto.manual ? '(registrada à mão)' : aberto.externo }}</p>
                         <h2 class="text-lg font-bold">{{ aberto.motivo ?? 'Motivo não informado' }}</h2>
-                        <span class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold" :class="SITUACAO_ESTILO[aberto.situacao]">{{ situacoes[aberto.situacao] }}</span>
+                        <StatusBadge class="mt-1" :status="aberto.situacao" context="return" :label="situacoes[aberto.situacao] ?? null" />
                     </div>
                     <button type="button" class="text-slate-400 hover:text-slate-600" @click="aberto = null"><i class="fas fa-xmark text-lg"></i></button>
                 </div>
@@ -278,7 +267,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                     <dt class="text-slate-500">Aberta em</dt><dd>{{ dataHora(aberto.abertaEm) }}</dd>
                     <template v-if="aberto.prazoResposta"><dt class="text-slate-500">Prazo de resposta</dt><dd>{{ dataHora(aberto.prazoResposta) }}</dd></template>
                     <template v-if="aberto.prazoConferir"><dt class="text-slate-500">Prazo pra conferir</dt><dd>{{ dataHora(aberto.prazoConferir) }}</dd></template>
-                    <template v-if="aberto.statusEnvio"><dt class="text-slate-500">Envio de volta</dt><dd>{{ ENVIO[aberto.statusEnvio] ?? aberto.statusEnvio }}</dd></template>
+                    <template v-if="aberto.statusEnvio"><dt class="text-slate-500">Envio de volta</dt><dd><StatusBadge :status="aberto.statusEnvio" :label="ENVIO[aberto.statusEnvio] ?? null" /></dd></template>
                     <template v-if="aberto.rastreio"><dt class="text-slate-500">Rastreio</dt><dd class="font-mono">{{ aberto.rastreio }}</dd></template>
                     <template v-if="aberto.dinheiro"><dt class="text-slate-500">Dinheiro</dt><dd>{{ DINHEIRO[aberto.dinheiro] ?? aberto.dinheiro }}</dd></template>
                     <template v-if="aberto.valor !== null"><dt class="text-slate-500">Valor do reembolso</dt><dd>{{ dinheiro(aberto.valor) }}</dd></template>

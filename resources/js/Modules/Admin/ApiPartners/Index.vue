@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 
@@ -205,7 +206,7 @@ const hasAnyAbility = computed(() => createForm.abilities.length > 0);
                 <div>
                     <h3 class="flex items-center gap-2 font-semibold">
                         {{ partner.name }}
-                        <span v-if="!partner.is_active" class="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">Inativo</span>
+                        <StatusBadge :status="partner.is_active ? 'active' : 'inactive'" />
                     </h3>
                     <p class="text-xs text-slate-400">
                         usuário (login): <code class="rounded bg-[var(--surface-sunken,theme(colors.slate.100))] px-1">{{ partner.slug }}</code>

@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import SubNav from './SubNav.vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
@@ -241,13 +242,9 @@ const closeDelivery = () => { selectedDelivery.value = null; };
                             <td class="px-4 py-3">{{ formatPrice(row.costPerDelivery) }}</td>
                             <td class="px-4 py-3 font-semibold">{{ formatPrice(row.totalAmount) }}</td>
                             <td class="px-4 py-3">
-                                <span v-if="row.emailSentAt" class="inline-flex items-center gap-1 text-xs text-success">
-                                    <i class="fas fa-circle-check"></i> {{ formatDateTime(row.emailSentAt) }}
-                                </span>
-                                <span v-else-if="row.emailError" class="inline-flex items-center gap-1 text-xs text-error" :title="row.emailError">
-                                    <i class="fas fa-triangle-exclamation"></i> Falhou
-                                </span>
-                                <span v-else class="text-xs text-slate-400">—</span>
+                                <StatusBadge v-if="row.emailSentAt" status="sent" context="email" :label="`Enviado em ${formatDateTime(row.emailSentAt)}`" />
+                                <StatusBadge v-else-if="row.emailError" status="failed" context="email" :title="row.emailError" />
+                                <StatusBadge v-else :status="null" context="email" />
                             </td>
                         </tr>
                     </tbody>

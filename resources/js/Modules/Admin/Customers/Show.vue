@@ -28,15 +28,6 @@ const channelBadge = {
     amazon: { color: '#146EB4', label: 'Amazon' },
 };
 
-const statusLabels = {
-    pending: 'Pendente',
-    awaiting_payment: 'Aguardando pagamento',
-    paid: 'Pago',
-    shipped: 'Enviado',
-    completed: 'Concluído',
-    cancelled: 'Cancelado',
-};
-
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -135,7 +126,7 @@ const ticketMedio = props.customer.orders_count > 0
                             </Link>
                             <StatusBadge :status="(channelBadge[order.origin] ?? { color: order.origin }).color"
                                 :label="(channelBadge[order.origin] ?? { label: order.origin }).label" />
-                            <StatusBadge :status="order.status" :label="statusLabels[order.status] ?? order.status" />
+                            <StatusBadge :status="order.status" context="order" />
                         </div>
                         <div class="text-right text-sm">
                             <p class="font-medium">{{ formatPrice(order.total) }}</p>

@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import InputError from '@/Shared/Components/InputError.vue';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
@@ -161,9 +162,7 @@ const move = (banner, direction) => {
                         <i class="fas fa-times"></i>
                     </button>
 
-                    <span v-if="!banner.is_active" class="absolute left-1 top-1 rounded bg-gray-900/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                        Inativo
-                    </span>
+                    <StatusBadge v-if="!banner.is_active" class="absolute left-1 top-1" status="inactive" />
                     <span v-if="banner.image_url_mobile" class="absolute bottom-1 left-1 rounded bg-gray-900/70 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                         <i class="fas fa-mobile-screen"></i> mobile próprio
                     </span>

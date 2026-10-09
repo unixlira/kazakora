@@ -13,7 +13,6 @@ const props = defineProps({
 
 const { can } = usePermissions();
 
-const statusLabels = { draft: 'Rascunho', sent: 'Enviado', received: 'Recebido', cancelled: 'Cancelado' };
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const destroy = async (po) => {
@@ -28,7 +27,7 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.status, label: statusLabels[row.original.status] ?? row.original.status }),
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'purchase_order' }),
     },
     {
         accessorKey: 'expected_date',

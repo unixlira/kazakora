@@ -61,38 +61,6 @@ const customerName = (order) =>
     || order.shipping_phone
     || '—';
 
-const statusLabels = {
-    pending: 'Pendente',
-    paid: 'Pago',
-    shipped: 'Enviado',
-    completed: 'Concluído',
-    cancelled: 'Cancelado',
-};
-
-// StatusBadge escolhe a cor pelo valor de "status" — reaproveitamos as
-// cores já definidas lá (não são específicas de pedido) pra nota fiscal e
-// e-mail em vez de duplicar uma paleta nova.
-const invoiceBadge = {
-    pending: { color: 'pending', label: 'Pendente' },
-    signed: { color: 'shipped', label: 'Assinada' },
-    sent: { color: 'shipped', label: 'Enviada à SEFAZ' },
-    authorized: { color: 'completed', label: 'Emitida' },
-    rejected: { color: 'cancelled', label: 'Rejeitada' },
-    denied: { color: 'cancelled', label: 'Denegada' },
-    cancelled: { color: 'cancelled', label: 'Cancelada' },
-    error: { color: 'cancelled', label: 'Erro' },
-};
-
-const emailBadge = {
-    sent: { color: 'completed', label: 'Enviado' },
-    failed: { color: 'cancelled', label: 'Falhou' },
-};
-
-const correiosStatusLabel = {
-    gerada: 'QR gerado',
-    erro: 'Falhou',
-};
-
 const formatPostagePrice = (value) => value == null
     ? null
     : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -122,27 +90,21 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.status, label: statusLabels[row.original.status] ?? row.original.status }),
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order' }),
     },
     {
         id: 'invoice_status',
         header: 'Nota Fiscal',
-        cell: ({ row }) => {
-            const status = row.original.invoice?.status;
-            if (!status) return h('span', { class: 'text-xs text-slate-400' }, '—');
-            const badge = invoiceBadge[status] ?? { color: status, label: status };
-            return h(StatusBadge, { status: badge.color, label: badge.label });
-        },
+        cell: ({ row }) => h(StatusBadge, { status: row.original.invoice?.status ?? null, context: 'invoice' }),
     },
     {
         id: 'email_status',
         header: 'E-mail',
         cell: ({ row }) => {
             const log = row.original.latest_email_log;
-            if (!log) return h('span', { class: 'text-xs text-slate-400' }, '—');
-            const badge = emailBadge[log.status] ?? { color: log.status, label: log.status };
+            if (!log) return h(StatusBadge, { status: null, context: 'email' });
             return h('div', { class: 'flex items-center gap-1.5' }, [
-                h(StatusBadge, { status: badge.color, label: badge.label }),
+                h(StatusBadge, { status: log.status, context: 'email' }),
                 log.status === 'sent' && !log.invoice_attached
                     ? h('span', { class: 'text-xs text-amber-600 dark:text-amber-400', title: 'Enviado sem a nota fiscal em anexo' }, 'sem anexo')
                     : null,
@@ -156,7 +118,7 @@ const columns = [
             const qr = row.original.latest_correios_pre_postagem;
 
             if (!qr) {
-                return h('span', { class: 'text-xs text-slate-400' }, row.original.origin === 'amazon' ? 'Sem QR' : '—');
+                return h(StatusBadge, { status: null, context: 'correios' });
             }
 
             return h(Link, {
@@ -164,7 +126,7 @@ const columns = [
                 class: 'group block text-xs hover:text-primary',
                 title: 'Abrir QR Code dos Correios',
             }, () => [
-                h('span', { class: qr.status === 'gerada' ? 'font-semibold text-emerald-600 dark:text-emerald-400' : 'font-semibold text-red-600 dark:text-red-400' }, correiosStatusLabel[qr.status] ?? qr.status),
+                h(StatusBadge, { status: qr.status, context: 'correios' }),
                 qr.codigo_objeto ? h('span', { class: 'block font-mono text-[11px] text-slate-400 group-hover:text-primary' }, qr.codigo_objeto) : null,
                 qr.service_label || qr.postage_price != null
                     ? h('span', { class: 'block text-[11px] text-slate-400' }, [qr.service_label, formatPostagePrice(qr.postage_price)].filter(Boolean).join(' · '))

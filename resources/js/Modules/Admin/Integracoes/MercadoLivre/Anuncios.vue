@@ -16,17 +16,6 @@ const formatPrice = (value) =>
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') : '—');
 
-// StatusBadge já cobre 'draft'/'pending' (amarelo); 'published'/'error' não
-// existem na paleta padrão dela (são valores do módulo de Marketplace, não
-// do pedido) — reaproveita as mesmas cores via label/status explícitos,
-// mesmo padrão do invoiceBadge em Orders/Index.vue.
-const statusBadge = {
-    draft: { color: 'draft', label: 'Rascunho' },
-    pending: { color: 'pending', label: 'Pendente' },
-    published: { color: 'completed', label: 'Publicado' },
-    error: { color: 'cancelled', label: 'Erro' },
-};
-
 const columns = [
     {
         id: 'product',
@@ -48,10 +37,7 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => {
-            const badge = statusBadge[row.original.status] ?? { color: row.original.status, label: row.original.status };
-            return h(StatusBadge, { status: badge.color, label: badge.label });
-        },
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'listing' }),
     },
     { accessorKey: 'price', header: 'Preço', cell: ({ row }) => formatPrice(row.original.price) },
     { accessorKey: 'stock', header: 'Estoque', cell: ({ row }) => row.original.stock ?? '—' },

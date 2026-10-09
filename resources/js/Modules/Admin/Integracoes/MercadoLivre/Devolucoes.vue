@@ -17,11 +17,6 @@ const formatPrice = (value) =>
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') : '—');
 
-const statusBadge = {
-    opened: { color: 'open', label: 'Aberta' },
-    closed: { color: 'completed', label: 'Fechada' },
-};
-
 const revertStock = async (claim) => {
     if (!claim.canRevertStock) {
         return;
@@ -57,8 +52,7 @@ const columns = [
         accessorKey: 'status',
         header: 'Status',
         cell: ({ row }) => {
-            const badge = statusBadge[row.original.status] ?? { color: row.original.status, label: row.original.statusLabel };
-            return h(StatusBadge, { status: badge.color, label: badge.label });
+            return h(StatusBadge, { status: row.original.status, context: 'claim', label: row.original.statusLabel ?? null });
         },
     },
     { accessorKey: 'claimCreatedAt', header: 'Aberta em', cell: ({ row }) => formatDate(row.original.claimCreatedAt) },
@@ -67,10 +61,10 @@ const columns = [
         header: 'Estoque',
         cell: ({ row }) => {
             if (row.original.stockRestoredAt) {
-                return h('span', { class: 'text-xs text-success' }, `Revertido em ${formatDate(row.original.stockRestoredAt)}`);
+                return h(StatusBadge, { tone: 'green', label: `Revertido em ${formatDate(row.original.stockRestoredAt)}` });
             }
             if (!row.original.orderId) {
-                return h('span', { class: 'text-xs text-slate-400' }, '—');
+                return h(StatusBadge, { tone: 'gray', label: 'Pedido não localizado' });
             }
             return h('button', {
                 type: 'button',

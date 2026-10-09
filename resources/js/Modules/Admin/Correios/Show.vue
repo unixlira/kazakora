@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import ShippingFiscalLabel from '@/Modules/Admin/Correios/Components/ShippingFiscalLabel.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 
@@ -32,7 +33,10 @@ const cancelar = () => {
                 <Link href="/admin/correios" class="mb-2 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-primary">
                     <i class="fas fa-arrow-left text-xs"></i> Voltar
                 </Link>
-                <h1 class="text-2xl font-bold">Pré-postagem — {{ item.customerName }}</h1>
+                <div class="flex flex-wrap items-center gap-3">
+                    <h1 class="text-2xl font-bold">Pré-postagem — {{ item.customerName }}</h1>
+                    <StatusBadge :status="item.status" context="correios" />
+                </div>
             </div>
             <button v-if="item.status === 'gerada'" type="button"
                 class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"

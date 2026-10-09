@@ -51,7 +51,7 @@ const columns = [
     {
         id: 'status',
         header: 'Status',
-        accessorFn: (row) => (row.is_active ? 'Active' : 'Inactive'),
+        accessorFn: (row) => (row.is_active ? 'Ativo' : 'Inativo'),
         cell: ({ row }) => h(StatusBadge, { status: row.original.is_active ? 'active' : 'inactive', label: row.original.is_active ? 'Ativo' : 'Inativo' }),
     },
     {
@@ -85,9 +85,10 @@ const columns = [
                     Cotação real de frete no checkout. Quando conectado, substitui a lista abaixo sempre que
                     conseguir cotar (produto com peso/dimensões cadastrados) — a lista fica como reserva.
                 </p>
-                <p v-if="melhorEnvio.connected" class="mt-2 text-xs text-emerald-600">
-                    <i class="fas fa-circle-check mr-1"></i> Conectado{{ melhorEnvio.accountLabel ? ` — ${melhorEnvio.accountLabel}` : '' }}
-                </p>
+                <StatusBadge class="mt-2" :status="melhorEnvio.connected ? 'connected' : 'disconnected'"
+                    :label="melhorEnvio.connected
+                        ? `Conectado${melhorEnvio.accountLabel ? ` — ${melhorEnvio.accountLabel}` : ''}`
+                        : 'Não conectado'" />
             </div>
             <a v-if="!melhorEnvio.connected" href="/api/melhorenvio/auth"
                 class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">

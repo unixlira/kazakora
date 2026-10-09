@@ -15,14 +15,6 @@ const formatPrice = (value) =>
         ? '—'
         : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const statusLabels = {
-    pending: 'Pendente',
-    paid: 'Pago',
-    shipped: 'Enviado',
-    completed: 'Concluído',
-    cancelled: 'Cancelado',
-};
-
 const columns = [
     {
         accessorKey: 'id',
@@ -39,7 +31,7 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.status, label: statusLabels[row.original.status] ?? row.original.status }),
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order' }),
     },
     { accessorKey: 'gross', header: 'Bruto', cell: ({ row }) => formatPrice(row.original.gross) },
     {

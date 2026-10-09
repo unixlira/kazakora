@@ -3,6 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { maskCpfCnpj, maskPhone } from '@/Shared/useMasks';
+import { statusLabel } from '@/Shared/statusLabels';
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -21,11 +22,6 @@ const channelLabels = {
     shein: 'Shein',
 };
 
-const statusLabels = {
-    paid: 'Pago',
-    shipped: 'Enviado',
-    completed: 'Concluído',
-};
 
 const form = useForm({
     origin: props.channels[0] ?? 'loja',
@@ -158,7 +154,7 @@ const submit = () => {
                         <label class="block text-sm font-medium text-slate-600">Status</label>
                         <select v-model="form.status" required class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm">
                             <option v-for="status in props.statuses" :key="status" :value="status">
-                                {{ statusLabels[status] ?? status }}
+                                {{ statusLabel(status, 'order') }}
                             </option>
                         </select>
                         <InputError :message="form.errors.status" />

@@ -63,19 +63,6 @@ const hexToRgba = (hex, alpha) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-// Mesma paleta usada em Orders/Index.vue e Orders/Show.vue — reaproveitada
-// aqui pra manter a mesma leitura visual de status em todo o admin.
-const invoiceBadge = {
-    pending: { color: 'pending', label: 'Pendente' },
-    signed: { color: 'shipped', label: 'Assinada' },
-    sent: { color: 'shipped', label: 'Enviada à SEFAZ' },
-    authorized: { color: 'completed', label: 'Emitida' },
-    rejected: { color: 'cancelled', label: 'Rejeitada' },
-    denied: { color: 'cancelled', label: 'Denegada' },
-    cancelled: { color: 'cancelled', label: 'Cancelada' },
-    error: { color: 'cancelled', label: 'Erro' },
-};
-
 const tabs = [
     { label: 'Todas', value: 'all' },
     { label: 'Emitidas', value: 'authorized' },
@@ -128,10 +115,7 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => {
-            const badge = invoiceBadge[row.original.status] ?? { color: row.original.status, label: row.original.status };
-            return h(StatusBadge, { status: badge.color, label: badge.label });
-        },
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'invoice' }),
     },
     { accessorKey: 'chave_acesso', header: 'Chave de acesso', cell: ({ row }) => h('span', { class: 'font-mono text-xs' }, row.original.chave_acesso ?? '—') },
     {

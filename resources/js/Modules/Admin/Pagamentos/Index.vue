@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -33,12 +34,8 @@ const submit = () => {
                 <div class="flex-1">
                     <div class="flex items-center gap-2">
                         <span class="font-semibold">{{ gateway.label }}</span>
-                        <span v-if="gateway.configured" class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                            Configurado
-                        </span>
-                        <span v-else class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                            Sem credenciais no .env
-                        </span>
+                        <StatusBadge :tone="gateway.configured ? 'green' : 'yellow'"
+                            :label="gateway.configured ? 'Configurado' : 'Sem credenciais no .env'" />
                     </div>
                     <p class="mt-1 text-sm text-slate-500">{{ gateway.description }}</p>
                 </div>

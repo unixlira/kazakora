@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -47,11 +48,11 @@ const parsedRecipients = computed(() => {
 });
 
 const estimatedStatus = computed(() => {
-    if (form.dry_run) return { label: 'Prévia segura', class: 'bg-sky-100 text-sky-800 dark:bg-sky-500/10 dark:text-sky-300' };
-    if (props.settings.sandbox_mode) return { label: 'Bloqueado pelo modo cauteloso', class: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' };
-    if (!props.credentials.readyToSend) return { label: 'Credenciais incompletas', class: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' };
-    if (form.confirmation !== props.limits.realSendConfirmation) return { label: 'Aguardando confirmação', class: 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' };
-    return { label: 'Pronto para envio real', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' };
+    if (form.dry_run) return { label: 'Prévia segura', tone: 'blue' };
+    if (props.settings.sandbox_mode) return { label: 'Bloqueado pelo modo cauteloso', tone: 'yellow' };
+    if (!props.credentials.readyToSend) return { label: 'Credenciais incompletas', tone: 'yellow' };
+    if (form.confirmation !== props.limits.realSendConfirmation) return { label: 'Aguardando confirmação', tone: 'yellow' };
+    return { label: 'Pronto para envio real', tone: 'green' };
 });
 
 const canSubmit = computed(() => {
@@ -105,18 +106,6 @@ const copyConfirmation = async () => {
     copied.value = true;
     setTimeout(() => (copied.value = false), 1600);
 };
-
-const statusLabel = (campaign) => {
-    const labels = {
-        dry_run: 'Prévia',
-        running: 'Enviando',
-        finished: 'Finalizada',
-        partial: 'Parcial',
-        failed: 'Falhou',
-        draft: 'Rascunho',
-    };
-    return labels[campaign.status] ?? campaign.status;
-};
 </script>
 
 <template>
@@ -139,9 +128,7 @@ const statusLabel = (campaign) => {
                             </p>
                         </div>
                         <div class="w-full rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur sm:w-auto sm:min-w-64">
-                            <span class="inline-flex max-w-full rounded-full px-3 py-1 text-xs font-semibold" :class="estimatedStatus.class">
-                                {{ estimatedStatus.label }}
-                            </span>
+                            <StatusBadge class="max-w-full" :tone="estimatedStatus.tone" :label="estimatedStatus.label" />
                             <p class="mt-3 text-xs text-emerald-50">
                                 {{ parsedRecipients.length }} contato(s) válidos · limite {{ limits.maxRecipientsPerBatch }} por lote
                             </p>
@@ -297,18 +284,14 @@ const statusLabel = (campaign) => {
                                     <p class="text-sm font-semibold">Token e número oficial</p>
                                     <p class="mt-1 text-xs text-slate-500">Protegidos no .env; a tela só mostra presença.</p>
                                 </div>
-                                <span class="w-fit rounded-full px-2.5 py-1 text-xs font-semibold" :class="credentials.readyToSend ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300'">
-                                    {{ credentials.readyToSend ? 'OK' : 'Pendente' }}
-                                </span>
+                                <StatusBadge class="w-fit" :tone="credentials.readyToSend ? 'green' : 'yellow'" :label="credentials.readyToSend ? 'OK' : 'Pendente'" />
                             </div>
                             <div class="flex min-w-0 flex-col gap-3 rounded-xl border border-[var(--surface-border)] p-4 sm:flex-row sm:items-start sm:justify-between">
                                 <div class="min-w-0">
                                     <p class="text-sm font-semibold">Modo cauteloso</p>
                                     <p class="mt-1 text-xs text-slate-500">Bloqueia envio real durante calibração.</p>
                                 </div>
-                                <span class="w-fit rounded-full px-2.5 py-1 text-xs font-semibold" :class="settings.sandbox_mode ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'">
-                                    {{ settings.sandbox_mode ? 'Ligado' : 'Desligado' }}
-                                </span>
+                                <StatusBadge class="w-fit" :tone="settings.sandbox_mode ? 'yellow' : 'green'" :label="settings.sandbox_mode ? 'Ligado' : 'Desligado'" />
                             </div>
                             <div class="rounded-xl border border-[var(--surface-border)] p-4">
                                 <p class="text-sm font-semibold">Templates de campanha</p>
@@ -346,7 +329,7 @@ const statusLabel = (campaign) => {
                                         <p class="mt-1 text-xs text-slate-500">{{ campaign.created_at }} · {{ campaign.mode === 'template' ? 'Template' : 'Texto livre' }}</p>
                                         <p v-if="campaign.media_type" class="mt-1 truncate text-xs text-slate-500">Anexo: {{ campaign.media_type === 'image' ? 'imagem' : 'vídeo' }} · {{ campaign.media_original_name }}</p>
                                     </div>
-                                    <span class="w-fit rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-semibold">{{ statusLabel(campaign) }}</span>
+                                    <StatusBadge class="w-fit" :status="campaign.status" context="campaign" />
                                 </div>
                                 <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
                                     <div class="rounded-lg bg-[var(--surface-muted)] p-2"><strong>{{ campaign.total_recipients }}</strong><br>contatos</div>

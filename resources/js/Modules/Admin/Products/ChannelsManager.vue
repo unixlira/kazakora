@@ -1,6 +1,7 @@
 <script setup>
 import { router, useForm } from '@inertiajs/vue3';
 import { confirmDelete } from '@/Shared/notify';
+import { StatusBadge } from '@/Shared/Components/DataTable';
 
 const props = defineProps({
     product: {
@@ -21,20 +22,6 @@ const channelLabels = {
     mercado_livre: 'Mercado Livre',
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',
-};
-
-const statusLabels = {
-    draft: 'Não publicado',
-    pending: 'Publicando…',
-    published: 'Publicado',
-    error: 'Erro',
-};
-
-const statusColors = {
-    draft: 'bg-slate-100 text-slate-500',
-    pending: 'bg-amber-100 text-amber-700',
-    published: 'bg-emerald-100 text-emerald-700',
-    error: 'bg-red-100 text-red-700',
 };
 
 const listingFor = (channel) => props.channelListings.find((listing) => listing.channel === channel);
@@ -97,10 +84,7 @@ const remove = async (channel) => {
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="font-semibold text-slate-700">{{ channelLabels[channel] ?? channel }}</h3>
-                    <span class="mt-1 inline-block rounded-full px-2 py-0.5 text-xs"
-                        :class="statusColors[listingFor(channel)?.status ?? 'draft']">
-                        {{ statusLabels[listingFor(channel)?.status ?? 'draft'] }}
-                    </span>
+                    <StatusBadge class="mt-1" :status="listingFor(channel)?.status ?? 'draft'" context="listing" />
                     <span v-if="listingFor(channel)?.external_id" class="ml-2 font-mono text-xs text-slate-400">
                         ID do anúncio: {{ listingFor(channel).external_id }}
                     </span>

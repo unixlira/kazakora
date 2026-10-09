@@ -164,6 +164,10 @@ class RetryStuckInvoices extends Command
         // faria a etiqueta aparecer.
         $enviosTravados = ChannelShipment::query()
             ->where('status', ChannelShipment::STATUS_ERROR)
+            // Canal que disse "não conheço este pedido" não muda de ideia:
+            // sem isto, cada um desses era reconsultado a cada 15 min pra
+            // sempre (pedido #994: 4.458 consultas ao Bling, 2026-10-09).
+            ->whereNull('unrecoverable_at')
             ->whereHas('order', fn ($query) => $query
                 ->where('status', Order::STATUS_PAID)
                 ->when($canal, fn ($q) => $q->where('origin', $canal))

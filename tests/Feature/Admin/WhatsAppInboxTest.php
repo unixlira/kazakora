@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Models\User;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
@@ -443,5 +444,50 @@ class WhatsAppInboxTest extends TestCase
         $customer = User::factory()->create();
 
         $this->actingAs($customer)->get('/admin/whatsapp/conversas')->assertForbidden();
+    }
+
+    private function unsupported(string $id, string $from = '5511999990000'): array
+    {
+        $payload = $this->inbound($id, '', $from);
+        $payload['entry'][0]['changes'][0]['value']['messages'][0] = [
+            'from' => $from,
+            'id' => $id,
+            'timestamp' => (string) now()->timestamp,
+            'errors' => [['code' => 131051, 'title' => 'Message type unknown']],
+            'type' => 'unsupported',
+        ];
+
+        return $payload;
+    }
+
+    /** Pedido 2026-10-09: código de verificação por API chega como "unsupported". */
+    public function test_mensagem_unsupported_sem_conversa_nem_abre_chat(): void
+    {
+        Http::fake();
+        app(WhatsAppSettings::class)->setMany(['enabled' => true]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->unsupported('wamid.UNS0'))->assertOk();
+
+        $this->assertSame(0, WhatsAppConversation::query()->count());
+        $this->assertSame(0, WhatsAppMessage::query()->count());
+        Http::assertNothingSent();
+    }
+
+    public function test_mensagem_unsupported_em_conversa_iniciada_pede_outro_formato_uma_vez(): void
+    {
+        Http::fake(['graph.facebook.com/*' => fn () => Http::response(['messages' => [['id' => 'wamid.OUT'.uniqid()]]])]);
+        app(WhatsAppSettings::class)->setMany(['enabled' => true]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.T1', 'Oi'))->assertOk();
+        $this->postJson('/api/whatsapp/webhook', $this->unsupported('wamid.UNS1'))->assertOk();
+        // Reentrega e outra unsupported logo em seguida: não repete o aviso.
+        $this->postJson('/api/whatsapp/webhook', $this->unsupported('wamid.UNS1'))->assertOk();
+        $this->postJson('/api/whatsapp/webhook', $this->unsupported('wamid.UNS2'))->assertOk();
+
+        $avisos = WhatsAppMessage::query()->where('direction', 'outbound')->get();
+        $this->assertCount(1, $avisos);
+        $this->assertSame(WhatsAppWebhookController::UNSUPPORTED_REPLY, $avisos[0]->body);
+        $this->assertSame(2, WhatsAppMessage::query()->where('type', 'unsupported')->count());
+        $this->assertSame(1, WhatsAppConversation::query()->count());
     }
 }

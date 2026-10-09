@@ -6,14 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
+use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class WhatsAppWebhookController extends Controller
 {
+    public const UNSUPPORTED_REPLY = 'Não consigo ver sua mensagem, nosso chat possui restrição para esse tipo. Pode enviar de outra forma para eu entender?';
+
     public function verify(Request $request, WhatsAppSettings $settings): Response
     {
         $mode = $request->query('hub_mode', $request->query('hub.mode'));
@@ -47,6 +51,18 @@ class WhatsAppWebhookController extends Controller
 
                 foreach ($value['messages'] ?? [] as $message) {
                     $contact = collect($value['contacts'] ?? [])->firstWhere('wa_id', $message['from'] ?? null) ?? [];
+
+                    // Tipo que a Cloud API não entrega (ex.: código de
+                    // verificação enviado por API de outro sistema). Pedido
+                    // 2026-10-09: sem conversa, nem abre chat; com conversa,
+                    // avisa o cliente pra mandar de outro jeito.
+                    if (($message['type'] ?? null) === 'unsupported') {
+                        $this->handleUnsupported($message, $contact, $payload, $settings);
+                        $handled++;
+
+                        continue;
+                    }
+
                     [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
                     $handled++;
 
@@ -61,6 +77,38 @@ class WhatsAppWebhookController extends Controller
         }
 
         return response()->json(['status' => 'ok', 'handled' => $handled]);
+    }
+
+    private function handleUnsupported(array $message, array $contact, array $payload, WhatsAppSettings $settings): void
+    {
+        if (! WhatsAppConversation::query()->where('wa_id', $message['from'] ?? null)->exists()) {
+            return;
+        }
+
+        [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
+
+        // Reentrega da Meta não responde de novo, e no máximo um aviso a
+        // cada 30 min (trava atômica, vale mesmo com duas chegando juntas):
+        // quem manda isso costuma ser sistema automático, e responder toda
+        // vez viraria pingue-pongue.
+        if (! $stored->wasRecentlyCreated || ! Cache::add("whatsapp:aviso-unsupported:{$conversation->id}", true, now()->addMinutes(30))) {
+            return;
+        }
+
+        $conversationId = $conversation->id;
+        dispatch(static function () use ($conversationId) {
+            $conversation = WhatsAppConversation::query()->find($conversationId);
+            $jaAvisou = WhatsAppMessage::query()
+                ->where('conversation_id', $conversationId)
+                ->where('direction', 'outbound')
+                ->where('body', self::UNSUPPORTED_REPLY)
+                ->where('created_at', '>=', now()->subMinutes(30))
+                ->exists();
+
+            if ($conversation && ! $jaAvisou) {
+                app(WhatsAppOutbox::class)->sendText($conversation, self::UNSUPPORTED_REPLY, 'manuela', null, ['aviso' => 'unsupported']);
+            }
+        })->afterResponse();
     }
 
     /** @return array{0: WhatsAppConversation, 1: WhatsAppMessage} */

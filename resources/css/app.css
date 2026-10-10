@@ -149,6 +149,13 @@
     height: auto;
 }
 
+/* No computador o banner preenche o quadro fixo (corta as sobras). */
+@media (min-width: 768px) {
+    .img-fluid.md\:object-cover {
+        height: 100%;
+    }
+}
+
 .no-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;

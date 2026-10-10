@@ -29,10 +29,10 @@ const tempo = computed(() => {
 
 <template>
     <div class="flex min-h-screen flex-col bg-[#FAFAFA] font-store text-slate-800 [color-scheme:light]">
-        <div class="bg-[#E02424] px-4 py-2 text-center text-sm font-semibold text-white">
-            <i class="fa-solid fa-stopwatch mr-1.5" :class="{ 'animate-pulse': restante > 0 }"></i>
-            Seu pedido está reservado por
-            <span class="ml-1 inline-block min-w-[3.25rem] rounded bg-white/20 px-1.5 py-0.5 font-mono tabular-nums">{{ tempo }}</span>
+        <div class="flex flex-wrap items-center justify-center gap-2 bg-[#E02424] px-4 py-2.5 text-center text-base font-bold uppercase tracking-wide text-white md:text-lg">
+            <i class="fa-solid fa-stopwatch" :class="{ 'animate-pulse': restante > 0 }"></i>
+            Frete grátis por tempo limitado:
+            <span class="inline-block min-w-[4.5rem] rounded-md bg-white/20 px-2 py-0.5 font-mono text-xl tabular-nums md:text-2xl">{{ tempo }}</span>
         </div>
         <div class="bg-[#0FB930] px-4 py-2 text-center text-sm font-semibold tracking-wide text-white">
             <i class="fa-solid fa-lock mr-1.5"></i> COMPRA 100% SEGURA

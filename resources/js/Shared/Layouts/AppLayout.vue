@@ -108,17 +108,17 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                 <div class="ml-auto flex items-center gap-1 lg:ml-0">
                     <Link href="/favoritos" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
                         <i class="far fa-heart text-base"></i>
-                        <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ favoritesCount }}</span>
+                        <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
                     <Link href="/carrinho" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
-                        <i class="fas fa-bag-shopping text-base"></i>
-                        <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ cartCount }}</span>
+                        <i class="fas fa-cart-shopping text-base"></i>
+                        <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>
 
                     <div v-if="user" ref="notifMenuRef" class="relative">
                         <button type="button" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Notificações" @click="notifMenuOpen = !notifMenuOpen">
                             <i class="far fa-bell text-base"></i>
-                            <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-store-accent px-1 text-[0.6rem] font-store-mono leading-tight text-store-accent-contrast">{{ unreadNotifications }}</span>
+                            <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ unreadNotifications }}</span>
                         </button>
 
                         <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
@@ -281,7 +281,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     <button type="button" class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-sunken text-store-fg-muted hover:text-store-fg" aria-label="Fechar" @click="closeDiscountModal">
                         <i class="fas fa-xmark"></i>
                     </button>
-                    <div class="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-store-accent via-purple-400 to-fuchsia-300"></div>
+                    <div class="absolute inset-x-0 top-0 h-1.5 bg-store-accent"></div>
                     <span class="inline-flex rounded-full bg-store-accent-soft px-3 py-1 font-store-mono text-xs font-semibold uppercase tracking-[0.18em] text-store-accent-strong">Oferta KazaKora</span>
                     <h3 class="mt-4 font-display text-3xl font-semibold leading-tight">Desconto já aplicado nos produtos selecionados</h3>
                     <p class="mt-3 text-sm leading-relaxed text-store-fg-muted">Abra o catálogo, escolha seu produto e finalize com frete e pagamento em poucos passos.</p>

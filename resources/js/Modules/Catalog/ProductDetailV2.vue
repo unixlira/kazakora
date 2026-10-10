@@ -421,7 +421,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                                 <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
                                 <button type="button" class="btn-sec" :disabled="addingToCart" @click="addToCart">
-                                    <i class="fas fa-bag-shopping"></i> Adicionar ao carrinho
+                                    <i class="fas fa-cart-shopping"></i> Adicionar ao carrinho
                                 </button>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>

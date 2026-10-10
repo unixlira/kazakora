@@ -365,7 +365,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
             <!-- Resumo no celular (recolhível) -->
             <button type="button" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm lg:hidden" @click="resumoAberto = !resumoAberto">
                 <span class="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <i class="fa-solid fa-bag-shopping text-emerald-600"></i>
+                    <i class="fa-solid fa-cart-shopping text-emerald-600"></i>
                     {{ resumoAberto ? 'Ocultar resumo' : 'Ver resumo' }} ({{ totalItens }} {{ totalItens === 1 ? 'item' : 'itens' }})
                     <i class="fa-solid fa-chevron-down text-xs transition" :class="{ 'rotate-180': resumoAberto }"></i>
                 </span>

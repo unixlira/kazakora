@@ -116,7 +116,7 @@ const submitReview = () => {
             <button type="button" :disabled="product.stock < 1"
                 class="absolute bottom-0 right-[5px] z-10 flex h-10 w-10 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
-                <i class="fas fa-bag-shopping text-sm"></i>
+                <i class="fas fa-cart-shopping text-sm"></i>
             </button>
         </div>
 

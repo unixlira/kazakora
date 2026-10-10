@@ -648,10 +648,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .foto img, .pd2 .foto video { width: 100%; height: 100%; object-fit: contain; }
 .pd2 .foto .vazio { height: 100%; display: grid; place-items: center; font-size: 56px; color: var(--muted); opacity: .4; }
 .pd2 .miniaturas { flex: 1; display: flex; flex-direction: column; gap: 20px; max-height: 640px; overflow-y: auto; scrollbar-width: thin; }
-.pd2 .miniaturas button { position: relative; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 2px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
+.pd2 .miniaturas button { position: relative; display: block; width: 100%; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 2px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
 .pd2 .miniaturas button:hover { border-color: var(--line); }
 .pd2 .miniaturas button[aria-current=true] { border-color: var(--yellow); }
-.pd2 .miniaturas img, .pd2 .miniaturas video { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+/* Foto e vídeo presos no quadrado da miniatura (o <video> tem altura própria
+   e ficava maior que as fotos). */
+.pd2 .miniaturas img, .pd2 .miniaturas video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0; background: #000; }
+.pd2 .miniaturas img { background: none; }
 .pd2 .play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .35); color: #fff; font-size: 12px; pointer-events: none; }
 .pd2 .play.grande { background: transparent; }
 .pd2 .play.grande i { width: 64px; height: 64px; border-radius: 50%; background: rgba(0, 0, 0, .55); display: grid; place-items: center; font-size: 22px; }

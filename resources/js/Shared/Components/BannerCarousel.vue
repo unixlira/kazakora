@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
     banners: {
@@ -14,8 +14,28 @@ const props = defineProps({
     },
 });
 
+// Loop contínuo (pedido 2026-10-10): uma cópia do 1º banner fica no fim da
+// faixa. Do último, desliza para a cópia (parece o 1º) e, sem animação, volta
+// pro 1º de verdade — nunca "rebobina" a faixa inteira.
 const current = ref(0);
+const animar = ref(true);
 let timer = null;
+const total = computed(() => props.banners.length);
+const slides = computed(() => (total.value > 1 ? [...props.banners, props.banners[0]] : props.banners));
+const ativo = computed(() => current.value % Math.max(total.value, 1));
+
+const pularSemAnimar = async (indice) => {
+    animar.value = false;
+    current.value = indice;
+    await nextTick();
+    // força o navegador a aplicar a posição antes de religar a animação
+    void document.body.offsetHeight;
+    requestAnimationFrame(() => { animar.value = true; });
+};
+
+const fimDaTransicao = () => {
+    if (current.value === total.value) pularSemAnimar(0);
+};
 
 const start = () => {
     stop();
@@ -31,12 +51,22 @@ const stop = () => {
     }
 };
 
-const next = () => {
-    current.value = (current.value + 1) % props.banners.length;
+const next = async () => {
+    if (current.value >= total.value) await pularSemAnimar(0);
+    current.value += 1;
+    // Garantia: se o navegador não avisar o fim da animação (aba em segundo
+    // plano, "reduzir animações"), volta da cópia pro 1º mesmo assim.
+    if (current.value === total.value) {
+        setTimeout(() => { if (current.value === total.value) pularSemAnimar(0); }, 800);
+    }
 };
 
-const prev = () => {
-    current.value = (current.value - 1 + props.banners.length) % props.banners.length;
+const prev = async () => {
+    if (current.value === 0) {
+        await pularSemAnimar(total.value);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    current.value -= 1;
 };
 
 const goTo = (index) => {
@@ -93,11 +123,13 @@ onUnmounted(stop);
         <div class="relative w-full overflow-hidden md:aspect-[21/9] lg:aspect-[3/1]">
             <!-- Slider de verdade (pedido 2026-10-10): os banners ficam lado a lado
                  numa faixa que desliza suave — sem "piscar" como se a tela recarregasse. -->
-            <div class="flex h-full items-start transition-transform duration-700 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none"
-                :style="{ transform: `translateX(-${current * 100}%)` }">
+            <div class="flex h-full items-start ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none"
+                :class="animar ? 'transition-transform duration-700' : 'transition-none'"
+                :style="{ transform: `translateX(-${current * 100}%)` }"
+                @transitionend.self="fimDaTransicao">
                 <component
                     :is="banner.link_url ? 'a' : 'div'"
-                    v-for="(banner, index) in banners" :key="banner.id"
+                    v-for="(banner, index) in slides" :key="`${banner.id}-${index}`"
                     :href="banner.link_url || undefined"
                     class="relative block w-full shrink-0 md:h-full"
                     :aria-hidden="index !== current"
@@ -133,7 +165,7 @@ onUnmounted(stop);
                 <button v-for="(banner, index) in banners" :key="banner.id" type="button"
                     :aria-label="`Ir para o banner ${index + 1}`"
                     class="h-2 rounded-full bg-store-accent transition-all"
-                    :class="index === current ? 'w-6 opacity-100' : 'w-2 opacity-50'"
+                    :class="index === ativo ? 'w-6 opacity-100' : 'w-2 opacity-50'"
                     @click="goTo(index)"
                 />
             </div>

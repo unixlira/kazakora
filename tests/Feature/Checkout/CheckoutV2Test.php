@@ -92,6 +92,28 @@ class CheckoutV2Test extends TestCase
         $this->assertSame('maria@exemplo.com', session('checkout_draft.guest.email'));
     }
 
+    public function test_entrega_e_sempre_frete_gratis_mesmo_mandando_outro(): void
+    {
+        $this->noCarrinho();
+        $pago = ShippingMethod::factory()->create(['price' => 30, 'is_active' => true]);
+
+        $this->get('/finalizacao')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('shippingMethods', 1)
+            ->where('shippingMethods.0.name', 'Frete Grátis')
+            ->where('shippingMethods.0.estimated_days', 7));
+
+        $this->postJson('/finalizacao/entrega', $this->entrega([
+            'shipping_method_id' => 'correios:03220',
+            'shipping_quote' => ['name' => 'SEDEX', 'price' => 30.06],
+            'guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000'],
+        ]))->assertOk();
+
+        $gratis = ShippingMethod::query()->where('name', 'Frete Grátis')->first();
+        $this->assertSame($gratis->id, (int) session('checkout_draft.shipping_method_id'));
+        $this->assertNotSame($pago->id, $gratis->id);
+        $this->assertEmpty(session('checkout_draft.shipping_quote'));
+    }
+
     public function test_email_que_ja_tem_conta_pede_login(): void
     {
         User::factory()->create(['email' => 'ja@exemplo.com']);

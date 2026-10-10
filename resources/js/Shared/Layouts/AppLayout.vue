@@ -90,7 +90,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                 </Link>
 
                 <nav class="ml-auto hidden items-center gap-7 lg:flex">
-                    <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Categorias</a>
+                    <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Departamentos</a>
                     <a href="/#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Favoritos</Link>
                     <Link href="/rastreio" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Rastrear pedido</Link>
@@ -178,7 +178,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                         class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm">
                 </form>
                 <nav class="flex flex-col gap-3">
-                    <a href="/#categorias" class="text-sm font-medium">Categorias</a>
+                    <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
                     <a href="/#produtos" class="text-sm font-medium">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>
                     <Link href="/carrinho" class="text-sm font-medium">Carrinho</Link>
@@ -208,7 +208,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                         <div>
                             <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
-                                <li><a href="/#categorias" class="hover:opacity-100">Categorias</a></li>
+                                <li><a href="/#categorias" class="hover:opacity-100">Departamentos</a></li>
                                 <li><a href="/#produtos" class="hover:opacity-100">Produtos</a></li>
                                 <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
                             </ul>

@@ -62,8 +62,13 @@ const showSecondImage = computed(() => supportsHover && hasHovered.value && !!se
 // primeiro hover piscaria o fundo vazio enquanto a segunda baixa.
 const secondImageVisible = computed(() => isHovering.value && secondImageLoaded.value);
 
+// Navegação rápida (pedido 2026-10-10): ao passar o mouse ou encostar o dedo
+// no card, a página do produto já é buscada; o clique abre na hora.
+const prefetchProduct = () => router.prefetch(`/produtos/${props.product.slug}`, { method: 'get' }, { cacheFor: '1m' });
+
 const onPointerEnter = () => {
     isHovering.value = true;
+    prefetchProduct();
 
     if (supportsHover) {
         hasHovered.value = true;
@@ -89,7 +94,7 @@ const submitReview = () => {
 <template>
     <article class="group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
         <div class="relative aspect-square cursor-pointer bg-white"
-            @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @click="goToProduct">
+            @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">
                 <img :src="primaryImage(product)" :alt="product.name" loading="lazy" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"

@@ -8,12 +8,14 @@ use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Operacional\Models\ShippingMethod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -35,6 +37,7 @@ class CatalogController extends Controller
 
         $search = $request->string('search')->trim();
         $tipo = $request->query('tipo');
+        $categoria = (string) $request->query('categoria', '');
 
         $baseQuery = Product::query()
             ->forCard()
@@ -46,11 +49,15 @@ class CatalogController extends Controller
             ->whereNull('parent_product_id')
             ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
             ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
-            ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true));
+            ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true))
+            // Departamentos (pedido 2026-10-10): clicar no círculo filtra a vitrine.
+            ->when($categoria !== '', fn ($query) => $query->whereHas('category', fn ($c) => $c->where('slug', $categoria)));
 
         $products = (clone $baseQuery)
             ->latest()
-            ->paginate(12)
+            // 8 por vez; o "Carregar mais" da home busca a próxima página só
+            // com essa prop (pedido 2026-10-10).
+            ->paginate(8)
             ->withQueryString();
 
         return Inertia::render('Catalog/Home', [
@@ -64,11 +71,7 @@ class CatalogController extends Controller
                 ->take(5)
                 ->get(),
             'products' => $products,
-            'categories' => Category::query()
-                ->whereHas('products', fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id'))
-                ->withCount(['products' => fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id')])
-                ->orderByDesc('products_count')
-                ->get(['id', 'name', 'slug', 'image_path']),
+            'categories' => $this->departamentos(),
             'favoriteIds' => $request->user()
                 ? Favorite::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
@@ -76,8 +79,38 @@ class CatalogController extends Controller
             'reviewedProductIds' => $request->user()
                 ? Review::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
-            'filters' => $request->only('search', 'tipo'),
+            'filters' => $request->only('search', 'tipo', 'categoria'),
         ]);
+    }
+
+    /**
+     * Departamentos da home (pedido 2026-10-10): círculo com imagem. Sem foto
+     * cadastrada na categoria, usa a foto de um produto dela. Fica 10 min em
+     * cache — a lista muda pouco e a home tem que abrir rápido.
+     *
+     * @return list<array{id: int, name: string, slug: string, image_url: ?string}>
+     */
+    private function departamentos(): array
+    {
+        return Cache::remember('loja:departamentos', now()->addMinutes(10), function () {
+            $ativos = fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id');
+
+            return Category::query()
+                ->whereHas('products', $ativos)
+                ->withCount(['products' => $ativos])
+                ->orderByDesc('products_count')
+                ->get(['id', 'name', 'slug', 'image_path'])
+                ->map(fn (Category $category) => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'slug' => $category->slug,
+                    'image_url' => $category->image_url ?? ProductImage::query()
+                        ->whereHas('product', fn ($query) => $ativos($query)->where('category_id', $category->id))
+                        ->orderByDesc('is_primary')->orderBy('position')
+                        ->first()?->thumb_url,
+                ])
+                ->all();
+        });
     }
 
     public function show(Request $request, Product $product): Response

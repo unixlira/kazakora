@@ -29,22 +29,28 @@ class OrderConfirmation extends Mailable
     }
 
     /**
-     * Anexa o DANFE em PDF ao e-mail de confirmação quando a NF-e do pedido
+     * Anexa o DANFE em PDF (e o XML) ao e-mail de confirmação quando a NF-e do pedido
      * já foi emitida (autorizada pela SEFAZ) e o PDF já foi gerado — ver
      * App\Modules\Fiscal\Services\InvoiceService.
      */
     public function attachments(): array
     {
         $invoice = $this->order->invoice;
+        $anexos = [];
 
-        if (! $invoice?->danfe_path || ! Storage::disk('local')->exists($invoice->danfe_path)) {
-            return [];
+        if ($invoice?->danfe_path && Storage::disk('local')->exists($invoice->danfe_path)) {
+            $anexos[] = Attachment::fromStorageDisk('local', $invoice->danfe_path)
+                ->as("nfe-pedido-{$this->order->id}.pdf")
+                ->withMime('application/pdf');
         }
 
-        return [
-            Attachment::fromStorageDisk('local', $invoice->danfe_path)
-                ->as("nfe-pedido-{$this->order->id}.pdf")
-                ->withMime('application/pdf'),
-        ];
+        // Pedido 2026-10-10: a nota vai também em XML (o arquivo oficial).
+        if ($invoice?->xml_path && Storage::disk('local')->exists($invoice->xml_path)) {
+            $anexos[] = Attachment::fromStorageDisk('local', $invoice->xml_path)
+                ->as("nfe-pedido-{$this->order->id}.xml")
+                ->withMime('application/xml');
+        }
+
+        return $anexos;
     }
 }

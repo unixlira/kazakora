@@ -18,7 +18,7 @@
             <tr>
                 <td style="padding: 14px 18px; font-size: 13px; color: #1b3a5c;">
                     <strong>Nota fiscal em anexo.</strong> A NF-e do seu pedido (chave de acesso
-                    {{ $order->invoice->chave_acesso }}) está anexada a este e-mail em PDF.
+                    {{ $order->invoice->chave_acesso }}) está anexada a este e-mail em PDF e XML.
                 </td>
             </tr>
         </table>

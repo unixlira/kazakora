@@ -73,9 +73,9 @@ const tempo = computed(() => {
                 <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-4 md:flex-row md:justify-between">
                     <span class="font-display text-2xl font-semibold">{{ COMPANY.nomeFantasia }}</span>
                     <ul class="flex flex-col items-center gap-2 text-sm font-medium md:flex-row md:gap-6">
-                        <li><i class="fa-solid fa-lock mr-2"></i>Compra Segura</li>
-                        <li><i class="fa-solid fa-fingerprint mr-2"></i>Dados Protegidos</li>
-                        <li><i class="fa-solid fa-box-open mr-2"></i>Entrega Garantida</li>
+                        <li><i class="fa-solid fa-lock mr-2 text-[#0FB930]"></i>Compra Segura</li>
+                        <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados Protegidos</li>
+                        <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega Garantida</li>
                     </ul>
                 </div>
             </div>

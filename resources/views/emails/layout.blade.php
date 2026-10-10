@@ -26,6 +26,9 @@
             .email-container { width: 100% !important; }
             .email-padding { padding-left: 20px !important; padding-right: 20px !important; }
             .selos-par, .quebra-celular { display: block !important; }
+            .whats-icone { width: 30px !important; height: 30px !important; }
+            .so-computador { display: none !important; }
+            .so-celular { display: inline !important; }
             .selo-ponto { display: none !important; }
         }
     </style>
@@ -58,9 +61,10 @@
                     </tr>
                     <tr>
                         <td style="background-color: #0b0b0b; padding: 20px 24px; text-align: center; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.7; color: #ffffff;">
-                            <a href="{{ $empresa['whatsapp_link'] }}" target="_blank" style="text-decoration: none; color: #ffffff; font-size: 14px; font-weight: 700;">
-                                <img src="{{ url('/images/marca/whatsapp-email.png') }}" alt="WhatsApp" width="40" height="40" style="display: inline-block; width: 40px; height: 40px; vertical-align: middle; border: 0;">
-                                <span class="quebra-celular" style="vertical-align: middle;">&nbsp;Dúvidas? Fale conosco</span>
+                            {{-- Ícone + frase curta apontando pra ele: o cliente entende que é
+                                 pra clicar. No celular o ícone diminui e a frase encurta. --}}
+                            <a href="{{ $empresa['whatsapp_link'] }}" target="_blank" style="text-decoration: none; color: #ffffff; font-size: 14px; font-weight: 700; white-space: nowrap;">
+                                <img class="whats-icone" src="{{ url('/images/marca/whatsapp-email.png') }}" alt="WhatsApp" width="40" height="40" style="display: inline-block; width: 40px; height: 40px; vertical-align: middle; border: 0;"><span class="so-computador" style="vertical-align: middle;">&nbsp;&#128072; Dúvidas? Clique e fale conosco</span><span class="so-celular" style="display: none; mso-hide: all; vertical-align: middle; font-size: 13px;">&nbsp;&#128072; Dúvidas? Toque aqui</span>
                             </a>
                             {{-- Gmail/iPhone viram número em link sozinho (pedido 2026-10-10:
                                  texto branco, sem link). O caractere invisível (&#8203;)

@@ -249,7 +249,12 @@ const SELOS = [
 const erros = ref({});
 const processando = ref(false);
 const erroGeral = ref(null);
-const erro = (campo) => erros.value[campo]?.[0] ?? erros.value[campo] ?? serverErrors.value[campo] ?? null;
+// Depois de uma tentativa nesta tela, valem só os erros dela (nada de erro
+// antigo guardado na sessão aparecendo de novo — BUG REAL 2026-10-10).
+const tentouAqui = ref(false);
+const erro = (campo) => erros.value[campo]?.[0] ?? erros.value[campo] ?? (tentouAqui.value ? null : serverErrors.value[campo]) ?? null;
+const CAMPOS_ENDERECO = ['new_address.zip', 'new_address.street', 'new_address.number', 'new_address.neighborhood', 'new_address.city', 'new_address.state', 'new_address.recipient_name'];
+const errosEndereco = computed(() => [...new Set(CAMPOS_ENDERECO.map((campo) => erro(campo)).filter(Boolean))]);
 
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
 
@@ -311,6 +316,7 @@ const conferirCpf = () => {
 const finalizar = async () => {
     erros.value = {};
     erroGeral.value = null;
+    tentouAqui.value = true;
 
     const errosLocais = {};
     if (nomeCurto()) {
@@ -603,7 +609,10 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <span class="text-sm font-medium text-slate-700">UF</span>
                                 <input v-model="endereco.state" type="text" maxlength="2" autocomplete="address-level1" :class="[inputClass, 'uppercase', erro('new_address.state') && inputErroClass]">
                             </label>
-                            <p v-if="['new_address.street','new_address.number','new_address.neighborhood','new_address.city','new_address.state'].some((c) => erro(c))" class="col-span-6 text-xs text-red-600">Preencha o endereço completo.</p>
+                            <!-- Diz exatamente o que falta (antes era só "Preencha o endereço completo"). -->
+                            <p v-if="errosEndereco.length" class="col-span-6 text-xs text-red-600">
+                                <i class="fa-solid fa-circle-exclamation mr-1"></i>{{ errosEndereco.join(' ') }}
+                            </p>
                             <button v-if="addresses.length" type="button" class="col-span-6 text-left text-sm font-medium text-sky-600 hover:underline" @click="usarNovoEndereco = false">
                                 <i class="fa-solid fa-arrow-left mr-1"></i> Usar um endereço salvo
                             </button>

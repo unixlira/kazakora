@@ -94,14 +94,14 @@ const submitReview = () => {
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
 const SELO_DO_MES = `Oferta ${mes}.${mes}`;
 
-// Nome no celular: cabe em 2 linhas com o selinho "Ver mais" no fim.
-const LIMITE_NOME_CELULAR = 26;
+// Nome no celular: cabe em 3 linhas com o selinho "Ver mais" no fim.
+const LIMITE_NOME_CELULAR = 44;
 const nomeCurto = computed(() => {
     const nome = String(props.product.name ?? '').trim();
-    if (nome.length <= LIMITE_NOME_CELULAR + 10) return { texto: nome, cortado: false };
+    if (nome.length <= LIMITE_NOME_CELULAR + 6) return { texto: nome, cortado: false };
     const corte = nome.slice(0, LIMITE_NOME_CELULAR);
     const ultimoEspaco = corte.lastIndexOf(' ');
-    return { texto: (ultimoEspaco > 15 ? corte.slice(0, ultimoEspaco) : corte).replace(/[\s,.;:–-]+$/, ''), cortado: true };
+    return { texto: (ultimoEspaco > 30 ? corte.slice(0, ultimoEspaco) : corte).replace(/[\s,.;:–-]+$/, ''), cortado: true };
 });
 </script>
 
@@ -151,9 +151,10 @@ const nomeCurto = computed(() => {
         <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
             <!-- Computador: nome em até 2 linhas. -->
             <h4 class="hidden cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent md:block" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
-            <!-- Celular (pedido 2026-10-10): letra menor, no máximo 2 linhas; nome
-                 longo termina em "…" e um selinho preto "Ver mais". -->
-            <h4 class="max-h-8 min-h-[2rem] cursor-pointer overflow-hidden text-[12px] font-semibold leading-4 md:hidden" :title="product.name" @click="goToProduct">
+            <!-- Celular (pedido 2026-10-10): letra menor e altura fixa de 3 linhas, para
+                 o Envio Express ficar alinhado em todos os cards; nome que não cabe
+                 termina em "…" e um selinho preto "Ver mais". -->
+            <h4 class="line-clamp-3 h-12 cursor-pointer overflow-hidden text-[12px] font-semibold leading-4 md:hidden" :title="product.name" @click="goToProduct">
                 {{ nomeCurto.texto }}<template v-if="nomeCurto.cortado">… <span class="ml-0.5 inline-block rounded bg-black px-1 py-px align-middle text-[9px] font-bold leading-tight text-white">Ver mais</span></template>
             </h4>
             <!-- Envio Express abaixo do título (pedido 2026-10-10): caminhão branco em
@@ -169,7 +170,7 @@ const nomeCurto = computed(() => {
                     </span>
                     <span class="-ml-2 flex items-center whitespace-nowrap bg-[#7B1E3A] pl-2.5 pr-2 text-[7.5px] font-extrabold uppercase italic leading-none tracking-tighter md:-ml-2.5 md:pl-3.5 md:pr-3 md:text-[10px] md:tracking-tight">Envio Express</span>
                 </div>
-                <span v-if="product.stock > 0" class="inline-flex h-5 items-center gap-0.5 whitespace-nowrap rounded-full bg-emerald-600 px-1.5 text-[7.5px] font-extrabold uppercase tracking-tighter text-white md:gap-1 md:px-2 md:text-[10px] md:tracking-wide"><i class="fa-solid fa-bolt"></i> Full</span>
+                <span v-if="product.stock > 0" class="inline-flex h-5 items-center gap-0.5 whitespace-nowrap rounded-full bg-emerald-600 px-1.5 text-[7.5px] font-extrabold uppercase tracking-tighter text-white md:gap-1 md:px-2 md:text-[10px] md:tracking-wide"><i class="fa-solid fa-bolt"></i> <span class="italic">Full</span></span>
             </div>
             <div class="mt-auto pt-1">
                 <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->

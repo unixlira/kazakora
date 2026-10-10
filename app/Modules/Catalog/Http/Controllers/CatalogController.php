@@ -68,7 +68,7 @@ class CatalogController extends Controller
                 ->whereNull('parent_product_id')
                 ->where('is_featured', true)
                 ->latest()
-                ->take(5)
+                ->take(4)
                 ->get(),
             'products' => $products,
             'categories' => $this->departamentos(),

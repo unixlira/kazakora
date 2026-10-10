@@ -67,6 +67,14 @@ onMounted(() => {
 });
 
 const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+
+const REDES = [
+    { nome: 'Instagram', icone: 'fab fa-instagram', link: COMPANY.redes?.instagram },
+    { nome: 'Facebook', icone: 'fab fa-facebook-f', link: COMPANY.redes?.facebook },
+    { nome: 'TikTok', icone: 'fab fa-tiktok', link: COMPANY.redes?.tiktok },
+    { nome: 'YouTube', icone: 'fab fa-youtube', link: COMPANY.redes?.youtube },
+    { nome: 'WhatsApp', icone: 'fab fa-whatsapp', link: COMPANY.whatsappLink },
+].filter((rede) => rede.link);
 </script>
 
 <template>
@@ -91,7 +99,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
                 <nav class="ml-auto hidden items-center gap-7 lg:flex">
                     <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Departamentos</a>
-                    <a href="/#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
+                    <a href="/?todos=1#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Favoritos</Link>
                     <Link href="/rastreio" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Rastrear pedido</Link>
                     <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
@@ -179,7 +187,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                 </form>
                 <nav class="flex flex-col gap-3">
                     <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
-                    <a href="/#produtos" class="text-sm font-medium">Produtos</a>
+                    <a href="/?todos=1#produtos" class="text-sm font-medium">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>
                     <Link href="/carrinho" class="text-sm font-medium">Carrinho</Link>
                     <Link href="/rastreio" class="text-sm font-medium">Rastrear pedido</Link>
@@ -194,14 +202,21 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
         </main>
 
         <!-- Footer -->
-        <footer class="mt-20 border-t border-store-border bg-white text-store-fg">
+        <footer class="mt-16 bg-[#0b0b0b] text-white">
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
                     <div class="lg:max-w-xs lg:shrink-0">
-                        <span class="font-display text-xl font-semibold text-store-fg">KazaKora</span>
+                        <span class="font-display text-xl font-semibold text-white">KazaKora</span>
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
+                        <!-- Redes sociais (pedido 2026-10-10) -->
+                        <div class="mt-5 flex justify-center gap-3 lg:justify-start">
+                            <a v-for="rede in REDES" :key="rede.nome" :href="rede.link" target="_blank" rel="noopener" :aria-label="rede.nome"
+                                class="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg transition hover:bg-white hover:text-black">
+                                <i :class="rede.icone"></i>
+                            </a>
+                        </div>
                     </div>
 
                     <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
@@ -209,7 +224,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                             <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><a href="/#categorias" class="hover:opacity-100">Departamentos</a></li>
-                                <li><a href="/#produtos" class="hover:opacity-100">Produtos</a></li>
+                                <li><a href="/?todos=1#produtos" class="hover:opacity-100">Produtos</a></li>
                                 <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
                             </ul>
                         </div>
@@ -261,7 +276,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     </div>
                 </div>
 
-                <div class="mt-12 border-t border-store-border pt-6 text-center text-xs opacity-70">
+                <div class="mt-12 border-t border-white/10 pt-6 text-center text-xs opacity-70">
                     <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
                 </div>
             </div>
@@ -286,7 +301,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     <h3 class="mt-4 font-display text-3xl font-semibold leading-tight">Desconto já aplicado nos produtos selecionados</h3>
                     <p class="mt-3 text-sm leading-relaxed text-store-fg-muted">Abra o catálogo, escolha seu produto e finalize com frete e pagamento em poucos passos.</p>
                     <div class="mt-5 grid gap-2 sm:grid-cols-2">
-                        <Link href="/#produtos" class="rounded-full bg-store-accent px-5 py-3 text-center text-sm font-bold text-store-accent-contrast no-underline" @click="closeDiscountModal">Ver ofertas</Link>
+                        <Link href="/?todos=1#produtos" class="rounded-full bg-store-accent px-5 py-3 text-center text-sm font-bold text-store-accent-contrast no-underline" @click="closeDiscountModal">Ver ofertas</Link>
                         <button type="button" class="rounded-full border border-store-border-strong px-5 py-3 text-sm font-bold text-store-fg hover:bg-store-bg-sunken" @click="closeDiscountModal">Continuar navegando</button>
                     </div>
                 </div>

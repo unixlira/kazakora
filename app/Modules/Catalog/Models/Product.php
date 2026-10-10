@@ -2,6 +2,7 @@
 
 namespace App\Modules\Catalog\Models;
 
+
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -42,7 +43,7 @@ class Product extends Model
         'is_new_release',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia'];
 
     protected function casts(): array
     {
@@ -67,10 +68,35 @@ class Product extends Model
 
     public function getHasDiscountAttribute(): bool
     {
-        return (bool) ($this->discount_percentage || $this->discount_amount);
+        return (bool) ($this->discount_percentage || $this->discount_amount) || $this->precoOfertaDeHoje() !== null;
     }
 
+    /**
+     * Preço da loja. Com oferta do dia (pedido 2026-10-10) vale o preço da
+     * oferta, já conferido sem prejuízo na escolha do dia. Se o preço do
+     * produto baixou depois disso, fica o menor.
+     */
     public function getFinalPriceAttribute(): float
+    {
+        $base = $this->precoSemOferta();
+        $oferta = $this->precoOfertaDeHoje();
+
+        return $oferta !== null ? min($base, $oferta) : $base;
+    }
+
+    /** Preço da oferta do dia deste produto (null = não está em oferta hoje). */
+    public function precoOfertaDeHoje(): ?float
+    {
+        return $this->id ? (OfertaDoDia::precosDeHoje()[$this->id] ?? null) : null;
+    }
+
+    public function getOfertaDoDiaAttribute(): bool
+    {
+        return $this->precoOfertaDeHoje() !== null;
+    }
+
+    /** Preço sem a oferta do dia — o que vale para os marketplaces. */
+    public function precoSemOferta(): float
     {
         if ($this->discount_percentage) {
             return max(0, round((float) $this->price * (1 - (float) $this->discount_percentage / 100), 2));
@@ -197,7 +223,9 @@ class Product extends Model
             ->filter(fn (ProductQuantityDiscount $discount) => $discount->min_quantity <= $quantity)
             ->last();
 
-        if (! $tier) {
+        // Oferta do dia não acumula com desconto por quantidade (a conta de
+        // lucro da oferta foi feita sem ele).
+        if (! $tier || $this->precoOfertaDeHoje() !== null) {
             return $this->final_price;
         }
 

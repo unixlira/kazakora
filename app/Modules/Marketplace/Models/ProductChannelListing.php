@@ -51,7 +51,8 @@ class ProductChannelListing extends Model
     {
         return $this->price !== null
             ? (float) $this->price
-            : (float) DescontoPix::semAcrescimo((float) $product->final_price);
+            // Sem a oferta do dia: ela vale só na loja KazaKora.
+            : (float) DescontoPix::semAcrescimo($product->precoSemOferta());
     }
 
     public function product(): BelongsTo

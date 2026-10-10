@@ -326,11 +326,15 @@ class CheckoutController extends Controller
         }
 
         $draft = $request->session()->get(self::SESSION_KEY, []);
-        $subtotal = round($this->cart->items()->sum('subtotal'), 2);
+        $cartItems = $this->cart->items();
+        $subtotal = round($cartItems->sum('subtotal'), 2);
         $email = $request->user()?->email ?? ($draft['guest']['email'] ?? null);
 
         if ($motivo = $coupon->motivoInvalido($subtotal, $request->user(), $email)) {
             return ['erro' => $motivo];
+        }
+        if ($subtotal > 0 && $this->subtotalParaCupom($cartItems) <= 0) {
+            return ['erro' => 'Cupons não valem para produtos da Oferta do Dia — eles já estão com o menor preço.'];
         }
 
         $draft['coupon_code'] = $coupon->code;
@@ -340,9 +344,19 @@ class CheckoutController extends Controller
             'code' => $coupon->code,
             'discount_type' => $coupon->discount_type,
             'discount_value' => (float) $coupon->discount_value,
-            'discount_amount' => $coupon->discountFor($subtotal),
+            'discount_amount' => $coupon->discountFor($this->subtotalParaCupom($cartItems)),
             'descricao' => $coupon->descricaoDesconto(),
         ];
+    }
+
+    /**
+     * Base do cupom: o carrinho sem os produtos da Oferta do Dia (pedido
+     * 2026-10-10) — a conta de "sem prejuízo" da oferta não tem espaço pra
+     * mais um desconto em cima.
+     */
+    private function subtotalParaCupom($cartItems): float
+    {
+        return round($cartItems->reject(fn (array $item) => $item['product']->oferta_do_dia)->sum('subtotal'), 2);
     }
 
     /**
@@ -460,7 +474,7 @@ class CheckoutController extends Controller
             return redirect()->route($this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento')
                 ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
         }
-        $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
+        $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
 
         $methods = $data['split'] ?? false
             ? $this->sortMethodsSafely([$data['payment_method'], $data['payment_method_secondary']])
@@ -995,7 +1009,7 @@ class CheckoutController extends Controller
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
-        $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
+        $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
 
         return [
             'items' => $cartItems,
@@ -1206,7 +1220,7 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
-            'discountAmount' => $coupon ? $coupon->discountFor($subtotal) : 0,
+            'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentual(),
             'addresses' => $user ? $user->addresses : [],
             'shippingMethods' => [ShippingMethod::freteGratis()->only(['id', 'name', 'estimated_days', 'price'])],

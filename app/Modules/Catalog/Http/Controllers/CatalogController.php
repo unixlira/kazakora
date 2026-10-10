@@ -10,6 +10,7 @@ use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Operacional\Models\ShippingMethod;
@@ -53,24 +54,20 @@ class CatalogController extends Controller
             // Departamentos (pedido 2026-10-10): clicar no círculo filtra a vitrine.
             ->when($categoria !== '', fn ($query) => $query->whereHas('category', fn ($c) => $c->where('slug', $categoria)));
 
-        $products = (clone $baseQuery)
+        $products = fn () => (clone $baseQuery)
             ->latest()
             // 8 por vez; o "Carregar mais" da home busca a próxima página só
             // com essa prop (pedido 2026-10-10).
             ->paginate(8)
             ->withQueryString();
 
+        // Sem busca/filtro a home é a vitrine (seções); com filtro, a lista com "Carregar mais".
+        $modoLista = $search->isNotEmpty() || $tipo || $categoria !== '' || $request->boolean('todos');
+
         return Inertia::render('Catalog/Home', [
+            'vitrine' => $modoLista ? null : fn () => app(VitrineHome::class)->montar(),
             'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'image_path_mobile', 'link_url']),
-            'featuredProducts' => Product::query()
-                ->forCard()
-                ->where('is_active', true)
-                ->whereNull('parent_product_id')
-                ->where('is_featured', true)
-                ->latest()
-                ->take(4)
-                ->get(),
-            'products' => $products,
+            'products' => $modoLista ? $products : null,
             'categories' => $this->departamentos(),
             'favoriteIds' => $request->user()
                 ? Favorite::query()->where('user_id', $request->user()->id)->pluck('product_id')
@@ -79,7 +76,7 @@ class CatalogController extends Controller
             'reviewedProductIds' => $request->user()
                 ? Review::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
-            'filters' => $request->only('search', 'tipo', 'categoria'),
+            'filters' => $request->only('search', 'tipo', 'categoria', 'todos'),
         ]);
     }
 

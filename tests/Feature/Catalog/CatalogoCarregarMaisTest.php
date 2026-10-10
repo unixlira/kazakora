@@ -20,13 +20,13 @@ class CatalogoCarregarMaisTest extends TestCase
     {
         Product::factory()->count(10)->create(['is_active' => true]);
 
-        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page
+        $this->get('/?todos=1')->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Catalog/Home', false)
             ->has('products.data', 8)
             ->where('products.last_page', 2));
 
-        $versao = $this->get('/')->viewData('page')['version'] ?? '';
-        $this->get('/?page=2', [
+        $versao = $this->get('/?todos=1')->viewData('page')['version'] ?? '';
+        $this->get('/?todos=1&page=2', [
             'X-Inertia' => 'true',
             'X-Inertia-Version' => $versao,
             'X-Inertia-Partial-Component' => 'Catalog/Home',
@@ -43,7 +43,7 @@ class CatalogoCarregarMaisTest extends TestCase
             $product->images()->create(['path' => "products/x{$position}.jpg", 'position' => $position, 'is_primary' => $position === 2]);
         }
 
-        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page
+        $this->get('/?todos=1')->assertInertia(fn (AssertableInertia $page) => $page
             ->has('products.data.0.images', 2)
             ->where('products.data.0.images.0.is_primary', true));
     }

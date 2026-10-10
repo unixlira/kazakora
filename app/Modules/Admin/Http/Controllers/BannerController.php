@@ -3,10 +3,13 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Modules\Catalog\Models\Banner;
+use App\Support\Marca;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,7 +19,63 @@ class BannerController extends Controller
     {
         return Inertia::render('Admin/Banners/Index', [
             'banners' => Banner::query()->orderBy('sort_order')->get(),
+            'marca' => [
+                ...Marca::urls(),
+                'personalizado' => collect(array_keys(Marca::ITENS))->mapWithKeys(fn ($item) => [$item => (bool) Marca::caminho($item)]),
+            ],
         ]);
+    }
+
+    /**
+     * Logos e favicon (pedido 2026-10-10): logo do topo, logo do rodapé e
+     * favicon. Cada um é opcional; o que vier substitui o atual. "restaurar"
+     * volta ao padrão da loja.
+     */
+    public function salvarMarca(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'logo_nav' => ['nullable', 'file', 'mimes:png,webp,jpg,jpeg', 'max:2048', 'dimensions:min_width=200,min_height=30,max_width=4000,max_height=1500'],
+            'logo_rodape' => ['nullable', 'file', 'mimes:png,webp,jpg,jpeg', 'max:2048', 'dimensions:min_width=200,min_height=30,max_width=4000,max_height=1500'],
+            'favicon' => ['nullable', 'file', 'mimes:png,ico', 'max:512'],
+            'restaurar' => ['nullable', 'array'],
+            'restaurar.*' => [Rule::in(array_keys(Marca::ITENS))],
+        ], [
+            'logo_nav.mimes' => 'A logo do topo precisa ser PNG, WebP ou JPG.',
+            'logo_nav.max' => 'A logo do topo pode ter no máximo 2 MB.',
+            'logo_nav.dimensions' => 'A logo do topo precisa ter entre 200 e 4000 px de largura (recomendado 520 × 92 px).',
+            'logo_rodape.mimes' => 'A logo do rodapé precisa ser PNG, WebP ou JPG.',
+            'logo_rodape.max' => 'A logo do rodapé pode ter no máximo 2 MB.',
+            'logo_rodape.dimensions' => 'A logo do rodapé precisa ter entre 200 e 4000 px de largura (recomendado 850 × 150 px).',
+            'favicon.mimes' => 'O favicon precisa ser PNG ou ICO.',
+            'favicon.max' => 'O favicon pode ter no máximo 512 KB.',
+        ]);
+
+        // Favicon PNG tem que ser quadrado (ICO o navegador já trata).
+        if ($request->hasFile('favicon') && strtolower($request->file('favicon')->getClientOriginalExtension()) === 'png') {
+            [$largura, $altura] = getimagesize($request->file('favicon')->getRealPath()) ?: [0, 0];
+            if ($largura !== $altura || $largura < 32 || $largura > 1024) {
+                return back()->withErrors(['favicon' => 'O favicon PNG precisa ser quadrado, entre 32 e 1024 px (recomendado 512 × 512 px).']);
+            }
+        }
+
+        foreach ((array) $request->input('restaurar', []) as $item) {
+            $this->trocarArquivoDaMarca($item, null);
+        }
+        foreach (array_keys(Marca::ITENS) as $item) {
+            if ($request->hasFile($item)) {
+                $this->trocarArquivoDaMarca($item, $request->file($item)->store('marca', 'public'));
+            }
+        }
+
+        return back()->with('success', 'Logos e favicon atualizados.');
+    }
+
+    private function trocarArquivoDaMarca(string $item, ?string $novo): void
+    {
+        if ($antigo = Marca::caminho($item)) {
+            Storage::disk('public')->delete($antigo);
+        }
+        Setting::set(Marca::chave($item), $novo);
     }
 
     public function store(Request $request): RedirectResponse

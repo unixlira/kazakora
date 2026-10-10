@@ -246,6 +246,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware('permission:cadastros.create')
         ->name('notificacoes-promocionais.armazenar');
 
+    // Logos e favicon da loja (pedido 2026-10-10).
+    Route::post('banners/marca', [BannerController::class, 'salvarMarca'])
+        ->middleware('permission:cadastros.edit')
+        ->name('banners.marca');
     Route::patch('banners/{banner}/subir', [BannerController::class, 'moveUp'])
         ->middleware('permission:cadastros.edit')
         ->name('banners.subir');

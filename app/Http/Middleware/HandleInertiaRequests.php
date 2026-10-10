@@ -73,6 +73,8 @@ class HandleInertiaRequests extends Middleware
             'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
             // Desconto no Pix da loja (pedido 2026-10-09), em %.
             'descontoPix' => DescontoPix::percentual(),
+            // Logos e favicon (Admin > Banners > Logos e favicon).
+            'marca' => fn () => \App\Support\Marca::urls(),
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),
             ],

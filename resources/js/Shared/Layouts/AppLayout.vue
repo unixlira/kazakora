@@ -6,6 +6,7 @@ import { useClickOutside } from '@/Shared/useClickOutside';
 import { COMPANY } from '@/Shared/company';
 
 const page = usePage();
+const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
 const favoritesCount = computed(() => page.props.favorites?.count ?? 0);
 const user = computed(() => page.props.auth?.user);
@@ -101,8 +102,12 @@ const REDES = [
         <!-- Header -->
         <header class="sticky top-0 z-40 border-b border-store-border bg-store-bg/90 backdrop-blur">
             <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
-                <Link href="/" class="whitespace-nowrap font-display text-2xl font-semibold text-store-fg no-underline">
-                    KazaKora
+                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
+                <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
+                    <picture>
+                        <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
+                        <img :src="marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
+                    </picture>
                 </Link>
 
                 <nav class="ml-auto hidden items-center gap-7 lg:flex">
@@ -219,7 +224,7 @@ const REDES = [
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
                     <div class="lg:max-w-xs lg:shrink-0">
-                        <span class="font-display text-xl font-semibold text-white">KazaKora</span>
+                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto lg:mx-0" loading="lazy">
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>

@@ -70,6 +70,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
 const REDES = [
     { nome: 'Instagram', icone: 'fab fa-instagram', link: COMPANY.redes?.instagram },
+    { nome: 'Threads', icone: 'fab fa-threads', link: COMPANY.redes?.threads },
     { nome: 'Facebook', icone: 'fab fa-facebook-f', link: COMPANY.redes?.facebook },
     { nome: 'TikTok', icone: 'fab fa-tiktok', link: COMPANY.redes?.tiktok },
     { nome: 'YouTube', icone: 'fab fa-youtube', link: COMPANY.redes?.youtube },

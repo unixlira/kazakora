@@ -43,7 +43,7 @@ class Product extends Model
         'is_new_release',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'preco_sem_oferta'];
 
     protected function casts(): array
     {
@@ -93,6 +93,12 @@ class Product extends Model
     public function getOfertaDoDiaAttribute(): bool
     {
         return $this->precoOfertaDeHoje() !== null;
+    }
+
+    /** Preço normal (riscado no card) quando está em oferta hoje; null fora da oferta. */
+    public function getPrecoSemOfertaAttribute(): ?float
+    {
+        return $this->precoOfertaDeHoje() !== null ? $this->precoSemOferta() : null;
     }
 
     /** Preço sem a oferta do dia — o que vale para os marketplaces. */

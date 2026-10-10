@@ -128,7 +128,12 @@ const submitReview = () => {
         <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
             <h4 class="cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
             <div class="mt-auto pt-1">
-                <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
+                <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->
+                <span v-if="product.oferta_do_dia" class="mb-0.5 inline-flex w-fit items-center gap-1 rounded bg-[#E02424] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    <i class="fa-solid fa-bolt"></i> Oferta do dia
+                </span>
+                <span v-if="product.oferta_do_dia && product.preco_sem_oferta" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.preco_sem_oferta) }}</span>
+                <span v-else-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
                 <div class="flex items-center justify-between">
                     <span class="text-base font-bold" :class="product.has_discount ? 'text-store-accent' : ''">{{ formatPrice(product.final_price) }}</span>
                     <StarRating :value="ratingAvg" />

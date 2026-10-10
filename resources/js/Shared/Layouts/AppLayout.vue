@@ -277,9 +277,10 @@ const REDES = [
                 <div class="mt-10 flex flex-col items-center gap-6 text-center lg:mt-12 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8 lg:text-left">
                     <div>
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
-                        <div class="no-scrollbar flex flex-nowrap items-center justify-center gap-2 overflow-x-auto lg:flex-wrap lg:justify-start lg:overflow-visible">
+                        <!-- Celular: bandeiras menores, todas numa linha só (sem arrastar). -->
+                        <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
                             <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao/${brand}.png`" :alt="brand"
-                                class="h-[55px] w-auto shrink-0 lg:h-[51px]">
+                                class="h-[30px] w-auto shrink-0 sm:h-[44px] lg:h-[51px]">
                         </div>
                     </div>
 

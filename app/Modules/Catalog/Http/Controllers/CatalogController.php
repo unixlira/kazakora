@@ -129,9 +129,12 @@ class CatalogController extends Controller
             ->whereHas('order', fn ($query) => $query->where('status', Order::STATUS_COMPLETED))
             ->sum('quantity');
 
+        // Avaliações com foto/vídeo primeiro, depois as só com texto (pedido 2026-10-10).
         $reviews = Review::query()
             ->where('product_id', $product->id)
             ->with(['user:id,name', 'images'])
+            ->withCount('images')
+            ->orderByDesc('images_count')
             ->latest()
             ->get();
 

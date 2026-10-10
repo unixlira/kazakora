@@ -582,6 +582,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // WhatsApp > Conversas: atendimento é de quem cuida de pedido, não só do
     // admin (as rotas de configuração do WhatsApp continuam admin-only abaixo).
     Route::middleware('permission:pedidos.view')->group(function () {
+        // E-mails do site (Fale conosco da loja) — pedido 2026-10-10.
+        Route::get('mensagens-site', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'index'])->name('mensagens-site.listar');
+        Route::get('mensagens-site/chegando', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'chegando'])->name('mensagens-site.chegando');
+        Route::post('mensagens-site/{mensagem}/lida', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'marcarLida'])->whereNumber('mensagem')->name('mensagens-site.lida');
+        Route::post('mensagens-site/{mensagem}/nao-lida', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'marcarNaoLida'])->whereNumber('mensagem')->name('mensagens-site.nao-lida');
         Route::get('whatsapp/conversas', [WhatsAppInboxController::class, 'index'])->name('whatsapp.conversas');
         Route::get('whatsapp/conversas/atualizacoes', [WhatsAppInboxController::class, 'updates'])->name('whatsapp.conversas.atualizacoes');
         Route::get('whatsapp/conversas/chegando', [WhatsAppInboxController::class, 'incoming'])->name('whatsapp.conversas.chegando');

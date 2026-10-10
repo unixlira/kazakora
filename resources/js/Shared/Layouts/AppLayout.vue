@@ -6,6 +6,7 @@ import { useClickOutside } from '@/Shared/useClickOutside';
 import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
+import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
@@ -116,6 +117,7 @@ const REDES = [
         <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
         <FaixaPromo />
         <TrocarSenhaModal />
+        <AvisoCookies />
         <!-- Marquee -->
         <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
@@ -147,7 +149,7 @@ const REDES = [
                         <button type="button" class="flex items-center gap-1.5 text-sm font-medium hover:text-store-fg"
                             :class="menuAberto === 'departamentos' ? 'text-store-fg' : 'text-store-fg-muted'"
                             :aria-expanded="menuAberto === 'departamentos'" @click="alternarMenu('departamentos')">
-                            <i class="fa-solid fa-bars-staggered text-xs"></i> Departamentos
+                            Departamentos
                             <i class="fa-solid fa-chevron-down text-[0.6rem] transition-transform" :class="{ 'rotate-180': menuAberto === 'departamentos' }"></i>
                         </button>
 
@@ -364,6 +366,7 @@ const REDES = [
                             <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
                             <ul class="flex flex-col gap-2 text-sm opacity-80">
                                 <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
+                                <li><Link href="/politica-de-cookies" class="hover:opacity-100">Política de Cookies</Link></li>
                                 <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>
                                 <li><Link href="/trocas-e-devolucoes" class="hover:opacity-100">Trocas e Devoluções</Link></li>
                                 <li><Link href="/politica-de-entrega" class="hover:opacity-100">Política de Entrega</Link></li>

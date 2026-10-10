@@ -95,6 +95,13 @@ Route::get('/politica-de-entrega', fn () => \Inertia\Inertia::render('Legal/Entr
     ],
 ]))->name('legal.entrega');
 Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
+// Cookies (pedido 2026-10-10, docs/privacidade-e-cookies.md).
+Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cookies', [
+    'sessaoMinutos' => (int) config('session.lifetime'),
+    'nomeSessao' => (string) config('session.cookie'),
+    'versao' => \App\Support\Privacidade\Cookies::VERSAO,
+]))->name('legal.cookies');
+Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 
 // Documentação da API pública de parceiros (ver routes/api_v1.php) — página

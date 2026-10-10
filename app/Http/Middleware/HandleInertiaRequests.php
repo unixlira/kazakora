@@ -81,6 +81,10 @@ class HandleInertiaRequests extends Middleware
                 'departamentos' => \App\Modules\Catalog\Support\MenuDaLoja::departamentos(),
                 'maiorDesconto' => \App\Modules\Catalog\Support\MenuDaLoja::maiorDesconto(),
             ], null, false),
+            // Aviso de cookies (docs/privacidade-e-cookies.md): some depois do OK.
+            'cookies' => fn () => $request->is('admin*') ? null : [
+                'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),
+            ],
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),
             ],

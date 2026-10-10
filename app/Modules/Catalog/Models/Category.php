@@ -3,6 +3,8 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Support\Rbac\Auditable;
+use App\Support\TituloPtBr;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +22,12 @@ class Category extends Model
     ];
 
     protected $appends = ['image_url'];
+
+    /** Nome sempre em formato de título pt-BR (pedido 2026-10-10). */
+    protected function name(): Attribute
+    {
+        return Attribute::make(set: fn (?string $value) => TituloPtBr::formatar($value));
+    }
 
     public function products(): HasMany
     {

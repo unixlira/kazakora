@@ -112,12 +112,78 @@ watch(cepEfetivo, async (zip) => {
 const entregaEscolhida = computed(() => opcoesEntrega.value.find((option) => option.id === shippingMethodId.value) ?? null);
 const valorFrete = computed(() => Number(entregaEscolhida.value?.price ?? 0));
 
+// ---------- Cupom (pedido 2026-10-10) ----------
+// Aplica por JSON: busca o cupom na base, confere as regras e o desconto
+// entra no total na hora, sem recarregar a tela.
+const cupomAplicado = ref(props.couponCode);
+const descontoCupom = ref(Number(props.discountAmount) || 0);
+const cupomDescricao = ref(null);
+const cupom = ref('');
+const mostrarCupom = ref(false);
+const cupomCarregando = ref(false);
+const cupomErro = ref(page.props.errors?.code ?? null);
+
+// Se o servidor tirar o cupom (expirou entre aplicar e pagar), a tela acompanha.
+watch(() => [props.couponCode, props.discountAmount], ([codigo, valor]) => {
+    cupomAplicado.value = codigo;
+    descontoCupom.value = Number(valor) || 0;
+});
+watch(() => page.props.errors?.code, (mensagem) => {
+    if (mensagem) cupomErro.value = mensagem;
+});
+
+const chamarCupom = (method, body) => fetch('/finalizacao/cupom', {
+    method,
+    credentials: 'same-origin',
+    headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-XSRF-TOKEN': decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? ''),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+});
+
+const aplicarCupom = async () => {
+    if (!cupom.value.trim() || cupomCarregando.value) return;
+    cupomCarregando.value = true;
+    cupomErro.value = null;
+    try {
+        const response = await chamarCupom('POST', { code: cupom.value });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            cupomErro.value = data.errors?.code?.[0] ?? data.message ?? 'Não foi possível aplicar o cupom agora.';
+            return;
+        }
+        cupomAplicado.value = data.code;
+        descontoCupom.value = Number(data.discount_amount) || 0;
+        cupomDescricao.value = data.descricao;
+        cupom.value = '';
+        mostrarCupom.value = false;
+    } catch {
+        cupomErro.value = 'Sem conexão. Tente de novo.';
+    } finally {
+        cupomCarregando.value = false;
+    }
+};
+
+const removerCupom = async () => {
+    cupomCarregando.value = true;
+    try {
+        await chamarCupom('DELETE');
+        cupomAplicado.value = null;
+        descontoCupom.value = 0;
+        cupomDescricao.value = null;
+    } finally {
+        cupomCarregando.value = false;
+    }
+};
+
 // ---------- 4. Pagamento ----------
 const metodo = ref('pix');
 const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0
-    ? round2((props.subtotal - props.discountAmount) * props.pixDiscountPercentage / 100)
+    ? round2((props.subtotal - descontoCupom.value) * props.pixDiscountPercentage / 100)
     : 0));
-const totalCartao = computed(() => round2(props.subtotal - props.discountAmount + valorFrete.value));
+const totalCartao = computed(() => round2(props.subtotal - descontoCupom.value + valorFrete.value));
 const totalAPagar = computed(() => (props.order ? Number(props.order.total) : round2(totalCartao.value - descontoPix.value)));
 const parcela12 = computed(() => totalCartao.value / 12);
 
@@ -169,17 +235,6 @@ watch([metodo, totalCartao], ([novoMetodo]) => {
     }
     brickTimer = setTimeout(montarBrick, 400);
 });
-
-// ---------- Cupom ----------
-const cupom = ref('');
-const mostrarCupom = ref(false);
-const aplicarCupom = () => {
-    router.post('/finalizacao/pagamento/cupom', { code: cupom.value }, {
-        preserveScroll: true,
-        preserveState: true,
-        onSuccess: () => { cupom.value = ''; mostrarCupom.value = false; },
-    });
-};
 
 // ---------- Finalizar ----------
 const erros = ref({});
@@ -600,19 +655,34 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     <Link href="/carrinho" class="mt-1 inline-block text-xs font-medium text-sky-600 hover:underline">Alterar itens do carrinho</Link>
 
                     <div class="mt-3 border-t border-slate-100 pt-3">
-                        <button v-if="!mostrarCupom && !couponCode" type="button" class="text-sm font-medium text-[#F44D00] hover:underline" @click="mostrarCupom = true">
+                        <div v-if="cupomAplicado" class="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+                            <span class="text-emerald-800">
+                                <i class="fa-solid fa-ticket mr-1"></i> Cupom <strong>{{ cupomAplicado }}</strong> aplicado
+                                <span v-if="cupomDescricao" class="block text-xs text-emerald-700">{{ cupomDescricao }}</span>
+                            </span>
+                            <button type="button" :disabled="cupomCarregando" class="text-xs font-semibold text-slate-500 hover:text-red-600 disabled:opacity-50" @click="removerCupom">
+                                <i class="fa-solid" :class="cupomCarregando ? 'fa-spinner animate-spin' : 'fa-xmark'"></i> Remover
+                            </button>
+                        </div>
+                        <button v-else-if="!mostrarCupom" type="button" class="text-sm font-medium text-[#F44D00] hover:underline" @click="mostrarCupom = true">
                             <i class="fa-solid fa-ticket mr-1"></i> Tem um cupom? Clique aqui
                         </button>
-                        <div v-else-if="!couponCode" class="flex gap-2">
-                            <input v-model="cupom" type="text" placeholder="Código do cupom" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#F44D00]">
-                            <button type="button" :disabled="!cupom" class="rounded-lg bg-[#F44D00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#E74900] disabled:opacity-50" @click="aplicarCupom">Aplicar</button>
-                        </div>
-                        <p v-if="serverErrors.code" class="mt-1 text-xs text-red-600">{{ serverErrors.code }}</p>
+                        <form v-else class="flex gap-2" @submit.prevent="aplicarCupom">
+                            <input v-model="cupom" type="text" placeholder="Código do cupom" autocapitalize="characters" :disabled="cupomCarregando"
+                                class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm uppercase outline-none focus:border-[#F44D00]"
+                                :class="cupomErro ? 'border-red-400' : 'border-slate-300'" @input="cupomErro = null">
+                            <button type="submit" :disabled="!cupom.trim() || cupomCarregando"
+                                class="inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg bg-[#F44D00] px-4 py-2 text-sm font-semibold text-white hover:bg-[#E74900] disabled:opacity-50">
+                                <i v-if="cupomCarregando" class="fa-solid fa-spinner animate-spin"></i>
+                                {{ cupomCarregando ? 'Buscando' : 'Aplicar' }}
+                            </button>
+                        </form>
+                        <p v-if="cupomErro" class="mt-1 text-xs text-red-600"><i class="fa-solid fa-circle-exclamation mr-1"></i>{{ cupomErro }}</p>
                     </div>
 
                     <dl class="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm text-slate-700">
                         <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotal) }}</dd></div>
-                        <div v-if="discountAmount > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ couponCode }}</dt><dd>-{{ formatPrice(discountAmount) }}</dd></div>
+                        <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixDiscountPercentage }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
                         <div class="flex justify-between"><dt>Entrega</dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}</dd></div>
                         <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">

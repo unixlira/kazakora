@@ -277,21 +277,93 @@ class CheckoutController extends Controller
     public function applyCoupon(Request $request): RedirectResponse
     {
         $data = $request->validate(['code' => ['required', 'string', 'max:60']]);
-
-        $coupon = Coupon::query()->where('code', $data['code'])->where('is_active', true)->first();
-
         $destino = $this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento';
+        $resultado = $this->validarCupom($request, $data['code']);
 
+        if (isset($resultado['erro'])) {
+            return redirect()->route($destino)->withErrors(['code' => $resultado['erro']]);
+        }
+
+        return redirect()->route($destino)->with('success', 'Cupom aplicado!');
+    }
+
+    /**
+     * Cupom no checkout v2 (pedido 2026-10-10): aplica por JSON e a tela
+     * atualiza o total na hora, sem recarregar.
+     */
+    public function applyCouponJson(Request $request): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:60']], ['code.required' => 'Digite o código do cupom.']);
+        $resultado = $this->validarCupom($request, $data['code']);
+
+        if (isset($resultado['erro'])) {
+            return response()->json(['message' => $resultado['erro'], 'errors' => ['code' => [$resultado['erro']]]], 422);
+        }
+
+        return response()->json($resultado);
+    }
+
+    public function removeCouponJson(Request $request): JsonResponse
+    {
+        $draft = $request->session()->get(self::SESSION_KEY, []);
+        unset($draft['coupon_code']);
+        $request->session()->put(self::SESSION_KEY, $draft);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Busca o cupom, confere as regras (ativo, validade, mínimo, limite de
+     * usos, 1 por cliente) e grava no rascunho do checkout.
+     *
+     * @return array{erro?: string, code?: string, discount_type?: string, discount_value?: float, discount_amount?: float, descricao?: string}
+     */
+    private function validarCupom(Request $request, string $codigo): array
+    {
+        $coupon = Coupon::buscar($codigo);
         if (! $coupon) {
-            return redirect()->route($destino)->withErrors(['code' => 'Cupom inválido.']);
+            return ['erro' => 'Cupom não encontrado. Confira o código.'];
         }
 
         $draft = $request->session()->get(self::SESSION_KEY, []);
+        $subtotal = round($this->cart->items()->sum('subtotal'), 2);
+        $email = $request->user()?->email ?? ($draft['guest']['email'] ?? null);
+
+        if ($motivo = $coupon->motivoInvalido($subtotal, $request->user(), $email)) {
+            return ['erro' => $motivo];
+        }
+
         $draft['coupon_code'] = $coupon->code;
         $request->session()->put(self::SESSION_KEY, $draft);
-        $request->session()->save();
 
-        return redirect()->route($destino)->with('success', 'Cupom aplicado!');
+        return [
+            'code' => $coupon->code,
+            'discount_type' => $coupon->discount_type,
+            'discount_value' => (float) $coupon->discount_value,
+            'discount_amount' => $coupon->discountFor($subtotal),
+            'descricao' => $coupon->descricaoDesconto(),
+        ];
+    }
+
+    /**
+     * Cupom guardado no rascunho, conferido de novo com o carrinho atual.
+     *
+     * @return array{0: ?Coupon, 1: ?string} [cupom que vale, motivo de não valer]
+     */
+    private function cupomDoRascunho(array $draft, float $subtotal, ?User $user): array
+    {
+        if (empty($draft['coupon_code'])) {
+            return [null, null];
+        }
+
+        $coupon = Coupon::buscar($draft['coupon_code']);
+        if (! $coupon) {
+            return [null, 'Este cupom não existe mais.'];
+        }
+
+        $motivo = $coupon->motivoInvalido($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null));
+
+        return $motivo ? [null, $motivo] : [$coupon, null];
     }
 
     /**
@@ -378,9 +450,16 @@ class CheckoutController extends Controller
 
         $shipping = $this->resolveShipping($draft);
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $coupon = ! empty($draft['coupon_code'])
-            ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
-            : null;
+        [$coupon, $motivoCupom] = $this->cupomDoRascunho($draft, $subtotal, $request->user());
+        if ($motivoCupom) {
+            // Cupom deixou de valer entre aplicar e pagar (expirou, esgotou...):
+            // tira do rascunho e avisa, em vez de cobrar diferente do que a tela mostrou.
+            unset($draft['coupon_code']);
+            $request->session()->put(self::SESSION_KEY, $draft);
+
+            return redirect()->route($this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento')
+                ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
+        }
         $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
 
         $methods = $data['split'] ?? false
@@ -915,9 +994,7 @@ class CheckoutController extends Controller
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft)['cost'] : 0.0;
-        $coupon = ! empty($draft['coupon_code'])
-            ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
-            : null;
+        [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
         $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
 
         return [
@@ -1122,9 +1199,7 @@ class CheckoutController extends Controller
         $draft = $request->session()->get(self::SESSION_KEY) ?? [];
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $coupon = ! empty($draft['coupon_code'])
-            ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
-            : null;
+        [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);
 
         return [
             'items' => $cartItems,

@@ -4,6 +4,7 @@ use App\Modules\Admin\Http\Controllers\AdsRechargeController;
 use App\Modules\Admin\Http\Controllers\ApiPartnerController;
 use App\Modules\Admin\Http\Controllers\AuditLogController;
 use App\Modules\Admin\Http\Controllers\BannerController;
+use App\Modules\Admin\Http\Controllers\CouponController;
 use App\Modules\Admin\Http\Controllers\CashFlowController;
 use App\Modules\Admin\Http\Controllers\CategoryController;
 use App\Modules\Admin\Http\Controllers\CompanyController;
@@ -117,6 +118,13 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
 });
 
 // Rastrear pedido (pedido 2026-10-10) — página pública.
+// Sair das promoções por e-mail (link assinado do rodapé do cupom).
+Route::get('/promocoes/sair/{user}', function (\App\Models\User $user) {
+    $user->forceFill(['recebe_promocoes' => false])->save();
+
+    return redirect()->route('catalogo.inicio')->with('success', 'Pronto! Você não vai mais receber promoções por e-mail.');
+})->middleware('signed')->name('promocoes.sair');
+
 Route::get('/rastreio', [TrackingController::class, 'index'])->name('rastreio');
 Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
 Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
@@ -129,6 +137,8 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::post('/frete', [CheckoutController::class, 'quoteFreight'])->middleware('throttle:20,1')->name('frete.cotar');
     Route::get('/pagamento', [CheckoutController::class, 'payment'])->name('pagamento');
     Route::post('/pagamento/cupom', [CheckoutController::class, 'applyCoupon'])->name('pagamento.cupom');
+    Route::post('/cupom', [CheckoutController::class, 'applyCouponJson'])->middleware('throttle:20,1')->name('cupom.aplicar');
+    Route::delete('/cupom', [CheckoutController::class, 'removeCouponJson'])->name('cupom.remover');
     Route::post('/pagamento', [CheckoutController::class, 'storePayment'])->middleware('throttle:10,1')->name('pagamento.iniciar');
     Route::post('/{order}/pagamento/proxima-parte', [CheckoutController::class, 'storeSecondPayment'])->middleware('throttle:10,1')->name('pagamento.proxima-parte');
     Route::get('/{order}/status', [CheckoutController::class, 'status'])->name('status');
@@ -218,6 +228,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor(['index', 'show'], 'permission:cadastros.view')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    // Cupons de desconto + disparo em lote (pedido 2026-10-10).
+    Route::get('cupons', [CouponController::class, 'index'])->middleware('permission:cadastros.view')->name('cupons.listar');
+    Route::post('cupons', [CouponController::class, 'store'])->middleware('permission:cadastros.create')->name('cupons.armazenar');
+    Route::put('cupons/{coupon}', [CouponController::class, 'update'])->middleware('permission:cadastros.edit')->name('cupons.atualizar');
+    Route::patch('cupons/{coupon}/ativo', [CouponController::class, 'toggle'])->middleware('permission:cadastros.edit')->name('cupons.alternar');
+    Route::delete('cupons/{coupon}', [CouponController::class, 'destroy'])->middleware('permission:cadastros.delete')->name('cupons.excluir');
+    Route::get('cupons/{coupon}/disparo', [CouponController::class, 'disparo'])->middleware('permission:cadastros.view')->name('cupons.disparo');
+    Route::get('cupons/{coupon}/publico', [CouponController::class, 'contarPublico'])->middleware('permission:cadastros.view')->name('cupons.publico');
+    Route::post('cupons/{coupon}/disparo', [CouponController::class, 'disparar'])->middleware('permission:cadastros.create')->name('cupons.disparar');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

@@ -236,6 +236,15 @@ watch([metodo, totalCartao], ([novoMetodo]) => {
     brickTimer = setTimeout(montarBrick, 400);
 });
 
+// ---------- Selos de confiança ----------
+const SELOS = [
+    { imagem: '/images/checkout/pagamento-100-seguro-checkout.png', titulo: 'Pagamento 100% Seguro', texto: 'Nossos pagamentos são processados com segurança pelo Mercado Pago. Seus dados estão protegidos.' },
+    { imagem: '/images/checkout/avaliacoes-positivas-checkout.png', titulo: 'Avaliações Positivas', texto: 'Clientes de todo o Brasil avaliam nossos produtos. Nosso suporte no WhatsApp está pronto para te atender.' },
+    { imagem: '/images/checkout/satisfacao-garantida-checkout.png', titulo: 'Satisfação Garantida', texto: 'Receba sua compra e fique 100% satisfeito(a) ou receba todo o seu dinheiro de volta, sem burocracia.' },
+    { imagem: '/images/checkout/parcele-12x-cartao-checkout.png', titulo: 'Parcele em até 12x no cartão!', texto: 'As compras no cartão de crédito têm segurança antifraude e são enviadas imediatamente.' },
+];
+const irParaFinalizar = () => document.getElementById('finalizar-pedido')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
 // ---------- Finalizar ----------
 const erros = ref({});
 const processando = ref(false);
@@ -623,7 +632,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <p v-if="brickErro" class="mt-2 text-sm text-red-600">{{ brickErro }}</p>
                         </div>
 
-                        <button type="button" :disabled="processando || !!order || (metodo === 'card' && !brickPronto)"
+                        <button id="finalizar-pedido" type="button" :disabled="processando || !!order || (metodo === 'card' && !brickPronto)"
                             class="mt-5 flex w-full items-center justify-center gap-3 rounded-xl bg-[#0FB930] px-6 py-4 text-xl font-bold text-white shadow-[0_4px_0_#0a8a23] transition hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_#0a8a23] disabled:cursor-not-allowed disabled:opacity-60 md:text-2xl"
                             @click="finalizar">
                             <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
@@ -693,18 +702,18 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </dl>
                 </div>
 
+                <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop
+                     adaptados à KazaKora). "Finalize sua compra" leva ao botão de finalizar. -->
                 <ul class="mt-4 space-y-3">
-                    <li class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><i class="fa-solid fa-shield-halved"></i></span>
-                        <span class="text-sm text-slate-600"><strong class="block text-slate-900">Pagamento 100% seguro</strong>Processado pelo Mercado Pago. Seus dados de cartão não passam pela loja.</span>
-                    </li>
-                    <li class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600"><i class="fa-solid fa-rotate-left"></i></span>
-                        <span class="text-sm text-slate-600"><strong class="block text-slate-900">Satisfação garantida</strong>7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
-                    </li>
-                    <li class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600"><i class="fa-solid fa-credit-card"></i></span>
-                        <span class="text-sm text-slate-600"><strong class="block text-slate-900">Parcele em até 12x no cartão</strong>Ou pague no Pix com {{ pixDiscountPercentage }}% de desconto.</span>
+                    <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                        <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
+                        <div class="text-sm text-slate-600">
+                            <strong class="block text-slate-900">{{ selo.titulo }}</strong>
+                            {{ selo.texto }}
+                            <button type="button" class="mt-1 block text-xs font-semibold text-[#0a8a23] hover:underline" @click="irParaFinalizar">
+                                Finalize sua compra <i class="fa-solid fa-arrow-right ml-0.5"></i>
+                            </button>
+                        </div>
                     </li>
                 </ul>
             </aside>

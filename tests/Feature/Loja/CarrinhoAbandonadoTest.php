@@ -138,7 +138,8 @@ class CarrinhoAbandonadoTest extends TestCase
 
         $this->assertStringContainsString(Product::first()->name, $html);
         $this->assertStringContainsString('Compra Segura', $html);
-        $this->assertStringContainsString('65.604.590/0001-07', $html);
+        // CNPJ com caractere invisível depois dos separadores (o Gmail não vira link).
+        $this->assertStringContainsString('65.&#8203;604.&#8203;590/&#8203;0001-&#8203;07', $html);
         $this->assertStringContainsString('wa.me/5511965723990', $html);
         $this->assertStringContainsString('/images/marca/logo-nav.png', $html);
     }

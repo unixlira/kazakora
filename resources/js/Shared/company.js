@@ -12,4 +12,12 @@ export const COMPANY = {
     whatsappLink: 'https://wa.me/5511965723990',
     site: 'https://kazakora.com',
     horario: 'Segunda a Sexta, das 9h às 18h | Sábado, das 9h às 13h',
+    // Redes sociais do rodapé (pedido 2026-10-10): preencha o link e o ícone
+    // aparece sozinho; vazio = não mostra.
+    redes: {
+        instagram: '',
+        facebook: '',
+        tiktok: '',
+        youtube: '',
+    },
 };

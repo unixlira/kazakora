@@ -10,6 +10,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+// Ofertas do dia da loja (pedido 2026-10-10).
+Schedule::command('loja:ofertas-do-dia')->dailyAt('00:05');
 // marketplace:poll-labels NÃO roda mais agendado (removido 2026-08-05,
 // pedido explícito do usuário — "cron nem precisa ter"). O pipeline de
 // etiqueta agora é orientado a evento: CheckShipmentLabelJob dispara na

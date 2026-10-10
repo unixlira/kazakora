@@ -2,22 +2,26 @@
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
+import MaisBuscadosSlider from '@/Shared/Components/MaisBuscadosSlider.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
+import SecaoProdutos from '@/Shared/Components/SecaoProdutos.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     banners: {
         type: Array,
         default: () => [],
     },
-    featuredProducts: {
-        type: Array,
-        default: () => [],
+    // Home sem filtro (pedido 2026-10-10): seções da vitrine. Com busca ou
+    // filtro vem null e a tela mostra a lista com "Carregar mais".
+    vitrine: {
+        type: Object,
+        default: null,
     },
     products: {
         type: Object,
-        required: true,
+        default: null,
     },
     categories: {
         type: Array,
@@ -62,7 +66,7 @@ const listTitle = computed(() => {
     return 'Catálogo';
 });
 
-const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
+const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/?todos=1#produtos');
 
 const BENEFICIOS = [
     { icone: 'fa-truck-fast', titulo: 'Frete Grátis', texto: 'Entrega em todo Brasil' },
@@ -74,16 +78,29 @@ const BENEFICIOS = [
 // Catálogo 8 por vez (pedido 2026-10-10): "Carregar mais" busca só a próxima
 // página dos produtos (sem recarregar a tela nem mudar o endereço) e junta
 // embaixo. Trocar de aba/busca recomeça a lista.
-const listaProdutos = ref([...props.products.data]);
+const listaProdutos = ref([...(props.products?.data ?? [])]);
 const carregandoMais = ref(false);
 let somarNaLista = false;
 
 watch(() => props.products, (novos) => {
+    if (!novos) return;
     listaProdutos.value = somarNaLista ? [...listaProdutos.value, ...novos.data] : [...novos.data];
     somarNaLista = false;
 });
 
-const temMais = computed(() => props.products.current_page < props.products.last_page);
+const temMais = computed(() => !!props.products && props.products.current_page < props.products.last_page);
+
+// Ofertas do dia: contagem até a meia-noite (quando as ofertas trocam).
+const restanteOfertas = ref('');
+let relogioOfertas = null;
+const atualizarRelogio = () => {
+    const fim = props.vitrine?.ofertasTerminamEm ? new Date(props.vitrine.ofertasTerminamEm).getTime() : 0;
+    const segundos = Math.max(0, Math.floor((fim - Date.now()) / 1000));
+    const dois = (valor) => String(valor).padStart(2, '0');
+    restanteOfertas.value = `${dois(Math.floor(segundos / 3600))}:${dois(Math.floor((segundos % 3600) / 60))}:${dois(segundos % 60)}`;
+};
+onMounted(() => { atualizarRelogio(); relogioOfertas = setInterval(atualizarRelogio, 1000); });
+onBeforeUnmount(() => clearInterval(relogioOfertas));
 
 const carregarMais = () => {
     if (carregandoMais.value || !temMais.value) return;
@@ -122,38 +139,40 @@ const carregarMais = () => {
             </div>
         </section>
 
-        <!-- Destaques -->
-        <section v-if="featuredProducts.length" class="mx-auto max-w-[1320px] px-4 pb-12 md:px-6">
-            <div class="mb-5 flex items-end justify-between gap-4">
-                <div>
-                    <p class="font-store-mono text-[0.68rem] uppercase tracking-[0.22em] text-store-accent">seleção KazaKora</p>
-                    <h2 class="mt-1 font-display text-3xl font-semibold">Destaques</h2>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
-                <ProductCard v-for="product in featuredProducts" :key="product.id" :product="product"
-                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
-                    :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
-            </div>
-
-            <div class="mt-8 flex justify-center">
-                <Link href="/?tipo=destaque#produtos"
-                    class="inline-flex items-center gap-2 rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast transition-colors hover:opacity-90">
-                    Ver mais destaques
-                    <i class="fas fa-arrow-right text-xs"></i>
-                </Link>
-            </div>
-        </section>
-
         <!-- Categories -->
-        <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-14 md:px-6">
+        <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-6 md:px-6">
             <h2 class="mb-6 text-center font-display text-2xl font-semibold">Departamentos</h2>
             <CategoryCarousel :categories="categories" :ativa="filters.categoria ?? null" />
         </section>
 
-        <!-- Product grid -->
-        <section id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 md:px-6">
+        <!-- Vitrine da home (pedido 2026-10-10): Departamentos, Ofertas do dia,
+             Mais buscados, Utilidades para casa, Últimas novidades e Você também pode gostar. -->
+        <template v-if="vitrine">
+            <SecaoProdutos titulo="Ofertas do dia" :produtos="vitrine.ofertas" cinco
+                subtitulo="Desconto extra só hoje, em produtos escolhidos a dedo."
+                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
+                <template #acao>
+                    <span class="inline-flex items-center gap-2 rounded-lg bg-[#E02424] px-3 py-1.5 text-sm font-bold text-white">
+                        <i class="fa-solid fa-stopwatch"></i> Termina em <span class="font-mono tabular-nums">{{ restanteOfertas }}</span>
+                    </span>
+                </template>
+            </SecaoProdutos>
+
+            <MaisBuscadosSlider :produtos="vitrine.maisBuscados" />
+
+            <SecaoProdutos titulo="Utilidades para casa" :produtos="vitrine.utilidades"
+                :link="vitrine.utilidadesLink ? `/?categoria=${vitrine.utilidadesLink}#produtos` : null"
+                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+
+            <SecaoProdutos titulo="Últimas novidades" :produtos="vitrine.novidades" link="/?todos=1#produtos"
+                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+
+            <SecaoProdutos titulo="Você também pode gostar" :produtos="vitrine.gostar"
+                :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
+        </template>
+
+        <!-- Lista (busca, aba ou departamento) com "Carregar mais" -->
+        <section v-else id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 md:px-6">
             <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
                 <div>
                     <h2 class="font-display text-3xl font-semibold">{{ listTitle }}</h2>
@@ -188,18 +207,9 @@ const carregarMais = () => {
                     <i class="fa-solid" :class="carregandoMais ? 'fa-spinner animate-spin' : 'fa-plus'"></i>
                     {{ carregandoMais ? 'Carregando...' : 'Carregar mais produtos' }}
                 </button>
-                <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products.total }}</span>
+                <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products?.total }}</span>
             </div>
         </section>
 
-        <!-- Manifesto -->
-        <section class="bg-store-accent-strong py-16 text-store-accent-contrast">
-            <div class="mx-auto max-w-3xl px-4 md:px-6">
-                <blockquote class="font-display text-balance text-2xl font-semibold leading-snug md:text-3xl">
-                    "Escolhemos cada produto do nosso catálogo com atenção — eletrônicos, gadgets e utensílios que valem o espaço na sua casa."
-                </blockquote>
-                <p class="font-store-mono mt-6 text-xs uppercase tracking-wider opacity-75">— Curadoria KazaKora</p>
-            </div>
-        </section>
     </AppLayout>
 </template>

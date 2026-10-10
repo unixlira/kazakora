@@ -1,9 +1,11 @@
 <script setup>
-// Página de produto v2 (pedido 2026-10-09): mesmo layout do modelo
-// "pagina-produto.html" que o Lira mandou — galeria + box de compra fixo à
-// direita, conteúdo em cards embaixo da galeria. Só o miolo: topo e rodapé
-// continuam os da loja (AppLayout). A v1 (ProductDetail.vue) segue no
-// código; o CatalogController escolhe qual mostrar.
+// Página de produto v2 (pedido 2026-10-09): mesmo layout da página de
+// produto da izeshop que o Lira mandou como referência — faixa amarela,
+// galeria + box de compra fixo à direita (60/40), cards brancos arredondados,
+// avaliações com barras por estrela e perguntas em sanfona. Só o miolo: topo
+// e rodapé continuam os da loja (AppLayout). Ficou de fora o que a KazaKora
+// não oferece (desconto no Pix, boleto, sorteio, brindes). A v1
+// (ProductDetail.vue) segue no código; o CatalogController escolhe qual mostrar.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
@@ -119,6 +121,9 @@ const unitPriceForQuantity = (qty) => {
     return Math.max(0, Math.round(Number(props.product.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
 };
 
+// "R$ 34 de desconto", como no selo da referência.
+const discountValue = computed(() => Math.round(Number(props.product.price) - Number(props.product.final_price)));
+
 const quantity = ref(1);
 const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quantity.value);
 const installmentValue = computed(() => Number(props.product.final_price) / PARCELAS);
@@ -211,6 +216,12 @@ const buyNow = () => {
     });
 };
 
+// Barras por estrela (5 → 1) a partir das avaliações reais.
+const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
+    const count = props.reviews.filter((review) => Number(review.rating) === star).length;
+    return { star, count, percent: props.reviews.length ? Math.round((count / props.reviews.length) * 100) : 0 };
+}));
+
 const showReviews = computed(() => props.reviews.length > 0 || (props.canReview && !props.hasReviewed));
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
@@ -231,236 +242,263 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     <Head :title="product.name">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     </Head>
 
     <AppLayout>
         <div class="pd2">
+            <!-- Faixa amarela do topo -->
+            <div class="faixa">
+                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS</span>
+                <span class="sep">|</span>
+                <span><i class="fas fa-lock"></i> COMPRA 100% SEGURA</span>
+            </div>
+
             <div class="wrap">
                 <nav class="migalhas" aria-label="Você está em">
                     <Link href="/">Início</Link>
                     <template v-if="product.category">
-                        / <Link :href="`/?search=${encodeURIComponent(product.category.name)}`">{{ product.category.name }}</Link>
+                        &nbsp;/&nbsp;<Link :href="`/?search=${encodeURIComponent(product.category.name)}`">{{ product.category.name }}</Link>
                     </template>
-                    / <span>{{ product.name }}</span>
+                    &nbsp;/&nbsp;<span>{{ product.name }}</span>
                 </nav>
 
                 <div class="grade">
-                    <!-- GALERIA -->
-                    <section class="card col-galeria">
-                        <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
-                            <div v-if="mediaItems.length > 1" class="miniaturas">
-                                <button v-for="(item, index) in mediaItems" :key="index" type="button"
-                                    :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
-                                    :aria-current="index === activeIndex" @click="activeIndex = index">
-                                    <template v-if="item.type === 'video'">
-                                        <video :src="item.src" muted preload="metadata"></video>
-                                        <span class="play"><i class="fas fa-play"></i></span>
+                    <!-- COLUNA PRINCIPAL (60%) -->
+                    <main class="col-principal">
+                        <section class="card galeria-card">
+                            <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
+                                <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
+                                    <template v-if="activeMedia?.type === 'video'">
+                                        <video :src="activeMedia.src" muted preload="metadata"></video>
+                                        <span class="play grande"><i class="fas fa-play"></i></span>
                                     </template>
-                                    <img v-else :src="item.src" alt="" loading="lazy">
+                                    <img v-else-if="activeMedia" :src="activeMedia.src" :alt="`${product.name} — foto ${activeIndex + 1}`">
+                                    <div v-else class="vazio"><i class="fas fa-box-open"></i></div>
+
+                                    <template v-if="mediaItems.length > 1">
+                                        <button type="button" class="seta esq" aria-label="Mídia anterior" @click.stop="goPrev"><i class="fas fa-chevron-left"></i></button>
+                                        <button type="button" class="seta dir" aria-label="Próxima mídia" @click.stop="goNext"><i class="fas fa-chevron-right"></i></button>
+                                    </template>
+                                </div>
+                                <div v-if="mediaItems.length > 1" class="miniaturas">
+                                    <button v-for="(item, index) in mediaItems" :key="index" type="button"
+                                        :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
+                                        :aria-current="index === activeIndex" @click="activeIndex = index">
+                                        <template v-if="item.type === 'video'">
+                                            <video :src="item.src" muted preload="metadata"></video>
+                                            <span class="play"><i class="fas fa-play"></i></span>
+                                        </template>
+                                        <img v-else :src="item.src" alt="" loading="lazy">
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
+                        <aside id="comprar" class="card compra">
+                            <div class="titulo">
+                                <h1>{{ product.name }}</h1>
+                                <button v-if="isAuthenticated" type="button" class="fav" :aria-pressed="isFavorite" aria-label="Favoritar" @click="toggleFavorite(product.id)">
+                                    <i :class="isFavorite ? 'fas fa-heart ativo' : 'far fa-heart'"></i>
                                 </button>
+                                <Link v-else href="/entrar" class="fav" aria-label="Favoritar"><i class="far fa-heart"></i></Link>
                             </div>
-                            <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                                <template v-if="activeMedia?.type === 'video'">
-                                    <video :src="activeMedia.src" muted preload="metadata"></video>
-                                    <span class="play grande"><i class="fas fa-play"></i></span>
-                                </template>
-                                <img v-else-if="activeMedia" :src="activeMedia.src" :alt="`${product.name} — foto ${activeIndex + 1}`">
-                                <div v-else class="vazio"><i class="fas fa-box-open"></i></div>
 
-                                <template v-if="mediaItems.length > 1">
-                                    <button type="button" class="seta esq" aria-label="Mídia anterior" @click.stop="goPrev"><i class="fas fa-chevron-left"></i></button>
-                                    <button type="button" class="seta dir" aria-label="Próxima mídia" @click.stop="goNext"><i class="fas fa-chevron-right"></i></button>
-                                    <span class="contador">{{ activeIndex + 1 }}/{{ mediaItems.length }}</span>
+                            <div v-if="reviewsCount > 0 || salesCount > 0" class="nota">
+                                <template v-if="reviewsCount > 0">
+                                    <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                    <a href="#avaliacoes">({{ reviewsCount }} avaliaç{{ reviewsCount === 1 ? 'ão' : 'ões' }} de clientes)</a>
                                 </template>
+                                <span v-if="salesCount > 0" class="vendidos">+{{ salesCount }} vendidos</span>
                             </div>
-                        </div>
-                    </section>
 
-                    <!-- BOX DE COMPRA -->
-                    <aside id="comprar" class="card col-compra compra">
-                        <div class="titulo">
-                            <h1>{{ product.name }}</h1>
-                            <button v-if="isAuthenticated" type="button" class="fav" :aria-pressed="isFavorite" aria-label="Favoritar" @click="toggleFavorite(product.id)">
-                                <i :class="isFavorite ? 'fas fa-heart ativo' : 'far fa-heart'"></i>
-                            </button>
-                            <Link v-else href="/entrar" class="fav" aria-label="Favoritar"><i class="far fa-heart"></i></Link>
-                        </div>
+                            <ul v-if="highlights.length" class="checks">
+                                <li v-for="(item, index) in highlights" :key="index">✔️ {{ item }}</li>
+                            </ul>
 
-                        <div v-if="reviewsCount > 0 || salesCount > 0" class="nota">
-                            <template v-if="reviewsCount > 0">
-                                <span class="estrelas">{{ '★'.repeat(stars(ratingAvg)) }}{{ '☆'.repeat(5 - stars(ratingAvg)) }}</span>
-                                <a href="#avaliacoes">({{ reviewsCount }} avaliaç{{ reviewsCount === 1 ? 'ão' : 'ões' }})</a>
+                            <hr class="divisor">
+
+                            <div class="preco">
+                                <span class="rot">Preço:</span>
+                                <div class="valores">
+                                    <div v-if="product.has_discount" class="linha-de">
+                                        <span class="de">{{ formatPrice(product.price) }}</span>
+                                        <span v-if="discountPercent > 0" class="selo">⇣ {{ discountPercent }}%</span>
+                                    </div>
+                                    <div class="por">{{ formatPrice(product.final_price) }}</div>
+                                    <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }} sem juros</div>
+                                    <span v-if="product.has_discount && discountValue > 0" class="selo">R$ {{ discountValue }} de desconto</span>
+                                </div>
+                            </div>
+
+                            <div v-if="variations.length" class="variacoes">
+                                <span class="subtitulo">Escolha a variação</span>
+                                <div class="opcoes">
+                                    <span class="opcao atual">
+                                        <img v-if="variantThumbnail(product)" :src="variantThumbnail(product)" alt="">
+                                        {{ product.variation || product.name }}
+                                    </span>
+                                    <Link v-for="variant in variations" :key="variant.id" :href="`/produtos/${variant.slug}`" preserve-scroll
+                                        class="opcao" :class="{ esgotada: variant.stock < 1 }">
+                                        <img v-if="variantThumbnail(variant)" :src="variantThumbnail(variant)" alt="">
+                                        {{ variant.variation || variant.name }}
+                                    </Link>
+                                </div>
+                            </div>
+
+                            <div v-if="quantityDiscounts.length" class="leve-mais">
+                                <span class="subtitulo">Leve mais, pague menos</span>
+                                <ul>
+                                    <li v-for="tier in quantityDiscounts" :key="tier.id">
+                                        <span>{{ tier.min_quantity }} unidades</span>
+                                        <strong>{{ formatPrice(unitPriceForQuantity(tier.min_quantity)) }}/un.</strong>
+                                        <span class="selo">-{{ Math.round(Number(tier.discount_percentage)) }}%</span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <template v-if="inStock">
+                                <div class="acao">
+                                    <div class="qtd">
+                                        <button type="button" aria-label="Diminuir quantidade" :disabled="quantity <= 1" @click="setQuantity(quantity - 1)">-</button>
+                                        <input :value="quantity" type="number" min="1" :max="product.stock" aria-label="Quantidade" @change="setQuantity($event.target.value)">
+                                        <button type="button" aria-label="Aumentar quantidade" :disabled="quantity >= product.stock" @click="setQuantity(quantity + 1)">+</button>
+                                    </div>
+                                    <button type="button" class="btn" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
+                                </div>
+                                <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
+                                <button type="button" class="btn-sec" :disabled="addingToCart" @click="addToCart">
+                                    <i class="fas fa-bag-shopping"></i> Adicionar ao carrinho
+                                </button>
                             </template>
-                            <span v-if="salesCount > 0">+{{ salesCount }} vendidos</span>
-                        </div>
+                            <p v-else class="esgotado">Produto esgotado</p>
 
-                        <ul v-if="highlights.length" class="checks">
-                            <li v-for="(item, index) in highlights" :key="index">{{ item }}</li>
-                        </ul>
-
-                        <div class="preco">
-                            <span class="rot">Preço:</span>
-                            <div v-if="product.has_discount">
-                                <span class="de">{{ formatPrice(product.price) }}</span>
-                                <span v-if="discountPercent > 0" class="selo">↓ {{ discountPercent }}%</span>
+                            <div class="bandeiras">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand" loading="lazy">
                             </div>
-                            <div class="por">{{ formatPrice(product.final_price) }}</div>
-                            <div class="parc">Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }} sem juros</div>
-                        </div>
 
-                        <div v-if="variations.length" class="variacoes">
-                            <span class="subtitulo">Escolha a variação</span>
-                            <div class="opcoes">
-                                <span class="opcao atual">
-                                    <img v-if="variantThumbnail(product)" :src="variantThumbnail(product)" alt="">
-                                    {{ product.variation || product.name }}
-                                </span>
-                                <Link v-for="variant in variations" :key="variant.id" :href="`/produtos/${variant.slug}`" preserve-scroll
-                                    class="opcao" :class="{ esgotada: variant.stock < 1 }">
-                                    <img v-if="variantThumbnail(variant)" :src="variantThumbnail(variant)" alt="">
-                                    {{ variant.variation || variant.name }}
-                                </Link>
-                            </div>
-                        </div>
-
-                        <div v-if="quantityDiscounts.length" class="leve-mais">
-                            <span class="subtitulo">Leve mais, pague menos</span>
-                            <ul>
-                                <li v-for="tier in quantityDiscounts" :key="tier.id">
-                                    <span>{{ tier.min_quantity }} unidades</span>
-                                    <strong>{{ formatPrice(unitPriceForQuantity(tier.min_quantity)) }}/un.</strong>
-                                    <span class="selo">-{{ Math.round(Number(tier.discount_percentage)) }}%</span>
+                            <ul class="fretefundo">
+                                <li>
+                                    <i class="fas fa-truck-fast"></i>
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout. <Link :href="`/produtos/${product.slug}/envio`">Ver formas de envio</Link></span>
+                                    <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
+                                </li>
+                                <li>
+                                    <i class="fas fa-recycle"></i>
+                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito. <Link href="/trocas-e-devolucoes">Ver política</Link></span>
+                                </li>
+                                <li>
+                                    <i class="fas fa-shield-halved"></i>
+                                    <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
+                                </li>
+                                <li>
+                                    <i class="far fa-star"></i>
+                                    <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
-                        </div>
+                        </aside>
 
-                        <template v-if="inStock">
-                            <div class="acao">
-                                <div class="qtd">
-                                    <button type="button" aria-label="Diminuir quantidade" :disabled="quantity <= 1" @click="setQuantity(quantity - 1)">−</button>
-                                    <input :value="quantity" type="number" min="1" :max="product.stock" aria-label="Quantidade" @change="setQuantity($event.target.value)">
-                                    <button type="button" aria-label="Aumentar quantidade" :disabled="quantity >= product.stock" @click="setQuantity(quantity + 1)">+</button>
-                                </div>
-                                <button type="button" class="btn" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
-                            </div>
-                            <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
-                            <button type="button" class="btn-sec" :disabled="addingToCart" @click="addToCart">
-                                <i class="fas fa-bag-shopping"></i> Adicionar ao carrinho
-                            </button>
-                        </template>
-                        <p v-else class="esgotado">Produto esgotado</p>
-
-                        <div class="bandeiras">
-                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand" loading="lazy">
-                        </div>
-
-                        <div class="infos">
-                            <Link :href="`/produtos/${product.slug}/envio`" class="info">
-                                <svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7zM6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /></svg>
-                                <div v-if="isFreeShipping"><strong>Frete grátis.</strong> Entrega na sua residência; o prazo é calculado pelo CEP no checkout.</div>
-                                <div v-else><strong>Entrega.</strong> O frete e o prazo são calculados pelo CEP no checkout.</div>
-                            </Link>
-                            <Link href="/trocas-e-devolucoes" class="info">
-                                <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4" /></svg>
-                                <div><strong>Devolução fácil.</strong> 7 dias para desistir e 30 dias para trocar se vier com defeito.</div>
-                            </Link>
-                            <div class="info">
-                                <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6zM9 12l2 2 4-4" /></svg>
-                                <div><strong>Compra segura.</strong> Pagamento processado em ambiente seguro. Vendido por {{ COMPANY.nomeFantasia }}.</div>
-                            </div>
-                        </div>
-                    </aside>
-
-                    <!-- CONTEÚDO -->
-                    <div class="col-conteudo">
                         <section v-if="descriptionSections.length" class="card">
                             <h2>Descrição</h2>
-                            <div v-for="(section, index) in descriptionSections" :key="index" class="bloco">
-                                <h3 v-if="section.heading">{{ section.heading }}</h3>
-                                <template v-for="(part, partIndex) in section.parts" :key="partIndex">
-                                    <ul v-if="part.type === 'ul'" class="lista">
-                                        <li v-for="(item, itemIndex) in part.items" :key="itemIndex">{{ item }}</li>
-                                    </ul>
-                                    <ul v-else-if="part.type === 'linhas'" class="linhas">
-                                        <li v-for="(item, itemIndex) in part.items" :key="itemIndex">{{ item }}</li>
-                                    </ul>
-                                    <p v-else>{{ part.items[0] }}</p>
-                                </template>
+                            <div class="descricao">
+                                <div v-for="(section, index) in descriptionSections" :key="index" class="bloco">
+                                    <h3 v-if="section.heading">{{ section.heading }}</h3>
+                                    <template v-for="(part, partIndex) in section.parts" :key="partIndex">
+                                        <ul v-if="part.type === 'ul'" class="lista">
+                                            <li v-for="(item, itemIndex) in part.items" :key="itemIndex">{{ item }}</li>
+                                        </ul>
+                                        <ul v-else-if="part.type === 'linhas'" class="linhas">
+                                            <li v-for="(item, itemIndex) in part.items" :key="itemIndex">{{ item }}</li>
+                                        </ul>
+                                        <p v-else>{{ part.items[0] }}</p>
+                                    </template>
+                                </div>
                             </div>
                         </section>
 
                         <section class="card">
-                            <h2>Garantia de Satisfação</h2>
+                            <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
-                                <div class="selo-garantia"><span><b>30</b>DIAS DE GARANTIA</span></div>
+                                <div class="selo-garantia"><span><b>30</b>DIAS DE<br>GARANTIA</span></div>
                                 <p>
                                     Se o produto chegar com defeito, você tem 30 dias após o recebimento para pedir a troca ou o reembolso.
-                                    Mudou de ideia? São 7 dias para devolver.
-                                    <Link href="/trocas-e-devolucoes">Ver política de trocas</Link>
+                                    Mudou de ideia? São 7 dias para devolver, sem nenhum risco para você.
                                 </p>
                             </div>
                         </section>
 
                         <section class="card">
                             <h2>Pagamento Seguro</h2>
-                            <p class="sem-margem">Aceitamos Pix, com aprovação imediata, e cartão de crédito em até {{ PARCELAS }}x sem juros. Seus dados trafegam criptografados e não ficam armazenados na loja.</p>
+                            <div class="bandeiras esquerda">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand" loading="lazy">
+                            </div>
+                            <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
                         </section>
 
                         <section class="card">
                             <h2>Informação adicional</h2>
-                            <div class="tabela-wrap">
-                                <table class="ficha">
-                                    <tr v-for="[label, value] in specs" :key="label"><th>{{ label }}</th><td>{{ value }}</td></tr>
-                                </table>
-                            </div>
+                            <table class="ficha">
+                                <tr v-for="[label, value] in specs" :key="label"><th>{{ label }}</th><td>{{ value }}</td></tr>
+                            </table>
                         </section>
-
-                        <section v-if="showReviews" id="avaliacoes" class="card">
-                            <div class="cabecalho">
-                                <h2>Avaliações de Clientes</h2>
-                                <button v-if="canReview && !hasReviewed" type="button" class="btn-sec pequeno" @click="showReviewModal = true">Avaliar produto</button>
-                            </div>
-                            <template v-if="reviews.length">
-                                <div class="resumo-nota">
-                                    <b>{{ ratingAvg.toFixed(1).replace('.', ',') }}</b>
-                                    <div>
-                                        <div class="estrelas">{{ '★'.repeat(stars(ratingAvg)) }}{{ '☆'.repeat(5 - stars(ratingAvg)) }}</div>
-                                        {{ reviewsCount }} avaliaç{{ reviewsCount === 1 ? 'ão' : 'ões' }}
-                                    </div>
-                                </div>
-                                <div class="avaliacoes">
-                                    <div v-for="review in reviews" :key="review.id" class="avaliacao">
-                                        <strong>{{ review.reviewer_display_name }}</strong>
-                                        <div class="estrelas">{{ '★'.repeat(review.rating) }}{{ '☆'.repeat(5 - review.rating) }}</div>
-                                        <p v-if="review.comment">{{ review.comment }}</p>
-                                        <div v-if="review.images?.length" class="fotos-avaliacao">
-                                            <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                                                <img :src="image.image_url" alt="">
-                                            </a>
-                                        </div>
-                                        <small>{{ formatDate(review.created_at) }}</small>
-                                    </div>
-                                </div>
-                            </template>
-                            <p v-else class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
-                        </section>
-
-                        <section class="card">
-                            <h2>Perguntas Frequentes</h2>
-                            <details v-for="[pergunta, resposta] in FAQ" :key="pergunta">
-                                <summary>{{ pergunta }}</summary>
-                                <p>{{ resposta }}</p>
-                            </details>
-                        </section>
-                    </div>
+                    </main>
                 </div>
 
+                <!-- AVALIAÇÕES (largura total) -->
+                <section v-if="showReviews" id="avaliacoes" class="card largura-total">
+                    <div class="aval-topo">
+                        <div class="aval-resumo">
+                            <h2>Avaliações de Clientes</h2>
+                            <div v-if="reviews.length" class="aval-media">
+                                <span class="caixa-nota">{{ ratingAvg.toFixed(2) }}</span>
+                                <div>
+                                    <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                    <div class="base">Baseado em {{ reviewsCount }} avaliaç{{ reviewsCount === 1 ? 'ão' : 'ões' }}</div>
+                                </div>
+                            </div>
+                            <button v-if="canReview && !hasReviewed" type="button" class="btn-sec pequeno" @click="showReviewModal = true">Avaliar produto</button>
+                        </div>
+                        <div v-if="reviews.length" class="aval-barras">
+                            <div v-for="row in ratingRows" :key="row.star" class="barra-linha">
+                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= row.star ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <span class="trilho"><span :style="{ width: row.percent + '%' }"></span><em>{{ row.percent }}%</em></span>
+                                <span class="qtd-aval">{{ row.count }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="reviews.length" class="aval-grade">
+                        <div v-for="review in reviews" :key="review.id" class="aval-item">
+                            <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}</div>
+                            <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
+                            <p v-if="review.comment">{{ review.comment }}</p>
+                            <div v-if="review.images?.length" class="fotos-avaliacao">
+                                <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
+                                    <img :src="image.image_url" alt="">
+                                </a>
+                            </div>
+                            <small>{{ formatDate(review.created_at) }}</small>
+                        </div>
+                    </div>
+                    <p v-else class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
+                </section>
+
+                <!-- PERGUNTAS FREQUENTES (largura total) -->
+                <section class="card largura-total">
+                    <h2>Perguntas Frequentes</h2>
+                    <details v-for="[pergunta, resposta] in FAQ" :key="pergunta">
+                        <summary><i class="fas fa-caret-right fechado"></i><i class="fas fa-caret-up aberto"></i> {{ pergunta }}</summary>
+                        <p>{{ resposta }}</p>
+                    </details>
+                </section>
+
+                <!-- FAIXA DE CONFIANÇA -->
                 <div class="confianca">
-                    <div><svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7zM6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" /></svg><strong>Frete Grátis</strong>Para a sua residência</div>
-                    <div><svg viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 10h18M7 15h4" /></svg><strong>Parcelamento</strong>Até {{ PARCELAS }}x sem juros</div>
-                    <div><svg viewBox="0 0 24 24"><path d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z" /></svg><strong>Compra Segura</strong>Dados protegidos</div>
-                    <div><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6zM9 12l2 2 4-4" /></svg><strong>Troca Garantida</strong>7 dias para devolver</div>
+                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis</strong>Entrega em todo Brasil</span></div>
+                    <div><i class="fas fa-credit-card"></i><span><strong>Parcelamento</strong>Em {{ PARCELAS }}x nos cartões</span></div>
+                    <div><i class="fas fa-lock"></i><span><strong>Compra Segura</strong>Ambiente seguro para pagamentos online</span></div>
+                    <div><i class="far fa-face-smile"></i><span><strong>Satisfação Garantida</strong>Troca ou reembolso garantido</span></div>
                 </div>
 
                 <section v-if="relatedProducts.length" class="relacionados">
@@ -473,13 +511,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                 </section>
             </div>
 
-            <!-- Barra fixa no celular -->
+            <!-- Botão fixo no celular -->
             <div class="barra">
-                <div>
-                    <small v-if="product.has_discount">De {{ formatPrice(product.price) }} por</small>
-                    <span class="por">{{ formatPrice(product.final_price) }}</span>
-                </div>
-                <button type="button" class="btn" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR' : 'ESGOTADO' }}</button>
+                <button type="button" class="btn" :disabled="!inStock || buyingNow" @click="buyNow">{{ inStock ? 'COMPRAR AGORA' : 'ESGOTADO' }}</button>
             </div>
         </div>
 
@@ -511,171 +545,230 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 </template>
 
 <style>
-/* Tudo preso em .pd2 pra não vazar pro resto da loja. Cores do modelo
-   (fundo cinza claro, CTA amarelo, preço verde, azul de marca) com
-   variante para o modo escuro da loja. */
+/* Tudo preso em .pd2 pra não vazar pro resto da loja. Medidas e cores
+   tiradas da página de referência (izeshop): fundo #F7F7F7, cards brancos
+   raio 20px, amarelo #FCBD10, verde #00AB21, azul #0044C3 / #002F88. */
 .pd2 {
-    --bg: #f7f7f7; --card: #fff; --ink: #111827; --text: #374151; --muted: #6b7280; --line: #e5e7eb; --soft: #f9fafb; --sunk: #f3f4f6;
-    --cta: #fcbd10; --cta-ink: #111827; --cta-shadow: #d99e00; --price: #16a34a; --brand: #1e3a8a; --bad: #dc2626; --star: #f5b301;
-    --r: 16px; --shadow: 0 1px 3px rgba(17, 24, 39, .06);
-    background: var(--bg); color: var(--text); font: 400 14px/1.6 Poppins, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
-    padding-bottom: 32px;
+    --bg: #f7f7f7; --card: #fff; --ink: #18212e; --text: #575757; --muted: #767676; --line: #ebebeb; --soft: #f9f9f9; --sunk: #f3f3f3;
+    --yellow: #fcbd10; --yellow-edge: #5a4200; --green: #00ab21; --green-edge: #006915; --blue: #0044c3; --navy: #002f88; --star: #fcbd10;
+    --shadow: 0 0 10px 0 rgba(218, 218, 218, .24); --shadow-strong: 0 17px 10px 0 rgba(218, 218, 218, .24);
+    background: var(--bg); color: var(--text); font: 400 16px/1.5 Poppins, system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    padding-bottom: 40px;
 }
 .dark .pd2 {
-    --bg: #0b0f17; --card: #141a24; --ink: #f3f4f6; --text: #d1d5db; --muted: #9ca3af; --line: #273042; --soft: #1a2130; --sunk: #1f2736;
-    --price: #22c55e; --brand: #93b4ff; --shadow: none;
+    --bg: #0b0f17; --card: #141a24; --ink: #f3f4f6; --text: #c4c9d2; --muted: #9ca3af; --line: #273042; --soft: #1a2130; --sunk: #1f2736;
+    --blue: #7aa2ff; --shadow: none; --shadow-strong: none;
 }
 .pd2 img { max-width: 100%; display: block; }
 .pd2 a { color: inherit; }
-.pd2 h1, .pd2 h2, .pd2 h3 { color: var(--ink); line-height: 1.25; margin: 0; text-wrap: balance; font-family: inherit; }
-.pd2 h2 { font-size: 22px; font-weight: 600; margin-bottom: 12px; }
-.pd2 h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
-.pd2 p { margin: 0 0 12px; }
+.pd2 h1, .pd2 h2, .pd2 h3 { color: var(--ink); font-family: inherit; margin: 0; line-height: 1.2; }
+.pd2 h2 { font-size: 28px; font-weight: 500; margin-bottom: 16px; }
+.pd2 p { margin: 0 0 14px; }
 .pd2 .sem-margem { margin: 0; }
-.pd2 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
-.pd2 .card { background: var(--card); border-radius: var(--r); box-shadow: var(--shadow); padding: 22px; }
-.pd2 :focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.pd2 .wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+.pd2 .card { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; }
+.pd2 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
-.pd2 .migalhas { font-size: 12.5px; color: var(--muted); padding: 14px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pd2 .migalhas a { text-decoration: none; }
+/* faixa amarela */
+.pd2 .faixa { background: var(--yellow); color: #111; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; font-weight: 600; font-size: 14px; letter-spacing: .5px; }
+.pd2 .faixa i { margin-right: 6px; }
+.pd2 .faixa .sep { opacity: .4; }
+
+.pd2 .migalhas { font-size: 14.5px; color: var(--muted); padding: 18px 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pd2 .migalhas a { color: var(--muted); text-decoration: none; }
 .pd2 .migalhas a:hover { text-decoration: underline; }
 
-/* grade principal */
-.pd2 .grade { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 20px; align-items: start; }
-.pd2 .col-galeria { grid-column: 1; }
-.pd2 .col-compra { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: 16px; }
-.pd2 .col-conteudo { grid-column: 1; display: grid; gap: 20px; min-width: 0; }
+/* grade 60/40: o box de compra ocupa a coluna da direita, fixo */
+.pd2 .col-principal { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 20px; align-items: start; }
+.pd2 .col-principal > .card { grid-column: 1; }
+.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 5; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
+.pd2 .galeria-card { box-shadow: var(--shadow-strong); padding: 10px; }
 
-/* galeria */
-.pd2 .galeria { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; }
-.pd2 .galeria.sem-miniaturas { grid-template-columns: minmax(0, 1fr); }
-.pd2 .miniaturas { display: flex; flex-direction: column; gap: 8px; max-height: 620px; overflow-y: auto; }
-.pd2 .miniaturas button { position: relative; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: var(--sunk); cursor: pointer; aspect-ratio: 1; }
-.pd2 .miniaturas button[aria-current=true] { border-color: var(--cta); }
+/* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
+.pd2 .galeria { display: flex; flex-direction: row-reverse; gap: 20px; }
+.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
+.pd2 .galeria.sem-miniaturas .foto { flex-basis: 100%; }
+.pd2 .foto img, .pd2 .foto video { width: 100%; height: 100%; object-fit: contain; }
+.pd2 .foto .vazio { height: 100%; display: grid; place-items: center; font-size: 56px; color: var(--muted); opacity: .4; }
+.pd2 .miniaturas { flex: 1; display: flex; flex-direction: column; gap: 20px; max-height: 640px; overflow-y: auto; scrollbar-width: thin; }
+.pd2 .miniaturas button { position: relative; flex: 0 0 auto; padding: 0; border: 0; background: none; cursor: pointer; aspect-ratio: 1; opacity: .3; transition: opacity .2s; }
+.pd2 .miniaturas button:hover, .pd2 .miniaturas button[aria-current=true] { opacity: 1; }
 .pd2 .miniaturas img, .pd2 .miniaturas video { width: 100%; height: 100%; object-fit: cover; }
 .pd2 .play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .35); color: #fff; font-size: 12px; pointer-events: none; }
 .pd2 .play.grande { background: transparent; }
 .pd2 .play.grande i { width: 64px; height: 64px; border-radius: 50%; background: rgba(0, 0, 0, .55); display: grid; place-items: center; font-size: 22px; }
-.pd2 .foto { position: relative; border-radius: 12px; overflow: hidden; background: var(--sunk); aspect-ratio: 1; cursor: zoom-in; user-select: none; }
-.pd2 .foto img, .pd2 .foto video { width: 100%; height: 100%; object-fit: contain; }
-.pd2 .foto .vazio { height: 100%; display: grid; place-items: center; font-size: 56px; color: var(--muted); opacity: .4; }
-.pd2 .seta { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #111827; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); cursor: pointer; opacity: 0; transition: opacity .15s; }
-.pd2 .seta.esq { left: 12px; }
-.pd2 .seta.dir { right: 12px; }
-.pd2 .foto:hover .seta { opacity: 1; }
-.pd2 .contador { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; border-radius: 999px; padding: 3px 10px; display: none; }
+.pd2 .seta { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .3); color: #fff; cursor: pointer; }
+.pd2 .seta.esq { left: 10px; }
+.pd2 .seta.dir { right: 10px; }
 
 /* box de compra */
+.pd2 .compra { padding: 20px 20px 24px; }
 .pd2 .titulo { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
-.pd2 .compra h1 { font-size: 19px; font-weight: 600; }
-.pd2 .fav { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; color: var(--muted); cursor: pointer; text-decoration: none; }
+.pd2 .compra h1 { font-size: 26px; font-weight: 500; text-transform: capitalize; }
+.pd2 .fav { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; color: var(--muted); cursor: pointer; text-decoration: none; }
 .pd2 .fav .ativo { color: #e11d48; }
-.pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; font-size: 12.5px; color: var(--muted); }
-.pd2 .estrelas { color: var(--star); letter-spacing: 1px; font-size: 14px; }
-.pd2 .checks { list-style: none; margin: 12px 0 0; padding: 0; font-size: 12.5px; }
-.pd2 .checks li { padding-left: 22px; position: relative; }
-.pd2 .checks li::before { content: "✔"; position: absolute; left: 0; color: var(--brand); }
-.pd2 .preco { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-.pd2 .preco .rot { color: var(--muted); grid-row: 1 / span 3; }
-.pd2 .de { color: var(--muted); text-decoration: line-through; font-weight: 600; font-size: 15px; }
-.pd2 .selo { display: inline-block; background: var(--brand); color: #fff; font-size: 11px; font-weight: 600; border-radius: 5px; padding: 2px 7px; margin-left: 6px; }
-.dark .pd2 .selo { color: #0b0f17; }
-.pd2 .por { color: var(--price); font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.pd2 .parc { font-size: 13.5px; }
-.pd2 .subtitulo { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
-.pd2 .variacoes, .pd2 .leve-mais { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
+.pd2 .nota a { text-decoration: none; }
+.pd2 .nota .vendidos { font-weight: 400; color: var(--muted); font-size: 14px; }
+.pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
+.pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
+.pd2 .divisor { border: 0; border-top: 1px solid #777; margin: 16px 0; opacity: .6; }
+
+.pd2 .preco { display: grid; grid-template-columns: 25% 75%; align-items: center; margin-bottom: 15px; }
+.pd2 .preco .rot { font-size: 18px; color: var(--ink); }
+.pd2 .valores { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pd2 .linha-de { display: flex; align-items: center; gap: 15px; }
+.pd2 .de { color: var(--text); font-size: 22px; font-weight: 600; text-decoration: line-through; }
+.pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
+.pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.pd2 .parc { color: var(--ink); font-size: 18px; }
+.pd2 .parc i { color: var(--navy); margin-right: 4px; }
+.dark .pd2 .parc i { color: var(--blue); }
+
+.pd2 .subtitulo { display: block; font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
+.pd2 .variacoes, .pd2 .leve-mais { margin: 6px 0 16px; }
 .pd2 .opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
-.pd2 .opcao { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 12.5px; font-weight: 500; text-decoration: none; }
-.pd2 .opcao img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
-.pd2 .opcao:hover { border-color: var(--muted); }
-.pd2 .opcao.atual { border: 2px solid var(--cta); font-weight: 600; color: var(--ink); }
+.pd2 .opcao { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #b9b9b9; border-radius: 10px; padding: 6px 12px; font-size: 14px; text-decoration: none; color: var(--ink); }
+.pd2 .opcao img { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; }
+.pd2 .opcao:hover { border-color: var(--ink); }
+.pd2 .opcao.atual { border: 2px solid var(--yellow); font-weight: 600; }
 .pd2 .opcao.esgotada { opacity: .5; text-decoration: line-through; }
-.pd2 .leve-mais ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; }
+.pd2 .leve-mais ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
 .pd2 .leve-mais li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; }
 .pd2 .leve-mais strong { color: var(--ink); }
-.pd2 .acao { display: grid; grid-template-columns: 120px 1fr; gap: 10px; margin: 18px 0 10px; }
-.pd2 .qtd { display: grid; grid-template-columns: 36px 1fr 36px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.pd2 .qtd button { border: 0; background: var(--sunk); color: var(--ink); font: 600 18px Poppins, sans-serif; cursor: pointer; }
+
+.pd2 .acao { display: flex; gap: 10px; margin: 6px 0 10px; }
+.pd2 .qtd { display: inline-flex; align-items: center; gap: 4px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); padding: 5px; flex: 0 0 auto; }
+.pd2 .qtd button { width: 34px; height: 100%; min-height: 40px; border: 0; border-radius: 10px; background: #e8e9ef; color: #000; font-weight: 700; font-size: 16px; cursor: pointer; }
+.dark .pd2 .qtd button { background: var(--sunk); color: var(--ink); }
+.pd2 .qtd button:hover { background: var(--soft); }
 .pd2 .qtd button:disabled { opacity: .4; cursor: not-allowed; }
-.pd2 .qtd input { border: 0; text-align: center; font: inherit; width: 100%; min-width: 0; background: var(--card); color: var(--ink); -moz-appearance: textfield; }
+.pd2 .qtd input { width: 44px; border: 0; background: transparent; text-align: center; font: inherit; color: var(--ink); -moz-appearance: textfield; }
 .pd2 .qtd input::-webkit-inner-spin-button, .pd2 .qtd input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.pd2 .btn { display: flex; align-items: center; justify-content: center; background: var(--cta); color: var(--cta-ink); font: 700 18px Poppins, sans-serif; letter-spacing: .5px; border: 0; border-radius: 10px; min-height: 50px; cursor: pointer; text-decoration: none; box-shadow: 0 3px 0 var(--cta-shadow); transition: transform .1s; }
-.pd2 .btn:hover { filter: brightness(1.04); }
-.pd2 .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--cta-shadow); }
+.pd2 .btn { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--yellow); color: #000; font: 600 24px Poppins, sans-serif; text-transform: uppercase; border: 0; border-bottom: 2px solid var(--yellow-edge); border-radius: 10px; min-height: 54px; padding: 0 20px; cursor: pointer; transition: all .2s; }
+.pd2 .btn:hover { background: var(--green); border-color: var(--green-edge); color: #fff; }
 .pd2 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.pd2 .btn-sec { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 10px; min-height: 44px; font: 600 14px Poppins, sans-serif; cursor: pointer; }
+.pd2 .btn-sec { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; color: var(--ink); border: 1px solid #b9b9b9; border-radius: 10px; min-height: 44px; font: 500 15px Poppins, sans-serif; cursor: pointer; }
 .pd2 .btn-sec:hover { background: var(--soft); }
 .pd2 .btn-sec:disabled { opacity: .5; cursor: not-allowed; }
-.pd2 .btn-sec.pequeno { width: auto; min-height: 36px; padding: 0 14px; font-size: 13px; }
-.pd2 .total { font-size: 13px; margin: 0 0 10px; }
+.pd2 .btn-sec.pequeno { width: auto; min-height: 38px; padding: 0 16px; font-size: 14px; margin-top: 12px; }
+.pd2 .total { font-size: 14px; margin: 0 0 10px; }
 .pd2 .total strong { color: var(--ink); }
-.pd2 .esgotado { margin: 18px 0 12px; color: var(--bad); font-weight: 600; }
-.pd2 .bandeiras { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 14px 0; }
-.pd2 .bandeiras img { height: 22px; width: auto; }
-.pd2 .infos { display: grid; gap: 8px; }
-.pd2 .info { display: grid; grid-template-columns: 28px 1fr; gap: 10px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; text-decoration: none; }
-.pd2 a.info:hover { border-color: var(--muted); }
-.pd2 .info strong { color: var(--brand); }
-.pd2 .info svg, .pd2 .confianca svg { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.pd2 .info svg { width: 24px; height: 24px; stroke: var(--ink); stroke-width: 1.6; margin-top: 2px; }
+.pd2 .esgotado { margin: 10px 0; color: #dc2626; font-weight: 600; }
+.pd2 .bandeiras { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 18px 0; }
+.pd2 .bandeiras.esquerda { justify-content: flex-start; margin-top: 0; }
+.pd2 .bandeiras img { height: 26px; width: auto; }
+
+.pd2 .fretefundo { list-style: none; margin: 0; padding: 5px 15px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); }
+.pd2 .fretefundo li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; padding: 10px 0; font-size: 15px; line-height: 22px; color: #545454; }
+.dark .pd2 .fretefundo li { color: var(--text); }
+.pd2 .fretefundo li + li { border-top: 1px solid var(--line); }
+.pd2 .fretefundo i { font-size: 22px; color: #000; text-align: center; margin-top: 2px; }
+.dark .pd2 .fretefundo i { color: var(--ink); }
+.pd2 .fretefundo b { color: var(--blue); }
+.pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
 
 /* conteúdo */
-.pd2 .bloco + .bloco { margin-top: 18px; }
-.pd2 .lista { margin: 0; padding-left: 20px; list-style: disc; }
+.pd2 .descricao { color: #000; }
+.dark .pd2 .descricao { color: var(--text); }
+.pd2 .descricao h3 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
+.pd2 .bloco + .bloco { margin-top: 22px; }
+.pd2 .lista { margin: 0 0 14px; padding-left: 22px; list-style: disc; }
 .pd2 .lista li { margin-bottom: 4px; }
-.pd2 .lista, .pd2 .linhas { margin-bottom: 12px; }
-.pd2 .linhas { list-style: none; padding: 0; }
+.pd2 .linhas { list-style: none; margin: 0 0 14px; padding: 0; }
 .pd2 .bloco > :last-child { margin-bottom: 0; }
-.pd2 .tabela-wrap { overflow-x: auto; }
-.pd2 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.pd2 th, .pd2 td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
-.pd2 .ficha th { font-weight: 600; color: var(--ink); background: var(--soft); width: 38%; }
-.pd2 .garantia { display: grid; grid-template-columns: 84px 1fr; gap: 16px; align-items: center; }
-.pd2 .garantia p { margin: 0; }
-.pd2 .garantia a { color: var(--brand); font-weight: 500; }
-.pd2 .selo-garantia { width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle, #ffe27a, #e0a100); display: grid; place-items: center; text-align: center; font-weight: 700; color: #5b4300; font-size: 11px; line-height: 1.15; border: 3px dashed #fff; box-shadow: 0 0 0 3px #e0a100; }
-.pd2 .selo-garantia b { font-size: 22px; display: block; }
-.pd2 details { border-bottom: 1px solid var(--line); }
-.pd2 summary { cursor: pointer; font-weight: 500; color: var(--ink); padding: 12px 0; font-size: 15px; }
-.pd2 details p { padding: 0 0 12px 18px; margin: 0; }
-.pd2 .cabecalho { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.pd2 .cabecalho h2 { margin: 0; }
-.pd2 .resumo-nota { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-.pd2 .resumo-nota b { font-size: 36px; color: var(--ink); line-height: 1; }
-.pd2 .avaliacoes { columns: 3 220px; column-gap: 14px; }
-.pd2 .avaliacao { break-inside: avoid; background: var(--sunk); border-radius: 10px; padding: 12px; margin-bottom: 14px; font-size: 12.5px; box-shadow: 2px 2px 4px rgba(0, 0, 0, .08); }
-.pd2 .avaliacao strong { color: var(--ink); display: block; }
-.pd2 .avaliacao p { margin: 4px 0 6px; }
-.pd2 .avaliacao small { color: var(--muted); }
+.pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
+.pd2 .garantia p { margin: 0 0 0 10px; }
+.pd2 .selo-garantia { width: 110px; max-width: 100%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, #ffe27a, #e0a100); display: grid; place-items: center; text-align: center; font-weight: 700; color: #5b4300; font-size: 11px; line-height: 1.15; border: 3px dashed #fff; box-shadow: 0 0 0 3px #e0a100; }
+.pd2 .selo-garantia b { font-size: 30px; display: block; }
+.pd2 .ficha { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pd2 .ficha th, .pd2 .ficha td { padding: 8px; border-bottom: 1px dotted rgba(0, 0, 0, .15); text-align: left; vertical-align: top; }
+.dark .pd2 .ficha th, .dark .pd2 .ficha td { border-color: var(--line); }
+.pd2 .ficha th { width: 150px; font-weight: 700; color: var(--ink); }
+.pd2 .ficha td { font-style: italic; }
+.pd2 .ficha tr:nth-child(even) th, .pd2 .ficha tr:nth-child(even) td { background: rgba(0, 0, 0, .025); }
+
+/* avaliações e FAQ em largura total */
+.pd2 .largura-total { margin-top: 20px; }
+.pd2 .aval-topo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px; align-items: center; padding-bottom: 30px; }
+.pd2 .aval-media { display: flex; align-items: center; gap: 10px; }
+.pd2 .caixa-nota { background: #2d2b2b; color: #fff; border-radius: 3px; padding: 15px 10px; font-size: 16px; }
+.pd2 .base { font-size: 14px; color: var(--text); white-space: nowrap; }
+.pd2 .barra-linha { display: grid; grid-template-columns: 7.5em 1fr 40px; gap: 10px; align-items: center; height: 22px; font-size: 14px; }
+.pd2 .barra-linha .estrelas { font-size: 13px; }
+.pd2 .trilho { position: relative; height: 6px; background: rgba(0, 0, 0, .1); border-radius: 3px; overflow: hidden; }
+.dark .pd2 .trilho { background: var(--line); }
+.pd2 .trilho span { position: absolute; inset: 0 auto 0 0; background: var(--blue); border-radius: 3px; }
+.pd2 .trilho em { position: absolute; left: -9999px; }
+.pd2 .qtd-aval { text-align: right; color: var(--ink); }
+.pd2 .aval-grade { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.pd2 .aval-item { background: var(--sunk); border-radius: 15px; padding: 14px 15px 10px; box-shadow: 3px 4px 8px rgba(0, 0, 0, .2); color: #000; font-size: 14px; transition: box-shadow .2s; }
+.pd2 .aval-item:hover { box-shadow: 3px 4px 15px rgba(0, 0, 0, .4); }
+.dark .pd2 .aval-item { color: var(--text); box-shadow: none; }
+.pd2 .aval-item .autor { font-weight: 700; color: var(--ink); }
+.pd2 .aval-item .autor i { margin-right: 5px; font-size: 12px; }
+.pd2 .aval-item p { margin: 6px 0; font-weight: 300; line-height: 1.5; }
+.pd2 .aval-item small { color: var(--muted); font-size: 12px; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .fotos-avaliacao img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
+.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; }
 
-/* faixa de confiança e relacionados */
-.pd2 .confianca { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 28px auto; }
-.pd2 .confianca div { text-align: center; font-size: 12.5px; }
-.pd2 .confianca svg { width: 34px; height: 34px; stroke: var(--brand); stroke-width: 1.5; margin: 0 auto 6px; }
-.pd2 .confianca strong { display: block; color: var(--ink); font-size: 14px; }
-.pd2 .relacionados { margin-top: 12px; }
+.pd2 details { border-bottom: 1px solid #d5d8dc; }
+.dark .pd2 details { border-color: var(--line); }
+.pd2 summary { list-style: none; cursor: pointer; padding: 15px; font-size: 20px; font-weight: 500; color: var(--ink); line-height: 1.3; }
+.pd2 summary::-webkit-details-marker { display: none; }
+.pd2 summary i { width: 1em; }
+.pd2 summary .aberto, .pd2 details[open] summary .fechado { display: none; }
+.pd2 details[open] summary .aberto { display: inline-block; }
+.pd2 details[open] summary { color: var(--blue); }
+.pd2 details p { padding: 0 15px 15px; margin: 0; }
 
-/* barra fixa no celular */
+.pd2 .confianca { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: center; min-height: 150px; margin: 20px 0; }
+.pd2 .confianca div { display: flex; align-items: flex-start; gap: 19px; color: var(--text); }
+.pd2 .confianca i { font-size: 48px; color: #000; width: 56px; text-align: center; flex: 0 0 auto; }
+.dark .pd2 .confianca i { color: var(--ink); }
+.pd2 .confianca strong { display: block; color: var(--ink); font-size: 20px; font-weight: 500; }
+.pd2 .relacionados h2 { margin-top: 10px; }
+
+/* botão fixo no celular */
 .pd2 .barra { display: none; }
 
-@media (max-width: 900px) {
-    .pd2 .grade { grid-template-columns: minmax(0, 1fr); }
-    .pd2 .col-compra { grid-column: 1; grid-row: auto; position: static; }
-    .pd2 .galeria { grid-template-columns: minmax(0, 1fr); }
-    .pd2 .miniaturas { flex-direction: row; order: 2; overflow-x: auto; max-height: none; }
-    .pd2 .miniaturas button { flex: 0 0 62px; }
-    .pd2 .seta { display: none; }
-    .pd2 .contador { display: block; }
-    .pd2 .card { padding: 16px; }
-    .pd2 h2 { font-size: 19px; }
+@media (max-width: 1024px) {
+    .pd2 .card { padding: 30px; }
+    .pd2 .galeria-card { padding: 10px; }
     .pd2 .confianca { grid-template-columns: repeat(2, 1fr); }
-    .pd2 .barra { display: grid; grid-template-columns: 1fr 1.2fr; gap: 10px; align-items: center; position: fixed; inset: auto 0 0 0; background: var(--card); border-top: 1px solid var(--line); padding: 10px 16px; z-index: 40; box-shadow: 0 -4px 12px rgba(0, 0, 0, .08); }
-    .pd2 .barra .por { font-size: 20px; }
-    .pd2 .barra small { color: var(--muted); display: block; font-size: 11px; }
-    .pd2 .barra .btn { min-height: 46px; font-size: 16px; }
-    .pd2 { padding-bottom: 88px; }
+    .pd2 .aval-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+    .pd2 .col-principal { grid-template-columns: minmax(0, 1fr); }
+    .pd2 .col-principal > .compra { grid-column: 1; grid-row: auto; position: static; }
+}
+@media (max-width: 767px) {
+    .pd2 .wrap { padding: 0 10px; }
+    .pd2 .migalhas { display: none; }
+    .pd2 .col-principal { padding-top: 10px; }
+    .pd2 .card { padding: 20px; }
+    .pd2 h2 { font-size: 24px; }
+    .pd2 .compra h1 { font-size: 20px; }
+    .pd2 .nota { font-size: 14px; }
+    .pd2 .galeria { flex-direction: column; gap: 10px; }
+    .pd2 .foto { flex-basis: auto; width: 100%; }
+    .pd2 .miniaturas { flex-direction: row; gap: 8px; max-height: none; overflow-x: auto; }
+    .pd2 .miniaturas button { flex: 0 0 calc(25% - 6px); border-radius: 5px; overflow: hidden; }
+    .pd2 .preco { grid-template-columns: 20% 80%; }
+    .pd2 .btn { font-size: 20px; }
+    .pd2 .fretefundo li { font-size: 14px; }
+    .pd2 .fretefundo i { color: #7b7b7b; }
+    .pd2 .garantia { grid-template-columns: 30% 70%; }
+    .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
+    .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .pd2 summary { font-size: 17px; padding: 12px; }
+    .pd2 .confianca { grid-template-columns: 1fr 1fr; gap: 16px; }
+    .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 3px; font-size: 14px; }
+    .pd2 .confianca i { font-size: 40px; }
+    .pd2 .confianca strong { font-size: 16px; }
+    .pd2 .barra { display: block; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); }
+    .pd2 .barra .btn { width: 100%; font-size: 18px; min-height: 46px; }
+    .pd2 { padding-bottom: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {
     .pd2 * { transition: none !important; }

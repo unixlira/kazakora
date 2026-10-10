@@ -63,10 +63,19 @@ const listTitle = computed(() => {
     if (props.filters.tipo === 'destaque') return 'Destaques';
     if (props.filters.tipo === 'lancamento') return 'Lançamentos';
     if (props.filters.categoria) return props.categories.find((category) => category.slug === props.filters.categoria)?.name ?? 'Catálogo';
-    return 'Catálogo';
+    return 'Todos os produtos';
 });
 
-const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/?todos=1#produtos');
+
+// Monta o link do filtro mantendo a busca e a ordenação atuais.
+const filtroHref = (mudancas) => {
+    const params = new URLSearchParams();
+    const atual = { search: props.filters.search, ordenar: props.filters.ordenar, tipo: props.filters.tipo, categoria: props.filters.categoria, ...mudancas };
+    Object.entries(atual).forEach(([chave, valor]) => { if (valor) params.set(chave, valor); });
+    if (![...params.keys()].some((chave) => ['search', 'tipo', 'categoria'].includes(chave))) params.set('todos', '1');
+    return `/?${params.toString()}#produtos`;
+};
+const ordenarPor = (valor) => router.get(filtroHref({ ordenar: valor || null }).split('#')[0], {}, { preserveScroll: true });
 
 const BENEFICIOS = [
     { icone: 'fa-truck-fast', titulo: 'Frete Grátis', texto: 'Entrega em todo Brasil' },
@@ -122,11 +131,11 @@ const carregarMais = () => {
 
     <AppLayout>
         <!-- Banner rotativo -->
-        <BannerCarousel v-if="banners.length" :banners="banners" reserva-base />
+        <BannerCarousel v-if="vitrine && banners.length" :banners="banners" reserva-base />
 
         <!-- Benefícios (pedido 2026-10-10, modelo izeshop): metade em cima do
              banner, metade abaixo da linha que separa o banner do resto. -->
-        <section class="relative z-10 mx-auto max-w-[1320px] px-4 md:px-6" :class="banners.length ? '-mt-12 mb-8 md:-mt-11' : 'my-6'">
+        <section v-if="vitrine" class="relative z-10 mx-auto max-w-[1320px] px-4 md:px-6" :class="banners.length ? '-mt-12 mb-8 md:-mt-11' : 'my-6'">
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
                 <div v-for="beneficio in BENEFICIOS" :key="beneficio.titulo"
                     class="flex items-center gap-3 rounded-xl border border-store-border bg-store-bg-raised px-3 py-3 shadow-[0_8px_24px_var(--store-shadow)] md:px-5 md:py-4">
@@ -140,7 +149,7 @@ const carregarMais = () => {
         </section>
 
         <!-- Categories -->
-        <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-6 md:px-6">
+        <section v-if="vitrine && categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-6 md:px-6">
             <h2 class="mb-6 text-center font-display text-2xl font-semibold">Departamentos</h2>
             <CategoryCarousel :categories="categories" :ativa="filters.categoria ?? null" />
         </section>
@@ -172,27 +181,54 @@ const carregarMais = () => {
         </template>
 
         <!-- Lista (busca, aba ou departamento) com "Carregar mais" -->
-        <section v-else id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 md:px-6">
-            <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <section v-else id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 pt-8 md:px-6">
+            <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <h2 class="font-display text-3xl font-semibold">{{ listTitle }}</h2>
-                    <p class="mt-2 text-store-fg-muted">Eletrônicos, gadgets e utensílios de cozinha selecionados pela curadoria KazaKora.</p>
+                    <h1 class="text-2xl font-bold md:text-3xl">{{ listTitle }}</h1>
+                    <p class="mt-1 text-sm text-store-fg-muted">
+                        {{ products?.total ?? 0 }} produto{{ (products?.total ?? 0) === 1 ? '' : 's' }}
+                        <Link v-if="filters.search || filters.categoria || filters.tipo" href="/?todos=1#produtos" class="ml-2 font-semibold text-store-accent hover:underline">Limpar filtros</Link>
+                    </p>
                 </div>
 
-                <div v-if="!filters.search" class="flex flex-wrap gap-2">
-                    <Link v-for="tab in TIPO_TABS" :key="tab.label" :href="tabHref(tab.key)" preserve-scroll
-                        class="rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
-                        :class="(filters.tipo ?? null) === tab.key
-                            ? 'bg-store-accent text-store-accent-contrast'
-                            : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
-                        {{ tab.label }}
-                    </Link>
-                </div>
+                <label class="flex items-center gap-2 text-sm text-store-fg-muted">
+                    Ordenar por
+                    <select :value="filters.ordenar ?? ''" class="rounded-lg border border-store-border-strong bg-store-bg-raised px-3 py-2 text-sm text-store-fg" @change="ordenarPor($event.target.value)">
+                        <option value="">{{ filters.search ? 'Mais relevantes' : 'Mais recentes' }}</option>
+                        <option value="menor_preco">Menor preço</option>
+                        <option value="maior_preco">Maior preço</option>
+                        <option value="nome">Nome (A–Z)</option>
+                    </select>
+                </label>
             </div>
 
-            <p v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
-                Nenhum produto encontrado.
-            </p>
+            <!-- Filtros: abas e departamentos em pílulas -->
+            <div class="no-scrollbar mb-8 flex gap-2 overflow-x-auto pb-1">
+                <Link v-for="tab in TIPO_TABS" :key="tab.label" :href="filtroHref({ tipo: tab.key, categoria: null })" preserve-scroll
+                    class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
+                    :class="!filters.categoria && (filters.tipo ?? null) === tab.key
+                        ? 'bg-store-accent text-store-accent-contrast'
+                        : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
+                    {{ tab.label }}
+                </Link>
+                <span class="mx-1 w-px shrink-0 bg-store-border-strong"></span>
+                <Link v-for="category in categories" :key="category.id" :href="filtroHref({ categoria: filters.categoria === category.slug ? null : category.slug, tipo: null })" preserve-scroll
+                    class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
+                    :class="filters.categoria === category.slug
+                        ? 'bg-store-accent text-store-accent-contrast'
+                        : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
+                    {{ category.name }}
+                </Link>
+            </div>
+
+            <div v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
+                <i class="fas fa-magnifying-glass mb-3 text-3xl text-store-fg-faint"></i>
+                <p class="text-base font-semibold text-store-fg">
+                    Nenhum produto encontrado{{ filters.search ? ` para "${filters.search}"` : '' }}.
+                </p>
+                <p class="mt-1 text-sm">Tente outra palavra, use menos termos ou veja todos os produtos.</p>
+                <Link href="/?todos=1#produtos" class="mt-4 inline-block rounded-lg bg-store-accent px-5 py-2.5 text-sm font-semibold text-store-accent-contrast">Ver todos os produtos</Link>
+            </div>
 
             <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
                 <ProductCard v-for="product in listaProdutos" :key="product.id" :product="product"

@@ -22,10 +22,7 @@ watch(
     { immediate: true, deep: true },
 );
 
-const search = ref('');
-const submitSearch = () => {
-    router.get('/', { search: search.value || undefined }, { preserveState: true });
-};
+
 
 const logout = () => router.post('/sair');
 
@@ -54,6 +51,16 @@ const markAllNotificationsRead = () => {
 };
 
 const mobileMenuOpen = ref(false);
+
+// Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
+// a lista de resultados abre logo no topo.
+const termoDaUrl = () => new URLSearchParams(window.location.search).get('search') ?? '';
+const search = ref(termoDaUrl());
+const submitSearch = () => {
+    const termo = search.value.trim();
+    mobileMenuOpen.value = false;
+    router.get('/', termo ? { search: termo } : { todos: 1 });
+};
 
 const discountModalOpen = ref(false);
 const closeDiscountModal = () => {
@@ -106,8 +113,8 @@ const REDES = [
                     <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
                 </nav>
 
-                <form class="relative hidden max-w-xs flex-1 lg:block" @submit.prevent="submitSearch">
-                    <input v-model="search" type="text" placeholder="O que você procura?"
+                <form class="relative hidden max-w-xs flex-1 lg:block" role="search" @submit.prevent="submitSearch">
+                    <input v-model="search" type="search" placeholder="O que você procura?"
                         class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
                     <button type="submit" class="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-store-fg-muted hover:text-store-accent" aria-label="Buscar">
                         <i class="fas fa-magnifying-glass text-xs"></i>
@@ -181,11 +188,16 @@ const REDES = [
                 </div>
             </div>
 
+            <!-- Busca sempre visível no celular -->
+            <form class="relative px-4 pb-3 lg:hidden" role="search" @submit.prevent="submitSearch">
+                <input v-model="search" type="search" placeholder="O que você procura?" enterkeyhint="search"
+                    class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2.5 pl-4 pr-11 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
+                <button type="submit" class="absolute right-5 top-1/2 flex h-8 w-8 -translate-y-[calc(50%+6px)] items-center justify-center rounded-full text-store-fg-muted" aria-label="Buscar">
+                    <i class="fas fa-magnifying-glass text-sm"></i>
+                </button>
+            </form>
+
             <div v-if="mobileMenuOpen" class="border-t border-store-border px-4 py-4 lg:hidden">
-                <form class="relative mb-4" @submit.prevent="submitSearch">
-                    <input v-model="search" type="text" placeholder="O que você procura?"
-                        class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm">
-                </form>
                 <nav class="flex flex-col gap-3">
                     <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
                     <a href="/?todos=1#produtos" class="text-sm font-medium">Produtos</a>

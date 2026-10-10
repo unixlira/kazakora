@@ -87,7 +87,9 @@ const cepEfetivo = computed(() => (usarNovoEndereco.value ? endereco.zip : (ende
 // ---------- 3. Entrega ----------
 const { loading: freteCarregando, expressa: entregaExpressa, quote: cotarFrete } = useFreightQuote();
 const cotacoes = ref([]);
-const opcoesEntrega = computed(() => (cotacoes.value.length ? cotacoes.value : props.shippingMethods));
+// Fretes cadastrados (ex.: "Frete GRÁTIS") aparecem sempre, antes mesmo do
+// CEP; as cotações dos Correios/Melhor Envio entram junto depois do CEP.
+const opcoesEntrega = computed(() => [...props.shippingMethods, ...cotacoes.value]);
 const shippingMethodId = ref(props.draft?.shipping_method_id ?? props.shippingMethods[0]?.id ?? null);
 
 watch(cepEfetivo, async (zip) => {
@@ -96,8 +98,8 @@ watch(cepEfetivo, async (zip) => {
         return;
     }
     cotacoes.value = await cotarFrete(zip);
-    if (cotacoes.value.length && !cotacoes.value.some((option) => option.id === shippingMethodId.value)) {
-        shippingMethodId.value = cotacoes.value[0].id;
+    if (opcoesEntrega.value.length && !opcoesEntrega.value.some((option) => option.id === shippingMethodId.value)) {
+        shippingMethodId.value = opcoesEntrega.value[0].id;
     }
 }, { immediate: true });
 
@@ -359,7 +361,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
     <Head title="Finalize sua compra" />
 
     <CheckoutLayout>
-        <div class="mx-auto grid max-w-[1160px] gap-6 px-3 py-6 md:px-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:py-9">
+        <div class="mx-auto grid w-full max-w-[1160px] gap-6 px-3 py-6 md:px-6 lg:grid-cols-[minmax(0,62fr)_minmax(0,38fr)] lg:items-start lg:py-9">
             <!-- Resumo no celular (recolhível) -->
             <button type="button" class="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm lg:hidden" @click="resumoAberto = !resumoAberto">
                 <span class="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -500,13 +502,16 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 Forma de entrega
                                 <i v-if="freteCarregando" class="fa-solid fa-spinner animate-spin text-sm text-slate-400"></i>
                             </h2>
+                            <p class="mt-0.5 text-sm text-slate-500">Método de entrega</p>
                         </header>
 
                         <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
                             <i class="fa-solid fa-bolt"></i> {{ entregaExpressa.mensagem }}
                         </p>
 
-                        <p v-if="!cepEfetivo || cepEfetivo.replace(/\D/g, '').length !== 8" class="text-sm text-slate-500">
+                        <!-- Igual à referência (pedido 2026-10-10): a opção aparece desde o
+                             início, mesmo antes do CEP; com o CEP a cotação atualiza. -->
+                        <p v-if="!opcoesEntrega.length" class="text-sm text-slate-500">
                             <i class="fa-solid fa-location-dot mr-1 text-slate-400"></i> Informe o CEP para ver as opções de entrega.
                         </p>
                         <div v-else class="space-y-2" :data-erro="erro('shipping_method_id') ? 1 : 0">
@@ -516,8 +521,10 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <input v-model="shippingMethodId" type="radio" :value="option.id" class="h-4 w-4 accent-emerald-600">
                                 <i class="fa-solid fa-truck-fast text-slate-500"></i>
                                 <span class="flex-1 text-sm text-slate-700">
-                                    <strong class="text-slate-900">{{ option.name }}</strong>
-                                    <span v-if="option.estimated_days" class="block text-xs text-slate-500">Chega em até {{ option.estimated_days }} dia{{ option.estimated_days === 1 ? '' : 's' }} úte{{ option.estimated_days === 1 ? 'il' : 'is' }}</span>
+                                    <strong class="text-slate-900">{{ Number(option.price) === 0 ? 'Frete GRÁTIS' : option.name }}</strong>
+                                    <span v-if="option.estimated_days" class="text-slate-500">
+                                        ({{ option.estimated_days > 1 ? `1 à ${option.estimated_days} dias úteis` : '1 dia útil' }})
+                                    </span>
                                 </span>
                                 <span class="text-sm font-bold" :class="Number(option.price) === 0 ? 'text-emerald-600' : 'text-slate-900'">
                                     {{ Number(option.price) === 0 ? 'Grátis' : formatPrice(option.price) }}

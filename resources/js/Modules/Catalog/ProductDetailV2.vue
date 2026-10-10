@@ -462,11 +462,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                         </aside>
 
-                        <!-- Descrição: visual da v1 (faixa em degradê + cabeçalho centralizado) com o
+                        <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
                         <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
-                            <div class="faixa-degrade bg-gradient-to-r from-store-accent via-purple-400 to-fuchsia-300"></div>
                             <header class="desc-cabecalho">
                                 <span class="desc-icone bg-store-accent-soft text-store-accent-strong"><i class="fas fa-wand-magic-sparkles"></i></span>
                                 <p class="desc-eyebrow">Por que esse produto merece atenção</p>
@@ -804,7 +803,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
-.pd2 .faixa-degrade { position: absolute; inset: 0 0 auto 0; height: 6px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
 .pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; }
 .pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }

@@ -36,8 +36,11 @@ const onSelectMobile = (event) => {
     mobilePreview.value = file ? URL.createObjectURL(file) : null;
 };
 
+// BUG REAL 2026-10-10: form.put com arquivo vai como multipart PUT, que o
+// PHP não lê — a imagem mobile (e qualquer troca de imagem) nunca chegava.
+// POST com _method=put é o jeito do Laravel receber arquivo na edição.
 const submit = () => {
-    form.put(`/admin/banners/${props.banner.id}`);
+    form.transform((data) => ({ ...data, _method: 'put' })).post(`/admin/banners/${props.banner.id}`, { forceFormData: true });
 };
 </script>
 

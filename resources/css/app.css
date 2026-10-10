@@ -139,6 +139,16 @@
     to { transform: translateX(-50%); }
 }
 
+/* Imagem "fluid" (como o .img-fluid do Bootstrap, sem o Bootstrap):
+   ocupa a largura disponível e a altura acompanha a proporção, sem cortar.
+   Usado no banner do celular quando não há imagem mobile (pedido 2026-10-10). */
+.img-fluid {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+}
+
 .no-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;

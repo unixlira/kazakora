@@ -115,6 +115,8 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
 });
 
+Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
+
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
     Route::post('/entrega', [CheckoutController::class, 'storeDelivery'])->name('entrega.salvar');

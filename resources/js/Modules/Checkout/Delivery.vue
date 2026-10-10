@@ -56,7 +56,7 @@ const useNewAddress = ref(!form.address_id);
 const showAddressPicker = ref(false);
 
 const { loading: cepLoading, error: cepError, lookup: lookupCep } = useCep();
-const { loading: freightLoading, quote: quoteFreight } = useFreightQuote();
+const { loading: freightLoading, expressa: entregaExpressa, quote: quoteFreight } = useFreightQuote();
 
 // Cotações reais do Melhor Envio pro CEP atual — quando vem alguma,
 // substituem por completo a lista estática (props.shippingMethods) nas
@@ -368,6 +368,9 @@ const submit = () => {
                             <h2 class="text-sm font-semibold uppercase text-store-fg-muted">Forma de envio</h2>
                             <i v-if="freightLoading" class="fas fa-spinner animate-spin text-xs text-store-fg-muted"></i>
                         </div>
+                        <p v-if="!freightLoading && entregaExpressa" class="mb-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            <i class="fas fa-bolt"></i> {{ entregaExpressa.mensagem }}
+                        </p>
                         <p v-if="freightLoading" class="text-sm text-store-fg-muted">Calculando frete para o seu CEP...</p>
                         <template v-else-if="availableOptions.length > 1">
                             <label v-for="method in availableOptions" :key="method.id"

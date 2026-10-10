@@ -250,8 +250,8 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     <div>
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
                         <div class="no-scrollbar flex flex-nowrap items-center justify-center gap-2 overflow-x-auto lg:flex-wrap lg:justify-start lg:overflow-visible">
-                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand"
-                                class="h-10 w-auto shrink-0 rounded-md bg-white p-1.5 lg:h-9">
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao/${brand}.png`" :alt="brand"
+                                class="h-10 w-auto shrink-0 lg:h-9">
                         </div>
                     </div>
 

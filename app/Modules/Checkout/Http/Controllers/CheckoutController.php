@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Address;
@@ -30,7 +31,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,9 @@ class CheckoutController extends Controller
 {
     private const SESSION_KEY = 'checkout_draft';
 
+    /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
+    private const CHECKOUT_VERSION = 2;
+
     public function __construct(
         private readonly CartManager $cart,
         private readonly StockManager $stock,
@@ -52,8 +56,16 @@ class CheckoutController extends Controller
     ) {
     }
 
-    public function delivery(Request $request): Response
+    public function delivery(Request $request): RedirectResponse|Response
     {
+        if ($this->usesCheckoutV2($request)) {
+            if ($this->cart->items()->isEmpty()) {
+                return redirect()->route('carrinho.ver');
+            }
+
+            return Inertia::render('Checkout/CheckoutV2', $this->checkoutV2Props($request));
+        }
+
         $user = $request->user();
 
         return Inertia::render('Checkout/Delivery', [
@@ -106,8 +118,15 @@ class CheckoutController extends Controller
         return response()->json(['entrega_expressa' => $entregaExpressa->consultar($cep)]);
     }
 
-    public function storeDelivery(Request $request): RedirectResponse
+    public function storeDelivery(Request $request): RedirectResponse|JsonResponse
     {
+        // Checkout v2 (pedido 2026-10-10): a tela única grava a entrega por
+        // fetch (JSON) e logo em seguida cria o pagamento — sem trocar de
+        // página. Erros voltam como 422 com os mesmos campos.
+        if ($this->wantsJsonDelivery($request)) {
+            return $this->storeDeliveryJson($request);
+        }
+
         // Todo erro nesta ação redireciona explicitamente pra tela de
         // entrega (nunca back()) — back() depende de _previous.url, que
         // reflete a última página GET vista nesta sessão e pode estar
@@ -172,6 +191,7 @@ class CheckoutController extends Controller
             $rules['guest.name'] = ['required', 'string', 'max:255'];
             $rules['guest.email'] = ['required', 'email', 'max:255'];
             $rules['guest.cpf'] = ['required', 'string', 'max:14'];
+            $rules['guest.phone'] = ['nullable', 'string', 'max:20'];
         }
 
         $validator = Validator::make($request->all(), $rules);
@@ -217,6 +237,12 @@ class CheckoutController extends Controller
             ];
         }
 
+        // Cupom aplicado antes de preencher a entrega (checkout v2) não pode
+        // se perder quando o rascunho é regravado.
+        if ($coupon = $request->session()->get(self::SESSION_KEY.'.coupon_code')) {
+            $data['coupon_code'] = $coupon;
+        }
+
         $request->session()->put(self::SESSION_KEY, $data);
         // Grava a sessão já aqui (em vez de esperar a fase terminate() do
         // kernel) — sob PHP-FPM com fastcgi_finish_request, a resposta do
@@ -232,12 +258,17 @@ class CheckoutController extends Controller
     {
         $draft = $request->session()->get(self::SESSION_KEY);
 
-        if (! $draft || $this->cart->items()->isEmpty()) {
+        if (! $draft || $this->cart->items()->isEmpty()
+            || ($this->usesCheckoutV2($request) && empty($draft['shipping_method_id']))) {
             return redirect()->route('finalizacao.entrega');
         }
 
         if ($request->user() && $resumable = $this->resumePendingOrder($request->user())) {
             return $this->renderConfirmingPayment($draft, ...$resumable);
+        }
+
+        if ($this->usesCheckoutV2($request)) {
+            return Inertia::render('Checkout/CheckoutV2', $this->checkoutV2Props($request));
         }
 
         return Inertia::render('Checkout/Payment', $this->paymentProps($draft));
@@ -249,8 +280,10 @@ class CheckoutController extends Controller
 
         $coupon = Coupon::query()->where('code', $data['code'])->where('is_active', true)->first();
 
+        $destino = $this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento';
+
         if (! $coupon) {
-            return redirect()->route('finalizacao.pagamento')->withErrors(['code' => 'Cupom inválido.']);
+            return redirect()->route($destino)->withErrors(['code' => 'Cupom inválido.']);
         }
 
         $draft = $request->session()->get(self::SESSION_KEY, []);
@@ -258,7 +291,7 @@ class CheckoutController extends Controller
         $request->session()->put(self::SESSION_KEY, $draft);
         $request->session()->save();
 
-        return redirect()->route('finalizacao.pagamento')->with('success', 'Cupom aplicado!');
+        return redirect()->route($destino)->with('success', 'Cupom aplicado!');
     }
 
     /**
@@ -753,8 +786,8 @@ class CheckoutController extends Controller
     {
         $qr = $mpPayment['point_of_interaction']['transaction_data'] ?? [];
 
-        return Inertia::render('Checkout/Payment', [
-            ...$this->paymentProps($draft),
+        return Inertia::render($this->paymentComponent(), [
+            ...$this->paymentPropsFor($draft),
             'order' => $order->only('id', 'total'),
             'methodType' => Payment::METHOD_PIX,
             'mercadoPagoPix' => [
@@ -774,8 +807,8 @@ class CheckoutController extends Controller
      */
     private function renderConfirmingMercadoPagoCard(array $draft, Order $order, ?string $pendingSecondMethod = null): Response
     {
-        return Inertia::render('Checkout/Payment', [
-            ...$this->paymentProps($draft),
+        return Inertia::render($this->paymentComponent(), [
+            ...$this->paymentPropsFor($draft),
             'order' => $order->only('id', 'total'),
             'methodType' => Payment::METHOD_CARD,
             'mercadoPagoCardConfirmed' => true,
@@ -994,16 +1027,28 @@ class CheckoutController extends Controller
             throw new GuestEmailAlreadyExistsException();
         }
 
+        // Pedido 2026-10-10: quem compra sem conta recebe uma senha
+        // temporária no e-mail de boas-vindas (entra só com e-mail + essa
+        // senha e troca no perfil). Quem se cadastra antes, com senha e
+        // confirmação, não passa por aqui e não recebe senha nenhuma.
+        $senhaTemporaria = Str::password(10, symbols: false);
+
         $user = User::create([
             'name' => $guest['name'],
             'email' => $guest['email'],
             'cpf' => $guest['cpf'],
-            'password' => Hash::make(Str::random(40)),
+            'phone' => $guest['phone'] ?? null,
+            'password' => Hash::make($senhaTemporaria),
             'role' => User::ROLE_CUSTOMER,
         ]);
 
         Auth::login($user);
-        Password::sendResetLink(['email' => $user->email]);
+
+        // Só depois do commit: se a cobrança falhar, a transação desfaz a
+        // conta e nenhum e-mail com senha de conta inexistente sai.
+        DB::afterCommit(function () use ($user, $senhaTemporaria) {
+            rescue(fn () => Mail::to($user->email)->send(new WelcomeEmail($user, $senhaTemporaria)));
+        });
 
         return $user;
     }
@@ -1040,6 +1085,83 @@ class CheckoutController extends Controller
     private function isLiveQuoteId(string $value): bool
     {
         return str_starts_with($value, 'me:') || str_starts_with($value, 'correios:');
+    }
+
+    /**
+     * Checkout v2 (pedido 2026-10-10): tela única de fechamento, sem topo e
+     * rodapé da loja. ?v=1 volta pro checkout em 2 etapas (fica guardado na
+     * sessão). Só com Mercado Pago — o v2 não tem o Payment Element do Stripe.
+     */
+    private function usesCheckoutV2(Request $request): bool
+    {
+        if (in_array($request->query('v'), ['1', '2'], true)) {
+            $request->session()->put('checkout_version', (int) $request->query('v'));
+        }
+
+        $versao = (int) $request->session()->get('checkout_version', self::CHECKOUT_VERSION);
+
+        return $versao === 2 && PaymentGateway::active() === PaymentGateway::MERCADOPAGO;
+    }
+
+    private function paymentComponent(): string
+    {
+        return $this->usesCheckoutV2(request()) ? 'Checkout/CheckoutV2' : 'Checkout/Payment';
+    }
+
+    /** Props do pagamento já com as do v2 quando ele está ativo. */
+    private function paymentPropsFor(array $draft): array
+    {
+        return $this->usesCheckoutV2(request()) ? $this->checkoutV2Props(request()) : $this->paymentProps($draft);
+    }
+
+    /** @return array<string, mixed> */
+    private function checkoutV2Props(Request $request): array
+    {
+        $user = $request->user();
+        $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        $cartItems = $this->cart->items();
+        $subtotal = round($cartItems->sum('subtotal'), 2);
+        $coupon = ! empty($draft['coupon_code'])
+            ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
+            : null;
+
+        return [
+            'items' => $cartItems,
+            'subtotal' => $subtotal,
+            'productsDiscount' => $this->productsDiscount(),
+            'couponCode' => $coupon?->code,
+            'discountAmount' => $coupon ? $coupon->discountFor($subtotal) : 0,
+            'pixDiscountPercentage' => DescontoPix::percentual(),
+            'addresses' => $user ? $user->addresses : [],
+            'shippingMethods' => ShippingMethod::query()->where('is_active', true)->orderBy('price')->get(['id', 'name', 'estimated_days', 'price']),
+            'customer' => $user ? $user->only('name', 'email', 'cpf', 'phone') : null,
+            'draft' => $draft ?: null,
+            'paymentGateway' => PaymentGateway::active(),
+            'mercadoPagoPublicKey' => config('services.mercadopago.public_key'),
+        ];
+    }
+
+    private function wantsJsonDelivery(Request $request): bool
+    {
+        return $request->expectsJson() && ! $request->header('X-Inertia') && ! $request->attributes->get('checkout_v2_json');
+    }
+
+    /** Mesma regra do storeDelivery(), respondendo em JSON (checkout v2). */
+    private function storeDeliveryJson(Request $request): JsonResponse
+    {
+        $request->attributes->set('checkout_v2_json', true);
+        $response = $this->storeDelivery($request);
+        $errors = $request->session()->get('errors');
+        $request->session()->forget(['errors', '_old_input']);
+
+        if ($errors && $errors->getBag('default')->isNotEmpty()) {
+            return response()->json([
+                'message' => $errors->getBag('default')->first(),
+                'errors' => $errors->getBag('default')->toArray(),
+            ], 422);
+        }
+
+        return response()->json(['ok' => $response instanceof RedirectResponse]);
     }
 
     private function sortMethodsSafely(array $methods): array

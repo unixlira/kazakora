@@ -133,9 +133,9 @@ const carregarMais = () => {
         <!-- Banner rotativo -->
         <BannerCarousel v-if="vitrine && banners.length" :banners="banners" reserva-base />
 
-        <!-- Benefícios (pedido 2026-10-10, modelo izeshop): metade em cima do
-             banner, metade abaixo da linha que separa o banner do resto. -->
-        <section v-if="vitrine" class="relative z-10 mx-auto max-w-[1320px] px-4 md:px-6" :class="banners.length ? '-mt-12 mb-8 md:-mt-11' : 'my-6'">
+        <!-- Benefícios (pedido 2026-10-10, modelo izeshop): no computador metade em
+             cima do banner; no celular logo abaixo dele (a imagem já é pequena). -->
+        <section v-if="vitrine" class="relative z-10 mx-auto max-w-[1320px] px-4 md:px-6" :class="banners.length ? 'mb-8 mt-4 md:-mt-11' : 'my-6'">
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
                 <div v-for="beneficio in BENEFICIOS" :key="beneficio.titulo"
                     class="flex items-center gap-3 rounded-xl border border-store-border bg-store-bg-raised px-3 py-3 shadow-[0_8px_24px_var(--store-shadow)] md:px-5 md:py-4">

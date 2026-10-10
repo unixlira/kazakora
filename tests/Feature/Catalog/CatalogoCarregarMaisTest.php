@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Catalog;
 
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
@@ -45,5 +46,20 @@ class CatalogoCarregarMaisTest extends TestCase
         $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page
             ->has('products.data.0.images', 2)
             ->where('products.data.0.images.0.is_primary', true));
+    }
+
+    public function test_departamento_usa_foto_de_produto_e_filtra_a_vitrine(): void
+    {
+        $cozinha = Category::factory()->create(['name' => 'Cozinha', 'slug' => 'cozinha', 'image_path' => null]);
+        $outra = Category::factory()->create(['slug' => 'outra']);
+        $panela = Product::factory()->create(['is_active' => true, 'category_id' => $cozinha->id, 'name' => 'Panela']);
+        $panela->images()->create(['path' => 'products/panela.jpg', 'position' => 0, 'is_primary' => true]);
+        Product::factory()->create(['is_active' => true, 'category_id' => $outra->id]);
+
+        $this->get('/?categoria=cozinha')->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('products.data', 1)
+            ->where('products.data.0.name', 'Panela')
+            ->where('filters.categoria', 'cozinha')
+            ->where('categories', fn ($departamentos) => collect($departamentos)->firstWhere('slug', 'cozinha')['image_url'] !== null));
     }
 }

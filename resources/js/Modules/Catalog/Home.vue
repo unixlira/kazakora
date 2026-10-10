@@ -58,6 +58,7 @@ const listTitle = computed(() => {
     if (props.filters.search) return `Resultados para "${props.filters.search}"`;
     if (props.filters.tipo === 'destaque') return 'Destaques';
     if (props.filters.tipo === 'lancamento') return 'Lançamentos';
+    if (props.filters.categoria) return props.categories.find((category) => category.slug === props.filters.categoria)?.name ?? 'Catálogo';
     return 'Catálogo';
 });
 
@@ -147,7 +148,8 @@ const carregarMais = () => {
 
         <!-- Categories -->
         <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-14 md:px-6">
-            <CategoryCarousel :categories="categories" />
+            <h2 class="mb-5 font-display text-2xl font-semibold">Departamentos</h2>
+            <CategoryCarousel :categories="categories" :ativa="filters.categoria ?? null" />
         </section>
 
         <!-- Product grid -->

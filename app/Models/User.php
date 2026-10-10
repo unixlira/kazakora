@@ -55,6 +55,8 @@ class User extends Authenticatable
             'password' => 'hashed',
             'birth_date' => 'date',
             'deleted_at' => 'datetime',
+            'deve_trocar_senha' => 'boolean',
+            'recebe_promocoes' => 'boolean',
         ];
     }
 

@@ -16,9 +16,11 @@ class ProfilePasswordController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
-        $request->user()->update([
+        $request->user()->forceFill([
             'password' => Hash::make($validated['password']),
-        ]);
+            // Senha pessoal criada: some o pedido de troca da senha temporária.
+            'deve_trocar_senha' => false,
+        ])->save();
 
         return back()->with('success', 'Senha alterada com sucesso.');
     }

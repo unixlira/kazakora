@@ -34,6 +34,14 @@ class Marca
         return $caminho ? Storage::disk('public')->url($caminho) : self::ITENS[$item]['padrao'];
     }
 
+    /** Endereço completo (com domínio), para e-mails. */
+    public static function urlAbsoluta(string $item): string
+    {
+        $url = rescue(fn () => self::url($item), self::ITENS[$item]['padrao'], false);
+
+        return str_starts_with($url, 'http') ? $url : url($url);
+    }
+
     /** @return array{logoNav: string, logoRodape: string, favicon: string, faviconTipo: string} */
     public static function urls(): array
     {

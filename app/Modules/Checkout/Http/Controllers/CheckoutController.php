@@ -303,6 +303,10 @@ class CheckoutController extends Controller
         }
 
         $request->session()->put(self::SESSION_KEY, $data);
+        // Visitante: guarda o e-mail no carrinho para o lembrete de carrinho abandonado.
+        if (! $request->user() && ! empty($data['guest']['email'])) {
+            rescue(fn () => $this->cart->lembrarEmail($data['guest']['email']), null, false);
+        }
         // Grava a sessão já aqui (em vez de esperar a fase terminate() do
         // kernel) — sob PHP-FPM com fastcgi_finish_request, a resposta do
         // redirect pode chegar ao navegador antes do terminate() rodar, e o
@@ -1192,6 +1196,8 @@ class CheckoutController extends Controller
             'password' => Hash::make($senhaTemporaria),
             'role' => User::ROLE_CUSTOMER,
         ]);
+        // Senha temporária: a loja pede para trocar ao entrar (pedido 2026-10-10).
+        $user->forceFill(['deve_trocar_senha' => true])->save();
 
         Auth::login($user);
 

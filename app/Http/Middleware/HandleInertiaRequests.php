@@ -68,13 +68,19 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $request->user()?->only('id', 'name', 'email', 'role', 'avatar_url', 'initials'),
+                'user' => $request->user()?->only('id', 'name', 'email', 'role', 'avatar_url', 'initials', 'deve_trocar_senha'),
             ],
             'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
             // Desconto no Pix da loja (pedido 2026-10-09), em %.
             'descontoPix' => DescontoPix::percentual(),
             // Logos e favicon (Admin > Banners > Logos e favicon).
             'marca' => fn () => rescue(fn () => \App\Support\Marca::urls(), null, false),
+            // Topo da loja (pedido 2026-10-10): mega menu de departamentos e
+            // o maior desconto da faixa promocional. Fora do admin.
+            'menuLoja' => fn () => $request->is('admin*') ? null : rescue(fn () => [
+                'departamentos' => \App\Modules\Catalog\Support\MenuDaLoja::departamentos(),
+                'maiorDesconto' => \App\Modules\Catalog\Support\MenuDaLoja::maiorDesconto(),
+            ], null, false),
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),
             ],

@@ -299,7 +299,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
         <div class="pd2">
             <!-- Faixa amarela do topo -->
             <div class="faixa">
-                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS</span>
+                <span><i class="fas fa-truck-fast"></i> FRETE GRÁTIS <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></span>
                 <span class="sep">|</span>
                 <span><i class="fas fa-lock"></i> COMPRA 100% SEGURA</span>
             </div>
@@ -449,7 +449,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <ul class="fretefundo">
                                 <li>
                                     <i class="fas fa-truck-fast"></i>
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout. <Link :href="`/produtos/${product.slug}/envio`">Ver formas de envio</Link></span>
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout. <Link :href="`/produtos/${product.slug}/envio`">Ver formas de envio</Link></span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
                                 </li>
                                 <li>
@@ -615,7 +615,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <!-- FAIXA DE CONFIANÇA -->
                 <div class="confianca">
-                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis</strong>Entrega em todo Brasil</span></div>
+                    <div><i class="fas fa-truck-fast"></i><span><strong>Frete Grátis <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span></strong>Entrega em todo Brasil</span></div>
                     <div><i class="fas fa-credit-card"></i><span><strong>Parcelamento</strong>Em {{ PARCELAS }}x nos cartões</span></div>
                     <div><i class="fas fa-lock"></i><span><strong>Compra Segura</strong>Ambiente seguro para pagamentos online</span></div>
                     <div><i class="far fa-face-smile"></i><span><strong>Satisfação Garantida</strong>Troca ou reembolso garantido</span></div>
@@ -692,6 +692,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* faixa amarela */
 .pd2 .faixa { background: var(--yellow); color: #111; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; font-weight: 600; font-size: 14px; letter-spacing: .5px; }
 .pd2 .faixa i { margin-right: 6px; }
+.pd2 .selo-full i { margin: 0 1px 0 0; font-size: 0.9em; width: auto; color: inherit; }
 .pd2 .faixa .sep { opacity: .4; }
 
 .pd2 .migalhas { font-size: 14.5px; color: var(--muted); padding: 18px 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -141,7 +141,7 @@ const nomeCurto = computed(() => {
 
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
-                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-l-none rounded-r-[40px] border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
                 :class="'bottom-0 translate-y-1/2'"
                 aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
                 <i class="fas fa-cart-shopping text-sm"></i>
@@ -159,11 +159,17 @@ const nomeCurto = computed(() => {
             <!-- Envio Express abaixo do título (pedido 2026-10-10): caminhão branco em
                  fundo cinza + selo vinho em itálico. -->
             <!-- Laterais inclinadas dos dois lados, como "/ Envio Express /". -->
-            <div class="envio-express flex h-6 w-fit text-white">
-                <span class="flex w-8 shrink-0 items-center justify-center bg-slate-500 pl-1.5">
-                    <i class="fa-solid fa-truck-fast -skew-x-12 text-[11px]"></i>
-                </span>
-                <span class="flex items-center whitespace-nowrap bg-[#7B1E3A] pl-1.5 pr-3 text-[10px] font-extrabold uppercase italic leading-none tracking-tight">Envio Express</span>
+            <!-- Ao lado, o selo "⚡ Full" (pedido 2026-10-10). -->
+            <div class="flex items-center gap-1 md:gap-1.5">
+                <div class="envio-express flex h-5 w-fit text-white md:h-6">
+                    <!-- Parte cinza do caminhão: só os cantos da direita arredondados (40px),
+                         com o vinho passando por baixo da curva. -->
+                    <span class="relative z-[1] flex w-6 shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-1 md:w-8 md:pl-1.5 md:pr-0.5">
+                        <i class="fa-solid fa-truck-fast -skew-x-12 text-[9px] md:text-[11px]"></i>
+                    </span>
+                    <span class="-ml-2 flex items-center whitespace-nowrap bg-[#7B1E3A] pl-2.5 pr-2 text-[7.5px] font-extrabold uppercase italic leading-none tracking-tighter md:-ml-2.5 md:pl-3.5 md:pr-3 md:text-[10px] md:tracking-tight">Envio Express</span>
+                </div>
+                <span v-if="product.stock > 0" class="inline-flex h-5 items-center gap-0.5 whitespace-nowrap rounded-full bg-emerald-600 px-1.5 text-[7.5px] font-extrabold uppercase tracking-tighter text-white md:gap-1 md:px-2 md:text-[10px] md:tracking-wide"><i class="fa-solid fa-bolt"></i> Full</span>
             </div>
             <div class="mt-auto pt-1">
                 <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->
@@ -174,7 +180,10 @@ const nomeCurto = computed(() => {
                     <StarRating :value="ratingAvg" />
                 </div>
                 <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
-                <span v-else class="mt-1 inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-tight sm:tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"><span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> Frete grátis</span>
+                <!-- Frete grátis centralizado no card ("⚡ Full" fica ao lado do Envio Express). -->
+                <div v-else class="mt-1.5 flex items-center justify-center">
+                    <span class="inline-flex items-center whitespace-nowrap rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-tight text-emerald-700 sm:px-2 sm:text-[10px] sm:tracking-wide dark:bg-emerald-500/15 dark:text-emerald-300">Frete grátis</span>
+                </div>
             </div>
             <button v-if="canReview && !hasReviewed" type="button"
                 class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"

@@ -1,4 +1,4 @@
-@extends('emails.layout')
+@extends('emails.layout-interno')
 
 @section('title', 'Fechamento Flex')
 

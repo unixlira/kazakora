@@ -201,6 +201,11 @@ class CheckoutController extends Controller
             $rules['guest.phone'] = ['nullable', 'string', 'max:20'];
         }
 
+        // Rua/bairro/cidade/UF vazios: completa pelo CEP antes de validar.
+        if (is_array($request->input('new_address'))) {
+            $request->merge(['new_address' => app(\App\Modules\Checkout\Support\CompletarEnderecoPeloCep::class)->completar($request->input('new_address'))]);
+        }
+
         if (is_array($request->input('new_address')) && blank($request->input('new_address.phone'))) {
             $request->merge(['new_address' => array_merge($request->input('new_address'), [
                 'phone' => $request->user()?->phone ?: $request->input('guest.phone'),

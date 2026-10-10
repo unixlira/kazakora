@@ -45,4 +45,24 @@ class EnderecoNovoLogadoTest extends TestCase
         ])->assertOk();
         $this->assertSame('11988887777', session('checkout_draft.new_address.phone'));
     }
+
+    public function test_bairro_vazio_e_completado_pelo_cep(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            'viacep.com.br/ws/03187040/*' => \Illuminate\Support\Facades\Http::response(['logradouro' => 'Rua Mogi Mirim', 'bairro' => 'Vila Bertioga', 'localidade' => 'São Paulo', 'uf' => 'SP']),
+            'viacep.com.br/ws/13990000/*' => \Illuminate\Support\Facades\Http::response(['logradouro' => '', 'bairro' => '', 'localidade' => 'Espírito Santo do Pinhal', 'uf' => 'SP']),
+        ]);
+        PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER, 'phone' => '11988887777']));
+        $product = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true]);
+        $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $metodo = $this->get('/finalizacao')->viewData('page')['props']['shippingMethods'][0]['id'];
+
+        $this->postJson('/finalizacao/entrega', ['shipping_method_id' => $metodo, 'new_address' => ['zip' => '03187-040', 'street' => 'Rua Mogi Mirim', 'number' => '20', 'neighborhood' => '', 'city' => 'São Paulo', 'state' => 'SP', 'recipient_name' => 'José Roberto Lira']])->assertOk();
+        $this->assertSame('Vila Bertioga', session('checkout_draft.new_address.neighborhood'));
+
+        $this->postJson('/finalizacao/entrega', ['shipping_method_id' => $metodo, 'new_address' => ['zip' => '13990-000', 'street' => 'Rua Um', 'number' => '5', 'neighborhood' => '', 'city' => '', 'state' => '', 'recipient_name' => 'José Roberto Lira']])->assertOk();
+        $this->assertSame('Centro', session('checkout_draft.new_address.neighborhood'));
+        $this->assertSame('Espírito Santo do Pinhal', session('checkout_draft.new_address.city'));
+    }
 }

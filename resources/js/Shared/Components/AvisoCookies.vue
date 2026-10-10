@@ -20,9 +20,11 @@ const aceitar = () => {
         <div v-if="visivel" role="region" aria-label="Aviso de cookies"
             class="fixed inset-x-3 bottom-3 z-[80] mx-auto flex max-w-3xl flex-col items-center gap-3 rounded-2xl bg-[#111] px-5 py-4 text-sm text-white shadow-2xl sm:flex-row sm:gap-5 [color-scheme:light]">
             <i class="fa-solid fa-cookie-bite hidden text-2xl text-[#f27a2a] sm:block"></i>
-            <p class="flex-1 text-center leading-snug text-white/90 sm:text-left">
-                Usamos cookies para a loja funcionar e para melhorar sua experiência, conforme a LGPD.
-                <Link href="/politica-de-cookies" class="font-semibold text-[#f27a2a] underline-offset-2 hover:underline">Saiba mais</Link>
+            <!-- Celular: frase curta e "Saiba mais" nunca quebra no meio. -->
+            <p class="flex-1 text-center text-[13px] leading-snug text-white/90 sm:text-left sm:text-sm">
+                <span class="sm:hidden">Usamos cookies para melhorar sua experiência, conforme a LGPD.</span>
+                <span class="hidden sm:inline">Usamos cookies para a loja funcionar e para melhorar sua experiência, conforme a LGPD.</span>
+                {{ " " }}<Link href="/politica-de-cookies" class="whitespace-nowrap font-semibold text-[#f27a2a] underline-offset-2 hover:underline">Saiba mais</Link>
             </p>
             <button type="button" class="w-full rounded-full bg-[#f27a2a] px-8 py-2.5 font-bold text-white transition hover:brightness-110 sm:w-auto" @click="aceitar">
                 OK

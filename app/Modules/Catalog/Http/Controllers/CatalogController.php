@@ -48,11 +48,35 @@ class CatalogController extends Controller
             // precisa ver um anúncio/produto e escolher a variação dentro
             // dele, estilo Shopee/Mercado Livre.
             ->whereNull('parent_product_id')
-            ->when($search->isNotEmpty(), fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
+            // Busca (pedido 2026-10-10): cada palavra precisa aparecer no nome,
+            // marca, modelo, SKU ou departamento — em qualquer ordem.
+            ->when($search->isNotEmpty(), function ($query) use ($search) {
+                foreach (preg_split('/\s+/', (string) $search) as $palavra) {
+                    $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';
+                    $query->where(fn ($q) => $q->where('name', 'like', $termo)
+                        ->orWhere('brand', 'like', $termo)
+                        ->orWhere('model', 'like', $termo)
+                        ->orWhere('sku', 'like', $termo)
+                        ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $termo)));
+                }
+            })
             ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
             ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true))
             // Departamentos (pedido 2026-10-10): clicar no círculo filtra a vitrine.
             ->when($categoria !== '', fn ($query) => $query->whereHas('category', fn ($c) => $c->where('slug', $categoria)));
+
+        // Ordenar (pedido 2026-10-10). Preço = o que o cliente paga (já com desconto).
+        $ordenar = (string) $request->query('ordenar', '');
+        $precoSql = 'CASE WHEN discount_percentage > 0 THEN price * (1 - discount_percentage / 100.0) WHEN discount_amount > 0 THEN price - discount_amount ELSE price END';
+        $baseQuery
+            ->when($ordenar === 'menor_preco', fn ($query) => $query->orderByRaw($precoSql.' asc'))
+            ->when($ordenar === 'maior_preco', fn ($query) => $query->orderByRaw($precoSql.' desc'))
+            ->when($ordenar === 'nome', fn ($query) => $query->orderBy('name'))
+            // Na busca, quem começa com o termo vem primeiro.
+            ->when($ordenar === '' && $search->isNotEmpty(), fn ($query) => $query->orderByRaw(
+                'CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END',
+                [$search.'%', '%'.$search.'%'],
+            ));
 
         $products = fn () => (clone $baseQuery)
             ->latest()
@@ -76,7 +100,7 @@ class CatalogController extends Controller
             'reviewedProductIds' => $request->user()
                 ? Review::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
-            'filters' => $request->only('search', 'tipo', 'categoria', 'todos'),
+            'filters' => $request->only('search', 'tipo', 'categoria', 'todos', 'ordenar'),
         ]);
     }
 

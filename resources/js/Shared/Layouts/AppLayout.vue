@@ -260,6 +260,7 @@ const REDES = [
                                 <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
                                 <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>
                                 <li><Link href="/trocas-e-devolucoes" class="hover:opacity-100">Trocas e Devoluções</Link></li>
+                                <li><Link href="/politica-de-entrega" class="hover:opacity-100">Política de Entrega</Link></li>
                             </ul>
                         </div>
                         <div>

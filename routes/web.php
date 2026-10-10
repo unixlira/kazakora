@@ -85,6 +85,14 @@ Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shippin
 // Páginas institucionais/legais — públicas de propósito, precisam ser
 // rastreáveis sem login para aprovação no Google Merchant Center.
 Route::inertia('/trocas-e-devolucoes', 'Legal/Trocas')->name('legal.trocas');
+// Política de Entrega com o Full e as regiões atendidas (pedido 2026-10-10).
+Route::get('/politica-de-entrega', fn () => \Inertia\Inertia::render('Legal/Entrega', [
+    'full' => [
+        'horario_corte' => str_replace(':00', 'h', (string) config('entrega_expressa.horario_corte', '13:00')),
+        'horario_entrega' => (string) config('entrega_expressa.horario_entrega', '21h'),
+        'faixas' => config('entrega_expressa.faixas', []),
+    ],
+]))->name('legal.entrega');
 Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 

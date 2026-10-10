@@ -638,7 +638,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div class="flex items-center gap-3 rounded-lg border border-emerald-500 bg-emerald-50/60 p-3 ring-1 ring-emerald-500">
                             <i class="fa-solid fa-truck-fast text-emerald-600"></i>
                             <span class="flex-1 text-sm text-slate-700">
-                                <strong class="text-slate-900">Frete GRÁTIS</strong> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                <strong class="text-slate-900">Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
                                 <span class="ml-1 text-slate-500">(1 à 7 dias úteis)</span>
                             </span>
                             <span class="text-sm font-bold text-emerald-600">Grátis</span>
@@ -752,7 +752,8 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotal) }}</dd></div>
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixDiscountPercentage }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega</dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<span v-if="entregaEscolhida && valorFrete === 0" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
+                        <div class="flex justify-between"><dt>Entrega</dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
+                            <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
                         <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
                             <dt>Total</dt>
                             <dd class="text-xl">{{ formatPrice(totalAPagar) }}</dd>

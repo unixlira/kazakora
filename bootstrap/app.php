@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsStaff;
 use App\Http\Middleware\ExpireStaleSession;
+use App\Http\Middleware\GuardarCupomDaUrl;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogApiRequest;
 use App\Http\Middleware\PreventBrowserCaching;
@@ -35,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
             TrackSiteVisit::class,
             PreventBrowserCaching::class,
             ExpireStaleSession::class,
+            GuardarCupomDaUrl::class,
         ]);
 
         $middleware->alias([

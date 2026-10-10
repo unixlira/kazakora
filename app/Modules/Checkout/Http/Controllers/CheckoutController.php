@@ -12,6 +12,7 @@ use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
@@ -29,6 +30,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -108,7 +110,7 @@ class CheckoutController extends Controller
      * CEP tem entrega expressa ("Receba hoje até as 21h" / "Receba amanhã").
      * Fora da área, entrega_expressa vem null e a tela mostra o prazo normal.
      */
-    public function deliveryEstimate(Request $request, EntregaExpressa $entregaExpressa): JsonResponse
+    public function deliveryEstimate(Request $request, EntregaExpressa $entregaExpressa, CorreiosFreightQuoteService $correios): JsonResponse
     {
         $cep = preg_replace('/\D/', '', (string) $request->query('cep'));
 
@@ -116,7 +118,27 @@ class CheckoutController extends Controller
             return response()->json(['message' => 'Informe um CEP com 8 números.'], 422);
         }
 
-        return response()->json(['entrega_expressa' => $entregaExpressa->consultar($cep)]);
+        $expressa = $entregaExpressa->consultar($cep);
+
+        // Fora da entrega expressa (pedido 2026-10-10): prazo mais rápido dos
+        // Correios para esse CEP e produto. Até 3 dias úteis = "Flex"; mais
+        // que isso, sem selo. Em cache por 1 dia (a consulta é lenta).
+        $prazoDias = null;
+        $product = $expressa ? null : Product::query()->with('fiscalData')->find((int) $request->query('produto'));
+        if ($product) {
+            $prazoDias = Cache::remember("prazo-cep:{$cep}:{$product->id}", now()->addDay(), function () use ($correios, $product, $cep) {
+                $dias = collect(rescue(fn () => $correios->quote(collect([['product' => $product, 'quantity' => 1, 'subtotal' => (float) $product->final_price]]), $cep), [], false))
+                    ->pluck('estimated_days')->filter(fn ($dias) => $dias > 0);
+
+                return $dias->isEmpty() ? 0 : (int) $dias->min();
+            }) ?: null;
+        }
+
+        return response()->json([
+            'entrega_expressa' => $expressa,
+            'prazo_dias' => $prazoDias,
+            'modalidade' => $expressa ? 'full' : ($prazoDias !== null && $prazoDias <= 3 ? 'flex' : null),
+        ]);
     }
 
     public function storeDelivery(Request $request): RedirectResponse|JsonResponse

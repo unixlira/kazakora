@@ -240,7 +240,8 @@ const precoPartes = computed(() => {
                     <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
                     <span v-if="vendidosTexto(product.vendidos)" class="pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
                 </div>
-                <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
+                <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
+                <p v-if="product.stock <= 0" class="mt-1.5 text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
                 <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
                 <p v-else class="mt-1.5 flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
                     Frete grátis

@@ -93,6 +93,8 @@ const REDES = [
             <div class="inline-flex animate-[scroll-left_28s_linear_infinite] items-center py-2 motion-reduce:animate-none">
                 <span v-for="n in 2" :key="n" class="contents">
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Frete grátis em todos os produtos</span>
+                    <!-- Full na faixa do topo (pedido 2026-10-10). -->
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']"><span class="font-extrabold italic text-[#22c55e]"><i class="fa-solid fa-bolt"></i>Full</span> Receba no mesmo dia</span>
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Pague no PIX e economize</span>
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Suporte via WhatsApp</span>
                 </span>

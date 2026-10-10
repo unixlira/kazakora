@@ -21,6 +21,7 @@ use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
+use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -348,14 +349,20 @@ class CheckoutController extends Controller
             ? Coupon::query()->where('code', $draft['coupon_code'])->where('is_active', true)->first()
             : null;
         $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
-        $total = round($subtotal - $discount + $shipping['cost'], 2);
 
         $methods = $data['split'] ?? false
             ? $this->sortMethodsSafely([$data['payment_method'], $data['payment_method_secondary']])
             : [$data['payment_method']];
 
+        // Desconto no Pix (pedido 2026-10-09): só pagando 100% no Pix, sobre os
+        // produtos (já com cupom e desconto por quantidade), nunca no frete.
+        $pixDiscount = $methods === [Payment::METHOD_PIX]
+            ? DescontoPix::desconto(max(0, $subtotal - $discount))
+            : 0.0;
+        $total = round($subtotal - $discount - $pixDiscount + $shipping['cost'], 2);
+
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $total, $methods, $data, $useMercadoPago) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
                 // conta de convidado, pedido ou qualquer cobrança — ver
                 // lockProductsForCart().
@@ -384,7 +391,11 @@ class CheckoutController extends Controller
                     'subtotal' => $subtotal,
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
-                    'discount_amount' => $discount,
+                    // discount_amount é o desconto TOTAL do pedido (vDesc da
+                    // NF-e, financeiro, devolução) — cupom + Pix; o do Pix
+                    // fica também à parte em pix_discount_amount.
+                    'discount_amount' => round($discount + $pixDiscount, 2),
+                    'pix_discount_amount' => $pixDiscount,
                     'total' => $total,
                 ]);
 
@@ -884,6 +895,9 @@ class CheckoutController extends Controller
             'discountAmount' => $discount,
             'total' => round($subtotal - $discount + $shippingCost, 2),
             'originalTotal' => round($subtotal + $shippingCost, 2),
+            // Pagando 100% no Pix (pedido 2026-10-09).
+            'pixDiscountPercentage' => DescontoPix::percentual(),
+            'pixDiscountAmount' => DescontoPix::desconto(max(0, $subtotal - $discount)),
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
                 ? config('services.mercadopago.public_key')

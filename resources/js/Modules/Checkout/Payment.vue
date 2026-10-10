@@ -16,6 +16,9 @@ const props = defineProps({
     discountAmount: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
     originalTotal: { type: Number, default: 0 },
+    // Desconto pagando 100% no Pix (pedido 2026-10-09).
+    pixDiscountPercentage: { type: Number, default: 0 },
+    pixDiscountAmount: { type: Number, default: 0 },
     order: { type: Object, default: null },
     clientSecret: { type: String, default: null },
     stripeKey: { type: String, default: null },
@@ -287,7 +290,15 @@ const confirmPayment = async () => {
     startPolling(props.order.id);
 };
 
-const savings = computed(() => props.discountAmount);
+// Desconto no Pix (pedido 2026-10-09): na escolha do método, vale quando é
+// 100% Pix; depois que o pedido existe, o total de verdade é o do pedido.
+const pixApplies = computed(() => props.pixDiscountAmount > 0 && chooseForm.payment_method === 'pix' && ! chooseForm.split);
+const payableTotal = computed(() => {
+    if (props.order) return Number(props.order.total);
+    return pixApplies.value ? Math.round((props.total - props.pixDiscountAmount) * 100) / 100 : props.total;
+});
+const pixSaving = computed(() => Math.max(0, Math.round((props.total - payableTotal.value) * 100) / 100));
+const savings = computed(() => props.discountAmount + pixSaving.value);
 
 // Verdadeiro só na Fase 1 (escolher método) — usado tanto lá quanto pro
 // cupom no resumo da compra, que não faz sentido nas fases seguintes.
@@ -408,6 +419,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                                         <p class="text-sm font-medium">{{ METHOD_LABELS[method] }}</p>
                                         <p class="text-xs text-store-fg-muted">
                                             {{ method === 'pix' ? 'Aprovação imediata' : 'Em até 12x' }}
+                                            <span v-if="method === 'pix' && pixDiscountPercentage > 0" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ pixDiscountPercentage }}% de desconto</span>
                                         </p>
                                     </div>
                                 </label>
@@ -517,12 +529,16 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                     </div>
 
                     <div class="mt-4 border-t border-store-border pt-4">
-                        <template v-if="discountAmount > 0">
+                        <div v-if="pixSaving > 0" class="mb-2 flex justify-between text-sm">
+                            <span class="text-store-fg-muted">Desconto Pix ({{ pixDiscountPercentage }}%)</span>
+                            <span class="font-store-mono text-emerald-600 dark:text-emerald-400">-{{ formatPrice(pixSaving) }}</span>
+                        </div>
+                        <template v-if="savings > 0">
                             <div class="flex items-baseline justify-between">
                                 <span class="font-semibold">Você pagará</span>
                                 <span class="text-right">
                                     <span class="mr-1 block text-xs text-store-fg-faint line-through">{{ formatPrice(originalTotal) }}</span>
-                                    <span class="text-lg font-semibold text-store-accent">{{ formatPrice(total) }}</span>
+                                    <span class="text-lg font-semibold text-store-accent">{{ formatPrice(payableTotal) }}</span>
                                 </span>
                             </div>
                             <p class="mt-1 text-right text-sm font-medium text-emerald-600 dark:text-emerald-400">
@@ -531,7 +547,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                         </template>
                         <div v-else class="flex items-baseline justify-between">
                             <span class="font-semibold">Total</span>
-                            <span class="text-lg font-semibold text-store-accent">{{ formatPrice(total) }}</span>
+                            <span class="text-lg font-semibold text-store-accent">{{ formatPrice(payableTotal) }}</span>
                         </div>
                     </div>
                 </div>

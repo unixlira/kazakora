@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Services\SkuGeneratorService;
+use App\Support\DescontoPix;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,6 +18,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+
 
 class ProductController extends Controller
 {
@@ -113,6 +115,7 @@ class ProductController extends Controller
         ])['parent_product_id'] ?? null;
 
         $validated['slug'] = $this->uniqueSlug($validated['name']);
+        $validated = $this->comAcrescimoPix($validated);
 
         $category = $validated['category_id']
             ? Category::query()->find($validated['category_id'])
@@ -162,6 +165,12 @@ class ProductController extends Controller
 
         return Inertia::render('Admin/Products/Edit', [
             'product' => $product,
+            // Pedido 2026-10-09: o formulário mostra o valor do Pix (sem o
+            // +5% que fica gravado no preço da loja) — ao salvar, soma de novo.
+            'precoPix' => [
+                'price' => DescontoPix::semAcrescimo((float) $product->price),
+                'discount_amount' => $product->discount_amount !== null ? DescontoPix::semAcrescimo((float) $product->discount_amount) : null,
+            ],
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'fiscalData' => $product->fiscalData,
             'images' => $product->images,
@@ -244,7 +253,7 @@ class ProductController extends Controller
             $validated['sku'] = strtoupper(trim($validated['sku']));
         }
 
-        $product->update($validated);
+        $product->update($this->comAcrescimoPix($validated));
 
         // $product->stock aqui já é o valor ATUAL do banco (route model
         // binding busca fresco no início desta requisição, e $validated
@@ -370,6 +379,24 @@ class ProductController extends Controller
         }
 
         return $request->validate($rules);
+    }
+
+    /**
+     * Pedido 2026-10-09: quem cadastra digita o valor do Pix e o preço da loja
+     * é gravado com +5% (o desconto do Pix devolve o cliente ao valor
+     * digitado). Desconto em R$ acompanha, pra o preço final bater.
+     */
+    private function comAcrescimoPix(array $validated): array
+    {
+        if (array_key_exists('price', $validated) && $validated['price'] !== null) {
+            $validated['price'] = DescontoPix::comAcrescimo((float) $validated['price']);
+        }
+
+        if (! empty($validated['discount_amount'])) {
+            $validated['discount_amount'] = DescontoPix::comAcrescimo((float) $validated['discount_amount']);
+        }
+
+        return $validated;
     }
 
     private function uniqueSlug(string $name, ?int $ignoreId = null): string

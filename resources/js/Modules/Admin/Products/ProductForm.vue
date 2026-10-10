@@ -1,7 +1,15 @@
 <script setup>
 import InputError from '@/Shared/Components/InputError.vue';
-import { ref, watch } from 'vue';
+import { usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import { useSkuPreview } from '@/Shared/useSkuPreview';
+
+// Pedido 2026-10-09: o preço digitado é o do Pix; a loja grava +5%.
+const descontoPix = computed(() => Number(usePage().props.descontoPix ?? 0));
+const precoLojaComPix = computed(() => {
+    const valor = Number(props.form.price);
+    return valor > 0 && descontoPix.value > 0 ? (Math.round(valor * (1 + descontoPix.value / 100) * 100) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null;
+});
 
 const props = defineProps({
     form: {
@@ -242,7 +250,7 @@ const regenerateSku = async () => {
 
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label for="price" class="block text-sm font-medium">Preço (R$)</label>
+                <label for="price" class="block text-sm font-medium">Preço (R$){{ descontoPix > 0 ? ' — valor no Pix' : '' }}</label>
                 <input
                     id="price"
                     v-model="form.price"
@@ -252,6 +260,10 @@ const regenerateSku = async () => {
                     required
                     class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                 >
+                <p v-if="descontoPix > 0" class="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                    Será inserido +{{ descontoPix }}% por causa do Pix<template v-if="precoLojaComPix">: preço na loja {{ precoLojaComPix }}</template>.
+                    No Pix o cliente tem {{ descontoPix }}% de desconto. Marketplaces usam o valor digitado.
+                </p>
                 <InputError :message="form.errors.price" />
             </div>
 

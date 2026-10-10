@@ -28,7 +28,9 @@ onBeforeUnmount(() => window.removeEventListener('resize', medir));
 const scrollByPage = (direction) => {
     const el = scroller.value;
     if (!el) return;
-    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' });
+    // Celular: um círculo por vez (anda uma tela); computador: 80% da faixa.
+    const passo = window.innerWidth < 768 ? el.clientWidth : el.clientWidth * 0.8;
+    el.scrollBy({ left: direction * passo, behavior: 'smooth' });
 };
 
 const hrefDe = (category) => (props.ativa === category.slug ? '/#produtos' : `/?categoria=${category.slug}#produtos`);
@@ -36,30 +38,46 @@ const hrefDe = (category) => (props.ativa === category.slug ? '/#produtos' : `/?
 
 <template>
     <div class="relative">
-        <!-- w-fit + mx-auto: centralizado quando cabe; rola de lado quando não cabe. -->
+        <!-- Celular (pedido 2026-10-10): um círculo grande no meio por vez, com
+             setas discretas dos lados. Computador: w-fit + mx-auto, centralizado
+             quando cabe e rolando de lado quando não cabe. -->
         <div ref="scroller"
-            class="no-scrollbar mx-auto flex w-fit max-w-full snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-1 pb-2 md:gap-8">
+            class="no-scrollbar mx-auto flex w-full max-w-full snap-x snap-mandatory overflow-x-auto scroll-smooth pb-2 md:w-fit md:gap-8 md:px-1">
             <Link v-for="category in categories" :key="category.id" :href="hrefDe(category)"
-                class="group flex w-[104px] shrink-0 snap-start flex-col items-center gap-2 text-center text-store-fg no-underline md:w-[160px]">
-                <span class="flex h-[96px] w-[96px] items-center justify-center overflow-hidden rounded-full border-2 bg-white shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md md:h-[150px] md:w-[150px]"
+                class="group flex w-full shrink-0 snap-center flex-col items-center gap-2 text-center text-store-fg no-underline md:w-[160px] md:snap-start">
+                <span class="flex h-[180px] w-[180px] items-center justify-center overflow-hidden rounded-full border-2 bg-white shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-md md:h-[150px] md:w-[150px]"
                     :class="ativa === category.slug ? 'border-store-accent' : 'border-store-border'">
                     <img v-if="category.image_url" :src="category.image_url" :alt="category.name" loading="lazy" decoding="async"
                         class="h-full w-full object-cover transition duration-500 group-hover:scale-105">
-                    <i v-else class="fas fa-tag text-2xl text-store-fg-faint md:text-4xl"></i>
+                    <i v-else class="fas fa-tag text-5xl text-store-fg-faint md:text-4xl"></i>
                 </span>
-                <span class="line-clamp-2 text-xs font-semibold leading-tight md:text-sm"
+                <span class="line-clamp-2 text-base font-semibold leading-tight md:text-sm"
                     :class="{ 'underline underline-offset-2': ativa === category.slug }">{{ category.name }}</span>
             </Link>
         </div>
 
+        <!-- Setas do celular: discretas, cinza-claro, sem fundo. -->
+        <template v-if="categories.length > 1">
+            <button type="button" aria-label="Departamento anterior"
+                class="absolute left-1 top-[90px] flex h-10 w-10 -translate-y-1/2 items-center justify-center text-3xl text-slate-300 transition hover:text-slate-400 md:hidden"
+                @click="scrollByPage(-1)">
+                <i class="fas fa-angle-left"></i>
+            </button>
+            <button type="button" aria-label="Próximo departamento"
+                class="absolute right-1 top-[90px] flex h-10 w-10 -translate-y-1/2 items-center justify-center text-3xl text-slate-300 transition hover:text-slate-400 md:hidden"
+                @click="scrollByPage(1)">
+                <i class="fas fa-angle-right"></i>
+            </button>
+        </template>
+
         <template v-if="isCarousel">
             <button type="button" aria-label="Departamentos anteriores"
-                class="absolute left-0 top-[48px] hidden h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-store-border bg-store-bg-raised/95 text-store-fg shadow-md backdrop-blur transition hover:border-store-border-strong md:top-[75px] md:flex"
+                class="absolute left-0 top-[75px] hidden h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-store-border bg-store-bg-raised/95 text-store-fg shadow-md backdrop-blur transition hover:border-store-border-strong md:top-[75px] md:flex"
                 @click="scrollByPage(-1)">
                 <i class="fas fa-chevron-left text-sm"></i>
             </button>
             <button type="button" aria-label="Próximos departamentos"
-                class="absolute right-0 top-[48px] hidden h-9 w-9 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-store-border bg-store-bg-raised/95 text-store-fg shadow-md backdrop-blur transition hover:border-store-border-strong md:top-[75px] md:flex"
+                class="absolute right-0 top-[75px] hidden h-9 w-9 -translate-y-1/2 translate-x-1/2 items-center justify-center rounded-full border border-store-border bg-store-bg-raised/95 text-store-fg shadow-md backdrop-blur transition hover:border-store-border-strong md:top-[75px] md:flex"
                 @click="scrollByPage(1)">
                 <i class="fas fa-chevron-right text-sm"></i>
             </button>

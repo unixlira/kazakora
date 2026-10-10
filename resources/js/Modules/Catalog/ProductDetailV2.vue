@@ -904,6 +904,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .col-principal > .compra { grid-column: 1; grid-row: auto; position: static; }
 }
 @media (max-width: 767px) {
+    /* Bandeiras menores no celular: as 6 cabem numa linha (pedido 2026-10-10). */
+    .pd2 .bandeiras { flex-wrap: nowrap; gap: 5px; }
+    .pd2 .bandeiras img { height: 30px; }
     .pd2 .wrap { padding: 0 10px; }
     .pd2 .migalhas { display: none; }
     .pd2 .col-principal { padding-top: 10px; }

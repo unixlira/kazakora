@@ -114,12 +114,28 @@ class CheckoutV2Test extends TestCase
         $this->assertEmpty(session('checkout_draft.shipping_quote'));
     }
 
+    public function test_nome_curto_e_cpf_invalido_sao_recusados(): void
+    {
+        $this->noCarrinho();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => '  Ana Souza ', 'email' => 'ana@exemplo.com', 'cpf' => '111.111.111-11']]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['guest.name', 'guest.cpf']);
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Ana Souza', 'email' => 'ana@exemplo.com', 'cpf' => '123.456.789-01']]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors', fn ($erros) => str_contains($erros['guest.cpf'][0], 'CPF inválido') && str_contains($erros['guest.name'][0], 'mais de 10'));
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Ana Souza Lima', 'email' => 'ana@exemplo.com', 'cpf' => '123.456.789-09']]))
+            ->assertOk();
+    }
+
     public function test_email_que_ja_tem_conta_pede_login(): void
     {
         User::factory()->create(['email' => 'ja@exemplo.com']);
         $this->noCarrinho();
 
-        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'X', 'email' => 'ja@exemplo.com', 'cpf' => '123.456.789-09']]))
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'ja@exemplo.com', 'cpf' => '123.456.789-09']]))
             ->assertStatus(422)
             ->assertJsonValidationErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
     }

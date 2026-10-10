@@ -273,9 +273,59 @@ const irParaErro = () => nextTick(() => {
     document.querySelector('[data-erro="1"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
+// Nome completo com mais de 10 caracteres (pedido 2026-10-10) — confere
+// antes de enviar, sem esperar o servidor.
+const NOME_MINIMO = 11;
+const nomeCurto = () => !isLoggedIn.value && (pessoa.name ?? '').trim().length < NOME_MINIMO;
+const MENSAGEM_NOME = 'Digite seu nome completo (nome e sobrenome, com mais de 10 caracteres).';
+const conferirNome = () => {
+    if (nomeCurto() && (pessoa.name ?? '').trim() !== '') {
+        erros.value = { ...erros.value, 'guest.name': [MENSAGEM_NOME] };
+    } else if (erros.value['guest.name']) {
+        const { 'guest.name': _, ...resto } = erros.value;
+        erros.value = resto;
+    }
+};
+
+// CPF: confere os dígitos verificadores na hora (o servidor confere de novo).
+const cpfValido = (valor) => {
+    const cpf = String(valor ?? '').replace(/\D/g, '');
+    if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+    for (let t = 9; t < 11; t += 1) {
+        let soma = 0;
+        for (let i = 0; i < t; i += 1) soma += Number(cpf[i]) * (t + 1 - i);
+        if (Number(cpf[t]) !== ((10 * soma) % 11) % 10) return false;
+    }
+    return true;
+};
+const conferirCpf = () => {
+    if (isLoggedIn.value || !String(pessoa.cpf ?? '').trim()) return;
+    if (!cpfValido(pessoa.cpf)) {
+        erros.value = { ...erros.value, 'guest.cpf': ['CPF inválido. Confira os números.'] };
+    } else if (erros.value['guest.cpf']) {
+        const { 'guest.cpf': _, ...resto } = erros.value;
+        erros.value = resto;
+    }
+};
+
 const finalizar = async () => {
     erros.value = {};
     erroGeral.value = null;
+
+    const errosLocais = {};
+    if (nomeCurto()) {
+        errosLocais['guest.name'] = [(pessoa.name ?? '').trim() ? MENSAGEM_NOME : 'Digite seu nome completo.'];
+    }
+    if (!isLoggedIn.value && !cpfValido(pessoa.cpf)) {
+        errosLocais['guest.cpf'] = [String(pessoa.cpf ?? '').trim() ? 'CPF inválido. Confira os números.' : 'Digite seu CPF.'];
+    }
+    if (Object.keys(errosLocais).length) {
+        erros.value = errosLocais;
+        erroGeral.value = 'Confira os campos destacados.';
+        irParaErro();
+        return;
+    }
+
     processando.value = true;
 
     try {
@@ -473,7 +523,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div class="grid gap-3 md:grid-cols-2">
                             <label class="md:col-span-2" :data-erro="erro('guest.name') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">Nome completo</span>
-                                <input v-model="pessoa.name" type="text" autocomplete="name" :readonly="isLoggedIn" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'bg-slate-50']" placeholder="Seu nome e sobrenome">
+                                <input v-model="pessoa.name" type="text" autocomplete="name" minlength="11" :readonly="isLoggedIn" @blur="conferirNome" :class="[inputClass, erro('guest.name') && inputErroClass, isLoggedIn && 'bg-slate-50']" placeholder="Seu nome e sobrenome">
                                 <small v-if="erro('guest.name')" class="text-xs text-red-600">{{ erro('guest.name') }}</small>
                             </label>
                             <label :data-erro="erro('new_address.phone') ? 1 : 0">
@@ -483,7 +533,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             </label>
                             <label v-if="!isLoggedIn" :data-erro="erro('guest.cpf') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">CPF</span>
-                                <input :value="pessoa.cpf" type="text" inputmode="numeric" :class="[inputClass, erro('guest.cpf') && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)">
+                                <input :value="pessoa.cpf" type="text" inputmode="numeric" :class="[inputClass, erro('guest.cpf') && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
                                 <small v-if="erro('guest.cpf')" class="text-xs text-red-600">{{ erro('guest.cpf') }}</small>
                             </label>
                             <label v-if="!isLoggedIn" class="md:col-span-2" :data-erro="erro('guest.email') ? 1 : 0">

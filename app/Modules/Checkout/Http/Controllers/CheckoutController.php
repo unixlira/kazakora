@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Rules\CpfValido;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
@@ -188,13 +189,21 @@ class CheckoutController extends Controller
 
         if (! $request->user()) {
             $rules['guest'] = ['required', 'array'];
-            $rules['guest.name'] = ['required', 'string', 'max:255'];
+            // Nome completo com mais de 10 caracteres (pedido 2026-10-10).
+            if (is_array($request->input('guest')) && is_string($request->input('guest.name'))) {
+                $request->merge(['guest' => array_merge($request->input('guest'), ['name' => trim($request->input('guest.name'))])]);
+            }
+            $rules['guest.name'] = ['required', 'string', 'min:11', 'max:255'];
             $rules['guest.email'] = ['required', 'email', 'max:255'];
-            $rules['guest.cpf'] = ['required', 'string', 'max:14'];
+            $rules['guest.cpf'] = ['required', 'string', 'max:14', new CpfValido];
             $rules['guest.phone'] = ['nullable', 'string', 'max:20'];
         }
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = Validator::make($request->all(), $rules, [
+            'guest.name.required' => 'Digite seu nome completo.',
+            'guest.cpf.required' => 'Digite seu CPF.',
+            'guest.name.min' => 'Digite seu nome completo (nome e sobrenome, com mais de 10 caracteres).',
+        ]);
 
         if ($validator->fails()) {
             return redirect()->route('finalizacao.entrega')->withErrors($validator)->withInput();

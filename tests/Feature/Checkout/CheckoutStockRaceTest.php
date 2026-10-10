@@ -115,7 +115,7 @@ class CheckoutStockRaceTest extends TestCase
         $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
         $this->post('/finalizacao/entrega', [
             'shipping_method_id' => $shippingMethod->id,
-            'guest' => ['name' => 'Visitante', 'email' => 'visitante-race@example.com', 'cpf' => '123.456.789-00'],
+            'guest' => ['name' => 'Visitante da Silva', 'email' => 'visitante-race@example.com', 'cpf' => '123.456.789-09'],
             'new_address' => [
                 'recipient_name' => 'Visitante',
                 'phone' => '11988887777',
@@ -141,7 +141,7 @@ class CheckoutStockRaceTest extends TestCase
     public function test_mercadopago_card_aborts_without_creating_mp_order(): void
     {
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
-        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '123.456.789-00']);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '123.456.789-09']);
         $product = Product::factory()->create(['price' => 100, 'stock' => 1, 'is_active' => true]);
 
         $this->reachPaymentStep($user, [$product->id => 1]);
@@ -170,7 +170,7 @@ class CheckoutStockRaceTest extends TestCase
     public function test_mercadopago_pix_aborts_without_creating_pix(): void
     {
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
-        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '123.456.789-00']);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '123.456.789-09']);
         $product = Product::factory()->create(['price' => 100, 'stock' => 2, 'is_active' => true]);
 
         $this->reachPaymentStep($user, [$product->id => 2]);

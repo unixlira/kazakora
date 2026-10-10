@@ -1088,7 +1088,7 @@ class CheckoutController extends Controller
             'pixDiscountAmount' => DescontoPix::desconto(max(0, $subtotal - $discount)),
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
-                ? config('services.mercadopago.public_key')
+                ? \App\Services\MercadoPago\CredenciaisCheckout::publicKey()
                 : null,
         ];
     }
@@ -1292,7 +1292,7 @@ class CheckoutController extends Controller
             'customer' => $user ? $user->only('name', 'email', 'cpf', 'phone') : null,
             'draft' => $draft ?: null,
             'paymentGateway' => PaymentGateway::active(),
-            'mercadoPagoPublicKey' => config('services.mercadopago.public_key'),
+            'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
         ];
     }
 

@@ -25,7 +25,7 @@ class MercadoPagoPaymentService
 {
     public function isConfigured(): bool
     {
-        return filled(config('services.mercadopago.access_token'));
+        return filled(CredenciaisCheckout::accessToken());
     }
 
     /**
@@ -123,7 +123,7 @@ class MercadoPagoPaymentService
         }
 
         $request = Http::baseUrl(config('services.mercadopago.api_base_url'))
-            ->withToken(config('services.mercadopago.access_token'))
+            ->withToken(CredenciaisCheckout::accessToken())
             ->timeout((int) config('mercadopago.timeout'))
             ->connectTimeout((int) config('mercadopago.connect_timeout'))
             ->acceptJson();

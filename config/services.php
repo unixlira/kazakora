@@ -56,6 +56,14 @@ return [
         'public_key' => env('MERCADOPAGO_PUBLIC_KEY'),
         'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
         'api_base_url' => env('MERCADOPAGO_API_BASE_URL', 'https://api.mercadopago.com'),
+        // Modo teste do CHECKOUT (pedido 2026-10-10): com MERCADOPAGO_MODO_TESTE=true
+        // e as credenciais de teste preenchidas, Pix e cartão da loja usam a
+        // conta de teste (sandbox). O token real acima continua valendo para
+        // o resto (saldo da carteira no painel financeiro). Ver
+        // App\Services\MercadoPago\CredenciaisCheckout.
+        'modo_teste' => (bool) env('MERCADOPAGO_MODO_TESTE', false),
+        'teste_access_token' => env('MERCADOPAGO_TESTE_ACCESS_TOKEN'),
+        'teste_public_key' => env('MERCADOPAGO_TESTE_PUBLIC_KEY'),
         // App próprio criado no painel de desenvolvedor do Mercado Pago
         // (developers.mercadopago.com.br — separado do app do Mercado
         // Livre, mesmo sendo a mesma empresa) — pedido explícito

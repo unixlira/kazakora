@@ -161,8 +161,9 @@ const carregarMais = () => {
                 subtitulo="Desconto extra só hoje, em produtos escolhidos a dedo."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
                 <template #acao>
-                    <span class="inline-flex items-center gap-2 rounded-lg bg-[#E02424] px-3 py-1.5 text-sm font-bold text-white">
-                        <i class="fa-solid fa-stopwatch"></i> Termina em <span class="font-mono tabular-nums">{{ restanteOfertas }}</span>
+                    <!-- Celular: largura toda, texto no centro e relógio pulsando (pedido 2026-10-10). -->
+                    <span class="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E02424] px-3 py-2 text-sm font-bold text-white md:inline-flex md:w-auto md:py-1.5">
+                        <i class="fa-solid fa-stopwatch animate-pulse"></i> Termina em <span class="font-mono tabular-nums">{{ restanteOfertas }}</span>
                     </span>
                 </template>
             </SecaoProdutos>

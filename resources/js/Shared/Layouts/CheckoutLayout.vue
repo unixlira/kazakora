@@ -7,6 +7,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 // Faixa vermelha de escassez: 15 minutos regressivos. Ao acabar fica em
 // 00:00; atualizar a página recomeça dos 15 (pedido do Lira, sem guardar).
+const BANDEIRAS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+
 const restante = ref(15 * 60);
 let relogio = null;
 
@@ -42,33 +44,39 @@ const tempo = computed(() => {
             <span class="hidden sm:inline"><i class="fa-solid fa-box-open mr-1.5"></i> ENTREGA GARANTIDA</span>
         </div>
         <slot />
-        <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop): selos de
-             confiança bem visíveis + dados da empresa, sem links pra fora. -->
-        <footer class="mt-auto border-t border-slate-200 bg-white px-4 py-8">
-            <div class="mx-auto grid max-w-[900px] grid-cols-1 gap-3 sm:grid-cols-3">
-                <div v-for="selo in [
-                    { icone: 'fa-lock', titulo: 'Compra 100% segura', texto: 'Pagamento criptografado' },
-                    { icone: 'fa-fingerprint', titulo: 'Dados protegidos', texto: 'Seus dados não são compartilhados' },
-                    { icone: 'fa-truck-fast', titulo: 'Entrega garantida', texto: 'Ou seu dinheiro de volta' },
-                ]" :key="selo.titulo" class="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0FB930] text-white">
-                        <i class="fa-solid" :class="selo.icone"></i>
-                    </span>
+        <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop): formas de
+             pagamento + dados da empresa, selo do Google à direita e a faixa
+             preta com a marca e os selos de confiança. Sem links pra fora. -->
+        <footer class="mt-auto">
+            <div class="border-t border-slate-200 bg-white px-4 py-8">
+                <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:items-center md:justify-between md:text-left">
                     <div>
-                        <p class="text-sm font-bold text-slate-800">{{ selo.titulo }}</p>
-                        <p class="text-xs text-slate-500">{{ selo.texto }}</p>
+                        <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
+                        <div class="mt-2 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                            <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/${bandeira}@2x.png`" :alt="bandeira"
+                                class="h-9 w-auto rounded-md border border-slate-200 bg-white p-1.5">
+                        </div>
+                        <p class="mt-4 text-xs leading-relaxed text-slate-500">
+                            © {{ new Date().getFullYear() }} {{ COMPANY.razaoSocial }}<br>
+                            CNPJ: {{ COMPANY.cnpj }}<br>
+                            WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
+                            E-mail: {{ COMPANY.email }}<br>
+                            {{ COMPANY.enderecoCompleto }}
+                        </p>
                     </div>
+                    <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                        class="h-24 w-auto shrink-0 rounded-md bg-white p-2 md:h-28">
                 </div>
             </div>
 
-            <div class="mx-auto mt-8 flex max-w-[900px] flex-col items-center gap-4 text-center sm:flex-row sm:items-start sm:text-left">
-                <span class="shrink-0 rounded-lg bg-[#6d28d9] px-4 py-2 font-display text-xl font-semibold text-white">{{ COMPANY.nomeFantasia }}</span>
-                <div class="text-xs leading-relaxed text-slate-500">
-                    <p class="font-semibold text-slate-700">© {{ new Date().getFullYear() }} {{ COMPANY.razaoSocial }}</p>
-                    <p>CNPJ: {{ COMPANY.cnpj }}</p>
-                    <p>WhatsApp: {{ COMPANY.whatsappDisplay }} · E-mail: {{ COMPANY.email }}</p>
-                    <p>{{ COMPANY.enderecoCompleto }}</p>
-                    <p class="mt-1"><i class="fa-solid fa-shield-halved mr-1"></i> Ambiente seguro · Pagamento processado pelo Mercado Pago</p>
+            <div class="bg-black px-4 py-5 text-white">
+                <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-4 md:flex-row md:justify-between">
+                    <span class="font-display text-2xl font-semibold">{{ COMPANY.nomeFantasia }}</span>
+                    <ul class="flex flex-col items-center gap-2 text-sm font-medium md:flex-row md:gap-6">
+                        <li><i class="fa-solid fa-lock mr-2"></i>Compra Segura</li>
+                        <li><i class="fa-solid fa-fingerprint mr-2"></i>Dados Protegidos</li>
+                        <li><i class="fa-solid fa-box-open mr-2"></i>Entrega Garantida</li>
+                    </ul>
                 </div>
             </div>
         </footer>

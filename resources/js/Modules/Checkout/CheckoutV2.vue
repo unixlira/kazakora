@@ -9,7 +9,6 @@ import CheckoutLayout from '@/Shared/Layouts/CheckoutLayout.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { maskCpf, maskPhone } from '@/Shared/useMasks';
-import { useFreightQuote } from '@/Shared/useFreightQuote';
 import { loadMercadoPagoSdk } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue';
@@ -85,21 +84,28 @@ const enderecoSelecionado = computed(() => props.addresses.find((address) => add
 const cepEfetivo = computed(() => (usarNovoEndereco.value ? endereco.zip : (enderecoSelecionado.value?.zip ?? '')));
 
 // ---------- 3. Entrega ----------
-const { loading: freteCarregando, expressa: entregaExpressa, quote: cotarFrete } = useFreightQuote();
-const cotacoes = ref([]);
-// Fretes cadastrados (ex.: "Frete GRÁTIS") aparecem sempre, antes mesmo do
-// CEP; as cotações dos Correios/Melhor Envio entram junto depois do CEP.
-const opcoesEntrega = computed(() => [...props.shippingMethods, ...cotacoes.value]);
-const shippingMethodId = ref(props.draft?.shipping_method_id ?? props.shippingMethods[0]?.id ?? null);
+const freteCarregando = ref(false);
+const entregaExpressa = ref(null);
+// Só o frete grátis (pedido 2026-10-10). O CEP ainda é consultado pra
+// mostrar a entrega expressa, mas as cotações pagas não aparecem.
+const opcoesEntrega = computed(() => props.shippingMethods);
+const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
+// O CEP só serve pro aviso de entrega expressa (não cota frete pago).
 watch(cepEfetivo, async (zip) => {
-    if ((zip ?? '').replace(/\D/g, '').length !== 8) {
-        cotacoes.value = [];
+    const cep = (zip ?? '').replace(/\D/g, '');
+    if (cep.length !== 8) {
+        entregaExpressa.value = null;
         return;
     }
-    cotacoes.value = await cotarFrete(zip);
-    if (opcoesEntrega.value.length && !opcoesEntrega.value.some((option) => option.id === shippingMethodId.value)) {
-        shippingMethodId.value = opcoesEntrega.value[0].id;
+    freteCarregando.value = true;
+    try {
+        const response = await fetch(`/frete/prazo?cep=${cep}`, { headers: { Accept: 'application/json' } });
+        entregaExpressa.value = response.ok ? ((await response.json()).entrega_expressa ?? null) : null;
+    } catch {
+        entregaExpressa.value = null;
+    } finally {
+        freteCarregando.value = false;
     }
 }, { immediate: true });
 
@@ -184,11 +190,7 @@ const erro = (campo) => erros.value[campo]?.[0] ?? erros.value[campo] ?? serverE
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
 
 const payloadEntrega = () => {
-    const quote = cotacoes.value.find((option) => option.id === shippingMethodId.value);
-    const data = {
-        shipping_method_id: shippingMethodId.value,
-        shipping_quote: quote ? { name: quote.name, carrier_name: quote.carrier_name, price: quote.price, estimated_days: quote.estimated_days } : null,
-    };
+    const data = { shipping_method_id: shippingMethodId.value };
 
     if (!usarNovoEndereco.value && addressId.value) {
         data.address_id = addressId.value;
@@ -509,29 +511,16 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <i class="fa-solid fa-bolt"></i> {{ entregaExpressa.mensagem }}
                         </p>
 
-                        <!-- Igual à referência (pedido 2026-10-10): a opção aparece desde o
-                             início, mesmo antes do CEP; com o CEP a cotação atualiza. -->
-                        <p v-if="!opcoesEntrega.length" class="text-sm text-slate-500">
-                            <i class="fa-solid fa-location-dot mr-1 text-slate-400"></i> Informe o CEP para ver as opções de entrega.
-                        </p>
-                        <div v-else class="space-y-2" :data-erro="erro('shipping_method_id') ? 1 : 0">
-                            <label v-for="option in opcoesEntrega" :key="option.id"
-                                class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
-                                :class="shippingMethodId === option.id ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 hover:border-slate-300'">
-                                <input v-model="shippingMethodId" type="radio" :value="option.id" class="h-4 w-4 accent-emerald-600">
-                                <i class="fa-solid fa-truck-fast text-slate-500"></i>
-                                <span class="flex-1 text-sm text-slate-700">
-                                    <strong class="text-slate-900">{{ Number(option.price) === 0 ? 'Frete GRÁTIS' : option.name }}</strong>
-                                    <span v-if="option.estimated_days" class="text-slate-500">
-                                        ({{ option.estimated_days > 1 ? `1 à ${option.estimated_days} dias úteis` : '1 dia útil' }})
-                                    </span>
-                                </span>
-                                <span class="text-sm font-bold" :class="Number(option.price) === 0 ? 'text-emerald-600' : 'text-slate-900'">
-                                    {{ Number(option.price) === 0 ? 'Grátis' : formatPrice(option.price) }}
-                                </span>
-                            </label>
-                            <small v-if="erro('shipping_method_id')" class="text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
+                        <!-- Sempre frete grátis, logado ou não, sem escolha (pedido 2026-10-10). -->
+                        <div class="flex items-center gap-3 rounded-lg border border-emerald-500 bg-emerald-50/60 p-3 ring-1 ring-emerald-500">
+                            <i class="fa-solid fa-truck-fast text-emerald-600"></i>
+                            <span class="flex-1 text-sm text-slate-700">
+                                <strong class="text-slate-900">Frete GRÁTIS</strong>
+                                <span class="ml-1 text-slate-500">(1 à 7 dias úteis)</span>
+                            </span>
+                            <span class="text-sm font-bold text-emerald-600">Grátis</span>
                         </div>
+                        <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
                     </section>
 
                     <!-- 4. Pagamento -->

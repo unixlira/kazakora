@@ -1134,7 +1134,7 @@ class CheckoutController extends Controller
             'discountAmount' => $coupon ? $coupon->discountFor($subtotal) : 0,
             'pixDiscountPercentage' => DescontoPix::percentual(),
             'addresses' => $user ? $user->addresses : [],
-            'shippingMethods' => ShippingMethod::query()->where('is_active', true)->orderBy('price')->get(['id', 'name', 'estimated_days', 'price']),
+            'shippingMethods' => [ShippingMethod::freteGratis()->only(['id', 'name', 'estimated_days', 'price'])],
             'customer' => $user ? $user->only('name', 'email', 'cpf', 'phone') : null,
             'draft' => $draft ?: null,
             'paymentGateway' => PaymentGateway::active(),
@@ -1151,6 +1151,8 @@ class CheckoutController extends Controller
     private function storeDeliveryJson(Request $request): JsonResponse
     {
         $request->attributes->set('checkout_v2_json', true);
+        // No v2 o frete é sempre o grátis — ignora qualquer outro que venha.
+        $request->merge(['shipping_method_id' => ShippingMethod::freteGratis()->id, 'shipping_quote' => null]);
         $response = $this->storeDelivery($request);
         $errors = $request->session()->get('errors');
         $request->session()->forget(['errors', '_old_input']);

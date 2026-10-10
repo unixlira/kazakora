@@ -420,7 +420,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Garantia Total De Satisfação</h2>
                             <div class="garantia">
-                                <div class="selo-garantia"><span><b>30</b>DIAS DE<br>GARANTIA</span></div>
+                                <img class="selo-garantia" src="/images/selo-satisfacao-garantida.png" alt="Satisfação 100% garantida" loading="lazy">
                                 <p>
                                     Se o produto chegar com defeito, você tem 30 dias após o recebimento para pedir a troca ou o reembolso.
                                     Mudou de ideia? São 7 dias para devolver, sem nenhum risco para você.
@@ -679,8 +679,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .bloco > :last-child { margin-bottom: 0; }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
-.pd2 .selo-garantia { width: 110px; max-width: 100%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, #ffe27a, #e0a100); display: grid; place-items: center; text-align: center; font-weight: 700; color: #5b4300; font-size: 11px; line-height: 1.15; border: 3px dashed #fff; box-shadow: 0 0 0 3px #e0a100; }
-.pd2 .selo-garantia b { font-size: 30px; display: block; }
+.pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
 .pd2 .ficha { width: 100%; border-collapse: collapse; font-size: 15px; }
 .pd2 .ficha th, .pd2 .ficha td { padding: 8px; border-bottom: 1px dotted rgba(0, 0, 0, .15); text-align: left; vertical-align: top; }
 .dark .pd2 .ficha th, .dark .pd2 .ficha td { border-color: var(--line); }

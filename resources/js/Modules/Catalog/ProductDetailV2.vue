@@ -213,12 +213,15 @@ const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 // SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
 // dela, o prazo normal de envio.
 const cep = ref('');
-const prazo = ref(null); // null = não consultado; { expressa } depois da consulta
+const prazo = ref(null); // null = não consultado; { expressa, dias, modalidade } depois da consulta
 const consultandoPrazo = ref(false);
 const erroPrazo = ref('');
+// Fora do Full (pedido 2026-10-10): frase em verde; com "Flex" quando os
+// Correios entregam em até 3 dias úteis nesse CEP (aí "geralmente chega em 3").
 const prazoNormal = computed(() => {
-    const dias = props.shippingMethods[0]?.estimated_days;
-    return dias ? `Entrega pelos Correios ou transportadora em até ${dias} dia${dias === 1 ? '' : 's'} úte${dias === 1 ? 'il' : 'is'}.` : 'Entrega pelos Correios ou transportadora; o prazo aparece no checkout.';
+    const ate = Math.max(7, Number(prazo.value?.dias) || 0);
+    const base = `Entrega pelos Correios ou transportadora em até ${ate} dias úteis.`;
+    return prazo.value?.modalidade === 'flex' ? `${base} (Mas geralmente chega em 3)` : base;
 });
 
 const onCepPrazo = (event) => {
@@ -235,10 +238,10 @@ const consultarPrazo = async () => {
     consultandoPrazo.value = true;
     erroPrazo.value = '';
     try {
-        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${props.product.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        prazo.value = { expressa: data.entrega_expressa ?? null };
+        prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null };
     } catch {
         erroPrazo.value = 'Não foi possível consultar o prazo agora.';
     } finally {
@@ -443,25 +446,30 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                                 <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
                                 <p v-else-if="prazo?.expressa" class="expressa"><span class="full"><i class="fas fa-bolt"></i> Full</span> {{ prazo.expressa.mensagem }}</p>
-                                <p v-else-if="prazo" class="normal">{{ prazoNormal }}</p>
+                                <p v-else-if="prazo" class="normal">
+                                    <span v-if="prazo.modalidade === 'flex'" class="full"><i class="fas fa-bolt"></i> Flex</span>
+                                    {{ prazoNormal }}
+                                </p>
                             </form>
 
+                            <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), mantendo
+                                 as frases e o negrito azul daqui. -->
                             <ul class="fretefundo">
                                 <li>
-                                    <i class="fas fa-truck-fast"></i>
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout. <Link :href="`/produtos/${product.slug}/envio`">Ver formas de envio</Link></span>
+                                    <span class="selo-icone"><i class="fas fa-truck-fast"></i></span>
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout.</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
                                 </li>
                                 <li>
-                                    <i class="fas fa-recycle"></i>
-                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito. <Link href="/trocas-e-devolucoes">Ver política</Link></span>
+                                    <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
+                                    <span><b>Devolução fácil.</b> Você tem 7 dias para desistir e 30 dias para trocar se vier com defeito.</span>
                                 </li>
                                 <li>
-                                    <i class="fas fa-shield-halved"></i>
+                                    <img class="selo-img" src="/images/checkout/pagamento-100-seguro-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Compra segura e garantida</b>, receba o produto que está esperando ou devolvemos o dinheiro.</span>
                                 </li>
                                 <li>
-                                    <i class="far fa-star"></i>
+                                    <img class="selo-img" src="/images/checkout/avaliacoes-positivas-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
                                     <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
@@ -789,12 +797,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .bandeiras img { height: 45px; width: auto; }
 
 .pd2 .fretefundo { list-style: none; margin: 0; padding: 5px 15px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); }
-.pd2 .fretefundo li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; padding: 10px 0; font-size: 15px; line-height: 22px; color: #545454; }
+.pd2 .fretefundo li { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: center; padding: 10px 0; font-size: 15px; line-height: 22px; color: #545454; }
 .dark .pd2 .fretefundo li { color: var(--text); }
 .pd2 .fretefundo li + li { border-top: 1px solid var(--line); }
 .pd2 .fretefundo i { font-size: 22px; color: #000; text-align: center; margin-top: 2px; }
 .dark .pd2 .fretefundo i { color: var(--ink); }
 .pd2 .fretefundo b { color: var(--blue); }
+.pd2 .fretefundo .selo-img { width: 44px; height: 44px; object-fit: contain; }
+.pd2 .fretefundo .selo-icone { display: flex; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: 9999px; background: #e7f8ec; }
+.pd2 .fretefundo .selo-icone i { margin: 0; color: #00a650; }
+.pd2 .fretefundo .selo-full i { font-size: 0.9em; margin: 0 1px 0 0; color: inherit; text-align: left; }
 .pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
 
 .pd2 .prazo-cep { margin: 0 0 14px; }
@@ -809,7 +821,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .prazo-cep .expressa { background: rgba(0, 171, 33, .15); color: #4ade80; }
 /* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
 .pd2 .prazo-cep .expressa .full { font-weight: 800; }
-.pd2 .prazo-cep .normal { color: var(--text); }
+.pd2 .prazo-cep .normal { color: #00801a; font-weight: 600; }
+.dark .pd2 .prazo-cep .normal { color: #4ade80; }
+.pd2 .prazo-cep .normal .full { color: #00530f; font-weight: 800; font-style: italic; margin-right: 4px; }
 .pd2 .prazo-cep .erro { color: #dc2626; }
 
 /* descrição no visual da v1 */

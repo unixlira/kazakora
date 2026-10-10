@@ -237,11 +237,12 @@ watch([metodo, totalCartao], ([novoMetodo]) => {
 });
 
 // ---------- Selos de confiança ----------
+// Textos com a identidade da KazaKora (a izeshop foi só referência de formato).
 const SELOS = [
-    { imagem: '/images/checkout/pagamento-100-seguro-checkout.png', titulo: 'Pagamento 100% Seguro', texto: 'Nossos pagamentos são processados com segurança pelo Mercado Pago. Seus dados estão protegidos.' },
-    { imagem: '/images/checkout/avaliacoes-positivas-checkout.png', titulo: 'Avaliações Positivas', texto: 'Clientes de todo o Brasil avaliam nossos produtos. Nosso suporte no WhatsApp está pronto para te atender.' },
-    { imagem: '/images/checkout/satisfacao-garantida-checkout.png', titulo: 'Satisfação Garantida', texto: 'Receba sua compra e fique 100% satisfeito(a) ou receba todo o seu dinheiro de volta, sem burocracia.' },
-    { imagem: '/images/checkout/parcele-12x-cartao-checkout.png', titulo: 'Parcele em até 12x no cartão!', texto: 'As compras no cartão de crédito têm segurança antifraude e são enviadas imediatamente.' },
+    { imagem: '/images/checkout/pagamento-100-seguro-checkout.png', titulo: 'Pagamento 100% Seguro', texto: 'Seu pagamento passa direto pelo Mercado Pago, com criptografia. Seus dados de cartão nunca ficam com a gente.' },
+    { imagem: '/images/checkout/avaliacoes-positivas-checkout.png', titulo: 'Curadoria KazaKora', texto: 'Cada produto é escolhido a dedo e avaliado por quem já comprou. Dúvidas? A gente responde no WhatsApp.' },
+    { imagem: '/images/checkout/satisfacao-garantida-checkout.png', titulo: 'Satisfação Garantida', texto: '7 dias para se arrepender e 30 dias de garantia. Trocou de ideia ou veio com defeito? A gente resolve sem complicação.' },
+    { imagem: '/images/checkout/parcele-12x-cartao-checkout.png', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora.' },
 ];
 const irParaFinalizar = () => document.getElementById('finalizar-pedido')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 

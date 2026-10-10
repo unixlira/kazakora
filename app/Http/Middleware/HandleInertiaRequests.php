@@ -74,7 +74,7 @@ class HandleInertiaRequests extends Middleware
             // Desconto no Pix da loja (pedido 2026-10-09), em %.
             'descontoPix' => DescontoPix::percentual(),
             // Logos e favicon (Admin > Banners > Logos e favicon).
-            'marca' => fn () => \App\Support\Marca::urls(),
+            'marca' => fn () => rescue(fn () => \App\Support\Marca::urls(), null, false),
             'cart' => fn () => [
                 'count' => app(CartManager::class)->count(),
             ],

@@ -929,6 +929,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .col-principal > .compra { grid-column: 1; grid-row: auto; position: static; }
 }
 @media (max-width: 767px) {
+    /* Faixa amarela do topo numa linha só no celular (pedido 2026-10-10). */
+    .pd2 .faixa { flex-wrap: nowrap; gap: 6px; padding: 8px 10px; font-size: 11px; letter-spacing: 0; white-space: nowrap; }
+    .pd2 .faixa i { margin-right: 3px; }
     /* Bandeiras menores no celular: as 6 cabem numa linha (pedido 2026-10-10). */
     .pd2 .bandeiras { flex-wrap: nowrap; gap: 5px; }
     .pd2 .bandeiras img { height: 30px; }

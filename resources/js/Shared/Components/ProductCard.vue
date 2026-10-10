@@ -2,7 +2,6 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
-import StarRating from '@/Shared/Components/StarRating.vue';
 import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
 const props = defineProps({
@@ -28,7 +27,6 @@ const props = defineProps({
     },
 });
 
-const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 
 const secondImage = computed(() => {
     const images = props.product.images ?? [];
@@ -103,6 +101,19 @@ const nomeCurto = computed(() => {
     const ultimoEspaco = corte.lastIndexOf(' ');
     return { texto: (ultimoEspaco > 30 ? corte.slice(0, ultimoEspaco) : corte).replace(/[\s,.;:–-]+$/, ''), cortado: true };
 });
+
+// Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
+const precoAntes = computed(() => {
+    if (props.product.oferta_do_dia && props.product.preco_sem_oferta) return Number(props.product.preco_sem_oferta);
+    return props.product.has_discount ? Number(props.product.price) : null;
+});
+const descontoPct = computed(() => (precoAntes.value
+    ? Math.max(1, Math.round((1 - Number(props.product.final_price) / precoAntes.value) * 100))
+    : 0));
+const precoPartes = computed(() => {
+    const [inteiro, centavos] = Number(props.product.final_price).toFixed(2).split('.');
+    return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
+});
 </script>
 
 <template>
@@ -173,12 +184,17 @@ const nomeCurto = computed(() => {
                 <span v-if="product.stock > 0" class="inline-flex h-5 items-center gap-0.5 whitespace-nowrap rounded-full bg-emerald-600 px-1.5 text-[7.5px] font-extrabold uppercase tracking-tighter text-white md:gap-1 md:px-2 md:text-[10px] md:tracking-wide"><i class="fa-solid fa-bolt"></i> <span class="italic">Full</span></span>
             </div>
             <div class="mt-auto pt-1">
-                <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->
-                <span v-if="product.oferta_do_dia && product.preco_sem_oferta" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.preco_sem_oferta) }}</span>
-                <span v-else-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
-                <div class="flex items-center justify-between">
-                    <span class="text-base font-bold" :class="product.has_discount ? 'text-store-accent' : ''">{{ formatPrice(product.final_price) }}</span>
-                    <StarRating :value="ratingAvg" />
+                <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
+                     "X% OFF" + preço antigo riscado; embaixo o preço grande com os
+                     centavos pequenos no alto. Estrelas ficam só na página do produto. -->
+                <div v-if="precoAntes" class="flex flex-wrap items-center gap-1.5">
+                    <span class="rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
+                    <s class="text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
+                </div>
+                <div class="flex items-start leading-none text-store-fg">
+                    <span class="mr-0.5 mt-[3px] text-sm font-medium md:text-base">R$</span>
+                    <span class="text-[22px] font-semibold tracking-tight md:text-2xl">{{ precoPartes.inteiro }}</span>
+                    <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
                 </div>
                 <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
                 <!-- Frete grátis centralizado no card ("⚡ Full" fica ao lado do Envio Express). -->

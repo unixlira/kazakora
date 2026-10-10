@@ -148,9 +148,11 @@ class CatalogController extends Controller
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
 
+        // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
+        // todos os canais (loja e marketplaces), somando as variações.
         $salesCount = OrderItem::query()
-            ->where('product_id', $product->id)
-            ->whereHas('order', fn ($query) => $query->where('status', Order::STATUS_COMPLETED))
+            ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
+            ->whereHas('order', fn ($query) => $query->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
             ->sum('quantity');
 
         // Avaliações com foto/vídeo primeiro, depois as só com texto (pedido 2026-10-10).

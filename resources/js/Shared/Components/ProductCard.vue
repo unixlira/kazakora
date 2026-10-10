@@ -1,6 +1,6 @@
 <script setup>
 import { Link, router, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 
@@ -92,15 +92,64 @@ const submitReview = () => {
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
 const SELO_DO_MES = `Oferta ${mes}.${mes}`;
 
-// Nome no celular: cabe em 3 linhas com o selinho "Ver mais" no fim.
-const LIMITE_NOME_CELULAR = 44;
-const nomeCurto = computed(() => {
+// Nome do produto (pedido 2026-10-10): 2 linhas no celular e 3 no computador.
+// Se não couber, mede de verdade e corta na última palavra que deixa espaço
+// para "… Ver mais" terminar exatamente no fim da última linha.
+const tituloEl = ref(null);
+const medidorEl = ref(null);
+const titulo = ref({ texto: String(props.product.name ?? '').trim(), cortado: false });
+const SELINHO = '<span class="titulo-ver-mais">Ver mais</span>';
+const escapar = (texto) => texto.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const ajustarTitulo = () => {
+    const alvo = tituloEl.value;
+    const medidor = medidorEl.value;
+    if (!alvo || !medidor) return;
     const nome = String(props.product.name ?? '').trim();
-    if (nome.length <= LIMITE_NOME_CELULAR + 6) return { texto: nome, cortado: false };
-    const corte = nome.slice(0, LIMITE_NOME_CELULAR);
-    const ultimoEspaco = corte.lastIndexOf(' ');
-    return { texto: (ultimoEspaco > 30 ? corte.slice(0, ultimoEspaco) : corte).replace(/[\s,.;:–-]+$/, ''), cortado: true };
+    medidor.style.width = `${alvo.clientWidth}px`;
+    const limite = alvo.clientHeight + 1;
+    const cabe = (html) => { medidor.innerHTML = html; return medidor.scrollHeight <= limite; };
+
+    if (cabe(escapar(nome))) {
+        titulo.value = { texto: nome, cortado: false };
+        return;
+    }
+    const palavras = nome.split(/\s+/);
+    let baixo = 1;
+    let alto = palavras.length - 1;
+    let melhor = 1;
+    while (baixo <= alto) {
+        const meio = Math.floor((baixo + alto) / 2);
+        const texto = palavras.slice(0, meio).join(' ').replace(/[\s,.;:–|-]+$/, '');
+        if (cabe(`${escapar(texto)}… ${SELINHO}`)) { melhor = meio; baixo = meio + 1; } else { alto = meio - 1; }
+    }
+    // Completa letra a letra com a próxima palavra, pra linha acabar no "Ver mais".
+    let texto = palavras.slice(0, melhor).join(' ');
+    const resto = nome.slice(texto.length);
+    let b = 0;
+    let c = resto.length;
+    while (b < c) {
+        const m = Math.ceil((b + c) / 2);
+        const tentativa = (texto + resto.slice(0, m)).replace(/[\s,.;:–|-]+$/, '');
+        if (cabe(`${escapar(tentativa)}… ${SELINHO}`)) b = m; else c = m - 1;
+    }
+    texto = (texto + resto.slice(0, b)).replace(/[\s,.;:–|-]+$/, '');
+    titulo.value = { texto, cortado: true };
+};
+
+let observador = null;
+onMounted(() => {
+    nextTick(ajustarTitulo);
+    if (window.ResizeObserver && tituloEl.value) {
+        let largura = 0;
+        observador = new ResizeObserver(([entrada]) => {
+            if (Math.abs(entrada.contentRect.width - largura) > 1) { largura = entrada.contentRect.width; ajustarTitulo(); }
+        });
+        observador.observe(tituloEl.value);
+    }
+    document.fonts?.ready?.then(ajustarTitulo);
 });
+onBeforeUnmount(() => observador?.disconnect());
 
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 const precoAntes = computed(() => {
@@ -160,28 +209,19 @@ const precoPartes = computed(() => {
         </div>
 
         <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
-            <!-- Computador: nome em até 2 linhas. -->
-            <h4 class="hidden cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent md:block" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
-            <!-- Celular (pedido 2026-10-10): letra menor e altura fixa de 3 linhas, para
-                 o Envio Express ficar alinhado em todos os cards; nome que não cabe
-                 termina em "…" e um selinho preto "Ver mais". -->
-            <h4 class="line-clamp-3 h-12 cursor-pointer overflow-hidden text-[12px] font-semibold leading-4 md:hidden" :title="product.name" @click="goToProduct">
-                {{ nomeCurto.texto }}<template v-if="nomeCurto.cortado">… <span class="ml-0.5 inline-block rounded bg-black px-1 py-px align-middle text-[9px] font-bold leading-tight text-white">Ver mais</span></template>
-            </h4>
-            <!-- Envio Express abaixo do título (pedido 2026-10-10): caminhão branco em
-                 fundo cinza + selo vinho em itálico. -->
-            <!-- Laterais inclinadas dos dois lados, como "/ Envio Express /". -->
-            <!-- Ao lado, o selo "⚡ Full" (pedido 2026-10-10). -->
-            <div class="flex items-center gap-1 md:gap-1.5">
-                <div class="envio-express flex h-5 w-fit text-white md:h-6">
-                    <!-- Parte cinza do caminhão: só os cantos da direita arredondados (40px),
-                         com o vinho passando por baixo da curva. -->
-                    <span class="relative z-[1] flex w-6 shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-1 md:w-8 md:pl-1.5 md:pr-0.5">
-                        <i class="fa-solid fa-truck-fast -skew-x-12 text-[9px] md:text-[11px]"></i>
-                    </span>
-                    <span class="-ml-2 flex items-center whitespace-nowrap bg-[#7B1E3A] pl-2.5 pr-2 text-[7.5px] font-extrabold uppercase italic leading-none tracking-tighter md:-ml-2.5 md:pl-3.5 md:pr-3 md:text-[10px] md:tracking-tight">Envio Express</span>
-                </div>
-                <span v-if="product.stock > 0" class="inline-flex h-5 items-center gap-0.5 whitespace-nowrap rounded-full bg-emerald-600 px-1.5 text-[7.5px] font-extrabold uppercase tracking-tighter text-white md:gap-1 md:px-2 md:text-[10px] md:tracking-wide"><i class="fa-solid fa-bolt"></i> <span class="italic">Full</span></span>
+            <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
+                 fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
+            <div class="relative">
+                <h4 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h4>
+                <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
+            </div>
+            <!-- Envio Express (pedido 2026-10-10): ocupa a linha inteira do card, laterais
+                 inclinadas "/ texto /", parte cinza do caminhão arredondada à direita. -->
+            <div class="envio-express flex h-7 w-full text-white">
+                <span class="relative z-[1] flex w-9 shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-1.5 pr-0.5">
+                    <i class="fa-solid fa-truck-fast -skew-x-12 text-xs md:text-sm"></i>
+                </span>
+                <span class="-ml-3 flex flex-1 items-center justify-center whitespace-nowrap bg-[#7B1E3A] pl-3 pr-3 text-[11px] font-extrabold uppercase italic leading-none tracking-tight md:text-xs">Envio Express</span>
             </div>
             <div class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
@@ -197,10 +237,11 @@ const precoPartes = computed(() => {
                     <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
                 </div>
                 <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
-                <!-- Frete grátis centralizado no card ("⚡ Full" fica ao lado do Envio Express). -->
-                <div v-else class="mt-1.5 flex items-center justify-center">
-                    <span class="inline-flex items-center whitespace-nowrap rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-tight text-emerald-700 sm:px-2 sm:text-[10px] sm:tracking-wide dark:bg-emerald-500/15 dark:text-emerald-300">Frete grátis</span>
-                </div>
+                <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
+                <p v-else class="mt-1.5 flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
+                    Frete grátis
+                    <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                </p>
             </div>
             <button v-if="canReview && !hasReviewed" type="button"
                 class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"

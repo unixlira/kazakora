@@ -213,6 +213,35 @@
     clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
+/* Nome no card: 2 linhas no celular, 3 no computador (altura fixa). */
+.titulo-card {
+    font-size: 12px;
+    line-height: 16px;
+    height: 32px;
+}
+
+@media (min-width: 768px) {
+    .titulo-card {
+        font-size: 14px;
+        line-height: 20px;
+        height: 60px;
+    }
+}
+
+.titulo-ver-mais {
+    display: inline-block;
+    margin-left: 2px;
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: #000;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.2;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
 /* Imagem "fluid" (como o .img-fluid do Bootstrap, sem o Bootstrap):
    ocupa a largura disponível e a altura acompanha a proporção, sem cortar.
    Usado no banner do celular quando não há imagem mobile (pedido 2026-10-10). */

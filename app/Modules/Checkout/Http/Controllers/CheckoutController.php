@@ -177,7 +177,9 @@ class CheckoutController extends Controller
             'new_address' => ['nullable', 'required_without:address_id', 'array'],
             'new_address.label' => ['nullable', 'string', 'max:60'],
             'new_address.recipient_name' => ['required_without:address_id', 'string', 'max:255'],
-            'new_address.phone' => ['required_without:address_id', 'string', 'max:20'],
+            // Celular: vem do campo "Celular" lá em cima; sem ele, usa o do
+            // cadastro (BUG REAL 2026-10-10: a mensagem não dizia o que faltava).
+            'new_address.phone' => ['required_without:address_id', 'nullable', 'string', 'max:20'],
             'new_address.zip' => ['required_without:address_id', 'string', 'max:9'],
             'new_address.street' => ['required_without:address_id', 'string', 'max:255'],
             'new_address.number' => ['required_without:address_id', 'string', 'max:20'],
@@ -199,10 +201,31 @@ class CheckoutController extends Controller
             $rules['guest.phone'] = ['nullable', 'string', 'max:20'];
         }
 
+        if (is_array($request->input('new_address')) && blank($request->input('new_address.phone'))) {
+            $request->merge(['new_address' => array_merge($request->input('new_address'), [
+                'phone' => $request->user()?->phone ?: $request->input('guest.phone'),
+            ])]);
+        }
+
         $validator = Validator::make($request->all(), $rules, [
+            'new_address.phone.required_without' => 'Informe seu celular com DDD no campo "Celular" acima.',
+            'new_address.*.required_without' => 'Informe :attribute.',
+            'new_address.state.size' => 'A UF tem 2 letras (ex.: SP).',
             'guest.name.required' => 'Digite seu nome completo.',
             'guest.cpf.required' => 'Digite seu CPF.',
             'guest.name.min' => 'Digite seu nome completo (nome e sobrenome, com mais de 10 caracteres).',
+        ]);
+
+        $validator->setAttributeNames([
+            'new_address.recipient_name' => 'o nome de quem recebe',
+            'new_address.zip' => 'o CEP',
+            'new_address.street' => 'a rua',
+            'new_address.number' => 'o número',
+            'new_address.neighborhood' => 'o bairro',
+            'new_address.city' => 'a cidade',
+            'new_address.state' => 'a UF',
+            'guest.email' => 'e-mail',
+            'guest.phone' => 'celular',
         ]);
 
         if ($validator->fails()) {

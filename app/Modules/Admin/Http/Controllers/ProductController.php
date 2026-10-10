@@ -5,6 +5,8 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductAdContent;
+use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
@@ -123,6 +125,8 @@ class ProductController extends Controller
 
         $product = $this->createWithGeneratedSku($validated, $category?->name);
 
+        $this->gerarConteudoAnuncioDepois($product);
+
         return redirect()
             ->route('admin.produtos.editar', $product)
             ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.');
@@ -167,6 +171,7 @@ class ProductController extends Controller
             'product' => $product,
             // Pedido 2026-10-09: o formulário mostra o valor do Pix (sem o
             // +5% que fica gravado no preço da loja) — ao salvar, soma de novo.
+            'adContent' => $product->adContent()->first(['id', 'fonte', 'gerado_em', 'destaques', 'blocos']),
             'precoPix' => [
                 'price' => DescontoPix::semAcrescimo((float) $product->price),
                 'discount_amount' => $product->discount_amount !== null ? DescontoPix::semAcrescimo((float) $product->discount_amount) : null,
@@ -254,6 +259,7 @@ class ProductController extends Controller
         }
 
         $product->update($this->comAcrescimoPix($validated));
+        $this->gerarConteudoAnuncioDepois($product);
 
         // $product->stock aqui já é o valor ATUAL do banco (route model
         // binding busca fresco no início desta requisição, e $validated
@@ -379,6 +385,35 @@ class ProductController extends Controller
         }
 
         return $request->validate($rules);
+    }
+
+    /**
+     * Conteúdo do anúncio (benefícios + descrição em blocos, pedido
+     * 2026-10-09): gera depois de responder, só se nome/descrição/fotos
+     * mudaram. Se falhar aqui, o agendador tenta de novo em 15 minutos.
+     */
+    private function gerarConteudoAnuncioDepois(Product $product): void
+    {
+        $id = $product->id;
+
+        dispatch(static function () use ($id) {
+            $product = Product::query()->find($id);
+            $servico = app(AnuncioConteudoService::class);
+
+            if ($product && $servico->precisaGerar($product)) {
+                $servico->gerar($product);
+            }
+        })->afterResponse();
+    }
+
+    /** Botão "Gerar de novo" na edição do produto. */
+    public function regenerateAdContent(Product $product): RedirectResponse
+    {
+        $conteudo = app(AnuncioConteudoService::class)->gerar($product, forcar: true);
+
+        return back()->with('success', $conteudo->fonte === ProductAdContent::FONTE_GEMINI
+            ? 'Conteúdo do anúncio gerado com IA.'
+            : 'A IA não respondeu agora; o conteúdo foi montado pela regra automática a partir da descrição.');
     }
 
     /**

@@ -9,13 +9,18 @@ import VideoManager from '@/Modules/Admin/Products/VideoManager.vue';
 import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
 import StockHistory from '@/Modules/Admin/Products/StockHistory.vue';
 import VariationsManager from '@/Modules/Admin/Products/VariationsManager.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
     product: {
         type: Object,
         required: true,
+    },
+    // Conteúdo do anúncio (benefícios + descrição em blocos) — pedido 2026-10-09.
+    adContent: {
+        type: Object,
+        default: null,
     },
     // Valores do Pix (preço da loja sem o +5%) — pedido 2026-10-09.
     precoPix: {
@@ -94,11 +99,22 @@ const tabs = [
     { key: 'logistica', label: 'Logística' },
     { key: 'desconto-quantidade', label: 'Desconto por quantidade' },
     { key: 'midia', label: 'Fotos e vídeo' },
+    { key: 'anuncio', label: 'Conteúdo do anúncio' },
     { key: 'canais', label: 'Canais de venda' },
     { key: 'estoque', label: 'Histórico de estoque' },
 ];
 
 const activeTab = ref('geral');
+
+const gerandoAnuncio = ref(false);
+const gerarAnuncio = () => {
+    gerandoAnuncio.value = true;
+    router.post(`/admin/produtos/${props.product.id}/conteudo-anuncio`, {}, {
+        preserveScroll: true,
+        onFinish: () => { gerandoAnuncio.value = false; },
+    });
+};
+const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR') : '—');
 </script>
 
 <template>
@@ -144,6 +160,40 @@ const activeTab = ref('geral');
                     <div>
                         <h3 class="mb-3 text-sm font-semibold uppercase text-slate-500">Vídeo</h3>
                         <VideoManager :product="product" />
+                    </div>
+                </div>
+
+                <div v-else-if="activeTab === 'anuncio'" class="space-y-5">
+                    <p class="text-sm text-slate-500">
+                        Benefícios (abaixo das avaliações) e a descrição em blocos com imagem da página do produto.
+                        São gerados pela IA (Gemini) a partir da descrição e das fotos sempre que elas mudam; se a IA
+                        falhar, o sistema monta tudo pela própria descrição.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span v-if="adContent" class="rounded px-2 py-1 text-xs font-semibold"
+                            :class="adContent.fonte === 'gemini' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'">
+                            {{ adContent.fonte === 'gemini' ? 'Gerado com IA' : 'Montado pela regra automática' }} · {{ formatarData(adContent.gerado_em) }}
+                        </span>
+                        <span v-else class="rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">Ainda não gerado — a página usa a descrição como está.</span>
+                        <button type="button" :disabled="gerandoAnuncio" class="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" @click="gerarAnuncio">
+                            <i class="fas mr-1" :class="gerandoAnuncio ? 'fa-spinner animate-spin' : 'fa-wand-magic-sparkles'"></i>
+                            {{ gerandoAnuncio ? 'Gerando...' : (adContent ? 'Gerar de novo' : 'Gerar agora') }}
+                        </button>
+                    </div>
+                    <div v-if="adContent?.destaques?.length">
+                        <h3 class="mb-2 text-sm font-semibold uppercase text-slate-500">Benefícios</h3>
+                        <ul class="list-inside list-disc text-sm text-slate-700">
+                            <li v-for="(item, index) in adContent.destaques" :key="index">{{ item }}</li>
+                        </ul>
+                    </div>
+                    <div v-if="adContent?.blocos?.length">
+                        <h3 class="mb-2 text-sm font-semibold uppercase text-slate-500">Blocos da descrição</h3>
+                        <ol class="list-inside list-decimal space-y-1 text-sm text-slate-700">
+                            <li v-for="(bloco, index) in adContent.blocos" :key="index">
+                                <strong>{{ bloco.titulo }}</strong>
+                                <span v-if="bloco.imagem !== null" class="text-slate-400"> · foto {{ bloco.imagem + 1 }}</span>
+                            </li>
+                        </ol>
                     </div>
                 </div>
 

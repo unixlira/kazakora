@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import LogosFavicon from '@/Modules/Admin/Banners/LogosFavicon.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import InputError from '@/Shared/Components/InputError.vue';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
@@ -9,6 +10,10 @@ import { computed, ref } from 'vue';
 import { confirmDelete, notifyError } from '@/Shared/notify';
 
 const props = defineProps({
+    marca: {
+        type: Object,
+        default: null,
+    },
     banners: {
         type: Array,
         default: () => [],
@@ -186,5 +191,6 @@ const move = (banner, direction) => {
                 </div>
             </div>
         </div>
+        <LogosFavicon v-if="marca" :marca="marca" />
     </AdminLayout>
 </template>

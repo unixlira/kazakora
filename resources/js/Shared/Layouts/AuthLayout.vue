@@ -7,7 +7,10 @@ import { Link } from '@inertiajs/vue3';
         <!-- Form side -->
         <div class="flex w-full flex-col items-center justify-center bg-store-bg-raised px-4 py-12 lg:w-1/2">
             <Link href="/" class="mb-8 no-underline">
-                <span class="font-display text-2xl font-semibold text-store-fg">KazaKora</span>
+                <picture>
+                    <source media="(prefers-color-scheme: dark)" :srcset="$page.props.marca?.logoRodape">
+                    <img :src="$page.props.marca?.logoNav ?? '/images/marca/logo-nav.png'" alt="KazaKora" class="h-9 w-auto">
+                </picture>
             </Link>
 
             <div class="w-full" style="max-width: 24rem;">

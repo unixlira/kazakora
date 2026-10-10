@@ -15,9 +15,10 @@ export const COMPANY = {
     // Redes sociais do rodapé (pedido 2026-10-10): preencha o link e o ícone
     // aparece sozinho; vazio = não mostra.
     redes: {
-        instagram: '',
-        facebook: '',
+        instagram: 'https://www.instagram.com/kazakora.co',
+        threads: 'https://www.threads.com/@kazakora.co',
+        facebook: 'https://www.facebook.com/profile.php?id=61566013688063',
         tiktok: '',
-        youtube: '',
+        youtube: 'https://www.youtube.com/@kazakora',
     },
 };

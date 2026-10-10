@@ -721,8 +721,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 details[open] summary { color: var(--blue); }
 .pd2 details p { padding: 0 15px 15px; margin: 0; }
 
-.pd2 .confianca { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: center; min-height: 150px; margin: 20px 0; }
-.pd2 .confianca div { display: flex; align-items: flex-start; gap: 19px; color: var(--text); }
+.pd2 .confianca { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: stretch; margin: 20px 0; }
+.pd2 .confianca div { display: flex; align-items: center; gap: 19px; color: var(--text); background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 24px 20px; }
 .pd2 .confianca i { font-size: 48px; color: #000; width: 56px; text-align: center; flex: 0 0 auto; }
 .dark .pd2 .confianca i { color: var(--ink); }
 .pd2 .confianca strong { display: block; color: var(--ink); font-size: 20px; font-weight: 500; }
@@ -762,7 +762,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }
     .pd2 .confianca { grid-template-columns: 1fr 1fr; gap: 16px; }
-    .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 3px; font-size: 14px; }
+    .pd2 .confianca div { flex-direction: column; align-items: center; text-align: center; gap: 6px; font-size: 14px; padding: 18px 12px; }
     .pd2 .confianca i { font-size: 40px; }
     .pd2 .confianca strong { font-size: 16px; }
     .pd2 .barra { display: block; position: fixed; inset: auto 0 0 0; z-index: 40; background: var(--card); padding: 10px 16px; box-shadow: 0 0 10px 1px rgba(0, 0, 0, .35); }

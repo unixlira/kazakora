@@ -572,7 +572,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         </header>
 
                         <p v-if="entregaExpressa" class="mb-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                            <span class="font-extrabold text-emerald-900"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
+                            <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
                         </p>
 
                         <!-- Sempre frete grátis, logado ou não, sem escolha (pedido 2026-10-10). -->

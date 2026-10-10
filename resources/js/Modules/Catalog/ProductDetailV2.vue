@@ -798,9 +798,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep p { margin: 8px 0 0; font-size: 14px; }
 .pd2 .prazo-cep .expressa { display: inline-flex; align-items: center; gap: 6px; background: #e7f8ec; color: #00801a; font-weight: 700; border-radius: 8px; padding: 6px 10px; font-size: 15px; }
 .dark .pd2 .prazo-cep .expressa { background: rgba(0, 171, 33, .15); color: #4ade80; }
-/* "⚡ Full" um tom mais escuro que o resto da mensagem (pedido 2026-10-10). */
-.pd2 .prazo-cep .expressa .full { color: #00530f; font-weight: 800; }
-.dark .pd2 .prazo-cep .expressa .full { color: #bbf7d0; }
+/* "⚡ Full" na mesma cor da mensagem, só mais forte (pedido 2026-10-10). */
+.pd2 .prazo-cep .expressa .full { font-weight: 800; }
 .pd2 .prazo-cep .normal { color: var(--text); }
 .pd2 .prazo-cep .erro { color: #dc2626; }
 

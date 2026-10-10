@@ -777,7 +777,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .esgotado { margin: 10px 0; color: #dc2626; font-weight: 600; }
 .pd2 .bandeiras { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 18px 0; }
 .pd2 .bandeiras.esquerda { justify-content: flex-start; margin-top: 0; }
-.pd2 .bandeiras img { height: 30px; width: auto; }
+.pd2 .bandeiras img { height: 45px; width: auto; }
 
 .pd2 .fretefundo { list-style: none; margin: 0; padding: 5px 15px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); }
 .pd2 .fretefundo li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; padding: 10px 0; font-size: 15px; line-height: 22px; color: #545454; }

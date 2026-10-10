@@ -3,6 +3,7 @@
 // loja — só a faixa de segurança e o conteúdo, pra o cliente fechar a compra
 // sem distração. Sempre claro (as cores do checkout são fixas).
 import { COMPANY } from '@/Shared/company.js';
+import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 // Faixa vermelha de escassez: 15 minutos regressivos. Ao acabar fica em
@@ -49,6 +50,7 @@ const tempo = computed(() => {
             <span class="max-[429px]:hidden"><i class="fa-solid fa-box-open mr-1"></i>ENTREGA GARANTIDA</span>
         </div>
         <slot />
+        <AvisoCookies />
         <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop): formas de
              pagamento + dados da empresa, selo do Google à direita e a faixa
              preta com a marca e os selos de confiança. Sem links pra fora. -->

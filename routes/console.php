@@ -15,6 +15,8 @@ Schedule::command('loja:ofertas-do-dia')->dailyAt('00:05');
 // Carrinho abandonado (pedido 2026-10-10): 1º lembrete aos 50 min, depois
 // 1 por dia por 7 dias (manhã, tarde e noite) — ver LembreteCarrinho.
 Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlapping(10);
+// Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
+Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // marketplace:poll-labels NÃO roda mais agendado (removido 2026-08-05,
 // pedido explícito do usuário — "cron nem precisa ter"). O pipeline de
 // etiqueta agora é orientado a evento: CheckShipmentLabelJob dispara na

@@ -17,7 +17,17 @@ class SiteVisit extends Model
         'referer',
         'user_agent',
         'ip',
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'dispositivo',
+        'consentiu',
     ];
+
+    protected function casts(): array
+    {
+        return ['consentiu' => 'boolean'];
+    }
 
     public function user(): BelongsTo
     {

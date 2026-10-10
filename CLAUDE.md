@@ -60,6 +60,8 @@ servidor por fora: trazer pro git antes, nunca publicar por cima.
 
 ## Referências rápidas
 
+- Cookies, sessão e LGPD da loja: `docs/privacidade-e-cookies.md`. Qualquer
+  coleta nova de dado de visitante (pixel, analytics) segue as regras de lá.
 - Servidor: Hostinger compartilhada, PHP em `/opt/alt/php83/usr/bin/php`,
   app em `~/domains/devlira.com.br/public_html/kazakora`.
 - Backups manuais: `~/deploy-backups` no servidor.

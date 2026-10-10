@@ -9,7 +9,8 @@ const dadosCategorias = [
     { titulo: 'Dados de cadastro', texto: 'nome, sobrenome, número de telefone, cidade, estado, endereço de e-mail, CPF/CNPJ.' },
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
-    { titulo: 'Cookies', texto: 'utilizados para melhorar a experiência de navegação, lembrar preferências e analisar tráfego.' },
+    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança) e, com o seu OK, de estatística de visitas. Sem cookies de publicidade. Veja a Política de Cookies.' },
+    { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 
 const finalidades = [
@@ -89,6 +90,13 @@ const direitos = [
                     </ul>
                 </LegalCard>
 
+                <LegalCard title="Cookies">
+                    <p>
+                        Os cookies que usamos, para que servem e por quanto tempo ficam estão na
+                        <Link href="/politica-de-cookies" class="font-medium text-store-accent hover:underline">Política de Cookies</Link>.
+                    </p>
+                </LegalCard>
+
                 <LegalCard title="Compartilhamento de Dados">
                     <p>
                         A KazaKora pode compartilhar dados com: provedores de pagamento, transportadoras, provedores de
@@ -125,7 +133,7 @@ const direitos = [
                         <div><dt class="text-xs text-store-fg-faint">E-mail</dt><dd class="text-store-fg">{{ COMPANY.email }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">WhatsApp</dt><dd class="text-store-fg">{{ COMPANY.whatsappDisplay }}</dd></div>
                         <div><dt class="text-xs text-store-fg-faint">Horário de atendimento</dt><dd class="text-store-fg">{{ COMPANY.horario }}</dd></div>
-                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">15/04/2026</dd></div>
+                        <div><dt class="text-xs text-store-fg-faint">Última atualização</dt><dd class="text-store-fg">10/10/2026</dd></div>
                     </dl>
                     <p class="mt-2">
                         Nossa equipe está sempre disponível durante o horário comercial, inclusive aos sábados, para

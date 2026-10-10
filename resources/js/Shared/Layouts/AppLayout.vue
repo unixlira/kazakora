@@ -93,6 +93,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Categorias</a>
                     <a href="/#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Favoritos</Link>
+                    <Link href="/rastreio" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Rastrear pedido</Link>
                     <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
                 </nav>
 
@@ -181,6 +182,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                     <a href="/#produtos" class="text-sm font-medium">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>
                     <Link href="/carrinho" class="text-sm font-medium">Carrinho</Link>
+                    <Link href="/rastreio" class="text-sm font-medium">Rastrear pedido</Link>
                     <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium">Fale conosco</a>
                 </nav>
             </div>
@@ -238,6 +240,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
                                     <li><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
                                     <li><Link href="/pedidos" class="hover:opacity-100">Compras</Link></li>
                                 </template>
+                                <li><Link href="/rastreio" class="hover:opacity-100">Rastrear pedido</Link></li>
                             </ul>
                         </div>
                     </div>

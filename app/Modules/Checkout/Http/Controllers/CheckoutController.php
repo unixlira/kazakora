@@ -723,7 +723,8 @@ class CheckoutController extends Controller
     public function myOrders(Request $request): Response
     {
         return Inertia::render('Checkout/MyOrders', [
-            'orders' => $request->user()->orders()->with('items')->latest()->paginate(10),
+            'orders' => $request->user()->orders()->with('items')->latest()->paginate(10)
+                ->through(fn (Order $order) => $order->setAttribute('tracking_ref', $order->trackingRef())),
         ]);
     }
 

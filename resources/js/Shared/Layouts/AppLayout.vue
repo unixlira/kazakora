@@ -68,13 +68,13 @@ onMounted(() => {
 
 const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
+// Ao passar o mouse, cada ícone fica na cor oficial da rede (pedido 2026-10-10).
 const REDES = [
-    { nome: 'Instagram', icone: 'fab fa-instagram', link: COMPANY.redes?.instagram },
-    { nome: 'Threads', icone: 'fab fa-threads', link: COMPANY.redes?.threads },
-    { nome: 'Facebook', icone: 'fab fa-facebook-f', link: COMPANY.redes?.facebook },
-    { nome: 'TikTok', icone: 'fab fa-tiktok', link: COMPANY.redes?.tiktok },
-    { nome: 'YouTube', icone: 'fab fa-youtube', link: COMPANY.redes?.youtube },
-    { nome: 'WhatsApp', icone: 'fab fa-whatsapp', link: COMPANY.whatsappLink },
+    { nome: 'Instagram', icone: 'fab fa-instagram', link: COMPANY.redes?.instagram, hover: 'hover:bg-gradient-to-tr hover:from-[#feda75] hover:via-[#d62976] hover:to-[#4f5bd5] hover:text-white' },
+    { nome: 'Threads', icone: 'fab fa-threads', link: COMPANY.redes?.threads, hover: 'hover:bg-white hover:text-black' },
+    { nome: 'Facebook', icone: 'fab fa-facebook-f', link: COMPANY.redes?.facebook, hover: 'hover:bg-[#1877F2] hover:text-white' },
+    { nome: 'TikTok', icone: 'fab fa-tiktok', link: COMPANY.redes?.tiktok, hover: 'hover:bg-[#FE2C55] hover:text-white' },
+    { nome: 'YouTube', icone: 'fab fa-youtube', link: COMPANY.redes?.youtube, hover: 'hover:bg-[#FF0000] hover:text-white' },
 ].filter((rede) => rede.link);
 </script>
 
@@ -214,7 +214,7 @@ const REDES = [
                         <!-- Redes sociais (pedido 2026-10-10) -->
                         <div class="mt-5 flex justify-center gap-3 lg:justify-start">
                             <a v-for="rede in REDES" :key="rede.nome" :href="rede.link" target="_blank" rel="noopener" :aria-label="rede.nome"
-                                class="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg transition hover:bg-white hover:text-black">
+                                class="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg transition" :class="rede.hover">
                                 <i :class="rede.icone"></i>
                             </a>
                         </div>

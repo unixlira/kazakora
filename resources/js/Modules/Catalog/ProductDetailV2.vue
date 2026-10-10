@@ -698,9 +698,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
 /* faixa amarela */
-.pd2 .faixa { background: var(--yellow); color: #111; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; font-weight: 600; font-size: 14px; letter-spacing: .5px; }
+.pd2 .faixa { background: #F37021; color: #111; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 16px; font-weight: 600; font-size: 14px; letter-spacing: .5px; }
 .pd2 .faixa i { margin-right: 6px; }
 .pd2 .selo-full i { margin: 0 1px 0 0; font-size: 0.9em; width: auto; color: inherit; }
+/* Faixa laranja (cor da logo): ⚡FULL em preto só aqui (pedido 2026-10-10). */
+.pd2 .faixa .selo-full { color: #111; }
 .pd2 .faixa .sep { opacity: .4; }
 
 .pd2 .migalhas { font-size: 14.5px; color: var(--muted); padding: 18px 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

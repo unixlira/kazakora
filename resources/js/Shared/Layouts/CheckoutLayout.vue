@@ -63,7 +63,7 @@ const tempo = computed(() => {
                 </div>
                 <div class="mx-auto mt-6 flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
                     <p class="text-xs leading-relaxed text-slate-500">
-                        © {{ new Date().getFullYear() }} {{ COMPANY.razaoSocial }}<br>
+                        © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                         CNPJ: {{ COMPANY.cnpj }}<br>
                         WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
                         E-mail: {{ COMPANY.email }}<br>

@@ -157,9 +157,16 @@
 }
 
 .promo-badge-icon {
+    position: relative;
+    z-index: 1;
     height: 28px;
     min-width: 30px;
     background: #064b9b;
+    /* Só os cantos da direita arredondados (pedido 2026-10-10); a faixa
+       vermelha passa por baixo para não sobrar buraco na curva. */
+    border-top-right-radius: 40px;
+    border-bottom-right-radius: 40px;
+    padding-right: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -169,7 +176,8 @@
 
 .promo-badge-text {
     height: 28px;
-    padding: 0 22px 0 10px;
+    margin-left: -14px;
+    padding: 0 22px 0 24px;
     background: #d71920;
     display: flex;
     align-items: center;
@@ -195,7 +203,8 @@
 
     .promo-badge-text {
         font-size: 11px;
-        padding: 0 18px 0 8px;
+        margin-left: -12px;
+        padding: 0 18px 0 20px;
     }
 }
 

@@ -6,6 +6,12 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    // Home: os cards de benefícios cobrem a base do banner (pedido
+    // 2026-10-10) — título e bolinhas sobem pra não ficarem escondidos.
+    reservaBase: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const current = ref(0);
@@ -58,7 +64,7 @@ onUnmounted(stop);
                 >
                     <img :src="banner.image_url" :alt="banner.title || 'Banner promocional'" class="hidden h-full w-full object-cover md:block">
                     <img :src="banner.image_url_mobile || banner.image_url" :alt="banner.title || 'Banner promocional'" class="block h-full w-full object-cover md:hidden">
-                    <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6">
+                    <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'pb-20 sm:pb-20': reservaBase }">
                         <p class="font-display text-lg font-semibold text-white sm:text-2xl">{{ banner.title }}</p>
                     </div>
                 </component>
@@ -77,7 +83,7 @@ onUnmounted(stop);
                 <i class="fas fa-chevron-right text-sm"></i>
             </button>
 
-            <div class="absolute inset-x-0 bottom-3 flex justify-center gap-2">
+            <div class="absolute inset-x-0 flex justify-center gap-2" :class="reservaBase ? 'bottom-16' : 'bottom-3'">
                 <button v-for="(banner, index) in banners" :key="banner.id" type="button"
                     :aria-label="`Ir para o banner ${index + 1}`"
                     class="h-2 rounded-full bg-store-accent transition-all"

@@ -4,6 +4,7 @@
     $empresa = config('loja.empresa');
     $logoTopo = \App\Support\Marca::urlAbsoluta('logo_nav');
     $logoRodape = \App\Support\Marca::urlAbsoluta('logo_rodape');
+    $semLink = fn (string $texto) => preg_replace('#([./\-, ])#u', '$1&#8203;', e($texto));
 @endphp
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -20,6 +21,8 @@
         img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
         body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; background-color: #f2f5f4; }
 
+        .sem-link a, a[x-apple-data-detectors], u + #corpo .sem-link a { color: #ffffff !important; text-decoration: none !important; font: inherit !important; pointer-events: none; }
+
         @media screen and (max-width: 600px) {
             .email-container { width: 100% !important; }
             .email-padding { padding-left: 20px !important; padding-right: 20px !important; }
@@ -28,7 +31,7 @@
         }
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f2f5f4;">
+<body id="corpo" style="margin: 0; padding: 0; background-color: #f2f5f4;">
     @hasSection('preheader')
         <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">@yield('preheader')</div>
     @endif
@@ -65,8 +68,11 @@
                                     </td>
                                 </tr>
                             </table>
-                            {{ $empresa['nome'] }} &middot; CNPJ {{ $empresa['cnpj'] }}<br>
-                            {{ $empresa['endereco'] }}<br>
+                            {{-- Gmail/iPhone viram número e endereço em link sozinhos (pedido
+                                 2026-10-10: texto branco, sem link). O caractere invisível
+                                 (&#8203;) depois de cada separador quebra essa detecção. --}}
+                            <span class="sem-link" style="color: #ffffff; text-decoration: none;">{{ $empresa['nome'] }} &middot; CNPJ {!! $semLink($empresa['cnpj']) !!}</span><br>
+                            <span class="sem-link" style="color: #ffffff; text-decoration: none;">{!! $semLink($empresa['endereco']) !!}</span><br>
                             <a href="{{ url('/') }}" target="_blank" style="color: #f27a2a; text-decoration: none;">{{ preg_replace('#^https?://#', '', rtrim(url('/'), '/')) }}</a>
                             <div style="margin-top: 12px; font-size: 11px; color: #7d828c;">
                                 Este é um e-mail automático, não é necessário responder.

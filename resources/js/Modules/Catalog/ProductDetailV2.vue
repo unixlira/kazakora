@@ -11,6 +11,7 @@ import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
+import { maskCep } from '@/Shared/useCep';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -196,6 +197,43 @@ const specs = computed(() => {
 
 const isFreeShipping = computed(() => props.shippingMethods.length > 0);
 
+// Prazo pelo CEP (pedido 2026-10-09): na área da entrega expressa da Grande
+// SP mostra "Receba hoje até as 21h" (até 13h) ou "Receba amanhã"; fora
+// dela, o prazo normal de envio.
+const cep = ref('');
+const prazo = ref(null); // null = não consultado; { expressa } depois da consulta
+const consultandoPrazo = ref(false);
+const erroPrazo = ref('');
+const prazoNormal = computed(() => {
+    const dias = props.shippingMethods[0]?.estimated_days;
+    return dias ? `Entrega pelos Correios ou transportadora em até ${dias} dia${dias === 1 ? '' : 's'} úte${dias === 1 ? 'il' : 'is'}.` : 'Entrega pelos Correios ou transportadora; o prazo aparece no checkout.';
+});
+
+const onCepPrazo = (event) => {
+    cep.value = maskCep(event.target.value);
+    prazo.value = null;
+    erroPrazo.value = '';
+};
+
+const consultarPrazo = async () => {
+    if (cep.value.replace(/\D/g, '').length !== 8) {
+        erroPrazo.value = 'Digite um CEP com 8 números.';
+        return;
+    }
+    consultandoPrazo.value = true;
+    erroPrazo.value = '';
+    try {
+        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}`, { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        prazo.value = { expressa: data.entrega_expressa ?? null };
+    } catch {
+        erroPrazo.value = 'Não foi possível consultar o prazo agora.';
+    } finally {
+        consultandoPrazo.value = false;
+    }
+};
+
 const addingToCart = ref(false);
 const buyingNow = ref(false);
 
@@ -377,6 +415,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="bandeiras">
                                 <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand" loading="lazy">
                             </div>
+
+                            <form class="prazo-cep" @submit.prevent="consultarPrazo">
+                                <label for="cep-prazo"><i class="fas fa-location-dot"></i> Consultar prazo de entrega</label>
+                                <div class="linha">
+                                    <input id="cep-prazo" :value="cep" type="text" inputmode="numeric" maxlength="9" placeholder="00000-000" autocomplete="postal-code" @input="onCepPrazo">
+                                    <button type="submit" :disabled="consultandoPrazo">{{ consultandoPrazo ? '...' : 'OK' }}</button>
+                                </div>
+                                <p v-if="erroPrazo" class="erro">{{ erroPrazo }}</p>
+                                <p v-else-if="prazo?.expressa" class="expressa"><i class="fas fa-bolt"></i> {{ prazo.expressa.mensagem }}</p>
+                                <p v-else-if="prazo" class="normal">{{ prazoNormal }}</p>
+                            </form>
 
                             <ul class="fretefundo">
                                 <li>
@@ -667,6 +716,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .fretefundo i { color: var(--ink); }
 .pd2 .fretefundo b { color: var(--blue); }
 .pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
+
+.pd2 .prazo-cep { margin: 0 0 14px; }
+.pd2 .prazo-cep label { display: block; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 6px; }
+.pd2 .prazo-cep label i { color: var(--blue); margin-right: 4px; }
+.pd2 .prazo-cep .linha { display: flex; gap: 8px; }
+.pd2 .prazo-cep input { flex: 1; min-width: 0; height: 44px; border: 1px solid #b9b9b9; border-radius: 10px; padding: 0 12px; font: inherit; background: var(--card); color: var(--ink); }
+.pd2 .prazo-cep button { height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--navy); color: #fff; font: 600 15px Poppins, sans-serif; cursor: pointer; }
+.pd2 .prazo-cep button:disabled { opacity: .6; }
+.pd2 .prazo-cep p { margin: 8px 0 0; font-size: 14px; }
+.pd2 .prazo-cep .expressa { display: inline-flex; align-items: center; gap: 6px; background: #e7f8ec; color: #00801a; font-weight: 700; border-radius: 8px; padding: 6px 10px; font-size: 15px; }
+.dark .pd2 .prazo-cep .expressa { background: rgba(0, 171, 33, .15); color: #4ade80; }
+.pd2 .prazo-cep .normal { color: var(--text); }
+.pd2 .prazo-cep .erro { color: #dc2626; }
 
 /* conteúdo */
 .pd2 .descricao { color: #000; }

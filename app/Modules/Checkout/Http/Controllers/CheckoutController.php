@@ -12,6 +12,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\CartStockChangedException;
+use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
@@ -71,17 +72,37 @@ class CheckoutController extends Controller
      * FreightQuoteService já devolve lista vazia se não for possível cotar,
      * e o front cai de volta pras formas de envio estáticas nesse caso.
      */
-    public function quoteFreight(Request $request): JsonResponse
+    public function quoteFreight(Request $request, EntregaExpressa $entregaExpressa): JsonResponse
     {
         $data = $request->validate(['zip' => ['required', 'string']]);
 
         $cartItems = $this->cart->items();
+        $expressa = $entregaExpressa->consultar($data['zip']);
 
         if ($cartItems->isEmpty()) {
-            return response()->json(['quotes' => []]);
+            return response()->json(['quotes' => [], 'entrega_expressa' => $expressa]);
         }
 
-        return response()->json(['quotes' => $this->freight->quote($cartItems, $data['zip'])]);
+        return response()->json([
+            'quotes' => $this->freight->quote($cartItems, $data['zip']),
+            'entrega_expressa' => $expressa,
+        ]);
+    }
+
+    /**
+     * Prazo pelo CEP na página do produto (pedido 2026-10-09): só diz se o
+     * CEP tem entrega expressa ("Receba hoje até as 21h" / "Receba amanhã").
+     * Fora da área, entrega_expressa vem null e a tela mostra o prazo normal.
+     */
+    public function deliveryEstimate(Request $request, EntregaExpressa $entregaExpressa): JsonResponse
+    {
+        $cep = preg_replace('/\D/', '', (string) $request->query('cep'));
+
+        if (strlen($cep) !== 8) {
+            return response()->json(['message' => 'Informe um CEP com 8 números.'], 422);
+        }
+
+        return response()->json(['entrega_expressa' => $entregaExpressa->consultar($cep)]);
     }
 
     public function storeDelivery(Request $request): RedirectResponse

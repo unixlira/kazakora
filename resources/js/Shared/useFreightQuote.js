@@ -8,11 +8,15 @@ function readXsrfToken() {
 export function useFreightQuote() {
     const loading = ref(false);
     const error = ref(null);
+    // Entrega expressa na Grande SP ("Receba hoje até as 21h" / "Receba
+    // amanhã") — null quando o CEP está fora da área.
+    const expressa = ref(null);
 
     async function quote(zip) {
         const digits = (zip ?? '').replace(/\D/g, '');
 
         if (digits.length !== 8) {
+            expressa.value = null;
             return [];
         }
 
@@ -37,6 +41,7 @@ export function useFreightQuote() {
             }
 
             const data = await response.json();
+            expressa.value = data.entrega_expressa ?? null;
 
             return data.quotes ?? [];
         } catch {
@@ -47,5 +52,5 @@ export function useFreightQuote() {
         }
     }
 
-    return { loading, error, quote };
+    return { loading, error, expressa, quote };
 }

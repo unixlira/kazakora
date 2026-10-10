@@ -2,6 +2,7 @@
 // Fora do setup: o AdminLayout remonta a cada navegação do Inertia e o
 // último id visto precisa sobreviver, senão some mensagem que chegou no meio.
 let lastId = null;
+let lastEmailId = null;
 </script>
 
 <script setup>
@@ -13,6 +14,8 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 // direito. Vários avisos ficam em coluna; cada um vive 3s desde que chegou e
 // some com desfoque, e os de baixo sobem. Se o de baixo também já deu os 3s,
 // some junto. Clique abre a conversa. Polling de 3s com a aba visível.
+// Desde 2026-10-10 os e-mails do site (Fale conosco) entram na MESMA fila,
+// com o ícone de envelope; clique abre a mensagem em Admin > E-mails do site.
 
 const LIFETIME_MS = 3000;
 const POLL_MS = 3000;
@@ -46,43 +49,76 @@ async function poll() {
     busy = true;
 
     try {
-        const query = lastId === null ? '' : `?after=${lastId}`;
-        const response = await fetch(`/admin/whatsapp/conversas/chegando${query}`, {
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const firstRun = lastId === null;
-        lastId = data.lastId;
-
-        // Contador do item "Conversas" do menu acompanha em tempo real.
-        if (page.props.sidebarBadges) page.props.sidebarBadges.whatsappNaoLidas = data.unreadConversations;
-
-        if (!firstRun && document.visibilityState === 'visible') data.messages.forEach(push);
-    } catch {
-        // rede caiu: tenta de novo no próximo ciclo
+        await Promise.all([pollWhatsApp(), pollEmails()]);
     } finally {
         busy = false;
         if (document.visibilityState === 'visible') timer = setTimeout(poll, POLL_MS);
     }
 }
 
-function push(message) {
-    if (toasts.value.some((t) => t.id === message.id)) return;
-    toasts.value.push(message);
-    if (toasts.value.length > MAX_VISIBLE) toasts.value.shift();
-    setTimeout(() => dismiss(message.id), LIFETIME_MS);
+async function getJson(url) {
+    try {
+        const response = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        return response.ok ? await response.json() : null;
+    } catch {
+        return null; // rede caiu: tenta de novo no próximo ciclo
+    }
 }
 
-function dismiss(id) {
-    toasts.value = toasts.value.filter((t) => t.id !== id);
+async function pollWhatsApp() {
+    const data = await getJson(`/admin/whatsapp/conversas/chegando${lastId === null ? '' : `?after=${lastId}`}`);
+    if (!data) return;
+
+    const firstRun = lastId === null;
+    lastId = data.lastId;
+
+    // Contador do item "Conversas" do menu acompanha em tempo real.
+    if (page.props.sidebarBadges) page.props.sidebarBadges.whatsappNaoLidas = data.unreadConversations;
+
+    if (!firstRun && document.visibilityState === 'visible') data.messages.forEach((m) => push({ ...m, tipo: 'whatsapp', key: `wa-${m.id}` }));
+}
+
+async function pollEmails() {
+    const data = await getJson(`/admin/mensagens-site/chegando${lastEmailId === null ? '' : `?after=${lastEmailId}`}`);
+    if (!data) return;
+
+    const firstRun = lastEmailId === null;
+    lastEmailId = data.lastId;
+
+    if (page.props.sidebarBadges) page.props.sidebarBadges.emailsSiteNaoLidos = data.naoLidas;
+    if (firstRun || !data.mensagens.length) return;
+
+    // Na própria caixa de e-mails, a lista se atualiza sozinha.
+    if (window.location.pathname === '/admin/mensagens-site') {
+        router.reload({ only: ['mensagens', 'naoLidas'], preserveScroll: true });
+    }
+
+    if (document.visibilityState === 'visible') {
+        data.mensagens.forEach((m) => push({
+            tipo: 'email',
+            key: `email-${m.id}`,
+            id: m.id,
+            name: m.nome,
+            assunto: m.assunto,
+            preview: m.previa,
+        }));
+    }
+}
+
+function push(message) {
+    if (toasts.value.some((t) => t.key === message.key)) return;
+    toasts.value.push(message);
+    if (toasts.value.length > MAX_VISIBLE) toasts.value.shift();
+    setTimeout(() => dismiss(message.key), LIFETIME_MS);
+}
+
+function dismiss(key) {
+    toasts.value = toasts.value.filter((t) => t.key !== key);
 }
 
 function open(toast) {
-    dismiss(toast.id);
-    router.visit(`/admin/whatsapp/conversas?c=${toast.conversationId}`);
+    dismiss(toast.key);
+    router.visit(toast.tipo === 'email' ? `/admin/mensagens-site?m=${toast.id}` : `/admin/whatsapp/conversas?c=${toast.conversationId}`);
 }
 
 function title(toast) {
@@ -99,7 +135,7 @@ function initials(toast) {
 }
 
 const COLORS = ['#25d366', '#53bdeb', '#ff8a65', '#a78bfa', '#f472b6', '#fbbf24', '#34d399', '#60a5fa'];
-const color = (toast) => COLORS[toast.conversationId % COLORS.length];
+const color = (toast) => (toast.tipo === 'email' ? '#f27a2a' : COLORS[toast.conversationId % COLORS.length]);
 </script>
 
 <template>
@@ -107,20 +143,23 @@ const color = (toast) => COLORS[toast.conversationId % COLORS.length];
         <TransitionGroup tag="div" name="wa-toast" class="relative flex flex-col gap-2">
             <button
                 v-for="toast in toasts"
-                :key="toast.id"
+                :key="toast.key"
                 type="button"
                 class="wa-toast pointer-events-auto flex w-full items-start gap-3 rounded-xl border border-black/5 bg-white p-3 text-left shadow-lg dark:border-white/5 dark:bg-[#233138]"
                 @click="open(toast)"
             >
                 <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white" :style="{ backgroundColor: color(toast) }">
-                    <template v-if="initials(toast)">{{ initials(toast) }}</template>
+                    <i v-if="toast.tipo === 'email'" class="fas fa-envelope"></i>
+                    <template v-else-if="initials(toast)">{{ initials(toast) }}</template>
                     <i v-else class="fas fa-user"></i>
                 </span>
                 <span class="min-w-0 flex-1">
                     <span class="flex items-center justify-between gap-2">
                         <span class="truncate text-[15px] font-semibold text-[#111b21] dark:text-[#e9edef]">{{ title(toast) }}</span>
-                        <span class="flex shrink-0 items-center gap-1 text-[11px] text-[#25d366]"><i class="fab fa-whatsapp"></i> agora</span>
+                        <span v-if="toast.tipo === 'email'" class="flex shrink-0 items-center gap-1 text-[11px] text-[#f27a2a]"><i class="fas fa-envelope"></i> e-mail · agora</span>
+                        <span v-else class="flex shrink-0 items-center gap-1 text-[11px] text-[#25d366]"><i class="fab fa-whatsapp"></i> agora</span>
                     </span>
+                    <span v-if="toast.assunto" class="block truncate text-sm font-medium text-[#111b21] dark:text-[#e9edef]">{{ toast.assunto }}</span>
                     <span class="mt-0.5 line-clamp-2 text-sm text-[#667781] dark:text-[#8696a0]">{{ toast.preview }}</span>
                 </span>
             </button>

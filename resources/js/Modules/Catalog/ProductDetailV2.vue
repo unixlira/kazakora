@@ -751,7 +751,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
 /* Check sempre verde (o emoji ✔️ mudava de cor conforme o aparelho) — pedido 2026-10-10. */
-.pd2 .checks li i { color: #00a650; margin-right: 6px; }
+.pd2 .checks li i { color: #00a650; margin-right: 6px; font-size: 1.1em; -webkit-text-stroke: 0.8px #00a650; }
 .pd2 .divisor { border: 0; border-top: 1px solid #777; margin: 16px 0; opacity: .6; }
 
 .pd2 .preco { display: grid; grid-template-columns: 25% 75%; align-items: center; margin-bottom: 15px; }

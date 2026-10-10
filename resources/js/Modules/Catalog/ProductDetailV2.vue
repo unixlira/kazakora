@@ -435,7 +435,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p v-else class="esgotado">Produto esgotado</p>
 
                             <div class="bandeiras">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao/${brand}.png`" :alt="brand" loading="lazy">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao-hd/${brand}.png`" :alt="brand" loading="lazy">
                             </div>
 
                             <form class="prazo-cep" @submit.prevent="consultarPrazo">
@@ -558,7 +558,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Pagamento Seguro</h2>
                             <div class="bandeiras esquerda">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao/${brand}.png`" :alt="brand" loading="lazy">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao-hd/${brand}.png`" :alt="brand" loading="lazy">
                             </div>
                             <p v-if="DESCONTO_PIX > 0">No Pix você tem {{ DESCONTO_PIX }}% de desconto, com aprovação imediata.</p>
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>

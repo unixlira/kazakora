@@ -57,7 +57,7 @@ const tempo = computed(() => {
                 <div class="mx-auto max-w-[1160px] border-b border-slate-100 pb-6 text-center">
                     <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
                     <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
-                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao/${bandeira}.png`" :alt="bandeira"
+                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
                             class="h-[51px] w-auto">
                     </div>
                 </div>

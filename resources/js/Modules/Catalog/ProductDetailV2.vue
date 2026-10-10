@@ -51,6 +51,13 @@ const FAQ = [
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const reviewsCount = computed(() => Number(props.product.reviews_count ?? props.reviews.length));
+const vendidosTexto = computed(() => {
+    const total = Number(props.salesCount);
+    const faixas = [10000, 5000, 1000, 500, 100, 50, 25, 10, 5];
+    const faixa = faixas.find((valor) => total >= valor);
+    if (!faixa) return `${total} vendido${total === 1 ? '' : 's'}`;
+    return `+${faixa >= 1000 ? `${faixa / 1000} mil` : faixa} vendidos`;
+});
 const stars = (value) => Math.round(value);
 
 // Galeria: vídeo primeiro, depois as imagens em ordem.
@@ -354,12 +361,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <Link v-else href="/entrar" class="fav" aria-label="Favoritar"><i class="far fa-heart"></i></Link>
                             </div>
 
+                            <!-- Estrelas e vendidos em destaque (pedido 2026-10-10: saem do card e
+                                 ficam aqui). Vendidos no formato do Mercado Livre: +5, +10, +50, +100... -->
                             <div v-if="reviewsCount > 0 || salesCount > 0" class="nota">
+                                <span v-if="salesCount > 0" class="vendidos"><i class="fas fa-fire"></i> {{ vendidosTexto }}</span>
+                                <span v-if="salesCount > 0 && reviewsCount > 0" class="separador">|</span>
                                 <template v-if="reviewsCount > 0">
+                                    <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
                                     <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                    <a href="#avaliacoes">({{ reviewsCount }} avaliaç{{ reviewsCount === 1 ? 'ão' : 'ões' }} de clientes)</a>
+                                    <a href="#avaliacoes">({{ reviewsCount }})</a>
                                 </template>
-                                <span v-if="salesCount > 0" class="vendidos">+{{ salesCount }} vendidos</span>
                             </div>
 
                             <ul v-if="highlights.length" class="checks">
@@ -728,7 +739,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fav .ativo { color: #e11d48; }
 .pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
 .pd2 .nota a { text-decoration: none; }
-.pd2 .nota .vendidos { font-weight: 400; color: var(--muted); font-size: 14px; }
+.pd2 .nota .vendidos { font-weight: 600; color: var(--ink); font-size: 14px; }
+.pd2 .nota .vendidos i { color: #f97316; }
+.pd2 .nota .separador { color: var(--line); }
+.pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
 .pd2 .divisor { border: 0; border-top: 1px solid #777; margin: 16px 0; opacity: .6; }

@@ -20,7 +20,7 @@ const onFileSelect = (event) => {
 };
 
 const submit = () => {
-    form.post('/admin/categorias');
+    form.post('/admin/categorias', { forceFormData: true });
 };
 </script>
 

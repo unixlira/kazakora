@@ -80,7 +80,7 @@ class DescontoPixTest extends TestCase
         $product = Product::factory()->create(['price' => 105, 'stock' => 5, 'is_active' => true]);
         $this->chegarNoPagamento($user, $product);
 
-        $this->actingAs($user)->get('/finalizacao/pagamento')
+        $this->actingAs($user)->get('/finalizacao/pagamento?v=1')
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('pixDiscountPercentage', 5)
                 ->where('pixDiscountAmount', 5.25));

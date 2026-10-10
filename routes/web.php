@@ -68,6 +68,7 @@ use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Catalog\Http\Controllers\ReviewController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
+use App\Modules\Checkout\Http\Controllers\TrackingController;
 use App\Modules\Marketplace\Http\Controllers\ProductChannelController;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Profile\Http\Controllers\ProfileAvatarController;
@@ -114,6 +115,11 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::patch('/{product}', [CartController::class, 'update'])->name('atualizar');
     Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
 });
+
+// Rastrear pedido (pedido 2026-10-10) — página pública.
+Route::get('/rastreio', [TrackingController::class, 'index'])->name('rastreio');
+Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
+Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
 
 Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
 

@@ -44,12 +44,15 @@ class SendOrderReceiptEmailJobTest extends TestCase
 
         $order = $this->makeOrder();
         $danfePath = "invoices/{$order->id}/danfe-test.pdf";
+        $xmlPath = "invoices/{$order->id}/nfe-test.xml";
         Storage::disk('local')->put($danfePath, '%PDF-1.3 fake');
-        Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_AUTHORIZED, 'numero' => 1, 'danfe_path' => $danfePath]);
+        Storage::disk('local')->put($xmlPath, '<nfeProc/>');
+        Invoice::create(['order_id' => $order->id, 'status' => Invoice::STATUS_AUTHORIZED, 'numero' => 1, 'danfe_path' => $danfePath, 'xml_path' => $xmlPath]);
 
         SendOrderReceiptEmailJob::dispatchSync($order->id);
 
-        Mail::assertSent(OrderConfirmation::class, fn (OrderConfirmation $mail) => count($mail->attachments()) === 1);
+        // PDF + XML da nota (pedido 2026-10-10).
+        Mail::assertSent(OrderConfirmation::class, fn (OrderConfirmation $mail) => count($mail->attachments()) === 2);
         $this->assertDatabaseHas('order_email_logs', [
             'order_id' => $order->id,
             'status' => OrderEmailLog::STATUS_SENT,

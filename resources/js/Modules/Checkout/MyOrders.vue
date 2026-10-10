@@ -66,6 +66,10 @@ const STATUS_STYLES = {
                         <span class="text-sm font-semibold">Total</span>
                         <span class="font-semibold text-store-accent">{{ formatPrice(order.total) }}</span>
                     </div>
+                    <Link v-if="order.status !== 'cancelled'" :href="`/rastreio/${order.tracking_ref}`"
+                        class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-store-accent hover:underline">
+                        <i class="fa-solid fa-location-dot"></i> Rastrear pedido
+                    </Link>
                 </div>
             </div>
 

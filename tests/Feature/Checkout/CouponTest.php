@@ -43,7 +43,7 @@ class CouponTest extends TestCase
 
         $this->actingAs($user)->post('/finalizacao/pagamento/cupom', ['code' => 'DEZOFF'])->assertRedirect();
 
-        $response = $this->actingAs($user)->get('/finalizacao/pagamento');
+        $response = $this->actingAs($user)->get('/finalizacao/pagamento?v=1');
 
         $response->assertInertia(fn ($page) => $page
             ->where('couponCode', 'DEZOFF')

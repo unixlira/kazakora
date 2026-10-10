@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\WhatsApp\Models\WhatsAppCampaign;
 use App\Modules\WhatsApp\Models\WhatsAppCampaignRecipient;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
+use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -277,17 +278,9 @@ class WhatsAppCampaignController extends Controller
             }
 
             [$phonePart, $namePart] = array_pad(preg_split('/[,;|]/', $line, 2), 2, null);
-            $phone = preg_replace('/\D+/', '', (string) $phonePart);
+            $phone = WhatsAppPhone::normalize($phonePart);
 
-            if (str_starts_with($phone, '0')) {
-                $phone = ltrim($phone, '0');
-            }
-
-            if (! str_starts_with($phone, '55') && strlen($phone) >= 10) {
-                $phone = '55'.$phone;
-            }
-
-            if (! preg_match('/^55\d{10,11}$/', $phone)) {
+            if ($phone === null) {
                 continue;
             }
 

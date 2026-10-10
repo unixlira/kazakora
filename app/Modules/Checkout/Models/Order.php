@@ -199,6 +199,34 @@ class Order extends Model
         return $this->hasMany(OrderEmailLog::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
+    /**
+     * Código público do rastreio (pedido 2026-10-10): "{id}-{assinatura}" —
+     * vai no link do WhatsApp/e-mail; sem a assinatura ninguém abre o
+     * pedido de outra pessoa só trocando o número.
+     */
+    public function trackingRef(): string
+    {
+        return $this->id.'-'.substr(hash_hmac('sha256', 'rastreio:'.$this->id, (string) config('app.key')), 0, 10);
+    }
+
+    public static function findByTrackingRef(string $ref): ?self
+    {
+        if (! preg_match('/^(\d+)-([a-f0-9]{10})$/', $ref, $m)) {
+            return null;
+        }
+
+        $order = static::query()->find((int) $m[1]);
+
+        return $order && hash_equals($order->trackingRef(), $ref) ? $order : null;
+    }
+
+    /** Código dos Correios/transportadora, quando já existe. */
+    public function trackingCode(): ?string
+    {
+        return $this->latestCorreiosPrePostagem?->codigo_objeto
+            ?: $this->channelShipment?->tracking_code;
+    }
+
     public function latestEmailLog(): HasOne
     {
         return $this->hasOne(OrderEmailLog::class)->latestOfMany(['created_at', 'id']);

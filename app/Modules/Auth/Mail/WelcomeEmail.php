@@ -15,7 +15,11 @@ class WelcomeEmail extends Mailable
 {
     use SerializesModels;
 
-    public function __construct(public readonly User $user)
+    /**
+     * $senhaTemporaria só vem pra conta criada no checkout sem cadastro
+     * (pedido 2026-10-10) — o cliente entra com o e-mail e essa senha.
+     */
+    public function __construct(public readonly User $user, public readonly ?string $senhaTemporaria = null)
     {
     }
 

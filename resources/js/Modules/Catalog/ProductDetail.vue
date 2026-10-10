@@ -511,7 +511,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <div class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
                                 <button type="button" :disabled="product.stock < 1 || buyingNow" class="flex items-center justify-center gap-2 rounded-full bg-store-accent px-6 py-3 text-sm font-bold text-store-accent-contrast shadow-lg shadow-store-accent/20 transition hover:-translate-y-0.5 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40" @click="buyNow">Comprar agora</button>
-                                <button type="button" :disabled="product.stock < 1 || addingToCart" class="flex items-center justify-center gap-2 rounded-full border border-store-border-strong bg-store-bg px-5 py-3 text-sm font-bold text-store-fg transition hover:bg-store-bg-sunken disabled:cursor-not-allowed disabled:opacity-40" @click="addToCart"><i class="fas fa-bag-shopping text-sm"></i><span class="sm:hidden lg:inline">Adicionar</span></button>
+                                <button type="button" :disabled="product.stock < 1 || addingToCart" class="flex items-center justify-center gap-2 rounded-full border border-store-border-strong bg-store-bg px-5 py-3 text-sm font-bold text-store-fg transition hover:bg-store-bg-sunken disabled:cursor-not-allowed disabled:opacity-40" @click="addToCart"><i class="fas fa-cart-shopping text-sm"></i><span class="sm:hidden lg:inline">Adicionar</span></button>
                             </div>
                         </div>
 
@@ -536,7 +536,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
             <!-- Descrição tipo landing page, centralizada logo abaixo da row principal -->
             <section v-if="product.description" class="mt-10 flex justify-center">
                 <div class="relative w-full max-w-5xl overflow-hidden rounded-[2rem] border border-store-border bg-store-bg-raised p-6 shadow-[0_20px_70px_var(--store-shadow)] md:p-10">
-                    <div class="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-store-accent via-purple-400 to-fuchsia-300"></div>
+                    <div class="absolute inset-x-0 top-0 h-1.5 bg-store-accent"></div>
                     <div class="mx-auto max-w-3xl text-center">
                         <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-store-accent-soft text-store-accent-strong"><i class="fas fa-sparkles"></i></span>
                         <p class="mt-4 font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Por que esse produto merece atenção</p>
@@ -615,7 +615,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
         <!-- Barra fixa no rodapé (mobile): preço + ações -->
         <div class="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-store-border bg-store-bg-raised p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] lg:hidden">
             <span class="font-display text-lg font-bold text-store-fg">{{ formatPrice(product.final_price) }}</span>
-            <button type="button" :disabled="product.stock < 1 || addingToCart" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-store-border-strong text-store-fg disabled:cursor-not-allowed disabled:opacity-40" aria-label="Adicionar ao carrinho" @click="addToCart"><i class="fas fa-bag-shopping text-sm"></i></button>
+            <button type="button" :disabled="product.stock < 1 || addingToCart" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-store-border-strong text-store-fg disabled:cursor-not-allowed disabled:opacity-40" aria-label="Adicionar ao carrinho" @click="addToCart"><i class="fas fa-cart-shopping text-sm"></i></button>
             <button type="button" :disabled="product.stock < 1 || buyingNow" class="flex-1 rounded-lg bg-store-accent px-4 py-2.5 text-sm font-semibold text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40" @click="buyNow">Comprar agora</button>
         </div>
 

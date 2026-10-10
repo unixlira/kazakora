@@ -52,26 +52,25 @@ const tempo = computed(() => {
              preta com a marca e os selos de confiança. Sem links pra fora. -->
         <footer class="mt-auto">
             <div class="border-t border-slate-200 bg-white px-4 py-8">
-                <!-- Dados à esquerda, formas de pagamento no meio, selo do Google à direita. -->
-                <div class="mx-auto grid max-w-[1160px] grid-cols-1 items-center gap-6 text-center md:grid-cols-3">
-                    <div class="order-1 md:order-2">
-                        <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
-                        <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
-                            <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/${bandeira}@2x.png`" :alt="bandeira"
-                                class="h-9 w-auto rounded-md border border-slate-200 bg-white p-1.5">
-                        </div>
+                <!-- Formas de pagamento numa linha própria em cima; embaixo, dados à
+                     esquerda e selo do Google à direita. -->
+                <div class="mx-auto max-w-[1160px] border-b border-slate-100 pb-6 text-center">
+                    <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
+                    <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
+                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao/${bandeira}.png`" :alt="bandeira"
+                            class="h-[51px] w-auto">
                     </div>
-                    <p class="order-2 text-xs leading-relaxed text-slate-500 md:order-1 md:text-left">
+                </div>
+                <div class="mx-auto mt-6 flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
+                    <p class="text-xs leading-relaxed text-slate-500">
                         © {{ new Date().getFullYear() }} {{ COMPANY.razaoSocial }}<br>
                         CNPJ: {{ COMPANY.cnpj }}<br>
                         WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
                         E-mail: {{ COMPANY.email }}<br>
                         <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
                     </p>
-                    <div class="order-3 flex justify-center md:justify-end">
-                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
-                            class="h-24 w-auto rounded-md bg-white p-2 md:h-28">
-                    </div>
+                    <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                        class="h-24 w-auto rounded-md bg-white p-2 md:h-28">
                 </div>
             </div>
 

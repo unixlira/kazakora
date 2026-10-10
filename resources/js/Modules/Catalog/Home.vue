@@ -62,6 +62,13 @@ const listTitle = computed(() => {
 });
 
 const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
+
+const BENEFICIOS = [
+    { icone: 'fa-truck-fast', titulo: 'Frete Grátis', texto: 'Entrega em todo Brasil' },
+    { icone: 'fa-credit-card', titulo: 'Parcelamento', texto: 'Em 12x nos cartões' },
+    { icone: 'fa-lock', titulo: 'Compra Segura', texto: 'Ambiente seguro para pagamentos online' },
+    { icone: 'fa-face-smile', titulo: 'Satisfação Garantida', texto: 'Você 100% feliz ou seu reembolso garantido' },
+];
 </script>
 
 <template>
@@ -69,10 +76,25 @@ const tabHref = (tipo) => (tipo ? `/?tipo=${tipo}#produtos` : '/#produtos');
 
     <AppLayout>
         <!-- Banner rotativo -->
-        <BannerCarousel v-if="banners.length" :banners="banners" class="mb-[10px]" />
+        <BannerCarousel v-if="banners.length" :banners="banners" reserva-base />
+
+        <!-- Benefícios (pedido 2026-10-10, modelo izeshop): metade em cima do
+             banner, metade abaixo da linha que separa o banner do resto. -->
+        <section class="relative z-10 mx-auto max-w-[1320px] px-4 md:px-6" :class="banners.length ? '-mt-12 mb-8 md:-mt-11' : 'my-6'">
+            <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+                <div v-for="beneficio in BENEFICIOS" :key="beneficio.titulo"
+                    class="flex items-center gap-3 rounded-xl border border-store-border bg-store-bg-raised px-3 py-3 shadow-[0_8px_24px_var(--store-shadow)] md:px-5 md:py-4">
+                    <i class="fa-solid shrink-0 text-2xl text-store-accent md:text-3xl" :class="beneficio.icone"></i>
+                    <div class="min-w-0">
+                        <h3 class="text-sm font-bold leading-tight md:text-base">{{ beneficio.titulo }}</h3>
+                        <p class="mt-0.5 text-xs leading-snug text-store-fg-muted md:text-sm">{{ beneficio.texto }}</p>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         <!-- Destaques -->
-        <section v-if="featuredProducts.length" class="mx-auto max-w-[1320px] px-4 pb-12 pt-2 md:px-6">
+        <section v-if="featuredProducts.length" class="mx-auto max-w-[1320px] px-4 pb-12 md:px-6">
             <div class="mb-5 flex items-end justify-between gap-4">
                 <div>
                     <p class="font-store-mono text-[0.68rem] uppercase tracking-[0.22em] text-store-accent">seleção KazaKora</p>

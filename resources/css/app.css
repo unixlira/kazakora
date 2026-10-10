@@ -42,20 +42,20 @@
     --radius-tw: 12px;
 
     /*
-     * Storefront palette (premium purple + warm porcelain): researched from
-     * luxury/home palettes that pair amethyst, aubergine, lavender and warm
-     * off-white. Tokens are shared by catalog, checkout and account screens.
+     * Storefront palette: tema preto (pedido 2026-10-10, trocou o roxo).
+     * Neutros puros, acento preto e contraste branco. Tokens compartilhados
+     * por catálogo, checkout e telas da conta.
      */
-    --color-store-bg: #fbf8fd;
+    --color-store-bg: #fafafa;
     --color-store-bg-raised: #ffffff;
-    --color-store-bg-sunken: #f3edf8;
-    --color-store-fg: #21162d;
-    --color-store-fg-muted: #5f5269;
-    --color-store-fg-faint: #9a8aa7;
-    --color-store-accent: #6d28d9;
-    --color-store-accent-strong: #2b1641;
-    --color-store-accent-soft: #efe7fb;
-    --color-store-accent-contrast: #fffaf4;
+    --color-store-bg-sunken: #f1f1f1;
+    --color-store-fg: #111111;
+    --color-store-fg-muted: #555555;
+    --color-store-fg-faint: #9a9a9a;
+    --color-store-accent: #111111;
+    --color-store-accent-strong: #000000;
+    --color-store-accent-soft: #ededed;
+    --color-store-accent-contrast: #ffffff;
     --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 10%, transparent);
     --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 20%, transparent);
 }
@@ -104,24 +104,28 @@
 
 @media (prefers-color-scheme: dark) {
     .storefront-shell {
-        --color-store-bg: #120b1c;
-        --color-store-bg-raised: #1f142c;
-        --color-store-bg-sunken: #0c0713;
-        --color-store-fg: #f6ecfb;
-        --color-store-fg-muted: #c5b3d2;
-        --color-store-fg-faint: #8d769d;
-        --color-store-accent: #c084fc;
-        --color-store-accent-strong: #eadcff;
-        --color-store-accent-soft: #352147;
-        --color-store-accent-contrast: #160b22;
-        --color-store-border: rgba(246, 236, 251, 0.13);
-        --color-store-border-strong: rgba(246, 236, 251, 0.24);
+        --color-store-bg: #0b0b0b;
+        --color-store-bg-raised: #171717;
+        --color-store-bg-sunken: #050505;
+        --color-store-fg: #f5f5f5;
+        --color-store-fg-muted: #bdbdbd;
+        --color-store-fg-faint: #8a8a8a;
+        --color-store-accent: #f5f5f5;
+        --color-store-accent-strong: #ffffff;
+        --color-store-accent-soft: #262626;
+        --color-store-accent-contrast: #111111;
+        --color-store-border: rgba(245, 245, 245, 0.13);
+        --color-store-border-strong: rgba(245, 245, 245, 0.24);
         --store-shadow: rgba(0, 0, 0, 0.55);
     }
 }
 
 .storefront-shell {
     --store-shadow: rgba(20, 32, 46, 0.16);
+    /* Fonte única do checkout no site todo (pedido 2026-10-10): títulos
+       (font-display) e números (font-store-mono) também em IBM Plex Sans. */
+    --font-display: var(--font-store);
+    --font-store-mono: var(--font-store);
     font-family: var(--font-store);
 }
 

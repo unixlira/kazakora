@@ -11,6 +11,7 @@ use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Services\Shopee\Exceptions\ShopeeException;
 use App\Services\Shopee\ShopeeClient;
+use App\Support\DescontoPix;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -355,7 +356,9 @@ class ShopeeDriver extends AbstractMarketplaceDriver
                     'name' => $item['name'],
                     'slug' => $slugBase.$suffix,
                     'description' => $item['description'] ?: null,
-                    'price' => $item['price'],
+                    // Preço da loja = preço do canal +5% do Pix (pedido 2026-10-09);
+                    // o canal continua com o preço dele (precoDeVenda tira o +5%).
+                    'price' => DescontoPix::comAcrescimo((float) $item['price']),
                     'stock' => $initialStock,
                     'is_active' => false,
                 ]);

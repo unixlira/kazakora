@@ -17,6 +17,11 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    // Valores do Pix (preço da loja sem o +5%) — pedido 2026-10-09.
+    precoPix: {
+        type: Object,
+        default: null,
+    },
     categories: {
         type: Array,
         default: () => [],
@@ -64,10 +69,10 @@ const form = useForm({
     color: props.product.color ?? '',
     variation: props.product.variation ?? '',
     description: props.product.description ?? '',
-    price: props.product.price,
+    price: props.precoPix?.price ?? props.product.price,
     cost_price: props.product.cost_price ?? '',
     discount_percentage: props.product.discount_percentage,
-    discount_amount: props.product.discount_amount,
+    discount_amount: props.precoPix ? props.precoPix.discount_amount : props.product.discount_amount,
     // stock aqui é só EXIBIÇÃO ("Estoque atual: X" no ProductForm) — quem
     // muda o estoque de verdade é stock_adjustment (0 = não mexe), ver
     // BUG REAL 2026-08-17 no ProductController::update().

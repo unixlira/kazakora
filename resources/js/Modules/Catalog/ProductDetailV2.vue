@@ -34,6 +34,8 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const PARCELAS = 12;
+// Desconto no Pix (pedido 2026-10-09) — % compartilhado pelo backend.
+const DESCONTO_PIX = Number(page.props.descontoPix ?? 0);
 const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
@@ -42,7 +44,9 @@ const FAQ = [
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
     ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
-    ['Quais são as formas de pagamento?', `Pix, com aprovação imediata, ou cartão de crédito em até ${PARCELAS}x sem juros.`],
+    ['Quais são as formas de pagamento?', DESCONTO_PIX > 0
+        ? `Pix, com aprovação imediata e ${DESCONTO_PIX}% de desconto, ou cartão de crédito em até ${PARCELAS}x sem juros.`
+        : `Pix, com aprovação imediata, ou cartão de crédito em até ${PARCELAS}x sem juros.`],
 ];
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
@@ -104,13 +108,6 @@ const variantThumbnail = (item) => {
     return images.find((image) => image.is_primary)?.url ?? images[0]?.url ?? null;
 };
 
-const discountPercent = computed(() => {
-    if (props.product.discount_percentage) return Math.round(Number(props.product.discount_percentage));
-    if (props.product.discount_amount && props.product.price > 0) {
-        return Math.round((Number(props.product.discount_amount) / Number(props.product.price)) * 100);
-    }
-    return 0;
-});
 
 // Desconto por quantidade: mesma conta do backend (CartManager/CheckoutController).
 const quantityDiscounts = computed(() =>
@@ -122,11 +119,18 @@ const unitPriceForQuantity = (qty) => {
     return Math.max(0, Math.round(Number(props.product.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
 };
 
-// "R$ 34 de desconto", como no selo da referência.
-const discountValue = computed(() => Math.round(Number(props.product.price) - Number(props.product.final_price)));
-
 const quantity = ref(1);
 const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quantity.value);
+const pixPrice = computed(() => Math.round(Number(props.product.final_price) * (1 - DESCONTO_PIX / 100) * 100) / 100);
+// Referência do bloco de preço: "de" = preço cheio (ou o do cartão, quando
+// não há promoção e existe desconto no Pix); "por" = valor no Pix.
+const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(props.product.final_price)));
+const precoDe = computed(() => {
+    if (props.product.has_discount) return Number(props.product.price);
+    return DESCONTO_PIX > 0 ? Number(props.product.final_price) : null;
+});
+const percentualTotal = computed(() => (precoDe.value ? Math.round((1 - precoPor.value / precoDe.value) * 100) : 0));
+const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(props.product.final_price) / PARCELAS);
 const inStock = computed(() => props.product.stock > 0);
 
@@ -357,16 +361,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <hr class="divisor">
 
+                            <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço à
+                                 vista (Pix) em destaque, 12x no cartão e "R$ X de desconto" — tudo
+                                 com os valores reais (preço de cartão = final_price). -->
                             <div class="preco">
                                 <span class="rot">Preço:</span>
                                 <div class="valores">
-                                    <div v-if="product.has_discount" class="linha-de">
-                                        <span class="de">{{ formatPrice(product.price) }}</span>
-                                        <span v-if="discountPercent > 0" class="selo">⇣ {{ discountPercent }}%</span>
+                                    <div v-if="precoDe" class="linha-de">
+                                        <span class="de">{{ formatPrice(precoDe) }}</span>
+                                        <span v-if="percentualTotal > 0" class="selo">⇣ {{ percentualTotal }}%</span>
                                     </div>
-                                    <div class="por">{{ formatPrice(product.final_price) }}</div>
-                                    <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }} sem juros</div>
-                                    <span v-if="product.has_discount && discountValue > 0" class="selo">R$ {{ discountValue }} de desconto</span>
+                                    <div class="por">{{ formatPrice(precoPor) }}<small v-if="DESCONTO_PIX > 0" class="no-pix">no Pix</small></div>
+                                    <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}<template v-if="DESCONTO_PIX > 0"> no cartão</template></div>
+                                    <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
                                 </div>
                             </div>
 
@@ -482,6 +489,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="bandeiras esquerda">
                                 <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/${brand}@2x.png`" :alt="brand" loading="lazy">
                             </div>
+                            <p v-if="DESCONTO_PIX > 0">No Pix você tem {{ DESCONTO_PIX }}% de desconto, com aprovação imediata.</p>
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
                         </section>
 
@@ -672,6 +680,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .pd2 .parc { color: var(--ink); font-size: 18px; }
+.pd2 .por .no-pix { font-size: 15px; font-weight: 500; color: var(--text); margin-left: 6px; }
 .pd2 .parc i { color: var(--navy); margin-right: 4px; }
 .dark .pd2 .parc i { color: var(--blue); }
 

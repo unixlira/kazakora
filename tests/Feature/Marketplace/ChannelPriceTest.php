@@ -40,7 +40,9 @@ class ChannelPriceTest extends TestCase
         ]);
 
         $this->admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $this->produto = Product::factory()->create(['price' => 79.04, 'discount_percentage' => 0, 'discount_amount' => 0, 'stock' => 3]);
+        // Preço da loja com o +5% do Pix (pedido 2026-10-09): 79,04 × 1,05 = 82,99.
+        // Sem preço próprio, o canal recebe o preço SEM o acréscimo (79,04).
+        $this->produto = Product::factory()->create(['price' => 82.99, 'discount_percentage' => 0, 'discount_amount' => 0, 'stock' => 3]);
         $this->produto->channelListings()->create([
             'channel' => 'mercado_livre', 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED,
             'external_id' => 'MLB7229164246', 'attributes' => ['category_id' => 'MLB178920'],
@@ -68,7 +70,7 @@ class ChannelPriceTest extends TestCase
         Http::assertSent(fn ($request) => $request->method() === 'PUT' && $request['price'] == 160.48 && $request['available_quantity'] === 3);
     }
 
-    public function test_without_a_channel_price_the_product_price_is_used(): void
+    public function test_without_a_channel_price_the_product_price_without_pix_markup_is_used(): void
     {
         Http::fake(['https://api.mercadolibre.com/items/MLB7229164246' => Http::response(['id' => 'MLB7229164246'])]);
 
@@ -77,7 +79,7 @@ class ChannelPriceTest extends TestCase
         Http::assertSent(fn ($request) => $request->method() === 'PUT' && $request['price'] == 79.04);
     }
 
-    public function test_clearing_the_channel_price_falls_back_to_the_product_price(): void
+    public function test_clearing_the_channel_price_falls_back_to_the_product_price_without_pix_markup(): void
     {
         $this->produto->channelListings()->update(['price' => 160.48]);
 

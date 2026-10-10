@@ -201,6 +201,12 @@ class Product extends Model
         return max(0, round($this->final_price * (1 - (float) $tier->discount_percentage / 100), 2));
     }
 
+    /** Conteúdo do anúncio (benefícios + descrição em blocos) — pedido 2026-10-09. */
+    public function adContent(): HasOne
+    {
+        return $this->hasOne(ProductAdContent::class);
+    }
+
     public function fiscalData(): HasOne
     {
         return $this->hasOne(ProductFiscalData::class);

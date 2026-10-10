@@ -88,6 +88,8 @@ class CatalogController extends Controller
             'category:id,name,slug',
             'images' => fn ($query) => $query->orderBy('position'),
             'quantityDiscounts',
+            // Benefícios + descrição em blocos (pedido 2026-10-09).
+            'adContent',
         ]);
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');

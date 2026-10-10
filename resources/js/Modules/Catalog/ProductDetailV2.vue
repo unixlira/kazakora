@@ -179,7 +179,14 @@ const descriptionSections = computed(() => {
 
 // Destaques do box de compra: os 3 primeiros itens da primeira lista da
 // própria descrição (nada inventado à parte).
+// Conteúdo do anúncio gerado (Gemini ou regra automática) — pedido
+// 2026-10-09. Sem ele, a página usa a descrição como está (nunca fica vazia).
+const anuncio = computed(() => props.product.ad_content ?? null);
+const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
+const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.url ?? null);
+
 const highlights = computed(() => {
+    if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
     for (const section of descriptionSections.value) {
         const list = section.parts.find((part) => part.type === 'ul');
         if (list) return list.items.slice(0, 3);
@@ -455,9 +462,61 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                         </aside>
 
-                        <section v-if="descriptionSections.length" class="card">
-                            <h2>Descrição</h2>
-                            <div class="descricao">
+                        <!-- Descrição: visual da v1 (faixa em degradê + cabeçalho centralizado) com o
+                             conteúdo no formato da referência: blocos de título + imagem + texto
+                             persuasivo, comparativo, benefícios e dúvidas. -->
+                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
+                            <div class="faixa-degrade bg-gradient-to-r from-store-accent via-purple-400 to-fuchsia-300"></div>
+                            <header class="desc-cabecalho">
+                                <span class="desc-icone bg-store-accent-soft text-store-accent-strong"><i class="fas fa-wand-magic-sparkles"></i></span>
+                                <p class="desc-eyebrow">Por que esse produto merece atenção</p>
+                                <h2>{{ anuncio?.chamada || 'Descrição' }}</h2>
+                            </header>
+
+                            <div v-if="blocosAnuncio.length" class="descricao">
+                                <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio">
+                                    <h3>{{ bloco.titulo }}</h3>
+                                    <img v-if="imagemDoBloco(bloco.imagem)" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
+                                    <p>{{ bloco.texto }}</p>
+                                </article>
+
+                                <div v-if="anuncio.comparativo?.linhas?.length" class="bloco-anuncio">
+                                    <h3>{{ anuncio.comparativo.titulo }}</h3>
+                                    <p v-if="anuncio.comparativo.intro">{{ anuncio.comparativo.intro }}</p>
+                                    <div class="tabela-wrap">
+                                        <table class="comparativo">
+                                            <thead><tr><th>Critério</th><th>Solução comum</th><th>Com este produto</th></tr></thead>
+                                            <tbody>
+                                                <tr v-for="(linha, index) in anuncio.comparativo.linhas" :key="index">
+                                                    <td>{{ linha[0] }}</td>
+                                                    <td class="ruim">✕ {{ linha[1] }}</td>
+                                                    <td class="bom">✓ {{ linha[2] }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div v-if="anuncio.beneficios?.length" class="bloco-anuncio">
+                                    <h3>Benefícios que fazem diferença na rotina</h3>
+                                    <ul class="beneficios">
+                                        <li v-for="(item, index) in anuncio.beneficios" :key="index">
+                                            <i class="fas fa-circle-check"></i>
+                                            <span><strong>{{ item[0] }}</strong><template v-if="item[1]">: {{ item[1] }}</template></span>
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div v-if="anuncio.duvidas?.length" class="bloco-anuncio">
+                                    <h3>Dúvidas comuns antes de escolher o seu</h3>
+                                    <div v-for="(duvida, index) in anuncio.duvidas" :key="index" class="duvida">
+                                        <strong>{{ duvida[0] }}</strong>
+                                        <p>{{ duvida[1] }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-else class="descricao">
                                 <div v-for="(section, index) in descriptionSections" :key="index" class="bloco">
                                     <h3 v-if="section.heading">{{ section.heading }}</h3>
                                     <template v-for="(part, partIndex) in section.parts" :key="partIndex">
@@ -743,6 +802,34 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .prazo-cep .normal { color: var(--text); }
 .pd2 .prazo-cep .erro { color: #dc2626; }
 
+/* descrição no visual da v1 */
+.pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
+.pd2 .faixa-degrade { position: absolute; inset: 0 0 auto 0; height: 6px; }
+.pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
+.pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; }
+.pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+.pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
+.pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
+.pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }
+.pd2 .bloco-anuncio img { width: 100%; max-width: 600px; height: auto; margin: 0 auto 16px; border-radius: 2px; }
+.pd2 .bloco-anuncio p { font-size: 16px; line-height: 1.7; }
+.pd2 .tabela-wrap { overflow-x: auto; }
+.pd2 .comparativo { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0; }
+.pd2 .comparativo th, .pd2 .comparativo td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+.dark .pd2 .comparativo th, .dark .pd2 .comparativo td { border-color: var(--line); }
+.pd2 .comparativo th { background: var(--soft); color: var(--ink); text-align: center; }
+.pd2 .comparativo .ruim { color: #b42318; font-weight: 700; }
+.pd2 .comparativo .bom { color: #16803c; font-weight: 700; }
+.dark .pd2 .comparativo .ruim { color: #f87171; }
+.dark .pd2 .comparativo .bom { color: #4ade80; }
+.pd2 .beneficios { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pd2 .beneficios li { display: flex; gap: 10px; align-items: flex-start; }
+.pd2 .beneficios i { color: #10b981; margin-top: 4px; }
+.pd2 .beneficios strong { color: var(--ink); }
+.pd2 .duvida { margin-top: 14px; }
+.pd2 .duvida strong { display: block; color: var(--ink); }
+.pd2 .duvida p { margin: 2px 0 0; }
+
 /* conteúdo */
 .pd2 .descricao { color: #000; }
 .dark .pd2 .descricao { color: var(--text); }
@@ -822,6 +909,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .col-principal { padding-top: 10px; }
     .pd2 .card { padding: 20px; }
     .pd2 h2 { font-size: 24px; }
+    .pd2 .desc-cabecalho h2 { font-size: 22px; }
+    .pd2 .bloco-anuncio h3 { font-size: 19px; }
     .pd2 .compra h1 { font-size: 20px; }
     .pd2 .nota { font-size: 14px; }
     .pd2 .galeria { flex-direction: column; gap: 10px; }

@@ -246,3 +246,7 @@ Schedule::command('fiscal:fechamento-mensal')->monthlyOn(1, '07:00')->withoutOve
 // UFESP do ano (multa do cancelamento fora do prazo): só consulta as
 // fontes enquanto o valor do ano não estiver gravado.
 Schedule::command('fiscal:atualizar-ufesp')->dailyAt('06:10');
+// Conteúdo do anúncio da página do produto (pedido 2026-10-09): benefícios e
+// descrição em blocos gerados pelo Gemini (regra própria se ele falhar), só
+// pra produto ativo novo ou que mudou — lote pequeno pra não estourar cota.
+Schedule::command('produtos:gerar-conteudo-anuncio --limite=10')->everyFifteenMinutes()->withoutOverlapping(30);

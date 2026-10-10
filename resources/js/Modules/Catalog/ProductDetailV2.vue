@@ -853,7 +853,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .largura-total { margin-top: 20px; }
 .pd2 .aval-topo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px; align-items: center; padding-bottom: 30px; }
 .pd2 .aval-media { display: flex; align-items: center; gap: 10px; }
-.pd2 .caixa-nota { background: #2d2b2b; color: #fff; border-radius: 3px; padding: 15px 10px; font-size: 16px; }
+.pd2 .caixa-nota { background: var(--green); color: #fff; font-weight: 700; border-radius: 3px; padding: 15px 10px; font-size: 16px; }
 .pd2 .base { font-size: 14px; color: var(--text); white-space: nowrap; }
 .pd2 .barra-linha { display: grid; grid-template-columns: 7.5em 1fr 40px; gap: 10px; align-items: center; height: 22px; font-size: 14px; }
 .pd2 .barra-linha .estrelas { font-size: 13px; }

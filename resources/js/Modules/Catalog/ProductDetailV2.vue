@@ -585,8 +585,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <button type="button" class="absolute right-3 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 md:right-8" aria-label="Próxima mídia" @click="goNext"><i class="fas fa-chevron-right"></i></button>
                 </template>
                 <div class="relative z-0 flex max-h-[90vh] max-w-[90vw] items-center justify-center" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                    <video v-if="activeMedia?.type === 'video'" :src="activeMedia.src" autoplay controls class="max-h-[90vh] max-w-[90vw] rounded-2xl"></video>
-                    <img v-else-if="activeMedia" :src="activeMedia.src" :alt="product.name" class="max-h-[90vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl">
+                    <video v-if="activeMedia?.type === 'video'" :src="activeMedia.src" autoplay controls class="max-h-[90vh] max-w-[90vw] rounded-[2px]"></video>
+                    <img v-else-if="activeMedia" :src="activeMedia.src" :alt="product.name" class="max-h-[90vh] max-w-[90vw] rounded-[2px] object-contain shadow-2xl">
                 </div>
             </div>
         </Teleport>
@@ -635,14 +635,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
 .pd2 .galeria { display: flex; flex-direction: row-reverse; gap: 20px; }
-.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
+.pd2 .foto { position: relative; flex: 0 0 calc(80% - 10px); aspect-ratio: 1; border-radius: 2px; overflow: hidden; background: var(--card); cursor: zoom-in; user-select: none; }
 .pd2 .galeria.sem-miniaturas .foto { flex-basis: 100%; }
 .pd2 .foto img, .pd2 .foto video { width: 100%; height: 100%; object-fit: contain; }
 .pd2 .foto .vazio { height: 100%; display: grid; place-items: center; font-size: 56px; color: var(--muted); opacity: .4; }
 .pd2 .miniaturas { flex: 1; display: flex; flex-direction: column; gap: 20px; max-height: 640px; overflow-y: auto; scrollbar-width: thin; }
-.pd2 .miniaturas button { position: relative; flex: 0 0 auto; padding: 0; border: 0; background: none; cursor: pointer; aspect-ratio: 1; opacity: .3; transition: opacity .2s; }
-.pd2 .miniaturas button:hover, .pd2 .miniaturas button[aria-current=true] { opacity: 1; }
-.pd2 .miniaturas img, .pd2 .miniaturas video { width: 100%; height: 100%; object-fit: cover; }
+.pd2 .miniaturas button { position: relative; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 2px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
+.pd2 .miniaturas button:hover { border-color: var(--line); }
+.pd2 .miniaturas button[aria-current=true] { border-color: var(--yellow); }
+.pd2 .miniaturas img, .pd2 .miniaturas video { width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
 .pd2 .play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .35); color: #fff; font-size: 12px; pointer-events: none; }
 .pd2 .play.grande { background: transparent; }
 .pd2 .play.grande i { width: 64px; height: 64px; border-radius: 50%; background: rgba(0, 0, 0, .55); display: grid; place-items: center; font-size: 22px; }
@@ -678,7 +679,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .variacoes, .pd2 .leve-mais { margin: 6px 0 16px; }
 .pd2 .opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
 .pd2 .opcao { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #b9b9b9; border-radius: 10px; padding: 6px 12px; font-size: 14px; text-decoration: none; color: var(--ink); }
-.pd2 .opcao img { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; }
+.pd2 .opcao img { width: 34px; height: 34px; border-radius: 2px; object-fit: cover; }
 .pd2 .opcao:hover { border-color: var(--ink); }
 .pd2 .opcao.atual { border: 2px solid var(--yellow); font-weight: 600; }
 .pd2 .opcao.esgotada { opacity: .5; text-decoration: line-through; }
@@ -771,7 +772,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item p { margin: 6px 0; font-weight: 300; line-height: 1.5; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; }
+.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 2px; object-fit: cover; }
 
 .pd2 details { border-bottom: 1px solid #d5d8dc; }
 .dark .pd2 details { border-color: var(--line); }
@@ -814,7 +815,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .galeria { flex-direction: column; gap: 10px; }
     .pd2 .foto { flex-basis: auto; width: 100%; }
     .pd2 .miniaturas { flex-direction: row; gap: 8px; max-height: none; overflow-x: auto; }
-    .pd2 .miniaturas button { flex: 0 0 calc(25% - 6px); border-radius: 5px; overflow: hidden; }
+    .pd2 .miniaturas button { flex: 0 0 calc(25% - 6px); }
     .pd2 .preco { grid-template-columns: 20% 80%; }
     .pd2 .btn { font-size: 20px; }
     .pd2 .fretefundo li { font-size: 14px; }

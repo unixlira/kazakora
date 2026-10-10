@@ -90,29 +90,31 @@ onUnmounted(stop);
         <!-- Celular: a imagem (mobile ou, sem ela, a do computador) entra
              "fluid" — largura toda e altura no formato dela, sem cortar nem
              sobrar espaço (o .img-fluid do Bootstrap). Computador: quadro fixo. -->
-        <div class="relative w-full md:aspect-[21/9] lg:aspect-[3/1]">
-            <template v-for="(banner, index) in banners" :key="banner.id">
+        <div class="relative w-full overflow-hidden md:aspect-[21/9] lg:aspect-[3/1]">
+            <!-- Slider de verdade (pedido 2026-10-10): os banners ficam lado a lado
+                 numa faixa que desliza suave — sem "piscar" como se a tela recarregasse. -->
+            <div class="flex h-full items-start transition-transform duration-700 ease-[cubic-bezier(.22,.61,.36,1)] motion-reduce:transition-none"
+                :style="{ transform: `translateX(-${current * 100}%)` }">
                 <component
                     :is="banner.link_url ? 'a' : 'div'"
-                    v-show="index === current"
+                    v-for="(banner, index) in banners" :key="banner.id"
                     :href="banner.link_url || undefined"
-                    class="block md:absolute md:inset-0"
+                    class="relative block w-full shrink-0 md:h-full"
+                    :aria-hidden="index !== current"
                     @click="cliqueBanner"
                 >
-                    <!-- <picture>: o navegador baixa só a imagem do tamanho de tela
-                         certo (antes baixava as duas). O 1º banner vem com
-                         prioridade; os outros só quando aparecem. -->
+                    <!-- <picture>: o navegador baixa só a imagem do tamanho de tela certo. -->
                     <picture class="block h-full">
                         <source media="(min-width: 768px)" :srcset="banner.image_url">
                         <img :src="banner.image_url_mobile || banner.image_url" :alt="banner.title || 'Banner promocional'"
-                            class="img-fluid md:object-cover" decoding="async"
-                            :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'">
+                            class="img-fluid md:object-cover" decoding="async" draggable="false"
+                            loading="eager" :fetchpriority="index === 0 ? 'high' : 'low'">
                     </picture>
                     <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'md:pb-20': reservaBase }">
                         <p class="font-display text-lg font-semibold text-white sm:text-2xl">{{ banner.title }}</p>
                     </div>
                 </component>
-            </template>
+            </div>
         </div>
 
         <template v-if="banners.length > 1">

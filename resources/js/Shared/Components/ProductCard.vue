@@ -92,7 +92,7 @@ const submitReview = () => {
 
 // Selo do mês na faixa do celular: "Ofertas 10.10" em outubro, "11.11" em novembro...
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
-const SELO_DO_MES = `Ofertas ${mes}.${mes}`;
+const SELO_DO_MES = `Oferta ${mes}.${mes}`;
 </script>
 
 <template>
@@ -122,6 +122,13 @@ const SELO_DO_MES = `Ofertas ${mes}.${mes}`;
             </Link>
 
 
+            <!-- Selo promocional sobre a foto (canto inferior esquerdo): "Oferta do dia"
+                 nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
+            <div class="promo-badge">
+                <span class="promo-badge-icon">%</span>
+                <span class="promo-badge-text">{{ product.oferta_do_dia ? 'Oferta do dia' : SELO_DO_MES }}</span>
+            </div>
+
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
                 class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
@@ -133,20 +140,13 @@ const SELO_DO_MES = `Ofertas ${mes}.${mes}`;
 
         <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
             <h4 class="cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
-            <!-- Faixa abaixo do título (pedido 2026-10-10), celular e computador:
-                 metade "Envio Express" (caminhão branco em fundo cinza + selo vinho
-                 em itálico) e metade "Oferta do dia" — ou "Ofertas MM.MM" do mês
-                 (10.10 em outubro, 11.11 em novembro...) nos outros produtos. -->
-            <div class="-mx-2.5 flex h-6 overflow-hidden rounded text-white md:mx-0">
-                <div class="flex w-1/2 min-w-0 items-stretch">
-                    <span class="flex w-4 shrink-0 items-center justify-center bg-slate-500 md:w-6">
-                        <i class="fa-solid fa-truck-fast -skew-x-12 text-[10px] md:text-[11px]"></i>
-                    </span>
-                    <span class="flex min-w-0 flex-1 items-center justify-center whitespace-nowrap bg-[#7B1E3A] px-0.5 text-[7.5px] font-extrabold uppercase italic leading-none tracking-tighter md:text-[9px] md:tracking-tight">Envio Express</span>
-                </div>
-                <span class="flex w-1/2 min-w-0 items-center justify-center gap-0.5 whitespace-nowrap bg-[#E02424] text-[7.5px] font-extrabold uppercase leading-none tracking-tighter md:text-[9px] md:tracking-tight">
-                    <i class="fa-solid fa-bolt"></i> {{ product.oferta_do_dia ? 'Oferta do dia' : SELO_DO_MES }}
+            <!-- Envio Express abaixo do título (pedido 2026-10-10): caminhão branco em
+                 fundo cinza + selo vinho em itálico. -->
+            <div class="flex h-6 w-fit overflow-hidden rounded text-white">
+                <span class="flex w-6 shrink-0 items-center justify-center bg-slate-500">
+                    <i class="fa-solid fa-truck-fast -skew-x-12 text-[11px]"></i>
                 </span>
+                <span class="flex items-center whitespace-nowrap bg-[#7B1E3A] px-2 text-[10px] font-extrabold uppercase italic leading-none tracking-tight">Envio Express</span>
             </div>
             <div class="mt-auto pt-1">
                 <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->

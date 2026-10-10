@@ -139,6 +139,66 @@
     to { transform: translateX(-50%); }
 }
 
+/* Selo promocional do card (pedido 2026-10-10): bloco azul com "%" e faixa
+   vermelha com corte inclinado, sobre a foto, no canto inferior esquerdo.
+   Só HTML/CSS, sem imagem. */
+.promo-badge {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    height: 28px;
+    font-weight: 800;
+    color: #fff;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+    pointer-events: none;
+}
+
+.promo-badge-icon {
+    height: 28px;
+    min-width: 30px;
+    background: #064b9b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    line-height: 1;
+}
+
+.promo-badge-text {
+    height: 28px;
+    padding: 0 22px 0 10px;
+    background: #d71920;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+}
+
+@media (max-width: 480px) {
+    .promo-badge,
+    .promo-badge-icon,
+    .promo-badge-text {
+        height: 24px;
+    }
+
+    .promo-badge-icon {
+        min-width: 26px;
+        font-size: 15px;
+    }
+
+    .promo-badge-text {
+        font-size: 11px;
+        padding: 0 18px 0 8px;
+    }
+}
+
 /* Imagem "fluid" (como o .img-fluid do Bootstrap, sem o Bootstrap):
    ocupa a largura disponível e a altura acompanha a proporção, sem cortar.
    Usado no banner do celular quando não há imagem mobile (pedido 2026-10-10). */

@@ -157,6 +157,8 @@ const carregarMais = () => {
         <!-- Vitrine da home (pedido 2026-10-10): Departamentos, Ofertas do dia,
              Mais buscados, Utilidades para casa, Últimas novidades e Você também pode gostar. -->
         <template v-if="vitrine">
+            <!-- Âncora da faixa promocional do topo. -->
+            <span id="ofertas" class="block scroll-mt-28"></span>
             <SecaoProdutos titulo="Ofertas do dia" :produtos="vitrine.ofertas" cinco slider
                 subtitulo="Desconto extra só hoje, em produtos escolhidos a dedo."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">

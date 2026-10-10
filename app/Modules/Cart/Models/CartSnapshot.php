@@ -20,12 +20,22 @@ class CartSnapshot extends Model
         'user_id',
         'items_count',
         'total',
+        'email',
+        'itens',
+        'ultima_atividade_em',
+        'lembretes_enviados',
+        'ultimo_lembrete_em',
+        'lembretes_parados',
     ];
 
     protected function casts(): array
     {
         return [
             'total' => 'decimal:2',
+            'itens' => 'array',
+            'ultima_atividade_em' => 'datetime',
+            'ultimo_lembrete_em' => 'datetime',
+            'lembretes_parados' => 'boolean',
         ];
     }
 

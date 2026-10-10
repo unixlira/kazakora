@@ -70,6 +70,7 @@ use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Catalog\Http\Controllers\ReviewController;
 use App\Modules\Checkout\Http\Controllers\CheckoutController;
 use App\Modules\Checkout\Http\Controllers\TrackingController;
+use App\Modules\Contato\Http\Controllers\ContatoController;
 use App\Modules\Marketplace\Http\Controllers\ProductChannelController;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
 use App\Modules\Profile\Http\Controllers\ProfileAvatarController;
@@ -120,6 +121,9 @@ Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store']
 
 Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::get('/', [CartController::class, 'index'])->name('ver');
+    // Links do e-mail de carrinho abandonado (pedido 2026-10-10), assinados.
+    Route::get('/recuperar/{carrinho}', [CartController::class, 'recuperar'])->middleware('signed')->name('recuperar');
+    Route::get('/lembretes/parar/{carrinho}', [CartController::class, 'pararLembretes'])->middleware('signed')->name('lembretes.parar');
     Route::post('/', [CartController::class, 'store'])->name('adicionar');
     Route::patch('/{product}', [CartController::class, 'update'])->name('atualizar');
     Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
@@ -132,6 +136,10 @@ Route::get('/promocoes/sair/{user}', function (\App\Models\User $user) {
 
     return redirect()->route('catalogo.inicio')->with('success', 'Pronto! Você não vai mais receber promoções por e-mail.');
 })->middleware('signed')->name('promocoes.sair');
+
+// Fale conosco > Mandar mensagem (pedido 2026-10-10): 5 envios a cada 10 min por IP.
+Route::get('/fale-conosco', [ContatoController::class, 'index'])->name('contato');
+Route::post('/fale-conosco', [ContatoController::class, 'store'])->middleware('throttle:5,10')->name('contato.enviar');
 
 Route::get('/rastreio', [TrackingController::class, 'index'])->name('rastreio');
 Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');

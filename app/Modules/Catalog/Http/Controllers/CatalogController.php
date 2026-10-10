@@ -104,34 +104,10 @@ class CatalogController extends Controller
         ]);
     }
 
-    /**
-     * Departamentos da home (pedido 2026-10-10): círculo com imagem. Sem foto
-     * cadastrada na categoria, usa a foto de um produto dela. Fica 10 min em
-     * cache — a lista muda pouco e a home tem que abrir rápido.
-     *
-     * @return list<array{id: int, name: string, slug: string, image_url: ?string}>
-     */
+    /** Departamentos da home — os mesmos do mega menu (ver MenuDaLoja). */
     private function departamentos(): array
     {
-        return Cache::remember('loja:departamentos', now()->addMinutes(10), function () {
-            $ativos = fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id');
-
-            return Category::query()
-                ->whereHas('products', $ativos)
-                ->withCount(['products' => $ativos])
-                ->orderByDesc('products_count')
-                ->get(['id', 'name', 'slug', 'image_path'])
-                ->map(fn (Category $category) => [
-                    'id' => $category->id,
-                    'name' => $category->name,
-                    'slug' => $category->slug,
-                    'image_url' => $category->image_url ?? ProductImage::query()
-                        ->whereHas('product', fn ($query) => $ativos($query)->where('category_id', $category->id))
-                        ->orderByDesc('is_primary')->orderBy('position')
-                        ->first()?->thumb_url,
-                ])
-                ->all();
-        });
+        return \App\Modules\Catalog\Support\MenuDaLoja::departamentos();
     }
 
     public function show(Request $request, Product $product): Response

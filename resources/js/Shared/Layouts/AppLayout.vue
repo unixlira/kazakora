@@ -1,9 +1,11 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { useClickOutside } from '@/Shared/useClickOutside';
 import { COMPANY } from '@/Shared/company';
+import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
+import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
@@ -53,6 +55,29 @@ const markAllNotificationsRead = () => {
 
 const mobileMenuOpen = ref(false);
 
+// Mega menu de Departamentos e menu do Fale conosco (pedido 2026-10-10).
+// Abrem ao passar o mouse (com uma folguinha pra não fechar no caminho) e
+// também no clique/teclado.
+const departamentos = computed(() => page.props.menuLoja?.departamentos ?? []);
+const menuAberto = ref(null);
+let fecharTimer = null;
+const abrirMenu = (nome) => {
+    clearTimeout(fecharTimer);
+    menuAberto.value = nome;
+};
+const fecharMenu = () => {
+    clearTimeout(fecharTimer);
+    fecharTimer = setTimeout(() => { menuAberto.value = null; }, 150);
+};
+const alternarMenu = (nome) => {
+    clearTimeout(fecharTimer);
+    menuAberto.value = menuAberto.value === nome ? null : nome;
+};
+const navRef = ref(null);
+useClickOutside(navRef, () => (menuAberto.value = null));
+const pararDeOuvir = router.on('start', () => { menuAberto.value = null; });
+onUnmounted(pararDeOuvir);
+
 // Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
 // a lista de resultados abre logo no topo.
 const termoDaUrl = () => new URLSearchParams(window.location.search).get('search') ?? '';
@@ -88,6 +113,9 @@ const REDES = [
 
 <template>
     <div class="storefront-shell min-h-screen bg-store-bg font-store text-store-fg">
+        <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
+        <FaixaPromo />
+        <TrocarSenhaModal />
         <!-- Marquee -->
         <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
@@ -114,12 +142,85 @@ const REDES = [
                     </picture>
                 </Link>
 
-                <nav class="ml-auto hidden items-center gap-7 lg:flex">
-                    <a href="/#categorias" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Departamentos</a>
+                <nav ref="navRef" class="ml-auto hidden items-center gap-7 lg:flex" @keydown.esc="menuAberto = null">
+                    <div @mouseenter="abrirMenu('departamentos')" @mouseleave="fecharMenu">
+                        <button type="button" class="flex items-center gap-1.5 text-sm font-medium hover:text-store-fg"
+                            :class="menuAberto === 'departamentos' ? 'text-store-fg' : 'text-store-fg-muted'"
+                            :aria-expanded="menuAberto === 'departamentos'" @click="alternarMenu('departamentos')">
+                            <i class="fa-solid fa-bars-staggered text-xs"></i> Departamentos
+                            <i class="fa-solid fa-chevron-down text-[0.6rem] transition-transform" :class="{ 'rotate-180': menuAberto === 'departamentos' }"></i>
+                        </button>
+
+                        <!-- Mega menu: ocupa a largura do topo, logo abaixo dele. -->
+                        <Transition enter-from-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1" leave-active-class="transition duration-100">
+                            <div v-if="menuAberto === 'departamentos'" class="absolute inset-x-0 top-full z-50 border-b border-store-border bg-store-bg-raised shadow-2xl">
+                                <div class="mx-auto grid max-w-[1320px] grid-cols-[1fr_280px] gap-8 px-6 py-7">
+                                    <div>
+                                        <p class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">Compre por departamento</p>
+                                        <div class="mt-4 grid grid-cols-3 gap-2 xl:grid-cols-4">
+                                            <Link v-for="dep in departamentos" :key="dep.id" :href="`/?categoria=${dep.slug}#produtos`"
+                                                class="group flex items-center gap-3 rounded-xl p-2 no-underline transition hover:bg-store-bg-sunken">
+                                                <span class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-store-border transition group-hover:ring-2 group-hover:ring-[#f27a2a]">
+                                                    <img v-if="dep.image_url" :src="dep.image_url" :alt="dep.name" class="h-full w-full object-cover" loading="lazy">
+                                                    <i v-else class="fa-solid fa-tag text-store-fg-faint"></i>
+                                                </span>
+                                                <span class="min-w-0">
+                                                    <span class="block truncate text-sm font-semibold text-store-fg group-hover:text-[#f27a2a]">{{ dep.name }}</span>
+                                                    <span class="block text-xs text-store-fg-faint">{{ dep.total }} {{ dep.total === 1 ? 'produto' : 'produtos' }}</span>
+                                                </span>
+                                            </Link>
+                                        </div>
+                                        <p v-if="!departamentos.length" class="mt-4 text-sm text-store-fg-muted">Nenhum departamento por aqui ainda.</p>
+                                    </div>
+                                    <div class="relative isolate flex flex-col justify-between overflow-hidden rounded-2xl bg-[#111] p-6 text-white">
+                                        <span aria-hidden="true" class="absolute -right-10 -top-10 -z-10 h-36 w-36 rounded-full bg-[#f27a2a] opacity-60 blur-2xl"></span>
+                                        <span aria-hidden="true" class="absolute -bottom-12 -left-8 -z-10 h-32 w-32 rounded-full bg-[#0FB930] opacity-40 blur-2xl"></span>
+                                        <div>
+                                            <p class="text-xs font-bold uppercase tracking-widest text-[#f6c343]"><i class="fa-solid fa-bolt mr-1"></i>Full</p>
+                                            <p class="mt-2 text-xl font-bold leading-tight">Frete grátis em todos os produtos</p>
+                                            <p class="mt-2 text-sm opacity-80">E com o Full você recebe no mesmo dia.</p>
+                                        </div>
+                                        <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-[#f27a2a] hover:text-white">
+                                            Ver todos os produtos <i class="fa-solid fa-arrow-right text-xs"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </Transition>
+                    </div>
                     <a href="/?todos=1#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Favoritos</Link>
                     <Link href="/rastreio" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Rastrear pedido</Link>
-                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Fale conosco</a>
+                    <div class="relative" @mouseenter="abrirMenu('contato')" @mouseleave="fecharMenu">
+                        <button type="button" class="flex items-center gap-1.5 text-sm font-medium hover:text-store-fg"
+                            :class="menuAberto === 'contato' ? 'text-store-fg' : 'text-store-fg-muted'"
+                            :aria-expanded="menuAberto === 'contato'" @click="alternarMenu('contato')">
+                            Fale conosco
+                            <i class="fa-solid fa-chevron-down text-[0.6rem] transition-transform" :class="{ 'rotate-180': menuAberto === 'contato' }"></i>
+                        </button>
+                        <Transition enter-from-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1" leave-active-class="transition duration-100">
+                            <div v-if="menuAberto === 'contato'" class="absolute right-0 top-full z-50 pt-3">
+                                <div class="w-72 rounded-2xl border border-store-border bg-store-bg-raised p-2 shadow-2xl">
+                                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener"
+                                        class="flex items-center gap-3 rounded-xl p-3 no-underline transition hover:bg-store-bg-sunken">
+                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-xl text-white"><i class="fa-brands fa-whatsapp"></i></span>
+                                        <span>
+                                            <span class="block text-sm font-semibold text-store-fg">WhatsApp</span>
+                                            <span class="block text-xs text-store-fg-muted">{{ COMPANY.whatsappDisplay }} · resposta rápida</span>
+                                        </span>
+                                    </a>
+                                    <Link href="/fale-conosco"
+                                        class="flex items-center gap-3 rounded-xl p-3 no-underline transition hover:bg-store-bg-sunken">
+                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f27a2a] text-base text-white"><i class="fa-regular fa-envelope"></i></span>
+                                        <span>
+                                            <span class="block text-sm font-semibold text-store-fg">Mandar mensagem</span>
+                                            <span class="block text-xs text-store-fg-muted">Respondemos no seu e-mail</span>
+                                        </span>
+                                    </Link>
+                                </div>
+                            </div>
+                        </Transition>
+                    </div>
                 </nav>
 
                 <form class="relative hidden max-w-xs flex-1 lg:block" role="search" @submit.prevent="submitSearch">
@@ -213,7 +314,8 @@ const REDES = [
                     <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>
                     <Link href="/carrinho" class="text-sm font-medium">Carrinho</Link>
                     <Link href="/rastreio" class="text-sm font-medium">Rastrear pedido</Link>
-                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium">Fale conosco</a>
+                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium"><i class="fa-brands fa-whatsapp mr-1.5 text-[#25D366]"></i>Fale conosco no WhatsApp</a>
+                    <Link href="/fale-conosco" class="text-sm font-medium"><i class="fa-regular fa-envelope mr-1.5 text-[#f27a2a]"></i>Mandar mensagem</Link>
                 </nav>
             </div>
         </header>

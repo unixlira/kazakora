@@ -179,6 +179,8 @@ class CheckoutV2Test extends TestCase
         $user = User::where('email', 'maria@exemplo.com')->firstOrFail();
         $this->assertAuthenticatedAs($user);
         $this->assertSame('(11) 99999-0000', $user->phone);
+        // Senha temporária: a loja pede a troca ao entrar.
+        $this->assertTrue($user->deve_trocar_senha);
         $this->assertEquals(5.25, (float) Order::firstOrFail()->pix_discount_amount);
 
         Mail::assertSent(WelcomeEmail::class, function (WelcomeEmail $mail) use ($user) {

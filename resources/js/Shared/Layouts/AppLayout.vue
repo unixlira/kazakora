@@ -90,8 +90,10 @@ const REDES = [
     <div class="storefront-shell min-h-screen bg-store-bg font-store text-store-fg">
         <!-- Marquee -->
         <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
-            <div class="inline-flex animate-[scroll-left_28s_linear_infinite] items-center py-2 motion-reduce:animate-none">
-                <span v-for="n in 2" :key="n" class="contents">
+            <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
+                 (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco. -->
+            <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2 motion-reduce:animate-none">
+                <span v-for="n in 6" :key="n" class="contents">
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Frete grátis em todos os produtos</span>
                     <!-- Full na faixa do topo (pedido 2026-10-10). -->
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']"><span class="font-extrabold italic text-[#22c55e]"><i class="fa-solid fa-bolt"></i>Full</span> Receba no mesmo dia</span>

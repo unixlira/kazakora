@@ -244,7 +244,6 @@ const SELOS = [
     { imagem: '/images/checkout/satisfacao-garantida-checkout.png', titulo: 'Satisfação Garantida', texto: '7 dias para se arrepender e 30 dias de garantia. Trocou de ideia ou veio com defeito? A gente resolve sem complicação.' },
     { imagem: '/images/checkout/parcele-12x-cartao-checkout.png', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora.' },
 ];
-const irParaFinalizar = () => document.getElementById('finalizar-pedido')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
 // ---------- Finalizar ----------
 const erros = ref({});
@@ -704,16 +703,13 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                 </div>
 
                 <!-- Selos de confiança com imagem (pedido 2026-10-10, textos no modelo izeshop
-                     adaptados à KazaKora). "Finalize sua compra" leva ao botão de finalizar. -->
+                     adaptados à KazaKora). -->
                 <ul class="mt-4 space-y-3">
                     <li v-for="selo in SELOS" :key="selo.titulo" class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4">
                         <img :src="selo.imagem" :alt="selo.titulo" width="56" height="56" loading="lazy" decoding="async" class="h-14 w-14 shrink-0">
                         <div class="text-sm text-slate-600">
                             <strong class="block text-slate-900">{{ selo.titulo }}</strong>
                             {{ selo.texto }}
-                            <button type="button" class="mt-1 block text-xs font-semibold text-[#0a8a23] hover:underline" @click="irParaFinalizar">
-                                Finalize sua compra <i class="fa-solid fa-arrow-right ml-0.5"></i>
-                            </button>
                         </div>
                     </li>
                 </ul>

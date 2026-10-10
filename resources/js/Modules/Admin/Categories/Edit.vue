@@ -26,8 +26,10 @@ const onFileSelect = (event) => {
     preview.value = file ? URL.createObjectURL(file) : null;
 };
 
+// BUG REAL 2026-10-10: form.put com imagem vai como multipart PUT, que o PHP
+// não lê — chegava tudo vazio e dava "nome obrigatório". POST + _method=put.
 const submit = () => {
-    form.put(`/admin/categorias/${props.category.id}`);
+    form.transform((data) => ({ ...data, _method: 'put' })).post(`/admin/categorias/${props.category.id}`, { forceFormData: true });
 };
 </script>
 

@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
+use App\Support\TituloPtBr;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -87,6 +88,12 @@ class CategoryController extends Controller
 
     private function validated(Request $request, ?int $ignoreId = null): array
     {
+        // Confere duplicidade já com o nome no formato que vai ser salvo
+        // ("cozinha" e "COZINHA" viram "Cozinha").
+        if (is_string($request->input('name'))) {
+            $request->merge(['name' => TituloPtBr::formatar($request->input('name'))]);
+        }
+
         return $request->validate([
             'name' => [
                 'required', 'string', 'max:255',
@@ -94,6 +101,11 @@ class CategoryController extends Controller
             ],
             'description' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'max:15360'],
+        ], [
+            'name.required' => 'Digite o nome do departamento.',
+            'name.unique' => 'Já existe um departamento com esse nome.',
+            'image.image' => 'Envie uma imagem (JPG, PNG ou WebP).',
+            'image.max' => 'A imagem pode ter no máximo 15 MB.',
         ]);
     }
 

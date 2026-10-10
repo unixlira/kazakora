@@ -49,7 +49,7 @@ class GuestCheckoutTest extends TestCase
 
         $this->post('/finalizacao/entrega', [
             'shipping_method_id' => $shippingMethod->id,
-            'guest' => ['name' => 'Visitante Teste', 'email' => 'visitante@example.com', 'cpf' => '123.456.789-00'],
+            'guest' => ['name' => 'Visitante Teste', 'email' => 'visitante@example.com', 'cpf' => '123.456.789-09'],
             'new_address' => [
                 'recipient_name' => 'Visitante Teste',
                 'phone' => '11988887777',
@@ -92,7 +92,7 @@ class GuestCheckoutTest extends TestCase
 
         $response = $this->post('/finalizacao/entrega', [
             'shipping_method_id' => $shippingMethod->id,
-            'guest' => ['name' => 'Alguém', 'email' => $existing->email, 'cpf' => '123.456.789-00'],
+            'guest' => ['name' => 'Alguém da Silva', 'email' => $existing->email, 'cpf' => '123.456.789-09'],
             'new_address' => [
                 'recipient_name' => 'Alguém',
                 'phone' => '11988887777',

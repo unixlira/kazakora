@@ -345,6 +345,15 @@ return [
         'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
         'webhook_url' => env('WHATSAPP_WEBHOOK_URL', 'https://kazakora.devlira.com.br/api/webhooks/whatsapp'),
 
+        // Mensagem de pedido aprovado (pedido 2026-10-10). Mensagem que a loja
+        // inicia precisa de template aprovado na Meta; vazio = não envia.
+        // Corpo com {{1}} = primeiro nome e {{2}} = número do pedido; botão
+        // de URL dinâmica ".../rastreio/{{1}}" recebe o código do rastreio.
+        'templates' => [
+            'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
+            'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),
+        ],
+
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).
         // Se preenchido, a Manuela passa a responder pelo API server
         // OpenAI-compatível do Hermes (POST {url}/chat/completions).

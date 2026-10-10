@@ -2,6 +2,7 @@
 
 namespace App\Modules\Checkout\Support;
 
+use App\Modules\Checkout\Jobs\SendOrderApprovedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
@@ -68,6 +69,12 @@ class OrderPaymentFinalizer
         // GenerateInvoiceJob dispara o e-mail sozinho ao final (sucesso,
         // rejeição definitiva ou falha esgotada) — ver App\Modules\Fiscal\Jobs.
         GenerateInvoiceJob::dispatch($order->id);
+
+        // WhatsApp de pedido aprovado com o link de rastreio (pedido
+        // 2026-10-10) — o job ignora pedido de marketplace e template vazio.
+        if ($order->origin === Order::ORIGIN_STORE) {
+            SendOrderApprovedWhatsAppJob::dispatch($order->id);
+        }
 
         return true;
     }

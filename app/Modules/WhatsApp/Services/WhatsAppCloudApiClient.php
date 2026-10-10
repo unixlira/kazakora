@@ -26,26 +26,54 @@ class WhatsAppCloudApiClient
         ]);
     }
 
+    /**
+     * @param  list<string>  $bodyParams  valores de {{1}}, {{2}}... do corpo
+     * @param  array<int, string>  $urlButtonParams  índice do botão => sufixo da URL dinâmica
+     */
     public function sendTemplate(
         string $to,
         string $templateName,
         string $languageCode = 'pt_BR',
         ?string $headerMediaType = null,
         ?string $headerMediaId = null,
+        array $bodyParams = [],
+        array $urlButtonParams = [],
     ): array {
         $template = [
             'name' => $templateName,
             'language' => ['code' => $languageCode],
         ];
 
+        $components = [];
+
         if ($headerMediaType && $headerMediaId) {
-            $template['components'] = [[
+            $components[] = [
                 'type' => 'header',
                 'parameters' => [[
                     'type' => $headerMediaType,
                     $headerMediaType => ['id' => $headerMediaId],
                 ]],
-            ]];
+            ];
+        }
+
+        if ($bodyParams !== []) {
+            $components[] = [
+                'type' => 'body',
+                'parameters' => array_map(fn ($value) => ['type' => 'text', 'text' => (string) $value], array_values($bodyParams)),
+            ];
+        }
+
+        foreach ($urlButtonParams as $index => $value) {
+            $components[] = [
+                'type' => 'button',
+                'sub_type' => 'url',
+                'index' => (string) $index,
+                'parameters' => [['type' => 'text', 'text' => (string) $value]],
+            ];
+        }
+
+        if ($components !== []) {
+            $template['components'] = $components;
         }
 
         return $this->postMessage([

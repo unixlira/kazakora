@@ -21,6 +21,8 @@ class CatalogController extends Controller
 {
     use HandlesShopeeAuthorizationLanding;
 
+    private const PRODUCT_PAGE_VERSION = 2;
+
     /**
      * Um dos 3 destinos plausíveis do redirect de autorização "Seller In
      * House" da Shopee — ver HandlesShopeeAuthorizationLanding.
@@ -145,7 +147,14 @@ class CatalogController extends Controller
             ->with(['images' => fn ($query) => $query->where('is_primary', true)->limit(1)])
             ->get(['id', 'name', 'slug', 'variation', 'price', 'stock']);
 
-        return Inertia::render('Catalog/ProductDetail', [
+        // Página de produto v2 (layout de loja com box de compra fixo, pedido
+        // 2026-10-09). A v1 continua no código: ?v=1 mostra a antiga, e pra
+        // voltar de vez é só trocar PRODUCT_PAGE_VERSION para 1.
+        $version = in_array($request->query('v'), ['1', '2'], true)
+            ? (int) $request->query('v')
+            : self::PRODUCT_PAGE_VERSION;
+
+        return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             'product' => $product,
             'variations' => $variations,
             'reviews' => $reviews,

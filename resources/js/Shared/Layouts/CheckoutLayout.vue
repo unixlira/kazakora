@@ -9,6 +9,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 // 00:00; atualizar a página recomeça dos 15 (pedido do Lira, sem guardar).
 const BANDEIRAS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
+// Endereço em duas linhas (rua/bairro e cidade/CEP), como na referência.
+const enderecoEmLinhas = COMPANY.enderecoCompleto.split(/,\s*(?=[^,]+\/[A-Z]{2})/);
+
 const restante = ref(15 * 60);
 let relogio = null;
 
@@ -49,23 +52,26 @@ const tempo = computed(() => {
              preta com a marca e os selos de confiança. Sem links pra fora. -->
         <footer class="mt-auto">
             <div class="border-t border-slate-200 bg-white px-4 py-8">
-                <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:items-center md:justify-between md:text-left">
-                    <div>
+                <!-- Dados à esquerda, formas de pagamento no meio, selo do Google à direita. -->
+                <div class="mx-auto grid max-w-[1160px] grid-cols-1 items-center gap-6 text-center md:grid-cols-3">
+                    <div class="order-1 md:order-2">
                         <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
-                        <div class="mt-2 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                        <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
                             <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/${bandeira}@2x.png`" :alt="bandeira"
                                 class="h-9 w-auto rounded-md border border-slate-200 bg-white p-1.5">
                         </div>
-                        <p class="mt-4 text-xs leading-relaxed text-slate-500">
-                            © {{ new Date().getFullYear() }} {{ COMPANY.razaoSocial }}<br>
-                            CNPJ: {{ COMPANY.cnpj }}<br>
-                            WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                            E-mail: {{ COMPANY.email }}<br>
-                            {{ COMPANY.enderecoCompleto }}
-                        </p>
                     </div>
-                    <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
-                        class="h-24 w-auto shrink-0 rounded-md bg-white p-2 md:h-28">
+                    <p class="order-2 text-xs leading-relaxed text-slate-500 md:order-1 md:text-left">
+                        © {{ new Date().getFullYear() }} {{ COMPANY.razaoSocial }}<br>
+                        CNPJ: {{ COMPANY.cnpj }}<br>
+                        WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
+                        E-mail: {{ COMPANY.email }}<br>
+                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
+                    </p>
+                    <div class="order-3 flex justify-center md:justify-end">
+                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                            class="h-24 w-auto rounded-md bg-white p-2 md:h-28">
+                    </div>
                 </div>
             </div>
 
@@ -73,9 +79,9 @@ const tempo = computed(() => {
                 <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-4 md:flex-row md:justify-between">
                     <span class="font-display text-2xl font-semibold">{{ COMPANY.nomeFantasia }}</span>
                     <ul class="flex flex-col items-center gap-2 text-sm font-medium md:flex-row md:gap-6">
-                        <li><i class="fa-solid fa-lock mr-2"></i>Compra Segura</li>
-                        <li><i class="fa-solid fa-fingerprint mr-2"></i>Dados Protegidos</li>
-                        <li><i class="fa-solid fa-box-open mr-2"></i>Entrega Garantida</li>
+                        <li><i class="fa-solid fa-lock mr-2 text-[#0FB930]"></i>Compra Segura</li>
+                        <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados Protegidos</li>
+                        <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega Garantida</li>
                     </ul>
                 </div>
             </div>

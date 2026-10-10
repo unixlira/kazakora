@@ -208,6 +208,11 @@
     }
 }
 
+/* Selo "Envio Express" do card com as duas laterais inclinadas (/ texto /). */
+.envio-express {
+    clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
 /* Imagem "fluid" (como o .img-fluid do Bootstrap, sem o Bootstrap):
    ocupa a largura disponível e a altura acompanha a proporção, sem cortar.
    Usado no banner do celular quando não há imagem mobile (pedido 2026-10-10). */

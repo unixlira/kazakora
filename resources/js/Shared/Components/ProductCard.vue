@@ -93,6 +93,16 @@ const submitReview = () => {
 // Selo do mês na faixa do celular: "Ofertas 10.10" em outubro, "11.11" em novembro...
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
 const SELO_DO_MES = `Oferta ${mes}.${mes}`;
+
+// Nome no celular: cabe em 2 linhas com o selinho "Ver mais" no fim.
+const LIMITE_NOME_CELULAR = 26;
+const nomeCurto = computed(() => {
+    const nome = String(props.product.name ?? '').trim();
+    if (nome.length <= LIMITE_NOME_CELULAR + 10) return { texto: nome, cortado: false };
+    const corte = nome.slice(0, LIMITE_NOME_CELULAR);
+    const ultimoEspaco = corte.lastIndexOf(' ');
+    return { texto: (ultimoEspaco > 15 ? corte.slice(0, ultimoEspaco) : corte).replace(/[\s,.;:–-]+$/, ''), cortado: true };
+});
 </script>
 
 <template>
@@ -139,14 +149,21 @@ const SELO_DO_MES = `Oferta ${mes}.${mes}`;
         </div>
 
         <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
-            <h4 class="cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
+            <!-- Computador: nome em até 2 linhas. -->
+            <h4 class="hidden cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent md:block" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
+            <!-- Celular (pedido 2026-10-10): letra menor, no máximo 2 linhas; nome
+                 longo termina em "…" e um selinho preto "Ver mais". -->
+            <h4 class="max-h-8 min-h-[2rem] cursor-pointer overflow-hidden text-[12px] font-semibold leading-4 md:hidden" :title="product.name" @click="goToProduct">
+                {{ nomeCurto.texto }}<template v-if="nomeCurto.cortado">… <span class="ml-0.5 inline-block rounded bg-black px-1 py-px align-middle text-[9px] font-bold leading-tight text-white">Ver mais</span></template>
+            </h4>
             <!-- Envio Express abaixo do título (pedido 2026-10-10): caminhão branco em
                  fundo cinza + selo vinho em itálico. -->
-            <div class="flex h-6 w-fit overflow-hidden rounded text-white">
-                <span class="flex w-6 shrink-0 items-center justify-center bg-slate-500">
+            <!-- Laterais inclinadas dos dois lados, como "/ Envio Express /". -->
+            <div class="envio-express flex h-6 w-fit text-white">
+                <span class="flex w-8 shrink-0 items-center justify-center bg-slate-500 pl-1.5">
                     <i class="fa-solid fa-truck-fast -skew-x-12 text-[11px]"></i>
                 </span>
-                <span class="flex items-center whitespace-nowrap bg-[#7B1E3A] px-2 text-[10px] font-extrabold uppercase italic leading-none tracking-tight">Envio Express</span>
+                <span class="flex items-center whitespace-nowrap bg-[#7B1E3A] pl-1.5 pr-3 text-[10px] font-extrabold uppercase italic leading-none tracking-tight">Envio Express</span>
             </div>
             <div class="mt-auto pt-1">
                 <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->

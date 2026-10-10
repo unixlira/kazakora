@@ -131,7 +131,7 @@ const carregarMais = () => {
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 lg:gap-6">
+            <div class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
                 <ProductCard v-for="product in featuredProducts" :key="product.id" :product="product"
                     :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
@@ -140,7 +140,7 @@ const carregarMais = () => {
             <div class="mt-8 flex justify-center">
                 <Link href="/?tipo=destaque#produtos"
                     class="inline-flex items-center gap-2 rounded-lg bg-store-accent px-6 py-3 text-sm font-semibold text-store-accent-contrast transition-colors hover:opacity-90">
-                    Ver mais
+                    Ver mais destaques
                     <i class="fas fa-arrow-right text-xs"></i>
                 </Link>
             </div>
@@ -148,7 +148,7 @@ const carregarMais = () => {
 
         <!-- Categories -->
         <section v-if="categories.length" id="categorias" class="mx-auto max-w-[1320px] px-4 pb-14 md:px-6">
-            <h2 class="mb-5 font-display text-2xl font-semibold">Departamentos</h2>
+            <h2 class="mb-6 text-center font-display text-2xl font-semibold">Departamentos</h2>
             <CategoryCarousel :categories="categories" :ativa="filters.categoria ?? null" />
         </section>
 

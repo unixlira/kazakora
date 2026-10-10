@@ -131,7 +131,7 @@ const SELO_DO_MES = `Oferta ${mes}.${mes}`;
 
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
-                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-l-none rounded-r-[40px] border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
                 :class="'bottom-0 translate-y-1/2'"
                 aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
                 <i class="fas fa-cart-shopping text-sm"></i>

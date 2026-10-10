@@ -89,6 +89,10 @@ const submitReview = () => {
         },
     });
 };
+
+// Selo do mês na faixa do celular: "Ofertas 10.10" em outubro, "11.11" em novembro...
+const mes = String(new Date().getMonth() + 1).padStart(2, '0');
+const SELO_DO_MES = `Ofertas ${mes}.${mes}`;
 </script>
 
 <template>
@@ -117,9 +121,27 @@ const submitReview = () => {
                 <i class="far fa-heart text-sm text-store-fg-muted"></i>
             </Link>
 
-            <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
+            <!-- Faixa do celular (pedido 2026-10-10) na base da foto: metade "Envio
+                 Express" (caminhão branco em fundo cinza + selo vinho em itálico) e
+                 metade "Oferta do dia" — ou, nos outros produtos, "Ofertas MM.MM"
+                 do mês (10.10 em outubro, 11.11 em novembro...). -->
+            <div class="absolute inset-x-0 bottom-0 flex h-6 text-white md:hidden">
+                <div class="flex w-1/2 min-w-0 items-stretch">
+                    <span class="flex w-5 shrink-0 items-center justify-center bg-slate-500">
+                        <i class="fa-solid fa-truck-fast -skew-x-12 text-[10px]"></i>
+                    </span>
+                    <span class="flex min-w-0 flex-1 items-center justify-center whitespace-nowrap bg-[#7B1E3A] px-0.5 text-[7.5px] font-extrabold uppercase italic leading-none tracking-tighter">Envio Express</span>
+                </div>
+                <span class="flex w-1/2 min-w-0 items-center justify-center gap-0.5 whitespace-nowrap bg-[#E02424] text-[7.5px] font-extrabold uppercase leading-none tracking-tighter">
+                    <i class="fa-solid fa-bolt"></i> {{ product.oferta_do_dia ? 'Oferta do dia' : SELO_DO_MES }}
+                </span>
+            </div>
+
+            <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição
+                 (no celular, em oferta, sobe acima da faixa). -->
             <button type="button" :disabled="product.stock < 1"
-                class="absolute bottom-0 right-[5px] z-10 flex h-10 w-10 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                :class="'bottom-8 md:bottom-0 md:translate-y-1/2'"
                 aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
                 <i class="fas fa-cart-shopping text-sm"></i>
             </button>
@@ -129,7 +151,7 @@ const submitReview = () => {
             <h4 class="cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
             <div class="mt-auto pt-1">
                 <!-- Oferta do dia (pedido 2026-10-10): riscado o preço normal de hoje e, embaixo, o preço da oferta. -->
-                <span v-if="product.oferta_do_dia" class="mb-0.5 inline-flex w-fit items-center gap-1 rounded bg-[#E02424] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                <span v-if="product.oferta_do_dia" class="mb-0.5 hidden w-fit items-center gap-1 rounded bg-[#E02424] md:inline-flex px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                     <i class="fa-solid fa-bolt"></i> Oferta do dia
                 </span>
                 <span v-if="product.oferta_do_dia && product.preco_sem_oferta" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.preco_sem_oferta) }}</span>
@@ -139,7 +161,7 @@ const submitReview = () => {
                     <StarRating :value="ratingAvg" />
                 </div>
                 <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
-                <span v-else class="mt-1 inline-flex w-fit items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Frete grátis</span>
+                <span v-else class="mt-1 inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-tight sm:tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"><span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> Frete grátis</span>
             </div>
             <button v-if="canReview && !hasReviewed" type="button"
                 class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"

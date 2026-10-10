@@ -10,7 +10,7 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
-import { formatPrice, toggleFavorite } from '@/Shared/productCard';
+import { formatPrice, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
 import { maskCep } from '@/Shared/useCep';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -51,13 +51,7 @@ const FAQ = [
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const reviewsCount = computed(() => Number(props.product.reviews_count ?? props.reviews.length));
-const vendidosTexto = computed(() => {
-    const total = Number(props.salesCount);
-    const faixas = [10000, 5000, 1000, 500, 100, 50, 25, 10, 5];
-    const faixa = faixas.find((valor) => total >= valor);
-    if (!faixa) return `${total} vendido${total === 1 ? '' : 's'}`;
-    return `+${faixa >= 1000 ? `${faixa / 1000} mil` : faixa} vendidos`;
-});
+const vendidosLegenda = computed(() => vendidosTexto(props.salesCount));
 const stars = (value) => Math.round(value);
 
 // Galeria: vídeo primeiro, depois as imagens em ordem.
@@ -364,7 +358,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <!-- Estrelas e vendidos em destaque (pedido 2026-10-10: saem do card e
                                  ficam aqui). Vendidos no formato do Mercado Livre: +5, +10, +50, +100... -->
                             <div v-if="reviewsCount > 0 || salesCount > 0" class="nota">
-                                <span v-if="salesCount > 0" class="vendidos"><i class="fas fa-fire"></i> {{ vendidosTexto }}</span>
+                                <span v-if="salesCount > 0" class="vendidos"><i class="fas fa-fire"></i> {{ vendidosLegenda }}</span>
                                 <span v-if="salesCount > 0 && reviewsCount > 0" class="separador">|</span>
                                 <template v-if="reviewsCount > 0">
                                     <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>

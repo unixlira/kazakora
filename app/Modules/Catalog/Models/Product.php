@@ -198,6 +198,15 @@ class Product extends Model
             ])
             // Card usa só a foto principal e a do hover: as outras iam no JSON
             // de toda vitrine à toa (velocidade, pedido 2026-10-10).
+            // Vendidos (pedido 2026-10-10, como no Mercado Livre): pedidos pagos,
+            // enviados ou entregues de todos os canais, somando as variações.
+            ->addSelect(['vendidos' => \App\Modules\Checkout\Models\OrderItem::query()
+                ->selectRaw('COALESCE(SUM(order_items.quantity), 0)')
+                ->join('orders', 'orders.id', '=', 'order_items.order_id')
+                ->whereIn('orders.status', ['paid', 'shipped', 'completed'])
+                ->whereIn('order_items.product_id', fn ($sub) => $sub->select('variacoes.id')->from('products as variacoes')
+                    ->whereColumn('variacoes.id', 'products.id')
+                    ->orWhereColumn('variacoes.parent_product_id', 'products.id'))])
             ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(2)])
             ->withAvg('reviews', 'rating');

@@ -2,7 +2,7 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
-import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
+import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
 
 const props = defineProps({
     product: {
@@ -231,10 +231,14 @@ const precoPartes = computed(() => {
                     <span class="rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
                     <s class="text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
                 </div>
-                <div class="flex items-start leading-none text-store-fg">
-                    <span class="mr-0.5 mt-[3px] text-sm font-medium md:text-base">R$</span>
-                    <span class="text-[22px] font-semibold tracking-tight md:text-2xl">{{ precoPartes.inteiro }}</span>
-                    <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
+                <div class="flex flex-wrap items-end gap-x-1.5 gap-y-0.5">
+                    <div class="flex items-start leading-none text-store-fg">
+                        <span class="mr-0.5 mt-[3px] text-sm font-medium md:text-base">R$</span>
+                        <span class="text-[22px] font-semibold tracking-tight md:text-2xl">{{ precoPartes.inteiro }}</span>
+                        <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
+                    </div>
+                    <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
+                    <span v-if="vendidosTexto(product.vendidos)" class="pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
                 </div>
                 <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
                 <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->

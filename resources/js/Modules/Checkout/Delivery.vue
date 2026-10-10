@@ -369,7 +369,7 @@ const submit = () => {
                             <i v-if="freightLoading" class="fas fa-spinner animate-spin text-xs text-store-fg-muted"></i>
                         </div>
                         <p v-if="!freightLoading && entregaExpressa" class="mb-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            <i class="fas fa-bolt"></i> {{ entregaExpressa.mensagem }}
+                            <span class="font-extrabold text-emerald-900 dark:text-emerald-200"><i class="fas fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
                         </p>
                         <p v-if="freightLoading" class="text-sm text-store-fg-muted">Calculando frete para o seu CEP...</p>
                         <template v-else-if="availableOptions.length > 1">

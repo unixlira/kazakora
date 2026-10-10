@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
  * Sobe uma vez só o preço (e o desconto em R$) de TODOS os produtos — ativos
  * e inativos, pra regra valer igual pra todo produto (os marketplaces usam o
  * preço sem o acréscimo; um produto sem ele mandaria preço 5% menor pro
- * canal). Grava backup em storage/app/backups antes e marca que já rodou.
+ * canal). Grava backup em storage/app/private/backups antes e marca que já rodou.
  * Sem --executar só mostra o que faria; --restaurar=arquivo desfaz.
  */
 class AplicarAcrescimoPix extends Command
@@ -22,7 +22,7 @@ class AplicarAcrescimoPix extends Command
 
     protected $signature = 'produtos:acrescimo-pix
         {--executar : grava de verdade}
-        {--restaurar= : caminho do backup (em storage/app) pra voltar os preços}';
+        {--restaurar= : caminho do backup (relativo a storage/app/private) pra voltar os preços}';
 
     protected $description = 'Sobe +5% (desconto do Pix) no preço da loja de todos os produtos, com backup.';
 
@@ -69,7 +69,7 @@ class AplicarAcrescimoPix extends Command
             Setting::set(self::MARCA, now()->toDateTimeString());
         });
 
-        $this->info("Preços atualizados. Backup: storage/app/{$caminho}");
+        $this->info('Preços atualizados. Backup: '.Storage::disk('local')->path($caminho));
         $this->line("Pra desfazer: php artisan produtos:acrescimo-pix --restaurar={$caminho}");
 
         return self::SUCCESS;
@@ -78,7 +78,7 @@ class AplicarAcrescimoPix extends Command
     private function restaurar(string $arquivo): int
     {
         if (! Storage::disk('local')->exists($arquivo)) {
-            $this->error("Backup não encontrado: storage/app/{$arquivo}");
+            $this->error('Backup não encontrado: '.Storage::disk('local')->path($arquivo));
 
             return self::FAILURE;
         }

@@ -108,7 +108,7 @@ onUnmounted(stop);
                             class="img-fluid md:object-cover" decoding="async"
                             :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'">
                     </picture>
-                    <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'pb-20 sm:pb-20': reservaBase }">
+                    <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'md:pb-20': reservaBase }">
                         <p class="font-display text-lg font-semibold text-white sm:text-2xl">{{ banner.title }}</p>
                     </div>
                 </component>
@@ -127,7 +127,7 @@ onUnmounted(stop);
                 <i class="fas fa-chevron-right text-sm"></i>
             </button>
 
-            <div class="absolute inset-x-0 flex justify-center gap-2" :class="reservaBase ? 'bottom-16' : 'bottom-3'">
+            <div class="absolute inset-x-0 flex justify-center gap-2" :class="reservaBase ? 'bottom-3 md:bottom-16' : 'bottom-3'">
                 <button v-for="(banner, index) in banners" :key="banner.id" type="button"
                     :aria-label="`Ir para o banner ${index + 1}`"
                     class="h-2 rounded-full bg-store-accent transition-all"

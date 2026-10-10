@@ -3,8 +3,8 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     banners: {
@@ -69,6 +69,34 @@ const BENEFICIOS = [
     { icone: 'fa-lock', titulo: 'Compra Segura', texto: 'Ambiente seguro para pagamentos online' },
     { icone: 'fa-face-smile', titulo: 'Satisfação Garantida', texto: 'Você 100% feliz ou seu reembolso garantido' },
 ];
+
+// Catálogo 8 por vez (pedido 2026-10-10): "Carregar mais" busca só a próxima
+// página dos produtos (sem recarregar a tela nem mudar o endereço) e junta
+// embaixo. Trocar de aba/busca recomeça a lista.
+const listaProdutos = ref([...props.products.data]);
+const carregandoMais = ref(false);
+let somarNaLista = false;
+
+watch(() => props.products, (novos) => {
+    listaProdutos.value = somarNaLista ? [...listaProdutos.value, ...novos.data] : [...novos.data];
+    somarNaLista = false;
+});
+
+const temMais = computed(() => props.products.current_page < props.products.last_page);
+
+const carregarMais = () => {
+    if (carregandoMais.value || !temMais.value) return;
+    carregandoMais.value = true;
+    somarNaLista = true;
+    router.reload({
+        data: { page: props.products.current_page + 1 },
+        only: ['products'],
+        preserveUrl: true,
+        preserveScroll: true,
+        onError: () => { somarNaLista = false; },
+        onFinish: () => { carregandoMais.value = false; },
+    });
+};
 </script>
 
 <template>
@@ -141,25 +169,25 @@ const BENEFICIOS = [
                 </div>
             </div>
 
-            <p v-if="products.data.length === 0" class="py-16 text-center text-store-fg-muted">
+            <p v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
                 Nenhum produto encontrado.
             </p>
 
-            <div v-else class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 lg:gap-6">
-                <ProductCard v-for="product in products.data" :key="product.id" :product="product"
+            <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
+                <ProductCard v-for="product in listaProdutos" :key="product.id" :product="product"
                     :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
             </div>
 
-            <nav v-if="products.last_page > 1" class="mt-10 flex flex-wrap justify-center gap-2">
-                <template v-for="link in products.links" :key="link.label">
-                    <Link v-if="link.url" :href="link.url" preserve-state
-                        class="rounded-full px-3 py-1.5 text-sm"
-                        :class="link.active ? 'bg-store-accent text-store-accent-contrast' : 'border border-store-border-strong text-store-fg hover:border-store-fg'"
-                        v-html="link.label" />
-                    <span v-else class="rounded-lg px-3 py-1.5 text-sm text-store-fg-faint" v-html="link.label" />
-                </template>
-            </nav>
+            <div v-if="temMais" class="mt-10 flex flex-col items-center gap-2">
+                <button type="button" :disabled="carregandoMais"
+                    class="inline-flex items-center gap-2 rounded-lg bg-store-accent px-8 py-3 text-sm font-semibold text-store-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-60"
+                    @click="carregarMais">
+                    <i class="fa-solid" :class="carregandoMais ? 'fa-spinner animate-spin' : 'fa-plus'"></i>
+                    {{ carregandoMais ? 'Carregando...' : 'Carregar mais produtos' }}
+                </button>
+                <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products.total }}</span>
+            </div>
         </section>
 
         <!-- Manifesto -->

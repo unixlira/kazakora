@@ -62,8 +62,15 @@ onUnmounted(stop);
                     :href="banner.link_url || undefined"
                     class="absolute inset-0 block"
                 >
-                    <img :src="banner.image_url" :alt="banner.title || 'Banner promocional'" class="hidden h-full w-full object-cover md:block">
-                    <img :src="banner.image_url_mobile || banner.image_url" :alt="banner.title || 'Banner promocional'" class="block h-full w-full object-cover md:hidden">
+                    <!-- <picture>: o navegador baixa só a imagem do tamanho de tela
+                         certo (antes baixava as duas). O 1º banner vem com
+                         prioridade; os outros só quando aparecem. -->
+                    <picture>
+                        <source media="(min-width: 768px)" :srcset="banner.image_url">
+                        <img :src="banner.image_url_mobile || banner.image_url" :alt="banner.title || 'Banner promocional'"
+                            class="h-full w-full object-cover" decoding="async"
+                            :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'">
+                    </picture>
                     <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'pb-20 sm:pb-20': reservaBase }">
                         <p class="font-display text-lg font-semibold text-white sm:text-2xl">{{ banner.title }}</p>
                     </div>

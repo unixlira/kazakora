@@ -50,7 +50,9 @@ class CatalogController extends Controller
 
         $products = (clone $baseQuery)
             ->latest()
-            ->paginate(12)
+            // 8 por vez; o "Carregar mais" da home busca a próxima página só
+            // com essa prop (pedido 2026-10-10).
+            ->paginate(8)
             ->withQueryString();
 
         return Inertia::render('Catalog/Home', [

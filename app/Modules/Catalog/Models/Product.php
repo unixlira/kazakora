@@ -164,7 +164,10 @@ class Product extends Model
                 'stock',
                 'created_at',
             ])
-            ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])])
+            // Card usa só a foto principal e a do hover: as outras iam no JSON
+            // de toda vitrine à toa (velocidade, pedido 2026-10-10).
+            ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
+                ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(2)])
             ->withAvg('reviews', 'rating');
     }
 

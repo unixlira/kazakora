@@ -15,6 +15,7 @@ const props = defineProps({
 });
 
 const current = ref(0);
+const temMobile = (banner) => !!banner?.image_url_mobile;
 let timer = null;
 
 const start = () => {
@@ -54,21 +55,26 @@ onUnmounted(stop);
         @mouseenter="stop"
         @mouseleave="start"
     >
-        <div class="relative aspect-square w-full md:aspect-[21/9] lg:aspect-[3/1]">
+        <!-- Celular: com imagem mobile, quadro quadrado; sem ela, a imagem do
+             computador entra "fluid" (largura toda, altura proporcional, sem
+             cortar) — o mesmo que o .img-fluid do Bootstrap fazia. -->
+        <div class="relative w-full md:aspect-[21/9] lg:aspect-[3/1]" :class="{ 'aspect-square': temMobile(banners[current]) }">
             <template v-for="(banner, index) in banners" :key="banner.id">
                 <component
                     :is="banner.link_url ? 'a' : 'div'"
                     v-show="index === current"
                     :href="banner.link_url || undefined"
-                    class="absolute inset-0 block"
+                    class="block md:absolute md:inset-0"
+                    :class="{ 'absolute inset-0': temMobile(banner) }"
                 >
                     <!-- <picture>: o navegador baixa só a imagem do tamanho de tela
                          certo (antes baixava as duas). O 1º banner vem com
                          prioridade; os outros só quando aparecem. -->
-                    <picture>
+                    <picture class="block h-full">
                         <source media="(min-width: 768px)" :srcset="banner.image_url">
                         <img :src="banner.image_url_mobile || banner.image_url" :alt="banner.title || 'Banner promocional'"
-                            class="h-full w-full object-cover" decoding="async"
+                            class="img-fluid md:h-full md:w-full md:max-w-none md:object-cover" decoding="async"
+                            :class="{ 'h-full w-full object-cover': temMobile(banner) }"
                             :loading="index === 0 ? 'eager' : 'lazy'" :fetchpriority="index === 0 ? 'high' : 'auto'">
                     </picture>
                     <div v-if="banner.title" class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 sm:p-6" :class="{ 'pb-20 sm:pb-20': reservaBase }">

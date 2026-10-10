@@ -32,3 +32,13 @@ export const specLine = (product) => {
     const parts = [product.brand, product.model, product.color].filter(Boolean);
     return parts.length ? parts.join(' · ') : null;
 };
+
+// Vendidos no formato do Mercado Livre: +5, +10, +25, +50, +100, +500, +1 mil...
+// Abaixo de 5 mostra o número exato; zero não mostra nada.
+export const vendidosTexto = (quantidade) => {
+    const total = Number(quantidade) || 0;
+    if (total <= 0) return null;
+    const faixa = [10000, 5000, 1000, 500, 100, 50, 25, 10, 5].find((valor) => total >= valor);
+    if (!faixa) return `${total} vendido${total === 1 ? '' : 's'}`;
+    return `+${faixa >= 1000 ? `${faixa / 1000} mil` : faixa} vendidos`;
+};

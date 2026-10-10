@@ -71,8 +71,8 @@ const removeItem = async (productId) => {
 
                         <span class="w-28 text-right font-semibold">{{ formatPrice(item.subtotal) }}</span>
 
-                        <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-store-fg-muted hover:bg-red-50 hover:text-red-600" aria-label="Remover" @click="removeItem(item.product.id)">
-                            <i class="fas fa-xmark"></i>
+                        <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-red-600 hover:bg-red-50 hover:text-red-700" aria-label="Remover" @click="removeItem(item.product.id)">
+                            <i class="fas fa-trash-can"></i>
                         </button>
                     </div>
                 </div>

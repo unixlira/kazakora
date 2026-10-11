@@ -76,3 +76,21 @@ valor da nota, e com isso o imposto do Simples.
 Pedidos no banco × fonte, mês a mês: **nenhum faltando** — ML (API, mai–out),
 Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Amazon
 (Bling, jun–out).
+
+## Auditoria de 2026-10-11: uma conta só
+
+- **Conta oficial:** `ContributionMargin::periodo()` e `porCanal()`. O painel, o KoraSync, o e-mail diário e o Financeiro usam as duas. O Financeiro não faz mais conta própria.
+- **Venda efetiva** (`Order::vendaEfetiva()`) é o que conta como receita. Ficam de fora:
+  - notas de devolução;
+  - nota avulsa, porque até hoje toda avulsa foi nota reemitida de uma venda que já existe no ML ou no TikTok e contava em dobro;
+  - pedido estornado por inteiro (`orders.estornado_em`).
+- **Mercado Pago:** o comando `mercadopago:conciliar` roda todo dia às 05:40 e cobre os últimos 60 dias. Ele baixa todos os pagamentos da conta e separa:
+  - **site:** pelo número da transação em `payments.mercadopago_payment_id`;
+  - **Mercado Livre:** pelo `order.type = mercadolibre`;
+  - **bônus do Flex:** pelas transferências `bonificaciones_flex`.
+- **Taxa real** (`source = report`):
+  - ML: receita − líquido recebido, incluindo comissão e frete cobrado do vendedor;
+  - site: taxa do Mercado Pago;
+  - essa taxa nunca é sobrescrita pela API nem pelo Bling.
+- **Bônus do Flex:** entra somando na margem (`bonificacoes`).
+- **Imposto (Simples):** a base é o valor da NF-e de venda autorizada. Se o pedido ainda não tem nota importada, usa a receita.

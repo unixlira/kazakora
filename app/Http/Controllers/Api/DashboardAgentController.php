@@ -269,22 +269,22 @@ class DashboardAgentController extends Controller
         // 'subtotal' é o valor real dos produtos, o mesmo que aparece no
         // Seller Center do canal — ver comentário completo em
         // FinancialDashboardController::index().
-        $revenueToday = (float) Order::query()->nonPurchaseReturn()
+        $revenueToday = (float) Order::query()->vendaEfetiva()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueYesterday = (float) Order::query()->nonPurchaseReturn()
+        $revenueYesterday = (float) Order::query()->vendaEfetiva()
             ->whereBetween('created_at', [$yesterday, $today])
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueMonth = (float) Order::query()->nonPurchaseReturn()
+        $revenueMonth = (float) Order::query()->vendaEfetiva()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
 
-        $revenueMonthPrev = (float) Order::query()->nonPurchaseReturn()
+        $revenueMonthPrev = (float) Order::query()->vendaEfetiva()
             ->whereBetween('created_at', [$prevMonthStart, $prevMonthToDate])
             ->whereIn('status', self::PAID_STATUSES)
             ->sum(DB::raw(ContributionMargin::receitaSql()));
@@ -310,13 +310,13 @@ class DashboardAgentController extends Controller
         $vendaCapturada = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
         $salesToday = Order::query()
-            ->nonPurchaseReturn()
+            ->vendaEfetiva()
             ->where('created_at', '>=', $today)
             ->whereIn('status', $vendaCapturada)
             ->count();
 
         $salesYesterday = Order::query()
-            ->nonPurchaseReturn()
+            ->vendaEfetiva()
             ->whereBetween('created_at', [$yesterday, $today])
             ->whereIn('status', $vendaCapturada)
             ->count();
@@ -390,7 +390,7 @@ class DashboardAgentController extends Controller
         // ontem/hoje de queue() — conta o dia inteiro, independente de
         // quando o pedido em si foi vendido.
         $packedToday = Order::query()
-            ->nonPurchaseReturn()
+            ->vendaEfetiva()
             ->where('packed_at', '>=', $today)
             ->count();
 

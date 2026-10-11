@@ -325,6 +325,19 @@ class Order extends Model
      * técnico da NF-e. Não é venda, não deve aparecer na fila/lista operacional
      * nem inflar métricas de pedido/faturamento.
      */
+    /**
+     * Venda que conta como receita (auditoria 2026-10-11): sem notas de
+     * devolução, sem nota avulsa (até hoje toda avulsa foi NOTA REEMITIDA
+     * de uma venda que já existe no ML/TikTok — contava em dobro) e sem
+     * venda estornada por inteiro na plataforma (estornado_em).
+     */
+    public function scopeVendaEfetiva($query)
+    {
+        return $query->nonPurchaseReturn()
+            ->where(fn ($q) => $q->where($this->qualifyColumn('origin'), '!=', self::ORIGIN_MANUAL_INVOICE)->orWhereNull($this->qualifyColumn('origin')))
+            ->whereNull($this->qualifyColumn('estornado_em'));
+    }
+
     public function scopeNonPurchaseReturn($query)
     {
         return $query

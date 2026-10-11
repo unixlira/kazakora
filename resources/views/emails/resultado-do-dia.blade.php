@@ -67,13 +67,19 @@
             ['Taxas dos canais'.($dia['taxas_estimadas'] > 0 ? ' *' : ''), $dia['taxas_canal'], true],
             ['Anúncios', $dia['anuncios'], true],
             ['Frete pago pela loja (Correios/Flex)', $dia['frete'], true],
-            ['Imposto (Simples '.$aliquota.'%)', $dia['impostos'], true],
+            ['Imposto (Simples '.$aliquota.'% sobre o valor das notas)', $dia['impostos'], true],
         ] as [$rotulo, $valor, $desconta])
             <tr>
                 <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4;">{{ $rotulo }}</td>
                 <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap; color: {{ $desconta && $valor > 0 ? '#b42318' : '#111827' }};">{{ $desconta && $valor > 0 ? '− ' : '' }}{{ $brl($valor) }}</td>
             </tr>
         @endforeach
+        @if (($dia['bonificacoes'] ?? 0) > 0)
+            <tr>
+                <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4;">Bônus do Flex (Mercado Livre)</td>
+                <td style="padding: 5px 0; border-bottom: 1px solid #f1f2f4; text-align: right; white-space: nowrap; color: #067647;">+ {{ $brl($dia['bonificacoes']) }}</td>
+            </tr>
+        @endif
         <tr>
             <td style="padding: 9px 0 0; font-weight: 800; color: #111827;">Lucro líquido</td>
             <td style="padding: 9px 0 0; text-align: right; font-weight: 800; color: {{ $cor($dia['lucro']) }};">{{ $brl($dia['lucro']) }}</td>

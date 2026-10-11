@@ -52,6 +52,7 @@ class ResultadoDiario
                 'taxas_canal' => $somar('taxas_canal'),
                 'anuncios' => $somar('anuncios'),
                 'frete' => $somar('frete'),
+                'bonificacoes' => $somar('bonificacoes'),
                 'impostos' => $somar('impostos'),
                 'lucro' => $somar('lucro'),
                 'pedidos' => (int) array_sum(array_column($dias, 'pedidos')),
@@ -74,7 +75,7 @@ class ResultadoDiario
         $fim = $inicio->copy()->addDay();
         $conta = $this->margem->periodo($inicio, $fim);
 
-        $pedidos = Order::query()->nonPurchaseReturn()
+        $pedidos = Order::query()->vendaEfetiva()
             ->whereIn('status', ContributionMargin::REVENUE_STATUSES)
             ->where('created_at', '>=', $inicio)->where('created_at', '<', $fim)
             ->count();
@@ -88,7 +89,7 @@ class ResultadoDiario
             ->sum('order_channel_fees.fee_amount'), 2);
 
         $inicioSimples = Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay();
-        $impostos = $dia->gte($inicioSimples) ? round($conta['receita'] * $this->aliquota() / 100, 2) : 0.0;
+        $impostos = $dia->gte($inicioSimples) ? round($this->baseDoImposto($inicio, $fim) * $this->aliquota() / 100, 2) : 0.0;
 
         return [
             'data' => $dia->copy(),
@@ -99,8 +100,27 @@ class ResultadoDiario
             'taxas_estimadas' => $estimadas,
             'frete' => $conta['frete'],
             'anuncios' => $conta['ads'],
+            'bonificacoes' => $conta['bonificacoes'],
             'impostos' => $impostos,
             'lucro' => round($conta['margem'] - $impostos, 2),
         ];
+    }
+
+    /**
+     * Base do Simples (auditoria 2026-10-11): o Simples incide sobre o valor
+     * da NOTA (o que o cliente pagou, frete incluso quando vai na nota), não
+     * sobre a receita interna. Pedido com NF-e de venda autorizada usa o
+     * valor dela; sem nota importada ainda (ex.: TikTok emitido no Bling),
+     * fica a receita do pedido.
+     */
+    private function baseDoImposto(Carbon $inicio, Carbon $fim): float
+    {
+        $nota = 'SELECT i.valor_total FROM invoices i WHERE i.order_id = orders.id AND i.status = \'authorized\''
+            ." AND i.operation_type = 'saida' AND i.cancelada_em IS NULL LIMIT 1";
+
+        return round((float) Order::query()->vendaEfetiva()
+            ->whereIn('status', ContributionMargin::REVENUE_STATUSES)
+            ->where('created_at', '>=', $inicio)->where('created_at', '<', $fim)
+            ->sum(DB::raw("COALESCE(({$nota}), ".ContributionMargin::receitaSql().')')), 2);
     }
 }

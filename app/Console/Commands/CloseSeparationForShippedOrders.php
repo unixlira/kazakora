@@ -77,6 +77,8 @@ class CloseSeparationForShippedOrders extends Command
             ->where('status', Order::STATUS_PAID)
             ->whereNull('packed_at')
             ->whereNotNull('external_order_id')
+            // Loja própria não tem canal pra reconsultar (o número dela é nosso).
+            ->where('origin', '!=', Order::ORIGIN_STORE)
             ->where('created_at', '>=', $desde)
             ->get();
 

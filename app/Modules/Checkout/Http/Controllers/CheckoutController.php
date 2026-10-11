@@ -584,6 +584,8 @@ class CheckoutController extends Controller
 
                 $order = Order::create([
                     'user_id' => $user->id,
+                    // Número do pedido no formato da Shopee (pedido 2026-10-11).
+                    'external_order_id' => Order::gerarNumeroDaLoja(),
                     'status' => Order::STATUS_AWAITING_PAYMENT,
                     'shipping_method_id' => $shipping['method_id'],
                     'shipping_carrier_name' => $shipping['carrier_name'],
@@ -900,7 +902,7 @@ class CheckoutController extends Controller
         abort_if($order->user_id !== $request->user()->id, 403);
 
         return Inertia::render('Checkout/Confirmation', [
-            'order' => $order->load('items'),
+            'order' => $order->load('items')->append('numero'),
         ]);
     }
 
@@ -908,7 +910,7 @@ class CheckoutController extends Controller
     {
         return Inertia::render('Checkout/MyOrders', [
             'orders' => $request->user()->orders()->with('items')->latest()->paginate(10)
-                ->through(fn (Order $order) => $order->setAttribute('tracking_ref', $order->trackingRef())),
+                ->through(fn (Order $order) => $order->setAttribute('tracking_ref', $order->trackingRef())->append('numero')),
         ]);
     }
 
@@ -991,7 +993,7 @@ class CheckoutController extends Controller
 
         return Inertia::render($this->paymentComponent(), [
             ...$this->paymentPropsFor($draft),
-            'order' => $order->only('id', 'total'),
+            'order' => $order->only('id', 'total', 'external_order_id'),
             'methodType' => Payment::METHOD_PIX,
             'mercadoPagoPix' => [
                 'qrCode' => $qr['qr_code'] ?? null,
@@ -1012,7 +1014,7 @@ class CheckoutController extends Controller
     {
         return Inertia::render($this->paymentComponent(), [
             ...$this->paymentPropsFor($draft),
-            'order' => $order->only('id', 'total'),
+            'order' => $order->only('id', 'total', 'external_order_id'),
             'methodType' => Payment::METHOD_CARD,
             'mercadoPagoCardConfirmed' => true,
             'pendingSecondMethod' => $pendingSecondMethod,
@@ -1109,7 +1111,7 @@ class CheckoutController extends Controller
     {
         return Inertia::render('Checkout/Payment', [
             ...$this->paymentProps($draft),
-            'order' => $order->only('id', 'total'),
+            'order' => $order->only('id', 'total', 'external_order_id'),
             'clientSecret' => $intent->client_secret,
             'stripeKey' => config('services.stripe.key'),
             'methodType' => $methodType,

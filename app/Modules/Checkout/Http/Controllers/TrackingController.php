@@ -28,7 +28,10 @@ class TrackingController extends Controller
             'documento' => ['required', 'string', 'max:255'],
         ], [], ['pedido' => 'número do pedido', 'documento' => 'e-mail ou CPF']);
 
-        $order = Order::query()->with('user')->find((int) preg_replace('/\D/', '', $data['pedido']));
+        // Aceita o número novo (261011K7Q2M9XD) ou o antigo (só dígitos).
+        $digitado = strtoupper(trim(str_replace(['#', ' '], '', $data['pedido'])));
+        $order = Order::query()->with('user')->where('origin', Order::ORIGIN_STORE)->where('external_order_id', $digitado)->first()
+            ?? (ctype_digit($digitado) ? Order::query()->with('user')->find((int) $digitado) : null);
         $documento = trim(mb_strtolower($data['documento']));
         $digitos = preg_replace('/\D/', '', $documento);
 
@@ -54,10 +57,14 @@ class TrackingController extends Controller
         $pago = in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
         $codigo = $order->trackingCode();
         $enviado = in_array($order->status, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true) || filled($codigo);
+        // Em preparação (pedido 2026-10-11): separado/embalado no KoraSync ou
+        // com etiqueta pronta; enviado já passou por aqui.
+        $emPreparacao = $enviado || ($pago && ($order->packed_at !== null || filled($order->channelShipment?->label_path)));
 
         return Inertia::render('Checkout/Rastreio', [
             'pedido' => [
                 'id' => $order->id,
+                'numero' => $order->numero,
                 'criado_em' => $order->created_at?->toIso8601String(),
                 'status' => $order->status,
                 'cancelado' => $order->status === Order::STATUS_CANCELLED,
@@ -70,6 +77,7 @@ class TrackingController extends Controller
                     ['titulo' => 'Pedido recebido', 'feito' => true],
                     ['titulo' => 'Pagamento aprovado', 'feito' => $pago],
                     ['titulo' => 'Nota fiscal emitida', 'feito' => $order->invoice?->status === \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED],
+                    ['titulo' => 'Em preparação', 'feito' => $emPreparacao],
                     ['titulo' => 'Pedido enviado', 'feito' => $enviado],
                     ['titulo' => 'Entregue', 'feito' => $order->status === Order::STATUS_COMPLETED],
                 ],

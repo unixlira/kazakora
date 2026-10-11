@@ -413,9 +413,10 @@ const REDES = [
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                                class="cursor-pointer transition hover:opacity-90" title="Ver a verificação do Google Safe Browsing">
-                                <img src="/images/selos/google-safe-browsing.png" alt="Google Safe Browsing — site seguro, clique para verificar"
-                                    class="h-[30px] w-auto cursor-pointer rounded-xl bg-white sm:h-[44px] lg:h-[51px]">
+                                class="flex h-[30px] cursor-pointer items-center justify-center rounded-xl bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
+                                title="Ver a verificação do Google Safe Browsing">
+                                <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45"
+                                    class="h-[20px] w-auto sm:h-[30px] lg:h-[36px]">
                             </a>
                             <a href="https://www.reclameaqui.com.br/busca/?q=kazakora" target="_blank" rel="noopener"
                                 class="flex h-[30px] cursor-pointer flex-col items-center justify-center rounded-xl bg-white px-3 leading-none transition hover:opacity-90 sm:h-[44px] sm:px-4 lg:h-[51px]"

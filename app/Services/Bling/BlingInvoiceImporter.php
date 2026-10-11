@@ -245,6 +245,15 @@ class BlingInvoiceImporter
         if ($this->deveTransmitir($nfeId, $nota)) {
             $divergencias = $this->conferirContraNossoCadastro($order, $nota);
 
+            // Correção automática (2026-10-11): nota de venda com valor, sem
+            // nota nossa série 2 no pedido → alinha ao cadastro (natureza
+            // Venda de mercadoria, CFOP 5102/6102, NCM) e confere de novo.
+            if ($divergencias !== [] && (float) $order->total > 0 && (int) $order->invoice?->serie !== 2) {
+                $r = $this->alinharNotaAoCadastro($order, true);
+                $nota = $this->fetchNota($nfeId) ?? $nota;
+                $divergencias = $r['erro'] ? [...$divergencias, $r['erro']] : $this->conferirContraNossoCadastro($order, $nota);
+            }
+
             if ($divergencias !== []) {
                 $this->registrarDivergencia($order, $divergencias);
 

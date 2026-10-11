@@ -81,4 +81,28 @@ class TikTokAmbiguousVariationTest extends TestCase
 
         $this->assertSame($unico->id, app(TikTokShopDriver::class)->autoImportProduct('CODIGO-UNICO')?->id);
     }
+
+    /**
+     * BUG REAL 2026-10-11: "Organizador De Pia Silicone" (produto excluído)
+     * casou 55,6% com a "Saboneteira De Silicone" e o KoraSync mandou
+     * embalar a saboneteira. Semelhança fraca não vincula.
+     */
+    public function test_semelhanca_fraca_nao_vincula_outro_produto(): void
+    {
+        MarketplaceAccount::create([
+            'channel' => MarketplaceAccount::CHANNEL_BLING,
+            'status' => MarketplaceAccount::STATUS_CONNECTED,
+            'metadata' => ['tiktok_loja_id' => 206277670],
+        ]);
+
+        Product::factory()->create([
+            'sku' => 'ORG-SAB-SEM-NAO-CIN-0002',
+            'name' => 'Saboneteira De Silicone Escoa Agua, Porta Sabão Pia E Tanque Cinza-escuro',
+            'is_active' => true,
+        ]);
+
+        Cache::put('bling.tiktok_item_name.ORG-PIA-SIL', 'Organizador De Pia Silicone Escorredor Porta Sabão Esponja');
+
+        $this->assertNull(app(TikTokShopDriver::class)->autoImportProduct('ORG-PIA-SIL'));
+    }
 }

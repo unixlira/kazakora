@@ -73,7 +73,7 @@ class TikTokReportsImportTest extends TestCase
         \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
 
         $this->withHeader('Authorization', 'Bearer segredo-de-teste')
-            ->post('/api/tiktok/reports/import', ['file' => UploadedFile::fake()->createWithContent('Income.xlsx', 'abc')])
+            ->post('/api/tiktok/reports/import', ['file' => new UploadedFile(__DIR__.'/../../fixtures/tiktok-demonstrativo-exemplo.xlsx', 'Income.xlsx', null, null, true)])
             ->assertOk();
 
         \Illuminate\Support\Facades\Notification::assertSentTo(\App\Models\User::first(), \App\Notifications\TikTokRelatorioNotification::class,

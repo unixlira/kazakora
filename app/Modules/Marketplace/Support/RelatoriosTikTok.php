@@ -53,7 +53,47 @@ class RelatoriosTikTok
             'status' => 'recebido', 'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        return ['id' => $id, 'nome' => $nome, 'sha256' => $sha, 'duplicado' => false];
+        return ['id' => $id, 'nome' => $nome, 'sha256' => $sha, 'duplicado' => false] + $this->processar($id);
+    }
+
+    /**
+     * Demonstrativo do TikTok (.xlsx): importa na hora para a auditoria. Outros
+     * tipos ficam só guardados.
+     *
+     * @return array{importado?: array<string, mixed>, erro_importacao?: string}
+     */
+    public function processar(int $uploadId): array
+    {
+        $upload = DB::table('tiktok_report_uploads')->find($uploadId);
+        if (! $upload || ! str_ends_with(strtolower($upload->nome_original), '.xlsx')) {
+            return [];
+        }
+
+        try {
+            $resumo = app(ImportadorDemonstrativoTikTok::class)->importar(Storage::disk('local')->path($upload->caminho), $upload->nome_original);
+            DB::table('tiktok_report_uploads')->where('id', $uploadId)->update(['status' => 'importado', 'tipo' => 'liquidacao', 'updated_at' => now()]);
+
+            return ['importado' => $resumo];
+        } catch (\Throwable $e) {
+            DB::table('tiktok_report_uploads')->where('id', $uploadId)->update(['status' => 'erro', 'updated_at' => now()]);
+
+            return ['erro_importacao' => mb_substr($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** Texto do alerta a partir do que guardar() devolveu. */
+    public function descrever(array $r): string
+    {
+        if (isset($r['erro_importacao'])) {
+            return "{$r['nome']}: {$r['erro_importacao']}";
+        }
+        if (! isset($r['importado'])) {
+            return $r['nome'];
+        }
+        $i = $r['importado'];
+        $texto = "{$r['nome']}: {$i['linhas']} linhas, {$i['demonstrativos']} demonstrativos ({$i['de']} a {$i['ate']}), líquido R$ ".number_format($i['liquido'], 2, ',', '.');
+
+        return $i['divergencias'] ? $texto.'. DIVERGÊNCIA: '.implode('; ', $i['divergencias']) : $texto;
     }
 
     public function avisar(bool $sucesso, string $detalhe): void

@@ -53,6 +53,18 @@ class CorrigirNotasBling extends Command
                 continue;
             }
 
+            if ((int) $pedido->invoice?->serie === 2) {
+                $this->warn("{$linha}: tem nota nossa série 2 ({$pedido->invoice->numero}) — pulado para não duplicar");
+
+                continue;
+            }
+
+            if ((float) $pedido->total <= 0) {
+                $this->warn("{$linha}: pedido de R$ 0,00 (amostra/brinde) — não vira nota de venda, pulado");
+
+                continue;
+            }
+
             // Bling: 3 req/s para a conta inteira (nota e etiqueta dividem).
             usleep(1_200_000);
 

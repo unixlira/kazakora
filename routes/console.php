@@ -31,6 +31,11 @@ Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // homolog quem rodava isso era o agendador da Naia (kazakora-label-poll-tick),
 // por fora do Laravel — sem ele a impressão automática para. Agora fica aqui.
 Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoMinutes()->withoutOverlapping(5);
+// Relatórios por e-mail (pedido 2026-10-10; antes eram rotinas da Naia por
+// fora, no homolog): resultado do dia às 23:50 e pedidos separados que foram
+// cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
+Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
+Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 
 // Reconciliação periódica pedido/faturamento (2026-08-06) — rede de

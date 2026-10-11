@@ -411,4 +411,9 @@ return [
         'path' => env('FFPROBE_PATH'),
     ],
 
+    // Relatórios do TikTok enviados pelo app de auditoria (2026-10-11).
+    'tiktok_reports' => [
+        'token' => env('TIKTOK_REPORTS_TOKEN'),
+    ],
+
 ];

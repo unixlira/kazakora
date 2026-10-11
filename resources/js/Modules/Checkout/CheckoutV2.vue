@@ -395,6 +395,7 @@ const finalizar = async () => {
 
 // ---------- Depois do pedido criado: QR do Pix / confirmação do cartão ----------
 const estado = ref('idle');
+const urlSucesso = ref(null);
 const motivoFalha = ref(null);
 const pixImagem = ref(null);
 const pixCodigo = ref(null);
@@ -424,8 +425,8 @@ const acompanhar = (orderId) => {
             const dados = await resposta.json();
             if (dados.status === 'paid') {
                 pararTimers();
+                urlSucesso.value = `/pedidos/${orderId}`;
                 estado.value = 'success';
-                setTimeout(() => router.visit(dados.redirect), 1500);
                 return;
             }
             if (dados.status === 'pending') {
@@ -792,6 +793,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
             :pix-qr-code="pixCodigo"
             :pix-seconds-left="pixSegundos"
             :failure-message="motivoFalha"
+            :success-url="urlSucesso"
             @retry="tentarDeNovo" />
     </CheckoutLayout>
 </template>

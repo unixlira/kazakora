@@ -174,6 +174,13 @@ Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
 });
 
 Route::get('/pedidos', [CheckoutController::class, 'myOrders'])->middleware('auth')->name('pedidos.meus');
+// Detalhe da compra e chat de suporte com a Manuela (pedido 2026-10-11).
+Route::middleware('auth')->group(function () {
+    Route::get('/pedidos/{order}', [CheckoutController::class, 'showOrder'])->whereNumber('order')->name('pedidos.ver');
+    Route::get('/pedidos/{order}/nota/{tipo}', [CheckoutController::class, 'notaDoCliente'])->whereNumber('order')->whereIn('tipo', ['pdf', 'xml'])->name('pedidos.nota.cliente');
+    Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
+    Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');
+});
 
 // Área de conta do usuário autenticado — acessível tanto pela loja quanto
 // pelo painel admin, sempre operando sobre o próprio usuário logado.
@@ -599,6 +606,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('mensagens-site/chegando', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'chegando'])->name('mensagens-site.chegando');
         Route::post('mensagens-site/{mensagem}/lida', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'marcarLida'])->whereNumber('mensagem')->name('mensagens-site.lida');
         Route::post('mensagens-site/{mensagem}/nao-lida', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'marcarNaoLida'])->whereNumber('mensagem')->name('mensagens-site.nao-lida');
+        // Suporte > Chamados (pedido 2026-10-11).
+        Route::get('suporte', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'index'])->name('suporte.chamados');
+        Route::post('suporte', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'criar'])->name('suporte.criar');
+        Route::get('suporte/{chamado}/mensagens', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'mensagens'])->whereNumber('chamado')->name('suporte.mensagens');
+        Route::post('suporte/{chamado}/mensagens', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'enviar'])->whereNumber('chamado')->name('suporte.enviar');
+        Route::post('suporte/{chamado}/humano', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'humano'])->whereNumber('chamado')->name('suporte.humano');
+        Route::patch('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'atualizar'])->whereNumber('chamado')->name('suporte.atualizar');
+        Route::delete('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'excluir'])->whereNumber('chamado')->name('suporte.excluir');
         Route::get('whatsapp/conversas', [WhatsAppInboxController::class, 'index'])->name('whatsapp.conversas');
         Route::get('whatsapp/conversas/atualizacoes', [WhatsAppInboxController::class, 'updates'])->name('whatsapp.conversas.atualizacoes');
         Route::get('whatsapp/conversas/chegando', [WhatsAppInboxController::class, 'incoming'])->name('whatsapp.conversas.chegando');

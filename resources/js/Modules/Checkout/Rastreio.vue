@@ -2,7 +2,7 @@
 // Rastrear pedido (pedido 2026-10-10): busca por número + e-mail/CPF ou link
 // direto /rastreio/{ref} (o mesmo que vai no WhatsApp de pedido aprovado).
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -10,6 +10,8 @@ const props = defineProps({
 });
 
 const form = useForm({ pedido: '', documento: '' });
+// Logado: só o número do pedido (pedido 2026-10-11).
+const logado = computed(() => !!usePage().props.auth?.user);
 const buscar = () => form.post('/rastreio', { preserveScroll: true });
 
 const formatPrice = (value) =>
@@ -44,14 +46,14 @@ const copiarCodigo = async () => {
 
             <form v-if="!pedido" class="mt-8 flex flex-col gap-4 rounded-2xl border border-store-border bg-store-bg-raised p-6" @submit.prevent="buscar">
                 <p class="text-sm text-store-fg-muted">
-                    Informe o número do pedido e o e-mail ou CPF usado na compra.
+                    {{ logado ? 'Informe o número do pedido.' : 'Informe o número do pedido e o e-mail ou CPF usado na compra.' }}
                 </p>
                 <label class="flex flex-col gap-1 text-sm font-medium">
                     Número do pedido
-                    <input v-model="form.pedido" type="text" inputmode="numeric" placeholder="Ex.: 1234"
+                    <input v-model="form.pedido" type="text" autocapitalize="characters" placeholder="Ex.: 261011K7Q2M9XD"
                         class="rounded-lg border border-store-border-strong bg-store-bg px-3 py-2.5 font-normal" />
                 </label>
-                <label class="flex flex-col gap-1 text-sm font-medium">
+                <label v-if="!logado" class="flex flex-col gap-1 text-sm font-medium">
                     E-mail ou CPF
                     <input v-model="form.documento" type="text" placeholder="voce@email.com ou 000.000.000-00"
                         class="rounded-lg border border-store-border-strong bg-store-bg px-3 py-2.5 font-normal" />

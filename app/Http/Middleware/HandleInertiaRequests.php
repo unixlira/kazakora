@@ -108,6 +108,8 @@ class HandleInertiaRequests extends Middleware
                     'fiscalDuplicidades' => rescue(fn () => \App\Modules\Fiscal\Models\NumeracaoOcorrencia::query()->duplicidadesAbertas()->count(), 0, false),
                     // E-mails do site (Fale conosco) ainda não lidos.
                     'emailsSiteNaoLidos' => rescue(fn () => \App\Modules\Contato\Models\MensagemContato::query()->naoLidas()->count(), 0, false),
+                    // Suporte: chamados abertos esperando a equipe (pedido 2026-10-11).
+                    'suporteAbertos' => rescue(fn () => \App\Modules\Suporte\Models\Chamado::query()->whereIn('status', [\App\Modules\Suporte\Models\Chamado::ABERTO, \App\Modules\Suporte\Models\Chamado::EM_ATENDIMENTO])->count(), 0, false),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

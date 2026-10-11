@@ -7,7 +7,7 @@ use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 
 /**
  * Como este pedido vai sair da loja — Flex, Mercado Envios, Full,
- * Express-Ponto Coleta (Shopee e TikTok), e por aí vai.
+ * Ponto Coleta (era "Express-Ponto Coleta" até 2026-10-11) (Shopee e TikTok), e por aí vai.
  *
  * Pedido explícito 2026-09-14: o KoraSync mostrava só o canal, e canal não
  * responde a pergunta que o operador faz na bancada. Duas vendas do Mercado
@@ -145,7 +145,7 @@ final class TipoDeEnvio
         }
 
         if (str_contains($normalizado, 'xpress')) {
-            return [self::EXPRESS_COLETA, 'Shopee Xpress — Express, entrega no ponto de coleta', 'Express-Ponto Coleta'];
+            return [self::EXPRESS_COLETA, 'Shopee Xpress — Express, entrega no ponto de coleta', 'Ponto Coleta'];
         }
 
         return [self::OUTRO, $metodo, $metodo];
@@ -164,7 +164,7 @@ final class TipoDeEnvio
         // Shopee. O código continua no label pra dar pra rastrear do outro
         // lado.
         if (str_contains(mb_strtoupper($metodo), 'PICKUP')) {
-            return [self::EXPRESS_COLETA, "TikTok — Express, entrega no ponto de coleta ({$metodo})", 'Express-Ponto Coleta'];
+            return [self::EXPRESS_COLETA, "TikTok — Express, entrega no ponto de coleta ({$metodo})", 'Ponto Coleta'];
         }
 
         return [self::OUTRO, "TikTok — {$metodo}", $metodo];

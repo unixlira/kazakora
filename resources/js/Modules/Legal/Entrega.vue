@@ -104,7 +104,7 @@ const regioes = computed(() => {
                     <p>
                         Assim que o pedido é despachado, o código de rastreio aparece em
                         <Link href="/rastreio" class="font-medium text-store-accent hover:underline">Rastrear pedido</Link>
-                        e em "Meus pedidos". Se tiver qualquer dúvida sobre a entrega, fale com a gente.
+                        e em "Meus Pedidos". Se tiver qualquer dúvida sobre a entrega, fale com a gente.
                     </p>
                 </LegalCard>
 

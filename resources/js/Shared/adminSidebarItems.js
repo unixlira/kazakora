@@ -90,6 +90,12 @@ export const sidebarSections = [
     },
 
     {
+        heading: 'Suporte',
+        items: [
+            { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', color: 'text-warning', permission: 'pedidos.view', badgeKey: 'suporteAbertos' },
+        ],
+    },
+    {
         heading: 'WhatsApp',
         items: [
             { label: 'Conversas', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', color: 'text-success', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },

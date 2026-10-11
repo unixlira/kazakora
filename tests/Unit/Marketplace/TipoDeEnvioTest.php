@@ -39,7 +39,7 @@ class TipoDeEnvioTest extends TestCase
         // em 2026-09-21): pacote no ponto de coleta, transportadora leva.
         $xpress = TipoDeEnvio::montar('shopee', 'Shopee Xpress');
         $this->assertSame(TipoDeEnvio::EXPRESS_COLETA, $xpress['tipo']);
-        $this->assertSame('Express-Ponto Coleta', $xpress['curto']);
+        $this->assertSame('Ponto Coleta', $xpress['curto']);
 
         $retirada = TipoDeEnvio::montar('shopee', 'Retirada pelo Comprador');
         $this->assertSame(TipoDeEnvio::RETIRADA, $retirada['tipo']);
@@ -49,7 +49,7 @@ class TipoDeEnvioTest extends TestCase
         // que a transportadora vem buscar aqui.
         $tiktok = TipoDeEnvio::montar('tiktok_shop', 'LSV-Standard-BR PICKUP');
         $this->assertSame(TipoDeEnvio::EXPRESS_COLETA, $tiktok['tipo']);
-        $this->assertSame('Express-Ponto Coleta', $tiktok['curto']);
+        $this->assertSame('Ponto Coleta', $tiktok['curto']);
         $this->assertSame($xpress['curto'], $tiktok['curto'], 'os dois canais dizem a mesma coisa no selo');
         $this->assertStringContainsString('LSV-Standard-BR PICKUP', $tiktok['label']);
 

@@ -97,6 +97,30 @@ const direitos = [
                     </p>
                 </LegalCard>
 
+                <!-- Exclusão de dados (pedido 2026-10-10): URL pedida pela Meta (WhatsApp)
+                     — https://kazakora.com/exclusao-de-dados aponta para cá. -->
+                <LegalCard id="exclusao-de-dados" title="Como pedir a exclusão dos seus dados" class="scroll-mt-28">
+                    <p>
+                        Você pode pedir, a qualquer momento e sem custo, a exclusão dos seus dados pessoais — inclusive das
+                        conversas com a KazaKora pelo WhatsApp (LGPD, art. 18, VI).
+                    </p>
+                    <ol class="flex list-decimal flex-col gap-2 pl-5">
+                        <li>
+                            Envie o pedido pelo <Link href="/fale-conosco" class="font-medium text-store-accent hover:underline">Fale conosco</Link>
+                            com o assunto <strong>"Exclusão de dados"</strong>, ou pelo e-mail {{ COMPANY.email }}, ou pelo WhatsApp {{ COMPANY.whatsappDisplay }}.
+                        </li>
+                        <li>Informe o nome e o e-mail ou telefone usados na loja ou no WhatsApp, para localizarmos os seus dados.</li>
+                        <li>Para sua segurança, podemos pedir uma confirmação de que o pedido é seu antes de excluir.</li>
+                        <li>Respondemos em até <strong>15 dias</strong> (LGPD, art. 19), confirmando o que foi excluído.</li>
+                    </ol>
+                    <p>
+                        Excluímos cadastro, endereços, favoritos, carrinho, preferências e conversas. Alguns dados precisam ser
+                        guardados por obrigação legal mesmo após o pedido, e ficam bloqueados para qualquer outro uso:
+                        notas fiscais e dados de pedidos pelo prazo da legislação fiscal (5 anos) e registros de acesso por
+                        6 meses (Marco Civil da Internet, art. 15).
+                    </p>
+                </LegalCard>
+
                 <LegalCard title="Compartilhamento de Dados">
                     <p>
                         A KazaKora pode compartilhar dados com: provedores de pagamento, transportadoras, provedores de

@@ -95,6 +95,8 @@ Route::get('/politica-de-entrega', fn () => \Inertia\Inertia::render('Legal/Entr
     ],
 ]))->name('legal.entrega');
 Route::inertia('/politica-de-privacidade', 'Legal/Privacidade')->name('legal.privacidade');
+// Exclusão de dados (pedido 2026-10-10, URL exigida pela Meta para o WhatsApp).
+Route::redirect('/exclusao-de-dados', '/politica-de-privacidade#exclusao-de-dados')->name('legal.exclusao');
 // Cookies (pedido 2026-10-10, docs/privacidade-e-cookies.md).
 Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cookies', [
     'sessaoMinutos' => (int) config('session.lifetime'),

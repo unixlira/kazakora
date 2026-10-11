@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
+use App\Http\Controllers\Api\TikTokReportsController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -175,3 +176,9 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
 Route::prefix('v1')->group(function () {
     require __DIR__.'/api_v1.php';
 });
+
+// Relatórios do TikTok para a auditoria financeira (app "KazaKora TikTok
+// Reports", 2026-10-11). Autenticação por Bearer TIKTOK_REPORTS_TOKEN.
+Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import'])
+    ->middleware('throttle:60,1')
+    ->name('api.tiktok.reports.import');

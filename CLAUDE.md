@@ -18,6 +18,13 @@ repositório inteiro pro servidor com `rsync --delete` e roda as migrations.
 **Tudo o que está no servidor e não está no git é apagado ou sobrescrito.**
 Push em qualquer outro ramo não publica nada.
 
+**Produção (desde 2026-10-10):** push no `main` publica a loja
+`kazakora.com` na VPS `187.127.60.51`, pela pipeline
+`.github/workflows/deploy-producao.yml` (testes → pasta nova em
+`releases/` → troca do link `current`, volta sozinha se a loja não
+responder). Fluxo: ramo → `homolog` → validar → `main`. Detalhes em
+`deploy/producao/LEIA-ME.md`.
+
 ## Regras
 
 1. **Nunca editar código direto no servidor.** Nem pra "testar rapidinho".

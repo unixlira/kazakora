@@ -106,6 +106,19 @@ class CorrigirNotasBlingTest extends TestCase
         Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && $r['itens'][0]['cfop'] === '5102');
     }
 
+    public function test_pula_serie_2_e_pedido_zerado(): void
+    {
+        $this->fake();
+        $this->order->invoice->update(['serie' => 2]);
+        $this->artisan('bling:corrigir-notas', [$this->order->id, '--aplicar' => true, '--enviar' => true])->assertSuccessful();
+
+        $this->order->invoice->update(['serie' => 3]);
+        $this->order->update(['total' => 0]);
+        $this->artisan('bling:corrigir-notas', [$this->order->id, '--aplicar' => true, '--enviar' => true])->assertSuccessful();
+
+        Http::assertNothingSent();
+    }
+
     public function test_nao_mexe_em_pedido_com_nota_autorizada(): void
     {
         $this->fake();

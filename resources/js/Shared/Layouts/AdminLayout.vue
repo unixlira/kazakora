@@ -17,6 +17,15 @@ const unreadNotifications = computed(() => page.props.notifications?.unreadCount
 const sidebarBadge = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
+// Menu fechado mostra o favicon da marca (o customizado de produção, se houver).
+// O favicon padrão é de 32px e fica borrado em 40px: nesse caso usa o de 180.
+const marcaFavicon = computed(() => {
+    const f = page.props.marca?.favicon;
+    return f && !f.includes('favicon-32') && !f.endsWith('.ico') ? f : '/images/marca/favicon-180.png';
+});
+const marcaLogo = computed(() => isDark.value
+    ? (page.props.marca?.logoRodape || '/images/marca/logo-rodape.png')
+    : (page.props.marca?.logoNav || '/images/marca/logo-nav.png'));
 const { can } = usePermissions();
 
 const visibleSections = computed(() =>
@@ -160,17 +169,17 @@ watch(
                 </button>
 
                 <div class="hidden w-full items-center justify-between md:flex">
-                    <Link href="/admin" class="inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-primary">
-                        <i class="fas fa-gem"></i>
-                        <span v-if="!sidebarCollapsed" class="ml-2">KazaKora Admin</span>
+                    <Link href="/admin" class="flex items-center py-3" title="KazaKora">
+                        <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 rounded-xl object-cover shadow-sm">
+                        <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
                     </Link>
                     <button type="button" class="text-slate-400 hover:text-primary" @click="toggleSidebar">
                         <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
                     </button>
                 </div>
 
-                <Link href="/admin" class="mr-0 inline-block whitespace-nowrap p-4 px-0 text-left text-sm font-bold uppercase text-primary md:hidden">
-                    <i class="fas fa-gem me-2"></i> KazaKora Admin
+                <Link href="/admin" class="mr-0 inline-block p-4 px-0 md:hidden">
+                    <img :src="marcaLogo" alt="KazaKora" class="h-6 w-auto">
                 </Link>
 
                 <!-- Bug real reportado 2026-08-09: esse painel não tinha
@@ -218,14 +227,14 @@ watch(
 
                     <ul class="mb-4 flex list-none flex-col md:min-w-full md:flex-col">
                         <li v-if="user?.role === 'admin'">
-                            <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium"
-                                :class="urlPath === '/admin/filas' ? 'border-primary bg-[var(--surface-border)]/40 text-primary' : 'border-transparent text-[var(--sidebar-foreground)] hover:text-primary'" title="Filas (Horizon)">
+                            <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium transition-colors"
+                                :class="urlPath === '/admin/filas' ? 'border-primary bg-[var(--surface-border)]/40 text-primary' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
                                 <i class="fas fa-layer-group w-8 text-center text-sm" :class="urlPath === '/admin/filas' ? 'text-primary' : 'text-slate-400'"></i>
-                                <span v-if="!sidebarCollapsed">Filas (Horizon)</span>
+                                <span v-if="!sidebarCollapsed">Horizon</span>
                             </Link>
                         </li>
                         <li>
-                            <Link href="/" class="flex items-center gap-2 py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] hover:text-primary" title="Ver loja">
+                            <Link href="/" class="flex items-center gap-2 rounded-lg border-l-4 border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
                                 <i class="fas fa-store w-8 text-center text-sm text-slate-400"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
                             </Link>
@@ -277,12 +286,14 @@ watch(
                         </div>
                     </div>
 
-                    <!-- Search (visual only for now) -->
+                    <!-- Busca do topo desligada a pedido do Lira (2026-10-11): pode
+                    ser que um dia ele habilite. Para voltar, é só descomentar.
                     <div class="relative hidden w-full max-w-xs md:block">
                         <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
                         <input type="text" placeholder="Buscar..." disabled
                             class="w-full cursor-not-allowed rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-3 text-sm text-slate-400 placeholder:text-slate-400">
                     </div>
+                    -->
 
                     <div class="ml-auto flex items-center gap-1">
                         <!-- Dark mode toggle -->

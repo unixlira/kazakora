@@ -2,7 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
@@ -26,6 +26,10 @@ const props = defineProps({
         type: Object,
         default: () => ({ kpis: {}, ritmo: { dia: 0, atual: [], anterior: [] }, mensal: [], categorias: [] }),
     },
+    visitantes: {
+        type: Object,
+        default: () => ({ mes: '', meses: [], mesAtual: true, dias: [], visitantesMes: 0, paginasMes: 0, visitantesHoje: 0, paginasHoje: 0, mediaDia: 0, melhorDia: null }),
+    },
 });
 
 // Curva ABC (pedido do usuário 2026-10-06): A = produtos que somam até 80%
@@ -36,7 +40,7 @@ const abcCards = computed(() => [
 ]);
 
 const CHANNEL_LABELS = {
-    loja: 'Site',
+    loja: 'KazaKora',
     mercado_livre: 'Mercado Livre',
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',
@@ -165,6 +169,19 @@ const channelShare = computed(() => {
     const total = rows.reduce((sum, row) => sum + row.total, 0);
 
     return { rows, total };
+});
+
+// Faixa do topo (pedido 2026-10-11): todos os canais aparecem, inclusive a
+// KazaKora sem venda — canal zerado também é informação.
+const channelStrip = computed(() => {
+    const total = props.revenueByChannel.reduce((sum, row) => sum + row.total, 0);
+    const extras = props.revenueByChannel.map((row) => row.origin).filter((o) => !CHANNEL_ORDER.includes(o));
+
+    return [...CHANNEL_ORDER, ...extras].map((origin) => {
+        const valor = props.revenueByChannel.find((row) => row.origin === origin)?.total ?? 0;
+
+        return { origin, total: valor, share: total > 0 ? (valor / total) * 100 : 0 };
+    });
 });
 
 const shareChartData = computed(() => ({
@@ -334,6 +351,102 @@ const categoryChartOptions = computed(() => ({
     },
 }));
 
+// ---- 5. Acessos ao site (pedido 2026-10-11) ---------------------------
+// Ver DashboardController::visitantes(): sem equipe e sem robô.
+const VISIT_COLORS = {
+    light: { bar: '#0d9488', today: '#f26b1d', line: '#7c3aed' },
+    dark: { bar: '#2dd4bf', today: '#fb923c', line: '#c4b5fd' },
+};
+const visitColors = computed(() => VISIT_COLORS[isDark.value ? 'dark' : 'light']);
+const mesVisitas = ref(props.visitantes?.mes ?? '');
+const carregandoVisitas = ref(false);
+const trocarMesVisitas = () => {
+    router.get('/admin', { mes: mesVisitas.value }, {
+        only: ['visitantes'],
+        preserveScroll: true,
+        preserveState: true,
+        replace: true,
+        onStart: () => { carregandoVisitas.value = true; },
+        onFinish: () => { carregandoVisitas.value = false; },
+    });
+};
+const formatMonthLong = (yearMonth) => {
+    const texto = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(`${yearMonth}-01T00:00:00`));
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+};
+const formatDay = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(`${date}T00:00:00`));
+const formatInt = (value) => (value ?? 0).toLocaleString('pt-BR');
+const hojeIso = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+
+const visitTiles = computed(() => {
+    const v = props.visitantes ?? {};
+    const tiles = [];
+    if (v.mesAtual) {
+        tiles.push({ label: 'Visitantes hoje', value: formatInt(v.visitantesHoje), hint: `${formatInt(v.paginasHoje)} páginas vistas hoje`, icon: 'fas fa-user-clock', color: '#f26b1d' });
+    }
+    tiles.push(
+        { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#0d9488' },
+        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#7c3aed' },
+        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#2563eb' },
+    );
+    return tiles;
+});
+
+const visitChartData = computed(() => {
+    const dias = props.visitantes?.dias ?? [];
+    const cores = visitColors.value;
+
+    return {
+        labels: dias.map((d) => d.dia.slice(8, 10)),
+        datasets: [
+            {
+                type: 'bar',
+                label: 'Visitantes',
+                data: dias.map((d) => d.visitantes),
+                backgroundColor: dias.map((d) => (d.dia === hojeIso ? cores.today : cores.bar)),
+                borderRadius: 4,
+                borderSkipped: 'start',
+                maxBarThickness: 22,
+                yAxisID: 'y',
+                order: 2,
+            },
+            {
+                type: 'line',
+                label: 'Páginas vistas',
+                data: dias.map((d) => d.paginas),
+                borderColor: cores.line,
+                backgroundColor: cores.line,
+                borderWidth: 2,
+                tension: 0.35,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                yAxisID: 'y1',
+                order: 1,
+            },
+        ],
+    };
+});
+
+const visitChartOptions = computed(() => ({
+    ...baseOptions.value,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+        x: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, maxTicksLimit: 16 } },
+        y: { ...axisStyle.value, beginAtZero: true, ticks: { ...axisStyle.value.ticks, precision: 0 }, title: { display: true, text: 'Visitantes', color: chrome.value.text } },
+        y1: { ...axisStyle.value, beginAtZero: true, position: 'right', grid: { display: false }, ticks: { ...axisStyle.value.ticks, precision: 0 }, title: { display: true, text: 'Páginas', color: chrome.value.text } },
+    },
+    plugins: {
+        ...baseOptions.value.plugins,
+        tooltip: {
+            ...baseOptions.value.plugins.tooltip,
+            callbacks: {
+                title: (items) => formatDay((props.visitantes?.dias ?? [])[items[0].dataIndex]?.dia ?? hojeIso),
+                label: (ctx) => ` ${ctx.dataset.label}: ${formatInt(ctx.parsed.y)}`,
+            },
+        },
+    },
+}));
+
 // ---- Cards de produto --------------------------------------------------
 const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quantity)));
 </script>
@@ -364,32 +477,85 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                 stat-icon-name="fas fa-rotate-left" variant="warning" vivid />
         </div>
 
-        <div v-if="revenueByChannel.length" class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-            <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400">Faturamento por canal</h3>
-            <div class="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                <span v-for="row in channelShare.rows" :key="row.origin" class="inline-flex items-center gap-2">
-                    <span class="h-2.5 w-2.5 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
-                    <span class="text-slate-500 dark:text-slate-400">{{ channelName(row.origin) }}</span>
-                    <span class="font-semibold">{{ formatPrice(row.total) }}</span>
-                </span>
+        <section class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+            <div class="flex items-center gap-2">
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-orange-500 text-xs text-white"><i class="fas fa-store"></i></span>
+                <h3 class="text-sm font-semibold">Faturamento por canal</h3>
+                <span class="text-xs text-[var(--texto-suave)]">· mês até hoje</span>
             </div>
-        </div>
+            <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                <div v-for="row in channelStrip" :key="row.origin"
+                    class="min-w-0 rounded-lg border border-[var(--surface-border)] px-3 py-2.5"
+                    :style="{ borderLeft: `4px solid ${channelColor(row.origin)}`, background: `color-mix(in oklab, ${channelColor(row.origin)} 9%, var(--surface))` }">
+                    <p class="truncate text-xs font-semibold" :style="{ color: channelColor(row.origin) }">{{ channelName(row.origin) }}</p>
+                    <p class="truncate text-lg font-bold" :class="row.total > 0 ? '' : 'text-[var(--texto-suave)]'">{{ formatPrice(row.total) }}</p>
+                    <div class="mt-1 h-1 rounded-full bg-[var(--surface-border)]">
+                        <div class="h-1 rounded-full" :style="{ width: `${row.share}%`, background: channelColor(row.origin) }"></div>
+                    </div>
+                    <p class="mt-1 text-[11px] text-[var(--texto-suave)]">{{ row.total > 0 ? `${formatPercent(row.share)} do mês` : 'sem vendas no mês' }}</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Acessos ao site (pedido 2026-10-11): entre o faturamento e o
+             desempenho do mês, com filtro de mês. -->
+        <section class="mt-4 overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" style="border-top: 3px solid #0d9488">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4"
+                style="background: linear-gradient(180deg, color-mix(in oklab, #0d9488 8%, var(--surface)) 0%, var(--surface) 100%)">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-white"><i class="fas fa-globe"></i></span>
+                    <div>
+                        <h3 class="text-base font-semibold">Acessos ao site KazaKora</h3>
+                        <p class="text-xs text-[var(--texto-suave)]">Visitantes por dia · sem a equipe e sem robôs</p>
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin text-teal-500"></i>
+                    <span class="text-[var(--texto-suave)]">Mês</span>
+                    <select v-model="mesVisitas" @change="trocarMesVisitas"
+                        class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] py-1.5 pl-3 pr-8 text-sm text-[var(--surface-foreground)] focus:border-teal-500 focus:ring-teal-500">
+                        <option v-for="m in visitantes.meses" :key="m" :value="m">{{ formatMonthLong(m) }}</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4" :class="{ 'opacity-60': carregandoVisitas }">
+                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg border border-[var(--surface-border)] p-3" :style="tileStyle(tile.color)">
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="truncate text-xs font-medium text-[var(--texto-suave)]">{{ tile.label }}</p>
+                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs text-white" :style="{ background: tile.color }"><i :class="tile.icon"></i></span>
+                    </div>
+                    <p class="mt-1 truncate text-2xl font-bold">{{ tile.value }}</p>
+                    <p class="truncate text-xs text-[var(--texto-suave)]">{{ tile.hint }}</p>
+                </div>
+            </div>
+            <div class="px-4 pb-4" :class="{ 'opacity-60': carregandoVisitas }">
+                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--texto-suave)]">
+                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.bar }"></span> Visitantes</span>
+                    <span v-if="visitantes.mesAtual" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.today }"></span> Hoje</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: visitColors.line }"></span> Páginas vistas</span>
+                </div>
+                <ChartCanvas v-if="visitantes.dias.length" class="mt-2" type="bar" :data="visitChartData" :options="visitChartOptions" />
+            </div>
+        </section>
 
         <!-- Indicadores do mês (pedido do usuário 2026-10-06): o mês até
              hoje sempre contra os MESMOS dias do mês passado. -->
-        <h2 class="mt-8 mb-3 text-lg font-bold">Desempenho do mês</h2>
+        <h2 class="mt-8 mb-3 flex items-center gap-2 text-lg font-bold">
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-sm text-white"><i class="fas fa-gauge-high"></i></span>
+            Desempenho do mês
+        </h2>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <div v-for="tile in kpiTiles" :key="tile.label"
                 class="flex min-w-0 flex-col rounded-xl border border-[var(--surface-border)] p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 :style="tileStyle(tile.color)">
                 <div class="flex items-center justify-between gap-2">
-                    <p class="truncate text-sm text-slate-500 dark:text-slate-400">{{ tile.label }}</p>
+                    <p class="truncate text-sm text-[var(--texto-suave)]">{{ tile.label }}</p>
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm text-white" :style="{ background: tile.color }">
                         <i :class="tile.icon"></i>
                     </span>
                 </div>
                 <p class="mt-1 truncate text-2xl font-bold">{{ tile.value }}</p>
-                <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500 dark:text-slate-400">
+                <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[var(--texto-suave)]">
                     <span v-if="tile.delta !== null" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold"
                         :class="tile.delta >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
                         <i :class="tile.delta >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'" class="text-[10px]"></i>
@@ -404,12 +570,12 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
             <!-- 1. Participação por canal -->
             <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-2">
                 <h3 class="text-base font-semibold">Participação por canal</h3>
-                <p class="text-xs text-slate-400">Faturamento do mês até hoje</p>
+                <p class="text-xs text-[var(--texto-suave)]">Faturamento do mês até hoje</p>
                 <div v-if="channelShare.total > 0" class="mt-3 grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
                     <div class="relative">
                         <ChartCanvas type="doughnut" :data="shareChartData" :options="shareChartOptions" />
                         <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                            <span class="text-xs text-slate-400">Total</span>
+                            <span class="text-xs text-[var(--texto-suave)]">Total</span>
                             <span class="text-lg font-bold">{{ formatCompact(channelShare.total) }}</span>
                         </div>
                     </div>
@@ -421,18 +587,18 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                             </span>
                             <span class="shrink-0 text-right">
                                 <span class="block font-semibold">{{ formatPrice(row.total) }}</span>
-                                <span class="block text-xs text-slate-400">{{ formatPercent((row.total / channelShare.total) * 100) }}</span>
+                                <span class="block text-xs text-[var(--texto-suave)]">{{ formatPercent((row.total / channelShare.total) * 100) }}</span>
                             </span>
                         </li>
                     </ul>
                 </div>
-                <p v-else class="mt-6 text-sm text-slate-500">Nenhuma venda no mês ainda.</p>
+                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Nenhuma venda no mês ainda.</p>
             </section>
 
             <!-- 2. Crescimento: faturamento mensal por canal -->
             <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-3">
                 <h3 class="text-base font-semibold">Faturamento mensal por canal</h3>
-                <p class="text-xs text-slate-400">Crescimento da loja mês a mês · passe o mouse para ver cada canal</p>
+                <p class="text-xs text-[var(--texto-suave)]">Crescimento da loja mês a mês · passe o mouse para ver cada canal</p>
                 <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     <span v-for="channel in monthlyChannels" :key="channel" class="inline-flex items-center gap-1.5">
                         <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: channelColor(channel) }"></span>
@@ -440,7 +606,7 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                     </span>
                 </div>
                 <ChartCanvas v-if="monthlyTotals.length" class="mt-2" type="bar" :data="monthlyChartData" :options="monthlyChartOptions" />
-                <p v-else class="mt-6 text-sm text-slate-500">Sem vendas nos últimos 12 meses.</p>
+                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 12 meses.</p>
             </section>
 
             <!-- 3. Ritmo do mês -->
@@ -448,7 +614,7 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                 <div class="flex flex-wrap items-start justify-between gap-2">
                     <div>
                         <h3 class="text-base font-semibold">Ritmo do mês</h3>
-                        <p class="text-xs text-slate-400">Faturamento acumulado dia a dia</p>
+                        <p class="text-xs text-[var(--texto-suave)]">Faturamento acumulado dia a dia</p>
                     </div>
                     <span v-if="paceComparison.delta !== null" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
                         :class="paceComparison.delta >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
@@ -466,9 +632,9 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
             <!-- 4. Mix de produtos por categoria -->
             <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-2">
                 <h3 class="text-base font-semibold">Faturamento por categoria</h3>
-                <p class="text-xs text-slate-400">Mix de produtos · últimos 90 dias</p>
+                <p class="text-xs text-[var(--texto-suave)]">Mix de produtos · últimos 90 dias</p>
                 <ChartCanvas v-if="categories.length" class="mt-3" type="bar" :data="categoryChartData" :options="categoryChartOptions" />
-                <p v-else class="mt-6 text-sm text-slate-500">Sem vendas nos últimos 90 dias.</p>
+                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 90 dias.</p>
             </section>
         </div>
 
@@ -481,11 +647,11 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white" style="background: var(--color-primary)"><i class="fas fa-fire"></i></span>
                     <div>
                         <h3 class="text-base font-semibold">Produtos mais vendidos</h3>
-                        <p class="text-xs text-slate-400">Unidades vendidas nos últimos 30 dias</p>
+                        <p class="text-xs text-[var(--texto-suave)]">Unidades vendidas nos últimos 30 dias</p>
                     </div>
                 </div>
                 <div class="p-4">
-                    <p v-if="topProducts.length === 0" class="text-sm text-slate-500">Nenhuma venda nos últimos 30 dias.</p>
+                    <p v-if="topProducts.length === 0" class="text-sm text-[var(--texto-suave)]">Nenhuma venda nos últimos 30 dias.</p>
                     <ol v-else class="space-y-3 text-sm">
                         <li v-for="(product, index) in topProducts" :key="`${product.id}-${product.name}`">
                             <div class="flex items-center justify-between gap-3">
@@ -496,12 +662,12 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                                     <span class="min-w-0 truncate">
                                         <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
                                         <span v-else>{{ product.name }}</span>
-                                        <span v-if="product.color" class="block text-xs font-semibold uppercase text-slate-500">{{ product.color }}</span>
+                                        <span v-if="product.color" class="block text-xs font-semibold uppercase text-[var(--texto-suave)]">{{ product.color }}</span>
                                     </span>
                                 </span>
                                 <span class="shrink-0 text-right">
                                     <span class="block font-semibold">{{ product.quantity }} un.</span>
-                                    <span class="block text-xs text-slate-400">{{ formatPrice(product.revenue) }}</span>
+                                    <span class="block text-xs text-[var(--texto-suave)]">{{ formatPrice(product.revenue) }}</span>
                                 </span>
                             </div>
                             <div class="mt-1.5 ml-8 h-1.5 rounded-full bg-lightprimary">
@@ -520,22 +686,22 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white" :style="{ background: curva.color }"><i :class="curva.icon"></i></span>
                     <div>
                         <h3 class="text-base font-semibold">Produtos curva {{ curva.key.toUpperCase() }}</h3>
-                        <p class="text-xs text-slate-400">{{ curva.description }} · últimos 90 dias</p>
+                        <p class="text-xs text-[var(--texto-suave)]">{{ curva.description }} · últimos 90 dias</p>
                     </div>
                 </div>
                 <div class="p-4">
-                    <p v-if="curva.items.length === 0" class="text-sm text-slate-500">Nenhum produto nesta curva.</p>
+                    <p v-if="curva.items.length === 0" class="text-sm text-[var(--texto-suave)]">Nenhum produto nesta curva.</p>
                     <ul v-else class="space-y-3 text-sm">
                         <li v-for="product in curva.items.slice(0, 10)" :key="`${product.id}-${product.name}`">
                             <div class="flex items-center justify-between gap-3">
                                 <span class="min-w-0 truncate">
                                     <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
                                     <span v-else>{{ product.name }}</span>
-                                    <span v-if="product.color" class="block text-xs font-semibold uppercase text-slate-500">{{ product.color }}</span>
+                                    <span v-if="product.color" class="block text-xs font-semibold uppercase text-[var(--texto-suave)]">{{ product.color }}</span>
                                 </span>
                                 <span class="shrink-0 text-right">
                                     <span class="block font-semibold">{{ formatPrice(product.revenue) }}</span>
-                                    <span class="block text-xs text-slate-400">{{ formatPercent(product.share) }} do faturamento</span>
+                                    <span class="block text-xs text-[var(--texto-suave)]">{{ formatPercent(product.share) }} do faturamento</span>
                                 </span>
                             </div>
                             <div class="mt-1.5 h-1.5 rounded-full" :style="{ background: `color-mix(in oklab, ${curva.color} 15%, transparent)` }">
@@ -543,7 +709,7 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                             </div>
                         </li>
                     </ul>
-                    <p v-if="curva.items.length > 10" class="mt-3 text-xs text-slate-400">+ {{ curva.items.length - 10 }} produto(s) nesta curva</p>
+                    <p v-if="curva.items.length > 10" class="mt-3 text-xs text-[var(--texto-suave)]">+ {{ curva.items.length - 10 }} produto(s) nesta curva</p>
                 </div>
             </section>
         </div>

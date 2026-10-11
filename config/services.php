@@ -216,6 +216,9 @@ return [
         // irreversível (a v3 do Bling não tem endpoint de cancelamento —
         // cancelar exige a tela dele). Ligar só com decisão explícita.
         'auto_send_nfe' => filter_var(env('BLING_AUTO_SEND_NFE', false), FILTER_VALIDATE_BOOLEAN),
+        // Natureza "Venda de mercadoria" no Bling (gera 5102/6102). A "a não
+        // contribuinte" gera 6108 e o Bling recalcula o CFOP por ela (2026-10-11).
+        'natureza_venda_id' => (int) env('BLING_NATUREZA_VENDA_ID', 15110696182),
 
         // Ids de situação do Bling que significam "pedido já despachado"
         // (lista separada por vírgula). Vazio = nada muda: o TikTok

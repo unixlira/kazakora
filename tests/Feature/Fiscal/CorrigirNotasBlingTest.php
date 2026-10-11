@@ -83,7 +83,8 @@ class CorrigirNotasBlingTest extends TestCase
 
         Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
             && $r['itens'][0]['cfop'] === '6102' && $r['itens'][0]['classificacaoFiscal'] === '9015.30.00' && $r['itens'][0]['origem'] === 2
-            && $r['numero'] === '000468' && $r['serie'] === '3' && ! isset($r['situacao']));
+            && $r['numero'] === '000468' && $r['serie'] === '3' && ! isset($r['situacao'])
+            && $r['naturezaOperacao']['id'] === 15110696182);
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/enviar'));
     }
 

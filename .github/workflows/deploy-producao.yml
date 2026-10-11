@@ -83,11 +83,19 @@ jobs:
           BASE=/var/www/kazakora
           ssh deploy@${{ secrets.PROD_SSH_HOST }} "mkdir -p $BASE/releases/$RELEASE"
           # --link-dest: o que não mudou vira hard link da versão atual (envio rápido).
-          rsync -az --delete \
-            --exclude='.git' --exclude='.github' --exclude='.env' --exclude='/storage' \
-            --exclude='node_modules' --exclude='tests' --exclude='/public/storage' \
-            --link-dest=$BASE/current/ \
-            ./ deploy@${{ secrets.PROD_SSH_HOST }}:$BASE/releases/$RELEASE/
+          # Até 3 tentativas com keepalive: 2x em 11/10/2026 a conexão caiu
+          # no meio do envio (ssh 255) e o deploy só passou no rerun.
+          for tentativa in 1 2 3; do
+            rsync -az --delete \
+              -e "ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -o ConnectTimeout=20" \
+              --exclude='.git' --exclude='.github' --exclude='.env' --exclude='/storage' \
+              --exclude='node_modules' --exclude='tests' --exclude='/public/storage' \
+              --link-dest=$BASE/current/ \
+              ./ deploy@${{ secrets.PROD_SSH_HOST }}:$BASE/releases/$RELEASE/ && break
+            [ "$tentativa" = 3 ] && exit 1
+            echo "rsync falhou (tentativa $tentativa/3), repetindo em 10s..."
+            sleep 10
+          done
 
       - name: Ativar
         run: |

@@ -16,6 +16,8 @@ const props = defineProps({
     pixQrCode: { type: String, default: null },
     pixSecondsLeft: { type: Number, default: null },
     failureMessage: { type: String, default: null },
+    // Para onde vai o botão "Ver minha compra" no sucesso.
+    successUrl: { type: String, default: null },
 });
 
 const emit = defineEmits(['retry']);
@@ -53,7 +55,7 @@ const copyPixCode = async () => {
         <div v-if="open" class="fixed inset-0 z-[120] flex items-center justify-center p-4" role="alertdialog" aria-modal="true">
             <div class="absolute inset-0 bg-store-fg/60 backdrop-blur-sm"></div>
 
-            <div class="relative w-full max-w-[440px] rounded-2xl p-8 text-center shadow-xl" :class="state === 'awaiting_pix' ? 'max-h-[95vh] overflow-y-auto bg-white [color-scheme:light]' : 'bg-store-bg-raised'">
+            <div class="relative max-h-[95vh] w-full max-w-[440px] overflow-y-auto rounded-2xl p-8 text-center shadow-xl" :class="state === 'awaiting_pix' ? 'bg-white [color-scheme:light]' : 'bg-store-bg-raised'">
                 <template v-if="state === 'processing' || state === 'timeout'">
                     <div class="mx-auto flex h-14 w-14 items-center justify-center">
                         <i class="fas fa-circle-notch animate-spin text-4xl text-store-accent"></i>
@@ -123,14 +125,44 @@ const copyPixCode = async () => {
                 </template>
 
                 <template v-else-if="state === 'success'">
-                    <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
-                        <i class="fas fa-check text-2xl text-emerald-600 dark:text-emerald-300"></i>
+                    <!-- Sucesso caprichado (pedido 2026-10-11): faixa verde com confete,
+                         número do pedido em laranja e botões em vez de só redirecionar. -->
+                    <div class="relative -mx-8 -mt-8 overflow-hidden rounded-t-2xl bg-gradient-to-br from-[#0FB930] to-[#0a8a23] px-6 pb-7 pt-8 text-white">
+                        <span v-for="n in 14" :key="n" aria-hidden="true" class="confete"
+                            :style="{ left: `${(n * 37) % 100}%`, animationDelay: `${(n % 7) * 0.18}s`, backgroundColor: ['#F27A2A', '#fde047', '#ffffff', '#38bdf8'][n % 4] }"></span>
+                        <div class="sucesso-check mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl text-[#0FB930] shadow-lg">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <h2 class="mt-3 font-display text-2xl font-bold">Pagamento aprovado!</h2>
+                        <p class="mt-1 text-sm opacity-90">Oba! Sua compra está confirmada 🎉</p>
                     </div>
-                    <h2 class="mt-4 font-display text-xl font-semibold text-store-fg">Pagamento confirmado!</h2>
-                    <p v-if="orderTotal !== null" class="mt-2 text-sm text-store-fg-muted">
-                        Total pago: <span class="font-semibold text-store-fg">{{ formatPrice(orderTotal) }}</span>
+
+                    <div v-if="orderCode" class="mx-auto -mt-4 flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-1.5 shadow-md ring-1 ring-black/5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pedido</span>
+                        <span class="text-xl font-black uppercase italic tracking-tight text-[#F27A2A]">{{ orderCode }}</span>
+                        <button type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-sm transition"
+                            :class="codigoCopiado ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-50 text-[#F27A2A] hover:bg-orange-100'"
+                            :aria-label="codigoCopiado ? 'Número copiado' : 'Copiar número do pedido'" @click="copiarCodigoDoPedido">
+                            <i class="fas" :class="codigoCopiado ? 'fa-check' : 'fa-copy'"></i>
+                        </button>
+                    </div>
+
+                    <p v-if="orderTotal !== null" class="mt-4 text-sm text-store-fg-muted">
+                        Total pago: <span class="font-bold text-store-fg">{{ formatPrice(orderTotal) }}</span>
                     </p>
-                    <p class="mt-1 text-sm text-store-fg-muted">Redirecionando para os detalhes do pedido...</p>
+                    <ul class="mx-auto mt-3 flex max-w-[300px] flex-col gap-1.5 text-left text-sm text-store-fg-muted">
+                        <li><i class="fas fa-envelope-circle-check mr-2 w-4 text-center text-[#0FB930]"></i>Enviamos a confirmação para o seu e-mail.</li>
+                        <li><i class="fas fa-box-open mr-2 w-4 text-center text-[#F27A2A]"></i>Já estamos preparando o seu pedido.</li>
+                        <li><i class="fas fa-truck-fast mr-2 w-4 text-center text-sky-500"></i>O rastreio aparece em Meus Pedidos.</li>
+                    </ul>
+
+                    <Link v-if="successUrl" :href="successUrl"
+                        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#F27A2A] px-4 py-3.5 text-sm font-bold text-white no-underline shadow-md hover:brightness-95">
+                        <i class="fas fa-receipt"></i> Ver minha compra
+                    </Link>
+                    <Link href="/" class="mt-2 block w-full rounded-xl border border-store-border px-4 py-3 text-sm font-semibold text-store-fg no-underline hover:border-[#F27A2A]">
+                        Continuar comprando
+                    </Link>
                 </template>
 
                 <template v-else-if="state === 'failed'">
@@ -149,3 +181,11 @@ const copyPixCode = async () => {
         </div>
     </Teleport>
 </template>
+
+<style scoped>
+.confete { position:absolute; top:-10px; width:7px; height:12px; border-radius:2px; opacity:.9; animation:cair 2.4s ease-in infinite; }
+@keyframes cair { 0% { transform:translateY(0) rotate(0); opacity:1; } 100% { transform:translateY(190px) rotate(540deg); opacity:0; } }
+.sucesso-check { animation:pulo .5s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes pulo { from { transform:scale(.3); opacity:0; } to { transform:scale(1); opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .confete, .sucesso-check { animation:none; } .confete { display:none; } }
+</style>

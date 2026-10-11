@@ -191,7 +191,7 @@ class SalesReturnService
         $fiscal = $venda ? $this->fiscalDoXmlDaVenda($venda) : [];
         $completados = 0;
 
-        foreach ($devolucao->items()->whereNull('product_id')->whereNull('ncm')->get() as $item) {
+        foreach ($devolucao->items()->whereNull('product_id')->where(fn ($q) => $q->whereNull('ncm')->orWhere('ncm', ''))->get() as $item) {
             $dados = $fiscal[$this->chaveDoNome($item->product_name)] ?? (count($fiscal) === 1 ? reset($fiscal) : null);
             if ($dados) {
                 $item->update($dados);

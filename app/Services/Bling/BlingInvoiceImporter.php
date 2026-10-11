@@ -93,6 +93,37 @@ class BlingInvoiceImporter
         }
     }
 
+    /**
+     * Importação do histórico (2026-10-11): traz a nota do Bling SÓ se ela
+     * já estiver autorizada lá. Nunca transmite nada à SEFAZ — rascunho
+     * pendente do Bling enviado à toa vira nota duplicada (caso dos 75
+     * pedidos do TikTok com nota nossa série 2 e rascunho série 3 no Bling).
+     *
+     * @return array{situacao: int, nota: ?array<string, mixed>, invoice: ?Invoice}
+     */
+    public function importarSeAutorizada(Order $order, bool $gravar): array
+    {
+        if (! $order->external_order_id) {
+            return ['situacao' => 0, 'nota' => null, 'invoice' => null];
+        }
+
+        $blingOrder = $this->orders->findByOrderNumber($order->external_order_id, $this->orders->lojaIdForChannel((string) $order->origin));
+        $nfeId = (int) ($blingOrder['notaFiscal']['id'] ?? 0);
+        $nota = $nfeId > 0 ? $this->fetchNota($nfeId) : null;
+        $situacao = (int) ($nota['situacao'] ?? 0);
+
+        if (! $nota || ($this->statusDaSituacao($situacao) !== Invoice::STATUS_AUTHORIZED)) {
+            return ['situacao' => $situacao, 'nota' => $nota, 'invoice' => null];
+        }
+
+        return ['situacao' => $situacao, 'nota' => $nota, 'invoice' => $gravar ? $this->gravarInvoice($order, $nota) : null];
+    }
+
+    public function statusDaSituacao(int $situacao): string
+    {
+        return self::SITUACAO_PARA_STATUS[$situacao] ?? Invoice::STATUS_PENDING;
+    }
+
     private function sync(Order $order): ?Invoice
     {
         if (! $order->external_order_id) {

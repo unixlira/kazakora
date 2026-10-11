@@ -284,13 +284,20 @@ const REDES = [
                             <i class="far fa-user text-base"></i>
                         </Link>
 
-                        <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
-                            <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">👤 Meu perfil</Link>
-                            <Link href="/pedidos" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛍️ Compras</Link>
-                            <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">⚙️ Configurações</Link>
-                            <Link v-if="user?.role === 'admin'" href="/admin" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛠️ Painel admin</Link>
-                            <hr class="my-1 border-store-border">
-                            <button type="button" class="block w-full whitespace-nowrap px-4 py-2 text-left text-sm hover:bg-store-bg-sunken" @click="logout">🚪 Sair</button>
+                        <!-- Menu da conta (2026-10-11): DM Sans, ícones no lugar dos emojis. -->
+                        <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised text-left font-sans shadow-xl">
+                            <div class="border-b border-store-border bg-store-bg-sunken px-4 py-3">
+                                <p class="text-[11px] font-semibold uppercase tracking-wider text-store-fg-faint">Olá,</p>
+                                <p class="truncate text-[15px] font-bold text-store-fg">{{ user?.name }}</p>
+                            </div>
+                            <nav class="py-1.5 text-[15px] font-medium text-store-fg">
+                                <Link href="/perfil" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="far fa-user w-4 text-center text-[#F27A2A]"></i> Meu Perfil</Link>
+                                <Link href="/pedidos" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-bag-shopping w-4 text-center text-[#F27A2A]"></i> Meus Pedidos</Link>
+                                <Link href="/rastreio" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-truck-fast w-4 text-center text-[#F27A2A]"></i> Rastrear Pedido</Link>
+                                <Link href="/configuracoes" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-gear w-4 text-center text-[#F27A2A]"></i> Configurações</Link>
+                                <Link v-if="user?.role === 'admin'" href="/admin" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-screwdriver-wrench w-4 text-center text-[#F27A2A]"></i> Painel Admin</Link>
+                            </nav>
+                            <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-4 py-3 text-left text-[15px] font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                         </div>
                     </div>
 
@@ -381,7 +388,7 @@ const REDES = [
                                 </template>
                                 <template v-else>
                                     <li><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
-                                    <li><Link href="/pedidos" class="hover:opacity-100">Compras</Link></li>
+                                    <li><Link href="/pedidos" class="hover:opacity-100">Meus Pedidos</Link></li>
                                 </template>
                                 <li><Link href="/rastreio" class="hover:opacity-100">Rastrear pedido</Link></li>
                             </ul>

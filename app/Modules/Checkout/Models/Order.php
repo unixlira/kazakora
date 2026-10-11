@@ -96,6 +96,30 @@ class Order extends Model
      * registro do pedido (como o ID do Mercado Livre) e fica em
      * external_order_id. Alfabeto sem I, L, O e U pra não confundir ao ditar.
      */
+    /**
+     * Etapas do pedido para o cliente (rastreio e detalhe da compra).
+     *
+     * @return list<array{titulo: string, feito: bool}>
+     */
+    public function etapas(): array
+    {
+        $this->loadMissing('invoice', 'channelShipment', 'latestCorreiosPrePostagem');
+
+        $pago = in_array($this->status, [self::STATUS_PAID, self::STATUS_SHIPPED, self::STATUS_COMPLETED], true);
+        $enviado = in_array($this->status, [self::STATUS_SHIPPED, self::STATUS_COMPLETED], true) || filled($this->trackingCode());
+        // Em preparação: separado/embalado no KoraSync ou com etiqueta pronta.
+        $emPreparacao = $enviado || ($pago && ($this->packed_at !== null || filled($this->channelShipment?->label_path)));
+
+        return [
+            ['titulo' => 'Pedido recebido', 'feito' => true],
+            ['titulo' => 'Pagamento aprovado', 'feito' => $pago],
+            ['titulo' => 'Nota fiscal emitida', 'feito' => $this->invoice?->status === \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED],
+            ['titulo' => 'Em preparação', 'feito' => $emPreparacao],
+            ['titulo' => 'Pedido enviado', 'feito' => $enviado],
+            ['titulo' => 'Entregue', 'feito' => $this->status === self::STATUS_COMPLETED],
+        ];
+    }
+
     /** Número que o cliente vê: o do formato Shopee (loja) ou o do canal; sem ele, o ID. */
     public function getNumeroAttribute(): string
     {

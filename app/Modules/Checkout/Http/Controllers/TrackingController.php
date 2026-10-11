@@ -23,16 +23,26 @@ class TrackingController extends Controller
 
     public function search(Request $request): RedirectResponse
     {
+        // Logado: só o número, buscando nos pedidos da própria conta (pedido 2026-10-11).
+        $logado = $request->user();
         $data = $request->validate([
             'pedido' => ['required', 'string', 'max:20'],
-            'documento' => ['required', 'string', 'max:255'],
+            'documento' => [$logado ? 'nullable' : 'required', 'string', 'max:255'],
         ], [], ['pedido' => 'número do pedido', 'documento' => 'e-mail ou CPF']);
 
         // Aceita o número novo (261011K7Q2M9XD) ou o antigo (só dígitos).
         $digitado = strtoupper(trim(str_replace(['#', ' '], '', $data['pedido'])));
         $order = Order::query()->with('user')->where('origin', Order::ORIGIN_STORE)->where('external_order_id', $digitado)->first()
             ?? (ctype_digit($digitado) ? Order::query()->with('user')->find((int) $digitado) : null);
-        $documento = trim(mb_strtolower($data['documento']));
+        if ($logado) {
+            if (! $order || $order->user_id !== $logado->id) {
+                return back()->withErrors(['pedido' => 'Não encontramos esse pedido na sua conta. Confira o número.'])->withInput();
+            }
+
+            return redirect()->route('rastreio.ver', $order->trackingRef());
+        }
+
+        $documento = trim(mb_strtolower((string) $data['documento']));
         $digitos = preg_replace('/\D/', '', $documento);
 
         $confere = $order && (
@@ -54,12 +64,7 @@ class TrackingController extends Controller
         abort_unless($order, 404);
         $order->load(['items', 'invoice', 'latestCorreiosPrePostagem', 'channelShipment']);
 
-        $pago = in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
         $codigo = $order->trackingCode();
-        $enviado = in_array($order->status, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true) || filled($codigo);
-        // Em preparação (pedido 2026-10-11): separado/embalado no KoraSync ou
-        // com etiqueta pronta; enviado já passou por aqui.
-        $emPreparacao = $enviado || ($pago && ($order->packed_at !== null || filled($order->channelShipment?->label_path)));
 
         return Inertia::render('Checkout/Rastreio', [
             'pedido' => [
@@ -73,14 +78,7 @@ class TrackingController extends Controller
                 'cidade' => trim(($order->shipping_city ?? '').'/'.($order->shipping_state ?? ''), '/'),
                 'codigo_rastreio' => $codigo,
                 'transportadora' => $order->shipping_carrier_name,
-                'etapas' => [
-                    ['titulo' => 'Pedido recebido', 'feito' => true],
-                    ['titulo' => 'Pagamento aprovado', 'feito' => $pago],
-                    ['titulo' => 'Nota fiscal emitida', 'feito' => $order->invoice?->status === \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED],
-                    ['titulo' => 'Em preparação', 'feito' => $emPreparacao],
-                    ['titulo' => 'Pedido enviado', 'feito' => $enviado],
-                    ['titulo' => 'Entregue', 'feito' => $order->status === Order::STATUS_COMPLETED],
-                ],
+                'etapas' => $order->etapas(),
             ],
         ]);
     }

@@ -35,6 +35,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -906,11 +907,103 @@ class CheckoutController extends Controller
         ]);
     }
 
+    /** Minhas Compras (pedido 2026-10-11): cards com as fotos dos produtos empilhadas. */
     public function myOrders(Request $request): Response
     {
-        return Inertia::render('Checkout/MyOrders', [
-            'orders' => $request->user()->orders()->with('items')->latest()->paginate(10)
-                ->through(fn (Order $order) => $order->setAttribute('tracking_ref', $order->trackingRef())->append('numero')),
+        $orders = $request->user()->orders()
+            // Pix gerado e nunca pago não é compra (só polui a lista).
+            ->where('status', '!=', Order::STATUS_AWAITING_PAYMENT)
+            ->with(['items.product.images' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('position')])
+            ->latest()->paginate(10)
+            ->through(fn (Order $order) => [
+                'id' => $order->id,
+                'numero' => $order->numero,
+                'tracking_ref' => $order->trackingRef(),
+                'status' => $order->status,
+                'total' => (float) $order->total,
+                'criado_em' => $order->created_at?->toIso8601String(),
+                'quantidade' => (int) $order->items->sum('quantity'),
+                'itens' => $order->items->map(fn ($item) => [
+                    'nome' => $item->product_name,
+                    'quantidade' => (int) $item->quantity,
+                    'imagem' => $item->product?->images->first()?->thumb_url,
+                ])->values(),
+            ]);
+
+        return Inertia::render('Checkout/MyOrders', ['orders' => $orders]);
+    }
+
+    /** Detalhe da compra com tudo para o cliente e o chat de suporte (pedido 2026-10-11). */
+    public function showOrder(Request $request, Order $order): Response
+    {
+        abort_unless($order->user_id === $request->user()->id, 403);
+
+        $order->load(['items.product.images' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('position'), 'invoice', 'payments', 'channelShipment', 'latestCorreiosPrePostagem']);
+        $pagamento = $order->payments->sortByDesc('id')->first();
+        $nota = $order->invoice?->status === \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED ? $order->invoice : null;
+
+        return Inertia::render('Checkout/OrderDetail', [
+            'pedido' => [
+                'id' => $order->id,
+                'numero' => $order->numero,
+                'status' => $order->status,
+                'criado_em' => $order->created_at?->toIso8601String(),
+                'etapas' => $order->etapas(),
+                'itens' => $order->items->map(fn ($item) => [
+                    'nome' => $item->product_name,
+                    'quantidade' => (int) $item->quantity,
+                    'preco' => (float) $item->product_price,
+                    'subtotal' => (float) $item->subtotal,
+                    'imagem' => $item->product?->images->first()?->thumb_url,
+                    'slug' => $item->product?->slug,
+                ])->values(),
+                'valores' => [
+                    'subtotal' => (float) $order->subtotal,
+                    'frete' => (float) $order->shipping_cost,
+                    'desconto_cupom' => round((float) $order->discount_amount - (float) $order->pix_discount_amount, 2),
+                    'desconto_pix' => (float) $order->pix_discount_amount,
+                    'total' => (float) $order->total,
+                ],
+                'pagamento' => $pagamento ? [
+                    'metodo' => $pagamento->method_type,
+                    'status' => $pagamento->status,
+                    'valor' => (float) $pagamento->amount,
+                    'provedor' => $pagamento->provider,
+                    'transacao' => $pagamento->mercadopago_payment_id ?? $pagamento->mercadopago_order_id ?? $pagamento->stripe_payment_intent_id,
+                    'pago_em' => $pagamento->updated_at?->toIso8601String(),
+                ] : null,
+                'nota' => $nota ? [
+                    'numero' => $nota->numero,
+                    'serie' => $nota->serie,
+                    'chave' => $nota->chave_acesso,
+                    'emitida_em' => ($nota->autorizada_em ?? $nota->updated_at)?->toIso8601String(),
+                    'pdf' => $nota->danfe_path ? route('pedidos.nota.cliente', [$order, 'pdf']) : null,
+                    'xml' => $nota->xml_path ? route('pedidos.nota.cliente', [$order, 'xml']) : null,
+                ] : null,
+                'entrega' => [
+                    'nome' => $order->shipping_name,
+                    'endereco' => trim($order->shipping_street.', '.$order->shipping_number.($order->shipping_complement ? ' - '.$order->shipping_complement : '')),
+                    'bairro_cidade' => trim($order->shipping_neighborhood.' - '.$order->shipping_city.'/'.$order->shipping_state, ' -/'),
+                    'cep' => $order->shipping_zip,
+                    'transportadora' => $order->shipping_carrier_name,
+                    'codigo_rastreio' => $order->trackingCode(),
+                    'rastreio_url' => route('rastreio.ver', $order->trackingRef()),
+                ],
+            ],
+        ]);
+    }
+
+    /** Nota fiscal do próprio pedido (PDF ou XML) para o cliente. */
+    public function notaDoCliente(Request $request, Order $order, string $tipo): \Symfony\Component\HttpFoundation\Response
+    {
+        abort_unless($order->user_id === $request->user()->id, 403);
+        $order->loadMissing('invoice');
+        $caminho = $tipo === 'xml' ? $order->invoice?->xml_path : $order->invoice?->danfe_path;
+        abort_unless($order->invoice?->status === \App\Modules\Fiscal\Models\Invoice::STATUS_AUTHORIZED && $caminho && Storage::disk('local')->exists($caminho), 404);
+
+        return response(Storage::disk('local')->get($caminho), 200, [
+            'Content-Type' => $tipo === 'xml' ? 'application/xml' : 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="nota-fiscal-'.$order->numero.'.'.($tipo === 'xml' ? 'xml' : 'pdf').'"',
         ]);
     }
 

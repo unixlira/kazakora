@@ -162,6 +162,7 @@ watch(() => props.clientSecret, mountPaymentElement, { immediate: true });
 // compra" e a confirmação real — que pode vir da resposta síncrona do Stripe
 // (cartão) OU do polling que espera o webhook confirmar (nunca confiamos só
 // na resposta do front-end pra marcar como pago de verdade).
+const successUrl = ref(null);
 const paymentState = ref('idle'); // idle | processing | awaiting_pix | success | timeout | failed
 const failureMessage = ref(null);
 const pixQrImageUrl = ref(null);
@@ -213,8 +214,8 @@ const startPolling = (orderId) => {
 
             if (data.status === 'paid') {
                 clearTimers();
+                successUrl.value = `/pedidos/${orderId}`;
                 paymentState.value = 'success';
-                setTimeout(() => router.visit(data.redirect), 1500);
                 return;
             }
 
@@ -563,6 +564,8 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
             :pix-qr-code="pixQrCode"
             :pix-seconds-left="pixSecondsLeft"
             :failure-message="failureMessage"
-            @retry="() => router.visit('/finalizacao/pagamento')" />
+            :success-url="successUrl"
+            @retry="() => router.visit('/finalizacao/pagamento')"
+        />
     </AppLayout>
 </template>

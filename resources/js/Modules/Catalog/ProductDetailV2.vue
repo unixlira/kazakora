@@ -40,7 +40,7 @@ const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
-    ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus pedidos", na sua conta.'],
+    ['Como acompanho o meu pedido?', 'Assim que o pedido é postado, o código de rastreio aparece em "Meus Pedidos", no menu da sua conta.'],
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
     ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
@@ -483,7 +483,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                  as frases e o negrito azul daqui. -->
                             <ul class="fretefundo">
                                 <li>
-                                    <span class="selo-icone"><i class="fas fa-truck-fast"></i></span>
+                                    <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
                                     <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout.</span>
                                     <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
                                 </li>

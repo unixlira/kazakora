@@ -58,7 +58,7 @@ class WhatsAppCampaignController extends Controller
             'settings' => [
                 'enabled' => $settings->bool('enabled'),
                 'sandbox_mode' => $settings->bool('sandbox_mode'),
-                'store_base_url' => $settings->get('store_base_url', 'https://kazakora.devlira.com.br'),
+                'store_base_url' => $settings->get('store_base_url'),
             ],
             'limits' => [
                 'maxRecipientsPerBatch' => self::MAX_RECIPIENTS_PER_BATCH,

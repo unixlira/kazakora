@@ -351,7 +351,7 @@ return [
         'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
         'app_secret' => env('WHATSAPP_APP_SECRET'),
         'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
-        'webhook_url' => env('WHATSAPP_WEBHOOK_URL', 'https://kazakora.devlira.com.br/api/webhooks/whatsapp'),
+        'webhook_url' => env('WHATSAPP_WEBHOOK_URL', rtrim((string) env('APP_URL', ''), '/').'/api/webhooks/whatsapp'),
 
         // Mensagem de pedido aprovado (pedido 2026-10-10). Mensagem que a loja
         // inicia precisa de template aprovado na Meta; vazio = não envia.

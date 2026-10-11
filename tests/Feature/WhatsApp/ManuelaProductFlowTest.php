@@ -113,7 +113,7 @@ class ManuelaProductFlowTest extends TestCase
         $this->assertCount(1, $response['response']['encontrados']);
         $this->assertSame('Webcam Full HD 1080p 2MP USB Plug and Play com Microfone Embutido', $response['response']['encontrados'][0]['nome']);
         $this->assertFalse($response['response']['encontrados'][0]['em_estoque']);
-        $this->assertSame('https://kazakora.devlira.com.br/produtos/webcam-full-hd', $response['response']['encontrados'][0]['link']);
+        $this->assertSame(rtrim(config('app.url'), '/').'/produtos/webcam-full-hd', $response['response']['encontrados'][0]['link']);
     }
 
     public function test_cliente_confirma_e_a_ficha_fica_na_conversa_pras_proximas_duvidas(): void

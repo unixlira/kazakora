@@ -423,7 +423,7 @@
         fiscais — sem acesso ao painel administrativo.
       </p>
       <dl class="hero-meta">
-        <div class="item"><dt>Base URL</dt><dd>https://kazakora.devlira.com.br/api/v1</dd></div>
+        <div class="item"><dt>Base URL</dt><dd>{{ rtrim(config('app.url'), '/') }}/api/v1</dd></div>
         <div class="item"><dt>Formato</dt><dd>JSON</dd></div>
         <div class="item"><dt>Auth</dt><dd>Bearer token</dd></div>
       </dl>
@@ -433,7 +433,7 @@
         <p>
           Esta é a <strong>base de homologação</strong> — ambiente real de testes, não uma sandbox
           sintética. Produtos criados aqui ficam visíveis na loja de verdade
-          (<code>kazakora.devlira.com.br</code>), e publicar num canal de marketplace envia o
+          (<code>{{ parse_url(config('app.url'), PHP_URL_HOST) }}</code>), e publicar num canal de marketplace envia o
           anúncio de fato para a conta real conectada no Mercado Livre/Shopee. Ainda não existe
           um endpoint de produção separado — trate escrita nesta API com o mesmo cuidado que
           teria em produção.
@@ -452,7 +452,7 @@
       </p>
 
       <p class="code-label">Requisição</p>
-      <pre class="code"><span class="p">curl</span> https://kazakora.devlira.com.br/api/v1/me \
+      <pre class="code"><span class="p">curl</span> {{ rtrim(config('app.url'), '/') }}/api/v1/me \
   -H <span class="s">"Authorization: Bearer SEU_TOKEN_AQUI"</span> \
   -H <span class="s">"Accept: application/json"</span></pre>
 
@@ -501,7 +501,7 @@
           </table>
 
           <p class="code-label">Requisição</p>
-          <pre class="code"><span class="p">curl -X POST</span> https://kazakora.devlira.com.br/api/v1/login \
+          <pre class="code"><span class="p">curl -X POST</span> {{ rtrim(config('app.url'), '/') }}/api/v1/login \
   -H <span class="s">"Content-Type: application/json"</span> \
   -d <span class="s">'{"usuario": "seu-usuario", "senha": "sua-senha"}'</span></pre>
 
@@ -594,7 +594,7 @@
           </table>
 
           <p class="code-label">Requisição</p>
-          <pre class="code"><span class="p">curl -X POST</span> https://kazakora.devlira.com.br/api/v1/produtos \
+          <pre class="code"><span class="p">curl -X POST</span> {{ rtrim(config('app.url'), '/') }}/api/v1/produtos \
   -H <span class="s">"Authorization: Bearer SEU_TOKEN_AQUI"</span> \
   -H <span class="s">"Content-Type: application/json"</span> \
   -d <span class="s">'{

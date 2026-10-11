@@ -26,7 +26,7 @@ class WhatsAppSettingsController extends Controller
         return Inertia::render('Admin/WhatsApp/Index', [
             'settings' => $settingsPayload,
             'callbackUrl' => $configuredCallback,
-            'requestedCallbackUrl' => config('services.whatsapp.webhook_url') ?: 'https://kazakora.devlira.com.br/api/webhooks/whatsapp',
+            'requestedCallbackUrl' => config('services.whatsapp.webhook_url') ?: rtrim((string) config('app.url'), '/').'/api/webhooks/whatsapp',
             'credentials' => [
                 'accessToken' => filled(config('services.whatsapp.access_token')),
                 'phoneNumberId' => filled(config('services.whatsapp.phone_number_id')),

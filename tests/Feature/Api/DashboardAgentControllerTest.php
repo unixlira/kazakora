@@ -126,10 +126,10 @@ class DashboardAgentControllerTest extends TestCase
         $response->assertOk();
         $response->assertJson([
             'revenue_today' => 280.0,
-            // Todo pedido do dia menos o cancelado (d3efd5f, 2026-09-05):
-            // pago + concluído + devolvido + aguardando pagamento — este
-            // último ainda pode virar venda e continua contando.
-            'sales_today' => 4,
+            // Só venda capturada (pedido do Lira: "só aparecer venda
+            // capturada, nada de pendente"): pago + concluído + devolvido.
+            // Aguardando pagamento e cancelado ficam de fora (2026-10-11).
+            'sales_today' => 3,
             'sales_yesterday' => 0,
             'cancelled_today' => 1,
             'refunded_today' => 1,

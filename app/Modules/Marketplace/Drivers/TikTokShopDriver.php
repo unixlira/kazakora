@@ -130,7 +130,12 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
      *    fica PERMANENTEMENTE vinculado a ela (ProductChannelListing
      *    abaixo) — nunca mais precisa decidir de novo pra esse código.
      */
-    private const MIN_NAME_SIMILARITY = 55.0;
+    // 2026-10-11: era 55 — "Organizador De Pia Silicone" casou 55,6% com a
+    // "Saboneteira De Silicone" (o organizador estava excluído) e o KoraSync
+    // mostrou o produto errado para embalar. Variação de cor legítima dá
+    // 83~85%; abaixo de 75 não chuta: o item entra sem vínculo, com o nome
+    // real do canal, e cai no alerta de item sem produto.
+    private const MIN_NAME_SIMILARITY = 75.0;
 
     public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
     {

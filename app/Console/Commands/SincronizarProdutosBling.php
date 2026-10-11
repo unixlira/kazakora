@@ -20,13 +20,18 @@ use Throwable;
  * completa campo VAZIO (nunca sobrescreve o que o contador ajustou lá);
  * achou mais de 1 → não mexe e avisa; não achou → cria.
  *
+ * Entram só produtos ATIVOS (inativos são cópias/rascunhos de importação,
+ * ex.: SHOPEE-58212998407) e nunca o produto-pai que só agrupa variações —
+ * quem é vendido é a variação, que vai com o nome "Pai - Variação".
+ *
  * Sem --aplicar só mostra o que faria.
  */
 class SincronizarProdutosBling extends Command
 {
     protected $signature = 'bling:sincronizar-produtos
         {--aplicar : Grava no Bling (sem isso, só mostra)}
-        {--sku= : Só este SKU}';
+        {--sku= : Só este SKU}
+        {--incluir-inativos : Inclui produtos inativos (por padrão ficam de fora: cópias e rascunhos de importação)}';
 
     protected $description = 'Cria no Bling os produtos que faltam e completa fiscal/logística (sem duplicar)';
 
@@ -39,9 +44,11 @@ class SincronizarProdutosBling extends Command
         $resumo = ['criados' => 0, 'completados' => 0, 'ok' => 0, 'duplicados' => 0, 'erros' => 0];
 
         $produtos = Product::query()
-            ->with('fiscalData')
+            ->with(['fiscalData', 'parent:id,name'])
             ->whereNotNull('sku')->where('sku', '!=', '')
-            ->where(fn ($q) => $q->where('is_active', true)->orWhereHas('channelListings'))
+            ->unless($this->option('incluir-inativos'), fn ($q) => $q->where('is_active', true))
+            // Pai que só agrupa variações não é vendido sozinho.
+            ->whereDoesntHave('children', fn ($q) => $q->where('is_active', true))
             ->when($this->option('sku'), fn ($q, $sku) => $q->where('sku', $sku))
             ->orderBy('id')
             ->get();
@@ -107,6 +114,19 @@ class SincronizarProdutosBling extends Command
         return $resumo['erros'] ? self::FAILURE : self::SUCCESS;
     }
 
+    /** Variação vai com o nome do pai: "Quebra-Cabeça Magnético - Menino". */
+    private function nome(Product $produto): string
+    {
+        $nome = trim((string) $produto->name);
+        $pai = trim((string) $produto->parent?->name);
+
+        if ($pai === '' || str_starts_with(mb_strtolower($nome), mb_strtolower(mb_substr($pai, 0, 20)))) {
+            return $nome;
+        }
+
+        return $pai.' - '.(trim((string) $produto->variation) ?: $nome);
+    }
+
     private function n(int $n): string
     {
         return (string) $n;
@@ -118,7 +138,7 @@ class SincronizarProdutosBling extends Command
         $f = $produto->fiscalData;
 
         return array_filter([
-            'nome' => mb_substr((string) $produto->name, 0, 120),
+            'nome' => mb_substr($this->nome($produto), 0, 120),
             'codigo' => $produto->sku,
             'preco' => round((float) $produto->price, 2),
             'precoCusto' => $produto->cost_price !== null ? round((float) $produto->cost_price, 2) : null,

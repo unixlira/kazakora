@@ -286,6 +286,17 @@ class ManuelaAgentClient
             return "[áudio do cliente, transcrito] {$transcription}";
         }
 
+        if ($message->type === 'image' && isset($message->payload['visao'])) {
+            $v = $message->payload['visao'];
+            $legenda = trim((string) $message->body);
+            $foto = '[cliente enviou uma FOTO'.($v['descricao'] ? " de: {$v['descricao']}" : '').'.';
+            $foto .= $v['produto_id']
+                ? " É o produto da loja \"{$v['nome']}\" (origem loja, id {$v['produto_id']}) — a ficha dele é o produto em conversa agora; preço e estoque só dela.]"
+                : ' Não foi possível identificar o produto da foto no catálogo. NÃO use o produto falado antes: pergunte com gentileza qual é o produto (nome ou link).]';
+
+            return $legenda !== '' ? "{$foto} Legenda: {$legenda}" : $foto;
+        }
+
         return '[cliente enviou '.$message->preview().']';
     }
 

@@ -18,7 +18,18 @@ class ImportadorDemonstrativoTikTokTest extends TestCase
 
     public function test_importa_o_arquivo_real_e_confere_os_demonstrativos(): void
     {
+        $pedido = \App\Modules\Checkout\Models\Order::create([
+            'status' => 'paid', 'origin' => 'tiktok_shop', 'external_order_id' => '586431223315924063',
+            'shipping_name' => 'C', 'shipping_phone' => '1', 'shipping_zip' => '01001000', 'shipping_street' => 'R', 'shipping_number' => '1',
+            'shipping_neighborhood' => 'B', 'shipping_city' => 'SP', 'shipping_state' => 'SP', 'subtotal' => 99.90, 'total' => 49.99,
+        ]);
+
         $r = app(ImportadorDemonstrativoTikTok::class)->importar(self::ARQUIVO, 'demo.xlsx');
+
+        // Taxa real = vendas líquidas 49,99 − liquidado 37,99 = 12,00.
+        $this->assertDatabaseHas('order_channel_fees', ['order_id' => $pedido->id, 'source' => 'report', 'gross_amount' => 49.99, 'fee_amount' => 12.00, 'payout_amount' => 37.99]);
+        // Receita na margem oficial: as vendas líquidas do extrato, não o subtotal cheio.
+        $this->assertSame(49.99, (float) \Illuminate\Support\Facades\DB::table('orders')->where('id', $pedido->id)->value(\Illuminate\Support\Facades\DB::raw(\App\Modules\Marketplace\Support\ContributionMargin::receitaSql())));
 
         $this->assertSame(99, $r['linhas']);
         $this->assertSame([], $r['divergencias'], 'soma das linhas tem que bater com a aba Extratos');

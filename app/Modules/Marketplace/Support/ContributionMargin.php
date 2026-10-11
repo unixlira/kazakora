@@ -38,7 +38,16 @@ class ContributionMargin
      */
     public static function receitaSql(string $orders = 'orders'): string
     {
-        return "({$orders}.subtotal + CASE WHEN {$orders}.origin = 'amazon' THEN COALESCE({$orders}.shipping_cost, 0) ELSE 0 END)";
+        // TikTok (2026-10-11): o subtotal é o preço CHEIO, antes do desconto
+        // que a própria loja financia (ex.: R$ 239,90 com R$ 150 de desconto
+        // do vendedor). Receita real = "Vendas líquidas dos produtos" do
+        // demonstrativo; enquanto ele não chega, o valor que o cliente pagou.
+        $tiktok = "COALESCE((SELECT SUM(msd.product_net_sales) FROM marketplace_settlement_details msd"
+            ." WHERE msd.channel = 'tiktok_shop' AND msd.transaction_type = 'Pedido' AND msd.external_order_id = {$orders}.external_order_id),"
+            ." CASE WHEN {$orders}.total - COALESCE({$orders}.shipping_cost, 0) > 0 THEN {$orders}.total - COALESCE({$orders}.shipping_cost, 0) ELSE 0 END)";
+
+        return "(CASE WHEN {$orders}.origin = 'tiktok_shop' THEN {$tiktok}"
+            ." ELSE {$orders}.subtotal + CASE WHEN {$orders}.origin = 'amazon' THEN COALESCE({$orders}.shipping_cost, 0) ELSE 0 END END)";
     }
 
     /**

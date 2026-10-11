@@ -136,14 +136,16 @@ class OrderImportService
             // Taxa do canal que só chega depois (Amazon/TikTok pelo Bling:
             // a comissão aparece no pedido quando o canal liquida) ou que
             // mudou. Taxa lançada à mão no Fluxo de Caixa nunca é
-            // sobrescrita — quem digitou sabe mais que a API.
+            // sobrescrita — quem digitou sabe mais que a API. Taxa de
+            // extrato (TikTok, Mercado Pago) também não: é o que a
+            // plataforma pagou de fato (auditoria 2026-10-11).
             if (($data['marketplace_fee'] ?? null) !== null) {
                 $taxa = OrderChannelFee::query()->firstOrNew(['order_id' => $existing->id, 'channel' => $channel]);
                 $componentes = self::componentesDaTaxa($data);
                 $mudou = (float) $taxa->fee_amount !== (float) $data['marketplace_fee']
                     || collect($componentes)->contains(fn ($valor, $campo) => $campo !== 'breakdown' && (string) $taxa->{$campo} !== (string) ($valor === null ? null : number_format((float) $valor, 2, '.', '')));
 
-                if ($taxa->source !== OrderChannelFee::SOURCE_MANUAL && $mudou) {
+                if (! in_array($taxa->source, [OrderChannelFee::SOURCE_MANUAL, OrderChannelFee::SOURCE_REPORT], true) && $mudou) {
                     $taxa->fill([
                         'gross_amount' => $data['subtotal'] ?? $existing->subtotal,
                         'fee_amount' => $data['marketplace_fee'],

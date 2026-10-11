@@ -8,6 +8,7 @@ use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Margem de contribuição — o que sobra no bolso de cada venda depois de
@@ -95,11 +96,11 @@ class ContributionMargin
      * A conta inteira pra um intervalo [desde, ate) — usada no painel
      * inicial (hoje) e no KoraSync.
      *
-     * @return array{receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, margem: float}
+     * @return array{receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float}
      */
     public function periodo(Carbon $desde, Carbon $ate): array
     {
-        $receita = round((float) Order::query()->nonPurchaseReturn()
+        $receita = round((float) Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $desde)
             ->where('created_at', '<', $ate)
@@ -126,6 +127,8 @@ class ContributionMargin
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $frete = round(self::correios($desde, $ate) + $flex, 2);
 
+        $bonificacoes = self::bonificacoes($desde, $ate);
+
         $ads = round((float) ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())
             ->where('date', '<', $ate->toDateString())
@@ -137,14 +140,92 @@ class ContributionMargin
             'taxas' => $taxas,
             'frete' => $frete,
             'ads' => $ads,
-            'margem' => round($receita - $custo - $taxas - $frete - $ads, 2),
+            'bonificacoes' => $bonificacoes,
+            'margem' => round($receita - $custo - $taxas - $frete - $ads + $bonificacoes, 2),
         ];
     }
 
-    /** Notas de devolução não são venda — mesmo filtro de Order::nonPurchaseReturn(). */
+    /**
+     * A mesma conta de periodo(), separada por canal (auditoria 2026-10-11:
+     * o Financeiro fazia uma conta própria por canal e não batia com o
+     * painel nem com o e-mail). Flex e bônus do Flex ficam no Mercado Livre.
+     *
+     * @return array<string, array{pedidos: int, receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float}>
+     */
+    public function porCanal(Carbon $desde, Carbon $ate): array
+    {
+        $vendas = fn () => DB::table('orders')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->tap(fn ($q) => self::semDevolucao($q));
+
+        $receita = $vendas()->selectRaw('orders.origin as canal, COUNT(*) as pedidos, COALESCE(SUM('.self::receitaSql().'), 0) as receita')
+            ->groupBy('orders.origin')->get()->keyBy('canal');
+        $custo = $vendas()->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->selectRaw('orders.origin as canal, COALESCE(SUM('.self::custoSql().'), 0) as total')
+            ->groupBy('orders.origin')->pluck('total', 'canal');
+        $taxas = $vendas()->join('order_channel_fees', 'order_channel_fees.order_id', '=', 'orders.id')
+            ->selectRaw('orders.origin as canal, COALESCE(SUM(order_channel_fees.fee_amount), 0) as total')
+            ->groupBy('orders.origin')->pluck('total', 'canal');
+        $correios = self::correios($desde, $ate, porCanal: true);
+        $ads = ChannelAdSpend::query()
+            ->where('date', '>=', $desde->toDateString())
+            ->where('date', '<', $ate->toDateString())
+            ->selectRaw('channel, COALESCE(SUM(spend), 0) as total')
+            ->groupBy('channel')->pluck('total', 'channel');
+        $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
+        $bonus = self::bonificacoes($desde, $ate);
+
+        $canais = collect([$receita->keys(), $custo->keys(), $taxas->keys(), array_keys($correios), $ads->keys()])
+            ->flatten()->filter()->unique()->values();
+        if ($flex > 0 || $bonus > 0) {
+            $canais->push(Order::ORIGIN_MERCADO_LIVRE);
+        }
+
+        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $correios, $ads, $flex, $bonus) {
+            $ml = $canal === Order::ORIGIN_MERCADO_LIVRE;
+            $linha = [
+                'pedidos' => (int) ($receita->get($canal)?->pedidos ?? 0),
+                'receita' => round((float) ($receita->get($canal)?->receita ?? 0), 2),
+                'custo_produtos' => round((float) ($custo[$canal] ?? 0), 2),
+                'taxas' => round((float) ($taxas[$canal] ?? 0), 2),
+                'frete' => round((float) ($correios[$canal] ?? 0) + ($ml ? $flex : 0), 2),
+                'ads' => round((float) ($ads[$canal] ?? 0), 2),
+                'bonificacoes' => $ml ? $bonus : 0.0,
+            ];
+            $linha['margem'] = round($linha['receita'] - $linha['custo_produtos'] - $linha['taxas'] - $linha['frete'] - $linha['ads'] + $linha['bonificacoes'], 2);
+
+            return [$canal => $linha];
+        })->all();
+    }
+
+    /**
+     * Bônus do Flex que o Mercado Livre deposita no Mercado Pago
+     * ("bonificaciones_flex", ver ConciliacaoMercadoPago) — dinheiro que
+     * entra e abate o custo do motoboy. Pela data em que caiu.
+     */
+    public static function bonificacoes(Carbon $desde, Carbon $ate): float
+    {
+        if (! Schema::hasTable('mercado_pago_pagamentos')) {
+            return 0.0;
+        }
+
+        return round((float) DB::table('mercado_pago_pagamentos')
+            ->where('canal', 'bonificacao')
+            ->where('status', 'approved')
+            ->where('data_criacao', '>=', $desde)
+            ->where('data_criacao', '<', $ate)
+            ->sum(DB::raw('liquido - reembolsado')), 2);
+    }
+
+    /** Só venda efetiva — mesmo filtro de Order::vendaEfetiva(). */
     public static function semDevolucao($query, string $orders = 'orders'): void
     {
         $query
+            ->where(fn ($q) => $q->where("{$orders}.origin", '!=', Order::ORIGIN_MANUAL_INVOICE)->orWhereNull("{$orders}.origin"))
+            ->whereNull("{$orders}.estornado_em")
             ->where(fn ($q) => $q->whereNotIn("{$orders}.origin", [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE])->orWhereNull("{$orders}.origin"))
             ->where(fn ($q) => $q->whereNotIn("{$orders}.fiscal_operation_type", ['purchase_return', 'sales_return'])->orWhereNull("{$orders}.fiscal_operation_type"));
     }

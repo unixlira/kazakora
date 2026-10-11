@@ -141,7 +141,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
         <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
             Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma e custo dos itens vendidos.
         </p>
-        <div class="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-4">
+        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
             <div v-for="market in marketplaceMetricsRows" :key="market.channel" class="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" :class="market.isEmpty ? 'opacity-70' : ''">
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <div class="flex min-w-0 items-start gap-3">

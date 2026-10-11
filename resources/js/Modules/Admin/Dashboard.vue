@@ -475,30 +475,34 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                 stat-icon-name="fas fa-rotate-left" :variant="stats.returnsMonth > 0 ? 'error' : 'success'" vivid />
         </div>
 
-        <section class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+        <!-- Fundos em degradê (pedido 2026-10-11, mesmas cores dos cards
+             "Adapta"): vinho/rosa aqui, verde nos acessos. Texto branco. -->
+        <section class="card-degrade card-degrade--vinho mt-4 p-4 text-white">
             <div class="flex items-center gap-2">
-                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 text-xs text-white"><i class="fas fa-store"></i></span>
-                <h3 class="text-sm font-semibold">Faturamento por canal</h3>
-                <span class="text-xs text-[var(--texto-suave)]">· mês até hoje</span>
+                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm ring-1 ring-white/30"><i class="fas fa-store"></i></span>
+                <h3 class="text-base font-semibold">Faturamento por canal</h3>
+                <span class="text-xs text-white/80">· mês até hoje</span>
             </div>
             <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                 <div v-for="row in channelStrip" :key="row.origin"
-                    class="min-w-0 rounded-lg border border-[var(--surface-border)] px-3 py-2.5"
-                    :style="{ borderLeft: `4px solid ${channelColor(row.origin)}`, background: `color-mix(in oklab, ${channelColor(row.origin)} 9%, var(--surface))` }">
-                    <p class="truncate text-xs font-semibold" :style="{ color: channelColor(row.origin) }">{{ channelName(row.origin) }}</p>
-                    <p class="truncate text-lg font-bold" :class="row.total > 0 ? '' : 'text-[var(--texto-suave)]'">{{ formatPrice(row.total) }}</p>
-                    <div class="mt-1 h-1 rounded-full bg-[var(--surface-border)]">
-                        <div class="h-1 rounded-full" :style="{ width: `${row.share}%`, background: channelColor(row.origin) }"></div>
+                    class="min-w-0 rounded-lg bg-white/12 px-3 py-2.5 ring-1 ring-white/20"
+                    :style="{ borderLeft: `4px solid ${channelColor(row.origin)}` }">
+                    <p class="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90">
+                        <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
+                        {{ channelName(row.origin) }}
+                    </p>
+                    <p class="truncate text-lg font-bold" :class="row.total > 0 ? 'text-white' : 'text-white/70'">{{ formatPrice(row.total) }}</p>
+                    <div class="mt-1 h-1 rounded-full bg-white/20">
+                        <div class="h-1 rounded-full bg-white" :style="{ width: `${row.share}%` }"></div>
                     </div>
-                    <p class="mt-1 text-[11px] text-[var(--texto-suave)]">{{ row.total > 0 ? `${formatPercent(row.share)} do mês` : 'sem vendas no mês' }}</p>
+                    <p class="mt-1 text-[11px] text-white/80">{{ row.total > 0 ? `${formatPercent(row.share)} do mês` : 'sem vendas no mês' }}</p>
                 </div>
             </div>
         </section>
 
         <!-- Acessos ao site (pedido 2026-10-11): entre o faturamento e o
              desempenho do mês, com filtro de mês. -->
-        <section class="mt-4 overflow-hidden rounded-xl text-white shadow-md"
-            style="background: linear-gradient(135deg, #198754 0%, #157347 55%, #0f5132 100%)">
+        <section class="card-degrade card-degrade--verde mt-4 overflow-hidden text-white">
             <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white ring-1 ring-white/30"><i class="fas fa-globe"></i></span>
@@ -712,6 +716,25 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
 </template>
 
 <style scoped>
+/* Cards em degradê (cores enviadas pelo Lira, 2026-10-11). */
+.card-degrade {
+    border-radius: 16px;
+    box-shadow: inset 0 8px 12px 0 rgba(255, 255, 255, 0.1), 0 4px 14px rgba(15, 23, 42, 0.12);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-degrade:hover {
+    transform: translateY(-4px);
+}
+.card-degrade--verde {
+    background: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
+}
+.card-degrade--vinho {
+    background: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+    .card-degrade:hover { transform: none; }
+}
+
 /* Select do mês no card verde: fundo branco e texto escuro nos dois temas. */
 .visitas-mes,
 .visitas-mes option {

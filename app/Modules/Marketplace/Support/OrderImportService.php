@@ -1,0 +1,1281 @@
+<?php
+
+namespace App\Modules\Marketplace\Support;
+
+use App\Models\User;
+use App\Modules\Catalog\Jobs\CompleteImportedProductJob;
+use App\Modules\Catalog\Support\ProductMediaBackfillService;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
+use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockManager;
+use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\MarketplaceClaim;
+use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Notifications\CancelledOrderWithAuthorizedInvoiceNotification;
+use App\Notifications\ProductAutoImportedNotification;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+
+/**
+ * Canal-agnóstico de propósito: só fala com MarketplaceChannelDriver
+ * (interface), nunca com a API de um canal específico. Cada driver já
+ * devolve o pedido no formato comum declarado em
+ * MarketplaceChannelDriver::importOrder() — esse serviço só sabe transformar
+ * esse formato em Order/OrderItem e debitar o estoque central, do mesmo
+ * jeito que o checkout do site já faz.
+ */
+class OrderImportService
+{
+    /**
+     * Venda trazida por varredura só conta como "perdida" (sem impressão
+     * automática) passado este tempo desde a compra. 2h: o webhook chega em
+     * segundos, e venda com menos que isso sem etiqueta ainda não foi
+     * despachada por fora — imprimir é o certo. Ver createOrder().
+     */
+    private const VENDA_PERDIDA_APOS_MINUTOS = 120;
+
+    public function __construct(
+        private readonly MarketplaceDriverManager $manager,
+        private readonly StockManager $stock,
+        private readonly OrderPaymentFinalizer $finalizer,
+        private readonly OrderFulfillmentTimeline $timeline,
+    ) {}
+
+    /**
+     * @return Order|null null quando o pedido não foi (e não devia ser)
+     *                    criado — ver importNormalized() pro único caso
+     *                    disso hoje (Shopee com pagamento pendente).
+     */
+    /**
+     * @param  bool  $viaVarredura  true quando quem chamou foi uma varredura
+     *                              (orders:sync-*), não o webhook do canal.
+     *                              Venda achada por varredura NÃO imprime
+     *                              sozinha — ver createOrder() e a migration
+     *                              add_auto_print_blocked_to_orders_table.
+     */
+    public function import(string $channel, string $externalOrderId, bool $viaVarredura = false): ?Order
+    {
+        $data = $this->manager->driver($channel)->importOrder($externalOrderId);
+
+        return $this->importNormalized($channel, $data, viaVarredura: $viaVarredura);
+    }
+
+    /**
+     * Mesmo caminho real do import via webhook (pedido, itens, débito de
+     * estoque, disparo de etiqueta/nota), mas recebendo os dados já
+     * normalizados em vez de buscar via driver — ponto de entrada usado
+     * pela tela de teste de webhook (Admin/Impressoes/TesteWebhook), que
+     * não tem um pedido de verdade em nenhum marketplace pra consultar.
+     *
+     * @param  array<string, mixed>  $data
+     * @return Order|null null só no caso descrito no bloco logo abaixo do
+     *                    check de $existing (Shopee com pagamento
+     *                    pendente, pedido novo) — em todo outro caso
+     *                    sempre devolve um Order de verdade.
+     */
+    public function importNormalized(string $channel, array $data, bool $dispatchShippingConfirmation = true, bool $viaVarredura = false): ?Order
+    {
+        $existing = Order::query()
+            ->where('origin', $channel)
+            ->where('external_order_id', $data['external_order_id'])
+            ->first();
+
+        if ($existing) {
+            $this->timeline->record($existing, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Webhook reentregue ({$channel}), status={$data['status']}");
+
+            // Autocorreção pra pedidos que entraram antes de placed_at
+            // existir (achado real 2026-08-06, ver comentário em
+            // createOrder()) — reprocessar o backfill já corrige a data sem
+            // precisar de um script separado.
+            if ($this->temHoraDeVerdade($data['placed_at'] ?? null) && ! $existing->created_at->equalTo($data['placed_at'])) {
+                $existing->forceFill(['created_at' => $data['placed_at']])->save();
+            }
+
+            // Mesma lógica pro total (achado real 2026-08-06,
+            // ShopeeDriver::importOrder() — total_amount da Shopee nunca
+            // incluía o frete, todo pedido já importado antes desse fix
+            // ficou com o total sub-contado). Reprocessar o sync já
+            // corrige os pedidos existentes, sem script separado.
+            $financialFields = array_filter([
+                'subtotal' => $data['subtotal'] ?? null,
+                'shipping_cost' => $data['shipping_cost'] ?? null,
+                'total' => $data['total'] ?? null,
+            ], fn ($value) => $value !== null);
+
+            $changed = array_filter($financialFields, fn ($value, $field) => (float) $existing->{$field} !== (float) $value, ARRAY_FILTER_USE_BOTH);
+
+            if ($changed) {
+                $existing->update($changed);
+            }
+
+            // Pedido importado antes da coluna existir ganha o pack_id no
+            // primeiro webhook reentregue.
+            if (! empty($data['channel_pack_id']) && ! $existing->channel_pack_id) {
+                $existing->update(['channel_pack_id' => $data['channel_pack_id']]);
+            }
+
+            $buyerFields = $this->resolveBuyerFieldUpdates($existing, $data);
+
+            if ($buyerFields) {
+                $existing->update($buyerFields);
+            }
+
+            // Taxa do canal que só chega depois (Amazon/TikTok pelo Bling:
+            // a comissão aparece no pedido quando o canal liquida) ou que
+            // mudou. Taxa lançada à mão no Fluxo de Caixa nunca é
+            // sobrescrita — quem digitou sabe mais que a API.
+            if (($data['marketplace_fee'] ?? null) !== null) {
+                $taxa = OrderChannelFee::query()->firstOrNew(['order_id' => $existing->id, 'channel' => $channel]);
+                $componentes = self::componentesDaTaxa($data);
+                $mudou = (float) $taxa->fee_amount !== (float) $data['marketplace_fee']
+                    || collect($componentes)->contains(fn ($valor, $campo) => $campo !== 'breakdown' && (string) $taxa->{$campo} !== (string) ($valor === null ? null : number_format((float) $valor, 2, '.', '')));
+
+                if ($taxa->source !== OrderChannelFee::SOURCE_MANUAL && $mudou) {
+                    $taxa->fill([
+                        'gross_amount' => $data['subtotal'] ?? $existing->subtotal,
+                        'fee_amount' => $data['marketplace_fee'],
+                        ...$componentes,
+                        'source' => OrderChannelFee::SOURCE_API,
+                        'computed_at' => now(),
+                    ])->save();
+                }
+            }
+
+            $this->reconcileMissingItems($existing, $channel, $data['items'] ?? []);
+
+            return $this->syncStatus($existing, $data['status'], $data['channel_status'] ?? null);
+        }
+
+        // Pedido explícito 2026-08-21: pedido NOVO da Shopee que ainda está
+        // com pagamento pendente (AWAITING_PAYMENT — Pix aguardando
+        // confirmação, cartão em análise etc., ver ShopeeDriver::
+        // mapOrderStatus()) não vira Order nenhum ainda. Motivo real: um
+        // pedido "fantasma" (nunca vai virar venda de verdade se o
+        // pagamento cair) ficava poluindo a lista de Pedidos e a fila de
+        // separação/impressão pra sempre, sem nenhuma venda real por trás.
+        // Quando o pagamento realmente confirmar, a Shopee reentrega o
+        // webhook com o status pago — nenhum $existing é achado (porque
+        // nunca criamos nada agora), então cai em createOrder() normalmente
+        // dessa vez. Só Shopee: Mercado Livre/Amazon continuam criando o
+        // pedido em qualquer status, comportamento não mudou pra eles (o
+        // status "pendente" deles já significa outra coisa no fluxo real).
+        if ($channel === MarketplaceAccount::CHANNEL_SHOPEE && $data['status'] === Order::STATUS_AWAITING_PAYMENT) {
+            Log::info('marketplace.order_import.skipped_pending_payment', [
+                'channel' => $channel,
+                'external_order_id' => $data['external_order_id'],
+            ]);
+
+            return null;
+        }
+
+        try {
+            return $this->createOrder($channel, $data, $dispatchShippingConfirmation, $viaVarredura);
+        } catch (QueryException $exception) {
+            // Reentrega de webhook quase simultânea pode passar pelo check
+            // de existência acima antes do outro processo commitar — o
+            // índice único (origin, external_order_id) pega isso na hora do
+            // insert. Trata como já importado em vez de estourar erro.
+            if ($exception->getCode() !== '23000') {
+                throw $exception;
+            }
+
+            // BUG REAL 2026-08-08 encontrado por causa disto: nem toda
+            // QueryException 23000 dentro de createOrder() é essa corrida
+            // (ex: um NOT NULL de outra tabela gravada na mesma
+            // transação, como product_fiscal_data.tipo_operacao —
+            // ver ShopeeDriver::importFiscalData()). Antes, firstOrFail()
+            // MASCARAVA esse erro completamente diferente como
+            // "ModelNotFoundException: No query results for model Order",
+            // fazendo o pedido inteiro sumir sem log nenhum do problema
+            // real. Confirma que o pedido REALMENTE existe (corrida de
+            // verdade) antes de tratar como sucesso — se não existir, era
+            // outra coisa, relança a exceção original pra aparecer no
+            // shopee.log/failed_jobs com a mensagem real, útil de
+            // debugar, em vez de uma pista falsa.
+            $order = Order::query()
+                ->where('origin', $channel)
+                ->where('external_order_id', $data['external_order_id'])
+                ->first();
+
+            if (! $order) {
+                throw $exception;
+            }
+
+            return $this->syncStatus($order, $data['status'], $data['channel_status'] ?? null);
+        }
+    }
+
+    /**
+     * BUG REAL 2026-09-01 (pedido #894, Mercado Livre): pedido existente com
+     * MENOS itens do que o canal informa — o #894 estava com ZERO itens,
+     * então a nota nunca sairia ("Pedido sem itens") e o card da fila
+     * mostrava só os itens do irmão de pacote. Até aqui, reprocessar o
+     * pedido corrigia data, totais, comprador e IE, mas NUNCA os itens: um
+     * pedido que nasceu incompleto ficava incompleto pra sempre, sem
+     * nenhum jeito de consertar sem mexer no banco na mão.
+     *
+     * Só ACRESCENTA o que falta (casando por external_item_id) — nunca
+     * apaga nem altera item existente. Se algum item já gravado não tem
+     * external_item_id (pedido anterior à migration
+     * add_external_item_id, 2026-08-19), não dá pra saber com segurança o
+     * que é duplicata: sai sem fazer nada em vez de arriscar duplicar
+     * item e debitar estoque duas vezes.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function reconcileMissingItems(Order $order, string $channel, array $items): void
+    {
+        if ($items === []) {
+            return;
+        }
+
+        $order->loadMissing('items');
+
+        // SÓ pedido com ZERO item — que é o caso real que motivou isto
+        // (#894, importado sem item nenhum, nota impossível e card da fila
+        // mostrando só os itens do irmão de pacote).
+        //
+        // BUG REAL 2026-09-02 (pedido #1216): completar item a item era
+        // ganancioso demais. Pra refazer uma nota com série errada, o
+        // pedido foi CLONADO no Bling, e o clone reescreve o código dos
+        // itens ("3" na frente do código original). Na reimportação, esses
+        // códigos novos pareceram "itens que faltavam" e viraram 2 itens
+        // extras num pedido que já estava completo: 4 itens no lugar de 2,
+        // os dois novos sem produto vinculado — o que travou a emissão da
+        // nota e faria o operador embalar o dobro.
+        //
+        // Pedido que já tem item é assunto do canal, não nosso: se o canal
+        // mudar o item de uma venda, isso chega por outro caminho, com
+        // gente olhando.
+        if ($order->items->isNotEmpty()) {
+            return;
+        }
+
+        $known = $order->items
+            ->map(fn ($item) => $item->external_item_id.'|'.($item->external_model_id ?? ''))
+            ->all();
+
+        foreach ($items as $item) {
+            $externalModelId = $item['external_model_id'] ?? null;
+
+            if (in_array($item['external_id'].'|'.($externalModelId ?? ''), $known, true)) {
+                continue;
+            }
+
+            $listingQuery = ProductChannelListing::query()
+                ->where('channel', $channel)
+                ->where('external_id', $item['external_id']);
+
+            $listing = $externalModelId
+                ? (clone $listingQuery)->where('external_model_id', $externalModelId)->first()
+                : null;
+
+            $listing ??= (clone $listingQuery)->whereNull('external_model_id')->first();
+
+            // SÓ o listing local — nada de auto-import aqui, de propósito.
+            // Achado por teste 2026-09-02: chamar o driver neste ponto
+            // muda o comportamento de um simples resync de pedido já
+            // existente (passa a bater na API do canal, e um canal sem
+            // credencial configurada derrubava o import inteiro, que antes
+            // só sincronizava o status). Item sem produto entra assim
+            // mesmo: a rotina marketplace:relink-unmapped-items (a cada
+            // 30min) já existe exatamente pra vincular isso depois, e o
+            // nome vem do próprio payload do canal.
+            $product = $listing?->product;
+
+            $order->items()->create([
+                'product_id' => $product?->id,
+                'external_item_id' => $item['external_id'],
+                'external_model_id' => $externalModelId,
+                'product_name' => $product?->name
+                    ?? ($item['external_name'] ?? null)
+                    ?? "Item {$item['external_id']} (sem produto local mapeado)",
+                'product_price' => $item['unit_price'],
+                'quantity' => $item['quantity'],
+                'subtotal' => round($item['unit_price'] * $item['quantity'], 2),
+            ]);
+
+            Log::warning('marketplace.order_import.item_backfilled', [
+                'order_id' => $order->id,
+                'channel' => $channel,
+                'item_external_id' => $item['external_id'],
+                'product_id' => $product?->id,
+            ]);
+
+            // A venda é real e nunca tinha debitado esta unidade — sem
+            // isso o estoque fica sobrando exatamente o que este item
+            // levou. Pedido já cancelado com estoque devolvido é a
+            // exceção: aí não há o que debitar (e syncStatus() cuida do
+            // débito se ele voltar a ficar pago).
+            if ($product && $order->status !== Order::STATUS_CANCELLED) {
+                $this->stock->adjust(
+                    $product,
+                    -$item['quantity'],
+                    StockMovement::TYPE_SALE,
+                    reason: 'Item faltante do pedido recuperado do canal — '.$channel,
+                    reference: $order,
+                );
+            }
+
+            $this->timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_STOCK_UPDATED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                "Item que faltava no pedido foi recuperado do canal ({$item['external_id']})",
+            );
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function createOrder(string $channel, array $data, bool $dispatchShippingConfirmation = true, bool $viaVarredura = false): Order
+    {
+        return DB::transaction(function () use ($channel, $data, $dispatchShippingConfirmation, $viaVarredura) {
+            $order = Order::create([
+                'user_id' => null,
+                'status' => $data['status'],
+                'origin' => $channel,
+                // ERRO MEU 2026-09-10: recuperei pela varredura uma venda
+                // que o sistema nunca tinha visto, e o fluxo seguiu sozinho
+                // até IMPRIMIR a etiqueta de um pedido que já estava a
+                // caminho. Varredura acha o que se perdeu; quem decide
+                // gastar papel é a bancada.
+                //
+                // ERRO MEU DE NOVO 2026-09-11 (pedido #2028, Shopee
+                // 260911Q4CJMQRK, relato do usuário "por que não foi
+                // impresso"): a varredura HORÁRIA pegou a venda às 00:03:11,
+                // 3 minutos depois da compra e 7 segundos antes do webhook
+                // chegar — e a trava tratou venda fresca como venda perdida.
+                // Ficou sem etiqueta a noite inteira. Perdida é venda VELHA:
+                // só trava quando a venda tem mais de
+                // VENDA_PERDIDA_APOS_MINUTOS no canal.
+                'auto_print_blocked' => $viaVarredura && $this->vendaJaEsfriou($data['placed_at'] ?? null),
+                'external_order_id' => $data['external_order_id'],
+                'channel_pack_id' => $data['channel_pack_id'] ?? null,
+                'buyer_document' => $data['buyer_document'] ?? null,
+                'shipping_name' => $data['buyer_name'],
+                // Só exibição (ver migration
+                // add_recipient_and_buyer_nickname_to_orders_table):
+                // destinatário real da etiqueta e apelido do comprador no
+                // canal. Driver que não manda essas chaves (Shopee/Amazon/
+                // TikTok hoje) grava null e nada muda pra ele.
+                'shipping_recipient_name' => $data['recipient_name'] ?? null,
+                'channel_buyer_nickname' => $data['buyer_nickname'] ?? null,
+                'shipping_phone' => $data['buyer_phone'] ?? 'Não informado',
+                'shipping_email' => $data['buyer_email'] ?? null,
+                'shipping_whatsapp' => $data['buyer_whatsapp'] ?? null,
+                'shipping_zip' => $data['shipping_zip'],
+                'shipping_street' => $data['shipping_street'],
+                'shipping_number' => $data['shipping_number'],
+                'shipping_complement' => $data['shipping_complement'],
+                'shipping_neighborhood' => $data['shipping_neighborhood'],
+                'shipping_city' => $data['shipping_city'],
+                'shipping_state' => $data['shipping_state'],
+                'subtotal' => $data['subtotal'],
+                'shipping_cost' => $data['shipping_cost'],
+                // BUG REAL 2026-08-31 (achado via TikTokShopDriver — cupom/
+                // desconto do canal fazia a NF-e sair com o total errado, a
+                // SEFAZ recusava por "total difere do somatório dos
+                // valores"): sem isso, um driver que já manda
+                // discount_amount calculado (ver
+                // TikTokShopDriver::importOrder()) tinha esse dado
+                // descartado silenciosamente aqui — NFeXmlBuilderService lê
+                // Order::discount_amount direto (vDesc), não recalcula
+                // sozinho. Default 0 mantém o comportamento de sempre pra
+                // driver que não manda essa chave (Mercado Livre/Shopee/
+                // Amazon).
+                'discount_amount' => $data['discount_amount'] ?? 0,
+                'total' => $data['total'],
+            ]);
+
+            // created_at não está no $fillable de Order (proteção normal de
+            // mass-assignment) — Order::create() acima sempre grava now(),
+            // então corrige com forceFill logo em seguida quando o canal
+            // manda a data real da venda (placed_at). Achado real
+            // 2026-08-06 (backfill de pedidos antigos do Mercado
+            // Livre/Shopee): sem isso, um pedido de meses atrás importado
+            // hoje aparecia como "vendido hoje" nos cards de faturamento.
+            // Sem placed_at (tela de teste de webhook, pedido fake), fica
+            // now() mesmo, que já é o comportamento correto pra isso.
+            $dataDaVenda = $this->dataDaVenda($data['placed_at'] ?? null);
+
+            if ($dataDaVenda) {
+                $order->forceFill(['created_at' => $dataDaVenda])->save();
+            }
+
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Pedido importado do canal {$channel}", ['external_order_id' => $data['external_order_id']]);
+
+            $unmappedItems = [];
+
+            foreach ($data['items'] as $item) {
+                // Achado real 2026-08-15 (Ring Light 8" vs 10", pedido
+                // #376): um anúncio com variação (ver
+                // ShopeeDriver::importOrder(), items[].external_model_id)
+                // pode ter VÁRIOS listings locais pro mesmo external_id, um
+                // por variação — casa pela variação exata primeiro. Sem
+                // model_id no item (canal/produto sem variação) ou sem
+                // nenhum listing pra essa variação específica ainda
+                // cadastrado, cai pro listing "genérico" do anúncio
+                // (external_model_id null) — mesmo comportamento de sempre,
+                // sem regressão pro que já funcionava.
+                $listingQuery = ProductChannelListing::query()
+                    ->where('channel', $channel)
+                    ->where('external_id', $item['external_id']);
+
+                $externalModelId = $item['external_model_id'] ?? null;
+
+                $listing = $externalModelId
+                    ? (clone $listingQuery)->where('external_model_id', $externalModelId)->first()
+                    : null;
+
+                if (! $listing) {
+                    $listing = (clone $listingQuery)->whereNull('external_model_id')->first();
+                }
+
+                $product = $listing?->product;
+                $autoImported = false;
+
+                // Item de um anúncio que nunca foi trazido pro catálogo
+                // local (feito direto no canal, fora do Kazakora) — tenta
+                // importar automaticamente em vez de deixar o pedido
+                // inteiro sem produto, o que travava a NF-e/etiqueta pra
+                // sempre (o canal recusa liberar o envio sem nota válida,
+                // e sem produto local não tem como emitir nota nenhuma).
+                // Entra como rascunho, com dados fiscais quando o canal já
+                // tem isso preenchido — ver
+                // MarketplaceChannelDriver::autoImportProduct(). Canais sem
+                // essa capacidade (ainda) implementada devolvem null, igual
+                // ao comportamento anterior. Passa a quantidade desta
+                // própria venda pro driver poder somar de volta ao estoque
+                // "atual" que ele buscar no canal — ver comentário lá:
+                // sem isso, a baixa abaixo contaria esta venda 2x.
+                if (! $product) {
+                    $product = $this->manager->driver($channel)->autoImportProduct($item['external_id'], $item['quantity'], $externalModelId)
+                        // Canal que não cadastra produto sozinho (TikTok,
+                        // Amazon): procura o mesmo SKU no ML/Shopee e
+                        // importa de lá — ver CrossChannelProductImporter.
+                        ?? app(CrossChannelProductImporter::class)->import($channel, $item['external_id']);
+                    $autoImported = (bool) $product;
+
+                    if ($product) {
+                        Log::info('marketplace.order_import.product_auto_imported', [
+                            'channel' => $channel,
+                            'external_order_id' => $data['external_order_id'],
+                            'item_external_id' => $item['external_id'],
+                            'product_id' => $product->id,
+                        ]);
+
+                        // Produto nascido de venda vinha SEM foto nenhuma
+                        // em todos os drivers — e é justamente ele que o
+                        // OrderImageArchiveService não consegue servir,
+                        // deixando o card de separação sem imagem. Busca a
+                        // foto no próprio anúncio agora, enquanto o pedido
+                        // está entrando. Best-effort de propósito: falha
+                        // aqui não pode derrubar a importação do pedido.
+                        try {
+                            app(ProductMediaBackfillService::class)->fill($product);
+                        } catch (\Throwable $exception) {
+                            Log::warning('marketplace.order_import.media_backfill_failed', [
+                                'product_id' => $product->id,
+                                'message' => $exception->getMessage(),
+                            ]);
+                        }
+
+                        // O resto do cadastro (descrição, marca, modelo,
+                        // cor, GTIN, vídeo) vem na fila, depois que o
+                        // pedido já entrou — pedido explícito 2026-10-07:
+                        // produto que nasce de venda entra COMPLETO. Só pro
+                        // produto criado agora: casado por SKU já é o
+                        // cadastro de alguém, não se mexe.
+                        if ($product->wasRecentlyCreated) {
+                            CompleteImportedProductJob::dispatch($product->id)->afterCommit();
+                        }
+
+                        // Pedido explícito 2026-08-17 (variações de
+                        // produto, achado ao vivo investigando o pedido
+                        // 260817JCXFKP1R): esta é uma variação NOVA de um
+                        // anúncio que já tínhamos (outro model_id do mesmo
+                        // external_id já mapeado — o caso real do Ring
+                        // Light 8"/10", pedido #376) — nasce já vinculada
+                        // como variação do produto existente, em vez de
+                        // ficar solta esperando alguém perceber e vincular
+                        // manualmente depois. Não cobre o caso de um 2º
+                        // anúncio DUPLICADO com external_id diferente pro
+                        // mesmo item físico (ex: produto #80) — isso é uma
+                        // duplicata do lado de fora, no próprio canal, sem
+                        // como detectar com segurança aqui; a ferramenta
+                        // "vincular produto existente" (ProductController::
+                        // attachVariation()) resolve esse caso na mão.
+                        // Só faz sentido comparar model_id quando ESTE
+                        // item de fato tem um (anúncio sem variação
+                        // nenhuma não tem irmão pra procurar).
+                        // Achado real 2026-08-21: autoImportProduct() agora
+                        // pode devolver um produto JÁ EXISTENTE (casado pelo
+                        // SKU real do canal, ver ShopeeDriver/MercadoLivreDriver
+                        // ::autoImportProduct()) em vez de sempre criar um
+                        // novo. Aninhar como variação só faz sentido pra
+                        // produto recém-criado de verdade — `$product` já
+                        // existente casado por SKU é a fonte de verdade mais
+                        // forte que existe, não faz sentido a heurística de
+                        // "irmão" tentar virar isso um filho de outro
+                        // produto por cima.
+                        if ($product->wasRecentlyCreated) {
+                            $siblingProduct = $externalModelId !== null
+                                ? (clone $listingQuery)
+                                    ->whereNotNull('external_model_id')
+                                    ->where('external_model_id', '!=', $externalModelId)
+                                    ->first()
+                                    ?->product
+                                : null;
+
+                            if ($siblingProduct && ! $siblingProduct->parent_product_id && $siblingProduct->children()->doesntExist()) {
+                                $product->update(['parent_product_id' => $siblingProduct->id]);
+                            } elseif ($siblingProduct?->parent_product_id) {
+                                $product->update(['parent_product_id' => $siblingProduct->parent_product_id]);
+                            }
+                        }
+                    }
+                }
+
+                $order->items()->create([
+                    'product_id' => $product?->id,
+                    // Persistido sempre (mapeado ou não) — sem isso, um
+                    // item que falhe o auto-import agora fica sem produto
+                    // pra sempre, sem nenhum jeito de tentar de novo depois
+                    // (achado real 2026-08-19, ver migration
+                    // add_external_item_id).
+                    'external_item_id' => $item['external_id'],
+                    'external_model_id' => $externalModelId,
+                    'product_name' => $product?->name
+                        ?? ($item['external_name'] ?? null)
+                        ?? "Item {$item['external_id']} (sem produto local mapeado)",
+                    'product_price' => $item['unit_price'],
+                    'quantity' => $item['quantity'],
+                    'subtotal' => round($item['unit_price'] * $item['quantity'], 2),
+                ]);
+
+                if (! $product) {
+                    Log::warning('marketplace.order_import.unmapped_item', [
+                        'channel' => $channel,
+                        'external_order_id' => $data['external_order_id'],
+                        'item_external_id' => $item['external_id'],
+                    ]);
+
+                    $unmappedItems[] = $item['external_id'];
+
+                    continue;
+                }
+
+                if ($autoImported) {
+                    // Avisa o admin na hora, não só quando a nota falhar lá
+                    // na frente (esse aviso genérico não deixa óbvio que é
+                    // um produto novo precisando de revisão manual).
+                    $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+                    if ($admins->isNotEmpty()) {
+                        Notification::send($admins, new ProductAutoImportedNotification($product, $order));
+                    }
+                }
+
+                // BUG REAL 2026-09-02 (achado no primeiro pedido que chegou
+                // pelo webhook do Bling — #1213, criado e cancelado no
+                // mesmo minuto): pedido que já NASCE cancelado debitava
+                // estoque igual, e nunca devolvia. restoreStockIfNeeded()
+                // só roda na TRANSIÇÃO pra cancelado (syncStatus), e essa
+                // transição nunca acontece quando o pedido já entra
+                // cancelado — a unidade sumia do estoque pra sempre, por
+                // uma venda que não existiu. Havia 29 pedidos assim nos
+                // últimos 30 dias.
+                //
+                // Não debita, e marca stock_restored_at pra manter o
+                // invariante do resto do fluxo: se esse pedido voltar a
+                // ficar pago (o canal reabrindo a venda, ver
+                // isStaleStatus), syncStatus usa exatamente essa marca pra
+                // saber que precisa debitar agora.
+                if ($data['status'] === Order::STATUS_CANCELLED) {
+                    continue;
+                }
+
+                $this->stock->adjust(
+                    $product,
+                    -$item['quantity'],
+                    StockMovement::TYPE_SALE,
+                    reason: 'Venda importada — '.$channel,
+                    reference: $order,
+                );
+            }
+
+            if ($data['status'] === Order::STATUS_CANCELLED) {
+                $order->forceFill(['stock_restored_at' => now()])->save();
+
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Pedido já entrou cancelado — nenhum estoque debitado');
+            } elseif ($unmappedItems) {
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_FAILED, 'Itens sem produto local mapeado, estoque não debitado para eles', ['unmapped_external_ids' => $unmappedItems]);
+            } else {
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_STOCK_UPDATED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Estoque central debitado para todos os itens');
+            }
+
+            if (! empty($data['external_shipment_id'])) {
+                ChannelShipment::query()->updateOrCreate(
+                    ['order_id' => $order->id, 'channel' => $channel],
+                    ['external_shipment_id' => $data['external_shipment_id']],
+                );
+            }
+
+            // Nem todo driver retorna 'marketplace_fee' hoje (Shopee/TikTok
+            // ainda são stubs sem integração real) — só grava quando o dado é
+            // real, nunca inventa um valor pra canal sem essa informação.
+            //
+            // BUG REAL 2026-08-17 ("as métricas não estão funcionando",
+            // achado varrendo todo painel atrás do mesmo tipo de bug já
+            // corrigido em 2026-08-15): gross_amount usava $data['total']
+            // (= Order.total = subtotal + frete) — CashFlowController::
+            // updateSaleFee() (lançamento manual da mesma taxa) já usava
+            // subtotal corretamente, então OrderChannelFee::netAmount()
+            // (gross_amount - fee_amount) vinha inflado pelo frete em todo
+            // pedido com taxa vinda da API (o caminho automático, a
+            // maioria dos pedidos reais), mas correto nos poucos editados
+            // à mão — inconsistência silenciosa dependendo de qual
+            // caminho gravou a taxa daquele pedido específico.
+            if (array_key_exists('marketplace_fee', $data)) {
+                OrderChannelFee::query()->updateOrCreate(
+                    ['order_id' => $order->id, 'channel' => $channel],
+                    [
+                        'gross_amount' => $data['subtotal'],
+                        'fee_amount' => $data['marketplace_fee'],
+                        ...self::componentesDaTaxa($data),
+                        'source' => OrderChannelFee::SOURCE_API,
+                        'computed_at' => now(),
+                    ],
+                );
+            }
+
+            // REVERTIDO DE VOLTA 2026-08-21 (mesmo dia): a tentativa de
+            // "nota antes do envio" pra todos os canais (ver histórico
+            // removido) travou uma venda real da Shopee esperando a Shopee
+            // aceitar a nota (~3h de demora do lado deles, achado real,
+            // pedido #566) antes de sequer TENTAR confirmar o envio — etiqueta
+            // não saiu automático. Pedido explícito do usuário: voltar ao
+            // modelo paralelo de sempre. Etiqueta e nota fiscal são dois
+            // pipelines paralelos e independentes a partir daqui — nenhum
+            // bloqueia o outro. ConfirmChannelShippingJob tem seu próprio
+            // retry/backoff (~3h) que dá tempo de sobra pra nota fiscal
+            // terminar de processar em paralelo sem travar o envio esperando
+            // por ela.
+            if ($data['status'] === Order::STATUS_PAID) {
+                // Desligado pela tela de teste de webhook: o pedido fake não
+                // existe de verdade no canal, então confirmar o envio pela
+                // API real (ConfirmChannelShippingJob -> driver real) só
+                // devolveria erro. O controller de teste simula esse trecho
+                // diretamente em vez de disparar o job real.
+                if ($dispatchShippingConfirmation) {
+                    ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
+                }
+
+                if ($order->shouldAutoGenerateInvoice()) {
+                    GenerateInvoiceJob::dispatch($order->id)->afterCommit();
+                } else {
+                    $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, 'TikTok Shop: emissão automática de NF-e no KazaKora não disparada para evitar duplicidade fiscal.');
+                }
+            }
+
+            $this->recordReturnClaimIfNeeded($order, $data['channel_status'] ?? null);
+
+            return $order;
+        });
+    }
+
+    /**
+     * Ordem "de progresso" normal de um pedido — usado só pra bloquear
+     * regressão (ver isStaleStatus() abaixo), nunca pra decidir uma
+     * transição válida (isso continua sendo responsabilidade de cada
+     * driver/mapOrderStatus()).
+     */
+    private const STATUS_PROGRESS = [
+        Order::STATUS_PENDING => 0,
+        Order::STATUS_AWAITING_PAYMENT => 1,
+        Order::STATUS_PAID => 2,
+        Order::STATUS_SHIPPED => 3,
+        Order::STATUS_COMPLETED => 4,
+    ];
+
+    /**
+     * BUG REAL encontrado 2026-08-07 (pedido #158, Shopee): um webhook de
+     * status "atrasado" (chegou depois de outro mais recente já ter
+     * avançado o pedido — no caso, TO_CONFIRM_RECEIVE chegando depois de
+     * SHIPPED, mapeado à época incorretamente pra `paid`, ver
+     * ShopeeDriver::mapOrderStatus()) fez o pedido regredir de `shipped`
+     * pra `paid` e reprocessou envio/nota fiscal de um pedido que já
+     * estava com etiqueta impressa. O mapeamento errado específico já foi
+     * corrigido, mas essa trava aqui é a defesa de verdade: nenhum canal
+     * (não só a Shopee) deveria conseguir mover um pedido pra trás na
+     * esteira normal (pending → awaiting_payment → paid → shipped →
+     * completed) via reimportação/webhook — só forward, ou pra
+     * `cancelled` (sempre aceito, de qualquer estado, é um evento real
+     * mesmo vindo fora de ordem). Pedido cancelado nunca "reabre" via
+     * webhook atrasado.
+     */
+    private function isStaleStatus(string $current, string $newStatus): bool
+    {
+        if ($newStatus === Order::STATUS_CANCELLED) {
+            return false;
+        }
+
+        // BUG REAL 2026-09-01 (relatado pelo usuário: "tem pedido em aberto
+        // que ta no cancelado" — pedido #894, Léia Feijó, ML
+        // 2000018160810742): cancelado era ABSORVENTE, nada nunca tirava o
+        // pedido de lá. Esse pedido está `paid` no Mercado Livre AGORA
+        // (conferido ao vivo na API), e desde 31/08 CADA consulta horária
+        // trazia "paid" e era descartada aqui — 20+ eventos seguidos de
+        // "status paid ignorado, pedido já estava em cancelled" na linha
+        // do tempo dele. Ficaria na aba Cancelados pra sempre, com a venda
+        // aberta e ninguém separando.
+        //
+        // Voltar de cancelado pra PAGO é liberado porque TODO chamador de
+        // syncStatus() lê o estado ATUAL do canal antes de chamar
+        // (importNormalized() vem de driver->importOrder(), que consulta a
+        // API; ShipmentService::syncOrderStatusFromShipment() idem) — não
+        // é um webhook antigo ressuscitando pedido, é o canal dizendo
+        // agora que a venda está de pé. O resto da trava continua igual:
+        // nada de shipped/completed/aguardando pagamento em cima de um
+        // cancelamento, só a volta pra "pago".
+        if ($current === Order::STATUS_CANCELLED) {
+            return $newStatus !== Order::STATUS_PAID;
+        }
+
+        $currentRank = self::STATUS_PROGRESS[$current] ?? null;
+        $newRank = self::STATUS_PROGRESS[$newStatus] ?? null;
+
+        if ($currentRank === null || $newRank === null) {
+            return false;
+        }
+
+        return $newRank < $currentRank;
+    }
+
+    /**
+     * Acha real 2026-08-08 (pedido #189): a Shopee mascara o nome do
+     * comprador ("E******a") e simplesmente OMITE buyer_cpf_id em
+     * get_order_detail() até o pedido avançar pra um status pago/pronto
+     * pra envio — confirmado ao vivo, o mesmo order_sn consultado de novo
+     * minutos depois já veio com nome completo e CPF reais. Se o webhook
+     * que criou o pedido chegou ANTES disso acontecer, buyer_document
+     * ficava vazio e shipping_name mascarado PRA SEMPRE (nada reconsultava
+     * depois), e GenerateInvoiceJob falhava sem parar com "não foi
+     * possível identificar o CPF/CNPJ do comprador" até esgotar as 3
+     * tentativas — mesmo a Shopee já tendo o dado real disponível.
+     *
+     * Só troca vazio/mascarado por preenchido/desmascarado, nunca o
+     * contrário — um pedido que já tem dado bom nunca regride.
+     *
+     * Bug real 2026-08-08 (pedido do próprio usuário: "maioria sem
+     * contato"): esta função nunca tocava em shipping_email, e só
+     * reconhecia telefone "incompleto" quando já vinha com `*` — um
+     * pedido que nasceu com buyer_phone nulo (por isso gravado como o
+     * literal "Não informado" em createOrder()) ficava preso nesse
+     * estado pra sempre, mesmo que um webhook seguinte trouxesse o
+     * telefone real. E-mail e telefone agora seguem o mesmo padrão de
+     * documento/nome: só atualiza de vazio/mascarado pra preenchido.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function resolveBuyerFieldUpdates(Order $existing, array $data): array
+    {
+        $fields = [];
+
+        if (($existing->buyer_document === null || $existing->buyer_document === '') && ! empty($data['buyer_document'])) {
+            $fields['buyer_document'] = $data['buyer_document'];
+        }
+
+        $newName = (string) ($data['buyer_name'] ?? '');
+        $nameLooksMasked = str_contains($newName, '*');
+        $existingNameLooksMasked = str_contains((string) $existing->shipping_name, '*');
+        // BUG REAL 2026-09-02 (pedido #1222): nome acima de 60 caracteres
+        // não é só "feio", é impossível de emitir — o schema da NF-e
+        // limita xNome a 60 e o XML nem chega na SEFAZ (ver
+        // NFeXmlBuilderService). Um pedido que nasceu assim ficava preso
+        // pra sempre, porque este método só trocava nome vazio/mascarado.
+        // Só conta como conserto se o nome novo couber de verdade.
+        $existingNameTooLongForNfe = mb_strlen((string) $existing->shipping_name) > 60;
+        $newNameFitsNfe = mb_strlen($newName) <= 60;
+
+        if ($newName !== '' && ! $nameLooksMasked && (empty($existing->shipping_name) || $existingNameLooksMasked || ($existingNameTooLongForNfe && $newNameFitsNfe))) {
+            $fields['shipping_name'] = $newName;
+        }
+
+        $newPhone = (string) ($data['buyer_phone'] ?? '');
+        $existingPhone = (string) $existing->shipping_phone;
+        $existingPhoneMissing = $existingPhone === '' || $existingPhone === 'Não informado' || str_contains($existingPhone, '*');
+
+        if ($newPhone !== '' && ! str_contains($newPhone, '*') && $existingPhoneMissing) {
+            $fields['shipping_phone'] = $newPhone;
+        }
+
+        $newEmail = (string) ($data['buyer_email'] ?? '');
+
+        if ($newEmail !== '' && empty($existing->shipping_email)) {
+            $fields['shipping_email'] = $newEmail;
+        }
+
+        // Campos de exibição que nasceram depois de pedidos já
+        // importados (2026-09-01): reprocessar o pedido preenche, mesmo
+        // padrão de autocorreção dos campos acima. Só preenche o que
+        // ainda está vazio — nunca sobrescreve algo já ajustado à mão.
+        // IE/tipo de contribuinte: o canal só passou a devolver isso de
+        // verdade em 2026-09-01 (ver OrderService::getBuyerBillingData()),
+        // então pedido importado antes disso está sem — e sem IE a nota de
+        // venda pra CNPJ é rejeitada pela SEFAZ (232). Reprocessar
+        // preenche, mesmo padrão dos campos acima.
+        $newStateRegistration = (string) ($data['buyer_state_registration'] ?? '');
+
+        if ($newStateRegistration !== '' && empty($existing->buyer_state_registration)) {
+            $fields['buyer_state_registration'] = $newStateRegistration;
+        }
+
+        $newTaxpayerType = (string) ($data['buyer_taxpayer_type'] ?? '');
+
+        if ($newTaxpayerType !== '' && empty($existing->buyer_taxpayer_type)) {
+            $fields['buyer_taxpayer_type'] = $newTaxpayerType;
+        }
+
+        $newRecipient = (string) ($data['recipient_name'] ?? '');
+
+        if ($newRecipient !== '' && empty($existing->shipping_recipient_name)) {
+            $fields['shipping_recipient_name'] = $newRecipient;
+        }
+
+        $newNickname = (string) ($data['buyer_nickname'] ?? '');
+
+        if ($newNickname !== '' && empty($existing->channel_buyer_nickname)) {
+            $fields['channel_buyer_nickname'] = $newNickname;
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Busca ativa (não espera um webhook futuro reprocessar o pedido) —
+     * chamada por GenerateInvoiceJob antes de tentar emitir a nota, quando
+     * o pedido ainda está sem documento/nome real. Ver
+     * resolveBuyerFieldUpdates() acima pro porquê disso acontecer.
+     * Silenciosa em qualquer erro (canal fora do ar, driver sem
+     * importOrder de verdade implementado etc.) — quem chama já sabe lidar
+     * com "documento ainda ausente" normalmente (a validação da
+     * NFeXmlBuilderService), isso é só uma tentativa extra de recuperar o
+     * dado antes de deixar a emissão falhar.
+     */
+    public function refreshBuyerInfo(Order $order): void
+    {
+        if ($order->origin === Order::ORIGIN_STORE) {
+            return;
+        }
+
+        // Nome acima de 60 caracteres é tão bloqueante quanto documento
+        // ausente: o XML não passa nem no validador local (ver
+        // resolveBuyerFieldUpdates()/NFeXmlBuilderService, pedido #1222).
+        // Buscar de novo no canal é o que traz a razão social correta.
+        $needsRefresh = empty($order->buyer_document)
+            || str_contains((string) $order->shipping_name, '*')
+            || mb_strlen((string) $order->shipping_name) > 60;
+
+        if (! $needsRefresh) {
+            return;
+        }
+
+        $this->fetchAndApplyBuyerFieldUpdates($order);
+    }
+
+    /**
+     * Mesma ideia de refreshBuyerInfo(), mas com um gatilho mais amplo —
+     * também considera telefone/e-mail ausentes, não só documento/nome.
+     * Deliberadamente **não** é chamada no caminho síncrono de emissão de
+     * nota (refreshBuyerInfo() continua enxuta pra isso, é o requisito
+     * bloqueante de verdade) — usada pelo comando de backfill
+     * `orders:refresh-contato` pra tentar completar o cadastro de
+     * clientes já existentes sem esperar um webhook futuro reprocessar o
+     * pedido.
+     *
+     * @return bool true se algum campo foi realmente atualizado.
+     */
+    public function refreshContactInfo(Order $order): bool
+    {
+        if ($order->origin === Order::ORIGIN_STORE) {
+            return false;
+        }
+
+        $existingPhone = (string) $order->shipping_phone;
+        $phoneMissing = $existingPhone === '' || $existingPhone === 'Não informado' || str_contains($existingPhone, '*');
+
+        $needsRefresh = empty($order->buyer_document)
+            || str_contains((string) $order->shipping_name, '*')
+            || empty($order->shipping_email)
+            || $phoneMissing;
+
+        if (! $needsRefresh) {
+            return false;
+        }
+
+        return $this->fetchAndApplyBuyerFieldUpdates($order);
+    }
+
+    private function fetchAndApplyBuyerFieldUpdates(Order $order): bool
+    {
+        try {
+            $data = $this->manager->driver($order->origin)->importOrder($order->external_order_id);
+        } catch (\Throwable $exception) {
+            Log::warning('marketplace.order_import.buyer_info_refresh_failed', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        $fields = $this->resolveBuyerFieldUpdates($order, $data);
+
+        if ($fields) {
+            $order->update($fields);
+        }
+
+        return (bool) $fields;
+    }
+
+    /**
+     * Público desde 2026-08-17 (era private) — passou a ser chamado também
+     * de fora do fluxo de import "pedido completo" (App\Services\
+     * MercadoLivre\Services\ShipmentService::processWebhook(), ver
+     * comentário lá). Motivo: no Mercado Livre, ao contrário da Shopee,
+     * o status de nível PEDIDO nunca vira "shipped"/"delivered" — essa
+     * informação só existe no sub-recurso SHIPMENT (MercadoLivreDriver::
+     * mapOrderStatus() só sabe mapear paid/cancelled/invalid, de
+     * propósito, porque é só isso que o campo `order.status` do ML
+     * realmente assume). Continua sendo o único lugar que decide status,
+     * com a mesma trava de regressão (isStaleStatus()) pra qualquer
+     * chamador — canal-agnóstico de propósito, não é código exclusivo do
+     * Mercado Livre.
+     */
+    public function syncStatus(Order $order, string $newStatus, ?string $channelStatus = null): Order
+    {
+        if ($order->status === $newStatus) {
+            // Mesmo sem mudança no status MAPEADO, o bruto pode ter virado
+            // TO_RETURN só agora (webhook de devolução chega depois do de
+            // cancelamento, os dois mapeiam pra STATUS_CANCELLED — ver
+            // ShopeeDriver::mapOrderStatus()) — sem este check aqui, esse
+            // caso nunca passaria do early-return acima e a devolução real
+            // nunca seria registrada.
+            $this->recordReturnClaimIfNeeded($order, $channelStatus);
+
+            return $order;
+        }
+
+        if ($this->isStaleStatus($order->status, $newStatus)) {
+            Log::info('marketplace.order_import.stale_status_ignored', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'current_status' => $order->status,
+                'ignored_status' => $newStatus,
+            ]);
+
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Status \"{$newStatus}\" do canal ignorado — pedido já estava em \"{$order->status}\", mais avançado (webhook fora de ordem).");
+
+            return $order;
+        }
+
+        $previousStatus = $order->status;
+        $wasCancelled = $order->status === Order::STATUS_CANCELLED;
+        $wasPaid = $order->status === Order::STATUS_PAID;
+        // Pedido explícito 2026-08-29 ("registrar log quando um pedido
+        // sair da fila por confirmação do marketplace"): captura ANTES do
+        // update — é exatamente a condição que tira o pedido de
+        // DashboardAgentController::queue() (Fila normal do KoraSync).
+        $leavesPreparationQueue = $wasPaid && in_array($newStatus, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
+
+        $order->update(['status' => $newStatus]);
+
+        if ($leavesPreparationQueue) {
+            Log::info('marketplace.order_import.left_preparation_queue', [
+                'order_id' => $order->id,
+                'channel' => $order->origin,
+                'new_status' => $newStatus,
+                'channel_status' => $channelStatus,
+            ]);
+
+            $this->timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                "Pedido saiu da fila de preparação do KoraSync — {$order->origin} confirmou \"{$newStatus}\" (coleta/despacho real do pacote)."
+            );
+        }
+
+        // BUG REAL 2026-09-29: devolvia o estoque sem olhar o status
+        // anterior — pedido já ENVIADO entrando em devolução na Shopee
+        // (TO_RETURN → cancelado, ver ShopeeDriver::mapOrderStatus()) ganhava
+        // +qty na hora, com o produto ainda na mão do comprador (estoque
+        // fantasma). Mesma regra do cancelamento pelo admin
+        // (Admin OrderController::update): se já saiu, só volta ao estoque
+        // quando a devolução chegar de fato (reversão manual, ex.:
+        // MercadoLivreClaimsController).
+        $alreadyShipped = in_array($previousStatus, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
+
+        if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled && ! $alreadyShipped) {
+            $this->finalizer->restoreStockIfNeeded($order, 'Pedido cancelado no canal de origem');
+        }
+
+        if ($newStatus === Order::STATUS_CANCELLED && ! $wasCancelled) {
+            $this->avisarNotaAutorizadaDePedidoCancelado($order);
+        }
+
+        if ($newStatus === Order::STATUS_PAID && ! $wasPaid) {
+            // Pedido voltando de um cancelamento (ver isStaleStatus()): o
+            // cancelamento devolveu as unidades ao estoque
+            // (restoreStockIfNeeded), então a venda precisa debitar de
+            // novo — senão o estoque fica inflado por uma devolução que
+            // não existe mais, e o KoraSync manda separar item que não
+            // tem.
+            if ($wasCancelled && $order->stock_restored_at) {
+                $order->loadMissing('items.product');
+
+                foreach ($order->items as $item) {
+                    if (! $item->product) {
+                        continue;
+                    }
+
+                    $this->stock->adjust(
+                        $item->product,
+                        -$item->quantity,
+                        StockMovement::TYPE_SALE,
+                        reason: 'Cancelamento revertido pelo canal — '.$order->origin,
+                        reference: $order,
+                    );
+                }
+
+                $order->update(['stock_restored_at' => null]);
+
+                $this->timeline->record(
+                    $order,
+                    OrderFulfillmentEvent::STEP_STOCK_UPDATED,
+                    OrderFulfillmentEvent::STATUS_SUCCESS,
+                    'Pedido voltou a ficar pago no canal — estoque debitado de novo',
+                );
+            }
+
+            // Revertido junto com createOrder() (ver comentário lá) —
+            // volta ao modelo paralelo de sempre.
+            //
+            // MENOS quando o envio já foi marcado como irrecuperável (o
+            // canal não conhece o pedido): era daqui que saía o loop —
+            // varredura horária reimporta, redispara, o job queima 6
+            // tentativas, e amanhã tudo de novo. Ver
+            // ChannelOrderNotFoundException.
+            if (! $order->channelShipment?->unrecoverable_at) {
+                ConfirmChannelShippingJob::dispatch($order->id);
+            }
+
+            if ($order->shouldAutoGenerateInvoice()) {
+                GenerateInvoiceJob::dispatch($order->id);
+            } else {
+                $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, 'TikTok Shop: emissão automática de NF-e no KazaKora não disparada para evitar duplicidade fiscal.');
+            }
+        }
+
+        $this->recordReturnClaimIfNeeded($order, $channelStatus);
+
+        return $order;
+    }
+
+    /**
+     * BUG REAL 2026-09-29: o canal cancelava a venda depois de a NF-e já
+     * estar autorizada e ninguém ficava sabendo — a nota seguia valendo (e
+     * contando no faturamento/teto do MEI) até estourar o prazo de 24h de
+     * cancelamento na SEFAZ. NÃO cancela sozinho: cancelamento na SEFAZ é
+     * irreversível (e o canal pode reabrir a venda — ver isStaleStatus()),
+     * então quem decide é o usuário. Aqui só registra e avisa os admins.
+     */
+    private function avisarNotaAutorizadaDePedidoCancelado(Order $order): void
+    {
+        // Carrinho do ML: a nota fica no pedido titular, então o pedido
+        // cancelado pode não ter nota própria e mesmo assim estar coberto
+        // por uma autorizada. pedidos() inclui os cancelados (este já está
+        // cancelado aqui) e, fora de carrinho, é só o próprio pedido.
+        $pack = app(PackDoPedido::class);
+
+        $invoice = Invoice::query()
+            ->whereIn('order_id', $pack->pedidos($order)->pluck('id'))
+            ->where('status', Invoice::STATUS_AUTHORIZED)
+            ->first();
+
+        if (! $invoice) {
+            return;
+        }
+
+        // Carrinho com outros pedidos ainda ativos: a nota cobre itens que
+        // continuam vendidos — o aviso é outro (devolução parcial, contador),
+        // nunca "cancele em 24h".
+        $avisoDoCarrinho = $pack->avisoDeCancelamento($order);
+
+        Log::warning('marketplace.order_import.cancelled_with_authorized_invoice', [
+            'order_id' => $order->id,
+            'channel' => $order->origin,
+            'invoice_id' => $invoice->id,
+            'numero' => $invoice->numero,
+            'autorizada_em' => $invoice->autorizada_em?->toIso8601String(),
+        ]);
+
+        $this->timeline->record(
+            $order,
+            OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+            OrderFulfillmentEvent::STATUS_FAILED,
+            $avisoDoCarrinho
+                ?? "Pedido cancelado no canal com a NF-e nº {$invoice->numero} já autorizada — precisa ser cancelada manualmente em até 24h da autorização.",
+        );
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new CancelledOrderWithAuthorizedInvoiceNotification($order, $invoice, $avisoDoCarrinho));
+        }
+    }
+
+    /**
+     * Achado real 2026-08-15: a Shopee tem um status de devolução de
+     * verdade (TO_RETURN — produto já enviado, comprador devolvendo), mas
+     * ShopeeDriver::mapOrderStatus() já colapsa isso pro mesmo
+     * Order::STATUS_CANCELLED genérico de "cancelou antes de enviar" —
+     * decisão CERTA pro ciclo de vida do pedido (reposição de estoque,
+     * notificações etc. tratam os dois igual, não tem por que separar
+     * ali). O problema real era outro: o card "Devoluções do mês"
+     * (DashboardAgentController::metrics()) só enxergava MarketplaceClaim,
+     * populado até então SÓ pelo Mercado Livre (MercadoLivreClaimsController)
+     * — Shopee tinha 15 pedidos cancelados no mês e ZERO apareciam como
+     * devolução, porque nada gravava claim nenhum pra esse canal. Em vez
+     * de inventar um conceito novo, reaproveita a mesma tabela/query que
+     * já existia pro ML — o card volta a enxergar devolução real de
+     * qualquer canal que informe isso via channel_status.
+     * updateOrCreate por (order_id, channel, type) é de propósito
+     * idempotente: um resync de webhook não duplica a mesma devolução.
+     */
+    private function recordReturnClaimIfNeeded(Order $order, ?string $channelStatus): void
+    {
+        if ($channelStatus !== 'TO_RETURN') {
+            return;
+        }
+
+        MarketplaceClaim::query()->updateOrCreate(
+            ['order_id' => $order->id, 'channel' => $order->origin, 'type' => 'return'],
+            [
+                'external_claim_id' => $order->external_order_id,
+                'stage' => 'to_return',
+                'status' => 'to_return',
+                'claim_created_at' => now(),
+                'claim_updated_at' => now(),
+            ]
+        );
+    }
+
+    /**
+     * A data da venda só vale quando o canal manda HORA de verdade.
+     *
+     * BUG REAL 2026-09-06, relatado pelo usuário ("saiu uma venda do TikTok
+     * e a hora do pedido tá errada... está abaixo do pedido do Mercado
+     * Livre"): a ponte do Bling manda `data` sem hora nenhuma
+     * (TikTokShopDriver linha do placed_at), e Carbon::parse('2026-09-06')
+     * vira 00:00:00. Com isso TODO pedido do TikTok nascia à meia-noite —
+     * hora errada no card e, pior, afundava na fila ordenada pela venda
+     * mais recente, contra a regra de "última venda no topo".
+     *
+     * Sem hora, o melhor dado que existe é a hora em que o pedido chegou
+     * aqui (created_at padrão, que a sincronia em tempo real deixa a
+     * minutos da venda). Mercado Livre e Shopee mandam data E hora reais e
+     * seguem exatamente como antes.
+     *
+     * Meia-noite cravada de um canal que manda hora de verdade é 1 segundo
+     * por dia em que caímos no fallback — troca aceita pra não precisar de
+     * uma coluna nova só pra isso.
+     */
+    private function temHoraDeVerdade(mixed $placedAt): bool
+    {
+        if (empty($placedAt)) {
+            return false;
+        }
+
+        return Carbon::parse($placedAt)->format('H:i:s') !== '00:00:00';
+    }
+
+    /**
+     * Que valor gravar em created_at (a "hora da venda" que a fila ordena e
+     * o card mostra). Devolve null pra deixar o now() padrão.
+     *
+     * Confirmado ao vivo no payload do Bling em 2026-09-06: ele NÃO tem
+     * campo de hora nenhum — só `data`, `dataSaida` e `dataPrevista`, todos
+     * data pura. Então pro TikTok a hora exata da venda não existe deste
+     * lado, e o que dá pra fazer é escolher o menos errado:
+     *
+     * - canal mandou hora (Mercado Livre, Shopee): usa ela, sempre;
+     * - só data, e a data é HOJE: usa o momento em que o pedido chegou
+     *   aqui — a sincronia em tempo real deixa isso a minutos da venda,
+     *   muito melhor que a meia-noite que afundava o pedido na fila;
+     * - só data, de um dia ANTERIOR: mantém o dia, à meia-noite. É o caso
+     *   do #1514 (venda de 05/09 que o Bling só entregou dia 06 às 14:15):
+     *   carimbar "agora" jogaria uma venda de ontem pro topo da fila de
+     *   hoje, mexeria no faturamento do dia e ainda dispararia o som de
+     *   venda nova — foi exatamente a reclamação do usuário.
+     */
+    /**
+     * A venda que a varredura trouxe já é "perdida" (e por isso não imprime
+     * sozinha)? Só se for velha: o webhook chega em segundos, e a varredura
+     * horária disputa com ele toda venda feita perto da virada da hora.
+     * Sem data da venda, trava — na dúvida, a bancada decide.
+     */
+    private function vendaJaEsfriou(mixed $placedAt): bool
+    {
+        $data = $this->dataDaVenda($placedAt);
+
+        return $data === null || $data->lt(now()->subMinutes(self::VENDA_PERDIDA_APOS_MINUTOS));
+    }
+
+    private function dataDaVenda(mixed $placedAt): ?Carbon
+    {
+        if (empty($placedAt)) {
+            return null;
+        }
+
+        $data = Carbon::parse($placedAt);
+
+        if ($data->format('H:i:s') !== '00:00:00') {
+            return $data;
+        }
+
+        return $data->isToday() ? now() : $data;
+    }
+
+    /**
+     * Quebra da taxa que o driver mandou (comissão, serviço, frete da loja,
+     * descontos, repasse) — só as colunas conhecidas, nada a mais. Driver
+     * que não manda quebra (Amazon/TikTok pelo Bling) devolve vazio e as
+     * colunas ficam como estão.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function componentesDaTaxa(array $data): array
+    {
+        return array_intersect_key($data['marketplace_fee_breakdown'] ?? [], array_flip(OrderChannelFee::COMPONENTES));
+    }
+}

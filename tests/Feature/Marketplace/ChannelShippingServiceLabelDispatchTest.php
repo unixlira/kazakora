@@ -1,0 +1,126 @@
+<?php
+
+namespace Tests\Feature\Marketplace;
+
+use App\Models\User;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Drivers\MarketplaceChannelDriver;
+use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\ChannelShippingService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Mockery;
+use Tests\TestCase;
+
+/**
+ * Confirma o gatilho novo (2026-08-05): assim que o frete é confirmado no
+ * canal, o retry orientado a evento já dispara na hora, sem esperar
+ * webhook nem polling — pra Mercado Livre e Shopee (2026-08-06, quando
+ * ShopeeDriver::fetchLabel() deixou de ser stub), Amazon e TikTok (este
+ * desde 2026-10-05, etiqueta via Bling); não pra Shein (ainda é stub).
+ */
+class ChannelShippingServiceLabelDispatchTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function makeOrder(string $origin): Order
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        return Order::create([
+            'user_id' => $user->id,
+            'origin' => $origin,
+            'status' => Order::STATUS_PAID,
+            'shipping_name' => 'Cliente',
+            'shipping_phone' => '11999999999',
+            'shipping_zip' => '01000-000',
+            'shipping_street' => 'Rua X',
+            'shipping_number' => '1',
+            'shipping_neighborhood' => 'Centro',
+            'shipping_city' => 'São Paulo',
+            'shipping_state' => 'SP',
+            'subtotal' => 100,
+            'total' => 100,
+        ]);
+    }
+
+    private function mockDriverConfirmShipping(string $channel, array $result): void
+    {
+        $driver = Mockery::mock(MarketplaceChannelDriver::class);
+        $driver->shouldReceive('confirmShipping')->once()->andReturn($result);
+
+        $manager = Mockery::mock(MarketplaceDriverManager::class);
+        $manager->shouldReceive('driver')->with($channel)->once()->andReturn($driver);
+
+        $this->app->instance(MarketplaceDriverManager::class, $manager);
+    }
+
+    public function test_confirm_dispatches_check_shipment_label_job_for_mercado_livre(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_MERCADO_LIVRE);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, [
+            'external_shipment_id' => 'SHIP-1',
+            'shipping_method' => 'self_service',
+            'status' => 'confirmed',
+        ]);
+
+        $shipment = app(ChannelShippingService::class)->confirm($order);
+
+        Queue::assertPushed(CheckShipmentLabelJob::class, fn (CheckShipmentLabelJob $job) => $job->shipmentId === $shipment->id);
+    }
+
+    public function test_confirm_dispatches_check_shipment_label_job_for_shopee(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(Order::ORIGIN_SHOPEE);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_SHOPEE, [
+            'external_shipment_id' => 'SHOPEE-1',
+            'shipping_method' => 'SPX Express',
+            'status' => 'confirmed',
+        ]);
+
+        $shipment = app(ChannelShippingService::class)->confirm($order);
+
+        Queue::assertPushed(CheckShipmentLabelJob::class, fn (CheckShipmentLabelJob $job) => $job->shipmentId === $shipment->id);
+    }
+
+    public function test_confirm_does_not_dispatch_for_channels_without_real_fetch_label(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_SHEIN);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_SHEIN, [
+            'external_shipment_id' => 'SH-1',
+            'shipping_method' => 'standard',
+            'status' => 'confirmed',
+        ]);
+
+        app(ChannelShippingService::class)->confirm($order);
+
+        Queue::assertNotPushed(CheckShipmentLabelJob::class);
+    }
+
+    /**
+     * TikTok busca a etiqueta no Bling, que só a libera depois da NF-e
+     * chegar no TikTok: consulta de minuto em minuto (cota de 3 req/s do
+     * Bling), por até 24h.
+     */
+    public function test_confirm_dispatches_a_slow_label_check_for_tiktok(): void
+    {
+        Queue::fake();
+        $order = $this->makeOrder(MarketplaceAccount::CHANNEL_TIKTOK_SHOP);
+        $this->mockDriverConfirmShipping(MarketplaceAccount::CHANNEL_TIKTOK_SHOP, [
+            'external_shipment_id' => 'TT-1',
+            'shipping_method' => 'LSV-Standard-BR PICKUP',
+            'status' => 'pending',
+        ]);
+
+        $shipment = app(ChannelShippingService::class)->confirm($order);
+
+        Queue::assertPushed(CheckShipmentLabelJob::class, fn (CheckShipmentLabelJob $job) => $job->shipmentId === $shipment->id
+            && $job->retryIntervalSeconds === 60
+            && $job->deadline->greaterThan(now()->addHours(23)));
+    }
+}

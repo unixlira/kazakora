@@ -1,88 +1,212 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import { usePermissions } from '@/Shared/usePermissions';
+import ServerPagination from '@/Shared/Components/ServerPagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, h, reactive } from 'vue';
+
+const { can } = usePermissions();
 
 const props = defineProps({
     orders: {
-        type: Object,
-        required: true,
+        type: [Array, Object],
+        default: () => ({ data: [] }),
+    },
+    channels: {
+        type: Array,
+        default: () => [],
     },
     filters: {
         type: Object,
         default: () => ({}),
     },
-    statuses: {
-        type: Array,
-        default: () => [],
-    },
 });
+
+const channelBadge = {
+    loja: { color: 'shipped', label: 'Site' },
+    mercado_livre: { color: 'pending', label: 'Mercado Livre' },
+    shopee: { color: 'processing', label: 'Shopee' },
+    tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
+    amazon: { color: '#146EB4', label: 'Amazon' },
+};
+
+const filterState = reactive({
+    origin: props.filters.origin ?? '',
+    search: props.filters.search ?? '',
+});
+const orderRows = computed(() => Array.isArray(props.orders) ? props.orders : (props.orders?.data ?? []));
+
+const applyFilters = () => {
+    const params = Object.fromEntries(
+        Object.entries(filterState).filter(([, value]) => value !== null && String(value).trim() !== '')
+    );
+
+    router.get('/admin/pedidos', params, { preserveState: true, replace: true });
+};
+
+const clearSearch = () => {
+    filterState.search = '';
+    applyFilters();
+};
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const filterByStatus = (event) => {
-    router.get('/admin/orders', { status: event.target.value }, { preserveState: true });
-};
+const customerName = (order) =>
+    order.user?.name
+    || order.shipping_name
+    || order.shipping_email
+    || order.shipping_phone
+    || '—';
+
+const formatPostagePrice = (value) => value == null
+    ? null
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const columns = [
+    {
+        accessorKey: 'id',
+        header: 'Pedido',
+        cell: ({ row }) => h('div', {}, [
+            h(Link, { href: `/admin/pedidos/${row.original.id}`, class: 'hover:text-primary hover:underline' }, () => `#${row.original.id}`),
+            row.original.external_order_id
+                ? h('div', { class: 'text-xs text-slate-400' }, row.original.external_order_id)
+                : null,
+        ]),
+    },
+    {
+        id: 'origin',
+        header: 'Canal',
+        cell: ({ row }) => {
+            const badge = channelBadge[row.original.origin] ?? { color: row.original.origin, label: row.original.origin };
+            return h(StatusBadge, { status: badge.color, label: badge.label });
+        },
+    },
+    { id: 'customer', header: 'Cliente', accessorFn: customerName },
+    { accessorKey: 'items_count', header: 'Itens' },
+    { accessorKey: 'total', header: 'Total', cell: ({ row }) => formatPrice(row.original.total) },
+    {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order' }),
+    },
+    {
+        id: 'invoice_status',
+        header: 'Nota Fiscal',
+        cell: ({ row }) => h(StatusBadge, { status: row.original.invoice?.status ?? null, context: 'invoice' }),
+    },
+    {
+        id: 'email_status',
+        header: 'E-mail',
+        cell: ({ row }) => {
+            const log = row.original.latest_email_log;
+            if (!log) return h(StatusBadge, { status: null, context: 'email' });
+            return h('div', { class: 'flex items-center gap-1.5' }, [
+                h(StatusBadge, { status: log.status, context: 'email' }),
+                log.status === 'sent' && !log.invoice_attached
+                    ? h('span', { class: 'text-xs text-amber-600 dark:text-amber-400', title: 'Enviado sem a nota fiscal em anexo' }, 'sem anexo')
+                    : null,
+            ]);
+        },
+    },
+    {
+        id: 'correios_qr',
+        header: 'Correios',
+        cell: ({ row }) => {
+            const qr = row.original.latest_correios_pre_postagem;
+
+            if (!qr) {
+                return h(StatusBadge, { status: null, context: 'correios' });
+            }
+
+            return h(Link, {
+                href: `/admin/correios/${qr.id}`,
+                class: 'group block text-xs hover:text-primary',
+                title: 'Abrir QR Code dos Correios',
+            }, () => [
+                h(StatusBadge, { status: qr.status, context: 'correios' }),
+                qr.codigo_objeto ? h('span', { class: 'block font-mono text-[11px] text-slate-400 group-hover:text-primary' }, qr.codigo_objeto) : null,
+                qr.service_label || qr.postage_price != null
+                    ? h('span', { class: 'block text-[11px] text-slate-400' }, [qr.service_label, formatPostagePrice(qr.postage_price)].filter(Boolean).join(' · '))
+                    : null,
+            ]);
+        },
+    },
+    {
+        accessorKey: 'created_at',
+        header: 'Data',
+        cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString('pt-BR'),
+    },
+    {
+        id: 'actions',
+        header: 'Ações',
+        enableSorting: false,
+        cell: ({ row }) => h('div', { class: 'flex justify-end' }, h(ActionIcon, {
+            icon: 'fa-eye',
+            label: 'Ver pedido',
+            color: 'blue',
+            href: `/admin/pedidos/${row.original.id}`,
+        })),
+    },
+];
 </script>
 
 <template>
     <Head title="Pedidos" />
 
     <AdminLayout>
-        <h1 class="text-2xl font-bold">Pedidos</h1>
+        <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
 
-        <select
-            class="mt-6 rounded border border-gray-300 px-3 py-2 text-sm"
-            :value="filters.status ?? ''"
-            @change="filterByStatus"
-        >
-            <option value="">Todos os status</option>
-            <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
-        </select>
+        <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
+            <div class="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
+                <div>
+                    <label class="text-xs font-medium text-slate-500">Marketplace</label>
+                    <select v-model="filterState.origin" @change="applyFilters"
+                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
+                        <option value="">Todos os marketplaces</option>
+                        <option v-for="channel in props.channels" :key="channel" :value="channel">
+                            {{ channelBadge[channel]?.label ?? channel }}
+                        </option>
+                    </select>
+                </div>
 
-        <div class="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table class="w-full text-left text-sm">
-                <thead class="border-b border-gray-200 text-xs uppercase text-gray-400">
-                    <tr>
-                        <th class="px-4 py-3">Pedido</th>
-                        <th class="px-4 py-3">Cliente</th>
-                        <th class="px-4 py-3">Itens</th>
-                        <th class="px-4 py-3">Total</th>
-                        <th class="px-4 py-3">Status</th>
-                        <th class="px-4 py-3">Data</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="order in orders.data" :key="order.id" class="border-b border-gray-100">
-                        <td class="px-4 py-3">
-                            <Link :href="`/admin/orders/${order.id}`" class="hover:underline">#{{ order.id }}</Link>
-                        </td>
-                        <td class="px-4 py-3">{{ order.user?.name }}</td>
-                        <td class="px-4 py-3">{{ order.items_count }}</td>
-                        <td class="px-4 py-3">{{ formatPrice(order.total) }}</td>
-                        <td class="px-4 py-3">
-                            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{{ order.status }}</span>
-                        </td>
-                        <td class="px-4 py-3 text-gray-400">
-                            {{ new Date(order.created_at).toLocaleDateString('pt-BR') }}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                <div>
+                    <label class="text-xs font-medium text-slate-500">Buscar pedido</label>
+                    <div class="relative mt-1">
+                        <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+                        <input v-model="filterState.search" type="search" placeholder="ID, número externo, cliente ou data"
+                            class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:border-primary focus:outline-none">
+                        <button v-if="filterState.search" type="button"
+                            class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
+                            aria-label="Limpar busca" @click="clearSearch">
+                            <i class="fas fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
 
-        <nav v-if="orders.last_page > 1" class="mt-6 flex flex-wrap gap-2">
-            <template v-for="link in orders.links" :key="link.label">
-                <Link
-                    v-if="link.url"
-                    :href="link.url"
-                    preserve-state
-                    class="rounded px-3 py-1 text-sm"
-                    :class="link.active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'"
-                    v-html="link.label"
-                />
-                <span v-else class="rounded px-3 py-1 text-sm text-gray-300" v-html="link.label" />
-            </template>
-        </nav>
+                <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
+                    class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">
+                    <i class="fas fa-plus text-xs"></i>
+                    Novo pedido
+                </Link>
+            </div>
+
+            <p class="mt-2 text-xs text-slate-400">Ex.: #274, 701-6533441-5387462, Rachel ou 13/08/2026. Aperte Enter para buscar.</p>
+        </form>
+
+        <DataTable
+            :columns="columns"
+            :data="orderRows"
+            search-placeholder="Filtrar resultados desta página..."
+            :hide-search="true"
+            empty-message="Nenhum pedido encontrado."
+            :create-label="null"
+            :create-href="null"
+            :show-pagination="false"
+        />
+
+        <ServerPagination v-if="!Array.isArray(props.orders)" :paginator="props.orders" />
     </AdminLayout>
 </template>

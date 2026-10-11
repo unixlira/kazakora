@@ -3,7 +3,9 @@
 namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Auth\Http\Requests\LoginRequest;
+use App\Modules\Inventory\Support\LowStockAlertService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,13 +21,37 @@ class AuthenticatedSessionController extends Controller
         ]);
     }
 
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request, LowStockAlertService $lowStockAlert): RedirectResponse
     {
         $request->authenticate();
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('catalog.index'));
+        // Pedido explícito 2026-08-16: alerta de estoque baixo em modal
+        // "toda vez que logar" — só pra admin (mesma regra de quem já
+        // recebe OversellDetectedNotification/etc, ver HandleInertiaRequests
+        // ::ADMIN_ONLY_NOTIFICATION_TYPES), não faz sentido pro cliente
+        // comum da loja. Flash de sessão (mesmo padrão de success/error) —
+        // some sozinho depois do próximo request, então só aparece uma vez
+        // por login, não em toda navegação seguinte.
+        $user = $request->user();
+        $isAdmin = $user instanceof User && $user->role === User::ROLE_ADMIN;
+
+        if ($isAdmin) {
+            $lowStockProducts = $lowStockAlert->checkAndNotify($user);
+
+            if ($lowStockProducts !== []) {
+                $request->session()->flash('lowStockProducts', $lowStockProducts);
+            }
+        }
+
+        // Correção 2026-08-20: o modal de estoque baixo só existe dentro do
+        // AdminLayout agora (antes vazava pra loja também). Sem URL
+        // "intended" salva, admin cai direto no painel — senão o flash
+        // acima nunca teria layout pra aparecer.
+        $default = $isAdmin ? route('admin.painel') : route('catalogo.inicio');
+
+        return redirect()->intended($default);
     }
 
     public function destroy(Request $request): RedirectResponse
@@ -35,6 +61,6 @@ class AuthenticatedSessionController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('catalog.index');
+        return redirect()->route('catalogo.inicio');
     }
 }

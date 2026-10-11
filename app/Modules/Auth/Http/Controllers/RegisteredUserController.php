@@ -4,11 +4,13 @@ namespace App\Modules\Auth\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Auth\Mail\WelcomeEmail;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -36,8 +38,10 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
+        Mail::to($user)->send(new WelcomeEmail($user));
+
         Auth::login($user);
 
-        return redirect()->route('catalog.index');
+        return redirect()->route('catalogo.inicio');
     }
 }

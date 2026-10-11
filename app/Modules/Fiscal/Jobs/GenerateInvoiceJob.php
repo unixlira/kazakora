@@ -1,0 +1,391 @@
+<?php
+
+namespace App\Modules\Fiscal\Jobs;
+
+use App\Models\User;
+use App\Modules\Checkout\Jobs\SendOrderReceiptEmailJob;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Models\InvoiceGenerationLog;
+use App\Modules\Fiscal\Services\InvoiceService;
+use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Marketplace\Drivers\AmazonDriver;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
+use App\Modules\Marketplace\Support\OrderImportService;
+use App\Notifications\InvoiceIssuanceFailedNotification;
+use App\Services\Bling\BlingInvoiceImporter;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use NFePHP\Common\Exception\ValidatorException;
+use Throwable;
+
+/**
+ * Emite a NF-e de um pedido pago, de forma assíncrona (disparado pelo
+ * webhook do Stripe/endpoint de status, nunca chamado sincronamente).
+ *
+ * Retry só se aplica a falha TÉCNICA (conexão, SOAP, certificado, resposta
+ * ilegível) — ver InvoiceService::issue(). Uma resposta definitiva da SEFAZ
+ * (autorizada/rejeitada/denegada) ou a ausência de certificado configurado
+ * não geram exceção, então terminam o job normalmente (sem retry) e já
+ * disparam o e-mail de recibo em seguida. Falha de validação local do XML
+ * (ValidatorException, antes de qualquer chamada à SEFAZ) também é
+ * terminal na primeira tentativa — é sempre um erro determinístico de
+ * dados, nunca resolvido por retry.
+ */
+class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public int $tries = 3;
+
+    public int $timeout = 120;
+
+    public function __construct(public readonly int $orderId)
+    {
+        // Fila própria (não 'default') — isola a nota fiscal do resto
+        // (envio, e-mail, sincronização de estoque), como pedido
+        // explicitamente: a nota pode ficar lenta/travada (SEFAZ fora do
+        // ar, certificado ruim) sem atrasar nada mais na fila. Precisa do
+        // worker do homolog escutando essa fila também
+        // (`queue:work --queue=default,nfe`), não só a default — ver
+        // comando no cron do Hostinger. Setado via onQueue() (não uma
+        // redeclaração de $queue) porque o trait Queueable já declara essa
+        // propriedade — redeclarar com valor default diferente é rejeitado
+        // pelo PHP como composição incompatível.
+        $this->onQueue('nfe');
+    }
+
+    /**
+     * Pedido que só estava travado por item sem produto vinculado: assim que
+     * o último vínculo é feito (botão do KoraSync ou relink automático), a
+     * nota sai na hora — sem esperar a rodada de 15 min do nfe:retry-stuck.
+     * Caso real #2504 (25/09): vinculado às 11:5x, nota parada desde 11:26.
+     */
+    public static function seDestravou(Order $order): void
+    {
+        $order->loadMissing('invoice', 'items');
+
+        if ($order->status !== Order::STATUS_PAID
+            || ! $order->shouldAutoGenerateInvoice()
+            || $order->invoice?->status === Invoice::STATUS_AUTHORIZED
+            || $order->items->contains(fn ($item) => $item->product_id === null)) {
+            return;
+        }
+
+        self::dispatch($order->id);
+    }
+
+    public function uniqueId(): string
+    {
+        return (string) $this->orderId;
+    }
+
+    public function uniqueFor(): int
+    {
+        return 3600;
+    }
+
+    public function backoff(): array
+    {
+        return [60, 300, 900];
+    }
+
+    public function handle(InvoiceService $invoices, OrderFulfillmentTimeline $timeline, OrderImportService $orderImport): void
+    {
+        $order = Order::findOrFail($this->orderId);
+
+        // BUG REAL 2026-09-29: o job é enfileirado com o pedido pago, mas só
+        // roda depois (backoff de retry, release(60) do carrinho do ML,
+        // nfe:retry-stuck). Se nesse meio-tempo o canal cancelou a venda,
+        // nada aqui olhava o status e a NF-e era AUTORIZADA mesmo assim —
+        // nota de venda inexistente, que alguém ainda tem que lembrar de
+        // cancelar na SEFAZ em 24h. Relê o status na hora de emitir.
+        //
+        // Bloqueia só o que NÃO é venda paga (cancelado / ainda não pago),
+        // e não "tudo que não é PAID": pedido que já foi enviado/concluído
+        // antes de a nota sair continua precisando dela (emissão manual do
+        // admin aceita esses status), e as notas técnicas (avulsa,
+        // devolução de compra/venda) já nascem concluídas.
+        $origemTecnica = in_array($order->origin, [Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true);
+
+        if (! $origemTecnica && in_array($order->status, [Order::STATUS_CANCELLED, Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT], true)) {
+            Log::warning('nfe.emissao_ignorada_pedido_nao_pago', ['order_id' => $order->id, 'status' => $order->status, 'origin' => $order->origin]);
+
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                OrderFulfillmentEvent::STATUS_FAILED,
+                "NF-e não emitida: o pedido está \"{$order->status}\" na hora da emissão (cancelado ou ainda não pago).",
+            );
+
+            return;
+        }
+
+        if (! $order->shouldAutoGenerateInvoice()) {
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                'TikTok Shop: emissão automática de NF-e no KazaKora bloqueada para evitar duplicidade fiscal; a emissão deste canal é tratada fora deste pipeline.',
+            );
+
+            return;
+        }
+
+        // Achado real 2026-08-08 (pedido #189) — ver comentário completo em
+        // OrderImportService::refreshBuyerInfo(): a Shopee mascara nome e
+        // omite CPF do comprador até o pedido avançar de status, então o
+        // dado gravado na importação pode estar incompleto mesmo quando o
+        // canal já tem o dado real disponível agora. Tenta buscar de novo
+        // ANTES de montar o XML, em vez de só falhar 3 vezes com o mesmo
+        // erro ("não foi possível identificar o CPF/CNPJ do comprador")
+        // esperando um webhook futuro consertar sozinho.
+        // Amazon via Bling (pedido explícito 2026-09-25): se o Bling já
+        // gerou a nota desse pedido, ela é a nota — importa completa (XML,
+        // DANFE) e o KazaKora NÃO emite outra. Só sem nota no Bling é que a
+        // emissão segue aqui. A autorização da nota importada dispara a
+        // pré-postagem dos Correios (ver BlingInvoiceImporter).
+        if ($order->origin === Order::ORIGIN_AMAZON && app(AmazonDriver::class)->viaBling()) {
+            $daBling = app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+            if ($daBling) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: NF-e do Bling importada (nº {$daBling->numero}, {$daBling->status}) — o KazaKora não emite outra.");
+
+                return;
+            }
+
+            // Pedido que entrou antes do Bling ter o endereço digitado pelo
+            // comprador fica sem número e a nota não sai (ver
+            // ReadsOrdersFromBling::enderecoDeEntregaDoBling()).
+            if (app(AmazonDriver::class)->atualizarEnderecoPeloBling($order)) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: endereço sem número atualizado pelo Bling ({$order->shipping_street}, {$order->shipping_number}) antes da NF-e.");
+            }
+
+            // BUG REAL 2026-10-08: a nota (e a pré-postagem, que vem logo
+            // atrás dela) saía no mesmo minuto da importação com "S/N", e os
+            // Correios devolveram as encomendas. Sem número, não emite:
+            // espera o Bling receber o endereço digitado pelo comprador.
+            if ($order->enderecoSemNumero()) {
+                $this->aguardarNumeroDoEndereco($order, $timeline);
+
+                return;
+            }
+        }
+
+        $orderImport->refreshBuyerInfo($order);
+        $order->refresh();
+
+        $travaDoCarrinho = null;
+
+        try {
+            // Carrinho do Mercado Livre: uma NF-e só, no pedido titular, com
+            // os itens de todos (ver PackDoPedido). Resolvido só pra pedido
+            // do ML — os outros canais nem tocam na API do ML.
+            if ($order->origin === Order::ORIGIN_MERCADO_LIVRE) {
+                $gate = app(MercadoLivrePackInvoiceGate::class);
+
+                if ($packId = $gate->packId($order)) {
+                    // Os pedidos do carrinho chegam juntos e cada um dispara
+                    // este job: sem a trava, dois deles montariam a nota do
+                    // carrinho ao mesmo tempo e sairiam duas.
+                    $travaDoCarrinho = Cache::lock("nfe:pack:{$packId}", 300);
+
+                    if (! $travaDoCarrinho->get()) {
+                        $travaDoCarrinho = null;
+                        $this->release(60);
+
+                        return;
+                    }
+
+                    $pack = app(PackDoPedido::class);
+
+                    if (! $pack->cobertoPor($order) && $order->invoice?->status !== Invoice::STATUS_AUTHORIZED) {
+                        $gate->garantirCompleto($order, $packId);
+                    }
+
+                    if ($motivo = $pack->motivoDeBloqueio($order)) {
+                        $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $motivo);
+                        Log::warning('nfe.pack.bloqueado', ['order_id' => $order->id, 'pack_id' => $packId, 'motivo' => $motivo]);
+
+                        return;
+                    }
+
+                    $titular = $pack->titular($order);
+
+                    if ($titular && $titular->id !== $order->id) {
+                        $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Carrinho do Mercado Livre: a NF-e deste pedido sai junto com a do pedido #{$titular->id}.");
+
+                        if (! in_array($titular->invoice?->status, [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_DENIED], true)) {
+                            self::dispatch($titular->id);
+                        }
+
+                        return;
+                    }
+                }
+            }
+
+            $invoice = $invoices->issue($order);
+
+            $isTerminalSuccess = in_array($invoice->status, [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_EXTERNAL], true);
+
+            $errorMessage = match (true) {
+                $invoice->status === Invoice::STATUS_AUTHORIZED => null,
+                $invoice->status === Invoice::STATUS_EXTERNAL => null,
+                $invoice->status === Invoice::STATUS_PENDING => 'Certificado digital não configurado — emissão pendente.',
+                default => $invoice->motivo_rejeicao,
+            };
+
+            InvoiceGenerationLog::create([
+                'order_id' => $order->id,
+                'invoice_id' => $invoice->id,
+                'attempt' => $this->attempts(),
+                'status' => $isTerminalSuccess
+                    ? InvoiceGenerationLog::STATUS_SUCCESS
+                    : InvoiceGenerationLog::STATUS_FAILED,
+                'error_message' => $errorMessage,
+            ]);
+
+            $timeline->record(
+                $order,
+                OrderFulfillmentEvent::STEP_INVOICE_ISSUED,
+                $isTerminalSuccess ? OrderFulfillmentEvent::STATUS_SUCCESS : OrderFulfillmentEvent::STATUS_FAILED,
+                match (true) {
+                    $invoice->status === Invoice::STATUS_AUTHORIZED => "NF-e autorizada, chave {$invoice->chave_acesso}",
+                    $invoice->status === Invoice::STATUS_EXTERNAL => 'Nota fiscal emitida pelo próprio canal — Kazakora não emite pra evitar duplicidade.',
+                    default => $errorMessage,
+                },
+            );
+
+            // Pedido do site (origin=loja) não passa por canal nenhum, não
+            // tem envio de canal nem nota pra enviar pra API nenhuma — e
+            // pedido de emissão manual avulsa (origin=nota_fiscal_avulsa,
+            // 2026-08-09) também não: sem essa exclusão, os jobs abaixo
+            // tentavam resolver um driver de marketplace pra um "canal" que
+            // não existe, falhavam 6 vezes em ~3h e disparavam um alerta de
+            // erro pros admins do nada.
+            //
+            // REVERTIDO DE VOLTA 2026-08-21 (mesmo dia — ver
+            // OrderImportService::createOrder() pro histórico completo): a
+            // tentativa de "nota antes do envio" travou uma venda real da
+            // Shopee esperando ~3h a Shopee aceitar a nota antes de sequer
+            // tentar confirmar o envio. Nota nossa autorizada só envia pro
+            // canal via API — não dispara mais confirmação de
+            // envio/etiqueta daqui (isso já dispara direto na importação do
+            // pedido, em paralelo, ver OrderImportService).
+            if ($invoice->status === Invoice::STATUS_AUTHORIZED
+                && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+                SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
+            }
+        } catch (ValidatorException $exception) {
+            // XML inválido localmente (barrado pelo validador do sped-nfe
+            // antes de qualquer chamada à SEFAZ) é sempre um erro
+            // determinístico dos dados/geração do XML — tentar de novo com
+            // os mesmos dados nunca vai dar certo. Falha na hora em vez de
+            // gastar minutos em retries com backoff pra chegar no mesmo
+            // erro (foi o que aconteceu de verdade nos pedidos #15/#16,
+            // 2026-08-03: ~7min de retry até desistir).
+            InvoiceGenerationLog::create([
+                'order_id' => $order->id,
+                'invoice_id' => $order->fresh()->invoice?->id,
+                'attempt' => $this->attempts(),
+                'status' => InvoiceGenerationLog::STATUS_FAILED,
+                'error_message' => $exception->getMessage(),
+            ]);
+
+            $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $exception->getMessage());
+
+            $this->fail($exception);
+
+            return;
+        } catch (Throwable $exception) {
+            InvoiceGenerationLog::create([
+                'order_id' => $order->id,
+                'invoice_id' => $order->fresh()->invoice?->id,
+                'attempt' => $this->attempts(),
+                'status' => $this->attempts() < $this->tries
+                    ? InvoiceGenerationLog::STATUS_RETRYING
+                    : InvoiceGenerationLog::STATUS_FAILED,
+                'error_message' => $exception->getMessage(),
+            ]);
+
+            if ($this->attempts() >= $this->tries) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $exception->getMessage());
+            }
+
+            throw $exception;
+        } finally {
+            $travaDoCarrinho?->release();
+        }
+
+        if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+            SendOrderReceiptEmailJob::dispatch($order->id);
+        }
+    }
+
+    /**
+     * Tenta de novo a cada 10 min por até 6h desde a entrada do pedido (o
+     * Bling costuma receber o endereço completo em minutos). Passou disso,
+     * avisa os admins: o número tem que ser corrigido à mão no pedido.
+     * Por idade do pedido, não por contador: o nfe:retry-stuck também
+     * redispara este job e zeraria qualquer contagem.
+     */
+    private function aguardarNumeroDoEndereco(Order $order, OrderFulfillmentTimeline $timeline): void
+    {
+        $endereco = trim("{$order->shipping_street}, {$order->shipping_number}");
+
+        if ($order->created_at && $order->created_at->gt(now()->subHours(6))) {
+            if (Cache::add("nfe:aguardando-numero:{$order->id}", true, now()->addHours(7))) {
+                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "Amazon: endereço sem número ({$endereco}). NF-e e etiqueta aguardando o Bling receber o endereço completo; nova tentativa a cada 10 min.");
+            }
+
+            $orderId = $order->id;
+            dispatch(static fn () => self::dispatch($orderId))->delay(now()->addMinutes(10))->onQueue('nfe');
+
+            return;
+        }
+
+        if (Cache::add("nfe:sem-numero-avisado:{$order->id}", true, now()->addDay())) {
+            $motivo = "endereço sem número ({$endereco}). Corrija o número no pedido e emita a nota de novo; a etiqueta só sai depois.";
+            $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "NF-e não emitida: {$motivo}");
+
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+            if ($admins->isNotEmpty()) {
+                Notification::send($admins, new InvoiceIssuanceFailedNotification($order, $motivo));
+            }
+        }
+    }
+
+    /**
+     * Chamado pelo Laravel quando as $tries se esgotam de verdade (falha
+     * técnica persistente). O e-mail de recibo sai mesmo assim (sem anexo),
+     * e os admins são avisados pra revisar o pedido manualmente.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $order = Order::find($this->orderId);
+
+        if (! $order) {
+            return;
+        }
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new InvoiceIssuanceFailedNotification($order, $exception?->getMessage() ?? 'Erro desconhecido'));
+        }
+
+        if (! in_array($order->origin, [Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
+            SendOrderReceiptEmailJob::dispatch($order->id);
+        }
+    }
+}

@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Modules\Marketplace\Drivers;
+
+use App\Modules\Catalog\Models\Product;
+use App\Modules\Marketplace\Exceptions\MarketplaceNotConfiguredException;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+
+abstract class AbstractMarketplaceDriver implements MarketplaceChannelDriver
+{
+    public function isConfigured(): bool
+    {
+        return $this->account()?->isConnected() ?? false;
+    }
+
+    /**
+     * Default: canal ainda sem auto-import implementado (só a Shopee tem,
+     * por enquanto — ver ShopeeDriver::autoImportProduct()). Mesmo
+     * comportamento de "sem produto vinculado" que já existia.
+     */
+    public function autoImportProduct(string $externalId, int $quantitySold = 0, ?string $externalModelId = null): ?Product
+    {
+        return null;
+    }
+
+    /**
+     * URLs das fotos do anúncio no canal. Default vazio: canal sem forma
+     * de consultar mídia (Amazon, TikTok via Bling) devolve [] e quem
+     * chamou tenta o próximo canal do produto, em vez de quebrar.
+     *
+     * @return array<int, string>
+     */
+    public function fetchItemImages(string $externalId, ?string $externalModelId = null): array
+    {
+        return [];
+    }
+
+    /**
+     * Descrição, marca, modelo, cor, GTIN e vídeo do anúncio, pra completar
+     * produto criado a partir de uma venda (ProductCompletionService).
+     * Default vazio: canal sem forma de consultar o anúncio.
+     *
+     * @return array{description?: string, brand?: string, model?: string, color?: string, gtin?: string, video?: array{url: string, duration: ?int}}
+     */
+    public function fetchItemContent(string $externalId, ?string $externalModelId = null): array
+    {
+        return [];
+    }
+
+    /**
+     * Default: canal ainda sem busca de avaliações implementada (só a
+     * Shopee tem, por enquanto — ver ShopeeDriver::fetchReviews()).
+     * Lançar, e não devolver [], porque ReviewImportService precisa
+     * distinguir "canal não suporta ainda" (pula o canal inteiro) de
+     * "suporta mas esse produto não tem avaliação nenhuma" ([] real).
+     */
+    public function fetchReviews(string $externalId): array
+    {
+        throw new \RuntimeException("Importação de avaliações via {$this->channel()} ainda não implementada.");
+    }
+
+    public function replyReview(string $externalId, string $comment): array
+    {
+        throw new \RuntimeException("Resposta de avaliações via {$this->channel()} ainda não implementada.");
+    }
+
+    protected function account(): ?MarketplaceAccount
+    {
+        return MarketplaceAccount::query()->where('channel', $this->channel())->first();
+    }
+
+    protected function ensureConfigured(): MarketplaceAccount
+    {
+        $account = $this->account();
+
+        if (! $account?->isConnected()) {
+            throw MarketplaceNotConfiguredException::forChannel($this->channel());
+        }
+
+        return $account;
+    }
+}

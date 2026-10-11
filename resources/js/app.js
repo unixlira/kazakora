@@ -16,8 +16,18 @@ createInertiaApp({
         createApp({ render: () => h(App, props) })
             .use(plugin)
             .mount(el);
+
+        // Tela de abertura (resources/views/app.blade.php): some quando a loja montou.
+        const abertura = document.getElementById('tela-abertura');
+        if (abertura) {
+            requestAnimationFrame(() => abertura.classList.add('saindo'));
+            setTimeout(() => abertura.remove(), 600);
+        }
     },
+    // Barra no topo nas trocas de página (a mesma de sempre); aparece aos
+    // 150 ms em vez de 250 pro cliente ver logo que está carregando.
     progress: {
         color: '#4B5563',
+        delay: 150,
     },
 });

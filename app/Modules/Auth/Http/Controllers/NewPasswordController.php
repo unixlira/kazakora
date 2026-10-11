@@ -38,6 +38,7 @@ class NewPasswordController extends Controller
             function (User $user) use ($request) {
                 $user->forceFill([
                     'password' => Hash::make($request->string('password')),
+                    'deve_trocar_senha' => false,
                     'remember_token' => Str::random(60),
                 ])->save();
 
@@ -51,6 +52,6 @@ class NewPasswordController extends Controller
             ]);
         }
 
-        return redirect()->route('login')->with('success', trans($status));
+        return redirect()->route('entrar')->with('success', trans($status));
     }
 }

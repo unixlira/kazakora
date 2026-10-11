@@ -1,0 +1,2489 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use Illuminate\Support\Facades\DB;
+use App\Modules\Marketplace\Support\ContributionMargin;
+use App\Http\Controllers\Controller;
+use App\Modules\Cart\Models\CartSnapshot;
+use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
+use App\Modules\Content\Models\DailyText;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Drivers\AmazonDriver;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
+use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
+use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Support\TipoDeEnvio;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Modules\Marketplace\Support\BatchLabelPrintService;
+use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Modules\Marketplace\Support\LabelFetchService;
+use App\Modules\Marketplace\Support\OrderImageArchiveService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Throwable;
+
+/**
+ * Dados agregados pro dashboard do agente local (app nativo Windows que
+ * substitui o print-agent Node.js) — mesma autenticação por token fixo do
+ * PrintAgentController (ver AuthenticatePrintAgent), mesmo trust boundary,
+ * já que é o mesmo processo/máquina fazendo os dois papéis.
+ */
+class DashboardAgentController extends Controller
+{
+    /**
+     * "Vendas confirmadas" — mesma definição já usada em
+     * Modules\Admin\Http\Controllers\DashboardController::PAID_STATUSES,
+     * reaproveitada aqui de propósito pra não haver duas definições
+     * divergentes de "faturamento" no sistema.
+     */
+    private const PAID_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
+    private const CHANNELS = [
+        Order::ORIGIN_STORE,
+        Order::ORIGIN_MERCADO_LIVRE,
+        Order::ORIGIN_SHOPEE,
+        Order::ORIGIN_TIKTOK_SHOP,
+        Order::ORIGIN_AMAZON,
+        Order::ORIGIN_SHEIN,
+    ];
+
+    /** Rótulo pt-BR do status pro payload de queue() — mesmo texto de Admin\DashboardController::STATUS_LABELS, duplicado aqui de propósito (DTO simples do KoraSync, não vale acoplar os dois a um enum/trait compartilhado por 6 valores fixos). */
+    private const STATUS_LABELS = [
+        Order::STATUS_PENDING => 'Pendente',
+        Order::STATUS_AWAITING_PAYMENT => 'Aguardando pagamento',
+        Order::STATUS_PAID => 'Pago',
+        Order::STATUS_SHIPPED => 'Enviado',
+        Order::STATUS_COMPLETED => 'Concluído',
+        Order::STATUS_CANCELLED => 'Cancelado',
+    ];
+
+    public function channels(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $monthStart = now()->startOfMonth();
+
+        $accounts = MarketplaceAccount::query()->get()->keyBy('channel');
+
+        $lastOrders = Order::query()
+            ->selectRaw('origin, MAX(id) as last_order_id')
+            ->groupBy('origin')
+            ->pluck('last_order_id', 'origin');
+
+        // selectRaw()+MAX() devolve string crua no formato do MySQL
+        // ("2026-08-03 19:44:42"), não um Carbon — sem esse parse, o JSON
+        // sai sem o "T"/offset ISO 8601 que o DateTimeOffset do C# exige,
+        // e o KoraSync quebra ao desserializar (achado ao vivo 2026-08-04,
+        // reproduzido rodando o parser real do cliente contra essa resposta
+        // — a exceção derrubava o tick inteiro, inclusive a busca de
+        // etiquetas, que roda depois dessa no mesmo ciclo).
+        $lastPrintedJobs = PrintJob::query()
+            ->join('orders', 'orders.id', '=', 'print_jobs.order_id')
+            ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
+            ->selectRaw('orders.origin, MAX(print_jobs.printed_at) as last_printed_at')
+            ->groupBy('orders.origin')
+            ->pluck('last_printed_at', 'orders.origin')
+            ->map(fn ($value) => $value ? \Carbon\Carbon::parse($value) : null);
+
+        $printedTodayByChannel = PrintJob::query()
+            ->join('orders', 'orders.id', '=', 'print_jobs.order_id')
+            ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
+            ->where('print_jobs.printed_at', '>=', $today)
+            ->selectRaw('orders.origin, COUNT(*) as total')
+            ->groupBy('orders.origin')
+            ->pluck('total', 'orders.origin');
+
+        // Uma query agrupada por métrica em vez de uma por canal — 6 canais
+        // × várias métricas em query separada viraria N+1 real, pesado pra
+        // um endpoint que o KoraSync consulta a cada poucos segundos.
+        //
+        // BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+        // varrendo todo painel de métricas do sistema atrás do mesmo tipo
+        // de bug já corrigido no dashboard admin): SUM(total) aqui inclui
+        // frete (shipping_cost), que nunca é receita do vendedor — mesma
+        // causa raiz já documentada em metrics() logo abaixo (que já usa
+        // sum('subtotal') corretamente) e no dashboard admin, ver
+        // DashboardController::index(). Os cards por canal do KoraSync
+        // (RevenueMonth/RevenueToday de ChannelStatusDto) ficavam visíveis
+        // ao lado dos cards de topo (RevenueMonth/RevenueToday de
+        // DashboardMetricsDto, vindos de metrics()) na MESMA tela — somar
+        // os cards por canal dava mais que o card de topo sempre que
+        // houvesse pedido com frete, mesma inconsistência visível do
+        // dashboard admin.
+        $revenueMonthByChannel = Order::query()
+            ->where('created_at', '>=', $monthStart)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $revenueTodayByChannel = Order::query()
+            ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $salesMonthByChannel = Order::query()
+            ->where('created_at', '>=', $monthStart)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $ordersTodayByChannel = Order::query()
+            ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->selectRaw('origin, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        // Achado real 2026-08-07 ("card de devolução não está ok, tem 1 no
+        // meli"): essa definição só olhava Payment estornado (Stripe/Mercado
+        // Pago) — pedido importado de canal externo NUNCA tem Payment local
+        // (paga por fora, na própria Shopee/ML), então uma devolução/
+        // reclamação real no Mercado Livre (MarketplaceClaim, já rastreado
+        // de verdade em /admin/integracoes/mercado-livre/devolucoes) nunca
+        // batia aqui. Une as duas fontes reais de "devolução" que o sistema
+        // tem — pagamento estornado (loja própria) OU claim do canal
+        // (marketplace) — em vez de só uma.
+        $returnsMonthByChannel = Order::query()
+            ->where(function ($query) use ($monthStart) {
+                $query->whereHas('payments', function ($query) use ($monthStart) {
+                    $query->where('status', Payment::STATUS_REFUNDED)
+                        ->where('updated_at', '>=', $monthStart);
+                })->orWhereHas('marketplaceClaims', function ($query) use ($monthStart) {
+                    $query->where('claim_created_at', '>=', $monthStart);
+                });
+            })
+            ->selectRaw('origin, COUNT(*) as total')
+            ->groupBy('origin')
+            ->pluck('total', 'origin');
+
+        $channels = collect(self::CHANNELS)->map(function (string $channel) use (
+            $accounts, $lastOrders, $lastPrintedJobs, $printedTodayByChannel,
+            $revenueMonthByChannel, $revenueTodayByChannel, $salesMonthByChannel,
+            $ordersTodayByChannel, $returnsMonthByChannel,
+        ) {
+            $lastOrderId = $lastOrders->get($channel);
+            $lastOrder = $lastOrderId ? Order::query()->find($lastOrderId, ['id', 'external_order_id', 'created_at']) : null;
+
+            return [
+                'channel' => $channel,
+                // A loja própria não é uma MarketplaceAccount — está sempre "conectada".
+                'connected' => $channel === Order::ORIGIN_STORE
+                    ? true
+                    : (bool) ($accounts->get($channel)?->isConnected() ?? false),
+                'last_order' => $lastOrder ? [
+                    'id' => $lastOrder->id,
+                    'external_order_id' => $lastOrder->external_order_id,
+                    'created_at' => $lastOrder->created_at,
+                ] : null,
+                'last_label_printed_at' => $lastPrintedJobs->get($channel),
+                'labels_printed_today' => (int) ($printedTodayByChannel->get($channel) ?? 0),
+                'revenue_month' => (float) ($revenueMonthByChannel->get($channel) ?? 0),
+                'revenue_today' => (float) ($revenueTodayByChannel->get($channel) ?? 0),
+                'sales_month' => (int) ($salesMonthByChannel->get($channel) ?? 0),
+                'orders_today' => (int) ($ordersTodayByChannel->get($channel) ?? 0),
+                'returns_month' => (int) ($returnsMonthByChannel->get($channel) ?? 0),
+            ];
+        });
+
+        return response()->json(['channels' => $channels]);
+    }
+
+    /**
+     * Batida curta: o mínimo pra tela saber que entrou venda nova.
+     *
+     * Pedido explícito 2026-09-05: "quero que toque o som quando sair venda
+     * e atualizar o sistema, quase que imediato ao chegar o webhook". Sem
+     * canal de push até o navegador (o estático é servido pelo Hostinger
+     * compartilhado e o /api passa por um proxy PHP que bufferiza a
+     * resposta, então SSE/WebSocket não atravessam), a saída é consulta
+     * curta — e pra isso o payload precisa ser barato: o dashboard inteiro
+     * tem 266 KB, que a cada 5s daria uns 4 GB por dia por tela aberta.
+     *
+     * Devolve também os pedidos recentes com o canal, porque o som é POR
+     * CANAL (mesma regra do app WPF, ver NewSaleSoundService): quem não tem
+     * som próprio fica em silêncio em vez de tocar um genérico.
+     */
+    public function pulse(): JsonResponse
+    {
+        $recentes = Order::query()
+            ->nonPurchaseReturn()
+            ->where('created_at', '>=', now()->subMinutes(15))
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get(['id', 'origin', 'created_at']);
+
+        return response()->json([
+            'last_order_id' => (int) (Order::query()->nonPurchaseReturn()->max('id') ?? 0),
+            'recent' => $recentes->map(fn (Order $order) => [
+                'id' => $order->id,
+                'channel' => $order->origin,
+            ])->values(),
+            'server_time' => now()->toIso8601String(),
+        ]);
+    }
+
+    public function metrics(): JsonResponse
+    {
+        $now = now();
+        $today = $now->copy()->startOfDay();
+        $yesterday = $today->copy()->subDay();
+        $monthStart = $now->copy()->startOfMonth();
+        // Comparação justa "mês até agora" vs "mesmo trecho do mês
+        // anterior" (não o mês anterior inteiro, que sempre pareceria maior
+        // só por ter mais dias já fechados).
+        $prevMonthStart = $monthStart->copy()->subMonthNoOverflow();
+        $prevMonthToDate = $prevMonthStart->copy()->addDays($now->day - 1)->endOfDay();
+
+        // BUG REAL 2026-08-15 (achado investigando reclamação real do
+        // usuário — pedido #305 Shopee: R$44,99 no Seller Center, R$58,24
+        // aqui no dashboard do KoraSync): 'total' = subtotal + frete
+        // (shipping_cost) — correto pro VALOR DA NOTA FISCAL (SEFAZ exige,
+        // ver ShopeeDriver::importOrder()), mas o frete pago pelo
+        // comprador/Shopee ao transportador nunca é receita do vendedor.
+        // 'subtotal' é o valor real dos produtos, o mesmo que aparece no
+        // Seller Center do canal — ver comentário completo em
+        // FinancialDashboardController::index().
+        $revenueToday = (float) Order::query()->nonPurchaseReturn()
+            ->where('created_at', '>=', $today)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
+
+        $revenueYesterday = (float) Order::query()->nonPurchaseReturn()
+            ->whereBetween('created_at', [$yesterday, $today])
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
+
+        $revenueMonth = (float) Order::query()->nonPurchaseReturn()
+            ->where('created_at', '>=', $monthStart)
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
+
+        $revenueMonthPrev = (float) Order::query()->nonPurchaseReturn()
+            ->whereBetween('created_at', [$prevMonthStart, $prevMonthToDate])
+            ->whereIn('status', self::PAID_STATUSES)
+            ->sum(DB::raw(ContributionMargin::receitaSql()));
+
+        // Achado real 2026-08-15: "Pedidos hoje" mostrava 17 quando o
+        // usuário contava 18 pedidos recebidos no dia — a diferença era 1
+        // pedido cancelado (Shopee UNPAID) —, e a decisão de 2026-08-15 foi
+        // contar "todo pedido do dia, qualquer status", porque a pergunta
+        // era quantos pedidos CHEGARAM.
+        //
+        // REVERTIDO em 2026-09-05, a pedido do usuário: venda cancelada não
+        // é venda. Ele conferiu o total de ontem e o número não fechava com
+        // o que vendeu de verdade. Vale pros DOIS dias, não só ontem —
+        // "hoje / ontem" com bases diferentes (um contando cancelado e o
+        // outro não) daria uma razão que não significa nada.
+        //
+        // Só CANCELLED sai. Pedido aguardando pagamento continua contando:
+        // ele ainda pode virar venda, e tirá-lo faria o número de hoje
+        // encolher e crescer sozinho ao longo do dia.
+        $salesToday = Order::query()
+            ->where('created_at', '>=', $today)
+            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->count();
+
+        $salesYesterday = Order::query()
+            ->whereBetween('created_at', [$yesterday, $today])
+            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->count();
+
+        $cancelledToday = Order::query()
+            ->where('status', Order::STATUS_CANCELLED)
+            ->where('updated_at', '>=', $today)
+            ->count();
+
+        // Achado real 2026-08-07 — ver comentário equivalente em
+        // channels(): "devolução"/"reembolso" precisa contar tanto Payment
+        // estornado (loja própria) quanto MarketplaceClaim (canal externo,
+        // ex: Mercado Livre) — só Payment nunca pegava devolução real de
+        // marketplace, já que esses pedidos não têm Payment local nenhum.
+        $refundedToday = Order::query()
+            ->where(function ($query) use ($today) {
+                $query->whereHas('payments', function ($query) use ($today) {
+                    $query->where('status', Payment::STATUS_REFUNDED)
+                        ->where('updated_at', '>=', $today);
+                })->orWhereHas('marketplaceClaims', function ($query) use ($today) {
+                    $query->where('claim_created_at', '>=', $today);
+                });
+            })
+            ->count();
+
+        $returnsMonth = Order::query()
+            ->where(function ($query) use ($monthStart) {
+                $query->whereHas('payments', function ($query) use ($monthStart) {
+                    $query->where('status', Payment::STATUS_REFUNDED)
+                        ->where('updated_at', '>=', $monthStart);
+                })->orWhereHas('marketplaceClaims', function ($query) use ($monthStart) {
+                    $query->where('claim_created_at', '>=', $monthStart);
+                });
+            })
+            ->count();
+
+        // Carrinhos ativos: CartSnapshot já é filtrado pra excluir sessões
+        // expiradas (mesma janela usada no dashboard admin), e uma linha só
+        // existe enquanto o carrinho tem itens — não precisa filtro extra.
+        $cartItemsCount = (int) CartSnapshot::query()
+            ->where('updated_at', '>=', now()->subMinutes((int) config('session.lifetime')))
+            ->sum('items_count');
+
+        // Margem de contribuição de hoje — a MESMA conta do painel e do
+        // Financeiro (ver ContributionMargin): receita − custo dos produtos
+        // − taxa da plataforma − frete pago pela loja − ADS. Até 25/09 isto
+        // era receita − taxa só, sem custo de produto nenhum.
+        $margemHoje = app(ContributionMargin::class)->periodo($today, $today->copy()->addDay());
+        $netProfitToday = $margemHoje['margem'];
+
+        // "Cancelamentos e devoluções do mês" do KoraSync v2.0 (pedido
+        // explícito 2026-08-29) — soma cancelamento (canal cancelou o
+        // pedido) com devolução/reclamação já contada em $returnsMonth
+        // acima. Duas contagens de naturezas diferentes juntas de propósito
+        // (é o card único "Cancelamentos e devoluções do mês" do layout
+        // novo), não reaproveita $cancelledToday (que é só HOJE).
+        $cancelledMonth = Order::query()
+            ->where('status', Order::STATUS_CANCELLED)
+            ->where('updated_at', '>=', $monthStart)
+            ->count();
+
+        // "Separados"/"Enviados" do card META DO DIA (pedido explícito
+        // 2026-08-29) — embalado hoje (packed_at, ver packOrder()) e
+        // etiqueta impressa hoje (mesma métrica já usada em
+        // channels()::printedTodayByChannel, aqui somada entre todos os
+        // canais pra um único número). Nenhum dos dois depende da janela
+        // ontem/hoje de queue() — conta o dia inteiro, independente de
+        // quando o pedido em si foi vendido.
+        $packedToday = Order::query()
+            ->where('packed_at', '>=', $today)
+            ->count();
+
+        $printedToday = PrintJob::query()
+            ->where('status', PrintJob::STATUS_PRINTED)
+            ->where('printed_at', '>=', $today)
+            ->count();
+
+        return response()->json([
+            'revenue_today' => $revenueToday,
+            'sales_today' => $salesToday,
+            // Mesma base de $salesToday acima (tudo menos cancelado), pra
+            // dar pra calcular "vendas de hoje / ontem" no META DO DIA do
+            // KoraSync — antes só a variação percentual viajava, não os
+            // dois números crus.
+            'sales_yesterday' => $salesYesterday,
+            'cancelled_today' => $cancelledToday,
+            'refunded_today' => $refundedToday,
+            'cart_items_count' => $cartItemsCount,
+            // Nome antigo mantido pro KoraSync desktop, que desserializa
+            // este campo; o valor já é a margem de contribuição.
+            'net_profit_today' => $netProfitToday,
+            'contribution_margin_today' => $margemHoje,
+            'revenue_month' => $revenueMonth,
+            'revenue_month_variation_pct' => $this->variationPct($revenueMonth, $revenueMonthPrev),
+            'revenue_today_variation_pct' => $this->variationPct($revenueToday, $revenueYesterday),
+            'sales_today_variation_pct' => $this->variationPct($salesToday, $salesYesterday),
+            'returns_month' => $returnsMonth,
+            'cancellations_and_returns_month' => $cancelledMonth + $returnsMonth,
+            'packed_today' => $packedToday,
+            'shipped_today' => $printedToday,
+            'month_label' => $now->translatedFormat('F'),
+            'today_label' => $now->format('d/m/Y'),
+        ]);
+    }
+
+    /**
+     * null quando não há base de comparação (ex: mês anterior sem nenhuma
+     * venda) — o cliente decide como exibir "sem dado" em vez de receber um
+     * 0% ou um Infinity mascarado de 0.
+     */
+    private function variationPct(float $current, float $previous): ?float
+    {
+        if ($previous <= 0.0) {
+            return null;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
+    }
+
+    public function channelOrders(Request $request, string $channel): JsonResponse
+    {
+        if (! in_array($channel, self::CHANNELS, true)) {
+            throw new NotFoundHttpException("Canal \"{$channel}\" não existe.");
+        }
+
+        $orders = Order::query()
+            ->where('origin', $channel)
+            ->with(['items:id,order_id,product_name,quantity'])
+            ->latest('id')
+            ->limit(100)
+            ->get(['id', 'external_order_id', 'status', 'shipping_name', 'total', 'created_at']);
+
+        $fees = OrderChannelFee::query()
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->get()
+            ->keyBy('order_id');
+
+        $shipments = ChannelShipment::query()
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->where('channel', $channel)
+            ->get()
+            ->keyBy('order_id');
+
+        $result = $orders->map(function (Order $order) use ($fees, $shipments) {
+            $fee = $fees->get($order->id);
+
+            return [
+                'id' => $order->id,
+                'external_order_id' => $order->external_order_id,
+                'status' => $order->status,
+                'customer_name' => $order->shipping_name,
+                'products' => $order->items->map(fn ($item) => [
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                ]),
+                'gross_amount' => (float) $order->total,
+                // null quando o canal ainda não tem integração de taxa real
+                // (Shopee/TikTok são stubs hoje) — nunca um valor inventado.
+                'fee_amount' => $fee ? (float) $fee->fee_amount : null,
+                'net_amount' => $fee ? $fee->netAmount() : null,
+                'shipping_method' => $shipments->get($order->id)?->shipping_method,
+                'created_at' => $order->created_at,
+            ];
+        });
+
+        return response()->json(['orders' => $result]);
+    }
+
+    /**
+     * Listagem read-only pra dashboard (KoraSync) mostrar produto/SKU/pedido
+     * por etiqueta — separado de propósito do índice usado pelo próprio
+     * agente de impressão (PrintAgentController::index(), só QUEUED, campos
+     * mínimos, é o loop de trabalho real). Aqui é histórico recente de
+     * qualquer status, só pra exibição.
+     */
+    public function labels(): JsonResponse
+    {
+        $jobs = PrintJob::query()
+            // Etiqueta de agradecimento (gerada junto com toda etiqueta
+            // manual, ver ManualLabelController) não é um dado operacional
+            // de pedido — não deve aparecer nessa lista, mesmo filtro já
+            // usado na listagem de Etiquetas Manuais.
+            ->where('is_thank_you', false)
+            ->with(['order:id,external_order_id,origin', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
+            // COALESCE(printed_at, created_at): a última IMPRESSA de verdade
+            // fica sempre primeiro (pedido explícito 2026-08-04), não só a
+            // mais recentemente criada — um job criado antes mas impresso
+            // depois de outro (ex: reentrou na fila por retry) sobe pro
+            // topo assim que imprime de verdade. Jobs ainda sem printed_at
+            // (queued/claimed/failed) continuam ordenados por created_at.
+            ->orderByRaw('COALESCE(printed_at, created_at) DESC')
+            ->limit(50)
+            ->get(['id', 'order_id', 'channel', 'status', 'error_message', 'created_at', 'printed_at']);
+
+        $result = $jobs->map(fn (PrintJob $job) => [
+            'id' => $job->id,
+            // Jobs antigos de teste têm PrintJob.channel nulo mesmo com
+            // pedido associado — usa o origin do pedido como fallback antes
+            // de mostrar "canal desconhecido" à toa.
+            'channel' => $job->channel ?? $job->order?->origin,
+            'order_id' => $job->order_id,
+            'external_order_id' => $job->order?->external_order_id,
+            'products' => $job->order?->items->map(fn ($item) => [
+                'name' => $item->product_name,
+                'quantity' => $item->quantity,
+                'sku' => $item->product?->sku,
+            ]) ?? [],
+            'status' => $job->status,
+            'error_message' => $job->error_message,
+            'created_at' => $job->created_at,
+            'printed_at' => $job->printed_at,
+        ]);
+
+        return response()->json(['labels' => $result]);
+    }
+
+    /**
+     * Fila de expedição do dia pro KoraSync (app nativo) — pedido explícito
+     * 2026-08-06: cards em destaque (3 desde 2026-08-15, eram 2) + lista com
+     * scroll pro resto, tudo em ordem decrescente. Mesmo conceito da fila
+     * já usada em Modules\Admin\Http\Controllers\PrintJobController::index()
+     * (pedido pago, ainda não embalado/enviado), com 1 filtro A MAIS que a
+     * versão do admin não tem: só pedidos de HOJE (pedido explícito do
+     * usuário pra esse fluxo específico, a versão web mantém todos os
+     * pendentes sem esse corte).
+     *
+     * packed_at (pedido explícito 2026-08-13, revisado no mesmo dia): NÃO
+     * tira o pedido da lista — só o card muda de cor/texto pra "Embalado"
+     * (ver OrderQueueCardViewModel no KoraSync). Primeira versão desse botão
+     * escondia o pedido assim que embalava (whereNull('packed_at') aqui),
+     * mas o usuário quer continuar vendo a lista inteira do dia como
+     * conferência visual, não perder o pedido de vista assim que aperta o
+     * botão — packed_at agora só viaja no payload (campo abaixo) pro app
+     * decidir a cor, nunca filtra a query.
+     *
+     * created_at aqui é a data REAL da venda no canal (placed_at, ver
+     * OrderImportService::createOrder()), não a hora que o webhook chegou
+     * no nosso servidor — normalizada pro timezone do app em cada driver
+     * (MercadoLivreDriver/AmazonDriver/ShopeeDriver) antes de virar
+     * created_at, senão o corte "só hoje" abaixo (que compara contra
+     * now(), sempre no timezone do app) fica errado perto da virada do
+     * dia sempre que o canal manda a data num timezone diferente do nosso
+     * (achado real 2026-08-13: Carbon::createFromTimestamp() do
+     * ShopeeDriver ficava em UTC, 3h à frente de São Paulo — pedido feito
+     * ontem à noite virava "hoje de madrugada" no banco e vazava pra fila
+     * de hoje mesmo sem ser de hoje de verdade).
+     *
+     * Pedido explícito 2026-08-15: "quero todos os pedidos aparecendo no
+     * KoraSync hoje" — confirmado via AskUserQuestion que é literal,
+     * qualquer status, não só "pago" (que era o filtro original, pensado
+     * só pra fila de EXPEDIÇÃO — pedido esperando ser preparado). Filtro de
+     * status removido, mantém só a data (hoje). 'status'/'status_label'
+     * agora vão no payload pra quem exibe (KoraSync) poder diferenciar
+     * visualmente um pedido acionável (pago, precisa embalar) de um que só
+     * está passando por aqui pra registro (já enviado, cancelado,
+     * aguardando pagamento) — packOrder() já rejeitava (409) tentar
+     * embalar pedido não-pago antes disso, esse guard continua valendo.
+     *
+     * BUG REAL 2026-08-17, corrigido no mesmo dia: o corte "só hoje" acima
+     * tem um efeito colateral não percebido em 2026-08-15 — um pedido pago
+     * ontem e ainda não embalado (packed_at nulo) simplesmente cai fora da
+     * janela [hoje, amanhã) na virada do dia e desaparece da fila, mesmo
+     * continuando "em preparação" de verdade (usuário relatou pedidos de
+     * ontem que sobraram pra embalar hoje e sumiram). Primeira correção
+     * tentou "pago sem packed_at, sem limite de data" — mas isso trouxe de
+     * volta um represamento de 32 pedidos pagos há semanas nunca embalados
+     * (não é o cenário que o usuário quer ver todo dia), então foi revertida
+     * a favor de um corte simples e explícito: **ontem + hoje**, qualquer
+     * status, sem exceção pra pedido mais antigo. O painel web
+     * (PrintJobController::index()) continua sem corte de data nenhum — é o
+     * lugar certo pra ver um represamento antigo de verdade, se um dia
+     * existir.
+     *
+     * Pedido explícito 2026-08-17: venda com entrega programada (Mercado
+     * Livre "Coleta/Places" agendado, ver MercadoLivreDriver::
+     * extractScheduledFor(), ChannelShipment.scheduled_for) precisa entrar
+     * na fila do DIA AGENDADO, não do dia da venda — a venda pode ter
+     * saído dias antes, mas o canal só libera a etiqueta perto da data
+     * agendada, e é nesse dia que o operador precisa ver o pedido pra se
+     * organizar (mesmo raciocínio de "controle" que já motivava
+     * scheduledShipments(), só que dentro da fila principal também).
+     * 'scheduled_for'/'label_ready' no payload (abaixo) alimentam o 3º
+     * estado do botão do KoraSync ("Sem Etiqueta") — ver
+     * OrderQueueCardViewModel.IsAwaitingLabel no app nativo.
+     *
+     * BUG REAL 2026-08-29 (achado no relato do usuário: venda do Mercado
+     * Livre aparecendo na fila de preparação antes da data agendada) — a
+     * condição original era um `orWhereHas` solto: `created_at` hoje/ontem
+     * OU `scheduled_for` hoje/ontem, sem exclusão mútua. Um pedido vendido
+     * HOJE mas com entrega agendada pra semana que vem batia na PRIMEIRA
+     * condição (created_at) e entrava na fila mesmo faltando dias pra
+     * etiqueta liberar — o "OU" nunca teve o efeito pretendido de "entra
+     * pela data agendada QUANDO existe uma", só ampliava o critério.
+     * Corrigido pra mútuo excludente: pedido COM entrega agendada só entra
+     * pela janela de scheduled_for (nunca pela de created_at, não importa
+     * quando foi vendido); pedido SEM entrega agendada continua entrando
+     * pela janela de created_at, como sempre foi.
+     *
+     * Pedido explícito 2026-08-29 (KoraSync v2.0): a fila de hoje agora se
+     * divide em duas abas — "Fila normal" (com estoque, pode separar já) e
+     * "Sem estoque" (falta produto, precisa repor no fornecedor antes de
+     * poder embalar) — ver partitionByStock() logo abaixo pra como a
+     * divisão é calculada. 'pending_separation_count' é o total ainda por
+     * separar (soma das duas abas, exceto pedido já embalado/cancelado) —
+     * alimenta o card "Pendentes de separação" do META DO DIA.
+     */
+    private const RELACOES_DA_FILA = [
+        'items:id,order_id,product_id,product_name,quantity',
+        // stock a mais que a versão anterior buscava — é o dado que
+        // partitionByStock() usa pra decidir a aba. SKU continua vindo
+        // junto, pro payload de shortage.
+        'items.product:id,sku,stock,color',
+        // external_shipment_id a mais: é a prova de que 2 pedidos do
+        // Mercado Livre vão na MESMA caixa (carrinho — ver
+        // groupOrdersShippedTogether()). Sem ele no select, a coluna
+        // vem null e o agrupamento silenciosamente nunca acontece.
+        // shipping_method a mais (2026-09-14): é o tipo de envio que o card
+        // mostra — Flex, Mercado Envios, Full, Shopee Xpress, coleta do
+        // TikTok. Fora do select a coluna vem null e todo pedido apareceria
+        // como "Envio não informado", que é exatamente o bug que o
+        // external_shipment_id já causou aqui antes.
+        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method,error_message,tracking_code',
+    ];
+
+    public function queue(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $yesterday = $today->clone()->subDay();
+        $tomorrow = $today->clone()->addDay();
+
+        $relations = self::RELACOES_DA_FILA;
+
+        // Pedido que NÃO é "pago e ainda não embalado" — já embalado,
+        // aguardando pagamento, ou já enviado/concluído — exibido como está
+        // na Fila normal quando cai na janela ontem/hoje, SEM entrar na
+        // conta de estoque. Pedido explícito 2026-08-15: mostrar TODO
+        // pedido do dia, qualquer status (auditoria do dia, não fila de
+        // separação em si).
+        //
+        // BUG REAL 2026-08-29, relatado pelo usuário ("está aparecendo
+        // vendas antigas já entregues"): a versão anterior usava só "status
+        // != cancelled" pra decidir quem entra na conta de estoque — isso
+        // incluía pedido já ENVIADO/CONCLUÍDO sem packed_at (resolvido antes
+        // desse campo existir, ou por fora do KoraSync), fazendo o sistema
+        // achar que uma venda já entregue há semanas ainda "precisava de
+        // estoque pra separar". Só status PAID representa de verdade "ainda
+        // precisa ser separado" — os outros status (mesmo sem packed_at) já
+        // saíram da mão ou nem foram pagos ainda, não fazem parte da conta
+        // de estoque de jeito nenhum.
+        //
+        // BUG REAL 2026-08-29 (2ª correção no mesmo dia, pedido #913 — venda
+        // lançada errada, cancelada de propósito pra sumir da fila):
+        // CANCELLED saiu de vez da regra de "auditoria do dia" acima — a
+        // exclusão explícita abaixo reverte especificamente esse status;
+        // os outros (aguardando pagamento, enviado, concluído) continuavam
+        // exibidos como antes.
+        //
+        // BUG REAL 2026-08-29 (3ª correção — pedido explícito do usuário,
+        // "ajuste no KoraSync/KazaKora": pedido embalado continuava
+        // aparecendo na fila mesmo depois do ponto de coleta escanear o
+        // pacote): SHIPPED/COMPLETED saem da mesma regra de "auditoria do
+        // dia" agora, junto com CANCELLED. O status já É atualizado
+        // corretamente pro canal confirmar a coleta de verdade — ver
+        // ShipmentService::processWebhook() (Mercado Livre) e
+        // ShopeeDriver::mapOrderStatus() (Shopee), os dois já mapeiam
+        // "shipped"/"delivered"/"completed" pro Order real. O que faltava
+        // NÃO era detectar o status (isso já funciona), era a fila parar
+        // de mostrar pedido nesse status "pra auditoria" — decisão
+        // 2026-08-15 revertida especificamente pra esses 2 status agora.
+        // Pedido do FULL: o estoque é do Mercado Livre e quem embala é o ML.
+        // Pedido explícito 2026-09-14: ele APARECE na fila, mas só pra
+        // contabilizar a venda do dia — o pessoal dá baixa quando vê. Por
+        // isso entra aqui (exibição) e fica FORA de $actionableOrders
+        // (conta de estoque e de separação pendente) logo abaixo: separar
+        // não é trabalho nosso, e pedir reposição de um produto que nem sai
+        // daqui só sujaria a aba Sem Estoque.
+        $ehFull = fn ($query) => $query->where('shipping_method', ChannelShipment::METHOD_FULFILLMENT);
+
+        $displayOnlyOrders = Order::query()
+            ->nonPurchaseReturn()
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
+            // Pedido explícito 2026-09-14 ("se já foram entregues, deve
+            // sumir da fila de embalado ou entrega futura"): quando o CANAL
+            // confirma que o pacote saiu — coleta escaneada ou entrega
+            // feita — não há mais nada a fazer aqui, mesmo que o status
+            // local ainda não tenha virado. Complementa a regra de
+            // SHIPPED/COMPLETED do whereNotIn acima, que depende do nosso
+            // status; esta olha o que o canal respondeu.
+            ->whereDoesntHave('channelShipment', fn ($query) => $query->jaSaiu())
+            ->where(function ($query) use ($ehFull) {
+                $query->whereNotNull('packed_at')
+                    ->orWhere('status', '!=', Order::STATUS_PAID)
+                    ->orWhereHas('channelShipment', $ehFull);
+            })
+            ->where(function ($query) use ($yesterday, $tomorrow, $ehFull) {
+                // BUG REAL 2026-09-01 (relatado pelo usuário: "mercado livre
+                // tá marcando mais de 40 pedidos", 18 pedidos reais sumidos
+                // de TODA tela — #927/931/932/939/973/980/989/990/1006/1023/
+                // 1026/1037/1040/1045/1047/1048/1050/1051): pedido ainda
+                // PAID (canal nunca confirmou o despacho de verdade, mesmo
+                // já embalado e com etiqueta pronta há dias) não pode
+                // desaparecer só porque a VENDA foi há mais de 1 dia — isso
+                // não é "auditoria de pedido resolvido", é trabalho pendente
+                // de verdade que simplesmente sumia da tela sem resolver,
+                // pior ainda no dia 1º do mês (corte de "mês atual" reseta
+                // bem quando o pedido tem só 2-3 dias). Mesmo princípio já
+                // aplicado a pedido agendado vencido (ver isInTodayWindow):
+                // não resolvido = sempre visível, não importa a idade.
+                // Pedido explícito 2026-09-14: pedido já embalado fica na
+                // tela pelo dia (contagem do dia e conferência de quem deu
+                // baixa) e depois sai. Antes a regra era "pago = sempre
+                // visível, não importa a idade" — mas ela foi escrita pra
+                // trabalho PENDENTE, e acabou segurando também o que já
+                // estava embalado: a aba Separados tinha 478 pedidos em
+                // 14/09, 429 deles do TikTok, com baixa de até um mês atrás.
+                // Quem procura um pedido velho usa a busca (bloco "No
+                // histórico"), não a fila.
+                //
+                // A janela é sobre packed_at, não created_at: baixa de hoje
+                // num pedido de cinco dias atrás é trabalho de HOJE e tem
+                // que contar no dia.
+                //
+                // O Full segue a MESMA janela depois da baixa (2026-09-21):
+                // enquanto ninguém deu baixa ele fica visível não importa a
+                // idade (é o pedido esperando alguém conferir), mas assim
+                // que a baixa sai ele passa a valer pelo packed_at como
+                // todo mundo. Sem isso ele nunca saía da aba Separados — o
+                // pedido #2315 deu baixa em 19/09 e ainda estava lá no dia
+                // 21, junto com todo Full que viesse depois.
+                $query->whereBetween('packed_at', [$yesterday, $tomorrow])
+                    ->orWhere(fn ($query) => $query
+                        ->whereNull('packed_at')
+                        ->whereHas('channelShipment', $ehFull))
+                    ->orWhere(function ($query) use ($yesterday, $tomorrow) {
+                        // Resolvido de outro jeito que não seja PAID (só
+                        // sobra "aguardando pagamento" aqui — cancelado/
+                        // enviado/concluído já saem no whereNotIn do topo) —
+                        // mantém a janela de auditoria original de sempre.
+                        $query->where(function ($query) use ($yesterday, $tomorrow) {
+                            $query->whereBetween('created_at', [$yesterday, $tomorrow])
+                                ->whereDoesntHave('channelShipment', function ($query) {
+                                    $query->whereNotNull('scheduled_for');
+                                });
+                        })
+                            ->orWhereHas('channelShipment', function ($query) use ($yesterday, $tomorrow) {
+                                $query->whereBetween('scheduled_for', [$yesterday, $tomorrow]);
+                            });
+                    });
+            })
+            ->with($relations)
+            ->withSum('items as units_count', 'quantity')
+            ->get();
+
+        // BUG REAL 2026-09-01 (relatado pelo usuário: "mercado livre tá
+        // marcando mais de 40 pedidos", 18 pedidos reais sumidos de TODA
+        // tela): min(início do mês, ontem) só protegia 1 dia de carry-over
+        // no limite do mês — pedido #927 (criado 28/08, ainda PAID, etiqueta
+        // já pronta há dias) tinha 3-4 dias, mais velho que "ontem", e
+        // sumia de $actionableOrders inteiro assim que o mês virou (hoje é
+        // dia 1º, então "início do mês" É hoje). 30 dias corridos em vez de
+        // "início do mês corrente" — continua limitado (não é "arquivo
+        // morto de anos", intenção original de 2026-08-29), só não reseta
+        // pra zero toda virada de mês.
+        $actionableSince = now()->subDays(30);
+
+        // SÓ pedido PAGO e ainda não embalado entra na conta de estoque — é
+        // o único status que representa de verdade "precisa separar, tem
+        // que ter produto pra isso" (ver BUG REAL acima). created_at >=
+        // início do mês (pedido explícito 2026-08-29: "sem estoque deve ser
+        // mostrado a partir desse mês em diante") — não é mais "sem limite
+        // nenhum" (1ª correção no mesmo dia, também baseada num relato real,
+        // mas longe demais: a aba é sobre reposição em aberto, não um
+        // arquivo morto de anos). EXCETO pedido com entrega agendada
+        // (scheduled_for) — esse sempre entra na conta de estoque não
+        // importa quando foi vendido (pode ter sido há semanas, ver
+        // MercadoLivreDriver::extractScheduledFor()): o que importa pra ele
+        // é a data de entrega, não a data da venda, e o estoque precisa
+        // ficar reservado pra ele desde já (FIFO de verdade), não só a
+        // partir do dia em que a etiqueta libera. O corte pra Fila normal é
+        // aplicado depois, em PHP (isInTodayWindow), sobre quem tem estoque
+        // OK — sem precisar de uma 2ª query.
+        $actionableOrders = Order::query()
+            ->nonPurchaseReturn()
+            ->where('status', Order::STATUS_PAID)
+            ->whereNull('packed_at')
+            // Full não é trabalho de separação nosso (ver $ehFull acima), e
+            // pedido que o canal já despachou também não — os dois ficam
+            // fora da conta de estoque e de "falta separar".
+            ->whereDoesntHave('channelShipment', $ehFull)
+            ->whereDoesntHave('channelShipment', fn ($query) => $query->jaSaiu())
+            ->where(function ($query) use ($actionableSince) {
+                $query->where('created_at', '>=', $actionableSince)
+                    ->orWhereHas('channelShipment', function ($query) {
+                        $query->whereNotNull('scheduled_for');
+                    });
+            })
+            ->with($relations)
+            ->withSum('items as units_count', 'quantity')
+            ->orderBy('id')
+            ->get();
+
+        [$withStock, $outOfStock, $shortages] = $this->partitionByStock($actionableOrders);
+
+        // FIFO calculado sobre TODO o backlog acionável (não só hoje) —
+        // pedido antigo represado sem estoque continua tendo prioridade
+        // real sobre uma reposição futura, mesmo não aparecendo na Fila
+        // normal (que é só a "vitrine" de hoje).
+        $withStockToday = $withStock->filter(fn (Order $order) => $this->isInTodayWindow($order, $yesterday, $tomorrow));
+
+        // BUG REAL 2026-08-31 (relatado pelo usuário: "vendas do mercado
+        // livre estao canceladas algumas horas depois e não apareceram na
+        // fila de cancelados... isso foi um erro que eu poderia ter
+        // enviado os produtos") — $displayOnlyOrders acima EXCLUI
+        // CANCELLED explicitamente (whereNotIn no topo), e $actionableOrders
+        // só pega status=PAID — nenhuma das duas nunca incluiu pedido
+        // cancelado, então um pedido que estava visível (pago, na fila) e
+        // foi cancelado horas depois simplesmente SUMIA da tela inteira no
+        // próximo poll, em vez de mudar pra aba "Cancelados" (o
+        // client-side do KoraSync já sabe separar por status=="cancelled"
+        // — MainViewModel.UpdateOrderQueue — só faltava o servidor não
+        // esconder esses pedidos antes disso chegar a acontecer). Pedido
+        // cancelado nas últimas ~48h (mesma janela ontem/hoje já usada em
+        // toda essa função) agora entra também, especificamente pra isso —
+        // sem essa visibilidade, ninguém percebe que precisa TIRAR um
+        // pedido já separado/em mãos da remessa.
+        $recentlyCancelledOrders = Order::query()
+            ->nonPurchaseReturn()
+            ->where('status', Order::STATUS_CANCELLED)
+            ->whereBetween('updated_at', [$yesterday, $tomorrow])
+            ->with($relations)
+            ->withSum('items as units_count', 'quantity')
+            ->get();
+
+        $normalOrders = $displayOnlyOrders->merge($withStockToday)->merge($recentlyCancelledOrders)->sortByDesc('id')->values();
+        $outOfStockOrders = $outOfStock->sortByDesc('id')->values();
+
+        // BUG REAL 2026-09-01 (relatado pelo usuário — "um pedido do
+        // Genivaldo do Mercado Livre que são 2 itens... no korasync deve
+        // aparecer os 2 itens", pedidos #1159/#1160 conferidos na produção):
+        // carrinho do Mercado Livre (comprador leva 2 anúncios de uma vez)
+        // vira DOIS pedidos na API — external_order_id ...284 e ...286,
+        // 1 item cada — mas UM pacote só, com a MESMA etiqueta
+        // (channel_shipments.external_shipment_id 47904652512 nos dois).
+        // O painel do ML mostra isso como uma venda só, com os 2 itens; a
+        // fila mostrava 2 cards de 1 item, e quem embala só vê metade do
+        // que tem que ir na caixa em cada card. Agrupado, o card volta a
+        // ser 1 por PACOTE, com todos os itens dele.
+        $normalGroups = $this->groupOrdersShippedTogether($normalOrders);
+        $outOfStockGroups = $this->groupOrdersShippedTogether($outOfStockOrders);
+
+        // Quando a etiqueta de cada pedido saiu na impressora — UMA query
+        // pra fila inteira, não uma por card.
+        //
+        // É o dado que faltava na tela e que custou papel (3º relato de
+        // duplicada, 2026-09-10): sem ele o card não tinha como avisar que
+        // a etiqueta já tinha saído sozinha, e o operador clicava em
+        // "Gerar etiqueta" achando que estava imprimindo a primeira.
+        $impressas = $this->labelsPrintedAt(
+            $normalGroups->flatten(1)->merge($outOfStockGroups->flatten(1))->pluck('id')->all(),
+        );
+
+        $mapper = fn (\Illuminate\Support\Collection $group) => $this->mapQueueOrder($group, $shortages, $impressas);
+
+        return response()->json([
+            'queue' => $normalGroups->map($mapper)->values(),
+            'out_of_stock' => $outOfStockGroups->map($mapper)->values(),
+            // Todo o backlog sem estoque conta aqui também (não só o de
+            // hoje) — é trabalho pendente de verdade, só esperando repor.
+            // Conta PACOTES, não pedidos: um carrinho do ML é uma caixa só
+            // pra separar, não duas (ver groupOrdersShippedTogether()).
+            'pending_separation_count' => $this->groupOrdersShippedTogether($withStockToday->values())->count()
+                + $outOfStockGroups->count(),
+        ]);
+    }
+
+    /**
+     * "Ontem+hoje" pra exibição normal, OU o dia agendado quando o pedido
+     * tem entrega/coleta programada (ver comentário completo em queue(),
+     * seção $displayOnlyOrders, mesma regra replicada aqui em PHP pra
+     * reaplicar sobre $withStock sem precisar de uma 2ª query no banco).
+     *
+     * BUG REAL 2026-08-31 (RESSURGIU no mesmo dia — já tinha sido corrigido
+     * antes, mas um deploy de rotina sem relação nenhuma resetou este
+     * arquivo pro estado do git via rsync --delete e o fix nunca tinha sido
+     * commitado; ao reconstruir as outras correções depois do reset,
+     * esqueci de reaplicar esta também. Achado de novo no relato do
+     * usuário: "tem pedido na fila errado" — pedidos #863/893/894/910/925/
+     * 940/967/969, agendados pro dia 31/08 mas com etiqueta AINDA não
+     * liberada pelo Mercado Livre, apareciam na Fila normal só por a data
+     * agendada ter chegado, mesmo sem poder ser separado/impresso de
+     * verdade ainda): pedido com scheduled_for só entra na janela de hoje
+     * quando a etiqueta JÁ foi liberada pelo canal — chegar a data
+     * prometida não basta, o Mercado Livre pode atrasar a liberação de
+     * verdade (foi exatamente o caso agora, madrugada do dia agendado, ML
+     * ainda não liberou nenhuma). Sem entrega agendada (pedido normal),
+     * comportamento intacto — só created_at importa, como sempre foi.
+     *
+     * Sem janela de data quando tem entrega agendada — só "etiqueta
+     * liberada, sim ou não" importa nesse caso (não "liberada dentro de
+     * ontem/hoje/amanhã"): a data agendada em si já decidiu quando o
+     * pedido entrou em $actionableOrders (ver query lá, scheduled_for not
+     * null passa sem olhar created_at); se o Mercado Livre atrasar a
+     * liberação de verdade pra depois da data prometida, o pedido não pode
+     * deixar de aparecer só porque "passou da janela" — continua sendo
+     * trabalho pendente até ser embalado.
+     */
+    private function isInTodayWindow(Order $order, \Carbon\Carbon $yesterday, \Carbon\Carbon $tomorrow): bool
+    {
+        $shipment = $order->channelShipment;
+        $scheduledFor = $shipment?->scheduled_for;
+
+        if ($scheduledFor !== null) {
+            if (in_array($shipment?->status, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true)) {
+                return true;
+            }
+
+            // BUG REAL 2026-09-01 (pedido explícito do usuário, repetido
+            // várias vezes): antes disso, pedido agendado sem etiqueta
+            // ficava SÓ na aba "Vendas futuras" pra sempre, mesmo depois da
+            // data prometida já ter chegado/vencido — "atrasado" ali não
+            // tinha nenhuma ação possível (nem embalar), só um aviso
+            // vermelho. Fila normal já tem um 3º estado de botão pronto
+            // pra exatamente esse caso ("Sem Etiqueta" — IsAwaitingLabel no
+            // KoraSync, ver OrderQueueCardViewModel.cs), só nunca tinha
+            // pedido chegando até lá pra usar. Agora, assim que a data
+            // agendada chega (hoje ou já passou — vencido), o pedido entra
+            // na Fila normal também (continua aparecendo em Vendas futuras
+            // igual, dupla visibilidade não é problema) — dá pra separar
+            // fisicamente e só falta a etiqueta de verdade, que é
+            // impressa sozinha assim que o canal libera. Só continua FORA
+            // da Fila normal enquanto a data ainda está no futuro (venda
+            // agendada de verdade, ainda não chegou a hora).
+            return $scheduledFor->lte($tomorrow);
+        }
+
+        // BUG REAL 2026-09-01 (mesmo relato: 18 pedidos reais sumidos de
+        // toda tela, ex. #927 criado 28/08, ainda PAID, etiqueta pronta há
+        // dias — mais velho que a janela ontem/hoje/amanhã, então nunca
+        // aparecia). Pedido sem entrega agendada continua entrando pela
+        // janela normal da venda quando é isso mesmo (pedido de hoje/ontem
+        // de verdade) — mas se AINDA está PAID (canal nunca confirmou o
+        // despacho), fica visível sempre, não importa a idade: mesmo
+        // princípio já aplicado acima pra entrega agendada vencida.
+        return $order->created_at->between($yesterday, $tomorrow)
+            || $order->status === Order::STATUS_PAID;
+    }
+
+    /**
+     * Divide os pedidos AINDA NÃO resolvidos (já filtrados por quem chama —
+     * ver queue()) entre "tem estoque pra separar agora" e "sem estoque,
+     * precisa repor no fornecedor antes" — pedido explícito 2026-08-29.
+     *
+     * BUG REAL 2026-08-31 (relatado pelo usuário, pedido #1108 — "carregador
+     * de celular tem sim no estoque", produto com stock=28 de verdade):
+     * a versão anterior fazia uma simulação FIFO reconstruindo um "estoque
+     * disponível" a partir de Product::stock e ia decrementando 1x por
+     * pedido pendente na fila — mas Product::stock JÁ é debitado de
+     * verdade, atomicamente, no momento de CADA venda (StockManager::
+     * adjust(), chamado por OrderImportService/ManualOrderService logo na
+     * importação/criação do pedido — confirmado ao vivo pelos
+     * StockMovements reais). Ou seja: Product::stock já reflete "quanto
+     * sobra depois de TODAS as vendas pendentes", não "quanto tinha antes
+     * delas" — rodar a simulação de novo em cima disso descontava a MESMA
+     * unidade duas vezes. Resultado real: produto com 28 de estoque e 34
+     * pedidos pagos/não embalados (a maioria do mesmo SKU popular) fazia a
+     * simulação "zerar" já no 28º pedido em ordem de id, marcando os 6
+     * seguintes como sem estoque — mesmo cada um deles já tendo debitado
+     * sua própria unidade normalmente, sem problema real nenhum.
+     *
+     * StockManager::adjust() já clampa em 0 (nunca fica negativo) e já
+     * dispara OversellDetectedNotification pros admins na hora real em que
+     * uma venda de fato não tem unidade física suficiente — é ali que
+     * "vendeu mais do que tinha" já é detectado e avisado, não precisa (e
+     * não deve) ser reconstruído aqui de novo. Correção: sem simulação
+     * nenhuma — cada pedido pendente só entra em "sem estoque" se o
+     * produto está com stock <= 0 NESTE INSTANTE (repõe no fornecedor,
+     * volta sozinho pra Fila normal no próximo poll, mesma dinâmica de
+     * sempre). Continua em tempo real, sem estado novo persistido.
+     *
+     * @param  \Illuminate\Support\Collection<int, Order>  $actionableOrders  já carregado com items.product:stock (ver queue()) — só pedido PAID e ainda não embalado, ver comentário completo lá.
+     * @return array{0: \Illuminate\Support\Collection<int, Order>, 1: \Illuminate\Support\Collection<int, Order>, 2: array<int, array<int, array{sku: ?string, name: string, missing: int}>>}
+     */
+    private function partitionByStock(\Illuminate\Support\Collection $actionableOrders): array
+    {
+        $withStock = collect();
+        $withoutStock = collect();
+        $shortages = [];
+
+        foreach ($actionableOrders->sortBy('id') as $order) {
+            $orderShortage = [];
+
+            foreach ($order->items as $item) {
+                $productId = $item->product_id;
+
+                // Item avulso sem produto local cadastrado (sem cost_price,
+                // sem estoque pra controlar) nunca vira "sem estoque" por
+                // falta de cadastro — não é esse o problema que essa aba
+                // resolve.
+                if ($productId === null) {
+                    continue;
+                }
+
+                $stock = (int) ($item->product?->stock ?? 0);
+
+                if ($stock <= 0) {
+                    $orderShortage[] = [
+                        'sku' => $item->product?->sku,
+                        'name' => $item->product_name,
+                        'missing' => $item->quantity,
+                    ];
+                }
+            }
+
+            if ($orderShortage === []) {
+                $withStock->push($order);
+            } else {
+                $withoutStock->push($order);
+                $shortages[$order->id] = $orderShortage;
+            }
+        }
+
+        // Carrinho do Mercado Livre (ver groupOrdersShippedTogether()): a
+        // caixa é uma só, então ou ela inteira dá pra separar, ou nenhuma
+        // parte dela dá. Sem isso, um carrinho com um item em falta ficava
+        // partido entre as duas abas — metade em "Fila", metade em "Sem
+        // Estoque" — e quem embalasse a metade da Fila fecharia a caixa
+        // faltando o resto.
+        $blockedPacks = $this->groupOrdersShippedTogether($withoutStock)
+            ->map(fn (\Illuminate\Support\Collection $group) => $group->first())
+            ->filter(fn (Order $order) => $order->origin === Order::ORIGIN_MERCADO_LIVRE)
+            ->map(fn (Order $order) => $order->channelShipment?->external_shipment_id)
+            ->filter()
+            ->unique()
+            ->all();
+
+        if ($blockedPacks !== []) {
+            [$dragged, $stillWithStock] = $withStock->partition(
+                fn (Order $order) => $order->origin === Order::ORIGIN_MERCADO_LIVRE
+                    && in_array($order->channelShipment?->external_shipment_id, $blockedPacks, true),
+            );
+
+            $withStock = $stillWithStock->values();
+            $withoutStock = $withoutStock->merge($dragged)->values();
+        }
+
+        return [$withStock, $withoutStock, $shortages];
+    }
+
+    /**
+     * Chave de agrupamento: pedidos que vão na MESMA caixa, com a MESMA
+     * etiqueta, viram um card só. Hoje isso só existe no Mercado Livre
+     * (carrinho/pack — ver o comentário completo em queue()): a API cria
+     * um pedido por anúncio, mas o envio é um só, e é o
+     * channel_shipments.external_shipment_id compartilhado que prova isso
+     * — não precisa de campo novo nem de consultar a API de novo.
+     *
+     * Status entra na chave de propósito: se o comprador cancelar UM dos
+     * pedidos do carrinho, o cancelado tem que continuar aparecendo
+     * sozinho na aba Cancelados (é justamente o que o operador precisa
+     * ver pra TIRAR aquele item da caixa), não escondido dentro do card
+     * do que sobrou.
+     *
+     * @param  \Illuminate\Support\Collection<int, Order>  $orders
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, Order>>
+     */
+    private function groupOrdersShippedTogether(\Illuminate\Support\Collection $orders): \Illuminate\Support\Collection
+    {
+        return $orders->groupBy(function (Order $order) {
+            $shipmentId = $order->channelShipment?->external_shipment_id;
+
+            return $order->origin === Order::ORIGIN_MERCADO_LIVRE && $shipmentId
+                ? "pack:{$order->origin}:{$shipmentId}:{$order->status}"
+                : "order:{$order->id}";
+        })->values();
+    }
+
+    /**
+     * Nome exibido na fila. Pedido explícito 2026-09-01 ("colocar
+     * destinatario e o nome do usuario entre parenteses"): quem RECEBE o
+     * pacote na frente, o apelido da conta no canal entre parênteses —
+     * "Genivaldo Jose Filho (GENIVALDOJOSEFILHOFILHO)". Os dois vêm do
+     * canal (ver MercadoLivreDriver::importOrder()); pedido sem
+     * destinatário/apelido (loja própria, canais que ainda não mandam
+     * esses campos) cai no shipping_name de sempre, sem parênteses.
+     */
+    private function queueCustomerName(Order $order): string
+    {
+        $name = trim((string) ($order->shipping_recipient_name ?: $order->shipping_name));
+
+        // Achado real 2026-08-15 (pedido #371): a própria Shopee manda
+        // o nome do comprador mascarado com asterisco ("S******o") pra
+        // pedido cancelado/não pago — confirmado ao vivo contra a API
+        // deles, não é bug nosso nem dado perdido no nosso lado, o nome
+        // de verdade simplesmente não existe mais na resposta. Troca só
+        // na EXIBIÇÃO desta fila (não mexe em shipping_name, que fica
+        // intacto pra qualquer outro uso — NF-e, histórico etc.) por um
+        // texto que não confunde o operador achando que é o nome real
+        // truncado.
+        if (str_contains($name, '*')) {
+            return 'Cliente (dados ocultados pelo canal)';
+        }
+
+        $nickname = trim((string) $order->channel_buyer_nickname);
+
+        return $nickname !== '' ? "{$name} ({$nickname})" : $name;
+    }
+
+    /**
+     * Um card por PACOTE (ver groupOrdersShippedTogether()) — o grupo tem
+     * 1 pedido só no caso normal, 2+ quando é carrinho do Mercado Livre.
+     * O pedido "principal" (id/número exibidos, alvo do botão de embalar)
+     * é o primeiro do grupo; os itens, unidades e faltas de estoque são a
+     * soma de todos, porque é isso que vai junto na caixa.
+     *
+     * @param  \Illuminate\Support\Collection<int, Order>  $group
+     * @param  array<int, array<int, array{sku: ?string, name: string, missing: int}>>  $shortages  por order_id, vazio pra pedido com estoque OK — ver partitionByStock().
+     * @return array<string, mixed>
+     */
+    /**
+     * @param  array<int, string>  $impressas  order_id => "d/m/Y H:i" da impressão
+     */
+    private function mapQueueOrder(\Illuminate\Support\Collection $group, array $shortages, array $impressas = []): array
+    {
+        $order = $group->first();
+        $itensDaCaixa = $group->flatMap(fn (Order $packOrder) => $packOrder->items);
+        // Nomes que se repetem na mesma caixa (as 4 cores do Power Bank têm
+        // o MESMO nome no catálogo — a cor só existe no SKU): sem algo que
+        // diferencie, o card mostrava 3 SKUs diferentes como o mesmo item.
+        $nomesRepetidos = $itensDaCaixa->countBy('product_name')->filter(fn ($n) => $n > 1)->keys()->all();
+        $stockShortage = $group->flatMap(fn (Order $item) => $shortages[$item->id] ?? [])->values()->all();
+
+        // Como a caixa sai da loja (Flex, Mercado Envios, Full, Shopee
+        // Xpress, coleta...). Canal sozinho não responde isso, e é a
+        // primeira coisa que o operador precisa saber pra separar — ver
+        // TipoDeEnvio. Num carrinho do ML todos os pedidos vão na mesma
+        // caixa, com um envio só, então o do titular vale pra caixa.
+        $envio = TipoDeEnvio::doPedido($order);
+
+        return [
+            'id' => $order->id,
+            'external_order_id' => $order->external_order_id,
+            'channel' => $order->origin,
+            'shipping_method' => $order->channelShipment?->shipping_method,
+            // Código de rastreio do envio (na Amazon, o código de postagem
+            // dos Correios) — pedido de 2026-09-25: copiar direto do card
+            // pra atualizar o painel do canal, sem abrir o menu Correios.
+            'tracking_code' => $order->channelShipment?->tracking_code,
+            // Amazon: o rastreio já foi mandado pro Bling (e dele pra
+            // Amazon)? Última tentativa do InformAmazonShipmentToBling —
+            // pedido de 2026-09-25 ("por que não saiu a confirmação na
+            // Amazon"): sem isto não havia onde ver se a etapa rodou.
+            'channel_update' => $order->origin === Order::ORIGIN_AMAZON ? $this->avisoDeEnvioAoCanal($order) : null,
+            'shipping_type' => $envio['tipo'],
+            'shipping_type_label' => $envio['label'],
+            'shipping_type_short' => $envio['curto'],
+            'customer_name' => $this->queueCustomerName($order),
+            // Carrinho do ML: quantos pedidos vão nesta caixa (1 no caso
+            // normal) e os outros números de pedido, pro operador conferir
+            // a etiqueta contra o painel do canal. Campo novo é ignorado
+            // por cliente que ainda não conhece (o KoraSync desktop
+            // desserializa só o que declara em OrderQueueItemDto).
+            'pack_order_count' => $group->count(),
+            'pack_external_order_ids' => $group->pluck('external_order_id')->filter()->values(),
+            'units_count' => (int) $group->sum('units_count'),
+            // Só conta como embalado quando TODOS os pedidos da caixa
+            // estão embalados — meia caixa embalada não é caixa pronta.
+            'packed_at' => $group->every(fn (Order $item) => $item->packed_at !== null)
+                ? $group->max('packed_at')
+                : null,
+            'status' => $order->status,
+            'status_label' => self::STATUS_LABELS[$order->status] ?? $order->status,
+            // product_id (pedido explícito 2026-08-30 — "múltiplos
+            // produtos de 1 pedido... o pessoal identifica pela imagem/
+            // foto para embalar") — o cliente busca 1 foto por produto
+            // distinto em GET dashboard/queue/{order}/image/{productId}
+            // (ver queueOrderProductImage() abaixo), não mais 1 foto só
+            // pro pedido inteiro. Num carrinho do ML, são os itens de
+            // TODOS os pedidos da caixa, na ordem dos pedidos.
+            'products' => $itensDaCaixa->map(fn ($item) => [
+                // id do PRÓPRIO item do pedido (não do produto): um pedido
+                // pode ter 2 itens apontando pro MESMO product_id (2
+                // variações do mesmo anúncio do Mercado Livre, que a
+                // importação hoje casa no mesmo listing/produto — ver
+                // MercadoLivreDriver::importOrder(), que não lê
+                // variation_id). Sem um id único por LINHA, o cliente web
+                // usava product_id como chave de lista e as duas linhas
+                // colidiam, sumindo uma das duas da tela (KoraSync
+                // desktop nunca sofreu disso — ProductRows é 1 linha por
+                // item, sem chave).
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'name' => $item->product_name,
+                // Linha de baixo do nome no card (o KoraSync web já exibe
+                // `variation_name`): a cor do produto, ou o SKU inteiro
+                // quando o nome se repete na caixa e não há cor cadastrada.
+                'variation_name' => $item->product?->color
+                    ?: (in_array($item->product_name, $nomesRepetidos, true) ? $item->product?->sku : null),
+                'quantity' => $item->quantity,
+                'sku' => $item->product?->sku,
+            ]),
+            // Pedido parado por logística incompleta (produto sem peso/
+            // medida, sem vínculo, ou pré-postagem que não bate mais com o
+            // pedido). Presente ⇒ o KoraSync mostra o alerta no card em vez
+            // de deixar o operador esperando uma etiqueta que não vem.
+            'logistics_block' => $this->bloqueioLogistico($order),
+            'created_at' => $order->created_at,
+            // Null pra pedido normal (sem entrega programada). Presente ⇒
+            // KoraSync trata como "venda agendada" — 3º estado do botão
+            // (ver OrderQueueCardViewModel.IsAwaitingLabel).
+            'scheduled_for' => $order->channelShipment?->scheduled_for,
+            // Só relevante quando scheduled_for não é null: true quando o
+            // canal já liberou a etiqueta de verdade (mesmos 2 status
+            // "prontos" usados em scheduledShipments()), false enquanto o
+            // pedido está preparado mas ainda esperando o canal liberar.
+            'label_ready' => in_array(
+                $order->channelShipment?->status,
+                [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED],
+                true,
+            ),
+            // Vazio pra pedido com estoque OK — presente ⇒ KoraSync mostra
+            // "falta Nx SKU" no card da aba Sem Estoque (pedido explícito
+            // 2026-08-29, ver partitionByStock()).
+            'stock_shortage' => $stockShortage,
+            // Quando a etiqueta desta caixa já saiu na impressora (null se
+            // nunca saiu). O KoraSync mostra no card e pergunta antes de
+            // mandar outra — ver reprintLabel().
+            'label_printed_at' => $group->map(fn (Order $item) => $impressas[$item->id] ?? null)->filter()->first(),
+        ];
+    }
+
+    /**
+     * @return array{status: string, message: ?string, at: ?string}|null
+     */
+    private function avisoDeEnvioAoCanal(Order $order): ?array
+    {
+        $evento = OrderFulfillmentEvent::query()
+            ->where('order_id', $order->id)
+            ->where('step', OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER)
+            ->latest('id')
+            ->first(['id', 'status', 'message', 'created_at']);
+
+        if (! $evento) {
+            return null;
+        }
+
+        return [
+            'status' => $evento->status,
+            'message' => $evento->message,
+            'at' => $evento->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+        ];
+    }
+
+    /**
+     * Motivo de um pedido Amazon (via Bling) não ter etiqueta dos Correios:
+     * pré-postagem que não bate com o pedido, ou a última tentativa de
+     * gerá-la falhou (produto sem peso/medida, sem vínculo, Correios
+     * recusou). null = nada travado. Outros canais: sempre null.
+     */
+    private function bloqueioLogistico(Order $order): ?string
+    {
+        if ($order->origin !== Order::ORIGIN_AMAZON || $order->status !== Order::STATUS_PAID || ! app(AmazonDriver::class)->viaBling()) {
+            return null;
+        }
+
+        $semVinculo = $order->items->whereNull('product_id');
+
+        if ($semVinculo->isNotEmpty()) {
+            return 'Item sem produto vinculado ('.$semVinculo->pluck('product_name')->map(fn ($nome) => Str::limit((string) $nome, 40))->implode('; ').') — use "Vincular produto" pra liberar a nota e a etiqueta.';
+        }
+
+        $correios = app(CorreiosAutoShipping::class);
+
+        if ($prePostagem = $correios->geradaPara($order)) {
+            return $correios->problemaDaEtiqueta($order, $prePostagem);
+        }
+
+        $invoice = $order->invoice()->first(['id', 'order_id', 'status', 'motivo_rejeicao', 'updated_at']);
+
+        // Nota ainda saindo não é trava — é a espera normal, e nos primeiros
+        // 30 minutos não vira alerta. Depois disso o card diz em que pé ela
+        // está (pedido #2504, 25/09: "não saiu a etiqueta" sem nenhum aviso
+        // do porquê — a etiqueta espera a nota).
+        if ($invoice?->status !== Invoice::STATUS_AUTHORIZED) {
+            if (in_array($invoice?->status, [Invoice::STATUS_REJECTED, Invoice::STATUS_DENIED, Invoice::STATUS_ERROR], true)) {
+                return 'NF-e '.$invoice->status.': '.($invoice->motivo_rejeicao ?: 'ver detalhe no pedido').'.';
+            }
+
+            $desde = $invoice?->updated_at ?? $order->updated_at;
+
+            if ($desde && $desde->lt(now()->subMinutes(30))) {
+                $situacao = match ($invoice?->status) {
+                    null => 'ainda não emitida',
+                    Invoice::STATUS_SENT => 'enviada à SEFAZ, sem resposta',
+                    default => 'pendente',
+                };
+
+                // O porquê de verdade fica na linha do tempo do pedido
+                // (validação, SEFAZ, dado faltando) — traz a última
+                // tentativa pro card, que é onde alguém vai olhar.
+                $ultima = \App\Modules\Checkout\Models\OrderFulfillmentEvent::query()
+                    ->where('order_id', $order->id)
+                    ->where('step', \App\Modules\Checkout\Models\OrderFulfillmentEvent::STEP_INVOICE_ISSUED)
+                    ->latest('id')
+                    ->first(['id', 'status', 'message', 'created_at']);
+
+                $motivo = $ultima
+                    ? ' Última tentativa '.$ultima->created_at?->timezone('America/Sao_Paulo')->format('H:i').': '.Str::limit((string) $ultima->message, 160)
+                    : ' Nenhuma tentativa de emissão registrada.';
+
+                return "Etiqueta esperando a NF-e ({$situacao} desde ".$desde->timezone('America/Sao_Paulo')->format('H:i').').'.$motivo;
+            }
+
+            return null;
+        }
+
+        $shipment = $order->channelShipment;
+
+        return $shipment?->status === ChannelShipment::STATUS_ERROR ? $shipment->error_message : null;
+    }
+
+    /**
+     * A hora da última impressão BEM-SUCEDIDA de cada pedido da lista.
+     *
+     * Uma query só: a fila do galpão tem dezenas de cards e é consultada de
+     * poucos em poucos segundos pelo KoraSync.
+     *
+     * @param  list<int>  $orderIds
+     * @return array<int, string>
+     */
+    private function labelsPrintedAt(array $orderIds): array
+    {
+        if ($orderIds === []) {
+            return [];
+        }
+
+        return PrintJob::query()
+            ->whereIn('order_id', $orderIds)
+            ->where('is_thank_you', false)
+            ->where('status', PrintJob::STATUS_PRINTED)
+            ->orderBy('id')
+            ->get(['order_id', 'printed_at'])
+            // O último de cada pedido vence (a ordenação acima garante).
+            ->mapWithKeys(fn (PrintJob $job) => [$job->order_id => $job->printed_at?->format('d/m/Y H:i')])
+            ->filter()
+            ->all();
+    }
+
+    /**
+     * Foto do produto pro card em destaque do KoraSync (pedido explícito
+     * 2026-08-15) — a mesma imagem já publicada nos marketplaces (ver
+     * OrderImageArchiveService). 404 quando o pedido não tem produto/imagem
+     * pra mostrar — esperado (item avulso sem produto local, produto sem
+     * foto cadastrada), não é erro; o cliente (KoraSync) trata como "sem
+     * imagem", mesmo padrão já usado em GET jobs/{id}/archive.
+     *
+     * Cache-Control longo: a imagem arquivada nunca muda pro mesmo pedido
+     * (archive() é idempotente, sempre a mesma foto), sem motivo pra
+     * revalidar a cada poll de 2s do KoraSync.
+     */
+    public function queueOrderImage(Order $order, OrderImageArchiveService $images): mixed
+    {
+        $bytes = $images->bytes($order);
+
+        if ($bytes === null) {
+            throw new NotFoundHttpException('Pedido sem imagem de produto disponível.');
+        }
+
+        return response($bytes, 200, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
+    /**
+     * Uma foto por PRODUTO DISTINTO do pedido (pedido explícito
+     * 2026-08-30 — "múltiplos produtos de 1 pedido... o pessoal
+     * identifica pela imagem/foto para embalar"). $product é o product_id
+     * vindo em queue()/products.product_id. Mesmo padrão de 404 "sem
+     * imagem" de queueOrderImage() acima.
+     */
+    public function queueOrderProductImage(Order $order, int $product, OrderImageArchiveService $images): mixed
+    {
+        $bytes = $images->bytes($order, $product);
+
+        if ($bytes === null) {
+            throw new NotFoundHttpException('Produto sem imagem disponível.');
+        }
+
+        return response($bytes, 200, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
+    /**
+     * Os pedidos que vão na MESMA caixa que $order (ele incluído) — ver
+     * groupOrdersShippedTogether() pro porquê de isso existir. Consulta
+     * própria (não dá pra reaproveitar o agrupamento da fila: este
+     * endpoint recebe só um pedido, sem a lista toda em mãos).
+     *
+     * @return \Illuminate\Support\Collection<int, Order>
+     */
+    private function ordersShippedWith(Order $order): \Illuminate\Support\Collection
+    {
+        $shipmentId = $order->channelShipment?->external_shipment_id;
+
+        if ($order->origin !== Order::ORIGIN_MERCADO_LIVRE || ! $shipmentId) {
+            return collect([$order]);
+        }
+
+        return Order::query()
+            ->where('origin', $order->origin)
+            ->where('status', $order->status)
+            ->whereHas('channelShipment', fn ($query) => $query->where('external_shipment_id', $shipmentId))
+            ->get();
+    }
+
+    /**
+     * Botão "Em preparação" -> "Embalado" do card, no KoraSync — marca o
+     * pedido como embalado (packed_at) sem tocar em orders.status, que
+     * continua sendo só a visão do canal sobre o pedido (ver comentário da
+     * migration 2026_08_13_150000). Idempotente de propósito: reenviar o
+     * clique (ex.: duplo clique acidental, ou um retry de rede depois de um
+     * timeout que já tinha ido pro servidor) não deve estourar erro, só
+     * confirmar o estado já embalado — o operador só precisa saber que o
+     * pedido saiu da fila.
+     */
+    public function packOrder(Order $order): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID) {
+            return response()->json(['message' => 'Pedido não está pago — nada pra embalar.'], 409);
+        }
+
+        $this->markPacked($order);
+
+        return response()->json(['packed_at' => $order->refresh()->packed_at]);
+    }
+
+    /**
+     * O clique de "separado/embalado" do KoraSync — hoje SÓ a baixa.
+     *
+     * Nasceu na Fase 3 (2026-09-04) fazendo três coisas: conferir o pedido
+     * no canal (o antigo SeparationGateService), gravar packed_at e soltar a
+     * etiqueta na impressora.
+     *
+     * MUDANÇA DE FLUXO 2026-09-07, pedida pelo usuário depois do dia em que
+     * etiqueta saiu duplicada: o galpão passou a **imprimir o lote inteiro
+     * de etiquetas antes** (botão "Gerar etiquetas em lote", ver
+     * batchPrintLabels()) e só depois ir dando baixa com os papéis na mão.
+     * Com a impressão fora daqui, as duas engrenagens que existiam pra
+     * proteger a impressão saíram junto — ordem explícita: "remove a ação
+     * de gerar etiqueta e validação se foi cancelada o pedido antes de
+     * imprimir, e só dá baixa na separação".
+     *
+     * O que isso significa na prática, registrado de propósito: a
+     * reconsulta ao canal no instante do clique não acontece mais, então um
+     * cancelamento que o canal ainda não nos mandou por webhook não é mais
+     * pego aqui. O que continua de pé é a aba "Cancelados" alimentada pelo
+     * webhook e a trava de status na impressão (pedido não-pago nunca
+     * imprime, ver LabelFetchService).
+     *
+     * packOrder() continua existindo e funcionando: um KoraSync antigo, que
+     * ainda chama /pack, não quebra com este deploy.
+     */
+    public function separateOrder(Order $order): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID && $order->status !== Order::STATUS_CANCELLED) {
+            return response()->json([
+                'result' => 'blocked',
+                'message' => 'Pedido não está pago — nada pra separar.',
+            ], 409);
+        }
+
+        $this->markPacked($order);
+
+        return response()->json([
+            'result' => 'ok',
+            'message' => null,
+            // Mantidos no payload de propósito, sempre nesses valores: o
+            // KoraSync no ar hoje lê os dois, e um deploy só do Kazakora não
+            // pode fazer a tela dizer que mandou papel pra impressora.
+            'channel_checked' => false,
+            'label_queued' => false,
+            'label_already_printed_at' => $this->lastPrintedAt($order),
+            'packed_at' => $order->refresh()->packed_at,
+        ]);
+    }
+
+    /**
+     * "Gerar etiquetas em lote" (2026-09-07) — o novo começo do dia no
+     * galpão. Manda pra impressora, de uma vez, toda etiqueta já disponível
+     * de pedido da Shopee/Mercado Livre que ainda falta separar.
+     *
+     * Toda a decisão de quem entra mora no BatchLabelPrintService; aqui é
+     * só a porta HTTP pro botão do KoraSync. Não consulta canal nenhum, por
+     * isso responde na hora mesmo com o galpão cheio.
+     */
+    public function batchPrintLabels(BatchLabelPrintService $service): JsonResponse
+    {
+        $resultado = $service->run();
+
+        $enfileiradas = count($resultado['enfileiradas']);
+        $jaImpressas = count($resultado['ja_impressas']);
+        $semEtiqueta = count($resultado['sem_etiqueta']);
+
+        $mensagem = match (true) {
+            $enfileiradas > 0 => $enfileiradas === 1
+                ? '1 etiqueta foi pra impressora.'
+                : "{$enfileiradas} etiquetas foram pra impressora.",
+            $jaImpressas > 0 => 'Nenhuma etiqueta nova: todas as disponíveis já tinham sido impressas.',
+            $semEtiqueta > 0 => 'Nenhuma etiqueta disponível ainda — o canal não liberou nenhuma dos pedidos que faltam separar.',
+            default => 'Não há pedido esperando separação.',
+        };
+
+        return response()->json([
+            'result' => 'ok',
+            'message' => $mensagem,
+            'enfileiradas' => $enfileiradas,
+            'ja_impressas' => $jaImpressas,
+            'sem_etiqueta' => $semEtiqueta,
+            'total_candidatos' => $resultado['total_candidatos'],
+            'detalhe' => $resultado,
+        ]);
+    }
+
+    /**
+     * Quando a etiqueta deste pedido já saiu na impressora — e quando.
+     * null se nunca saiu (ou se a última tentativa falhou/está na fila).
+     */
+    private function lastPrintedAt(Order $order): ?string
+    {
+        $job = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->latest('id')
+            ->first();
+
+        if ($job?->status !== PrintJob::STATUS_PRINTED) {
+            return null;
+        }
+
+        return $job->printed_at?->format('d/m/Y H:i');
+    }
+
+    private const HISTORICO_DIAS = 120;
+
+    private const HISTORICO_LIMITE = 40;
+
+    /**
+     * Busca de pedido no histórico, pra busca do KoraSync (2026-09-11).
+     *
+     * Relato do usuário: "tem Rosângela e Rosangela, só apareceu o sem
+     * acento". A busca da tela já ignorava acento — o problema era outro: ela
+     * só procura no que a fila carregou, e a fila tira o pedido assim que o
+     * canal confirma o envio. A Rosângela (#1914, Shopee) tinha sido separada
+     * e enviada no dia anterior; a Rosangela (#934, TikTok) continuava na
+     * lista só porque o TikTok nunca marca enviado. Aqui a busca vai no banco
+     * inteiro (últimos HISTORICO_DIAS dias), qualquer status.
+     */
+    public function searchOrders(Request $request): JsonResponse
+    {
+        $palavras = collect(preg_split('/\s+/u', trim((string) $request->query('q', ''))))
+            ->filter(fn (string $palavra) => $palavra !== '')
+            ->take(5)
+            ->values();
+
+        if (mb_strlen($palavras->implode('')) < 3) {
+            return response()->json(['orders' => []]);
+        }
+
+        $pedidos = Order::query()
+            ->nonPurchaseReturn()
+            ->where('created_at', '>=', now()->subDays(self::HISTORICO_DIAS))
+            ->where(function ($query) use ($palavras) {
+                // Cada palavra casa em algum campo, em qualquer ordem — o
+                // mesmo "like" da busca local da tela. Sem acento de graça:
+                // as colunas são utf8mb4_unicode_ci, e nessa collation o
+                // MySQL compara "rosangela" = "Rosângela".
+                foreach ($palavras as $palavra) {
+                    $like = '%'.addcslashes($palavra, '%_\\').'%';
+
+                    $query->where(fn ($q) => $q
+                        ->where('shipping_name', 'like', $like)
+                        ->orWhere('shipping_recipient_name', 'like', $like)
+                        ->orWhere('channel_buyer_nickname', 'like', $like)
+                        ->orWhere('external_order_id', 'like', $like)
+                        ->orWhereHas('items', fn ($item) => $item
+                            ->where('product_name', 'like', $like)
+                            ->orWhereHas('product', fn ($produto) => $produto->where('sku', 'like', $like)))
+                        ->when(ctype_digit($palavra), fn ($q) => $q->orWhere('id', (int) $palavra)));
+                }
+            })
+            ->with(self::RELACOES_DA_FILA)
+            ->withSum('items as units_count', 'quantity')
+            ->orderByDesc('id')
+            ->limit(self::HISTORICO_LIMITE)
+            ->get();
+
+        // Carrinho do ML: quem busca pelo número de UM pedido tem que ver a
+        // caixa inteira, não metade dela.
+        $envios = $pedidos
+            ->filter(fn (Order $order) => $order->origin === Order::ORIGIN_MERCADO_LIVRE)
+            ->map(fn (Order $order) => $order->channelShipment?->external_shipment_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($envios->isNotEmpty()) {
+            $irmaos = Order::query()
+                ->where('origin', Order::ORIGIN_MERCADO_LIVRE)
+                ->whereNotIn('id', $pedidos->pluck('id'))
+                ->whereHas('channelShipment', fn ($query) => $query->whereIn('external_shipment_id', $envios))
+                ->with(self::RELACOES_DA_FILA)
+                ->withSum('items as units_count', 'quantity')
+                ->get();
+
+            $pedidos = $pedidos->merge($irmaos);
+        }
+
+        $grupos = $this->groupOrdersShippedTogether($pedidos->sortByDesc('id')->values());
+        $impressas = $this->labelsPrintedAt($pedidos->pluck('id')->all());
+
+        return response()->json([
+            'orders' => $grupos->map(fn (\Illuminate\Support\Collection $group) => $this->mapQueueOrder($group, [], $impressas))->values(),
+        ]);
+    }
+
+    /**
+     * Candidatos pra vincular um item sem produto (2026-09-06).
+     *
+     * Busca por nome ou SKU, só produto ativo. Serve a tela do KoraSync que
+     * fecha a lacuna descrita em TikTokShopDriver::matchByNameSimilarity():
+     * quando o canal não diz qual variação foi vendida, o sistema se recusa
+     * a chutar e pede pra alguém vincular UMA vez. Até agora não havia onde.
+     */
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $termo = trim((string) $request->query('q', ''));
+
+        $produtos = Product::query()
+            ->where('is_active', true)
+            ->when($termo !== '', fn ($query) => $query->where(
+                fn ($q) => $q->where('name', 'like', "%{$termo}%")->orWhere('sku', 'like', "%{$termo}%"),
+            ))
+            ->orderBy('name')
+            ->limit(30)
+            ->get(['id', 'name', 'sku', 'color', 'stock']);
+
+        return response()->json([
+            'products' => $produtos->map(fn (Product $p) => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'sku' => $p->sku,
+                'color' => $p->color,
+                'stock' => $p->stock,
+            ]),
+        ]);
+    }
+
+    /**
+     * Vincula um item de pedido sem produto ao produto certo, escolhido por
+     * uma pessoa (2026-09-06). É a decisão que o sistema se RECUSA a tomar
+     * sozinho: as 4 cores do Power Bank têm o mesmo nome no catálogo e o
+     * canal não informa a cor, então chutar significaria o operador embalar
+     * a cor errada (ver o comentário longo em matchByNameSimilarity()).
+     *
+     * Vale pro CÓDIGO do canal, não só pra este item: grava o
+     * ProductChannelListing e alcança todos os itens em aberto com o mesmo
+     * external_item_id. É o que o driver já esperava que existisse — "basta
+     * alguém vincular UMA vez e nunca mais se decide isso pra esse código".
+     *
+     * NÃO mexe em estoque: o canal já debitou do lado dele no momento da
+     * venda, e o produto que está sendo vinculado agora foi vendido antes —
+     * debitar aqui contaria a mesma venda duas vezes (mesmo raciocínio de
+     * RelinkUnmappedMarketplaceItems).
+     */
+    public function linkOrderItem(Request $request, Order $order, OrderItem $item): JsonResponse
+    {
+        if ($item->order_id !== $order->id) {
+            return response()->json(['message' => 'Este item não é deste pedido.'], 404);
+        }
+
+        if ($item->product_id !== null) {
+            return response()->json(['message' => 'Este item já tem produto vinculado.'], 409);
+        }
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+        ]);
+
+        $product = Product::query()->findOrFail($validated['product_id']);
+        $externalItemId = $item->external_item_id;
+
+        $itens = OrderItem::query()
+            ->whereNull('product_id')
+            ->when(
+                $externalItemId !== null,
+                fn ($query) => $query->where('external_item_id', $externalItemId),
+                fn ($query) => $query->where('id', $item->id),
+            )
+            ->get();
+
+        foreach ($itens as $alvo) {
+            $alvo->forceFill([
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+            ])->save();
+        }
+
+        // O listing é o que evita repetir essa decisão: da próxima venda
+        // com o mesmo código, o driver acha o produto sem passar perto da
+        // similaridade de nome.
+        if ($externalItemId !== null && $order->origin !== null) {
+            try {
+                ProductChannelListing::query()->firstOrCreate(
+                    ['channel' => $order->origin, 'external_id' => $externalItemId],
+                    [
+                        'product_id' => $product->id,
+                        'is_enabled' => true,
+                        'status' => ProductChannelListing::STATUS_PUBLISHED,
+                        'last_synced_at' => now(),
+                    ],
+                );
+            } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+                // BUG REAL 2026-09-06, na primeira vez que a tela foi usada:
+                // a tabela só permite 1 linha por (produto, canal), e o
+                // produto escolhido já tinha uma pra OUTRO código do mesmo
+                // canal — o TikTok gera um código por variação. A exceção
+                // estourava DEPOIS dos itens já terem sido gravados: o
+                // vínculo aplicava e a tela mostrava erro.
+                //
+                // O listing é só atalho pra próxima venda não recalcular
+                // nada. Não conseguir criá-lo não invalida o vínculo, que é
+                // o que importa. Mesmo tratamento de
+                // MercadoLivreDriver::autoImportProduct().
+            }
+        }
+
+        app(OrderFulfillmentTimeline::class)->record(
+            $order,
+            OrderFulfillmentEvent::STEP_STOCK_UPDATED,
+            OrderFulfillmentEvent::STATUS_SUCCESS,
+            "Item \"{$item->product_name}\" vinculado ao produto #{$product->id} ({$product->sku}) pelo KoraSync",
+        );
+
+        // Era o que faltava pra nota sair? Então sai agora.
+        Order::query()->whereIn('id', $itens->pluck('order_id')->push($order->id)->unique())->get()
+            ->each(fn (Order $destravado) => GenerateInvoiceJob::seDestravou($destravado));
+
+        return response()->json([
+            'result' => 'ok',
+            'message' => $itens->count() > 1
+                ? "Produto vinculado. {$itens->count()} itens com o mesmo código do canal foram corrigidos."
+                : 'Produto vinculado.',
+            'product' => ['id' => $product->id, 'name' => $product->name, 'sku' => $product->sku],
+        ]);
+    }
+
+    /**
+     * Passo "Deseja imprimir a etiqueta?" do modal de separação
+     * (2026-09-05). SÓ CONSULTA — não cria, não recria e não reenfileira
+     * PrintJob nenhum, de propósito.
+     *
+     * O motivo é o incidente de 2026-08-12: um empurrão de checagem
+     * recriou jobs e reimprimiu 11 etiquetas físicas de pedidos antigos,
+     * uma delas de pedido cancelado. Enfileirar impressão a partir de um
+     * clique de tela é exatamente o tipo de gatilho que causou aquilo.
+     *
+     * E não precisa: quando a etiqueta chega, LabelFetchService já cria o
+     * PrintJob sozinho e o agente local imprime. Este endpoint só conta ao
+     * operador em que pé isso está.
+     */
+    public function labelStatus(Order $order): JsonResponse
+    {
+        // Shein: a etiqueta sai no painel do próprio canal, nunca pela
+        // nossa impressora (TikTok saiu dessa lista em 2026-10-05).
+        if (in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
+            return response()->json([
+                'state' => 'channel_only',
+                'message' => 'A etiqueta deste canal sai no painel do próprio marketplace — ela não passa pelo Kazakora.',
+            ]);
+        }
+
+        // BUG REAL 2026-09-29: isto era labelFiscalBlock($order, true) — o
+        // KoraSync consulta este endpoint a cada 2s por até 3 min, e cada
+        // consulta enfileirava SubmitInvoiceToChannelJob/GenerateInvoiceJob
+        // (log de produção: a mesma recusa do canal a cada ~2s). Consulta é
+        // consulta: o empurrão do fluxo fiscal fica só no POST reimprimir.
+        $fiscalBlock = $this->labelFiscalBlock($order, false);
+
+        if ($fiscalBlock) {
+            return response()->json($fiscalBlock);
+        }
+
+        $job = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->latest('id')
+            ->first();
+
+        $shipment = $order->loadMissing('channelShipment')->channelShipment;
+
+        if (! $job
+            && $shipment?->status === ChannelShipment::STATUS_LABEL_READY
+            && $shipment->label_path
+            && \Illuminate\Support\Facades\Storage::disk('local')->exists($shipment->label_path)) {
+            return response()->json([
+                'state' => 'ready_not_queued',
+                'message' => 'Etiqueta pronta no KazaKora, mas sem fila de impressão. Use "Imprimir de novo" ou gere o lote; isto não é atraso do marketplace.',
+            ], 409);
+        }
+
+        if ($job?->status === PrintJob::STATUS_PRINTED) {
+            return response()->json([
+                'state' => 'printed',
+                'message' => 'Etiqueta já impressa em '.$job->printed_at?->format('d/m/Y H:i').'. Ela não sai de novo sozinha — se esse papel se perdeu, use "Imprimir de novo".',
+            ]);
+        }
+
+        if ($job && in_array($job->status, [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED], true)) {
+            return response()->json([
+                'state' => 'queued',
+                'message' => 'Etiqueta na fila da impressora — o agente local imprime em instantes.',
+            ]);
+        }
+
+        if ($job?->status === PrintJob::STATUS_FAILED) {
+            return response()->json([
+                'state' => 'failed',
+                'message' => 'A última tentativa de impressão falhou: '.($job->error_message ?: 'sem detalhe do agente').'.',
+            ]);
+        }
+
+        return response()->json([
+            'state' => 'pending',
+            'message' => 'O canal ainda não liberou a etiqueta deste pedido. Assim que liberar, ela entra sozinha na fila de impressão — não precisa voltar aqui.',
+        ]);
+    }
+
+    /**
+     * "Tentar de novo" do modal de falha de impressão (2026-09-06).
+     *
+     * Nasceu do pedido #1503: a impressora recusou a etiqueta, o job ficou
+     * failed e não havia caminho nenhum pra mandar de novo sem alguém
+     * mexer no banco. Reaproveita a etiqueta JÁ baixada — não consulta o
+     * canal, não gera etiqueta nova, não passa de novo pelo gate: o pedido
+     * já foi separado, o que faltou foi papel sair.
+     *
+     * Cria uma LINHA nova de PrintJob de propósito, em vez de reabrir a
+     * antiga: o agente da loja guarda localmente os jobs que já viu, e um
+     * id repetido costuma não disparar impressão nenhuma.
+     *
+     * MUDANÇA DE FLUXO 2026-09-07: não exige mais separação concluída. Com
+     * a impressão acontecendo em lote ANTES da separação, exigir packed_at
+     * aqui deixaria justamente o caso mais comum sem saída — a etiqueta que
+     * amassou no lote da manhã, de um pedido que ninguém separou ainda.
+     *
+     * TRAVA DE CONFIRMAÇÃO 2026-09-10, terceiro relato de etiqueta
+     * duplicada ("isso causa prejuízo"): a impressão automática imprime uma
+     * vez só — a trava dela funciona. O segundo papel saía DAQUI, do clique
+     * no botão "Gerar etiqueta" do card, que mandava direto pra impressora
+     * sem dizer que a etiqueta já tinha saído. Na venda AGENDADA isso é
+     * quase certo: a etiqueta sai sozinha na véspera, o operador só olha o
+     * pedido no dia da entrega, não vê nada na tela dizendo que já saiu, e
+     * clica.
+     *
+     * Agora, com etiqueta já impressa, este endpoint RECUSA e devolve a
+     * hora — quem quiser a 2ª via manda `confirmar: true`, que é o que a
+     * tela envia depois de perguntar. A regra da casa continua inteira:
+     * máquina nunca imprime duas vezes, pessoa pode — desde que saiba que
+     * está pedindo a segunda.
+     */
+    public function reprintLabel(Order $order, Request $request): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Pedido não está mais pago — não dá pra reimprimir por aqui.',
+            ], 409);
+        }
+
+        if (in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'A etiqueta deste canal sai no painel do próprio marketplace — ela não passa pela impressora daqui.',
+            ], 409);
+        }
+
+        $shipment = $order->loadMissing('channelShipment')->channelShipment;
+
+        // Amazon via Bling: a etiqueta é a da pré-postagem dos Correios, e
+        // ela só sai se ainda descreve o pacote (relatório técnico
+        // 2026-09-25: pré-postagem com peso/quantidade errada não
+        // reimprime — cancela e gera de novo).
+        if ($order->origin === Order::ORIGIN_AMAZON && app(AmazonDriver::class)->viaBling()) {
+            if ($bloqueio = $this->bloqueioLogistico($order)) {
+                return response()->json(['ok' => false, 'logistics_blocked' => true, 'message' => $bloqueio], 409);
+            }
+
+            $prePostagem = app(CorreiosAutoShipping::class)->geradaPara($order);
+
+            // Sem pré-postagem válida, ou a etiqueta guardada é de uma que
+            // já foi cancelada: pede uma nova em vez de imprimir a velha.
+            if (! $prePostagem || $shipment?->external_shipment_id !== $prePostagem->correios_id) {
+                ConfirmChannelShippingJob::dispatch($order->id);
+
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Gerando a pré-postagem dos Correios deste pedido — tente de novo em instantes.',
+                ], 409);
+            }
+        }
+
+        $fiscalBlock = $this->labelFiscalBlock($order, true);
+
+        if ($fiscalBlock) {
+            return response()->json([
+                'ok' => false,
+                'state' => $fiscalBlock['state'],
+                'message' => $fiscalBlock['message'],
+            ], 409);
+        }
+
+        // Sem etiqueta baixada não há o que mandar pra impressora — mas
+        // devolver só "não tem" é beco sem saída pra quem está com a caixa
+        // pronta. Pede a etiqueta ao canal agora e diz pra tentar de novo:
+        // o mesmo empurrão que o lote dá, no clique de um pedido só.
+        if (! $shipment?->label_path) {
+            try {
+                if ($shipment) {
+                    CheckShipmentLabelJob::dispatch($shipment->id);
+                } else {
+                    ConfirmChannelShippingJob::dispatch($order->id);
+                }
+            } catch (Throwable $exception) {
+                Log::warning('dashboard.reprint_nudge_failed', [
+                    'order_id' => $order->id,
+                    'message' => $exception->getMessage(),
+                ]);
+            }
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'O canal ainda não liberou a etiqueta deste pedido. Acabei de pedir pra ele — tente de novo em instantes.',
+            ], 409);
+        }
+
+        // Já tem uma esperando a impressora: não empilha uma segunda, senão
+        // uma sequência de cliques vira uma sequência de etiquetas.
+        $emAberto = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->whereIn('status', [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED])
+            ->latest('id')
+            ->first();
+
+        if ($emAberto) {
+            return response()->json([
+                'ok' => true,
+                'already_queued' => true,
+                'job_id' => $emAberto->id,
+                'message' => 'Esta etiqueta já está na fila da impressora.',
+            ]);
+        }
+
+        // Já saiu papel deste pedido: pergunta antes de gastar outro.
+        $jaImpressaEm = $this->lastPrintedAt($order);
+
+        if ($jaImpressaEm && ! $request->boolean('confirmar')) {
+            return response()->json([
+                'ok' => false,
+                'needs_confirmation' => true,
+                'already_printed_at' => $jaImpressaEm,
+                'message' => "A etiqueta deste pedido já foi impressa em {$jaImpressaEm}. Confira a bancada antes de gastar outra.",
+            ], 409);
+        }
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => $shipment->channel,
+            'tracking_code' => $shipment->tracking_code,
+            'label_path' => $shipment->label_path,
+            'raw_label_path' => $shipment->raw_label_path,
+            'is_thank_you' => false,
+            'origin' => PrintJob::ORIGEM_REIMPRESSAO,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        if ($jaImpressaEm) {
+            Log::info('dashboard.reimpressao_confirmada', [
+                'order_id' => $order->id,
+                'ja_impressa_em' => $jaImpressaEm,
+                'job_id' => $job->id,
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'job_id' => $job->id,
+            'reprint_confirmed' => (bool) $jaImpressaEm,
+            'message' => 'Etiqueta mandada de novo pra impressora.',
+        ]);
+    }
+
+    /**
+     * O inverso de separateOrder(): tira o pedido de "separados" e devolve
+     * pra fila (pedido de 2026-09-05, botão "Desfazer" da aba Separados do
+     * KoraSync). Clique errado acontece — sem isso, só dava pra corrigir
+     * mexendo no banco.
+     *
+     * NÃO desfaz pedido que já saiu (status != pago): a etiqueta pode ter
+     * sido gerada e o pacote despachado no meio, e devolver isso pra fila
+     * faria o operador separar a mesma caixa duas vezes. O gate aqui é o
+     * mesmo de packOrder(), só que pelo outro lado.
+     *
+     * Idempotente, como packOrder(): desfazer o que já está desfeito
+     * confirma o estado em vez de estourar erro.
+     */
+    public function unseparateOrder(Order $order): JsonResponse
+    {
+        if ($order->status !== Order::STATUS_PAID) {
+            return response()->json([
+                'result' => 'blocked',
+                'message' => 'Pedido não está mais pago — já saiu da operação e não volta pra fila.',
+            ], 409);
+        }
+
+        $this->markUnpacked($order);
+
+        return response()->json([
+            'result' => 'ok',
+            'message' => 'Pedido devolvido para a fila de separação.',
+            'packed_at' => $order->refresh()->packed_at,
+        ]);
+    }
+
+    /**
+     * Espelha markPacked(): o card é a CAIXA, então desfazer um pedido do
+     * carrinho desfaz os irmãos que iam no mesmo pacote. Sem isso o irmão
+     * continuaria embalado e o card voltaria pra fila pela metade.
+     */
+    private function markUnpacked(Order $order): void
+    {
+        foreach ($this->ordersShippedWith($order) as $packOrder) {
+            if ($packOrder->status !== Order::STATUS_PAID || $packOrder->packed_at === null) {
+                continue;
+            }
+
+            $packOrder->forceFill(['packed_at' => null])->save();
+
+            app(OrderFulfillmentTimeline::class)->record(
+                $packOrder,
+                OrderFulfillmentEvent::STEP_ORDER_PACKED,
+                OrderFulfillmentEvent::STATUS_PENDING,
+                $packOrder->is($order)
+                    ? 'Separação desfeita no KoraSync — pedido devolvido para a fila'
+                    : "Separação desfeita no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
+            );
+        }
+    }
+
+    /**
+     * O card é a CAIXA, não o pedido (ver groupOrdersShippedTogether()):
+     * num carrinho do Mercado Livre o clique embala os 2 pedidos que vão no
+     * mesmo pacote de uma vez. Sem isso o irmão continuaria "não embalado"
+     * e voltaria pra fila sozinho no poll seguinte, como se faltasse
+     * separar uma caixa que já foi.
+     */
+    private function markPacked(Order $order): void
+    {
+        foreach ($this->ordersShippedWith($order) as $packOrder) {
+            if ($packOrder->status !== Order::STATUS_PAID || $packOrder->packed_at !== null) {
+                continue;
+            }
+
+            $packOrder->forceFill(['packed_at' => now()])->save();
+
+            app(OrderFulfillmentTimeline::class)->record(
+                $packOrder,
+                OrderFulfillmentEvent::STEP_ORDER_PACKED,
+                OrderFulfillmentEvent::STATUS_SUCCESS,
+                $packOrder->is($order)
+                    ? 'Pedido marcado como embalado no KoraSync'
+                    : "Pedido marcado como embalado no KoraSync junto com o pedido #{$order->id} (mesmo pacote do canal)",
+            );
+
+            $this->enqueueReadyLabelAfterPacked($packOrder);
+        }
+    }
+
+    /**
+     * Correção 2026-09-29: pedido recuperado por varredura pode ficar com
+     * auto_print_blocked=1. Se a etiqueta já estava pronta e o operador deu
+     * baixa no KoraSync, não pode ficar silencioso sem PrintJob.
+     */
+    private function enqueueReadyLabelAfterPacked(Order $order): void
+    {
+        $order->loadMissing('channelShipment');
+        $shipment = $order->channelShipment;
+
+        if (! $shipment
+            || $shipment->status !== ChannelShipment::STATUS_LABEL_READY
+            || ! $shipment->label_path
+            || in_array($shipment->channel, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)
+            || in_array($order->origin, LabelFetchService::CANAIS_SEM_IMPRESSAO_NOSSA, true)) {
+            return;
+        }
+
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($shipment->label_path)) {
+            Log::warning('korasync.pack.ready_label_missing_file', [
+                'order_id' => $order->id,
+                'label_path' => $shipment->label_path,
+            ]);
+
+            return;
+        }
+
+        $exists = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->whereIn('status', [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED, PrintJob::STATUS_PRINTED])
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        $job = PrintJob::create([
+            'order_id' => $order->id,
+            'channel' => $shipment->channel ?: $order->origin,
+            'tracking_code' => $shipment->tracking_code,
+            'is_thank_you' => false,
+            'origin' => PrintJob::ORIGEM_LOTE,
+            'label_path' => $shipment->label_path,
+            'raw_label_path' => $shipment->raw_label_path,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        Log::warning('korasync.pack.ready_label_enqueued_after_packed_without_print_job', [
+            'order_id' => $order->id,
+            'print_job_id' => $job->id,
+            'auto_print_blocked' => (bool) $order->auto_print_blocked,
+        ]);
+
+        app(OrderFulfillmentTimeline::class)->record(
+            $order,
+            OrderFulfillmentEvent::STEP_LABEL_GENERATED,
+            OrderFulfillmentEvent::STATUS_SUCCESS,
+            'Etiqueta pronta estava sem fila; enfileirada automaticamente ao marcar embalado no KoraSync',
+        );
+    }
+
+    /**
+     * A mensagem genérica "canal ainda não liberou" era falsa para Shopee/ML
+     * quando o bloqueio real vinha antes: NF-e inexistente, pendente ou ainda
+     * não aceita pelo canal. Nessa condição, pedir etiqueta só martela o endpoint
+     * errado; aqui o botão/status mostra a ação correta e empurra o próximo passo
+     * seguro do pipeline fiscal.
+     *
+     * @return array{state:string,message:string}|null
+     */
+    private function labelFiscalBlock(Order $order, bool $nudgePipeline = false): ?array
+    {
+        if (! in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)) {
+            return null;
+        }
+
+        $order->loadMissing(['invoice', 'items.product.fiscalData']);
+
+        // BUG REAL 2026-09-29: no carrinho do Mercado Livre a NF-e fica só
+        // no pedido titular (PackDoPedido::cobertoPor()). Lendo a nota do
+        // próprio pedido, o secundário ficava pra sempre em "ainda não tem
+        // NF-e" e cada reimprimir disparava um GenerateInvoiceJob inútil
+        // pra ele. Nota e envio ao canal são os do titular.
+        $fiscal = app(PackDoPedido::class)->cobertoPor($order) ?? $order;
+        $fiscal->loadMissing('invoice');
+        $invoice = $fiscal->invoice;
+        $submission = ChannelInvoiceSubmission::query()
+            ->where('order_id', $fiscal->id)
+            ->latest('id')
+            ->first();
+
+        if ($invoice?->status === Invoice::STATUS_AUTHORIZED
+            && $submission
+            && in_array($submission->status, [ChannelInvoiceSubmission::STATUS_SENT, ChannelInvoiceSubmission::STATUS_ACCEPTED], true)) {
+            return null;
+        }
+
+        if ($invoice?->status === Invoice::STATUS_AUTHORIZED) {
+            if ($nudgePipeline && $order->status === Order::STATUS_PAID) {
+                SubmitInvoiceToChannelJob::dispatch($fiscal->id);
+            }
+
+            $detail = $submission?->error_message
+                ? ' Último retorno do canal: '.mb_substr($submission->error_message, 0, 140).'.'
+                : '';
+
+            return [
+                'state' => 'invoice_not_sent_to_channel',
+                'message' => 'A etiqueta ainda não está liberada porque a NF-e foi autorizada, mas o canal ainda não aceitou essa nota.'
+                    .($nudgePipeline ? ' Reenviei a NF-e para o canal agora; tente de novo em instantes.' : ' O envio da nota ao canal segue em andamento.')
+                    .$detail,
+            ];
+        }
+
+        $missingFiscal = $this->missingFiscalFieldsForLabel($order);
+
+        if ($missingFiscal !== []) {
+            return [
+                'state' => 'fiscal_action_required',
+                'message' => 'A etiqueta não está travada no canal; ela está bloqueada antes disso porque a NF-e ainda não saiu. Corrija o fiscal do produto: '.$this->summarizeMissingFiscal($missingFiscal).'. Depois o sistema emite a NF-e, envia para o canal e busca a etiqueta sozinho.',
+            ];
+        }
+
+        if ($nudgePipeline && $order->status === Order::STATUS_PAID && $fiscal->shouldAutoGenerateInvoice()) {
+            GenerateInvoiceJob::dispatch($fiscal->id);
+        }
+
+        $status = $invoice?->status;
+        $reason = $invoice?->motivo_rejeicao ? ' Motivo atual: '.mb_substr($invoice->motivo_rejeicao, 0, 140).'.' : '';
+        $prefix = match ($status) {
+            Invoice::STATUS_PENDING => 'A NF-e deste pedido ainda está pendente.',
+            Invoice::STATUS_REJECTED => 'A NF-e deste pedido foi rejeitada.',
+            Invoice::STATUS_SENT => 'A NF-e foi enviada à SEFAZ e está em conferência.',
+            null => 'Este pedido ainda não tem NF-e emitida.',
+            default => "A NF-e deste pedido está em status {$status}.",
+        };
+
+        return [
+            'state' => 'invoice_not_ready',
+            'message' => $prefix
+                .($nudgePipeline ? ' Reprocessei o fluxo fiscal agora.' : '')
+                .' Quando a nota autorizar e o canal aceitar, a etiqueta entra na fila automaticamente.'.$reason,
+        ];
+    }
+
+    /**
+     * @return array<int, array{sku:string, missing:array<int, string>}>
+     */
+    private function missingFiscalFieldsForLabel(Order $order): array
+    {
+        return $order->items
+            ->map(function (OrderItem $item): ?array {
+                $product = $item->product;
+                $fiscal = $product?->fiscalData;
+
+                $missing = [];
+
+                if (! $fiscal) {
+                    $missing[] = 'cadastro fiscal completo';
+                } else {
+                    $fields = [
+                        'NCM' => $fiscal->ncm,
+                        'CFOP' => $fiscal->cfop,
+                        'CSOSN/ICMS' => $fiscal->icms_situacao_tributaria,
+                        'PIS' => $fiscal->pis_situacao_tributaria,
+                        'COFINS' => $fiscal->cofins_situacao_tributaria,
+                        'peso bruto/líquido' => $fiscal->peso_bruto ?: $fiscal->peso_liquido,
+                        'profundidade/comprimento' => $fiscal->profundidade_cm,
+                    ];
+
+                    foreach ($fields as $label => $value) {
+                        if (! filled($value)) {
+                            $missing[] = $label;
+                        }
+                    }
+                }
+
+                if ($missing === []) {
+                    return null;
+                }
+
+                return [
+                    'sku' => $product?->sku ?: mb_substr($item->product_name, 0, 35),
+                    'missing' => $missing,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, array{sku:string, missing:array<int, string>}>  $missingFiscal
+     */
+    private function summarizeMissingFiscal(array $missingFiscal): string
+    {
+        return collect($missingFiscal)
+            ->take(3)
+            ->map(fn (array $row) => $row['sku'].' sem '.implode(', ', array_slice($row['missing'], 0, 7)))
+            ->implode('; ');
+    }
+
+    /**
+     * Envios AGENDADOS pelo canal (pedido explícito 2026-08-14, achado ao
+     * vivo no pedido #278) — venda de Coleta/Places do Mercado Livre em que
+     * o próprio canal decidiu só liberar a etiqueta perto de uma data
+     * futura (scheduled_for, ver MercadoLivreDriver::extractScheduledFor()
+     * e ChannelShippingService::confirm()). Sem essa lista visível, o
+     * pedido fica parado em "aguardando etiqueta" que parece exatamente
+     * igual a um pedido travado de verdade — ninguém no time consegue
+     * distinguir os dois só olhando o KoraSync. Mostra todo envio com
+     * scheduled_for preenchido enquanto o CANAL ainda não liberou a
+     * etiqueta de verdade (status), mesmo os já vencidos (aí é hora de
+     * prestar atenção de verdade: o canal disse que ia liberar e não
+     * liberou), ordenado pela data mais próxima primeiro.
+     *
+     * BUG REAL 2026-08-14, corrigido no mesmo dia: a primeira versão
+     * também excluía pedido já embalado (order.packed_at), copiando o
+     * filtro de queue() sem pensar — mas embalar (packed_at, botão "Em
+     * preparação" do KoraSync) é sobre o operador ter preparado a caixa
+     * fisicamente, sem relação nenhuma com o canal ter liberado a
+     * etiqueta. Confirmado ao vivo no próprio pedido #278: já estava
+     * "embalado" havia horas e a etiqueta continuava tão agendada quanto
+     * antes — escondê-lo da lista era exatamente o oposto do que devia
+     * acontecer (ainda NÃO PODE sair, mesmo com a caixa pronta).
+     *
+     * ?channel= (pedido explícito 2026-08-29): filtro opcional — a aba
+     * "Mercado Livre" do KoraSync v2.0 chama com channel=mercado_livre pra
+     * ver só as vendas futuras desse canal (é praticamente o único que usa
+     * entrega agendada hoje, mas o filtro é genérico, não hardcoded). Sem
+     * o parâmetro, comportamento idêntico a antes (todos os canais).
+     */
+    public function scheduledShipments(Request $request): JsonResponse
+    {
+        $shipments = ChannelShipment::query()
+            ->whereNotNull('scheduled_for')
+            ->whereNotIn('status', [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED])
+            // Mesma regra do 2º/3º bug real 2026-08-29 em queue(): pedido
+            // cancelado, enviado ou concluído não precisa mais de nenhuma
+            // ação (nem aqui, na aba de agendados do ML) — sem isso, um
+            // pedido já despachado com scheduled_for continuava aparecendo
+            // pra sempre nesta lista.
+            ->whereHas('order', fn ($query) => $query->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
+            // Mesma regra nova da fila (pedido explícito 2026-09-14): venda
+            // agendada que o canal já despachou ou entregou sai da aba, sem
+            // depender do status local ter virado.
+            ->aindaNaoSaiu()
+            ->when(
+                $request->query('channel'),
+                fn ($query, $channel) => $query->where('channel', $channel),
+            )
+            ->with(['order:id,external_order_id,origin,shipping_name,created_at', 'order.items:id,order_id,product_id,product_name,quantity', 'order.items.product:id,sku'])
+            ->orderBy('scheduled_for')
+            ->get()
+            ->filter(fn (ChannelShipment $shipment) => $shipment->order !== null)
+            ->values();
+
+        $result = $shipments->map(function (ChannelShipment $shipment) {
+            $envioAgendado = TipoDeEnvio::montar($shipment->channel, $shipment->shipping_method);
+
+            return [
+                'order_id' => $shipment->order_id,
+                'external_order_id' => $shipment->order->external_order_id,
+                'channel' => $shipment->channel,
+                'customer_name' => $shipment->order->shipping_name,
+                'shipping_method' => $shipment->shipping_method,
+                'shipping_type' => $envioAgendado['tipo'],
+                'shipping_type_label' => $envioAgendado['label'],
+                'shipping_type_short' => $envioAgendado['curto'],
+                'scheduled_for' => $shipment->scheduled_for,
+                // Data real da venda (pedido explícito 2026-08-29: "Data do
+                // Pedido... Criado:", pro card da aba Mercado Livre no
+                // KoraSync) — mesmo campo já exposto em queue() (ver
+                // mapQueueOrder), só que essa aba nunca tinha exposto antes.
+                'created_at' => $shipment->order->created_at,
+                // Pra já vir pronto pro KoraSync destacar visualmente quem já
+                // passou da data prometida sem liberar — não é o mesmo alerta
+                // que "vai liberar em breve".
+                'is_overdue' => $shipment->scheduled_for->isPast(),
+                // id/product_id/sku: mesmos campos da fila — sem eles o
+                // card de Vendas futuras do KoraSync não acha a foto de
+                // cada item (2026-10-07, "está sem imagem").
+                'products' => $shipment->order->items->map(fn ($item) => [
+                    'id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'sku' => $item->product?->sku,
+                    'name' => $item->product_name,
+                    'quantity' => $item->quantity,
+                ]),
+            ];
+        });
+
+        return response()->json(['scheduled_shipments' => $result]);
+    }
+
+    /**
+     * Resumo do dia do Mercado Livre — pedido explícito 2026-09-01: espelha
+     * os cartões "Envios de hoje" do próprio painel do Mercado Livre (Flex
+     * x Agência, canceladas, "NF-e para gerenciar", prontas pra enviar)
+     * direto na aba "Mercado Livre" do KoraSync, sem precisar abrir o site
+     * do canal pra conferir. "Hoje" = mesma regra de sempre: scheduled_for
+     * de hoje (envio com data prometida) OU, sem entrega agendada, venda
+     * de hoje (criada hoje).
+     *
+     * "nfe_pendente" (Agência) não é literalmente NF-e ausente — é
+     * qualquer pedido sem etiqueta ainda E sem confirmação de que o canal
+     * ACEITOU a nota (ChannelInvoiceSubmission::STATUS_SENT/ACCEPTED) —
+     * casa com o balde real do Mercado Livre, achado ao vivo 2026-09-01:
+     * 30 pedidos presos exatamente porque o envio da nota pro canal tinha
+     * falhado (erro real, nunca re-tentado) e o canal só libera a etiqueta
+     * depois de aceitar a nota.
+     */
+    public function mercadoLivreSummary(): JsonResponse
+    {
+        $today = now()->startOfDay();
+        $todayEnd = $today->clone()->endOfDay();
+
+        // BUG REAL 2026-09-01 (achado na hora): scheduled_for some sozinho
+        // assim que o Mercado Livre para de reportar uma data de buffering
+        // FUTURA (ver MercadoLivreDriver::extractScheduledFor()) — no dia
+        // prometido, a próxima reconfirmação (a cada 30min, ver
+        // ReleaseMercadoLivreScheduledShipments) já grava scheduled_for
+        // NULL de novo, mesmo o pedido continuando "de hoje" pro operador.
+        // "Hoje" por scheduled_for/created_at, então, não é confiável pra
+        // esse resumo — usa o mesmo critério real da Fila normal (ver
+        // queue()): todo pedido ML ainda PAID (não resolvido) é "precisa
+        // sair", não importa se a data agendada já sumiu do registro.
+        $orders = Order::query()
+            ->where('origin', Order::ORIGIN_MERCADO_LIVRE)
+            ->where('status', Order::STATUS_PAID)
+            ->with('channelShipment', 'invoice')
+            ->get();
+
+        $recentlyCancelled = Order::query()
+            ->where('origin', Order::ORIGIN_MERCADO_LIVRE)
+            ->where('status', Order::STATUS_CANCELLED)
+            ->whereBetween('updated_at', [$today, $todayEnd])
+            ->with('channelShipment')
+            ->get();
+
+        $isFlex = fn (Order $order) => ($order->channelShipment->shipping_method ?? null) === 'self_service';
+        $isReady = fn (Order $order) => in_array($order->channelShipment->status ?? null, [ChannelShipment::STATUS_LABEL_READY, ChannelShipment::STATUS_LABEL_DOWNLOADED], true);
+
+        $flex = $orders->filter($isFlex);
+        $agencia = $orders->reject($isFlex);
+
+        $agenciaCancelada = $recentlyCancelled->reject($isFlex)->count();
+        $agenciaProntos = $agencia->filter($isReady)->count();
+        $agenciaNfePendente = $agencia->reject($isReady)->count();
+
+        return response()->json([
+            'total' => $orders->count() + $recentlyCancelled->count(),
+            'flex' => [
+                'total' => $flex->count(),
+                'prontos' => $flex->filter($isReady)->count(),
+            ],
+            'agencia' => [
+                'total' => $agencia->count() + $agenciaCancelada,
+                'cancelada' => $agenciaCancelada,
+                'nfe_pendente' => $agenciaNfePendente,
+                'prontos' => $agenciaProntos,
+            ],
+        ]);
+    }
+
+    /**
+     * Texto diário das Testemunhas de Jeová — só leitura do que já foi
+     * salvo pelo comando agendado (App\Console\Commands\FetchDailyText,
+     * roda a cada 12h). Não busca ao vivo aqui: esse endpoint precisa
+     * responder rápido pro KoraSync, e raspar wol.jw.org na hora da
+     * requisição arriscaria travar/atrasar o dashboard por causa de um
+     * site externo.
+     */
+    public function dailyText(): JsonResponse
+    {
+        $dailyText = DailyText::query()->latest('date')->first();
+
+        if (! $dailyText) {
+            return response()->json(['daily_text' => null]);
+        }
+
+        return response()->json([
+            'daily_text' => [
+                'date' => $dailyText->date->toDateString(),
+                'weekday_label' => $dailyText->weekday_label,
+                'scripture_quote' => $dailyText->scripture_quote,
+                'scripture_reference' => $dailyText->scripture_reference,
+                'commentary' => $dailyText->commentary,
+                'fetched_at' => $dailyText->fetched_at,
+            ],
+        ]);
+    }
+}

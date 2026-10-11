@@ -1,222 +1,441 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onUnmounted, ref } from 'vue';
-import { useStorefrontAssets } from '@/Shared/useStorefrontAssets';
-
-useStorefrontAssets();
-onUnmounted(useStorefrontAssets());
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
+import { useClickOutside } from '@/Shared/useClickOutside';
+import { COMPANY } from '@/Shared/company';
+import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
+import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
+import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 
 const page = usePage();
+const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
-const flashSuccess = computed(() => page.props.flash?.success);
+const favoritesCount = computed(() => page.props.favorites?.count ?? 0);
 const user = computed(() => page.props.auth?.user);
+const notifications = computed(() => page.props.notifications?.items ?? []);
+const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
 
-const search = ref('');
+watch(
+    () => page.props.flash,
+    (flash) => {
+        if (flash?.success) notifySuccess(flash.success);
+        if (flash?.error) notifyError(flash.error);
+        if (flash?.warning) notifyWarning(flash.warning);
+    },
+    { immediate: true, deep: true },
+);
 
+
+
+const logout = () => router.post('/sair');
+
+const userMenuOpen = ref(false);
+const userMenuRef = ref(null);
+useClickOutside(userMenuRef, () => (userMenuOpen.value = false));
+
+const notifMenuOpen = ref(false);
+const notifMenuRef = ref(null);
+useClickOutside(notifMenuRef, () => (notifMenuOpen.value = false));
+
+const markNotificationRead = (item) => {
+    if (!item.read) {
+        router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
+    }
+
+    // Notificação promocional pode ter um link (cupom, categoria em
+    // promoção) — navega pra lá depois de marcar como lida.
+    if (item.link) {
+        router.visit(item.link);
+    }
+};
+
+const markAllNotificationsRead = () => {
+    router.post('/notificacoes/ler-todas', {}, { preserveScroll: true, preserveState: true });
+};
+
+const mobileMenuOpen = ref(false);
+
+// Mega menu de Departamentos e menu do Fale conosco (pedido 2026-10-10).
+// Abrem ao passar o mouse (com uma folguinha pra não fechar no caminho) e
+// também no clique/teclado.
+const departamentos = computed(() => page.props.menuLoja?.departamentos ?? []);
+const menuAberto = ref(null);
+let fecharTimer = null;
+const abrirMenu = (nome) => {
+    clearTimeout(fecharTimer);
+    menuAberto.value = nome;
+};
+const fecharMenu = () => {
+    clearTimeout(fecharTimer);
+    fecharTimer = setTimeout(() => { menuAberto.value = null; }, 150);
+};
+const alternarMenu = (nome) => {
+    clearTimeout(fecharTimer);
+    menuAberto.value = menuAberto.value === nome ? null : nome;
+};
+const navRef = ref(null);
+useClickOutside(navRef, () => (menuAberto.value = null));
+const pararDeOuvir = router.on('start', () => { menuAberto.value = null; });
+onUnmounted(pararDeOuvir);
+
+// Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
+// a lista de resultados abre logo no topo.
+const termoDaUrl = () => new URLSearchParams(window.location.search).get('search') ?? '';
+const search = ref(termoDaUrl());
 const submitSearch = () => {
-    router.get('/', { search: search.value || undefined }, { preserveState: true });
+    const termo = search.value.trim();
+    mobileMenuOpen.value = false;
+    router.get('/', termo ? { search: termo } : { todos: 1 });
 };
 
-const logout = () => {
-    router.post('/logout');
+const discountModalOpen = ref(false);
+const closeDiscountModal = () => {
+    discountModalOpen.value = false;
+    window.sessionStorage?.setItem('kazakora_discount_modal_seen', '1');
 };
 
-const WHATSAPP_NUMBER = '5511965723990';
-const WHATSAPP_DISPLAY = '(11) 96572-3990';
+onMounted(() => {
+    // Popup de desconto removido da abertura automática: a vitrine precisa
+    // aparecer limpa primeiro. Ofertas já ficam visíveis nos cards e CTAs.
+});
+
+const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+
+// Ao passar o mouse, cada ícone fica na cor oficial da rede (pedido 2026-10-10).
+const REDES = [
+    { nome: 'Instagram', icone: 'fab fa-instagram', link: COMPANY.redes?.instagram, hover: 'hover:bg-gradient-to-tr hover:from-[#feda75] hover:via-[#d62976] hover:to-[#4f5bd5] hover:text-white' },
+    { nome: 'Threads', icone: 'fab fa-threads', link: COMPANY.redes?.threads, hover: 'hover:bg-white hover:text-black' },
+    { nome: 'Facebook', icone: 'fab fa-facebook-f', link: COMPANY.redes?.facebook, hover: 'hover:bg-[#1877F2] hover:text-white' },
+    { nome: 'TikTok', icone: 'fab fa-tiktok', link: COMPANY.redes?.tiktok, hover: 'hover:bg-[#FE2C55] hover:text-white' },
+    { nome: 'YouTube', icone: 'fab fa-youtube', link: COMPANY.redes?.youtube, hover: 'hover:bg-[#FF0000] hover:text-white' },
+].filter((rede) => rede.link);
 </script>
 
 <template>
-    <div>
-        <!-- Faixa de frete grátis -->
-        <div class="w-100 text-center py-2" style="background:#28a745;color:#fff;font-size:.9rem;">
-            🚚 Frete grátis para compras acima de R$ 299,00 · Pague no PIX e economize!
-        </div>
-
-        <!-- Topbar -->
-        <div class="container-fluid px-5 d-none border-bottom d-lg-block">
-            <div class="row gx-0 align-items-center">
-                <div class="col-lg-4 text-center text-lg-start mb-lg-0">
-                    <div class="d-inline-flex align-items-center" style="height: 45px;">
-                        <Link href="/" class="text-muted me-2">Início</Link><small> / </small>
-                        <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-muted mx-2">Suporte</a><small> / </small>
-                        <a href="mailto:contato@kazakora.com" class="text-muted ms-2">Contato</a>
-                    </div>
-                </div>
-                <div class="col-lg-4 text-center d-flex align-items-center justify-content-center">
-                    <small class="text-dark">Ligue:</small>
-                    <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" class="text-muted">{{ WHATSAPP_DISPLAY }}</a>
-                </div>
-                <div class="col-lg-4 text-center text-lg-end">
-                    <div class="d-inline-flex align-items-center" style="height: 45px;">
-                        <template v-if="user">
-                            <span class="text-muted me-3">Olá, {{ user.name }}</span>
-                            <button type="button" class="text-muted border-0 bg-transparent" @click="logout">Sair</button>
-                        </template>
-                        <template v-else>
-                            <Link href="/login" class="text-muted me-2">Entrar</Link><small> / </small>
-                            <Link href="/register" class="text-muted ms-2">Cadastrar</Link>
-                        </template>
-                    </div>
-                </div>
+    <div class="storefront-shell min-h-screen bg-store-bg font-store text-store-fg">
+        <!-- Faixa promocional com "X" para fechar (pedido 2026-10-10). -->
+        <FaixaPromo />
+        <TrocarSenhaModal />
+        <AvisoCookies />
+        <!-- Marquee -->
+        <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
+            <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
+                 (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco. -->
+            <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2 motion-reduce:animate-none">
+                <span v-for="n in 6" :key="n" class="contents">
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Frete grátis em todos os produtos</span>
+                    <!-- Full na faixa do topo (pedido 2026-10-10). -->
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']"><span class="font-extrabold italic text-[#22c55e]"><i class="fa-solid fa-bolt"></i>Full</span> Receba no mesmo dia</span>
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Pague no PIX e economize</span>
+                    <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Suporte via WhatsApp</span>
+                </span>
             </div>
         </div>
 
-        <!-- Header principal -->
-        <div class="container-fluid px-5 py-4 d-none d-lg-block">
-            <div class="row gx-0 align-items-center text-center">
-                <div class="col-md-4 col-lg-3 text-center text-lg-start">
-                    <Link href="/" class="navbar-brand p-0">
-                        <h1 class="display-5 text-primary m-0"><i class="fas fa-leaf text-secondary me-2"></i>KazaKora</h1>
+        <!-- Header -->
+        <header class="sticky top-0 z-40 border-b border-store-border bg-store-bg/90 backdrop-blur">
+            <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
+                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
+                <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
+                    <picture>
+                        <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
+                        <img :src="marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
+                    </picture>
+                </Link>
+
+                <nav ref="navRef" class="ml-auto hidden items-center gap-7 lg:flex" @keydown.esc="menuAberto = null">
+                    <div @mouseenter="abrirMenu('departamentos')" @mouseleave="fecharMenu">
+                        <button type="button" class="flex items-center gap-1.5 text-sm font-medium hover:text-store-fg"
+                            :class="menuAberto === 'departamentos' ? 'text-store-fg' : 'text-store-fg-muted'"
+                            :aria-expanded="menuAberto === 'departamentos'" @click="alternarMenu('departamentos')">
+                            Departamentos
+                            <i class="fa-solid fa-chevron-down text-[0.6rem] transition-transform" :class="{ 'rotate-180': menuAberto === 'departamentos' }"></i>
+                        </button>
+
+                        <!-- Mega menu: ocupa a largura do topo, logo abaixo dele. -->
+                        <Transition enter-from-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1" leave-active-class="transition duration-100">
+                            <div v-if="menuAberto === 'departamentos'" class="absolute inset-x-0 top-full z-50 border-b border-store-border bg-store-bg-raised shadow-2xl">
+                                <div class="mx-auto grid max-w-[1320px] grid-cols-[1fr_280px] gap-8 px-6 py-7">
+                                    <div>
+                                        <p class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">Compre por departamento</p>
+                                        <div class="mt-4 grid grid-cols-3 gap-2 xl:grid-cols-4">
+                                            <Link v-for="dep in departamentos" :key="dep.id" :href="`/?categoria=${dep.slug}#produtos`"
+                                                class="group flex items-center gap-3 rounded-xl p-2 no-underline transition hover:bg-store-bg-sunken">
+                                                <span class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-store-border transition group-hover:ring-2 group-hover:ring-[#f27a2a]">
+                                                    <img v-if="dep.image_url" :src="dep.image_url" :alt="dep.name" class="h-full w-full object-cover" loading="lazy">
+                                                    <i v-else class="fa-solid fa-tag text-store-fg-faint"></i>
+                                                </span>
+                                                <span class="min-w-0">
+                                                    <span class="block truncate text-sm font-semibold text-store-fg group-hover:text-[#f27a2a]">{{ dep.name }}</span>
+                                                    <span class="block text-xs text-store-fg-faint">{{ dep.total }} {{ dep.total === 1 ? 'produto' : 'produtos' }}</span>
+                                                </span>
+                                            </Link>
+                                        </div>
+                                        <p v-if="!departamentos.length" class="mt-4 text-sm text-store-fg-muted">Nenhum departamento por aqui ainda.</p>
+                                    </div>
+                                    <div class="relative isolate flex flex-col justify-between overflow-hidden rounded-2xl bg-[#111] p-6 text-white">
+                                        <span aria-hidden="true" class="absolute -right-10 -top-10 -z-10 h-36 w-36 rounded-full bg-[#f27a2a] opacity-60 blur-2xl"></span>
+                                        <span aria-hidden="true" class="absolute -bottom-12 -left-8 -z-10 h-32 w-32 rounded-full bg-[#0FB930] opacity-40 blur-2xl"></span>
+                                        <div>
+                                            <p class="text-xs font-bold uppercase tracking-widest text-[#f6c343]"><i class="fa-solid fa-bolt mr-1"></i>Full</p>
+                                            <p class="mt-2 text-xl font-bold leading-tight">Frete grátis em todos os produtos</p>
+                                            <p class="mt-2 text-sm opacity-80">E com o Full você recebe no mesmo dia.</p>
+                                        </div>
+                                        <a href="/?todos=1#produtos" class="mt-5 inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-black no-underline transition hover:bg-[#f27a2a] hover:text-white">
+                                            Ver todos os produtos <i class="fa-solid fa-arrow-right text-xs"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </Transition>
+                    </div>
+                    <a href="/?todos=1#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
+                    <Link href="/favoritos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Favoritos</Link>
+                    <Link href="/rastreio" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Rastrear pedido</Link>
+                    <div class="relative" @mouseenter="abrirMenu('contato')" @mouseleave="fecharMenu">
+                        <button type="button" class="flex items-center gap-1.5 text-sm font-medium hover:text-store-fg"
+                            :class="menuAberto === 'contato' ? 'text-store-fg' : 'text-store-fg-muted'"
+                            :aria-expanded="menuAberto === 'contato'" @click="alternarMenu('contato')">
+                            Fale conosco
+                            <i class="fa-solid fa-chevron-down text-[0.6rem] transition-transform" :class="{ 'rotate-180': menuAberto === 'contato' }"></i>
+                        </button>
+                        <Transition enter-from-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1" leave-active-class="transition duration-100">
+                            <div v-if="menuAberto === 'contato'" class="absolute right-0 top-full z-50 pt-3">
+                                <div class="w-72 rounded-2xl border border-store-border bg-store-bg-raised p-2 shadow-2xl">
+                                    <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener"
+                                        class="flex items-center gap-3 rounded-xl p-3 no-underline transition hover:bg-store-bg-sunken">
+                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-xl text-white"><i class="fa-brands fa-whatsapp"></i></span>
+                                        <span>
+                                            <span class="block text-sm font-semibold text-store-fg">WhatsApp</span>
+                                            <span class="block text-xs text-store-fg-muted">{{ COMPANY.whatsappDisplay }} · resposta rápida</span>
+                                        </span>
+                                    </a>
+                                    <Link href="/fale-conosco"
+                                        class="flex items-center gap-3 rounded-xl p-3 no-underline transition hover:bg-store-bg-sunken">
+                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f27a2a] text-base text-white"><i class="fa-regular fa-envelope"></i></span>
+                                        <span>
+                                            <span class="block text-sm font-semibold text-store-fg">Mandar mensagem</span>
+                                            <span class="block text-xs text-store-fg-muted">Respondemos no seu e-mail</span>
+                                        </span>
+                                    </Link>
+                                </div>
+                            </div>
+                        </Transition>
+                    </div>
+                </nav>
+
+                <form class="relative hidden max-w-xs flex-1 lg:block" role="search" @submit.prevent="submitSearch">
+                    <input v-model="search" type="search" placeholder="O que você procura?"
+                        class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
+                    <button type="submit" class="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-store-fg-muted hover:text-store-accent" aria-label="Buscar">
+                        <i class="fas fa-magnifying-glass text-xs"></i>
+                    </button>
+                </form>
+
+                <div class="ml-auto flex items-center gap-1 lg:ml-0">
+                    <Link href="/favoritos" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
+                        <i class="far fa-heart text-base"></i>
+                        <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
-                </div>
-                <div class="col-md-4 col-lg-6 text-center">
-                    <form class="position-relative ps-4" @submit.prevent="submitSearch">
-                        <div class="d-flex border rounded-pill">
-                            <input v-model="search" class="form-control border-0 rounded-pill w-100 py-3" type="text"
-                                placeholder="O que você procura?">
-                            <button type="submit" class="btn btn-primary rounded-pill py-3 px-5" style="border: 0;">
-                                <i class="fas fa-search"></i>
+                    <Link href="/carrinho" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
+                        <i class="fas fa-cart-shopping text-base"></i>
+                        <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
+                    </Link>
+
+                    <div v-if="user" ref="notifMenuRef" class="relative">
+                        <button type="button" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Notificações" @click="notifMenuOpen = !notifMenuOpen">
+                            <i class="far fa-bell text-base"></i>
+                            <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ unreadNotifications }}</span>
+                        </button>
+
+                        <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
+                            <div class="flex items-center justify-between px-4 py-2">
+                                <h5 class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">🔔 Notificações</h5>
+                                <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-store-accent hover:underline" @click="markAllNotificationsRead">
+                                    Marcar todas como lidas
+                                </button>
+                            </div>
+
+                            <p v-if="notifications.length === 0" class="px-4 py-6 text-center text-sm text-store-fg-muted">
+                                Nenhuma notificação por aqui ainda.
+                            </p>
+
+                            <button v-for="item in notifications" :key="item.id" type="button"
+                                class="flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-store-bg-sunken"
+                                :class="{ 'bg-store-accent-soft/40': !item.read }"
+                                @click="markNotificationRead(item)">
+                                <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-store-accent'"></span>
+                                <span>
+                                    <span class="block font-medium text-store-fg">{{ item.message }}</span>
+                                    <span v-if="item.body" class="block text-xs text-store-fg-muted">{{ item.body }}</span>
+                                    <span class="font-store-mono text-xs text-store-fg-faint">{{ item.createdAt }}</span>
+                                </span>
                             </button>
                         </div>
-                    </form>
-                </div>
-                <div class="col-md-4 col-lg-3 text-center text-lg-end">
-                    <div class="d-inline-flex align-items-center">
-                        <Link href="/cart" class="text-muted d-flex align-items-center justify-content-center">
-                            <span class="rounded-circle btn-md-square border position-relative">
-                                <i class="fas fa-shopping-cart"></i>
-                                <span v-if="cartCount > 0"
-                                    class="position-absolute badge rounded-pill bg-secondary"
-                                    style="top:-6px;right:-6px;font-size:.65rem;">{{ cartCount }}</span>
-                            </span>
-                            <span class="text-dark ms-2">Carrinho</span>
-                        </Link>
                     </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Navbar -->
-        <div class="container-fluid nav-bar p-0">
-            <div class="row gx-0 bg-primary px-5 align-items-center">
-                <div class="col-12">
-                    <nav class="navbar navbar-expand-lg navbar-light bg-primary">
-                        <Link href="/" class="navbar-brand d-block d-lg-none">
-                            <h1 class="display-5 text-secondary m-0"><i class="fas fa-leaf text-white me-2"></i>KazaKora</h1>
-                        </Link>
-                        <button class="navbar-toggler ms-auto" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#navbarCollapse">
-                            <span class="fa fa-bars fa-1x"></span>
+                    <div ref="userMenuRef" class="relative">
+                        <button v-if="user" type="button" class="flex h-10 w-10 items-center justify-center rounded-full hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
+                            <img v-if="user.avatar_url" :src="user.avatar_url" class="h-8 w-8 rounded-full object-cover" alt="">
+                            <span v-else class="flex h-8 w-8 items-center justify-center rounded-full bg-store-accent-soft text-xs font-semibold text-store-accent-strong">{{ user.initials }}</span>
                         </button>
-                        <div class="collapse navbar-collapse" id="navbarCollapse">
-                            <div class="navbar-nav ms-auto py-0">
-                                <Link href="/" class="nav-item nav-link">Catálogo</Link>
-                                <Link href="/cart" class="nav-item nav-link">Carrinho</Link>
-                                <Link href="/checkout" class="nav-item nav-link">Checkout</Link>
-                                <Link href="/admin" class="nav-item nav-link me-2">Admin</Link>
-                            </div>
-                            <a class="btn btn-secondary rounded-pill py-2 px-4 px-lg-3 mb-3 mb-md-3 mb-lg-0"
-                                :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank">
-                                <i class="fab fa-whatsapp me-2"></i> {{ WHATSAPP_DISPLAY }}
-                            </a>
+                        <Link v-else href="/entrar" class="flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
+                            <i class="far fa-user text-base"></i>
+                        </Link>
+
+                        <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
+                            <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">👤 Meu perfil</Link>
+                            <Link href="/pedidos" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛍️ Compras</Link>
+                            <Link href="/configuracoes" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">⚙️ Configurações</Link>
+                            <Link v-if="user?.role === 'admin'" href="/admin" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-store-bg-sunken">🛠️ Painel admin</Link>
+                            <hr class="my-1 border-store-border">
+                            <button type="button" class="block w-full whitespace-nowrap px-4 py-2 text-left text-sm hover:bg-store-bg-sunken" @click="logout">🚪 Sair</button>
                         </div>
-                    </nav>
+                    </div>
+
+                    <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" @click="mobileMenuOpen = !mobileMenuOpen">
+                        <i class="fas fa-bars text-base"></i>
+                    </button>
                 </div>
             </div>
-        </div>
 
-        <div v-if="flashSuccess" class="bg-success text-white text-center py-2 small">
-            {{ flashSuccess }}
-        </div>
+            <!-- Busca sempre visível no celular -->
+            <form class="relative px-4 pb-3 lg:hidden" role="search" @submit.prevent="submitSearch">
+                <input v-model="search" type="search" placeholder="O que você procura?" enterkeyhint="search"
+                    class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2.5 pl-4 pr-11 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
+                <button type="submit" class="absolute right-5 top-1/2 flex h-8 w-8 -translate-y-[calc(50%+6px)] items-center justify-center rounded-full text-store-fg-muted" aria-label="Buscar">
+                    <i class="fas fa-magnifying-glass text-sm"></i>
+                </button>
+            </form>
 
-        <!-- Conteúdo da página -->
-        <slot />
+            <div v-if="mobileMenuOpen" class="border-t border-store-border px-4 py-4 lg:hidden">
+                <nav class="flex flex-col gap-3">
+                    <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
+                    <a href="/?todos=1#produtos" class="text-sm font-medium">Produtos</a>
+                    <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>
+                    <Link href="/carrinho" class="text-sm font-medium">Carrinho</Link>
+                    <Link href="/rastreio" class="text-sm font-medium">Rastrear pedido</Link>
+                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium"><i class="fa-brands fa-whatsapp mr-1.5 text-[#25D366]"></i>Fale conosco no WhatsApp</a>
+                    <Link href="/fale-conosco" class="text-sm font-medium"><i class="fa-regular fa-envelope mr-1.5 text-[#f27a2a]"></i>Mandar mensagem</Link>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Page content -->
+        <main>
+            <slot />
+        </main>
 
         <!-- Footer -->
-        <div class="container-fluid footer py-5">
-            <div class="container py-5">
-                <div class="row g-4 rounded mb-5" style="background: rgba(255, 255, 255, .03);">
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="rounded p-4">
-                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mb-4"
-                                style="width: 70px; height: 70px;">
-                                <i class="fas fa-map-marker-alt fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-white">Endereço</h4>
-                                <p class="mb-2">São Paulo - SP</p>
-                            </div>
+        <footer class="mt-16 bg-[#0b0b0b] text-white">
+            <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
+                <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
+                    <div class="lg:max-w-xs lg:shrink-0">
+                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto lg:mx-0" loading="lazy">
+                        <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
+                            Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
+                        </p>
+                        <!-- Redes sociais (pedido 2026-10-10) -->
+                        <div class="mt-5 flex justify-center gap-3 lg:justify-start">
+                            <a v-for="rede in REDES" :key="rede.nome" :href="rede.link" target="_blank" rel="noopener" :aria-label="rede.nome"
+                                class="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-lg transition" :class="rede.hover">
+                                <i :class="rede.icone"></i>
+                            </a>
                         </div>
                     </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="rounded p-4">
-                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mb-4"
-                                style="width: 70px; height: 70px;">
-                                <i class="fas fa-envelope fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-white">E-mail</h4>
-                                <p class="mb-2">contato@kazakora.com</p>
-                            </div>
+
+                    <div class="grid w-full grid-cols-2 gap-x-8 gap-y-10 sm:w-auto lg:grid-cols-4 lg:gap-x-12">
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Comprar</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><a href="/#categorias" class="hover:opacity-100">Departamentos</a></li>
+                                <li><a href="/?todos=1#produtos" class="hover:opacity-100">Produtos</a></li>
+                                <li><Link href="/carrinho" class="hover:opacity-100">Meu carrinho</Link></li>
+                            </ul>
                         </div>
-                    </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="rounded p-4">
-                            <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mb-4"
-                                style="width: 70px; height: 70px;">
-                                <i class="fab fa-whatsapp fa-2x text-primary"></i>
-                            </div>
-                            <div>
-                                <h4 class="text-white">WhatsApp</h4>
-                                <p class="mb-2">{{ WHATSAPP_DISPLAY }}</p>
-                            </div>
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Atendimento</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><a :href="`mailto:${COMPANY.email}`" class="hover:opacity-100">{{ COMPANY.email }}</a></li>
+                                <li><a :href="COMPANY.whatsappLink" target="_blank" class="hover:opacity-100">{{ COMPANY.whatsappDisplay }}</a></li>
+                                <li>São Paulo - SP</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Institucional</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <li><Link href="/politica-de-privacidade" class="hover:opacity-100">Política de Privacidade</Link></li>
+                                <li><Link href="/politica-de-cookies" class="hover:opacity-100">Política de Cookies</Link></li>
+                                <li><Link href="/termos-de-uso" class="hover:opacity-100">Termos de Uso</Link></li>
+                                <li><Link href="/trocas-e-devolucoes" class="hover:opacity-100">Trocas e Devoluções</Link></li>
+                                <li><Link href="/politica-de-entrega" class="hover:opacity-100">Política de Entrega</Link></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-store-mono mb-4 text-xs uppercase tracking-wider opacity-60">Minha conta</h5>
+                            <ul class="flex flex-col gap-2 text-sm opacity-80">
+                                <template v-if="!user">
+                                    <li><Link href="/entrar" class="hover:opacity-100">Entrar</Link></li>
+                                    <li><Link href="/cadastro" class="hover:opacity-100">Cadastrar</Link></li>
+                                </template>
+                                <template v-else>
+                                    <li><Link href="/perfil" class="hover:opacity-100">Meu perfil</Link></li>
+                                    <li><Link href="/pedidos" class="hover:opacity-100">Compras</Link></li>
+                                </template>
+                                <li><Link href="/rastreio" class="hover:opacity-100">Rastrear pedido</Link></li>
+                            </ul>
                         </div>
                     </div>
                 </div>
 
-                <div class="row g-5">
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="footer-item d-flex flex-column">
-                            <h4 class="text-primary mb-4">KazaKora</h4>
-                            <p class="mb-3">Decoração para transformar sua casa, com entrega para todo o Brasil.</p>
+                <div class="mt-10 flex flex-col items-center gap-6 text-center lg:mt-12 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8 lg:text-left">
+                    <div>
+                        <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
+                        <!-- Celular: bandeiras menores, todas numa linha só (sem arrastar). -->
+                        <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao-hd/${brand}.png`" :alt="brand"
+                                class="h-[30px] w-auto shrink-0 sm:h-[44px] lg:h-[51px]">
                         </div>
                     </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="footer-item d-flex flex-column">
-                            <h4 class="text-primary mb-4">Atendimento</h4>
-                            <a href="mailto:contato@kazakora.com"><i class="fas fa-angle-right me-2"></i> Fale Conosco</a>
-                            <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank"><i class="fas fa-angle-right me-2"></i> WhatsApp</a>
-                            <Link href="/cart"><i class="fas fa-angle-right me-2"></i> Meu Carrinho</Link>
-                        </div>
+
+                    <div class="flex justify-center">
+                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                            class="h-24 w-auto rounded-md bg-white p-2 lg:h-32">
                     </div>
-                    <div class="col-md-6 col-lg-6 col-xl-4">
-                        <div class="footer-item d-flex flex-column">
-                            <h4 class="text-primary mb-4">Minha Conta</h4>
-                            <Link v-if="!user" href="/login"><i class="fas fa-angle-right me-2"></i> Entrar</Link>
-                            <Link v-if="!user" href="/register"><i class="fas fa-angle-right me-2"></i> Cadastrar</Link>
-                            <Link v-if="user" href="/checkout"><i class="fas fa-angle-right me-2"></i> Meus Pedidos</Link>
-                        </div>
-                    </div>
+                </div>
+
+                <div class="mt-12 border-t border-white/10 pt-6 text-center text-xs opacity-70">
+                    <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
                 </div>
             </div>
-        </div>
+        </footer>
 
-        <!-- Copyright -->
-        <div class="container-fluid copyright py-4">
-            <div class="container">
-                <div class="row g-4 align-items-center">
-                    <div class="col-12 text-center text-white small">
-                        © 2026 KazaKora · CNPJ: 65.604.590/0001-07 · Todos os direitos reservados
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- WhatsApp flutuante -->
-        <a :href="`https://wa.me/${WHATSAPP_NUMBER}`" target="_blank" rel="noopener"
-            class="position-fixed d-flex align-items-center justify-content-center rounded-circle"
-            style="bottom:24px;right:24px;width:56px;height:56px;background:#25D366;color:#fff;font-size:28px;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:1050;">
+        <!-- WhatsApp float -->
+        <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" aria-label="WhatsApp"
+            class="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-2xl text-white shadow-lg">
             <i class="fab fa-whatsapp"></i>
         </a>
+
+        <!-- Modal inicial de desconto: visual conversion-first, sem criar cupom falso. -->
+        <Teleport to="body">
+            <div v-if="discountModalOpen" class="fixed inset-0 z-[115] flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeDiscountModal"></div>
+                <div class="relative w-full max-w-[440px] overflow-hidden rounded-[2rem] border border-white/10 bg-store-bg-raised p-6 text-store-fg shadow-2xl">
+                    <button type="button" class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-store-bg-sunken text-store-fg-muted hover:text-store-fg" aria-label="Fechar" @click="closeDiscountModal">
+                        <i class="fas fa-xmark"></i>
+                    </button>
+                    <div class="absolute inset-x-0 top-0 h-1.5 bg-store-accent"></div>
+                    <span class="inline-flex rounded-full bg-store-accent-soft px-3 py-1 font-store-mono text-xs font-semibold uppercase tracking-[0.18em] text-store-accent-strong">Oferta KazaKora</span>
+                    <h3 class="mt-4 font-display text-3xl font-semibold leading-tight">Desconto já aplicado nos produtos selecionados</h3>
+                    <p class="mt-3 text-sm leading-relaxed text-store-fg-muted">Abra o catálogo, escolha seu produto e finalize com frete e pagamento em poucos passos.</p>
+                    <div class="mt-5 grid gap-2 sm:grid-cols-2">
+                        <Link href="/?todos=1#produtos" class="rounded-full bg-store-accent px-5 py-3 text-center text-sm font-bold text-store-accent-contrast no-underline" @click="closeDiscountModal">Ver ofertas</Link>
+                        <button type="button" class="rounded-full border border-store-border-strong px-5 py-3 text-sm font-bold text-store-fg hover:bg-store-bg-sunken" @click="closeDiscountModal">Continuar navegando</button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
     </div>
 </template>

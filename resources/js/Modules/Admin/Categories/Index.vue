@@ -1,10 +1,14 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { DataTable } from '@/Shared/Components/DataTable';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import { usePermissions } from '@/Shared/usePermissions';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { computed, h } from 'vue';
+import { confirmDelete } from '@/Shared/notify';
 
-defineProps({
+const props = defineProps({
     categories: {
         type: Array,
         default: () => [],
@@ -13,54 +17,58 @@ defineProps({
 
 const page = usePage();
 const categoryError = computed(() => page.props.errors?.category);
+const { can } = usePermissions();
 
-const destroy = (category) => {
-    if (confirm(`Remover a categoria "${category.name}"?`)) {
-        router.delete(`/admin/categories/${category.id}`);
+const destroy = async (category) => {
+    if (await confirmDelete({ title: `Remover a categoria "${category.name}"?` })) {
+        router.delete(`/admin/categorias/${category.id}`);
     }
 };
+
+const columns = [
+    {
+        id: 'image',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => row.original.image_url
+            ? h('img', { src: row.original.image_url, class: 'h-9 w-9 rounded-full object-cover' })
+            : h('div', { class: 'h-9 w-9 rounded-full bg-gray-100' }),
+    },
+    { accessorKey: 'name', header: 'Nome' },
+    { accessorKey: 'products_count', header: 'Produtos' },
+    {
+        id: 'actions',
+        header: 'Ações',
+        enableSorting: false,
+        cell: ({ row }) => {
+            const children = [];
+            if (can('cadastros.edit')) {
+                children.push(h(ActionIcon, { icon: 'fa-pen', label: 'Editar', color: 'blue', href: `/admin/categorias/${row.original.id}/editar` }));
+            }
+            if (can('cadastros.delete')) {
+                children.push(h(ActionIcon, { icon: 'fa-trash', label: 'Remover', color: 'red', onClick: () => destroy(row.original) }));
+            }
+            return h('div', { class: 'flex items-center justify-end gap-2' }, children);
+        },
+    },
+];
 </script>
 
 <template>
     <Head title="Categorias" />
 
     <AdminLayout>
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold">Categorias</h1>
-            <Link
-                href="/admin/categories/create"
-                class="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
-            >
-                Nova categoria
-            </Link>
-        </div>
+        <h1 class="mb-4 text-2xl font-bold">Categorias</h1>
 
-        <InputError :message="categoryError" class="mt-4" />
+        <InputError :message="categoryError" class="mb-4" />
 
-        <div class="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table class="w-full text-left text-sm">
-                <thead class="border-b border-gray-200 text-xs uppercase text-gray-400">
-                    <tr>
-                        <th class="px-4 py-3">Nome</th>
-                        <th class="px-4 py-3">Produtos</th>
-                        <th class="px-4 py-3"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="category in categories" :key="category.id" class="border-b border-gray-100">
-                        <td class="px-4 py-3">{{ category.name }}</td>
-                        <td class="px-4 py-3">{{ category.products_count }}</td>
-                        <td class="px-4 py-3 text-right">
-                            <Link :href="`/admin/categories/${category.id}/edit`" class="mr-3 hover:underline">
-                                Editar
-                            </Link>
-                            <button type="button" class="text-red-500 hover:underline" @click="destroy(category)">
-                                Remover
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        <DataTable
+            :columns="columns"
+            :data="props.categories"
+            search-placeholder="Buscar categoria..."
+            empty-message="Nenhuma categoria cadastrada."
+            :create-label="can('cadastros.create') ? 'Nova categoria' : null"
+            :create-href="can('cadastros.create') ? '/admin/categorias/criar' : null"
+        />
     </AdminLayout>
 </template>

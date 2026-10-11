@@ -1,0 +1,126 @@
+<script setup>
+import { Link, router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import Modal from '@/Shared/Modal.vue';
+import StarRating from '@/Shared/Components/StarRating.vue';
+import { addToCart, formatPrice, primaryImage, toggleFavorite } from '@/Shared/productCard';
+
+const props = defineProps({
+    product: {
+        type: Object,
+        required: true,
+    },
+    isFavorite: {
+        type: Boolean,
+        default: false,
+    },
+    isAuthenticated: {
+        type: Boolean,
+        default: false,
+    },
+    canReview: {
+        type: Boolean,
+        default: false,
+    },
+    hasReviewed: {
+        type: Boolean,
+        default: false,
+    },
+});
+
+const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));
+
+const secondImage = computed(() => {
+    const images = props.product.images ?? [];
+    if (images.length < 2) return null;
+    const primary = images.find((img) => img.is_primary) ?? images[0];
+    return images.find((img) => img.url !== primary.url)?.url ?? null;
+});
+
+const isHovering = ref(false);
+
+const goToProduct = () => router.visit(`/produtos/${props.product.slug}`);
+
+const showReviewModal = ref(false);
+const reviewForm = useForm({ rating: 5, comment: '' });
+
+const submitReview = () => {
+    reviewForm.post(`/produtos/${props.product.id}/avaliacoes`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showReviewModal.value = false;
+            reviewForm.reset();
+        },
+    });
+};
+</script>
+
+<template>
+    <article class="group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
+        <div class="relative aspect-square cursor-pointer bg-white"
+            @mouseenter="isHovering = true" @mouseleave="isHovering = false" @click="goToProduct">
+            <template v-if="primaryImage(product)">
+                <img :src="primaryImage(product)" :alt="product.name"
+                    class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                    :class="isHovering && secondImage ? 'opacity-0' : 'opacity-100'">
+                <img v-if="secondImage" :src="secondImage" :alt="product.name"
+                    class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                    :class="isHovering ? 'opacity-100' : 'opacity-0'">
+            </template>
+            <div v-else class="flex h-full w-full items-center justify-center">
+                <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
+            </div>
+            <button v-if="isAuthenticated" type="button"
+                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow"
+                :aria-pressed="isFavorite" @click.stop="toggleFavorite(product.id)">
+                <i class="text-sm" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
+            </button>
+            <Link v-else href="/entrar" @click.stop
+                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow">
+                <i class="far fa-heart text-sm text-store-fg-muted"></i>
+            </Link>
+
+            <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
+            <button type="button" :disabled="product.stock < 1"
+                class="absolute bottom-0 right-[5px] z-10 flex h-10 w-10 translate-y-1/2 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
+                <i class="fas fa-bag-shopping text-sm"></i>
+            </button>
+        </div>
+
+        <div class="flex flex-1 flex-col gap-2 px-4 pb-4 pt-6">
+            <h4 class="cursor-pointer line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug hover:text-store-accent" :title="product.name" @click="goToProduct">{{ product.name }}</h4>
+            <div class="mt-auto pt-1">
+                <span v-if="product.has_discount" class="block text-xs text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
+                <div class="flex items-center justify-between">
+                    <span class="text-base font-bold" :class="product.has_discount ? 'text-store-accent' : ''">{{ formatPrice(product.final_price) }}</span>
+                    <StarRating :value="ratingAvg" />
+                </div>
+                <span v-if="product.stock <= 0" class="mt-0.5 block text-[11px] text-red-600">Esgotado</span>
+                <span v-else class="mt-1 inline-flex w-fit items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Frete grátis</span>
+            </div>
+            <button v-if="canReview && !hasReviewed" type="button"
+                class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"
+                @click="showReviewModal = true">
+                Avaliar produto
+            </button>
+        </div>
+    </article>
+
+    <Modal :open="showReviewModal" max-width="max-w-[480px]" @close="showReviewModal = false">
+        <h3 class="font-display text-xl font-semibold">Avaliar {{ product.name }}</h3>
+        <div class="mt-4 flex gap-1">
+            <button v-for="star in 5" :key="star" type="button" @click="reviewForm.rating = star">
+                <i class="text-2xl" :class="star <= reviewForm.rating ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
+            </button>
+        </div>
+        <textarea v-model="reviewForm.comment" rows="3" placeholder="Conte como foi sua experiência (opcional)"
+            class="mt-4 w-full rounded-lg border border-store-border-strong bg-store-bg px-3 py-2 text-sm"></textarea>
+        <p v-if="reviewForm.errors.review" class="mt-2 text-sm text-red-600">{{ reviewForm.errors.review }}</p>
+        <button type="button" :disabled="reviewForm.processing"
+            class="mt-4 rounded-lg bg-store-accent px-5 py-2.5 text-sm font-semibold text-store-accent-contrast hover:opacity-90 disabled:opacity-50"
+            @click="submitReview">
+            Enviar avaliação
+        </button>
+    </Modal>
+</template>

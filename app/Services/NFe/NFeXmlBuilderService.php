@@ -1,0 +1,578 @@
+<?php
+
+namespace App\Services\NFe;
+
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Fiscal\Models\Company;
+use App\Modules\Fiscal\Models\ProductFiscalData;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use NFePHP\NFe\Make;
+use RuntimeException;
+use stdClass;
+
+/**
+ * Monta o XML da NF-e (modelo 55, layout 4.00) a partir do pedido + dados
+ * fiscais já cadastrados (Company = emitente, ProductFiscalData por item).
+ * Não depende do certificado digital — só monta e valida a estrutura, a
+ * assinatura é uma etapa separada (NFeCertificateService/Tools::signNFe).
+ */
+class NFeXmlBuilderService
+{
+    public function __construct(private readonly IbgeMunicipioResolver $ibge)
+    {
+    }
+
+    public function build(Order $order, int $numero): array
+    {
+        $company = Company::query()->firstOrFail();
+        $order->loadMissing(['items.product.fiscalData', 'user', 'payments']);
+
+        if ($order->items->isEmpty()) {
+            throw new RuntimeException('Pedido sem itens — não é possível montar a NF-e.');
+        }
+
+        // Pedido explícito 2026-08-09: item pode ser um produto real do
+        // catálogo (fiscalData já cadastrado) OU um item digitado na hora na
+        // emissão manual (produto fora do catálogo ou serviço avulso — a
+        // empresa tem 2 CNAEs) — nesse segundo caso os dados fiscais vêm das
+        // colunas próprias do OrderItem em vez de product->fiscalData. Ver
+        // resolveFiscalData().
+        foreach ($order->items as $item) {
+            if (! $item->product && ! $item->ncm) {
+                throw new RuntimeException("Item \"{$item->product_name}\" não tem dados fiscais — nem produto do catálogo vinculado, nem NCM/CFOP preenchidos manualmente.");
+            }
+
+            if ($item->product && ! $item->product->fiscalData) {
+                throw new RuntimeException("Produto \"{$item->product_name}\" não tem dados fiscais cadastrados.");
+            }
+        }
+
+        // Nota fiscal é uma coisa só (natOp/finNFe únicos pro documento
+        // inteiro) — se TODOS os itens forem serviço, descreve a operação
+        // como prestação de serviço; havendo qualquer produto (mesmo
+        // misturado com serviço), mantém "venda de mercadoria" como já era.
+        // Aviso real de negócio, não travado no código: NF-e modelo 55 é
+        // formalmente pra mercadoria — prestação de serviço "pura" costuma
+        // exigir NFS-e (municipal, sistema totalmente separado, não
+        // implementado aqui). Fica a critério de quem emite.
+        $allServices = $order->items->every(fn ($item) => $item->item_type === OrderItem::TYPE_SERVICE);
+
+        // Devolução (pedido fiscal técnico, ver Order::ORIGIN_*_RETURN_INVOICE):
+        // `purchase_return` é devolução ao FORNECEDOR — sai daqui, nota de
+        // saída. `sales_return` é devolução do CLIENTE — a mercadoria volta
+        // pra cá, e quem emite é o próprio vendedor, então o documento é de
+        // ENTRADA (tpNF=0). Os dois são finalidade 4 e referenciam a chave da
+        // nota de origem.
+        $isPurchaseReturn = $order->fiscal_operation_type === 'purchase_return';
+        $isSalesReturn = $order->fiscal_operation_type === 'sales_return';
+        $isFiscalReturn = $isPurchaseReturn || $isSalesReturn;
+
+        $make = new Make();
+
+        $cUF = (int) config('nfe.cuf');
+        $tpAmb = config('nfe.ambiente') === 'producao' ? 1 : 2;
+        $cMunFG = $this->ibge->resolve($company->city, $company->state);
+
+        $infNFe = new stdClass();
+        $infNFe->versao = '4.00';
+        $make->taginfNFe($infNFe);
+
+        $ide = new stdClass();
+        $ide->cUF = $cUF;
+        $ide->natOp = $order->fiscal_nature_operation
+            ?: ($isPurchaseReturn ? 'Devolução de compra' : ($isSalesReturn ? 'Devolução de venda' : ($allServices ? 'Prestação de serviço' : 'Venda de mercadoria')));
+        $ide->mod = 55;
+        $ide->serie = config('nfe.serie');
+        $ide->nNF = $numero;
+        $ide->tpNF = $isSalesReturn ? 0 : 1; // devolução de venda é entrada emitida pelo próprio vendedor
+        $ide->idDest = $order->shipping_state === $company->state ? 1 : 2;
+        $ide->cMunFG = $cMunFG;
+        $ide->tpImp = 1; // retrato
+        $ide->tpEmis = 1; // emissão normal
+        $ide->tpAmb = $tpAmb;
+        $ide->finNFe = $order->fiscal_finality ?: ($isFiscalReturn ? 4 : 1); // 4 = devolução
+        $ide->indFinal = $isPurchaseReturn ? 0 : 1; // devolução ao fornecedor não é consumidor final
+        $ide->indPres = $isFiscalReturn ? 9 : 2; // devolução não é um novo checkout pela internet
+        $ide->procEmi = 0;
+        $ide->verProc = '1.0.0';
+        $make->tagide($ide);
+
+        if ($isFiscalReturn) {
+            $referencedKey = preg_replace('/\D/', '', (string) $order->fiscal_referenced_nfe_key);
+
+            // Sem a chave da nota de origem a SEFAZ não aceita finalidade 4.
+            // Falhar aqui, antes de assinar, é melhor que queimar um número
+            // de NF-e numa rejeição garantida.
+            if (strlen($referencedKey) !== 44) {
+                throw new RuntimeException('NF-e de devolução precisa referenciar a chave da nota de origem com 44 dígitos.');
+            }
+
+            $ref = new stdClass();
+            $ref->refNFe = $referencedKey;
+            $make->tagrefNFe($ref);
+        }
+
+        $emit = new stdClass();
+        $emit->xNome = $company->razao_social;
+        $emit->xFant = $company->nome_fantasia;
+        $emit->IE = $company->inscricao_estadual;
+        // Estava fixo em 1 (Simples Nacional) sempre, ignorando o regime
+        // real cadastrado — rejeição real da SEFAZ em produção 2026-08-02
+        // ("Código Regime Tributário do emitente diverge do cadastro")
+        // porque o valor enviado não bate com o que está registrado pra
+        // esse CNPJ. CRT=2 (Simples Nacional excesso de sublimite) não tem
+        // como inferir de Company::regime_tributario — se for esse o caso,
+        // precisa de campo/config novo, não dá pra adivinhar.
+        //
+        // Segunda rejeição real (pedido #17, 2026-08-03): MEI ainda caía no
+        // default (CRT=1), mas a NT 2024.001 tornou obrigatório CRT=4
+        // ("Simples Nacional — Microempreendedor Individual — MEI") pra
+        // emitentes MEI a partir de abril/2025 — confirmado contra a nota
+        // técnica oficial, não é mais opcional/inferido.
+        $emit->CRT = match ($company->regime_tributario) {
+            Company::REGIME_LUCRO_PRESUMIDO, Company::REGIME_LUCRO_REAL => 3,
+            Company::REGIME_MEI => 4,
+            default => 1, // simples_nacional
+        };
+        $emit->CNPJ = preg_replace('/\D/', '', $company->cnpj);
+        $emit->CNAE = $company->cnae;
+        $make->tagemit($emit);
+
+        $enderEmit = new stdClass();
+        $enderEmit->xLgr = $company->street;
+        $enderEmit->nro = $company->number;
+        // Mesmo limite de 60 caracteres do xCpl do destinatário logo abaixo
+        // — rejeição real da SEFAZ (pedidos #15/#16, 2026-08-03) porque o
+        // complemento do emitente tinha 73 caracteres.
+        $enderEmit->xCpl = Str::limit((string) $company->complement, 60, '');
+        $enderEmit->xBairro = $company->neighborhood;
+        $enderEmit->cMun = $cMunFG;
+        $enderEmit->xMun = $company->city;
+        $enderEmit->UF = $company->state;
+        $enderEmit->CEP = preg_replace('/\D/', '', (string) $company->zip);
+        $enderEmit->cPais = 1058;
+        $enderEmit->xPais = 'Brasil';
+
+        // Mesma defesa do enderDest logo abaixo — fone é opcional, só seta
+        // quando tem dígito suficiente pro pattern [0-9]{6,14} da NF-e.
+        $emitPhone = preg_replace('/\D/', '', (string) $company->phone);
+        if (strlen($emitPhone) >= 6) {
+            $enderEmit->fone = $emitPhone;
+        }
+
+        $make->tagenderEmit($enderEmit);
+
+        $customer = $order->user;
+
+        // Cidade que o canal mandou pode não ser um município de verdade
+        // (comprador digita o bairro — ver
+        // IbgeMunicipioResolver::resolveByCep()). Quando o CEP resolve, o
+        // nome do município vai corrigido no xMun também: cMun e xMun
+        // divergentes seriam outra rejeição.
+        $xMunDest = (string) $order->shipping_city;
+
+        try {
+            $cMunDest = $this->ibge->resolve($order->shipping_city, $order->shipping_state);
+        } catch (RuntimeException $exception) {
+            $fromCep = $this->ibge->resolveByCep((string) $order->shipping_zip, (string) $order->shipping_state);
+
+            if ($fromCep === null) {
+                throw $exception;
+            }
+
+            $cMunDest = $fromCep['code'];
+            $xMunDest = $fromCep['city'];
+        }
+
+        // Pedido de canal externo não tem Order::user (user_id fica null
+        // em importação de marketplace) — o CPF real vem de
+        // buyer_document, capturado na importação via endpoint dedicado
+        // do canal (ver MercadoLivreDriver::importOrder()). Pedido do
+        // site sempre tem um user local com cpf (checkout, inclusive
+        // convidado, exige o campo).
+        $document = preg_replace('/\D/', '', (string) ($order->buyer_document ?: $customer?->cpf));
+
+        if ($document === '') {
+            // CNPJ/CPF/idEstrangeiro é elemento obrigatório no schema do
+            // modelo 55 antes de xNome — sem isso o XML é inválido e a
+            // SEFAZ rejeita (confirmado ao vivo, 2026-08-02: erro
+            // "Element xNome: not expected"). Falha cedo com mensagem
+            // clara em vez de deixar o validador do schema estourar com
+            // um erro críptico.
+            throw new RuntimeException("Pedido #{$order->id}: não foi possível identificar o CPF/CNPJ do comprador — não é possível emitir NF-e sem essa informação.");
+        }
+
+        $dest = new stdClass();
+        // Mesmo tratamento do xCpl acima: o schema da NF-e limita xNome a
+        // 60 caracteres e o validador do sped-nfe barra o XML ANTES de
+        // qualquer chamada à SEFAZ — pedido #1222 (2026-09-02) ficou dias
+        // sem nota porque o nome do comprador chegou do canal com 61.
+        // Truncar é a única saída que ainda emite a nota: o destinatário
+        // continua identificado pelo CNPJ/CPF, que é o que a SEFAZ casa de
+        // verdade. A causa raiz daquele caso (nome duplicado pela ML) foi
+        // corrigida na origem — ver MercadoLivreDriver::importOrder() —
+        // mas nome legítimo com mais de 60 caracteres existe, e o limite
+        // vale pra todo canal.
+        $dest->xNome = Str::limit((string) $order->shipping_name, 60, '');
+        $dest->email = $customer?->email;
+
+        // BUG REAL 2026-09-01 (pedido #1165 do Mercado Livre, nota 810
+        // rejeitada pela SEFAZ: "232 - IE do destinatário não informada"):
+        // indIEDest era 9 (não contribuinte) FIXO, pra qualquer
+        // destinatário. Pra pessoa física está certo, mas venda pra CNPJ
+        // contribuinte tem que ir com indIEDest=1 e a inscrição estadual
+        // junto — a SEFAZ recusa a nota inteira sem isso. O canal já
+        // mandava a IE (ver OrderService::getBuyerBillingData(), que
+        // descartava esse dado até hoje).
+        $stateRegistration = preg_replace('/\D/', '', (string) $order->buyer_state_registration);
+        $isCompany = strlen($document) === 14;
+
+        if ($isCompany) {
+            $dest->CNPJ = $document;
+
+            if ($stateRegistration !== '' && $order->buyer_taxpayer_type !== 'isento') {
+                $dest->indIEDest = 1; // contribuinte de ICMS
+                $dest->IE = $stateRegistration;
+            } else {
+                // Empresa sem inscrição estadual — indIEDest=2 e NENHUMA
+                // tag IE (informar as duas coisas é outra rejeição).
+                $dest->indIEDest = 2;
+            }
+        } else {
+            $dest->CPF = $document;
+            $dest->indIEDest = 9; // pessoa física, não contribuinte
+        }
+
+        $make->tagdest($dest);
+
+        // Str::limit(..., 60) nos campos de texto livre abaixo: o schema da
+        // NFe limita xLgr/xCpl/xBairro/xMun a 60 caracteres, mas pedido
+        // importado de marketplace usa texto livre sem esse limite (ex:
+        // Mercado Livre manda o "comment" do comprador, tipo instrução de
+        // entrega, direto pro complemento) — sem isso o XML falha na
+        // validação local do sped-nfe e a emissão nunca sai do lugar
+        // (bug real em produção, pedidos #15/#16, 2026-08-03).
+        $enderDest = new stdClass();
+        $enderDest->xLgr = Str::limit((string) $order->shipping_street, 60, '');
+        // Sem número a SEFAZ recusa o XML inteiro (E05 `nro` obrigatório) e
+        // a nota, a pré-postagem e a etiqueta ficam paradas — "S/N" é o
+        // valor aceito pra endereço sem número (achado 2026-09-28, Amazon).
+        $enderDest->nro = trim((string) $order->shipping_number) !== '' ? $order->shipping_number : 'S/N';
+        $enderDest->xCpl = Str::limit((string) $order->shipping_complement, 60, '');
+        $enderDest->xBairro = Str::limit((string) $order->shipping_neighborhood, 60, '');
+        $enderDest->cMun = $cMunDest;
+        $enderDest->xMun = Str::limit($xMunDest, 60, '');
+        $enderDest->UF = $order->shipping_state;
+        $enderDest->CEP = preg_replace('/\D/', '', $order->shipping_zip);
+        $enderDest->cPais = 1058;
+        $enderDest->xPais = 'Brasil';
+
+        // Achado real 2026-08-06 (pedidos Shopee reais #180/#181): a Shopee
+        // mascara o telefone por privacidade ("******97") — depois de tirar
+        // os não-dígitos sobra só "97", 2 caracteres, e o schema da NF-e
+        // exige 6-14 ([0-9]{6,14} pattern). Rejeição real do validador
+        // local antes até de chegar na SEFAZ. fone é opcional no XML —
+        // omite em vez de mandar um valor curto demais que nunca vai
+        // validar.
+        $destPhone = preg_replace('/\D/', '', (string) $order->shipping_phone);
+        if (strlen($destPhone) >= 6) {
+            $enderDest->fone = $destPhone;
+        }
+
+        $make->tagenderDest($enderDest);
+
+        $totalVProd = 0.0;
+
+        // Rejeição real da SEFAZ (535, pedido #180, 2026-08-06): "Total do
+        // Frete difere do somatório dos itens" — o total (icmsTot->vFrete
+        // logo abaixo) sempre foi só order->shipping_cost, sem NENHUM item
+        // declarar frete individual, e a SEFAZ exige que o total bata com a
+        // soma do vFrete de cada item quando o total é > 0. Distribuído
+        // proporcionalmente ao valor de cada item (não dividido igual entre
+        // eles — item mais caro carrega mais frete, mais justo e é o padrão
+        // usado por a maioria dos emissores), com o resto do arredondamento
+        // absorvido pelo último item pra sempre bater exatamente com o
+        // total, nunca sobrar/faltar centavo por causa de round() em cada
+        // parcela.
+        $totalShipping = (float) $order->shipping_cost;
+        $orderSubtotal = (float) $order->subtotal;
+        $itemsCount = $order->items->count();
+        $allocatedShipping = 0.0;
+
+        // Rejeição real da SEFAZ (537, pedidos #1118/#1123/#1124,
+        // 2026-08-31 — TikTok Shop via Bling, cupom/desconto real do
+        // canal): "Total do Desconto difere do somatório dos itens" —
+        // MESMA regra do frete acima (docblock 2026-08-06), só que pra
+        // vDesc: a SEFAZ exige o total (icmsTot->vDesc, order->discount_amount)
+        // batendo com a soma do vDesc de cada item quando > 0. Mesma
+        // distribuição proporcional, mesmo último item absorvendo o resto
+        // do arredondamento.
+        $totalDiscount = (float) $order->discount_amount;
+        $allocatedDiscount = 0.0;
+
+        foreach ($order->items as $index => $item) {
+            $n = $index + 1;
+            $fiscal = $this->resolveFiscalData($item);
+            $cfop = $order->shipping_state === $company->state ? $fiscal->cfop : $fiscal->cfop_outros_estados;
+
+            // Entrada por devolução de venda tem CFOP próprio (1202/2202) —
+            // o CFOP do cadastro do produto é de saída e não serve aqui.
+            if ($isSalesReturn) {
+                $cfop = $order->shipping_state === $company->state ? '1202' : '2202';
+            }
+
+            if ($n === $itemsCount) {
+                $itemShipping = round($totalShipping - $allocatedShipping, 2);
+                $itemDiscount = round($totalDiscount - $allocatedDiscount, 2);
+            } else {
+                $itemShipping = $orderSubtotal > 0
+                    ? round($totalShipping * ((float) $item->subtotal / $orderSubtotal), 2)
+                    : 0.0;
+                $itemDiscount = $orderSubtotal > 0
+                    ? round($totalDiscount * ((float) $item->subtotal / $orderSubtotal), 2)
+                    : 0.0;
+            }
+
+            $allocatedShipping += $itemShipping;
+            $allocatedDiscount += $itemDiscount;
+
+            $prod = new stdClass();
+            $prod->item = $n;
+            // Item digitado na hora não tem SKU de catálogo — "SERV-{id}"
+            // como código interno, só precisa ser único/estável, a SEFAZ não
+            // valida contra nada externo.
+            // Numa devolução de compra o item carrega o código do próprio
+            // fornecedor em external_item_id — usar o dele facilita o
+            // batimento do outro lado.
+            $prod->cProd = $item->product?->sku ?: ($item->external_item_id ?: "SERV-{$item->id}");
+            $prod->cEAN = $fiscal->gtin ?: 'SEM GTIN';
+            $prod->xProd = $item->product_name;
+            $prod->NCM = $fiscal->ncm;
+            $prod->CFOP = $cfop;
+            $prod->uCom = $fiscal->unidade_tributavel;
+            $prod->qCom = (float) $item->quantity;
+            $prod->vUnCom = (float) $item->product_price;
+            $prod->vProd = (float) $item->subtotal;
+            $prod->cEANTrib = $fiscal->gtin ?: 'SEM GTIN';
+            $prod->uTrib = $fiscal->unidade_tributavel;
+            $prod->qTrib = (float) $item->quantity;
+            $prod->vUnTrib = (float) $item->product_price;
+            $prod->indTot = 1;
+            if ($itemShipping > 0) {
+                $prod->vFrete = $itemShipping;
+            }
+            if ($itemDiscount > 0) {
+                $prod->vDesc = $itemDiscount;
+            }
+            if ($fiscal->cest) {
+                $prod->CEST = $fiscal->cest;
+            }
+            $make->tagprod($prod);
+
+            $totalVProd += (float) $item->subtotal;
+
+            $imposto = new stdClass();
+            $imposto->item = $n;
+            $imposto->vTotTrib = round((float) $item->subtotal * (float) ($fiscal->percentual_aproximado_tributos ?? 0) / 100, 2);
+            $make->tagimposto($imposto);
+
+            $icms = new stdClass();
+            $icms->item = $n;
+            $icms->orig = $fiscal->origem;
+            // Devolução de venda sob MEI (CRT=4) foi rejeitada pela SEFAZ-SP
+            // com CSOSN 102 + CFOP 2202 (cStat 337). Na nota de entrada da
+            // devolução vai 900, pra não herdar o enquadramento da venda
+            // normal que está no cadastro do produto.
+            $icms->CSOSN = $isSalesReturn ? '900' : $fiscal->icms_situacao_tributaria;
+            $make->tagICMSSN($icms);
+
+            $pisAliquota = (float) ($fiscal->pis_aliquota ?? 0);
+            $pis = new stdClass();
+            $pis->item = $n;
+            $pis->CST = $this->cstPisCofins($fiscal->pis_situacao_tributaria, 'pis_situacao_tributaria', $item);
+            $pis->vBC = $pisAliquota > 0 ? (float) $item->subtotal : 0;
+            $pis->pPIS = $pisAliquota;
+            $pis->vPIS = round((float) $item->subtotal * $pisAliquota / 100, 2);
+            $make->tagPIS($pis);
+
+            $cofinsAliquota = (float) ($fiscal->cofins_aliquota ?? 0);
+            $cofins = new stdClass();
+            $cofins->item = $n;
+            $cofins->CST = $this->cstPisCofins($fiscal->cofins_situacao_tributaria, 'cofins_situacao_tributaria', $item);
+            $cofins->vBC = $cofinsAliquota > 0 ? (float) $item->subtotal : 0;
+            $cofins->pCOFINS = $cofinsAliquota;
+            $cofins->vCOFINS = round((float) $item->subtotal * $cofinsAliquota / 100, 2);
+            $make->tagCOFINS($cofins);
+        }
+
+        $icmsTot = new stdClass();
+        $icmsTot->vBC = 0;
+        $icmsTot->vICMS = 0;
+        $icmsTot->vICMSDeson = 0;
+        $icmsTot->vBCST = 0;
+        $icmsTot->vST = 0;
+        $icmsTot->vProd = $totalVProd;
+        $icmsTot->vFrete = (float) $order->shipping_cost;
+        $icmsTot->vSeg = 0;
+        $icmsTot->vDesc = (float) $order->discount_amount;
+        $icmsTot->vII = 0;
+        $icmsTot->vIPI = 0;
+        $icmsTot->vPIS = 0;
+        $icmsTot->vCOFINS = 0;
+        $icmsTot->vOutro = 0;
+        $icmsTot->vNF = (float) $order->total;
+        $make->tagICMSTot($icmsTot);
+
+        $transp = new stdClass();
+        $transp->modFrete = 0; // por conta do emitente (CIF)
+        $make->tagtransp($transp);
+
+        $pag = new stdClass();
+        $make->tagpag($pag);
+
+        $paymentMethodCodes = [
+            'card' => '03',
+            'pix' => '17',
+            'boleto' => '15',
+        ];
+
+        if ($isFiscalReturn) {
+            // Devolução não movimenta dinheiro aqui: tPag 90 = sem pagamento.
+            $detPag = new stdClass();
+            $detPag->indPag = 0;
+            $detPag->tPag = '90';
+            $detPag->vPag = 0;
+            $make->tagdetPag($detPag);
+        } elseif ($order->payments->isEmpty()) {
+            // Pedido de canal externo nunca tem Payment local — o
+            // pagamento acontece do lado do marketplace, não aqui. SEFAZ
+            // exige xPag (descrição) sempre que tPag=99 "outros"
+            // (rejeição real 441, confirmada em produção 2026-08-02).
+            $detPag = new stdClass();
+            $detPag->indPag = 0;
+            $detPag->tPag = '99';
+            $detPag->xPag = $order->origin === Order::ORIGIN_STORE
+                ? 'Pagamento processado externamente'
+                : 'Pagamento processado pelo canal de origem do pedido';
+            $detPag->vPag = (float) $order->total;
+            $make->tagdetPag($detPag);
+        } else {
+            foreach ($order->payments as $payment) {
+                $detPag = new stdClass();
+                $detPag->indPag = 0;
+                $detPag->tPag = $paymentMethodCodes[$payment->method_type] ?? '99';
+
+                if ($detPag->tPag === '99') {
+                    $detPag->xPag = "Pagamento via {$payment->method_type}";
+                }
+
+                $detPag->vPag = (float) $payment->amount;
+                $make->tagdetPag($detPag);
+            }
+        }
+
+        $infAdic = new stdClass();
+        // Nota de carrinho do Mercado Livre traz itens de mais de um pedido
+        // (PackDoPedido::pedidoFiscal) — lista todos, pro contador achar a
+        // venda por qualquer um deles.
+        $pedidosNaNota = $order->items->pluck('order_id')->filter()->unique()->sort()->values();
+        // Pedido fiscal de devolução traz o texto pronto (número da nota de
+        // origem, motivo) em fiscal_additional_info — quando vem, manda.
+        $infAdic->infCpl = $order->fiscal_additional_info
+            ?: ($pedidosNaNota->count() > 1
+                ? 'Pedidos #'.$pedidosNaNota->implode(', #')." (carrinho {$order->channel_pack_id}) - KazaKora"
+                : "Pedido #{$order->id} - KazaKora");
+        $make->taginfAdic($infAdic);
+
+        $xml = $make->getXML();
+
+        if (! empty($make->getErrors())) {
+            throw new RuntimeException('Erros ao montar o XML da NF-e: '.implode(' | ', $make->getErrors()));
+        }
+
+        return [
+            'xml' => $xml,
+            'chave' => $make->getChave(),
+        ];
+    }
+
+    /**
+     * BUG REAL 2026-10-01 (2 vendas da Shopee sem nota e sem etiqueta):
+     * produto com cadastro fiscal criado só com peso/medidas
+     * (PackageDataResolver, tela de logística) fica com o CST de PIS/COFINS
+     * vazio, e o tagPIS do nfephp só monta o grupo filho para CST que ele
+     * conhece: com vazio (ou "8" sem o zero) saía <PIS/> oco e a SEFAZ
+     * recusava o XML inteiro ("Element PIS: Missing child element(s)").
+     * Sem nota a Shopee não libera a etiqueta.
+     *
+     * Vazio cai no padrão da empresa (o mesmo das notas já autorizadas, ver
+     * ProductFiscalData::defaultMeiAttributes) e fica registrado no log pra
+     * o cadastro do produto ser completado.
+     */
+    private function cstPisCofins(?string $cst, string $campo, OrderItem $item): string
+    {
+        $cst = trim((string) $cst);
+
+        if ($cst !== '' && ctype_digit($cst)) {
+            return str_pad($cst, 2, '0', STR_PAD_LEFT);
+        }
+
+        $padrao = ProductFiscalData::defaultMeiAttributes()[$campo];
+
+        Log::warning('nfe.cst_pis_cofins_padrao', [
+            'order_item_id' => $item->id,
+            'product_id' => $item->product_id,
+            'campo' => $campo,
+            'valor_cadastrado' => $cst,
+            'usado' => $padrao,
+        ]);
+
+        return $padrao;
+    }
+
+    /**
+     * Unifica as duas fontes possíveis de dados fiscais por item: produto
+     * real do catálogo (ProductFiscalData, já validado/estável) ou as
+     * colunas manuais do próprio OrderItem (item digitado na emissão manual
+     * — produto fora do catálogo ou serviço avulso). Devolve sempre o mesmo
+     * formato pra quem chama não precisar saber a origem.
+     */
+    private function resolveFiscalData(OrderItem $item): stdClass
+    {
+        if ($item->product) {
+            return (object) [
+                'ncm' => $item->product->fiscalData->ncm,
+                'cest' => $item->product->fiscalData->cest,
+                'cfop' => $item->product->fiscalData->cfop,
+                'cfop_outros_estados' => $item->product->fiscalData->cfop_outros_estados,
+                'origem' => $item->product->fiscalData->origem,
+                'gtin' => $item->product->fiscalData->gtin,
+                'unidade_tributavel' => $item->product->fiscalData->unidade_tributavel,
+                'icms_situacao_tributaria' => $item->product->fiscalData->icms_situacao_tributaria,
+                'pis_situacao_tributaria' => $item->product->fiscalData->pis_situacao_tributaria,
+                'pis_aliquota' => $item->product->fiscalData->pis_aliquota,
+                'cofins_situacao_tributaria' => $item->product->fiscalData->cofins_situacao_tributaria,
+                'cofins_aliquota' => $item->product->fiscalData->cofins_aliquota,
+                'percentual_aproximado_tributos' => $item->product->fiscalData->percentual_aproximado_tributos,
+            ];
+        }
+
+        return (object) [
+            'ncm' => $item->ncm,
+            'cest' => $item->cest,
+            'cfop' => $item->cfop,
+            'cfop_outros_estados' => $item->cfop_outros_estados ?: $item->cfop,
+            'origem' => $item->origem_mercadoria ?? 0,
+            'gtin' => $item->gtin,
+            'unidade_tributavel' => $item->unidade_tributavel ?: 'UN',
+            'icms_situacao_tributaria' => $item->icms_situacao_tributaria,
+            'pis_situacao_tributaria' => $item->pis_situacao_tributaria,
+            'pis_aliquota' => $item->pis_aliquota,
+            'cofins_situacao_tributaria' => $item->cofins_situacao_tributaria,
+            'cofins_aliquota' => $item->cofins_aliquota,
+            'percentual_aproximado_tributos' => $item->percentual_aproximado_tributos,
+        ];
+    }
+}

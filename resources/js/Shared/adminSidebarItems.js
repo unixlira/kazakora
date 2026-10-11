@@ -1,0 +1,125 @@
+/**
+ * Sidebar IA for the admin panel. Grouped by section like the reference
+ * design (Gestão / Cadastros / Operacional / Configurações). New sections
+ * are added here as their pages actually ship — no dead links in the menu.
+ * `permission: null` means "any staff role can see it".
+ */
+export const sidebarSections = [
+    {
+        heading: 'Geral',
+        items: [{ label: 'Dashboard', href: '/admin', icon: 'fas fa-gauge-high', color: 'text-primary', permission: null }],
+    },
+    {
+        heading: 'Gestão',
+        items: [
+            { label: 'Financeiro', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', color: 'text-primary', permission: 'financeiro.view' },
+            { label: 'Fluxo de Caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', color: 'text-success', permission: 'financeiro.view' },
+            { label: 'Recargas de Anúncio', href: '/admin/anuncios/recargas', icon: 'fas fa-bullhorn', color: 'text-warning', permission: 'financeiro.view' },
+            { label: 'Fotos de Anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-images', color: 'text-warning', permission: 'relatorios.view' },
+            { label: 'Relatórios', href: '/admin/relatorios', icon: 'fas fa-file-lines', color: 'text-info', permission: 'relatorios.view' },
+            { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-gauge', color: 'text-warning', permission: 'relatorios.view' },
+        ],
+    },
+    {
+        heading: 'MKT Digital',
+        items: [
+            { label: 'Criativos Mapeados', href: '/admin/mkt-digital', icon: 'fas fa-globe', color: 'text-primary', permission: 'relatorios.view' },
+            { label: 'Páginas de Conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', color: 'text-error', permission: 'relatorios.view' },
+            { label: 'PDF Oportunidades', href: '/admin/pdf-oportunidades', icon: 'fas fa-file-pdf', color: 'text-warning', permission: 'relatorios.view' },
+        ],
+    },
+    {
+        heading: 'Cadastros',
+        items: [
+            { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', color: 'text-info', permission: 'cadastros.view' },
+            { label: 'Calculadora de Preços', href: '/admin/precificacao', icon: 'fas fa-calculator', color: 'text-success', permission: 'cadastros.view' },
+            { label: 'Análise de Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', color: 'text-info', permission: 'cadastros.view' },
+            { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-tags', color: 'text-secondary', permission: 'cadastros.view' },
+            { label: 'Banners', href: '/admin/banners', icon: 'fas fa-images', color: 'text-info', permission: 'cadastros.view' },
+            { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', color: 'text-warning', permission: 'cadastros.view' },
+            { label: 'Cupons', href: '/admin/cupons', icon: 'fas fa-ticket', color: 'text-success', permission: 'cadastros.view' },
+            { label: 'Notificações Promocionais', href: '/admin/notificacoes-promocionais', icon: 'fas fa-bullhorn', color: 'text-warning', permission: 'cadastros.view' },
+            { label: 'Fornecedores', href: '/admin/fornecedores', icon: 'fas fa-truck-field', color: 'text-warning', permission: 'cadastros.view' },
+            { label: 'Centro de Custos', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', color: 'text-success', permission: 'cadastros.view' },
+        ],
+    },
+    {
+        heading: 'Operacional',
+        items: [
+            { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', color: 'text-warning', permission: 'pedidos.view' },
+            { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', color: 'text-primary', permission: 'pedidos.view' },
+            { label: 'Notas Fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', color: 'text-info', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
+            { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', color: 'text-info', permission: 'pedidos.view' },
+            // Devoluções e reclamações de todas as plataformas (2026-10-06):
+            // o número é quantos casos têm pendência (prazo, conferência,
+            // encerrada sem o produto voltar).
+            { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', color: 'text-error', permission: 'operacional.view', badgeKey: 'devolucoes' },
+            { label: 'Pedidos de Compra', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', color: 'text-info', permission: 'operacional.view' },
+            { label: 'Ordens de Serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', color: 'text-secondary', permission: 'operacional.view' },
+            { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', color: 'text-success', permission: 'operacional.view' },
+            { label: 'Logística', href: '/admin/logistica', icon: 'fas fa-truck', color: 'text-primary', permission: 'operacional.view' },
+            { label: 'Correios', href: '/admin/correios', icon: 'fas fa-qrcode', color: 'text-secondary', permission: 'operacional.view' },
+            { label: 'Download vídeos', href: '/admin/download-videos', icon: 'fas fa-download', color: 'text-primary', permission: 'operacional.create' },
+        ],
+    },
+    {
+        // Espelho web do app desktop KoraSync (pedido explícito 2026-08-31:
+        // "menu Korasync... dentro dele todos submenus das filas") — mesmas
+        // 5 telas que o operador de separação já usa no app nativo, agora
+        // acessíveis também pelo navegador. Ver KoraSyncController.
+        heading: 'KoraSync',
+        items: [
+            { label: 'Fila normal', href: '/admin/korasync/fila', icon: 'fas fa-list-check', color: 'text-success', permission: 'operacional.view' },
+            { label: 'Sem estoque', href: '/admin/korasync/sem-estoque', icon: 'fas fa-triangle-exclamation', color: 'text-warning', permission: 'operacional.view' },
+            { label: 'Vendas futuras', href: '/admin/korasync/vendas-futuras', icon: 'fas fa-calendar-days', color: 'text-warning', permission: 'operacional.view' },
+            { label: 'Separados', href: '/admin/korasync/separados', icon: 'fas fa-boxes-packing', color: 'text-success', permission: 'operacional.view' },
+            { label: 'Cancelados', href: '/admin/korasync/cancelados', icon: 'fas fa-circle-xmark', color: 'text-error', permission: 'operacional.view' },
+        ],
+    },
+    {
+        // Envios Flex (pedido explícito 2026-09-11): tudo que saiu com o
+        // entregador do Flex, o comprovante de retirada (foto e assinatura
+        // do KoraFlex) e os alertas — devolução pendente, venda cancelada
+        // com o produto fora, entregador que não iniciou a rota. O número
+        // no item é quantos envios têm pendência aberta.
+        heading: 'Envios Flex',
+        items: [
+            { label: 'Controle de envios', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', color: 'text-warning', permission: 'operacional.view', badgeKey: 'flexAlertas' },
+            { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', color: 'text-info', permission: 'configuracoes.integracoes' },
+        ],
+    },
+
+    {
+        heading: 'WhatsApp',
+        items: [
+            { label: 'Conversas', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', color: 'text-success', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
+            { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', color: 'text-warning', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos' },
+            { label: 'Configurações', href: '/admin/whatsapp', icon: 'fab fa-whatsapp', color: 'text-success', permission: 'configuracoes.integracoes' },
+            { label: 'Disparos', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', color: 'text-primary', permission: 'configuracoes.integracoes' },
+        ],
+    },
+    {
+        // Menu Log (pedido explícito 2026-09-14): tudo que o sistema
+        // escreve em storage/logs numa lista só, com filtro de data/hora,
+        // nível e busca por texto — pra achar um erro sem abrir SSH.
+        // Admin-only (ver SystemLogController).
+        heading: 'Log',
+        items: [
+            { label: 'Logs do Sistema', href: '/admin/logs', icon: 'fas fa-file-lines', color: 'text-error', permission: 'configuracoes.auditoria' },
+        ],
+    },
+    {
+        heading: 'Configurações',
+        items: [
+            { label: 'Empresa', href: '/admin/empresa', icon: 'fas fa-building', color: 'text-success', permission: null },
+            { label: 'Pagamentos', href: '/admin/pagamentos', icon: 'fas fa-credit-card', color: 'text-warning', permission: null },
+            { label: 'Usuários e Permissões', href: '/admin/usuarios-permissoes', icon: 'fas fa-user-shield', color: 'text-error', permission: 'configuracoes.usuarios' },
+            { label: 'API de Parceiros', href: '/admin/api-parceiros', icon: 'fas fa-key', color: 'text-error', permission: 'configuracoes.usuarios' },
+            { label: 'Integrações', href: '/admin/integracoes', icon: 'fas fa-plug', color: 'text-secondary', permission: 'configuracoes.integracoes' },
+            { label: 'Impressões', href: '/admin/impressoes', icon: 'fas fa-print', color: 'text-info', permission: 'configuracoes.integracoes' },
+            { label: 'Etiquetas Manuais', href: '/admin/etiquetas-manuais/nova', icon: 'fas fa-tags', color: 'text-secondary', permission: 'configuracoes.integracoes' },
+            { label: 'Importar Pedido', href: '/admin/importar-pedido', icon: 'fas fa-magnifying-glass', color: 'text-info', permission: 'configuracoes.integracoes' },
+            { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', color: 'text-primary', permission: 'configuracoes.auditoria' },
+        ],
+    },
+];

@@ -35,4 +35,377 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
+    'mercadolivre' => [
+        'app_id' => env('ML_APP_ID'),
+        'client_secret' => env('ML_CLIENT_SECRET'),
+        'redirect_uri' => env('ML_REDIRECT_URI'),
+        'webhook_url' => env('ML_WEBHOOK_URL'),
+        'api_base_url' => env('ML_API_BASE_URL', 'https://api.mercadolibre.com'),
+        'auth_url' => env('ML_AUTH_URL', 'https://auth.mercadolivre.com.br/authorization'),
+        'token_url' => env('ML_TOKEN_URL', 'https://api.mercadolibre.com/oauth/token'),
+    ],
+
+    'mercadopago' => [
+        'access_token' => env('MERCADOPAGO_ACCESS_TOKEN'),
+        'public_key' => env('MERCADOPAGO_PUBLIC_KEY'),
+        'webhook_secret' => env('MERCADOPAGO_WEBHOOK_SECRET'),
+        'api_base_url' => env('MERCADOPAGO_API_BASE_URL', 'https://api.mercadopago.com'),
+        // Modo teste do CHECKOUT (pedido 2026-10-10): com MERCADOPAGO_MODO_TESTE=true
+        // e as credenciais de teste preenchidas, Pix e cartão da loja usam a
+        // conta de teste (sandbox). O token real acima continua valendo para
+        // o resto (saldo da carteira no painel financeiro). Ver
+        // App\Services\MercadoPago\CredenciaisCheckout.
+        'modo_teste' => (bool) env('MERCADOPAGO_MODO_TESTE', false),
+        'teste_access_token' => env('MERCADOPAGO_TESTE_ACCESS_TOKEN'),
+        'teste_public_key' => env('MERCADOPAGO_TESTE_PUBLIC_KEY'),
+        // App próprio criado no painel de desenvolvedor do Mercado Pago
+        // (developers.mercadopago.com.br — separado do app do Mercado
+        // Livre, mesmo sendo a mesma empresa) — pedido explícito
+        // 2026-08-09, pra tentar acessar saldo de conta que o app do ML
+        // não libera (ver ShopeeWalletService/FinancialDashboardController,
+        // "walletBalances.mercado_livre"). "ID do aplicativo" e "Chave
+        // secreta" do painel deles = client_id/client_secret aqui.
+        'client_id' => env('MERCADOPAGO_CLIENT_ID'),
+        'client_secret' => env('MERCADOPAGO_CLIENT_SECRET'),
+        'redirect_uri' => env('MERCADOPAGO_REDIRECT_URI', env('APP_URL').'/api/mercadopago/callback'),
+        'auth_url' => env('MERCADOPAGO_AUTH_URL', 'https://auth.mercadopago.com.br/authorization'),
+    ],
+
+    'melhorenvio' => [
+        'client_id' => env('MELHORENVIO_CLIENT_ID'),
+        'client_secret' => env('MELHORENVIO_CLIENT_SECRET'),
+        'redirect_uri' => env('MELHORENVIO_REDIRECT_URI'),
+        'api_base_url' => env('MELHORENVIO_API_BASE_URL', 'https://sandbox.melhorenvio.com.br/api/v2'),
+        'auth_url' => env('MELHORENVIO_AUTH_URL', 'https://sandbox.melhorenvio.com.br/oauth/authorize'),
+        'token_url' => env('MELHORENVIO_TOKEN_URL', 'https://sandbox.melhorenvio.com.br/oauth/token'),
+    ],
+
+    /**
+     * KoraFlex — o app de celular que bipa o QR da etiqueta do Flex e
+     * registra "pronto pra coleta". Ver FlexPickupService.
+     */
+    'koraflex' => [
+        // Token PRÓPRIO do celular, separado do PRINT_AGENT_TOKEN de
+        // propósito (ver AuthenticateKoraFlex): celular sai do prédio.
+        'token' => env('KORAFLEX_TOKEN'),
+
+        // Horário de corte do despacho, "HH:MM" (padrão 12:00, definido
+        // pelo usuário em 2026-09-10). Venda fechada depois dele entra na
+        // lista do dia SEGUINTE — a regra inteira em FlexPickupService::
+        // janela(). Mudar aqui não exige deploy do app.
+        'cutoff' => env('KORAFLEX_CUTOFF', '12:00'),
+
+        // Por quanto tempo a assinatura e a FOTO do entregador ficam
+        // guardadas. Elas existem pra resolver dúvida sobre entrega, e
+        // dúvida de entrega não aparece seis meses depois — guardar foto de
+        // pessoa pra sempre não é "cuidado", é acúmulo. Ver o comando
+        // koraflex:limpar-recibos (o recibo em si, com hora e lista de
+        // pacotes, permanece; só as imagens somem).
+        'receipt_retention_days' => (int) env('KORAFLEX_RECEIPT_RETENTION_DAYS', 180),
+
+        // Quantas horas depois da entrega ao entregador o Mercado Livre
+        // ainda pode não mostrar a rota iniciada antes de virar alerta na
+        // tela Envios Flex (2026-09-11: "tem entregador que não está
+        // colocando que iniciou a rota").
+        'route_alert_hours' => (int) env('KORAFLEX_ROUTE_ALERT_HOURS', 2),
+    ],
+
+    /**
+     * Pra onde vão os alertas que não podem esperar alguém abrir uma tela
+     * (hoje: venda que o canal tem e não entrou no sistema).
+     *
+     * Sem ALERT_EMAIL no .env, cai pros e-mails dos admins cadastrados —
+     * nunca fica sem destinatário.
+     */
+    'alerts' => [
+        'email' => env('ALERT_EMAIL'),
+    ],
+
+    'print_agent' => [
+        'token' => env('PRINT_AGENT_TOKEN'),
+
+        // QUAIS MÁQUINAS PODEM PEGAR ETIQUETA (lista separada por vírgula
+        // dos agent_id; vazio = qualquer uma, como era antes).
+        //
+        // Pergunta do usuário em 2026-09-10: "outros agentes rodam em
+        // outros pc e notebook, isso pode duplicar impressão?". Duplicar,
+        // não — a reivindicação virou atômica hoje, e só uma máquina ganha
+        // cada job. Mas quem ganha imprime na PRÓPRIA impressora: um
+        // notebook com o agente ligado rouba a etiqueta e ela sai lá (ou
+        // não sai), e na bancada isso é idêntico a "a etiqueta não veio".
+        //
+        // Com a lista preenchida, o servidor só entrega etiqueta pra
+        // máquina da loja — instalar o agente em qualquer outro lugar
+        // deixa de ter efeito.
+        'allowed_agents' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('PRINT_AGENT_ALLOWED_IDS', '')),
+        ))),
+
+        // Chave liga/desliga da impressão automática de etiqueta.
+        //
+        // OPCIONAL, e LIGADA quando ausente — o contrário do que valia até
+        // 2026-09-08, quando a linha sumir do .env custou meia jornada de
+        // loja sem imprimir, calada. Só o valor explícito `off` (ou `false`,
+        // ou `0`) desliga. Ver o comentário longo em
+        // LabelFetchService::dentroDoCorteAutomatico().
+        'auto_print_since' => env('PRINT_AUTO_SINCE'),
+    ],
+
+    'correios' => [
+        'numero_usuario' => env('CORREIOS_NUMERO_USUARIO'),
+        'codigo_acesso' => env('CORREIOS_CODIGO_ACESSO'),
+        // Chaves de acesso escopadas por vínculo (ver CorreiosTokenService)
+        // — cada uma gerada separadamente no CWS, não é a mesma chave
+        // genérica acima.
+        'codigo_acesso_contrato' => env('CORREIOS_CODIGO_ACESSO_CONTRATO'),
+        'codigo_acesso_cartao_postagem' => env('CORREIOS_CODIGO_ACESSO_CARTAO_POSTAGEM'),
+        'contrato' => env('CORREIOS_CONTRATO'),
+        'cartao_postagem' => env('CORREIOS_CARTAO_POSTAGEM'),
+        'dr' => env('CORREIOS_DR'),
+        'token_base_url' => env('CORREIOS_TOKEN_BASE_URL', 'https://api.correios.com.br/token'),
+        'api_base_url' => env('CORREIOS_API_BASE_URL', 'https://api.correios.com.br/prepostagem'),
+        'preco_base_url' => env('CORREIOS_PRECO_BASE_URL', 'https://api.correios.com.br/preco'),
+        'prazo_base_url' => env('CORREIOS_PRAZO_BASE_URL', 'https://api.correios.com.br/prazo'),
+    ],
+
+    // Ponte pro TikTok Shop via Bling (pedido explícito 2026-08-31 — integração
+    // direta com a API do TikTok Shop segue bloqueada por aprovação de parceiro,
+    // ver TikTokShopDriver/CorreiosController). Bling já resolve a autenticação
+    // com o TikTok Shop do lado dele (ver ajuda.bling.com.br "Autenticação com o
+    // TikTok Shop") — aqui só precisamos de OAuth2 com o Bling em si e consultar
+    // pedidos/vendas filtrando pela loja conectada ao TikTok Shop.
+    'bling' => [
+        'client_id' => env('BLING_CLIENT_ID'),
+        'client_secret' => env('BLING_CLIENT_SECRET'),
+        'redirect_uri' => env('BLING_REDIRECT_URI'),
+        // Achado real 2026-08-31, confirmado no exemplo cURL literal de
+        // developer.bling.com.br/aplicativos: authorize fica em
+        // www.bling.com.br, mas token/recursos (produtos/pedidos) ficam em
+        // api.bling.com.br — NÃO é o mesmo host dos dois lados (ver
+        // docblock completo em BlingAuthService sobre esse achado).
+        'api_base_url' => env('BLING_API_BASE_URL', 'https://api.bling.com.br/Api/v3'),
+        'oauth_base_url' => env('BLING_OAUTH_BASE_URL', 'https://www.bling.com.br/Api/v3'),
+        // Canais cuja NF-e é emitida PELO BLING, não por nós (lista
+        // separada por vírgula, ex: "tiktok_shop"). Existe por um motivo
+        // concreto, achado testando a API em 2026-09-02: o TikTok Shop só
+        // libera a etiqueta depois de receber o XML da nota, e o Bling só
+        // repassa nota pra loja quando ELE mesmo a gerou a partir do
+        // pedido de venda — `POST /nfe` cria nota solta (confirmado ao
+        // vivo: ele ignora qualquer referência a pedido no corpo) e
+        // nota solta não é repassada. Então, pra esse canal, ou a emissão
+        // é do Bling ou o XML sobe na mão no Seller Center.
+        //
+        // Vazio (padrão) = nada muda: continuamos emitindo tudo. Ligar
+        // isto sem ligar a geração automática no Bling deixaria o pedido
+        // SEM nota nenhuma — as duas pontas viram juntas.
+        // Envia à SEFAZ (POST /nfe/{id}/enviar) a nota que o Bling gerou
+        // a partir do pedido. Achado ao vivo 2026-09-02 (nota 26759176098,
+        // pedido #1216): a automação do Bling GERA a nota mas NÃO envia —
+        // ela fica em situação 1 (pendente), sem chave de acesso e sem
+        // XML, e nesse estado o TikTok não recebe nada e a etiqueta não
+        // libera. É esta chamada que fecha o ciclo.
+        //
+        // Desligado por padrão de propósito: emitir NF-e é ato fiscal
+        // irreversível (a v3 do Bling não tem endpoint de cancelamento —
+        // cancelar exige a tela dele). Ligar só com decisão explícita.
+        'auto_send_nfe' => filter_var(env('BLING_AUTO_SEND_NFE', false), FILTER_VALIDATE_BOOLEAN),
+
+        // Ids de situação do Bling que significam "pedido já despachado"
+        // (lista separada por vírgula). Vazio = nada muda: o TikTok
+        // continua entrando só como pago/cancelado. Ver o comentário longo
+        // em TikTokShopDriver::mapOrderStatus() sobre por que isto NÃO tem
+        // padrão adivinhado — os ids são custom da conta e o token não tem
+        // escopo pra ler o nome da situação.
+        'situacoes_enviado' => array_values(array_filter(array_map(
+            'intval',
+            array_filter(array_map('trim', explode(',', (string) env('BLING_SITUACOES_ENVIADO', '')))),
+        ))),
+
+        // Loja do Bling conectada à Amazon (ver BlingOrderService::
+        // amazonLojaId()) — metadata da conta Bling tem prioridade.
+        // 206308488 = loja "KoraMix Shop" da conta real, ligada por padrão
+        // (pedido explícito 2026-09-25). BLING_AMAZON_LOJA_ID=0 desliga.
+        'amazon_loja_id' => env('BLING_AMAZON_LOJA_ID', 206308488),
+
+        // Postagem da Amazon de volta pro Bling (e dele pra Amazon), assim
+        // que a pré-postagem dos Correios sai — ver InformAmazonShipmentToBling.
+        // - informar: liga/desliga o envio do rastreio (padrão ligado).
+        // - logistica_servico_id: serviço de logística "Correios" cadastrado
+        //   no Bling. Com ele, o rastreio vira um objeto de logística
+        //   (POST logisticas/objetos); sem ele, vai no volume do pedido
+        //   (PUT pedidos/vendas/{id}).
+        // - situacao_id: situação do pedido no Bling depois de postado
+        //   Padrão 9 = "Atendido" de fábrica do Bling (existe em toda conta,
+        //   como o 12 = Cancelado usado em ReadsOrdersFromBling); 0 = não
+        //   muda a situação. É a situação "Atendido" que faz a integração do
+        //   Bling avisar a Amazon que o pedido foi enviado.
+        'amazon_envio' => [
+            'informar' => filter_var(env('BLING_AMAZON_INFORMAR_ENVIO', true), FILTER_VALIDATE_BOOLEAN),
+            'logistica_servico_id' => env('BLING_AMAZON_LOGISTICA_SERVICO_ID') ? (int) env('BLING_AMAZON_LOGISTICA_SERVICO_ID') : null,
+            'situacao_id' => (int) env('BLING_AMAZON_SITUACAO_ENVIADO_ID', 9) ?: null,
+        ],
+
+        'invoice_issuer_channels' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('BLING_INVOICE_ISSUER_CHANNELS', '')),
+        ))),
+    ],
+
+    'shopee' => [
+        // Credenciais atuais são de teste/sandbox (SHOPEE_TEST_*, confirmado
+        // pelo próprio nome) — pareiam com o host test-stable, não o de
+        // produção. Trocar pra produção = trocar as 3 envs junto (partner_id
+        // e partner_key reais têm valores diferentes dos de teste).
+        'partner_id' => env('SHOPEE_TEST_PARTNER_ID', env('SHOPEE_PARTNER_ID')),
+        'partner_key' => env('SHOPEE_TEST_PARTNER_KEY', env('SHOPEE_PARTNER_KEY')),
+        'redirect_url' => env('SHOPEE_REDIRECT_URL'),
+        // URL fixa (não $request->fullUrl()) porque não há TrustProxies
+        // configurado — atrás do Nginx do Hostinger, a URL calculada a
+        // partir da request poderia vir como http:// em vez de https://,
+        // o que quebraria a validação de assinatura do push silenciosamente.
+        'push_url' => env('SHOPEE_PUSH_URL'),
+        // Chave separada da partner_key acima — a própria Shopee gera uma
+        // "Push Partner Key" específica pra assinar/validar notificações de
+        // push, distinta da partner_key usada nas chamadas normais de API
+        // (confirmado pelo usuário direto no painel deles, não documentado
+        // em lugar nenhum que consegui acessar nesta sessão).
+        'push_partner_key' => env('SHOPEE_PUSH_PARTNER_KEY'),
+        'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
+        // Host do LINK de autorização (o vendedor clica e é levado pra lá) —
+        // achado real 2026-08-06: a Shopee usa um host REGIONAL específico
+        // pra esse link em PRODUÇÃO, diferente do api_base_url usado nas
+        // chamadas de API (token/get etc.) — confirmado contra a doc
+        // oficial (open.shopee.com/developer-guide/20, tabela "Generating
+        // the Authorization Link") E contra DNS de verdade: produção
+        // Brasil é open.shopee.com.br (resolve, responde 200). A doc
+        // TAMBÉM lista um "sandbox Brasil" (open.sandbox.test-stable.
+        // shopee.com.br) que na prática NÃO EXISTE (NXDOMAIN, confirmado)
+        // — sandbox não tem infraestrutura regional, é sempre o host
+        // global mesmo (open.test-stable.shopee.com, sem "sandbox." antes
+        // de "test-stable" — esse SIM resolve e responde 302, bate com o
+        // exemplo de link da própria doc, só a tabela de hosts é que tá
+        // errada/desatualizada nesse ponto específico). Usar o
+        // api_base_url aqui (como o código fazia antes) gera um link que a
+        // própria Shopee rejeita — foi exatamente o "endpoint errado" que
+        // o suporte deles apontou. Ver ShopeeAuthService::getAuthorizationUrl().
+        'auth_base_url' => env('SHOPEE_AUTH_BASE_URL', 'https://open.test-stable.shopee.com'),
+        // Liga log de diagnóstico da assinatura (base string, sign, fingerprint
+        // da key — nunca a key crua) sem precisar redeploy. Usado pra investigar
+        // um "Wrong sign" real da Shopee (2026-08-01) — ver ShopeeAuthService.
+        'debug_signing' => (bool) env('SHOPEE_DEBUG_SIGNING', false),
+    ],
+
+    'amazon' => [
+        // "Identificador de cliente" no console do Login with Amazon (LWA) —
+        // usado pra trocar/renovar tokens (api.amazon.com/auth/o2/token).
+        // Diferente do "App ID" abaixo, que identifica o app SP-API em si
+        // (usado só no link de autorização).
+        'lwa_client_id' => env('AMAZON_LWA_CLIENT_ID'),
+        'lwa_client_secret' => env('AMAZON_LWA_CLIENT_SECRET'),
+        // amzn1.sp.solution.xxx — App ID do app SP-API (Seller Central >
+        // Develop Apps), usado como application_id no link de autorização
+        // (fluxo OAuth completo, ver AmazonAuthService::getAuthorizationUrl()).
+        'app_id' => env('AMAZON_APP_ID'),
+        'redirect_uri' => env('AMAZON_REDIRECT_URI'),
+        // Apps SP-API privados (não publicados na loja de apps) não
+        // precisam do redirect OAuth: o próprio vendedor gera um refresh
+        // token direto no Seller Central (Partner Network > Develop Apps >
+        // Autorizar) e cola no admin — ver
+        // AmazonAuthService::connectWithRefreshToken(). Esse valor aqui é
+        // só uma conveniência pra bootstrap via .env (o mesmo token colado
+        // manualmente fica persistido em marketplace_accounts depois).
+        'bootstrap_refresh_token' => env('AMAZON_REFRESH_TOKEN'),
+        'bootstrap_seller_id' => env('AMAZON_SELLER_ID'),
+        // Brasil fica na região "NA" pra fins de endpoint da SP-API (mesmo
+        // host base de US/CA/MX), apesar do marketplace em si ser regional.
+        'marketplace_id' => env('AMAZON_MARKETPLACE_ID', 'A2Q3Y263D00KWC'), // Amazon.com.br
+        'region' => env('AMAZON_REGION', 'na'),
+        'sandbox' => (bool) env('AMAZON_SANDBOX', true),
+        'sp_api_base_url' => env(
+            'AMAZON_SP_API_BASE_URL',
+            (bool) env('AMAZON_SANDBOX', true)
+                ? 'https://sandbox.sellingpartnerapi-na.amazon.com'
+                : 'https://sellingpartnerapi-na.amazon.com',
+        ),
+        // Host do link de autorização (fluxo OAuth completo) — .com.br pra
+        // vendedor brasileiro logar direto na conta certa. "version=beta" é
+        // exigido enquanto o app estiver em estado "Draft" no Seller
+        // Central (self-testing antes de publicar).
+        'auth_base_url' => env('AMAZON_AUTH_BASE_URL', 'https://sellercentral.amazon.com.br'),
+        'auth_draft_mode' => (bool) env('AMAZON_AUTH_DRAFT_MODE', true),
+    ],
+
+
+    'whatsapp' => [
+        // API oficial do WhatsApp Cloud API. Tokens reais ficam só no .env/cofre,
+        // nunca na tela admin. O painel mostra apenas presença/ausência.
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN'),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID'),
+        'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID'),
+        'app_secret' => env('WHATSAPP_APP_SECRET'),
+        'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
+        'webhook_url' => env('WHATSAPP_WEBHOOK_URL', 'https://kazakora.devlira.com.br/api/webhooks/whatsapp'),
+
+        // Mensagem de pedido aprovado (pedido 2026-10-10). Mensagem que a loja
+        // inicia precisa de template aprovado na Meta; vazio = não envia.
+        // Corpo com {{1}} = primeiro nome e {{2}} = número do pedido; botão
+        // de URL dinâmica ".../rastreio/{{1}}" recebe o código do rastreio.
+        'templates' => [
+            'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
+            'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),
+        ],
+
+        // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).
+        // Se preenchido, a Manuela passa a responder pelo API server
+        // OpenAI-compatível do Hermes (POST {url}/chat/completions).
+        'manuela_url' => env('MANUELA_AGENT_URL'),
+        'manuela_token' => env('MANUELA_AGENT_TOKEN'),
+        'manuela_model' => env('MANUELA_AGENT_MODEL', 'hermes-agent'),
+        'manuela_timeout' => (int) env('MANUELA_AGENT_TIMEOUT', 60),
+    ],
+
+    // Gemini da conta do dono: responde como Manuela quando o Hermes não está
+    // configurado, e transcreve os áudios do WhatsApp (pedido 2026-10-08).
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        // gemini-3.5-flash: testado ao vivo em 2026-10-08, ~2s. O
+        // gemini-flash-latest levava 22s e dava 503; o gemini-2.5-flash não
+        // está mais liberado pra conta (404).
+        'chat_model' => env('GEMINI_CHAT_MODEL', 'gemini-3.5-flash'),
+        'audio_model' => env('GEMINI_AUDIO_MODEL', 'gemini-3.5-flash'),
+        // Reservas, em ordem, quando os de cima estão sobrecarregados (503).
+        'fallback_models' => array_filter(array_map('trim', explode(',', (string) env('GEMINI_FALLBACK_MODELS', 'gemini-flash-latest,gemini-flash-lite-latest')))),
+        'retry_delay_ms' => (int) env('GEMINI_RETRY_DELAY_MS', 1500),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 30),
+    ],
+
+    // Pra quem manda o e-mail de fechamento quinzenal do Mercado Envios
+    // Flex — pedido explícito 2026-08-10, ver CheckFlexBillingCycle.
+    'mercado_livre_flex' => [
+        'billing_email' => env('FLEX_BILLING_EMAIL', 'joserobertolira@gmail.com'),
+    ],
+
+    // Segredo de assinatura do JWT de login self-service de parceiro de
+    // API (POST /api/v1/login) — pedido explícito 2026-08-22. Dedicado, não
+    // reaproveita APP_KEY: comprometer esse segredo só forja token de
+    // parceiro de API, nunca sessão/cookie da aplicação. Sem valor
+    // setado, App\Support\Jwt\ApiPartnerJwt cai pra APP_KEY (funciona,
+    // mas perde esse isolamento — defina um valor próprio em produção).
+    'api_partner_jwt' => [
+        'secret' => env('API_PARTNER_JWT_SECRET'),
+    ],
+
+    // Leitura da duração de vídeo (evidências de devolução). Vazio = procura
+    // ~/bin/ffprobe e depois o PATH — ver DuracaoDeVideo.
+    'ffprobe' => [
+        'path' => env('FFPROBE_PATH'),
+    ],
+
 ];

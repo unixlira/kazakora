@@ -1,0 +1,123 @@
+<?php
+
+namespace App\Modules\Marketplace\Support;
+
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
+use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
+use App\Modules\Marketplace\Exceptions\ChannelOrderNotFoundException;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
+use Throwable;
+
+/**
+ * Confirma/consulta o método de envio no canal (a decisão em si — Flex x
+ * padrão no Mercado Livre, drop-off na Shopee — é feita pelo próprio canal
+ * ou já decidida automaticamente; ver MarketplaceChannelDriver::confirmShipping()).
+ * Dispara direto na importação do pedido pago (OrderImportService), em
+ * paralelo com a nota fiscal — não depende dela.
+ */
+class ChannelShippingService
+{
+    public function __construct(
+        private readonly MarketplaceDriverManager $manager,
+        private readonly OrderFulfillmentTimeline $timeline,
+    ) {
+    }
+
+    public function confirm(Order $order): ChannelShipment
+    {
+        $shipment = ChannelShipment::query()->firstOrCreate(
+            ['order_id' => $order->id, 'channel' => $order->origin],
+            ['status' => ChannelShipment::STATUS_PENDING],
+        );
+
+        try {
+            $result = $this->manager->driver($order->origin)->confirmShipping($order);
+        } catch (Throwable $exception) {
+            // Erro PERMANENTE (o canal não conhece o pedido) fica marcado no
+            // envio: os caminhos automáticos param de redisparar, e a fila
+            // deixa de ser ocupada por tentativa que nunca vai dar certo —
+            // ver ChannelOrderNotFoundException e o incidente da fila com
+            // 7.794 falhas/dia em 2026-09-10.
+            $shipment->update([
+                'status' => ChannelShipment::STATUS_ERROR,
+                'error_message' => $exception->getMessage(),
+                'unrecoverable_at' => $exception instanceof ChannelOrderNotFoundException ? now() : null,
+            ]);
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_FAILED, $exception->getMessage());
+
+            throw $exception;
+        }
+
+        $scheduledFor = $result['scheduled_for'] ?? null;
+
+        $shipment->update([
+            'external_shipment_id' => $result['external_shipment_id'] ?? $shipment->external_shipment_id,
+            'tracking_code' => $result['tracking_code'] ?? $shipment->tracking_code,
+            'shipping_method' => $result['shipping_method'],
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now(),
+            'scheduled_for' => $scheduledFor,
+            // Achado real 2026-08-08 (pedido #189): uma tentativa anterior
+            // que falhou grava error_message; sem limpar aqui, uma
+            // tentativa seguinte que dá certo deixava esse texto de erro
+            // velho pra sempre na tela do pedido, mesmo com status
+            // "confirmed" — parecia um problema que já tinha sido resolvido.
+            'error_message' => null,
+        ]);
+
+        $message = $scheduledFor
+            ? "Método: {$result['shipping_method']} — venda agendada, etiqueta só é liberada perto de {$scheduledFor->format('d/m/Y')}"
+            : "Método: {$result['shipping_method']}";
+
+        $this->timeline->record($order, OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED, OrderFulfillmentEvent::STATUS_SUCCESS, $message);
+
+        // Dispara o retry orientado a evento assim que o envio existe do
+        // lado do canal — não espera o próximo webhook nem um ciclo de
+        // polling. Mercado Livre, Shopee e Amazon têm fetchLabel() real
+        // implementado; Shein ainda é stub — disparar lá só
+        // geraria falha garantida após 4h de tentativas inúteis.
+        // Pedido que o próprio confirmShipping() já deu como enviado (Amazon
+        // despachada à mão pelo Bling) não tem etiqueta nossa pra buscar —
+        // sem isto, 4h de tentativas e um alerta falso de "etiqueta não
+        // ficou disponível".
+        //
+        // TikTok Shop entrou em 2026-10-05 (pedido do usuário): a etiqueta
+        // vem do Bling (logisticas/etiquetas, confirmado com PDF real) e só
+        // existe depois que o Bling emite a NF-e e o TikTok a recebe — pode
+        // levar horas, e cada consulta gasta a cota de 3 req/s do Bling.
+        // Por isso consulta de minuto em minuto, com prazo de 24h.
+        if ($order->origin === Order::ORIGIN_TIKTOK_SHOP && $order->fresh()?->status === Order::STATUS_PAID) {
+            CheckShipmentLabelJob::dispatch($shipment->id, CarbonImmutable::now()->addHours(24), 60)->afterCommit();
+        }
+
+        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)
+            && $order->fresh()?->status === Order::STATUS_PAID) {
+            // BUG REAL 2026-08-14 (pedido #278): venda agendada (ver
+            // MercadoLivreDriver::extractScheduledFor()) disparando o job
+            // padrão martelava a API a cada 5s por até 4h só pra ouvir "não
+            // pronta" sempre — o canal já avisou de propósito que só libera
+            // perto de scheduled_for, insistir antes disso é desperdício e
+            // ainda gera um alerta de "falhou" falso pros admins quando o
+            // prazo de 4h vence sem sucesso (esperado, não é erro nenhum).
+            // Atrasa o início do job pra perto da data (2h antes, margem
+            // pro canal liberar um pouco cedo) e estende o prazo pra 24h
+            // DEPOIS da data agendada, em vez das 4h padrão a partir de
+            // agora.
+            if ($scheduledFor) {
+                $startAt = Carbon::now()->max($scheduledFor->clone()->subHours(2));
+                $deadline = $scheduledFor->clone()->addHours(24)->toImmutable();
+
+                CheckShipmentLabelJob::dispatch($shipment->id, $deadline)->delay($startAt)->afterCommit();
+            } else {
+                CheckShipmentLabelJob::dispatch($shipment->id)->afterCommit();
+            }
+        }
+
+        return $shipment;
+    }
+}

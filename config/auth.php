@@ -42,6 +42,25 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // API pública (parceiros externos, ver App\Models\ApiPartner) —
+        // 'provider' fica null de propósito: o token do Sanctum já sabe
+        // resolver o model autenticado (tokenable_type/tokenable_id são
+        // polimórficos), não precisa de um provider fixo apontando pra um
+        // único model como o guard 'web' aponta pra User.
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => null,
+        ],
+
+        // Login self-service (usuário/senha -> JWT) de parceiro de API,
+        // pedido explícito 2026-08-22 — alternativa ao token estático
+        // acima. Driver registrado via Auth::viaRequest() em
+        // AppServiceProvider (não é um driver nativo do framework).
+        'jwt_partner' => [
+            'driver' => 'jwt_partner',
+            'provider' => null,
+        ],
     ],
 
     /*

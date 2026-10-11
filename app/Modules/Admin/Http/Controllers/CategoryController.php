@@ -4,8 +4,10 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
+use App\Support\TituloPtBr;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -33,9 +35,13 @@ class CategoryController extends Controller
         $validated = $this->validated($request);
         $validated['slug'] = $this->uniqueSlug($validated['name']);
 
+        if ($request->hasFile('image')) {
+            $validated['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
         Category::create($validated);
 
-        return redirect()->route('admin.categories.index')->with('success', 'Categoria criada com sucesso.');
+        return redirect()->route('admin.categorias.listar')->with('success', 'Categoria criada com sucesso.');
     }
 
     public function edit(Category $category): Response
@@ -53,15 +59,26 @@ class CategoryController extends Controller
             $validated['slug'] = $this->uniqueSlug($validated['name'], $category->id);
         }
 
+        if ($request->hasFile('image')) {
+            if ($category->image_path) {
+                Storage::disk('public')->delete($category->image_path);
+            }
+            $validated['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
         $category->update($validated);
 
-        return redirect()->route('admin.categories.index')->with('success', 'Categoria atualizada com sucesso.');
+        return redirect()->route('admin.categorias.listar')->with('success', 'Categoria atualizada com sucesso.');
     }
 
     public function destroy(Category $category): RedirectResponse
     {
         if ($category->products()->exists()) {
             return back()->withErrors(['category' => 'Não é possível remover uma categoria com produtos vinculados.']);
+        }
+
+        if ($category->image_path) {
+            Storage::disk('public')->delete($category->image_path);
         }
 
         $category->delete();
@@ -71,12 +88,24 @@ class CategoryController extends Controller
 
     private function validated(Request $request, ?int $ignoreId = null): array
     {
+        // Confere duplicidade já com o nome no formato que vai ser salvo
+        // ("cozinha" e "COZINHA" viram "Cozinha").
+        if (is_string($request->input('name'))) {
+            $request->merge(['name' => TituloPtBr::formatar($request->input('name'))]);
+        }
+
         return $request->validate([
             'name' => [
                 'required', 'string', 'max:255',
                 Rule::unique('categories', 'name')->ignore($ignoreId),
             ],
             'description' => ['nullable', 'string'],
+            'image' => ['nullable', 'image', 'max:15360'],
+        ], [
+            'name.required' => 'Digite o nome do departamento.',
+            'name.unique' => 'Já existe um departamento com esse nome.',
+            'image.image' => 'Envie uma imagem (JPG, PNG ou WebP).',
+            'image.max' => 'A imagem pode ter no máximo 15 MB.',
         ]);
     }
 

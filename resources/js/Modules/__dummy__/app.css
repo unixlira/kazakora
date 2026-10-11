@@ -1,0 +1,145 @@
+@import 'tailwindcss';
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+    --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Fraunces', ui-serif, Georgia, serif;
+    --font-store: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --font-store-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+    /* KazaKora purple system: primary UI accents move from blue/orange to
+       a premium amethyst range. Semantic success/warning/error stay legible
+       for operational states, but the interface identity is purple. */
+    --color-primary: #6d28d9;
+    --color-secondary: #a855f7;
+    --color-success: #10b981;
+    --color-warning: #d97706;
+    --color-error: #dc2626;
+    --color-info: #7c3aed;
+
+    --color-primary-emphasis: color-mix(in oklab, var(--color-primary) 80%, black);
+    --color-secondary-emphasis: color-mix(in oklab, var(--color-secondary) 80%, black);
+    --color-success-emphasis: color-mix(in oklab, var(--color-success) 80%, black);
+    --color-warning-emphasis: color-mix(in oklab, var(--color-warning) 80%, black);
+    --color-error-emphasis: color-mix(in oklab, var(--color-error) 80%, black);
+    --color-info-emphasis: color-mix(in oklab, var(--color-info) 80%, black);
+
+    /* Pastel tints for KPI card backgrounds — 12%/20% mix mirrors the
+       reference template's light/dark ratios, see .dark override below. */
+    --color-lightprimary: color-mix(in oklab, var(--color-primary) 12%, transparent);
+    --color-lightsecondary: color-mix(in oklab, var(--color-secondary) 12%, transparent);
+    --color-lightsuccess: color-mix(in oklab, var(--color-success) 12%, transparent);
+    --color-lightwarning: color-mix(in oklab, var(--color-warning) 12%, transparent);
+    --color-lighterror: color-mix(in oklab, var(--color-error) 12%, transparent);
+    --color-lightinfo: color-mix(in oklab, var(--color-info) 12%, transparent);
+
+    --radius-tw: 12px;
+
+    /*
+     * Storefront palette (premium purple + warm porcelain): researched from
+     * luxury/home palettes that pair amethyst, aubergine, lavender and warm
+     * off-white. Tokens are shared by catalog, checkout and account screens.
+     */
+    --color-store-bg: #fbf8fd;
+    --color-store-bg-raised: #ffffff;
+    --color-store-bg-sunken: #f3edf8;
+    --color-store-fg: #21162d;
+    --color-store-fg-muted: #5f5269;
+    --color-store-fg-faint: #9a8aa7;
+    --color-store-accent: #6d28d9;
+    --color-store-accent-strong: #2b1641;
+    --color-store-accent-soft: #efe7fb;
+    --color-store-accent-contrast: #fffaf4;
+    --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 10%, transparent);
+    --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 20%, transparent);
+}
+
+/*
+ * Admin-only design tokens (sidebar/card/badge surfaces), scoped to
+ * `.admin-shell` so they never bleed into the storefront below.
+ */
+.admin-shell {
+    --surface: #fffaff;
+    --surface-muted: #f4eff8;
+    --surface-foreground: #251830;
+    --surface-border: #e6dcef;
+    --sidebar-foreground: #463450;
+}
+
+.dark .admin-shell {
+    --surface: #20162c;
+    --surface-muted: #140d1e;
+    --surface-foreground: #f4ecfa;
+    --surface-border: #3a2a4a;
+    --sidebar-foreground: #d9cae6;
+
+    /* Pastel tints need more opacity to stay legible on dark surfaces. */
+    --color-lightprimary: color-mix(in oklab, var(--color-primary) 20%, transparent);
+    --color-lightsecondary: color-mix(in oklab, var(--color-secondary) 20%, transparent);
+    --color-lightsuccess: color-mix(in oklab, var(--color-success) 20%, transparent);
+    --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
+    --color-lighterror: color-mix(in oklab, var(--color-error) 20%, transparent);
+    --color-lightinfo: color-mix(in oklab, var(--color-info) 20%, transparent);
+}
+
+/*
+ * <select>/<option> não herdam bem cor/fundo customizados no popup nativo
+ * do navegador — o box fechado respeitava bg-[var(--surface)] certinho,
+ * mas a lista aberta caía no branco padrão do SO com texto claro por cima
+ * (herdado do dark mode), ficando ilegível. Bug real reportado pelo
+ * usuário 2026-08-05. Fallback hex igual ao valor de .dark .admin-shell
+ * acima, caso a variável não cascate até o popup em algum navegador.
+ */
+.dark select,
+.dark select option {
+    background-color: var(--surface, #20162c);
+    color: var(--surface-foreground, #f4ecfa);
+}
+
+@media (prefers-color-scheme: dark) {
+    .storefront-shell {
+        --color-store-bg: #120b1c;
+        --color-store-bg-raised: #1f142c;
+        --color-store-bg-sunken: #0c0713;
+        --color-store-fg: #f6ecfb;
+        --color-store-fg-muted: #c5b3d2;
+        --color-store-fg-faint: #8d769d;
+        --color-store-accent: #c084fc;
+        --color-store-accent-strong: #eadcff;
+        --color-store-accent-soft: #352147;
+        --color-store-accent-contrast: #160b22;
+        --color-store-border: rgba(246, 236, 251, 0.13);
+        --color-store-border-strong: rgba(246, 236, 251, 0.24);
+        --store-shadow: rgba(0, 0, 0, 0.55);
+    }
+}
+
+.storefront-shell {
+    --store-shadow: rgba(20, 32, 46, 0.16);
+    font-family: var(--font-store);
+}
+
+/* Used by the AppLayout free-shipping marquee. Kept here (global,
+   statically-imported app.css) rather than a per-component <style> block —
+   Vite splits component <style> blocks into their own async CSS chunk, and
+   that chunk was never actually linked on page load, so the animation
+   silently had no @keyframes to run. */
+@keyframes scroll-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+.no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}

@@ -1,0 +1,1179 @@
+<?php
+
+namespace Tests\Feature\Api;
+
+use App\Models\User;
+use App\Modules\Cart\Models\CartSnapshot;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\Payment;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Models\PrintJob;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class DashboardAgentControllerTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function makeOrder(array $attributes = []): Order
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        return Order::create(array_merge([
+            'user_id' => $user->id,
+            'status' => Order::STATUS_PAID,
+            'origin' => Order::ORIGIN_STORE,
+            'shipping_name' => 'Cliente',
+            'shipping_phone' => '11999999999',
+            'shipping_zip' => '01000-000',
+            'shipping_street' => 'Rua X',
+            'shipping_number' => '1',
+            'shipping_neighborhood' => 'Centro',
+            'shipping_city' => 'São Paulo',
+            'shipping_state' => 'SP',
+            'subtotal' => 100,
+            'total' => 100,
+        ], $attributes));
+    }
+
+    private function authHeaders(): array
+    {
+        return ['Authorization' => 'Bearer test-print-agent-token'];
+    }
+
+    public function test_dashboard_endpoints_reject_requests_without_a_valid_token(): void
+    {
+        $this->getJson('/api/print-agent/dashboard/channels')->assertStatus(401);
+        $this->getJson('/api/print-agent/dashboard/metrics')->assertStatus(401);
+    }
+
+    public function test_channels_reports_connection_status_and_last_order_per_channel(): void
+    {
+        MarketplaceAccount::create([
+            'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'status' => MarketplaceAccount::STATUS_CONNECTED,
+            'seller_id' => '123',
+        ]);
+        MarketplaceAccount::create([
+            'channel' => MarketplaceAccount::CHANNEL_SHOPEE,
+            'status' => MarketplaceAccount::STATUS_DISCONNECTED,
+        ]);
+
+        $storeOrder = $this->makeOrder(['origin' => Order::ORIGIN_STORE]);
+        $mlOrder = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1']);
+
+        $printJob = PrintJob::create([
+            'order_id' => $mlOrder->id,
+            'label_path' => 'labels/ml-1.pdf',
+            'status' => PrintJob::STATUS_PRINTED,
+            'printed_at' => now(),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/channels');
+
+        $response->assertOk();
+        $channels = collect($response->json('channels'))->keyBy('channel');
+
+        $this->assertTrue($channels[Order::ORIGIN_STORE]['connected']);
+        $this->assertSame($storeOrder->id, $channels[Order::ORIGIN_STORE]['last_order']['id']);
+
+        $this->assertTrue($channels[Order::ORIGIN_MERCADO_LIVRE]['connected']);
+        $this->assertSame($mlOrder->id, $channels[Order::ORIGIN_MERCADO_LIVRE]['last_order']['id']);
+        $this->assertSame(1, $channels[Order::ORIGIN_MERCADO_LIVRE]['labels_printed_today']);
+        $this->assertNotNull($channels[Order::ORIGIN_MERCADO_LIVRE]['last_label_printed_at']);
+
+        $this->assertFalse($channels[Order::ORIGIN_SHOPEE]['connected']);
+        $this->assertNull($channels[Order::ORIGIN_SHOPEE]['last_order']);
+
+        $this->assertFalse($channels[Order::ORIGIN_TIKTOK_SHOP]['connected']);
+    }
+
+    public function test_metrics_reports_todays_revenue_sales_cancellations_refunds_and_cart_items(): void
+    {
+        // subtotal igual a total em todos os pedidos deste teste (sem
+        // frete) — revenue_today soma 'subtotal', não 'total' (que inclui
+        // frete e não é receita do vendedor, ver comentário no controller).
+        $mlOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'subtotal' => 150, 'total' => 150, 'origin' => Order::ORIGIN_MERCADO_LIVRE]);
+        OrderChannelFee::create([
+            'order_id' => $mlOrder->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'gross_amount' => 150,
+            'fee_amount' => 20,
+            'source' => OrderChannelFee::SOURCE_API,
+            'computed_at' => now(),
+        ]);
+        $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'subtotal' => 50, 'total' => 50]);
+        $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'subtotal' => 30, 'total' => 30]);
+        $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'subtotal' => 999, 'total' => 999]);
+
+        $refundedOrder = $this->makeOrder(['status' => Order::STATUS_PAID, 'subtotal' => 80, 'total' => 80]);
+        Payment::create([
+            'order_id' => $refundedOrder->id,
+            'provider' => Payment::PROVIDER_MERCADOPAGO,
+            'method_type' => Payment::METHOD_CARD,
+            'status' => Payment::STATUS_REFUNDED,
+            'amount' => 80,
+        ]);
+
+        CartSnapshot::create(['session_id' => 'sess-1', 'items_count' => 3, 'total' => 200]);
+        CartSnapshot::create(['session_id' => 'sess-2', 'items_count' => 2, 'total' => 90]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/metrics');
+
+        $response->assertOk();
+        $response->assertJson([
+            'revenue_today' => 280.0,
+            // Todo pedido do dia menos o cancelado (d3efd5f, 2026-09-05):
+            // pago + concluído + devolvido + aguardando pagamento — este
+            // último ainda pode virar venda e continua contando.
+            'sales_today' => 4,
+            'sales_yesterday' => 0,
+            'cancelled_today' => 1,
+            'refunded_today' => 1,
+            'cart_items_count' => 5,
+            // 280 de bruto - 20 de taxa real (só o pedido do ML tem taxa
+            // capturada) - os outros dois pedidos pagos hoje não têm
+            // OrderChannelFee, então entram sem desconto nenhum.
+            'net_profit_today' => 260.0,
+            // 1 cancelado + 1 devolvido (Payment estornado) neste mês —
+            // card "Cancelamentos e devoluções do mês" do KoraSync v2.0.
+            'cancellations_and_returns_month' => 2,
+            'packed_today' => 0,
+            'shipped_today' => 0,
+        ]);
+    }
+
+    /**
+     * BUG REAL 2026-08-15 — cobertura de regressão. Pedido #305 Shopee real:
+     * subtotal 44.99, shipping_cost 13.25, total 58.24 (subtotal+frete,
+     * correto pro valor da nota fiscal — ver ShopeeDriver::importOrder()).
+     * O dashboard do KoraSync mostrava 58.24 como "faturado hoje", mas o
+     * Seller Center da Shopee (e o dinheiro que realmente cai pro
+     * vendedor) mostra 44.99 — o frete pago ao transportador nunca foi
+     * receita do vendedor. revenue_today tem que somar subtotal, não total.
+     */
+    public function test_metrics_revenue_excludes_shipping_cost_paid_to_the_carrier(): void
+    {
+        $this->makeOrder([
+            'status' => Order::STATUS_PAID,
+            'origin' => Order::ORIGIN_SHOPEE,
+            'subtotal' => 44.99,
+            'shipping_cost' => 13.25,
+            'total' => 58.24,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/metrics');
+
+        $response->assertOk();
+        $response->assertJson(['revenue_today' => 44.99]);
+    }
+
+    /**
+     * BUG REAL 2026-08-17 ("as métricas não estão funcionando", achado
+     * varrendo todo painel atrás do mesmo bug já corrigido em metrics()
+     * acima 2 dias antes): channels() somava SUM(total) por canal — o
+     * mesmo problema do frete, só que num lugar diferente do mesmo
+     * endpoint. O card por canal (revenue_today/revenue_month) fica na
+     * MESMA tela do KoraSync que os cards de topo (vindos de metrics(),
+     * já corretos) — somar os cards por canal dava mais que o card de
+     * topo sempre que houvesse pedido com frete.
+     */
+    public function test_channels_revenue_excludes_shipping_cost_paid_to_the_carrier(): void
+    {
+        $this->makeOrder([
+            'status' => Order::STATUS_PAID,
+            'origin' => Order::ORIGIN_SHOPEE,
+            'subtotal' => 44.99,
+            'shipping_cost' => 13.25,
+            'total' => 58.24,
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/channels');
+
+        $response->assertOk();
+        $channel = collect($response->json('channels'))->firstWhere('channel', Order::ORIGIN_SHOPEE);
+
+        $this->assertSame(44.99, $channel['revenue_today']);
+        $this->assertSame(44.99, $channel['revenue_month']);
+    }
+
+    public function test_channel_orders_returns_404_for_an_unknown_channel(): void
+    {
+        $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/channels/nao-existe/orders')
+            ->assertNotFound();
+    }
+
+    public function test_channel_orders_reports_products_fee_and_shipping_method_when_available(): void
+    {
+        $order = $this->makeOrder([
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-123',
+            'shipping_name' => 'Fulano de Tal',
+            'total' => 180.80,
+        ]);
+
+        $order->items()->create([
+            'product_name' => 'Lixeira Inox 12l',
+            'product_price' => 180.80,
+            'quantity' => 1,
+            'subtotal' => 180.80,
+        ]);
+
+        OrderChannelFee::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'gross_amount' => 180.80,
+            'fee_amount' => 27.12,
+            'source' => OrderChannelFee::SOURCE_API,
+            'computed_at' => now(),
+        ]);
+
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => ChannelShipment::METHOD_FLEX,
+        ]);
+
+        // Pedido de outro canal não deve aparecer na lista do Mercado Livre.
+        $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/channels/mercado_livre/orders');
+
+        $response->assertOk();
+        $orders = $response->json('orders');
+
+        $this->assertCount(1, $orders);
+        $this->assertSame($order->id, $orders[0]['id']);
+        $this->assertSame('ML-123', $orders[0]['external_order_id']);
+        $this->assertSame('Fulano de Tal', $orders[0]['customer_name']);
+        $this->assertSame('Lixeira Inox 12l', $orders[0]['products'][0]['name']);
+        $this->assertSame(180.80, $orders[0]['gross_amount']);
+        $this->assertSame(27.12, $orders[0]['fee_amount']);
+        $this->assertSame(153.68, $orders[0]['net_amount']);
+        $this->assertSame(ChannelShipment::METHOD_FLEX, $orders[0]['shipping_method']);
+    }
+
+    public function test_channel_orders_reports_null_fee_when_the_channel_has_no_fee_integration_yet(): void
+    {
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/channels/shopee/orders');
+
+        $response->assertOk();
+        $orders = $response->json('orders');
+
+        $this->assertCount(1, $orders);
+        $this->assertNull($orders[0]['fee_amount']);
+        $this->assertNull($orders[0]['net_amount']);
+        $this->assertNull($orders[0]['shipping_method']);
+    }
+
+    public function test_queue_returns_todays_orders_of_any_status_in_descending_order_with_all_products(): void
+    {
+        $older = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-1', 'shipping_name' => 'Cliente Antigo']);
+        $older->items()->create(['product_name' => 'Produto A', 'product_price' => 50, 'quantity' => 1, 'subtotal' => 50]);
+
+        $newest = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-2', 'shipping_name' => 'Cliente Novo']);
+        // 2 produtos diferentes no mesmo pedido — exatamente o cenário que
+        // motivou "listar todos os produtos" em vez de só o primeiro (ver
+        // commit 6cfa401 do painel web).
+        $newest->items()->create(['product_name' => 'Produto B', 'product_price' => 30, 'quantity' => 2, 'subtotal' => 60]);
+        $newest->items()->create(['product_name' => 'Produto C', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        // Pedido explícito 2026-08-15 ("quero todos os pedidos aparecendo
+        // hoje") valia pra enviado também — revertido em 2c181ab
+        // (2026-08-29): enviado/concluído sai da fila, o canal já confirmou
+        // a coleta e não sobra ação nenhuma aqui.
+        $shipped = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'SHIPPED-1']);
+
+        // Não deve aparecer: pedido de ANTEONTEM, fora da janela
+        // "ontem + hoje" (corte explícito do usuário 2026-08-17).
+        // created_at não está em Order::$fillable, então nem create() nem
+        // update() conseguem setá-lo — só forceFill() ignora esse limite
+        // de propósito (bug real encontrado escrevendo este teste: o
+        // ->update(['created_at' => ...]) que PrintJobControllerTest usa
+        // também não funciona de verdade, só nunca quebrou nenhuma
+        // asserção lá porque aquele teste não depende de cruzar a virada
+        // do dia).
+        $twoDaysAgo = $this->makeOrder(['status' => Order::STATUS_SHIPPED]);
+        $twoDaysAgo->forceFill(['created_at' => now()->subDays(2)])->save();
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = $response->json('queue');
+
+        $this->assertCount(2, $queue);
+        $this->assertFalse(collect($queue)->contains('id', $twoDaysAgo->id));
+        $this->assertFalse(collect($queue)->contains('id', $shipped->id));
+
+        $this->assertSame($newest->id, $queue[0]['id']);
+        $this->assertSame('SHP-2', $queue[0]['external_order_id']);
+        $this->assertSame(Order::ORIGIN_SHOPEE, $queue[0]['channel']);
+        $this->assertSame('Cliente Novo', $queue[0]['customer_name']);
+        $this->assertSame(3, $queue[0]['units_count']);
+        $this->assertCount(2, $queue[0]['products']);
+        $this->assertSame(Order::STATUS_PAID, $queue[0]['status']);
+        $this->assertSame('Pago', $queue[0]['status_label']);
+
+        $this->assertSame($older->id, $queue[1]['id']);
+        $this->assertSame(1, $queue[1]['units_count']);
+    }
+
+    /**
+     * BUG REAL 2026-09-01 (relatado pelo usuário — pedido do Mercado Livre
+     * com 2 itens aparecendo com 1 só na tela de separação): dois itens do
+     * MESMO produto local no mesmo pedido (2 variações do mesmo anúncio do
+     * ML caem no mesmo listing/produto — importOrder() não lê variation_id)
+     * viravam 2 entradas de `products` indistinguíveis entre si: mesmo
+     * product_id, mesmo nome, mesmo SKU. O cliente web usava product_id
+     * como chave de lista e derrubava uma das linhas.
+     *
+     * O payload manda o id do PRÓPRIO item do pedido justamente pra cada
+     * linha ter identidade própria — é o que impede a tela de colapsar as
+     * duas de novo.
+     */
+    public function test_queue_lists_one_product_entry_per_order_item_even_when_they_share_the_same_product(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 10, 'sku' => 'SKU-VAR']);
+
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-VARIACOES']);
+        $first = $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 25, 'quantity' => 1, 'subtotal' => 25]);
+        $second = $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 25, 'quantity' => 2, 'subtotal' => 50]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $products = $queue[$order->id]['products'];
+
+        $this->assertCount(2, $products);
+        $this->assertSame([$first->id, $second->id], array_column($products, 'id'));
+        $this->assertSame([1, 2], array_column($products, 'quantity'));
+        $this->assertSame(3, $queue[$order->id]['units_count']);
+    }
+
+    /**
+     * BUG REAL 2026-09-01 (relatado pelo usuário: "um pedido do Genivaldo do
+     * Mercado Livre que são 2 itens... no korasync deve aparecer os 2
+     * itens" — pedidos #1159/#1160 conferidos na produção): carrinho do ML
+     * é UM pacote com UMA etiqueta, mas DOIS pedidos na API
+     * (external_order_id ...284 e ...286, 1 item cada, mesmo
+     * channel_shipments.external_shipment_id 47904652512). A fila mostrava
+     * 2 cards de 1 item e quem embala via metade da caixa em cada um.
+     */
+    public function test_queue_merges_mercado_livre_cart_orders_that_ship_in_the_same_package(): void
+    {
+        $first = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => '2000018222059284', 'shipping_name' => 'Genivaldo José Filho']);
+        $first->items()->create(['product_name' => 'Extensão Elétrica 5 Tomadas', 'product_price' => 60, 'quantity' => 1, 'subtotal' => 60]);
+        ChannelShipment::create([
+            'order_id' => $first->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'external_shipment_id' => '47904652512',
+        ]);
+
+        $second = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => '2000018222059286', 'shipping_name' => 'Genivaldo José Filho']);
+        $second->items()->create(['product_name' => 'Lixeira Redonda 5L Inox', 'product_price' => 40, 'quantity' => 1, 'subtotal' => 40]);
+        ChannelShipment::create([
+            'order_id' => $second->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'external_shipment_id' => '47904652512',
+        ]);
+
+        // Outro pedido do MESMO canal com envio próprio continua sozinho.
+        $unrelated = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SOZINHO']);
+        $unrelated->items()->create(['product_name' => 'Produto Avulso', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'));
+
+        // 2 cards, não 3: o carrinho virou uma caixa só.
+        $this->assertCount(2, $queue);
+
+        $pack = $queue->firstWhere('id', $second->id);
+        $this->assertNotNull($pack, 'O card do carrinho deve ser o pedido mais novo do pacote.');
+        $this->assertSame(2, $pack['pack_order_count']);
+        $this->assertCount(2, $pack['products']);
+        $this->assertSame(2, $pack['units_count']);
+        $this->assertEqualsCanonicalizing(
+            ['2000018222059284', '2000018222059286'],
+            $pack['pack_external_order_ids'],
+        );
+
+        $this->assertSame(1, $queue->firstWhere('id', $unrelated->id)['pack_order_count']);
+
+        // Embalar o card embala a CAIXA inteira — o irmão não pode voltar
+        // pra fila sozinho no poll seguinte.
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$second->id}/pack")
+            ->assertOk();
+
+        $this->assertNotNull($first->refresh()->packed_at);
+        $this->assertNotNull($second->refresh()->packed_at);
+    }
+
+    /**
+     * Pedido explícito 2026-09-01: "colocar destinatario e o nome do usuario
+     * entre parenteses". shipping_name (nome que casa com o CPF na NF-e)
+     * fica intacto — a troca é só de exibição.
+     */
+    public function test_queue_shows_the_recipient_with_the_channel_nickname_in_parentheses(): void
+    {
+        $order = $this->makeOrder([
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-NOME',
+            'shipping_name' => 'Genivaldo  José Filho',
+            'shipping_recipient_name' => 'Genivaldo Jose Filho',
+            'channel_buyer_nickname' => 'GENIVALDOJOSEFILHOFILHO',
+        ]);
+        $order->items()->create(['product_name' => 'Produto', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        // Sem destinatário/apelido (loja própria) continua como sempre foi.
+        $ownStore = $this->makeOrder(['external_order_id' => 'LOJA-1', 'shipping_name' => 'Maria de Souza']);
+        $ownStore->items()->create(['product_name' => 'Produto', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertSame('Genivaldo Jose Filho (GENIVALDOJOSEFILHOFILHO)', $queue[$order->id]['customer_name']);
+        $this->assertSame('Genivaldo  José Filho', $order->refresh()->shipping_name);
+        $this->assertSame('Maria de Souza', $queue[$ownStore->id]['customer_name']);
+    }
+
+    public function test_queue_includes_yesterdays_orders_of_any_status_but_not_older_ones(): void
+    {
+        // Bug real relatado 2026-08-17: pedido pago ONTEM e ainda não
+        // embalado sumia da fila na virada do dia, mesmo continuando "em
+        // preparação" de verdade — o corte "só hoje" (pedido explícito
+        // 2026-08-15) não previa esse caso. Primeira correção tentativa foi
+        // "pago sem packed_at, sem limite de data", mas trouxe de volta um
+        // represamento de semanas — revertida a favor do corte explícito
+        // pedido pelo usuário no mesmo dia: só ONTEM + HOJE, qualquer
+        // status, igual já era só pra hoje.
+        $unpackedYesterday = $this->makeOrder(['external_order_id' => 'YESTERDAY-UNPACKED']);
+        $unpackedYesterday->forceFill(['created_at' => now()->subDay()])->save();
+
+        // Continua aparecendo mesmo já embalado (packed_at não filtra a
+        // query, pedido 2026-08-13) — desde que dentro da janela
+        // ontem+hoje. Já enviado NÃO aparece mais (2c181ab, 2026-08-29):
+        // o canal confirmou a coleta, não há o que fazer na fila.
+        $packedYesterday = $this->makeOrder(['external_order_id' => 'YESTERDAY-PACKED']);
+        $packedYesterday->forceFill(['created_at' => now()->subDay(), 'packed_at' => now()->subDay()])->save();
+
+        $shippedYesterday = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'YESTERDAY-SHIPPED']);
+        $shippedYesterday->forceFill(['created_at' => now()->subDay()])->save();
+
+        // Fora da janela: anteontem, já resolvido de outro jeito que não
+        // seja "pago e por separar" (aqui, aguardando pagamento).
+        $twoDaysAgo = $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT, 'external_order_id' => 'TWO-DAYS-AGO']);
+        $twoDaysAgo->forceFill(['created_at' => now()->subDays(2)])->save();
+
+        // BUG REAL 2026-09-01 (18 pedidos reais sumidos de toda tela, ex.
+        // #927): pago e ainda não embalado é trabalho pendente — fica
+        // visível não importa a idade (ver isInTodayWindow()).
+        $paidTwoDaysAgo = $this->makeOrder(['external_order_id' => 'TWO-DAYS-AGO-PAID']);
+        $paidTwoDaysAgo->forceFill(['created_at' => now()->subDays(2)])->save();
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($queue->has($unpackedYesterday->id));
+        $this->assertNull($queue[$unpackedYesterday->id]['packed_at']);
+        $this->assertTrue($queue->has($packedYesterday->id));
+        $this->assertFalse($queue->has($shippedYesterday->id));
+        $this->assertFalse($queue->has($twoDaysAgo->id));
+        $this->assertTrue($queue->has($paidTwoDaysAgo->id));
+    }
+
+    /**
+     * Pedido explícito 2026-08-17: venda com entrega programada (Mercado
+     * Livre) entra na fila do DIA AGENDADO, não do dia da venda — a venda
+     * pode ter saído há semanas, mas o canal só libera a etiqueta perto da
+     * data agendada, e é nesse dia que o operador precisa vê-la. Payload
+     * ganha 'scheduled_for'/'label_ready' pro app decidir o 3º estado do
+     * botão ("Sem Etiqueta").
+     */
+    public function test_queue_includes_a_scheduled_order_on_its_scheduled_day_regardless_of_when_it_was_sold(): void
+    {
+        $scheduledForToday = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-TODAY']);
+        $scheduledForToday->forceFill(['created_at' => now()->subWeeks(2)])->save();
+        ChannelShipment::create([
+            'order_id' => $scheduledForToday->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now()->subWeeks(2),
+            'scheduled_for' => now(),
+        ]);
+
+        // Continua fora: agendado pra depois de amanhã, ainda não chegou o
+        // dia — mesma janela que já vale pra created_at.
+        $scheduledForFuture = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-FUTURE']);
+        $scheduledForFuture->forceFill(['created_at' => now()->subWeeks(2)])->save();
+        ChannelShipment::create([
+            'order_id' => $scheduledForFuture->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now()->subWeeks(2),
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($queue->has($scheduledForToday->id));
+        $this->assertNotNull($queue[$scheduledForToday->id]['scheduled_for']);
+        $this->assertFalse($queue[$scheduledForToday->id]['label_ready']);
+        $this->assertFalse($queue->has($scheduledForFuture->id));
+    }
+
+    /**
+     * BUG REAL 2026-08-29 (relatado pelo usuário: venda do Mercado Livre
+     * aparecendo na fila de preparação antes da data agendada) — pedido
+     * vendido HOJE mas com entrega agendada pra semana que vem batia na
+     * condição de created_at (hoje) e entrava na fila mesmo faltando dias
+     * pra etiqueta liberar. Cobertura específica desse cenário (venda de
+     * HOJE + agendamento futuro), diferente do teste acima (venda de
+     * SEMANAS atrás + agendamento futuro) — o bug só aparecia quando
+     * created_at também caía dentro da janela ontem/hoje.
+     */
+    public function test_queue_excludes_a_scheduled_order_sold_today_when_its_scheduled_day_has_not_arrived(): void
+    {
+        $soldTodayScheduledForFuture = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SOLD-TODAY-FUTURE']);
+        ChannelShipment::create([
+            'order_id' => $soldTodayScheduledForFuture->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now(),
+            'scheduled_for' => now()->addDays(5),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+        $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
+
+        $this->assertFalse($queue->has($soldTodayScheduledForFuture->id));
+        $this->assertFalse($outOfStock->has($soldTodayScheduledForFuture->id));
+    }
+
+    public function test_queue_marks_label_ready_true_once_the_channel_releases_the_scheduled_label(): void
+    {
+        $order = $this->makeOrder(['external_order_id' => 'ML-SCHEDULED-READY']);
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'shipping_method' => 'xd_drop_off',
+            'status' => ChannelShipment::STATUS_LABEL_READY,
+            'confirmed_at' => now(),
+            'scheduled_for' => now(),
+            'label_ready_at' => now(),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($queue[$order->id]['label_ready']);
+    }
+
+    public function test_queue_still_includes_packed_orders_flagged_via_packed_at(): void
+    {
+        // Pedido explícito 2026-08-13: embalar NÃO tira o pedido da lista —
+        // o app só troca a cor/texto do botão pra "Embalado" usando este
+        // campo, a query continua trazendo todo pedido pago de hoje.
+        $pending = $this->makeOrder(['external_order_id' => 'PENDING-1']);
+        $packed = $this->makeOrder(['external_order_id' => 'PACKED-1']);
+        $packed->forceFill(['packed_at' => now()])->save();
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertCount(2, $queue);
+        $this->assertNull($queue[$pending->id]['packed_at']);
+        $this->assertNotNull($queue[$packed->id]['packed_at']);
+    }
+
+    /**
+     * KoraSync v2.0 (pedido explícito 2026-08-29): pedido sem estoque
+     * suficiente do produto vai pra 'out_of_stock' em vez de 'queue'.
+     *
+     * BUG REAL 2026-08-31 (relatado pelo usuário, pedido #1108 — "carregador
+     * de celular tem sim no estoque"): a versão anterior deste teste
+     * validava uma simulação FIFO que reconstruía "estoque disponível"
+     * decrementando Product::stock 1x por pedido pendente na fila — mas
+     * Product::stock JÁ é debitado de verdade, atomicamente, no momento de
+     * CADA venda real (StockManager::adjust(), chamado por
+     * OrderImportService/ManualOrderService na importação/criação do
+     * pedido). Rodar a simulação de novo em cima de um número que já é
+     * "quanto sobra depois de todas as vendas pendentes" descontava a MESMA
+     * unidade duas vezes — um produto com estoque real 28 e 34 pedidos
+     * pendentes (a maioria do mesmo SKU popular, cada um já com sua própria
+     * unidade debitada corretamente na hora da venda) tinha os últimos 6
+     * marcados como "sem estoque" por engano. Este teste antes só passava
+     * porque criava os itens direto via Eloquent (bypassando
+     * StockManager::adjust()) — um cenário que não existe na produção real.
+     *
+     * Corrigido: sem simulação — cada pedido pendente só entra em "sem
+     * estoque" se o produto está com stock <= 0 NESTE INSTANTE (ver
+     * partitionByStock() no controller).
+     */
+    public function test_queue_splits_orders_between_normal_and_out_of_stock_by_available_stock(): void
+    {
+        $inStock = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 5, 'sku' => 'SKU-1']);
+        $depleted = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'SKU-2']);
+
+        // Estoque real positivo — cada pedido pendente já debitou a própria
+        // unidade na hora da venda de verdade; múltiplos pedidos concorrendo
+        // pelo mesmo produto não reduzem esse número de novo aqui.
+        $covered = $this->makeOrder(['external_order_id' => 'COVERED']);
+        $covered->items()->create(['product_id' => $inStock->id, 'product_name' => $inStock->name, 'product_price' => 10, 'quantity' => 5, 'subtotal' => 50]);
+
+        $alsoCovered = $this->makeOrder(['external_order_id' => 'ALSO-COVERED']);
+        $alsoCovered->items()->create(['product_id' => $inStock->id, 'product_name' => $inStock->name, 'product_price' => 10, 'quantity' => 2, 'subtotal' => 20]);
+
+        // Estoque real zerado — sem unidade física, precisa repor no
+        // fornecedor antes de qualquer um destes sair.
+        $shortfall = $this->makeOrder(['external_order_id' => 'SHORTFALL']);
+        $shortfall->items()->create(['product_id' => $depleted->id, 'product_name' => $depleted->name, 'product_price' => 10, 'quantity' => 2, 'subtotal' => 20]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+        $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
+
+        $this->assertTrue($queue->has($covered->id));
+        $this->assertSame([], $queue[$covered->id]['stock_shortage']);
+
+        $this->assertTrue($queue->has($alsoCovered->id));
+        $this->assertSame([], $queue[$alsoCovered->id]['stock_shortage']);
+
+        $this->assertFalse($queue->has($shortfall->id));
+        $this->assertTrue($outOfStock->has($shortfall->id));
+        $this->assertSame('SKU-2', $outOfStock[$shortfall->id]['stock_shortage'][0]['sku']);
+        $this->assertSame(2, $outOfStock[$shortfall->id]['stock_shortage'][0]['missing']);
+
+        $this->assertSame(3, $response->json('pending_separation_count'));
+    }
+
+    /**
+     * BUG REAL relatado pelo usuário 2026-08-29: 2 vendas sem estoque
+     * (controle de Xbox, Shopee) vendidas fora da janela ontem/hoje
+     * sumiam da aba "Sem Estoque" por causa do mesmo corte de data que só
+     * faz sentido pra Fila normal ("hoje só") — "Sem Estoque" é uma fila
+     * de reposição em aberto, mas com limite: a partir do início do mês
+     * corrente (2ª correção no mesmo dia, pedido explícito: "sem estoque
+     * deve ser mostrado a partir desse mês em diante" — a 1ª correção,
+     * "sem limite nenhum", foi longe demais e trazia venda de meses atrás
+     * já enviada/concluída, ver teste abaixo).
+     */
+    public function test_out_of_stock_orders_are_shown_from_the_start_of_the_month_but_not_before(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL']);
+
+        // Início do mês corrente (limite INCLUSIVE) — ainda deve aparecer.
+        $earlyThisMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-EARLY-MONTH']);
+        $earlyThisMonth->forceFill(['created_at' => now()->startOfMonth()])->save();
+        $earlyThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        // Fora da janela de 30 dias corridos (a regra deixou de ser "só o
+        // mês corrente" em 2026-09-01, ver $actionableSince no controller):
+        // não deve aparecer em lugar nenhum.
+        $beforeThisMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-BEFORE-MONTH']);
+        $beforeThisMonth->forceFill(['created_at' => now()->subDays(31)])->save();
+        $beforeThisMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $outOfStock = collect($response->json('out_of_stock'))->keyBy('id');
+        $queue = collect($response->json('queue'))->keyBy('id');
+
+        $this->assertTrue($outOfStock->has($earlyThisMonth->id));
+        $this->assertSame('XBOX-CTRL', $outOfStock[$earlyThisMonth->id]['stock_shortage'][0]['sku']);
+        $this->assertFalse($queue->has($earlyThisMonth->id));
+
+        $this->assertFalse($outOfStock->has($beforeThisMonth->id));
+        $this->assertFalse($queue->has($beforeThisMonth->id));
+    }
+
+    /**
+     * BUG REAL 2026-08-15 (o carry-over de "ontem" — ver isInTodayWindow) +
+     * o corte mensal novo (2026-08-29) não podem se contradizer: se HOJE é
+     * dia 1º do mês, "ontem" cai no mês anterior — um pedido pago de ontem
+     * ainda não embalado precisa continuar entrando na conta de estoque
+     * mesmo assim. Carbon::setTestNow() simula esse instante exato, não dá
+     * pra depender de rodar o teste justo no dia 1º de verdade.
+     */
+    public function test_actionable_orders_still_include_yesterday_when_today_is_the_first_of_the_month(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow('2026-09-01 10:00:00');
+
+        try {
+            $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL-3']);
+
+            $yesterdayLastMonth = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-YESTERDAY-LAST-MONTH']);
+            $yesterdayLastMonth->forceFill(['created_at' => now()->subDay()])->save(); // 2026-08-31
+            $yesterdayLastMonth->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+            $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+            $response->assertOk();
+            $this->assertTrue(collect($response->json('out_of_stock'))->contains('id', $yesterdayLastMonth->id));
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
+    /**
+     * BUG REAL relatado pelo usuário 2026-08-29 ("está aparecendo vendas
+     * antigas já entregues"): a 1ª correção do dia usava "status !=
+     * cancelled" pra decidir quem entra na conta de estoque — isso incluía
+     * pedido já ENVIADO/CONCLUÍDO sem packed_at (resolvido antes desse
+     * campo existir, ou por fora do KoraSync), fazendo o sistema achar que
+     * uma venda já entregue ainda "precisava de estoque". Corrigido pra só
+     * status PAID entrar na conta — os outros (mesmo sem packed_at) não
+     * fazem parte da fila de separação de jeito nenhum, só aparecem como
+     * está na Fila normal (se caírem na janela ontem/hoje).
+     */
+    public function test_out_of_stock_never_includes_an_already_shipped_order_even_without_packed_at(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'XBOX-CTRL-4']);
+
+        $shippedNoPackedAt = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHOPEE-XBOX-ALREADY-SHIPPED']);
+        $shippedNoPackedAt->forceFill(['created_at' => now()->startOfMonth()])->save();
+        $shippedNoPackedAt->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $shippedNoPackedAt->id));
+    }
+
+    /**
+     * KoraSync v2.0: assim que o estoque é reposto, o próximo poll (2s) já
+     * recalcula e o pedido sobe sozinho pra Fila normal — sem nenhuma ação
+     * manual de "mover" entre as abas (cálculo em tempo real, sem estado
+     * persistido, ver partitionByStock() no controller).
+     */
+    public function test_out_of_stock_order_moves_back_to_normal_queue_once_restocked(): void
+    {
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['stock' => 0, 'sku' => 'SKU-2']);
+        $order = $this->makeOrder(['external_order_id' => 'RESTOCK-ME']);
+        $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 3, 'subtotal' => 30]);
+
+        $before = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+        $this->assertTrue(collect($before->json('out_of_stock'))->contains('id', $order->id));
+        $this->assertFalse(collect($before->json('queue'))->contains('id', $order->id));
+
+        $product->update(['stock' => 3]);
+
+        $after = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+        $this->assertTrue(collect($after->json('queue'))->contains('id', $order->id));
+        $this->assertFalse(collect($after->json('out_of_stock'))->contains('id', $order->id));
+    }
+
+    /**
+     * BUG REAL 2026-08-29 (pedido #913): CANCELLED saiu da regra de
+     * "auditoria do dia". Revisto em ed7b96f (BUG REAL 2026-08-31, venda
+     * do ML cancelada horas depois sumia da tela e quase foi enviada):
+     * cancelado nas últimas ~48h (updated_at) volta a vir em 'queue', com
+     * status "cancelled", pro KoraSync mover o card pra aba "Cancelados"
+     * — nunca em 'out_of_stock'. Cancelado há mais tempo não vem.
+     */
+    public function test_recently_cancelled_order_comes_in_the_queue_marked_cancelled_but_old_ones_do_not(): void
+    {
+        $cancelled = $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'external_order_id' => 'CANCELLED-913']);
+
+        $oldCancelled = $this->makeOrder(['status' => Order::STATUS_CANCELLED, 'external_order_id' => 'CANCELLED-OLD']);
+        $oldCancelled->forceFill(['created_at' => now()->subDays(5), 'updated_at' => now()->subDays(3)])->saveQuietly();
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $queue = collect($response->json('queue'))->keyBy('id');
+        $this->assertTrue($queue->has($cancelled->id));
+        $this->assertSame(Order::STATUS_CANCELLED, $queue[$cancelled->id]['status']);
+        $this->assertFalse($queue->has($oldCancelled->id));
+        $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $cancelled->id));
+    }
+
+    /**
+     * Mesmo bug do teste acima, só que na aba de "vendas futuras agendadas"
+     * do Mercado Livre (scheduledShipments()) — um pedido com scheduled_for
+     * que foi cancelado não precisa de nenhuma ação, não devia continuar
+     * aparecendo aqui pra sempre.
+     */
+    public function test_cancelled_order_does_not_appear_in_scheduled_shipments(): void
+    {
+        $cancelled = $this->makeOrder([
+            'status' => Order::STATUS_CANCELLED,
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-CANCELLED-SCHEDULED',
+        ]);
+
+        ChannelShipment::create([
+            'order_id' => $cancelled->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_PENDING,
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/scheduled-shipments');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('scheduled_shipments'))->contains('order_id', $cancelled->id));
+    }
+
+    /**
+     * Pedido explícito 2026-08-29 ("ajuste no KoraSync/KazaKora... pedido
+     * embalado continua na fila mesmo depois do ponto de coleta"): o
+     * status já é atualizado corretamente pro canal confirmar a coleta de
+     * verdade (ShipmentService::syncOrderStatusFromShipment pro Mercado
+     * Livre, ShopeeDriver::mapOrderStatus pra Shopee) — o que faltava era
+     * a própria fila parar de mostrar pedido nesse status "pra auditoria"
+     * (decisão antiga de 2026-08-15, revertida agora especificamente pra
+     * SHIPPED/COMPLETED, mesmo padrão já usado pra CANCELLED acima).
+     */
+    public function test_shipped_or_completed_order_does_not_appear_in_the_queue(): void
+    {
+        $shipped = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'external_order_id' => 'SHIPPED-1']);
+        $completed = $this->makeOrder(['status' => Order::STATUS_COMPLETED, 'external_order_id' => 'COMPLETED-1']);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('queue'))->contains('id', $shipped->id));
+        $this->assertFalse(collect($response->json('queue'))->contains('id', $completed->id));
+        $this->assertFalse(collect($response->json('out_of_stock'))->contains('id', $shipped->id));
+    }
+
+    /**
+     * Mesmo bug do teste acima, na aba de vendas futuras agendadas do
+     * Mercado Livre — um pedido que o canal já confirmou coletado não
+     * precisa de nenhuma ação, mesmo que tivesse scheduled_for no passado.
+     */
+    public function test_shipped_order_does_not_appear_in_scheduled_shipments(): void
+    {
+        $shipped = $this->makeOrder([
+            'status' => Order::STATUS_SHIPPED,
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-SHIPPED-SCHEDULED',
+        ]);
+
+        ChannelShipment::create([
+            'order_id' => $shipped->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_PENDING,
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/scheduled-shipments');
+
+        $response->assertOk();
+        $this->assertFalse(collect($response->json('scheduled_shipments'))->contains('order_id', $shipped->id));
+    }
+
+    public function test_pack_order_marks_it_packed_without_removing_it_from_the_queue(): void
+    {
+        $order = $this->makeOrder(['external_order_id' => 'ML-1']);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack");
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('packed_at'));
+
+        $order->refresh();
+        $this->assertNotNull($order->packed_at);
+        // status é a visão do canal sobre o pedido (paid/shipped/...) —
+        // embalar não mexe nela, ver comentário da migration.
+        $this->assertSame(Order::STATUS_PAID, $order->status);
+
+        $queue = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/queue')
+            ->json('queue');
+
+        $this->assertCount(1, $queue);
+        $this->assertSame($order->id, $queue[0]['id']);
+        $this->assertNotNull($queue[0]['packed_at']);
+    }
+
+    /**
+     * Pedido explícito 2026-08-15: foto do produto pro card do KoraSync —
+     * a mesma imagem local usada pra publicar nos marketplaces (ver
+     * OrderImageArchiveService), arquivada em disco na hierarquia
+     * t320/Ano/Mês/Dia/Canal/id_pedido.jpg. Era PNG no tamanho original;
+     * virou miniatura JPEG de até 320px (BUG REAL 2026-09-06, "foto sem
+     * aparecer" — ver constantes de OrderImageArchiveService).
+     */
+    public function test_queue_order_image_returns_the_products_primary_image_as_jpeg(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+
+        $product = \App\Modules\Catalog\Models\Product::factory()->create();
+        \App\Modules\Catalog\Models\ProductImage::create([
+            'product_id' => $product->id,
+            'path' => 'products/'.$product->id.'/secondary.jpg',
+            'position' => 1,
+            'is_primary' => false,
+        ]);
+        $primary = \App\Modules\Catalog\Models\ProductImage::create([
+            'product_id' => $product->id,
+            'path' => 'products/'.$product->id.'/primary.jpg',
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $fakeJpeg = imagecreate(4, 4);
+        ob_start();
+        imagejpeg($fakeJpeg);
+        Storage::disk('public')->put($primary->path, ob_get_clean());
+        imagedestroy($fakeJpeg);
+
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+        $order->items()->create(['product_id' => $product->id, 'product_name' => $product->name, 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->get("/api/print-agent/dashboard/queue/{$order->id}/image");
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'image/jpeg');
+        $this->assertStringStartsWith("\xFF\xD8\xFF", $response->getContent());
+
+        $expectedPath = sprintf('order-images/t320/%s/%s/%s/shopee/%d.jpg', $order->created_at->format('Y'), $order->created_at->format('m'), $order->created_at->format('d'), $order->id);
+        Storage::disk('local')->assertExists($expectedPath);
+    }
+
+    /** ACHADO REAL 2026-09-30 (Amazon #2694): variação "Preto" sem foto, as fotos estão no pai. */
+    public function test_queue_product_image_falls_back_to_the_parent_when_the_variation_has_no_photo(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+
+        $pai = \App\Modules\Catalog\Models\Product::factory()->create();
+        $variacao = \App\Modules\Catalog\Models\Product::factory()->create(['parent_product_id' => $pai->id]);
+        $foto = \App\Modules\Catalog\Models\ProductImage::create([
+            'product_id' => $pai->id,
+            'path' => 'products/'.$pai->id.'/primary.jpg',
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $fakeJpeg = imagecreate(4, 4);
+        ob_start();
+        imagejpeg($fakeJpeg);
+        Storage::disk('public')->put($foto->path, ob_get_clean());
+        imagedestroy($fakeJpeg);
+
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_AMAZON]);
+        $order->items()->create(['product_id' => $variacao->id, 'product_name' => 'Preto', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        foreach (["/image", "/image/{$variacao->id}"] as $rota) {
+            $this->withHeaders($this->authHeaders())
+                ->get("/api/print-agent/dashboard/queue/{$order->id}{$rota}")
+                ->assertOk()
+                ->assertHeader('Content-Type', 'image/jpeg');
+        }
+    }
+
+    public function test_queue_order_image_returns_404_when_the_order_has_no_product_image(): void
+    {
+        $order = $this->makeOrder();
+        // Item sem product_id — emissão manual/serviço avulso, sem foto pra mostrar.
+        $order->items()->create(['product_id' => null, 'product_name' => 'Serviço avulso', 'product_price' => 10, 'quantity' => 1, 'subtotal' => 10]);
+
+        $this->withHeaders($this->authHeaders())
+            ->get("/api/print-agent/dashboard/queue/{$order->id}/image")
+            ->assertNotFound();
+    }
+
+    public function test_pack_order_is_idempotent_on_a_second_call(): void
+    {
+        $order = $this->makeOrder();
+
+        $this->withHeaders($this->authHeaders())->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack")->assertOk();
+        $firstPackedAt = $order->refresh()->packed_at;
+
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack")
+            ->assertOk();
+
+        $this->assertTrue($firstPackedAt->equalTo($order->refresh()->packed_at));
+    }
+
+    public function test_pack_order_rejects_an_order_that_is_not_paid(): void
+    {
+        $order = $this->makeOrder(['status' => Order::STATUS_AWAITING_PAYMENT]);
+
+        $this->withHeaders($this->authHeaders())
+            ->postJson("/api/print-agent/dashboard/queue/{$order->id}/pack")
+            ->assertStatus(409);
+
+        $this->assertNull($order->refresh()->packed_at);
+    }
+
+    /**
+     * Pedido explícito 2026-08-14 (achado real no pedido #278): venda de
+     * Coleta/Places do Mercado Livre com etiqueta liberada só perto de uma
+     * data futura decidida pelo canal (scheduled_for) — sem essa lista,
+     * ficava indistinguível de um pedido travado de verdade.
+     */
+    public function test_scheduled_shipments_lists_orders_with_a_future_scheduled_for(): void
+    {
+        $scheduled = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-1', 'shipping_name' => 'Cliente Agendado']);
+        $scheduled->items()->create(['product_name' => 'Produto A', 'product_price' => 50, 'quantity' => 2, 'subtotal' => 100]);
+        ChannelShipment::create([
+            'order_id' => $scheduled->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off',
+            'confirmed_at' => now(),
+            'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $overdue = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-2', 'shipping_name' => 'Cliente Atrasado']);
+        ChannelShipment::create([
+            'order_id' => $overdue->id,
+            'channel' => Order::ORIGIN_MERCADO_LIVRE,
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off',
+            'confirmed_at' => now()->subDays(2),
+            'scheduled_for' => now()->subDay(),
+        ]);
+
+        // Continua aparecendo mesmo já "embalado" (packed_at) — achado real
+        // no próprio pedido #278: embalar é sobre a caixa estar pronta,
+        // sem relação com o canal ter liberado a etiqueta de verdade.
+        // Confirmado ao vivo (estava embalado havia horas e a etiqueta
+        // continuava tão agendada quanto antes).
+        $packedButStillScheduled = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-3']);
+        $packedButStillScheduled->forceFill(['packed_at' => now()])->save();
+        ChannelShipment::create([
+            'order_id' => $packedButStillScheduled->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(3),
+        ]);
+
+        // Não deve aparecer: etiqueta já pronta (saiu da janela de
+        // "aguardando", nem que o canal tenha mandado scheduled_for em
+        // algum momento — o problema que essa lista existe pra sinalizar
+        // já não existe mais).
+        $labelReady = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-SCHED-4']);
+        ChannelShipment::create([
+            'order_id' => $labelReady->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_LABEL_READY,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(3),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/scheduled-shipments');
+
+        $response->assertOk();
+        $result = collect($response->json('scheduled_shipments'))->keyBy('order_id');
+
+        $this->assertCount(3, $result);
+        $this->assertArrayNotHasKey($labelReady->id, $result);
+
+        $this->assertSame('Cliente Agendado', $result[$scheduled->id]['customer_name']);
+        $this->assertFalse($result[$scheduled->id]['is_overdue']);
+        $this->assertCount(1, $result[$scheduled->id]['products']);
+
+        $this->assertTrue($result[$overdue->id]['is_overdue']);
+        $this->assertArrayHasKey($packedButStillScheduled->id, $result);
+    }
+
+    /**
+     * Aba "Mercado Livre" do KoraSync v2.0 (pedido explícito 2026-08-29):
+     * ?channel= filtra a mesma lista pra só um canal, sem mudar o
+     * comportamento padrão (sem o parâmetro) usado pelos testes acima.
+     */
+    public function test_scheduled_shipments_filters_by_channel_query_param(): void
+    {
+        $ml = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-FUT']);
+        ChannelShipment::create([
+            'order_id' => $ml->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(2),
+        ]);
+
+        $shopee = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-FUT']);
+        ChannelShipment::create([
+            'order_id' => $shopee->id, 'channel' => Order::ORIGIN_SHOPEE, 'status' => ChannelShipment::STATUS_CONFIRMED,
+            'shipping_method' => 'xd_drop_off', 'confirmed_at' => now(), 'scheduled_for' => now()->addDays(2),
+        ]);
+
+        $response = $this->withHeaders($this->authHeaders())
+            ->getJson('/api/print-agent/dashboard/scheduled-shipments?channel=mercado_livre');
+
+        $response->assertOk();
+        $result = collect($response->json('scheduled_shipments'))->keyBy('order_id');
+
+        $this->assertTrue($result->has($ml->id));
+        $this->assertFalse($result->has($shopee->id));
+    }
+
+    /**
+     * Relato de 2026-09-11: "tem Rosângela e Rosangela, só apareceu o sem
+     * acento". A Rosângela já estava enviada — fora da fila, fora da busca.
+     * (Acento em si é da collation do MySQL; o SQLite dos testes não ignora
+     * acento, então aqui o que se prova é achar pedido fora da fila.)
+     */
+    public function test_busca_de_pedido_acha_pedido_ja_enviado_que_saiu_da_fila(): void
+    {
+        $enviado = $this->makeOrder(['status' => Order::STATUS_SHIPPED, 'origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => '260910M91YKUVC', 'shipping_name' => 'Rosangela de Andrade da Silva Breta', 'packed_at' => now()->subDay()]);
+        $this->makeOrder(['shipping_name' => 'Outra Cliente', 'external_order_id' => 'X-1', 'origin' => Order::ORIGIN_SHOPEE]);
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q='.urlencode('andrade rosangela'));
+
+        $response->assertOk();
+        $this->assertSame([$enviado->id], collect($response->json('orders'))->pluck('id')->all());
+        $this->assertSame('shipped', $response->json('orders.0.status'));
+        $this->assertNotNull($response->json('orders.0.packed_at'));
+    }
+
+    public function test_busca_de_pedido_pelo_numero_de_um_pedido_do_carrinho_traz_a_caixa_inteira(): void
+    {
+        $a = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'status' => Order::STATUS_COMPLETED, 'external_order_id' => '2000018325566408', 'shipping_name' => 'Ana Rosa']);
+        $b = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'status' => Order::STATUS_COMPLETED, 'external_order_id' => '2000018325568030', 'shipping_name' => 'Ana Rosa']);
+        foreach ([$a, $b] as $order) {
+            ChannelShipment::create(['order_id' => $order->id, 'channel' => Order::ORIGIN_MERCADO_LIVRE, 'external_shipment_id' => '47952448296', 'status' => ChannelShipment::STATUS_LABEL_READY]);
+        }
+
+        $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q=2000018325568030');
+
+        $response->assertOk()->assertJsonCount(1, 'orders');
+        $this->assertSame(2, $response->json('orders.0.pack_order_count'));
+    }
+
+    public function test_busca_de_pedido_com_menos_de_3_letras_nao_consulta(): void
+    {
+        $this->makeOrder(['shipping_name' => 'Ana']);
+
+        $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q=an')
+            ->assertOk()->assertJsonCount(0, 'orders');
+    }
+}

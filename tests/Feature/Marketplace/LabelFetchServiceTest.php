@@ -1,0 +1,722 @@
+<?php
+
+namespace Tests\Feature\Marketplace;
+
+use App\Models\User;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Drivers\MarketplaceChannelDriver;
+use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\PrintJob;
+use App\Modules\Marketplace\Support\LabelFetchService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Mockery;
+use Tests\TestCase;
+use ZipArchive;
+
+class LabelFetchServiceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /**
+     * A impressão automática só vale pra venda posterior ao corte
+     * (PRINT_AUTO_SINCE, 2026-09-07). Um corte antigo por padrão deixa os
+     * testes das OUTRAS regras exercitarem o que eles se propõem a testar,
+     * em vez de passarem de graça pelo corte.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.print_agent.auto_print_since' => now()->subYear()->toDateTimeString()]);
+    }
+
+    private function makeShipment(string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE, ?\Illuminate\Support\Carbon $scheduledFor = null, ?\Illuminate\Support\Carbon $packedAt = null, ?\Illuminate\Support\Carbon $createdAt = null): ChannelShipment
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        $order = Order::create([
+            'user_id' => $user->id,
+            'origin' => Order::ORIGIN_MERCADO_LIVRE,
+            'external_order_id' => 'ML-1',
+            'status' => Order::STATUS_PAID,
+            'shipping_name' => 'Cliente',
+            'shipping_phone' => '11999999999',
+            'shipping_zip' => '01000-000',
+            'shipping_street' => 'Rua X',
+            'shipping_number' => '1',
+            'shipping_neighborhood' => 'Centro',
+            'shipping_city' => 'São Paulo',
+            'shipping_state' => 'SP',
+            'subtotal' => 100,
+            'total' => 100,
+        ]);
+
+        if ($packedAt !== null) {
+            $order->forceFill(['packed_at' => $packedAt])->save();
+        }
+
+        if ($createdAt !== null) {
+            $order->forceFill(['created_at' => $createdAt])->save();
+        }
+
+        $order->items()->create([
+            'product_name' => 'Produto teste',
+            'product_price' => 100,
+            'quantity' => 1,
+            'subtotal' => 100,
+        ]);
+
+        return ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => $channel,
+            'external_shipment_id' => 'SHIP-1',
+            'shipping_method' => 'self_service',
+            'status' => ChannelShipment::STATUS_CONFIRMED,
+            'confirmed_at' => now(),
+            'scheduled_for' => $scheduledFor,
+        ]);
+    }
+
+    private function mockDriver(array $fetchLabelResult, string $channel = MarketplaceAccount::CHANNEL_MERCADO_LIVRE): void
+    {
+        $driver = Mockery::mock(MarketplaceChannelDriver::class);
+        $driver->shouldReceive('fetchLabel')->once()->andReturn($fetchLabelResult);
+        // A etiqueta pronta faz o serviço reconsultar o rastreio quando ele
+        // ainda não existe (refreshTrackingCode) — é uma 2ª ida ao driver,
+        // sempre foi. Sem estas duas linhas o Mockery derrubava metade dos
+        // testes deste arquivo por contagem de chamada, escondendo o que
+        // eles de fato provam.
+        $driver->shouldReceive('confirmShipping')->zeroOrMoreTimes()->andReturn(['tracking_code' => null]);
+
+        $manager = Mockery::mock(MarketplaceDriverManager::class);
+        $manager->shouldReceive('driver')->with($channel)->atLeast()->once()->andReturn($driver);
+
+        $this->app->instance(MarketplaceDriverManager::class, $manager);
+    }
+
+    public function test_attempt_returns_false_and_changes_nothing_when_label_is_not_ready(): void
+    {
+        $shipment = $this->makeShipment();
+        $this->mockDriver(['ready' => false, 'contents' => null, 'content_type' => null]);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertFalse($ready);
+        $this->assertSame(ChannelShipment::STATUS_CONFIRMED, $shipment->fresh()->status);
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    public function test_attempt_downloads_and_registers_the_label_when_ready(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        $this->mockDriver(['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $fresh = $shipment->fresh();
+        $this->assertSame(ChannelShipment::STATUS_LABEL_READY, $fresh->status);
+        $this->assertNotNull($fresh->label_ready_at);
+        Storage::disk('local')->assertExists($fresh->label_path);
+
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+        $this->assertDatabaseHas('order_fulfillment_events', [
+            'order_id' => $shipment->order_id,
+            'step' => 'label_generated',
+            'status' => 'success',
+        ]);
+    }
+
+    /** Shein continua sem etiqueta nossa: nunca vira PrintJob. */
+    public function test_queue_print_never_creates_a_job_for_shein(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHEIN, packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/shein.pdf'])->save();
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseCount('print_jobs', 0);
+    }
+
+    /**
+     * MUDANÇA DE FLUXO 2026-09-07 (2ª ordem do dia): a impressão automática
+     * voltou. Assim que o canal libera a etiqueta, ela vai pra impressora
+     * sozinha — sem esperar clique nenhum.
+     */
+    public function test_attempt_prints_by_itself_for_a_sale_after_the_cutoff(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(
+            ['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream'],
+            MarketplaceAccount::CHANNEL_SHOPEE,
+        );
+
+        app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertNull($shipment->order->refresh()->packed_at, 'Ninguém separou nada — a etiqueta sai antes disso.');
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * O corte mudou de significado em 2026-09-07, no mesmo dia: ele começou
+     * comparando a DATA DA VENDA e passou a valer pelo MOMENTO em que a
+     * etiqueta chega. Motivo: venda AGENDADA do Mercado Livre é de dias
+     * atrás e o canal só libera a etiqueta na véspera — comparando a data da
+     * venda, justamente a que o usuário quer automática ficava de fora.
+     */
+    public function test_attempt_prints_a_scheduled_sale_even_though_it_is_old(): void
+    {
+        Storage::fake('local');
+        config(['services.print_agent.auto_print_since' => now()->subHour()->toDateTimeString()]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE, createdAt: now()->subDays(3));
+        $this->mockDriver(
+            ['ready' => true, 'contents' => 'not-a-real-pdf', 'content_type' => 'application/octet-stream'],
+            MarketplaceAccount::CHANNEL_SHOPEE,
+        );
+
+        $this->assertTrue(app(LabelFetchService::class)->attempt($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * O mesmo pedido antigo SAI pelo botão de lote: o corte é pra máquina
+     * não decidir sozinha, não pra prender o operador.
+     */
+    public function test_the_batch_prints_a_sale_from_before_the_cutoff(): void
+    {
+        Storage::fake('local');
+        config(['services.print_agent.auto_print_since' => now()->toDateTimeString()]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE, createdAt: now()->subDays(3));
+        $shipment->forceFill(['label_path' => 'labels/represada.pdf'])->save();
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrintInBatch($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * ERRO REAL 2026-09-07: o corte foi gravado com a hora do SO (UTC)
+     * enquanto o app roda em America/Sao_Paulo e caiu 3h no futuro. Até
+     * 2026-09-08 isso DESLIGAVA a impressão de todo mundo; hoje o valor
+     * errado é ignorado e só grita no log — configuração torta não pode
+     * parar a loja.
+     */
+    public function test_a_cutoff_in_the_future_is_ignored_and_warns(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Log::spy();
+        config(['services.print_agent.auto_print_since' => now()->addHours(3)->toDateTimeString()]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $shipment->forceFill(['label_path' => 'labels/corte-futuro.pdf'])->save();
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $mensagem) => $mensagem === 'marketplace.label_fetch.corte_no_futuro');
+    }
+
+    /**
+     * INCIDENTE 2026-09-08: um restore no servidor devolveu um `.env` de
+     * 02/09 e a linha PRINT_AUTO_SINCE, criada em 07/09, sumiu junto — a
+     * impressora ficou meia jornada sem receber nada, sem erro nenhum,
+     * porque "ausente" significava "desligada". Hoje ausente = LIGADA.
+     *
+     * O represamento antigo continua protegido, mas por outra via:
+     * attempt() só roda pra envio sem etiqueta baixada, e etiqueta já
+     * impressa nunca sai de novo.
+     */
+    public function test_automatic_printing_stays_on_without_a_configured_cutoff(): void
+    {
+        Storage::fake('local');
+        config(['services.print_agent.auto_print_since' => null]);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $shipment->forceFill(['label_path' => 'labels/sem-corte.pdf'])->save();
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseHas('print_jobs', [
+            'order_id' => $shipment->order_id,
+            'status' => PrintJob::STATUS_QUEUED,
+        ]);
+    }
+
+    /**
+     * Desligar continua possível — mas só na cara, nunca por omissão.
+     */
+    public function test_printing_only_turns_off_with_an_explicit_off(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Log::spy();
+        config(['services.print_agent.auto_print_since' => 'off']);
+
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $shipment->forceFill(['label_path' => 'labels/desligada.pdf'])->save();
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertDatabaseCount('print_jobs', 0);
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $mensagem) => $mensagem === 'marketplace.label_fetch.auto_print_desligada');
+    }
+
+    /**
+     * Os pedidos que a versão antiga já imprimiu sozinha (06/09, antes da
+     * correção) não podem prometer uma segunda impressão quando o operador
+     * separar: o job existe e já saiu. false aqui é o que faz o KoraSync
+     * mostrar "etiqueta já impressa às HH:MM" em vez de "enviada pra
+     * impressão".
+     */
+    /**
+     * ERRO MEU, 2026-09-10 ("já tinha pedido a caminho e vc imprimiu de
+     * novo"): recuperei pela varredura uma venda que o sistema nunca tinha
+     * visto e o fluxo seguiu sozinho até imprimir a etiqueta de um pedido
+     * já despachado por fora. Varredura acha o que se perdeu; gastar papel
+     * é decisão de quem olha a bancada.
+     */
+    public function test_an_order_found_by_a_sweep_never_prints_by_itself(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: null);
+        $shipment->forceFill(['label_path' => 'labels/varredura.pdf'])->save();
+        $shipment->order->forceFill(['auto_print_blocked' => true])->save();
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(0, PrintJob::where('order_id', $shipment->order_id)->count());
+
+        // Mas o botão de lote (uma PESSOA decidindo) imprime normalmente.
+        $this->assertTrue(app(LabelFetchService::class)->queuePrintInBatch($shipment->fresh()));
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+        $this->assertSame(
+            PrintJob::ORIGEM_LOTE,
+            PrintJob::where('order_id', $shipment->order_id)->latest('id')->first()->origin,
+        );
+    }
+
+    public function test_queue_print_reports_false_when_the_label_was_already_printed(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now()->subMinute());
+        $shipment->forceFill(['label_path' => 'labels/ja-impressa.pdf'])->save();
+
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'label_path' => 'labels/ja-impressa.pdf',
+            'status' => PrintJob::STATUS_PRINTED,
+            // Saiu DEPOIS da separação: é a etiqueta deste trabalho.
+            'printed_at' => now(),
+        ]);
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+    }
+
+    /**
+     * BUG REAL 2026-09-07 ("tá saindo duplicado e agora não sabe qual é",
+     * pedidos #1419/#1422/#1437, Flex do Mercado Livre): etiqueta que saiu
+     * dias ANTES da separação, pelo bug antigo da impressão automática,
+     * continuava na mão do operador. Reimprimir sozinha nesse caso põe duas
+     * etiquetas iguais na bancada. Papel só sai de novo pelo botão de
+     * reimprimir, que é decisão de quem está embalando.
+     */
+    public function test_queue_print_never_prints_again_when_the_label_already_came_out(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/impressa-antes.pdf'])->save();
+
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'label_path' => 'labels/impressa-antes.pdf',
+            'status' => PrintJob::STATUS_PRINTED,
+            // Saiu há 3 dias, muito antes de alguém separar.
+            'printed_at' => now()->subDays(3),
+        ]);
+
+        $this->assertFalse(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(0, PrintJob::where('order_id', $shipment->order_id)->where('status', PrintJob::STATUS_QUEUED)->count());
+    }
+
+    /**
+     * Falha de impressora não pode condenar o pedido a nunca mais imprimir
+     * (achado ao desfazer a separação do #1503 pra testar de novo: com os
+     * jobs falhados no banco, uma nova separação não enfileirava nada).
+     */
+    public function test_queue_print_tries_again_when_the_last_attempt_failed(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        $shipment->forceFill(['label_path' => 'labels/tentar-de-novo.pdf'])->save();
+
+        PrintJob::create([
+            'order_id' => $shipment->order_id,
+            'label_path' => 'labels/tentar-de-novo.pdf',
+            'status' => PrintJob::STATUS_FAILED,
+            'error_message' => 'Impressora não está pronta',
+        ]);
+
+        $this->assertTrue(app(LabelFetchService::class)->queuePrint($shipment->fresh()));
+        $this->assertSame(2, PrintJob::where('order_id', $shipment->order_id)->count());
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->where('status', PrintJob::STATUS_QUEUED)->count());
+    }
+
+    public function test_attempt_is_idempotent_and_does_not_duplicate_the_print_job(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(packedAt: now());
+        PrintJob::create(['order_id' => $shipment->order_id, 'label_path' => 'labels/existing.pdf', 'status' => PrintJob::STATUS_PRINTED]);
+
+        $this->mockDriver(['ready' => true, 'contents' => 'conteudo', 'content_type' => 'application/octet-stream']);
+
+        app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertSame(1, PrintJob::where('order_id', $shipment->order_id)->count());
+    }
+
+    /**
+     * BUG REAL 2026-08-10 — cobertura de regressão. O zip do
+     * response_type=zpl2 do Mercado Livre (MercadoLivreDriver::fetchLabel())
+     * vem com DOIS arquivos: um PDF da PLP (não é a etiqueta térmica, é uma
+     * folha A4 — foi esse PDF sendo mandado direto pra impressora que
+     * causava "impressora parada, nada sai") e um .txt com o ZPL de
+     * verdade. Precisa achar o .txt certo, não o primeiro entry do zip.
+     */
+    public function test_attempt_picks_the_zpl_txt_entry_not_the_plp_pdf_from_a_multi_file_zip(): void
+    {
+        Storage::fake('local');
+        Http::fake(['api.labelary.com/*' => Http::response(self::minimalPdf(), 200, ['Content-Type' => 'application/pdf'])]);
+
+        $shipment = $this->makeShipment();
+
+        $zip = self::buildZip([
+            'plp.pdf' => "%PDF-1.4\nconteúdo irrelevante, não é a etiqueta\n%%EOF",
+            'thermal_zpl_shipping_label.txt' => "^XA^FO50,50^A0N,50,50^FDTeste^FS^XZ",
+        ]);
+
+        $this->mockDriver(['ready' => true, 'contents' => $zip, 'content_type' => 'application/force-download']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $fresh = $shipment->fresh();
+        $labelContents = Storage::disk('local')->get($fresh->label_path);
+
+        // Se tivesse pego o PDF errado (índice 0 do zip), isso teria virado
+        // a PLP crua em vez de passar pela conversão ZPL->PDF do Labelary.
+        $this->assertStringStartsWith('%PDF-', $labelContents);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'api.labelary.com'));
+    }
+
+    /**
+     * REVERTIDO 2026-08-21 (mesmo dia, 2ª vez — ver docblock de
+     * LabelFetchService::CHANNELS_WITH_DECLARATION pro histórico
+     * completo): composeSideBySideLabel() espremeu o código de barras do
+     * Mercado Livre até ficar ilegível numa etiqueta real, de novo. Volta
+     * a ser overlayDeclarationFooter() — etiqueta da Shopee sai retrato, 1
+     * página só, com a faixa "SKU | QTD" no rodapé da própria etiqueta,
+     * sem dividir nem espremer nada.
+     */
+    public function test_attempt_adds_the_declaration_footer_for_shopee(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        // O item de makeShipment() não tem product_id (sem SKU cadastrado),
+        // então cai no fallback pro nome do produto.
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
+
+        // Sobreposição na mesma página, NUNCA página extra — pedido
+        // explícito 2026-08-15.
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $labelContents);
+
+        try {
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    public function test_attempt_uses_the_product_sku_when_one_is_linked(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_SHOPEE);
+        $product = \App\Modules\Catalog\Models\Product::factory()->create(['sku' => 'ORG-KIT-BEGE-0001']);
+        $shipment->order->items()->first()->update(['product_id' => $product->id, 'quantity' => 3]);
+
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf'], MarketplaceAccount::CHANNEL_SHOPEE);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertStringContainsString('ORG-KIT-BEGE-0001 | QTD: 03', self::textoDoPdf($labelContents));
+    }
+
+    /**
+     * BUG REAL 2026-08-21 (etiqueta real do Mercado Livre): até aqui a
+     * etiqueta do ML passava intacta, sem declaração nenhuma — a etiqueta
+     * real dele sempre vem com uma DANFE simplificada numa 2ª página, e a
+     * declaração de conteúdo passou a valer pra esse canal também. Este
+     * teste usa um mock de 1 página só (sem DANFE) — cobre o fallback de
+     * overlayDeclarationFooter(targetPage: 'last') pra página 1 quando não
+     * existe 2ª página (nunca quebra, ver LabelProcessingServiceTest). O
+     * caso real (2 páginas, DANFE de verdade) é o teste seguinte.
+     */
+    public function test_attempt_adds_the_declaration_footer_for_mercado_livre(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        // makeShipment() cria Flex (self_service), que desde df6cba9
+        // (2026-08-30) não estampa SKU/QTD — a declaração do ML só vale
+        // pro não-Flex (etiqueta + DANFE simplificada).
+        $shipment->update(['shipping_method' => ChannelShipment::METHOD_DROP_OFF]);
+        $rawPdf = self::minimalPdf();
+        $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertNotSame($rawPdf, $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
+
+        // A etiqueta original intacta (com a eventual DANFE) continua
+        // arquivada à parte, sem passar por nenhum processamento.
+        $rawContents = Storage::disk('local')->get($shipment->fresh()->raw_label_path);
+        $this->assertSame($rawPdf, $rawContents);
+    }
+
+    /**
+     * BUG REAL 2026-08-21 (feedback do usuário vendo a etiqueta física
+     * impressa, 2 vezes seguidas no mesmo dia): a etiqueta real do ML
+     * sempre vem em 2 páginas — a faixa de declaração vai na 2ª (DANFE
+     * simplificada, área "DADOS ADICIONAIS" que já vem vazia), NUNCA na 1ª
+     * (colidiria com o endereço). overlayDeclarationFooter() NUNCA cria
+     * página extra nem funde páginas — as 2 originais continuam intactas,
+     * resultando em 2 folhas físicas por pedido do ML (aceito
+     * conscientemente pelo usuário: código de barras legível > economia
+     * de papel — composeSideBySideLabel(), que forçava 1 página só,
+     * espremia o código de barras até ficar ilegível, motivo real do
+     * revert).
+     */
+    public function test_attempt_targets_the_danfe_page_for_mercado_livre(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // canal default: Mercado Livre
+        // makeShipment() cria Flex (self_service), que desde df6cba9
+        // (2026-08-30) não estampa SKU/QTD — a declaração do ML só vale
+        // pro não-Flex (etiqueta + DANFE simplificada).
+        $shipment->update(['shipping_method' => ChannelShipment::METHOD_DROP_OFF]);
+        $rawPdf = self::minimalTwoPagePdf();
+        $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertNotSame($rawPdf, $labelContents);
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $labelContents);
+
+        try {
+            $this->assertSame(2, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath), 'as 2 páginas originais continuam — código de barras da 1ª página intacto');
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    /**
+     * Pedido explícito 2026-08-30 (df6cba9): etiqueta Flex do Mercado
+     * Livre é 1 página só (sem DANFE simplificada) — estampar SKU/QTD
+     * nela colidia com o layout da etiqueta real. Sai crua.
+     */
+    public function test_attempt_leaves_the_mercado_livre_flex_label_untouched(): void
+    {
+        Storage::fake('local');
+        $shipment = $this->makeShipment(); // Mercado Livre Flex (self_service)
+        $rawPdf = self::minimalPdf();
+        $this->mockDriver(['ready' => true, 'contents' => $rawPdf, 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $this->assertSame($rawPdf, Storage::disk('local')->get($shipment->fresh()->label_path));
+    }
+
+    /**
+     * Pedido explícito 2026-08-17: entrega programada (Mercado Livre
+     * "Coleta/Places" agendado, scheduled_for preenchido) ganha MAIS uma
+     * 2ª linha na declaração ("Pedido agendado dia dd/mm/yyyy | Pedido nº
+     * X"), pra quem embala identificar de cara que aquele pedido é um
+     * agendado.
+     */
+    public function test_attempt_adds_the_scheduled_declaration_for_a_scheduled_mercado_livre_shipment(): void
+    {
+        Storage::fake('local');
+        $scheduledFor = now()->addDays(3)->setTime(0, 0);
+        $shipment = $this->makeShipment(MarketplaceAccount::CHANNEL_MERCADO_LIVRE, $scheduledFor);
+        // makeShipment() cria Flex (self_service), que desde df6cba9
+        // (2026-08-30) não estampa SKU/QTD — a declaração do ML só vale
+        // pro não-Flex (etiqueta + DANFE simplificada).
+        $shipment->update(['shipping_method' => ChannelShipment::METHOD_DROP_OFF]);
+        $this->mockDriver(['ready' => true, 'contents' => self::minimalPdf(), 'content_type' => 'application/pdf']);
+
+        $ready = app(LabelFetchService::class)->attempt($shipment->fresh());
+
+        $this->assertTrue($ready);
+        $labelContents = Storage::disk('local')->get($shipment->fresh()->label_path);
+
+        $this->assertStringContainsString('Produto teste | QTD: 01', self::textoDoPdf($labelContents));
+        // "nº" tem "º" (ordinal), que sai convertido pro Latin-1 do FPDF —
+        // checa o texto ao redor da data/nº sem depender do byte exato do
+        // símbolo.
+        $this->assertStringContainsString('Pedido agendado dia '.$scheduledFor->format('d/m/Y'), self::textoDoPdf($labelContents));
+        $this->assertStringContainsString((string) $shipment->order_id, self::textoDoPdf($labelContents));
+
+        // Sobreposição na mesma página, nunca página extra — mesma garantia
+        // já exigida pro caso Shopee.
+        $tempPath = tempnam(sys_get_temp_dir(), 'label_result_').'.pdf';
+        file_put_contents($tempPath, $labelContents);
+
+        try {
+            $this->assertSame(1, (new \setasign\Fpdi\Fpdi)->setSourceFile($tempPath));
+        } finally {
+            @unlink($tempPath);
+        }
+    }
+
+    private static function buildZip(array $files): string
+    {
+        $tempPath = tempnam(sys_get_temp_dir(), 'test_zip_').'.zip';
+
+        $zip = new ZipArchive();
+        $zip->open($tempPath, ZipArchive::CREATE);
+
+        foreach ($files as $name => $contents) {
+            $zip->addFromString($name, $contents);
+        }
+
+        $zip->close();
+
+        $bytes = file_get_contents($tempPath);
+        unlink($tempPath);
+
+        return $bytes;
+    }
+
+    /**
+     * O FPDF comprime os content streams (FlateDecode) sempre que o PHP
+     * tem zlib — o texto desenhado na etiqueta não aparece cru nos bytes
+     * do PDF. Descomprime cada stream e desfaz o escape de string do PDF
+     * (\( \) \\) pra os asserts checarem o texto de verdade, com ou sem
+     * compressão.
+     */
+    private static function textoDoPdf(string $pdf): string
+    {
+        $texto = $pdf;
+
+        preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $pdf, $streams);
+
+        foreach ($streams[1] as $stream) {
+            $descomprimido = @gzuncompress($stream);
+            $texto .= "\n".($descomprimido === false ? $stream : $descomprimido);
+        }
+
+        return strtr($texto, ['\\(' => '(', '\\)' => ')', '\\\\' => '\\']);
+    }
+
+    private static function minimalPdf(): string
+    {
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 4 0 R >>',
+            4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+        ];
+
+        $body = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $id => $content) {
+            $offsets[$id] = strlen($body);
+            $body .= "{$id} 0 obj\n{$content}\nendobj\n";
+        }
+
+        $xrefOffset = strlen($body);
+        $body .= "xref\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+
+        foreach ($objects as $id => $content) {
+            $body .= sprintf("%010d 00000 n \n", $offsets[$id]);
+        }
+
+        $body .= "trailer\n<< /Size ".(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF";
+
+        return $body;
+    }
+
+    private static function minimalTwoPagePdf(): string
+    {
+        $objects = [
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+            2 => '<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>',
+            3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 4 0 R >>',
+            4 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+            5 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 288 432] /Resources << >> /Contents 6 0 R >>',
+            6 => "<< /Length 9 >>\nstream\nBT ET\nendstream",
+        ];
+
+        $body = "%PDF-1.4\n";
+        $offsets = [];
+
+        foreach ($objects as $id => $content) {
+            $offsets[$id] = strlen($body);
+            $body .= "{$id} 0 obj\n{$content}\nendobj\n";
+        }
+
+        $xrefOffset = strlen($body);
+        $body .= "xref\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+
+        foreach ($objects as $id => $content) {
+            $body .= sprintf("%010d 00000 n \n", $offsets[$id]);
+        }
+
+        $body .= "trailer\n<< /Size ".(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xrefOffset}\n%%EOF";
+
+        return $body;
+    }
+}

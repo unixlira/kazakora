@@ -123,6 +123,78 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        'mercadolivre' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/mercadolivre.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'stripe' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/stripe.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'melhorenvio' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/melhorenvio.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'correios' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/correios.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'mercadopago' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/mercadopago.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'shopee' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/shopee.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'bling' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/bling.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'amazon' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/amazon.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'reviews' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/reviews.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

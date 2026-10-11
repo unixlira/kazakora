@@ -78,7 +78,7 @@ class SystemLogController extends Controller
                 ->values()
                 ->map(fn (array $entry, int $indice) => $entry + [
                     'id' => ($pagina - 1) * $porPagina + $indice + 1,
-                    'nivelLabel' => self::NIVEL_LABELS[$entry['nivel']] ?? '—',
+                    'nivelLabel' => self::NIVEL_LABELS[$entry['nivel']] ?? 'Saída',
                 ])
                 ->all(),
             'arquivos' => collect($arquivos)->map(fn (array $file) => [

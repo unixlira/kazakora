@@ -23,6 +23,12 @@ const NIVEL_CORES = {
     debug: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
 
+const NIVEL_ICONES = {
+    emergency: 'fa-skull-crossbones', alert: 'fa-bell', critical: 'fa-fire',
+    error: 'fa-circle-xmark', warning: 'fa-triangle-exclamation',
+    notice: 'fa-circle-info', info: 'fa-circle-info', debug: 'fa-bug',
+};
+
 const filtros = reactive({
     arquivo: props.filtros.arquivo ?? '',
     niveis: [...(props.filtros.niveis ?? [])],
@@ -254,8 +260,10 @@ const arquivoAtual = computed(
                             <tr class="cursor-pointer align-top hover:bg-[var(--surface-muted)]/50" @click="alternarDetalhe(log.id)">
                                 <td class="whitespace-nowrap px-4 py-3 text-slate-500">{{ log.dataHora ?? '—' }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
-                                        :class="NIVEL_CORES[log.nivel] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'">
+                                    <!-- Sem nível no arquivo (saída crua de fila/comando): badge "Saída", nunca "—". -->
+                                    <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
+                                        :class="NIVEL_CORES[log.nivel] ?? 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300'">
+                                        <i class="fas text-[10px]" :class="NIVEL_ICONES[log.nivel] ?? 'fa-terminal'"></i>
                                         {{ log.nivelLabel }}
                                     </span>
                                 </td>

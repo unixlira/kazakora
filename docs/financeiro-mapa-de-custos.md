@@ -47,6 +47,19 @@ que **nunca** podem ser somadas entre si:
   do TikTok está inflado.
 - **Amazon Ads** idem (sem integração).
 
+## Valor da nota fiscal = valor que o cliente pagou (regra fixa, 11/10/2026)
+
+Decisão do Lira: **toda NF-e de venda sai pelo valor que o cliente pagou**,
+não pelo preço cheio do anúncio. Cupom e subsídio das plataformas (TikTok,
+Shopee, Mercado Livre, Amazon — todas dão cupom próprio às vezes) abatem o
+valor da nota, e com isso o imposto do Simples.
+
+- No Bling (notas do TikTok/Amazon), o pedido chega com os itens pelo preço
+  cheio e as parcelas pelo valor pago. `BlingInvoiceImporter::alinharNotaAoCadastro()`
+  reparte o pago entre os itens (proporcional ao preço cheio) antes de enviar;
+  sem isso o Bling recusa ("total das parcelas difere do total da nota").
+- Pedido de R$ 0 (amostra/brinde) não vira nota de venda.
+
 ## Buracos de valor conhecidos (10/10/2026)
 
 - **Comissão da Amazon:** o Bling devolve `taxaComissao = 0` nos pedidos da Amazon

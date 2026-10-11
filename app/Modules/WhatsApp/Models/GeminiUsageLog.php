@@ -13,6 +13,12 @@ class GeminiUsageLog extends Model
     /** Conteúdo do anúncio da página do produto (pedido 2026-10-09). */
     public const PURPOSE_AD_CONTENT = 'anuncio';
 
+    /** Resposta de avaliação da Shopee (2026-10-11). */
+    public const PURPOSE_REVIEW = 'avaliacao';
+
+    /** Alinhamento do catálogo / dados fiscais (2026-10-11). */
+    public const PURPOSE_CATALOGO = 'catalogo';
+
     protected $fillable = ['model', 'purpose', 'prompt_tokens', 'output_tokens', 'total_tokens'];
 
     protected function casts(): array

@@ -160,7 +160,7 @@ watch(
     <div class="admin-shell min-h-screen bg-[var(--surface-muted)] text-[var(--surface-foreground)]">
         <!-- Sidebar -->
         <nav class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
-            :class="sidebarCollapsed ? 'md:w-20' : 'md:w-64'">
+            :class="sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64'">
             <div class="mx-auto flex w-full flex-wrap items-center justify-between px-0 md:min-h-full md:flex-col md:flex-nowrap md:items-stretch">
                 <button
                     class="cursor-pointer rounded border border-solid border-transparent bg-transparent px-3 py-1 text-xl leading-none opacity-50 md:hidden"
@@ -168,12 +168,13 @@ watch(
                     <i class="fas fa-bars"></i>
                 </button>
 
-                <div class="hidden w-full items-center justify-between md:flex">
+                <!-- Menu recolhido: logo em cima e botão embaixo (lado a lado não cabe em 80px). -->
+                <div class="hidden w-full items-center justify-between md:flex" :class="sidebarCollapsed ? 'flex-col gap-2' : ''">
                     <Link href="/admin" class="flex items-center py-3" title="KazaKora">
-                        <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 rounded-xl object-cover shadow-sm">
+                        <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                         <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
                     </Link>
-                    <button type="button" class="text-slate-400 hover:text-primary" @click="toggleSidebar">
+                    <button type="button" class="text-slate-400 hover:text-primary" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
                         <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
                     </button>
                 </div>

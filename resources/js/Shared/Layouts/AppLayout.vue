@@ -416,15 +416,15 @@ const REDES = [
                                 class="flex h-[30px] cursor-pointer items-center justify-center rounded-xl bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
                                 title="Ver a verificação do Google Safe Browsing">
                                 <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45"
-                                    class="h-[20px] w-auto sm:h-[30px] lg:h-[36px]">
+                                    class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
                             </a>
                             <a :href="page.props.reclameAqui?.url ?? 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
                                 class="flex h-[30px] cursor-pointer flex-col items-center justify-center rounded-xl bg-white leading-none transition hover:opacity-90 sm:h-[44px] lg:h-[51px]"
-                                :class="page.props.reclameAqui?.verificada ? 'px-2' : 'px-3 sm:px-4'"
+                                :class="page.props.reclameAqui?.verificada ? 'px-1' : 'px-3 sm:px-4'"
                                 title="Ver a KazaKora no Reclame AQUI">
                                 <!-- Selo de verificada só com a chave LOJA_SELO_RA_VERIFICADA (só depois da aprovação). -->
                                 <img v-if="page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
-                                    class="h-[24px] w-auto sm:h-[36px] lg:h-[42px]">
+                                    class="h-[27px] w-auto sm:h-[41px] lg:h-[48px]">
                                 <template v-else>
                                     <span class="text-[7px] font-semibold uppercase tracking-wider text-slate-500 sm:text-[9px]">Estamos no</span>
                                     <span class="mt-0.5 text-[13px] font-black tracking-tight text-[#1a1a1a] sm:text-[18px] lg:text-[20px]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>

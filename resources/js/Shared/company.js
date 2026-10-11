@@ -18,7 +18,7 @@ export const COMPANY = {
         instagram: 'https://www.instagram.com/kazakora.co',
         threads: 'https://www.threads.com/@kazakora.co',
         facebook: 'https://www.facebook.com/profile.php?id=61566013688063',
-        tiktok: '',
+        tiktok: 'https://www.tiktok.com/@usekazakora',
         youtube: 'https://www.youtube.com/@kazakora',
     },
 };

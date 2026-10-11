@@ -621,10 +621,13 @@ class CheckoutController extends Controller
                 if ($useMercadoPago && $primaryMethod === Payment::METHOD_PIX) {
                     $mpPayment = $this->mercadoPago->createPixPayment(
                         $primaryAmount,
-                        $this->mercadoPagoPayer($user),
+                        $this->mercadoPagoPayer($user, pix: $order),
                         "order-{$order->id}-payment-1",
                         "order:{$order->id}:payment:1",
                     );
+
+                    // E-mail do Pix pela KazaKora, depois de gravado o pedido.
+                    DB::afterCommit(fn () => $this->enviarEmailDoPix($user, $order, $mpPayment, $primaryAmount));
 
                     Payment::create([
                         'order_id' => $order->id,
@@ -770,10 +773,11 @@ class CheckoutController extends Controller
             try {
                 $mpPayment = $this->mercadoPago->createPixPayment(
                     $remaining,
-                    $this->mercadoPagoPayer($order->user),
+                    $this->mercadoPagoPayer($order->user, pix: $order),
                     "order-{$order->id}-payment-2",
                     "order:{$order->id}:payment:2",
                 );
+                $this->enviarEmailDoPix($order->user, $order, $mpPayment, $remaining);
             } catch (MercadoPagoException $exception) {
                 Log::channel('mercadopago')->error('mercadopago.checkout.second_payment_failed', [
                     'order_id' => $order->id,
@@ -963,6 +967,24 @@ class CheckoutController extends Controller
      * secret, sem SDK JS pra montar), só mostrar e começar o polling.
      */
     /** Pix é sempre a API de Payments clássica — ver MercadoPagoPaymentService::createPixPayment(). */
+    /** "Seu Pix está pronto" com QR Code e copia-e-cola (pedido 2026-10-11). Falha de e-mail não trava o pagamento. */
+    private function enviarEmailDoPix(User $user, Order $order, array $mpPayment, float $valor): void
+    {
+        $qr = $mpPayment['point_of_interaction']['transaction_data'] ?? [];
+
+        if (empty($qr['qr_code'])) {
+            return;
+        }
+
+        rescue(fn () => Mail::to($user->email)->send(new \App\Modules\Checkout\Mail\PixAguardandoPagamento(
+            $order,
+            $valor,
+            (string) $qr['qr_code'],
+            $qr['qr_code_base64'] ?? null,
+            $mpPayment['date_of_expiration'] ?? null,
+        )), null, false);
+    }
+
     private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpPayment): Response
     {
         $qr = $mpPayment['point_of_interaction']['transaction_data'] ?? [];
@@ -1006,13 +1028,19 @@ class CheckoutController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function mercadoPagoPayer(User $user): array
+    private function mercadoPagoPayer(User $user, ?Order $pix = null): array
     {
         $cpf = preg_replace('/\D/', '', $user->cpf ?? '');
         $nameParts = preg_split('/\s+/', trim($user->name), 2);
 
+        // Pix: e-mail nosso, para o Mercado Pago não escrever ao cliente
+        // (pedido 2026-10-11). Quem avisa do Pix é a KazaKora.
+        $email = $pix
+            ? str_replace('{pedido}', (string) $pix->id, (string) config('loja.email_pagador_pix'))
+            : $user->email;
+
         return array_filter([
-            'email' => $user->email,
+            'email' => $email,
             'first_name' => $nameParts[0] ?? $user->name,
             'last_name' => $nameParts[1] ?? $nameParts[0] ?? $user->name,
             'identification' => $cpf ? ['type' => 'CPF', 'number' => $cpf] : null,

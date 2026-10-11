@@ -63,20 +63,6 @@ export const sidebarSections = [
         ],
     },
     {
-        // Espelho web do app desktop KoraSync (pedido explícito 2026-08-31:
-        // "menu Korasync... dentro dele todos submenus das filas") — mesmas
-        // 5 telas que o operador de separação já usa no app nativo, agora
-        // acessíveis também pelo navegador. Ver KoraSyncController.
-        heading: 'KoraSync',
-        items: [
-            { label: 'Fila normal', href: '/admin/korasync/fila', icon: 'fas fa-list-check', color: 'text-success', permission: 'operacional.view' },
-            { label: 'Sem estoque', href: '/admin/korasync/sem-estoque', icon: 'fas fa-triangle-exclamation', color: 'text-warning', permission: 'operacional.view' },
-            { label: 'Vendas futuras', href: '/admin/korasync/vendas-futuras', icon: 'fas fa-calendar-days', color: 'text-warning', permission: 'operacional.view' },
-            { label: 'Separados', href: '/admin/korasync/separados', icon: 'fas fa-boxes-packing', color: 'text-success', permission: 'operacional.view' },
-            { label: 'Cancelados', href: '/admin/korasync/cancelados', icon: 'fas fa-circle-xmark', color: 'text-error', permission: 'operacional.view' },
-        ],
-    },
-    {
         // Envios Flex (pedido explícito 2026-09-11): tudo que saiu com o
         // entregador do Flex, o comprovante de retirada (foto e assinatura
         // do KoraFlex) e os alertas — devolução pendente, venda cancelada

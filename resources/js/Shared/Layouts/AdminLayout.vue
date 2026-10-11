@@ -93,6 +93,31 @@ const activeItem = computed(() => {
     return null;
 });
 
+// Menu em dropdown (pedido 2026-10-11): cada seção abre e fecha; a seção da
+// tela atual já vem aberta e o item continua marcado. O que o usuário abriu
+// fica lembrado neste navegador.
+const SECOES_ABERTAS = 'admin_sidebar_secoes';
+const lerAbertas = () => {
+    try { return JSON.parse(localStorage.getItem(SECOES_ABERTAS) ?? '[]'); } catch { return []; }
+};
+const secoesAbertas = ref(new Set(lerAbertas()));
+const secaoAtiva = computed(() => visibleSections.value.find((s) => s.items.some((i) => isActive(i.href)))?.heading ?? null);
+const secaoAberta = (heading) => heading === secaoAtiva.value || secoesAbertas.value.has(heading);
+const alternarSecao = (heading) => {
+    const abertas = new Set(secoesAbertas.value);
+    if (secaoAberta(heading)) {
+        abertas.delete(heading);
+        if (heading === secaoAtiva.value) abertas.add(`!${heading}`);
+    } else {
+        abertas.add(heading);
+        abertas.delete(`!${heading}`);
+    }
+    secoesAbertas.value = abertas;
+    try { localStorage.setItem(SECOES_ABERTAS, JSON.stringify([...abertas])); } catch { /* sem storage: só não lembra */ }
+};
+const secaoExpandida = (heading) => !secoesAbertas.value.has(`!${heading}`) && secaoAberta(heading);
+const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
+
 const logout = () => router.post('/sair');
 
 // Pedido explícito 2026-08-15: botão de voltar visível em toda tela do
@@ -151,12 +176,20 @@ watch(
                 item de 100% de largura nunca cabe ao lado de outro). -->
                 <div class="h-auto w-full basis-full items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:w-auto md:flex-1 md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
                     :class="collapseShow">
-                    <div v-for="section in visibleSections" :key="section.heading" class="mb-4">
-                        <h6 v-if="!sidebarCollapsed" class="mb-2 block pt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-                            {{ section.heading }}
-                        </h6>
+                    <div v-for="section in visibleSections" :key="section.heading" class="mb-1">
+                        <button v-if="!sidebarCollapsed" type="button"
+                            class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold uppercase tracking-wide transition-colors"
+                            :class="secaoExpandida(section.heading)
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-slate-400 hover:bg-[var(--surface-border)]/30 hover:text-[var(--sidebar-foreground)]'"
+                            :aria-expanded="secaoExpandida(section.heading)" @click="alternarSecao(section.heading)">
+                            <span class="flex-1 truncate">{{ section.heading }}</span>
+                            <span v-if="!secaoExpandida(section.heading) && badgeDaSecao(section) > 0"
+                                class="min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-[10px] font-bold leading-5 text-white">{{ badgeDaSecao(section) }}</span>
+                            <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': secaoExpandida(section.heading) }"></i>
+                        </button>
 
-                        <ul class="flex list-none flex-col md:min-w-full md:flex-col">
+                        <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
                             <li v-for="item in section.items" :key="item.href">
                                 <Link :href="item.href" :title="item.label"
                                     class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium transition-colors"
@@ -178,6 +211,13 @@ watch(
                     <hr class="my-4 border-[var(--surface-border)] md:min-w-full">
 
                     <ul class="mb-4 flex list-none flex-col md:min-w-full md:flex-col">
+                        <li v-if="user?.role === 'admin'">
+                            <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium"
+                                :class="urlPath === '/admin/filas' ? 'border-primary bg-[var(--surface-border)]/40 text-primary' : 'border-transparent text-[var(--sidebar-foreground)] hover:text-primary'" title="Filas (Horizon)">
+                                <i class="fas fa-layer-group w-8 text-center text-sm" :class="urlPath === '/admin/filas' ? 'text-primary' : 'text-slate-400'"></i>
+                                <span v-if="!sidebarCollapsed">Filas (Horizon)</span>
+                            </Link>
+                        </li>
                         <li>
                             <Link href="/" class="flex items-center gap-2 py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] hover:text-primary" title="Ver loja">
                                 <i class="fas fa-store w-8 text-center text-sm text-slate-400"></i>

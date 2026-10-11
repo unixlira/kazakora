@@ -64,7 +64,8 @@ class RespostaAvaliacaoIa
 
         // Frase tem que terminar: ponto, exclamação, interrogação ou emoji.
         // Resposta cortada no meio ("chegou dire") nunca vai para a Shopee.
-        if (! preg_match('/([.!?…]|\p{Extended_Pictographic}|\x{FE0F})$/u', $texto)) {
+        // Faixas de emoji explícitas: o PCRE da VPS não conhece \p{Extended_Pictographic}.
+        if (! preg_match('/([.!?…]|[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2764}\x{FE0F}])$/u', $texto)) {
             return null;
         }
 

@@ -54,6 +54,15 @@ class RespostaAvaliacaoIaTest extends TestCase
         $this->assertSame('ia_rating_5', $review->seller_reply_template);
     }
 
+    public function test_resposta_terminando_em_emoji_vale(): void
+    {
+        $review = $this->cenario('Que alegria saber que o carregador chegou antes do prazo! Segue a loja 💛');
+
+        app(AutoReplyShopeeReviewsService::class)->replyPendingPositiveShopeeReviews(1);
+
+        $this->assertSame('ia_rating_5', $review->fresh()->seller_reply_template);
+    }
+
     public function test_texto_fora_das_regras_cai_no_pronto(): void
     {
         $review = $this->cenario('Obrigado! Fale com a gente em https://kazakora.com que fazemos o reembolso.');

@@ -78,7 +78,7 @@ class SalesReturnService
     /**
      * @param  array<int|string, int|string>  $quantidades  order_item_id => quantidade devolvida
      */
-    public function registrar(Invoice $venda, array $quantidades, string $motivo, bool $voltaAoEstoque, ?UploadedFile $declaracao = null): Order
+    public function registrar(Invoice $venda, array $quantidades, string $motivo, bool $voltaAoEstoque, ?UploadedFile $declaracao = null, bool $emitirAgora = true): Order
     {
         if ($impedimento = $this->impedimento($venda)) {
             throw new RuntimeException($impedimento);
@@ -101,7 +101,7 @@ class SalesReturnService
             }
         }
 
-        return DB::transaction(function () use ($venda, $escolhidos, $motivo, $voltaAoEstoque, $declaracao) {
+        return DB::transaction(function () use ($venda, $escolhidos, $motivo, $voltaAoEstoque, $declaracao, $emitirAgora) {
             $original = $venda->order->loadMissing('items');
             $originais = $original->items->keyBy('id');
 
@@ -166,7 +166,11 @@ class SalesReturnService
 
             $this->timeline->record($order, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, "Devolução da NF-e {$venda->numero}/{$venda->serie} (pedido #{$original->id}) registrada pelo admin");
 
-            GenerateInvoiceJob::dispatch($order->id)->afterCommit();
+            // Rascunho (devolução automática, 2026-10-11): a nota só é emitida
+            // quando o produto chega — ver DevolucaoFiscalAutomatica.
+            if ($emitirAgora) {
+                GenerateInvoiceJob::dispatch($order->id)->afterCommit();
+            }
 
             return $order;
         });

@@ -66,6 +66,7 @@ class MarketplaceReturn extends Model
         'tracking_number', 'respond_due_at', 'receive_due_at', 'opened_at', 'delivered_at', 'closed_at',
         'resolution', 'received_at', 'received_by', 'verdict', 'verdict_note', 'verdict_at', 'verdict_by',
         'manual', 'alerts_notified', 'raw_payload', 'last_synced_at',
+        'devolucao_order_id', 'devolucao_fiscal_status', 'devolucao_fiscal_obs',
     ];
 
     protected function casts(): array
@@ -84,6 +85,24 @@ class MarketplaceReturn extends Model
             'raw_payload' => 'array',
             'last_synced_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Nota de devolução automática (2026-10-11): toda mudança do caso passa
+     * pelo preparo/emissão da NF-e de entrada, na fila.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (self $caso) {
+            if ($caso->wasRecentlyCreated || $caso->wasChanged(['kind', 'situacao', 'verdict', 'order_id', 'received_at'])) {
+                \App\Modules\Fiscal\Jobs\ProcessarDevolucaoFiscal::dispatch($caso->id)->afterCommit();
+            }
+        });
+    }
+
+    public function devolucaoOrder(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Checkout\Models\Order::class, 'devolucao_order_id');
     }
 
     public function order(): BelongsTo

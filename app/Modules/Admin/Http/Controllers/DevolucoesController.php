@@ -47,7 +47,7 @@ class DevolucoesController extends Controller
         $busca = trim((string) $request->string('busca')) ?: null;
 
         $casos = MarketplaceReturn::query()
-            ->with(['order:id,shipping_name,total,stock_restored_at', 'order.items:id,order_id,product_id,product_name,quantity', 'events.user:id,name', 'evidencias.user:id,name', 'receivedBy:id,name', 'verdictBy:id,name'])
+            ->with(['order:id,shipping_name,total,stock_restored_at', 'order.items:id,order_id,product_id,product_name,quantity', 'devolucaoOrder.invoice:id,order_id,numero,status', 'events.user:id,name', 'evidencias.user:id,name', 'receivedBy:id,name', 'verdictBy:id,name'])
             ->when($canal, fn ($q) => $q->where('channel', $canal))
             ->when($busca, fn ($q) => $q->where(fn ($q) => $q
                 ->where('external_order_id', 'like', "%{$busca}%")
@@ -323,6 +323,13 @@ class DevolucoesController extends Controller
             'cliente' => $caso->order?->shipping_name,
             'produtos' => $caso->order?->items->map(fn ($item) => "{$item->quantity}x {$item->product_name}")->implode(', '),
             'estoqueDevolvidoEm' => $caso->order?->stock_restored_at?->toIso8601String(),
+            // Nota de devolução automática (2026-10-11).
+            'notaDevolucao' => $caso->devolucao_fiscal_status ? [
+                'status' => $caso->devolucao_fiscal_status,
+                'obs' => $caso->devolucao_fiscal_obs,
+                'pedidoId' => $caso->devolucao_order_id,
+                'nota' => $caso->devolucaoOrder?->invoice ? ['id' => $caso->devolucaoOrder->invoice->id, 'numero' => $caso->devolucaoOrder->invoice->numero, 'status' => $caso->devolucaoOrder->invoice->status] : null,
+            ] : null,
             'tipo' => $caso->kind,
             'motivo' => $caso->reason_label ?? $caso->reason_code,
             'situacao' => $caso->situacao,

@@ -34,7 +34,7 @@ const form = useForm({
     brand_name: props.settings.brand_name ?? 'KazaKora',
     tone: props.settings.tone ?? 'consultivo',
     max_questions_before_close: props.settings.max_questions_before_close ?? 2,
-    store_base_url: props.settings.store_base_url ?? 'https://kazakora.devlira.com.br',
+    store_base_url: props.settings.store_base_url ?? window.location.origin,
     welcome_message: props.settings.welcome_message ?? '',
     outside_hours_message: props.settings.outside_hours_message ?? '',
     closing_template: props.settings.closing_template ?? '',

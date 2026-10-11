@@ -17,7 +17,8 @@ class WhatsAppSettings
         'brand_name' => 'KazaKora',
         'tone' => 'consultivo',
         'max_questions_before_close' => '2',
-        'store_base_url' => 'https://kazakora.devlira.com.br',
+        // Vazio = endereço deste ambiente (APP_URL) — ver get().
+        'store_base_url' => '',
         'welcome_message' => 'Oi, eu sou a Manuela da KazaKora. Me conta o que você está procurando que eu te ajudo.',
         'outside_hours_message' => 'Agora estamos fora do horário, mas já deixei sua mensagem registrada. Assim que possível seguimos por aqui.',
         'closing_template' => 'Pelo que você me contou, esse modelo parece o caminho mais seguro. Quer que eu te mande o link certo pra compra?',
@@ -52,9 +53,20 @@ class WhatsAppSettings
         return $settings;
     }
 
+    /** Endereço antigo que ficou gravado como padrão antes da produção (2026-10-10). */
+    private const ENDERECO_HOMOLOG_ANTIGO = 'https://kazakora.devlira.com.br';
+
     public function get(string $key, ?string $default = null): ?string
     {
-        return Setting::get(self::PREFIX.$key, $default ?? self::DEFAULTS[$key] ?? null);
+        $valor = Setting::get(self::PREFIX.$key, $default ?? self::DEFAULTS[$key] ?? null);
+
+        // Link da loja nas mensagens: sem valor próprio (ou com o endereço do
+        // homolog que veio na cópia do banco), usa o endereço deste ambiente.
+        if ($key === 'store_base_url' && (blank($valor) || rtrim((string) $valor, '/') === self::ENDERECO_HOMOLOG_ANTIGO)) {
+            return rtrim((string) config('app.url'), '/');
+        }
+
+        return $valor;
     }
 
     public function bool(string $key): bool

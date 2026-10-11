@@ -108,7 +108,8 @@ jobs:
           # Troca atômica do link: quem está navegando não vê erro.
           ln -sfn \$R \$BASE/current.novo && mv -Tf \$BASE/current.novo \$BASE/current
           sudo /usr/bin/systemctl reload php8.3-fpm
-          \$PHP artisan queue:restart
+          # Workers sobem com o código novo (e saem de FATAL se estavam parados).
+          sudo /usr/bin/supervisorctl restart 'kazakora:*'
 
           # A loja tem que responder; senão volta para a versão anterior.
           sleep 2

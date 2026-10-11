@@ -49,7 +49,51 @@ class RespostaAvaliacaoIa
             return null;
         }
 
-        return $this->validar($texto);
+        $texto = $this->validar($texto);
+
+        // Avaliação obrigatória (pedido 2026-10-11: "PRECISA SEMPRE AVALIAR"):
+        // um segundo passo revisa a resposta antes de ela ir a público. Sem
+        // aprovação explícita, não vai — e entra o texto pronto.
+        if ($texto === null || ! $this->aprovada($pedido, $texto)) {
+            return null;
+        }
+
+        return $texto;
+    }
+
+    private function aprovada(string $pedido, string $resposta): bool
+    {
+        try {
+            $bruto = $this->gemini->generate(
+                (string) config('services.gemini.chat_model'),
+                [['role' => 'user', 'parts' => [['text' => $pedido."\n\nResposta proposta da loja:\n".$resposta]]]],
+                <<<'TXT'
+Você revisa, antes de publicar, a resposta de uma loja a uma avaliação pública na Shopee. A resposta NÃO pode ser editada depois de publicada, então seja rigoroso.
+Aprove SOMENTE se TODAS forem verdadeiras:
+1. Está completa: nenhuma frase cortada ou sem sentido, termina de forma natural.
+2. Português do Brasil correto, sem erro de digitação.
+3. Combina com a nota e o comentário (não agradece com entusiasmo uma reclamação; não pede desculpa por um elogio).
+4. Não promete reembolso, troca, estorno ou devolução; não tem link, telefone, e-mail ou outra plataforma.
+5. Tom gentil e profissional, sem exagero, que você publicaria com orgulho.
+Responda SOMENTE com JSON: {"aprovada": true ou false, "motivo": "curto"}
+TXT,
+                1024,
+                GeminiUsageLog::PURPOSE_REVIEW,
+            );
+        } catch (Throwable $e) {
+            Log::channel('reviews')->warning('Revisor da resposta de avaliação falhou', ['erro' => mb_substr($e->getMessage(), 0, 180)]);
+
+            return false;
+        }
+
+        $json = json_decode(trim((string) preg_replace('/^```(?:json)?|```$/m', '', trim($bruto))), true);
+        $ok = is_array($json) && ($json['aprovada'] ?? null) === true;
+
+        if (! $ok) {
+            Log::channel('reviews')->info('Resposta de avaliação reprovada pelo revisor', ['resposta' => $resposta, 'motivo' => $json['motivo'] ?? mb_substr($bruto, 0, 160)]);
+        }
+
+        return $ok;
     }
 
     private function validar(string $texto): ?string

@@ -19,12 +19,13 @@ class RespostaAvaliacaoIaTest extends TestCase
 
     private array $enviadas = [];
 
-    private function cenario(?string $textoDaIa): Review
+    private function cenario(?string $textoDaIa, string $revisao = '{"aprovada": true, "motivo": "ok"}'): Review
     {
         $gemini = Mockery::mock(GeminiClient::class);
         $gemini->shouldReceive('isConfigured')->andReturn($textoDaIa !== null);
         if ($textoDaIa !== null) {
-            $gemini->shouldReceive('generate')->andReturn($textoDaIa);
+            // 1ª chamada escreve, 2ª revisa.
+            $gemini->shouldReceive('generate')->andReturn($textoDaIa, $revisao);
         }
         $this->app->instance(GeminiClient::class, $gemini);
 
@@ -78,6 +79,24 @@ class RespostaAvaliacaoIaTest extends TestCase
     public function test_resposta_cortada_no_meio_cai_no_pronto(): void
     {
         $review = $this->cenario('Ficamos muito felizes em saber que o seu carregador turbo chegou dire');
+
+        app(AutoReplyShopeeReviewsService::class)->replyPendingPositiveShopeeReviews(1);
+
+        $this->assertStringStartsWith('positive_rating_5_', $review->fresh()->seller_reply_template);
+    }
+
+    public function test_reprovada_pelo_revisor_cai_no_pronto(): void
+    {
+        $review = $this->cenario('Que bom que gostou do carregador! Segue a loja.', '{"aprovada": false, "motivo": "genérica"}');
+
+        app(AutoReplyShopeeReviewsService::class)->replyPendingPositiveShopeeReviews(1);
+
+        $this->assertStringStartsWith('positive_rating_5_', $review->fresh()->seller_reply_template);
+    }
+
+    public function test_revisor_com_resposta_invalida_cai_no_pronto(): void
+    {
+        $review = $this->cenario('Que bom que gostou do carregador! Segue a loja.', 'acho que está ok');
 
         app(AutoReplyShopeeReviewsService::class)->replyPendingPositiveShopeeReviews(1);
 

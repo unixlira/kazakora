@@ -7,6 +7,8 @@ use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\ManuelaAutoReplyService;
+use App\Modules\WhatsApp\Services\ManuelaProductSearch;
+use App\Modules\WhatsApp\Services\ManuelaVisao;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -58,6 +60,10 @@ class ReplyWithManuela
             $this->transcribe($inbound, $gemini, $media);
         }
 
+        if ($inbound->type === 'image' && $gemini->isConfigured()) {
+            $this->enxergar($inbound, $conversation, $media);
+        }
+
         $text = $inbound->type === 'text' ? (string) $inbound->body : (string) ($inbound->payload['transcription'] ?? '');
 
         // Sem IA, o roteiro fixo não entende foto/áudio: chama uma pessoa.
@@ -103,6 +109,41 @@ class ReplyWithManuela
 
         $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    /**
+     * Foto do cliente (2026-10-11): o Gemini identifica o produto pelo
+     * catálogo real. Identificou → esse produto passa a ser o "produto em
+     * conversa" (a ficha de onde saem preço e estoque). Não identificou →
+     * o produto anterior SAI do contexto, para ela não responder sobre ele.
+     */
+    private function enxergar(WhatsAppMessage $inbound, WhatsAppConversation $conversation, WhatsAppMediaDownloader $media): void
+    {
+        if (isset($inbound->payload['visao'])) {
+            return;
+        }
+
+        try {
+            $arquivo = $media->download($inbound);
+            $visao = $arquivo ? app(ManuelaVisao::class)->identificar($arquivo['body'], $arquivo['mime_type'], (string) $inbound->body) : null;
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp.visao_falhou', ['message_id' => $inbound->id, 'error' => $exception->getMessage()]);
+            $visao = null;
+        }
+
+        $visao ??= ['descricao' => '', 'produto_id' => null, 'nome' => null, 'confianca' => 0.0];
+        $inbound->update(['payload' => array_merge($inbound->payload ?? [], ['visao' => $visao])]);
+
+        $metadata = $conversation->metadata ?? [];
+        $ficha = $visao['produto_id'] ? app(ManuelaProductSearch::class)->details(ManuelaProductSearch::ORIGIN_STORE, (string) $visao['produto_id']) : null;
+
+        if ($ficha) {
+            $metadata[ManuelaAgentClient::PRODUCT_CONTEXT_KEY] = $ficha + ['aberto_em' => now()->toIso8601String()];
+        } else {
+            unset($metadata[ManuelaAgentClient::PRODUCT_CONTEXT_KEY]);
+        }
+
+        $conversation->update(['metadata' => $metadata]);
     }
 
     /** Áudio do cliente vira texto (Gemini) e fica salvo na mensagem. */

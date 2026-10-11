@@ -269,6 +269,8 @@ const payloadEntrega = () => {
 
     if (!isLoggedIn.value) {
         data.guest = { name: pessoa.name, email: pessoa.email, cpf: pessoa.cpf, phone: pessoa.phone };
+    } else if (pedirCpf.value) {
+        data.cpf = pessoa.cpf;
     }
 
     return data;
@@ -303,12 +305,17 @@ const cpfValido = (valor) => {
     }
     return true;
 };
+// CPF: convidado sempre informa; logado só quando o do cadastro está vazio ou
+// inválido (pedido 2026-10-11 — o Mercado Pago recusa Pix com CPF inválido).
+const pedirCpf = computed(() => !isLoggedIn.value || !cpfValido(props.customer?.cpf));
+const campoCpf = computed(() => (isLoggedIn.value ? 'cpf' : 'guest.cpf'));
+
 const conferirCpf = () => {
-    if (isLoggedIn.value || !String(pessoa.cpf ?? '').trim()) return;
+    if (!pedirCpf.value || !String(pessoa.cpf ?? '').trim()) return;
     if (!cpfValido(pessoa.cpf)) {
-        erros.value = { ...erros.value, 'guest.cpf': ['CPF inválido. Confira os números.'] };
-    } else if (erros.value['guest.cpf']) {
-        const { 'guest.cpf': _, ...resto } = erros.value;
+        erros.value = { ...erros.value, [campoCpf.value]: ['CPF inválido. Confira os números.'] };
+    } else if (erros.value[campoCpf.value]) {
+        const { [campoCpf.value]: _, ...resto } = erros.value;
         erros.value = resto;
     }
 };
@@ -322,8 +329,8 @@ const finalizar = async () => {
     if (nomeCurto()) {
         errosLocais['guest.name'] = [(pessoa.name ?? '').trim() ? MENSAGEM_NOME : 'Digite seu nome completo.'];
     }
-    if (!isLoggedIn.value && !cpfValido(pessoa.cpf)) {
-        errosLocais['guest.cpf'] = [String(pessoa.cpf ?? '').trim() ? 'CPF inválido. Confira os números.' : 'Digite seu CPF.'];
+    if (pedirCpf.value && !cpfValido(pessoa.cpf)) {
+        errosLocais[campoCpf.value] = [String(pessoa.cpf ?? '').trim() ? 'CPF inválido. Confira os números.' : 'Digite seu CPF.'];
     }
     if (Object.keys(errosLocais).length) {
         erros.value = errosLocais;
@@ -537,10 +544,10 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <input :value="pessoa.phone" type="tel" inputmode="numeric" autocomplete="tel" :class="[inputClass, erro('new_address.phone') && inputErroClass]" placeholder="(11) 99999-9999" @input="pessoa.phone = maskPhone($event.target.value)">
                                 <small v-if="erro('new_address.phone')" class="text-xs text-red-600">{{ erro('new_address.phone') }}</small>
                             </label>
-                            <label v-if="!isLoggedIn" :data-erro="erro('guest.cpf') ? 1 : 0">
-                                <span class="text-sm font-medium text-slate-700">CPF</span>
-                                <input :value="pessoa.cpf" type="text" inputmode="numeric" :class="[inputClass, erro('guest.cpf') && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
-                                <small v-if="erro('guest.cpf')" class="text-xs text-red-600">{{ erro('guest.cpf') }}</small>
+                            <label v-if="pedirCpf" :data-erro="erro(campoCpf) ? 1 : 0">
+                                <span class="text-sm font-medium text-slate-700">CPF<template v-if="isLoggedIn"> <span class="font-normal text-red-600">(o do seu cadastro está inválido)</span></template></span>
+                                <input :value="pessoa.cpf" type="text" inputmode="numeric" :class="[inputClass, erro(campoCpf) && inputErroClass]" placeholder="000.000.000-00" @input="pessoa.cpf = maskCpf($event.target.value)" @blur="conferirCpf">
+                                <small v-if="erro(campoCpf)" class="text-xs text-red-600">{{ erro(campoCpf) }}</small>
                             </label>
                             <label v-if="!isLoggedIn" class="md:col-span-2" :data-erro="erro('guest.email') ? 1 : 0">
                                 <span class="text-sm font-medium text-slate-700">E-mail</span>

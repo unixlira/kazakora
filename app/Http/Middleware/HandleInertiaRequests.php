@@ -88,7 +88,8 @@ class HandleInertiaRequests extends Middleware
                 'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),
             ],
             'cart' => fn () => [
-                'count' => app(CartManager::class)->count(),
+                // Ícone do topo: o carrinho de verdade, mesmo durante uma compra direta.
+                'count' => app(CartManager::class)->quantidadeNoCarrinho(),
             ],
             'favorites' => fn () => [
                 'count' => $request->user() ? Favorite::query()->where('user_id', $request->user()->id)->count() : 0,

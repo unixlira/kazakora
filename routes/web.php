@@ -128,6 +128,9 @@ Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store']
     ->middleware('auth')
     ->name('avaliacoes.armazenar');
 
+// "Comprar" na página do produto: finalização só com aquele item (pedido 2026-10-11).
+Route::post('/comprar-agora', [CartController::class, 'comprarAgora'])->name('comprar-agora');
+
 Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::get('/', [CartController::class, 'index'])->name('ver');
     // Links do e-mail de carrinho abandonado (pedido 2026-10-10), assinados.

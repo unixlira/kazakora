@@ -118,6 +118,7 @@ class ImportadorDemonstrativoTikTok
             DB::table('marketplace_settlement_details')->upsert($lote, ['channel', 'statement_id', 'external_order_id', 'external_sku_id', 'transaction_type'], $atualizar);
         }
 
+        $taxas = $this->aplicarTaxasReais(array_values(array_unique(array_column($linhas, 'external_order_id'))));
         $datas = array_filter(array_column($linhas, 'settlement_date'));
 
         return [
@@ -128,7 +129,54 @@ class ImportadorDemonstrativoTikTok
             'de' => $datas ? min($datas) : null,
             'ate' => $datas ? max($datas) : null,
             'divergencias' => $this->conferir($linhas, $abas['Extratos'] ?? []),
+            'taxas_reais' => $taxas,
         ];
+    }
+
+    /**
+     * Taxa REAL de cada pedido liquidado (vendas líquidas − valor liquidado:
+     * comissão, SFP, taxa por item, afiliado e frete líquido) — substitui a
+     * estimativa na margem. Sem ids, refaz para todo o extrato.
+     *
+     * @param  list<string>|null  $ids
+     */
+    public function aplicarTaxasReais(?array $ids = null): int
+    {
+        $porPedido = DB::table('marketplace_settlement_details')
+            ->where('channel', Order::ORIGIN_TIKTOK_SHOP)
+            ->where('transaction_type', 'Pedido')
+            ->when($ids !== null, fn ($q) => $q->whereIn('external_order_id', $ids))
+            ->groupBy('external_order_id')
+            ->selectRaw('external_order_id, SUM(product_net_sales) venda, SUM(payout_amount) liquido, SUM(platform_commission_fee) comissao, SUM(service_fees) servico, SUM(net_shipping_cost) frete, SUM(seller_discounts) desconto')
+            ->get();
+
+        $pedidos = Order::query()->where('origin', Order::ORIGIN_TIKTOK_SHOP)
+            ->whereIn('external_order_id', $porPedido->pluck('external_order_id'))
+            ->pluck('id', 'external_order_id');
+
+        $gravadas = 0;
+        foreach ($porPedido as $l) {
+            if (! isset($pedidos[$l->external_order_id])) {
+                continue;
+            }
+            \App\Modules\Marketplace\Models\OrderChannelFee::query()->updateOrCreate(
+                ['order_id' => $pedidos[$l->external_order_id], 'channel' => Order::ORIGIN_TIKTOK_SHOP],
+                [
+                    'gross_amount' => round((float) $l->venda, 2),
+                    'fee_amount' => round((float) $l->venda - (float) $l->liquido, 2),
+                    'commission_fee' => round(abs((float) $l->comissao), 2),
+                    'service_fee' => round(abs((float) $l->servico), 2),
+                    'shipping_fee' => round(-(float) $l->frete, 2),
+                    'seller_discount' => round(abs((float) $l->desconto), 2),
+                    'payout_amount' => round((float) $l->liquido, 2),
+                    'source' => \App\Modules\Marketplace\Models\OrderChannelFee::SOURCE_REPORT,
+                    'computed_at' => now(),
+                ],
+            );
+            $gravadas++;
+        }
+
+        return $gravadas;
     }
 
     /** Conferência 1 do plano: soma das linhas = valor do demonstrativo. */

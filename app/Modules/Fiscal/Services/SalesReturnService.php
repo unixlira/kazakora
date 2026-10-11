@@ -141,10 +141,18 @@ class SalesReturnService
                 'total' => round($subtotal - $desconto, 2),
             ]);
 
+            $fiscalDaVenda = $this->fiscalDoXmlDaVenda($venda);
+
             foreach ($escolhidos as $itemId => $quantidade) {
                 $item = $originais[$itemId];
 
+                // Item sem produto do catálogo e sem NCM próprio (venda antiga
+                // da Shopee, 2026-10-11): a devolução espelha a nota de venda,
+                // então o dado fiscal sai do XML autorizado dela.
+                $doXml = (! $item->product_id && ! $item->ncm) ? ($fiscalDaVenda[$this->chaveDoNome($item->product_name)] ?? (count($fiscalDaVenda) === 1 ? reset($fiscalDaVenda) : [])) : [];
+
                 $order->items()->create([
+                    ...$doXml,
                     ...collect($item->only([
                         'product_id', 'product_name', 'item_type', 'ncm', 'cest', 'cfop', 'cfop_outros_estados', 'origem_mercadoria', 'gtin',
                         'unidade_tributavel', 'icms_situacao_tributaria', 'pis_situacao_tributaria', 'pis_aliquota',
@@ -174,6 +182,60 @@ class SalesReturnService
 
             return $order;
         });
+    }
+
+    /** Completa, pelo XML da venda, o NCM dos itens sem cadastro de uma devolução já montada. */
+    public function completarFiscalPeloXml(Order $devolucao): int
+    {
+        $venda = Invoice::query()->where('chave_acesso', $devolucao->fiscal_referenced_nfe_key)->first();
+        $fiscal = $venda ? $this->fiscalDoXmlDaVenda($venda) : [];
+        $completados = 0;
+
+        foreach ($devolucao->items()->whereNull('product_id')->whereNull('ncm')->get() as $item) {
+            $dados = $fiscal[$this->chaveDoNome($item->product_name)] ?? (count($fiscal) === 1 ? reset($fiscal) : null);
+            if ($dados) {
+                $item->update($dados);
+                $completados++;
+            }
+        }
+
+        return $completados;
+    }
+
+    /**
+     * NCM/origem/CEST de cada item da nota de venda autorizada, pelo nome.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private function fiscalDoXmlDaVenda(Invoice $venda): array
+    {
+        $xml = $venda->xml_path ? rescue(fn () => \Illuminate\Support\Facades\Storage::disk('local')->get($venda->xml_path), null, false) : null;
+
+        if (! $xml || ! preg_match_all('/<prod>(.*?)<\/prod>.*?<orig>(\d)<\/orig>/s', $xml, $itens, PREG_SET_ORDER)) {
+            return [];
+        }
+
+        $resultado = [];
+        foreach ($itens as $item) {
+            preg_match('/<xProd>([^<]*)<\/xProd>/', $item[1], $nome);
+            preg_match('/<NCM>(\d+)<\/NCM>/', $item[1], $ncm);
+            preg_match('/<CEST>(\d+)<\/CEST>/', $item[1], $cest);
+            if (! isset($ncm[1])) {
+                continue;
+            }
+            $resultado[$this->chaveDoNome(html_entity_decode($nome[1] ?? ''))] = array_filter([
+                'ncm' => $ncm[1],
+                'cest' => $cest[1] ?? null,
+                'origem_mercadoria' => $item[2],
+            ], fn ($v) => $v !== null);
+        }
+
+        return $resultado;
+    }
+
+    private function chaveDoNome(string $nome): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/', ' ', $nome)));
     }
 
     /**

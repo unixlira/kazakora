@@ -52,6 +52,23 @@ class SincronizarProdutosBlingTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_fica_de_fora_inativo_e_pai_e_variacao_leva_nome_do_pai(): void
+    {
+        $pai = $this->produto('PAI-1');
+        $pai->forceFill(['name' => 'Quebra-Cabeça Magnético'])->save();
+        $filho = $this->produto('FILHO-1');
+        $filho->forceFill(['name' => 'Menino', 'parent_product_id' => $pai->id])->save();
+        $inativo = $this->produto('SHOPEE-123');
+        $inativo->forceFill(['is_active' => false])->save();
+
+        $bling = Mockery::mock(BlingClient::class);
+        $bling->shouldReceive('get')->once()->with('produtos', ['codigo' => 'FILHO-1'])->andReturn(['data' => []]);
+        $bling->shouldReceive('post')->once()->withArgs(fn ($uri, $dados) => $dados['nome'] === 'Quebra-Cabeça Magnético - Menino')->andReturn([]);
+        $this->app->instance(BlingClient::class, $bling);
+
+        $this->artisan('bling:sincronizar-produtos --aplicar')->expectsOutputToContain('1 criado(s)')->assertSuccessful();
+    }
+
     public function test_sem_aplicar_nao_grava_nada(): void
     {
         $this->produto('NOVO-1');

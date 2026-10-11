@@ -25,7 +25,8 @@ class CorrigirNotasBling extends Command
         {pedidos?* : IDs dos pedidos (padrão: todos do TikTok com nota pendente ou rejeitada)}
         {--dias=30 : Janela quando não informar pedidos}
         {--aplicar : Grava a correção no Bling}
-        {--enviar : Depois de corrigir, envia à SEFAZ}';
+        {--enviar : Depois de corrigir, envia à SEFAZ}
+        {--forcar : Reenvia nota rejeitada mesmo sem mudança (ex.: SEFAZ estava fora do ar)}';
 
     protected $description = 'Alinha as NF-e travadas do Bling ao cadastro (CFOP/NCM) e, opcionalmente, envia';
 
@@ -89,6 +90,9 @@ class CorrigirNotasBling extends Command
 
             if ($enviar) {
                 usleep(1_200_000);
+                if ($this->option('forcar')) {
+                    $importer->esquecerUltimaTentativa($pedido);
+                }
                 $invoice = $importer->syncForOrder($pedido->fresh());
                 $this->line('   -> '.($invoice ? "nota {$invoice->serie}-{$invoice->numero}: {$invoice->status}".($invoice->motivo_rejeicao ? " ({$invoice->motivo_rejeicao})" : '') : 'sem retorno do Bling'));
             }

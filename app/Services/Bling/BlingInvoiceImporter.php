@@ -325,6 +325,17 @@ class BlingInvoiceImporter
      * Olha os XMLs AUTORIZADOS guardados do pedido, não o registro (que pode
      * ter sido sobrescrito): alguma NF-e série 2 (a nossa) com cStat 100?
      */
+    /** Libera um novo envio de nota rejeitada mesmo sem mudança nos itens (reenvio manual). */
+    public function esquecerUltimaTentativa(Order $order): void
+    {
+        $blingOrder = $this->orders->findByOrderNumber((string) $order->external_order_id, $this->orders->lojaIdForChannel((string) $order->origin));
+        $nfeId = (int) ($blingOrder['notaFiscal']['id'] ?? 0);
+
+        if ($nfeId > 0) {
+            Cache::forget($this->chaveDaUltimaTentativa($nfeId));
+        }
+    }
+
     public function temNotaNossaAutorizada(Order $order): bool
     {
         $disco = Storage::disk('local');

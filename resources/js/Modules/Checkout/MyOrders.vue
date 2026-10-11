@@ -47,7 +47,7 @@ const STATUS_STYLES = {
                     class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <p class="font-semibold">Pedido #{{ order.id }}</p>
+                            <p class="font-semibold">Pedido {{ order.numero ?? order.id }}</p>
                             <p class="text-xs text-store-fg-muted">{{ formatDate(order.created_at) }}</p>
                         </div>
                         <span class="rounded-full px-3 py-1 text-xs font-semibold" :class="STATUS_STYLES[order.status] ?? 'bg-store-bg-sunken text-store-fg-muted'">

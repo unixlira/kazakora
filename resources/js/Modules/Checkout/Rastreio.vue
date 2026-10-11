@@ -16,7 +16,7 @@ const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(value));
 
-const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-truck-fast', 'fa-house-circle-check'];
+const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-box-open', 'fa-truck-fast', 'fa-house-circle-check'];
 
 // Etapa atual = a primeira que ainda não aconteceu.
 const etapaAtual = computed(() => props.pedido?.etapas.findIndex((etapa) => !etapa.feito) ?? -1);
@@ -34,7 +34,7 @@ const copiarCodigo = async () => {
 </script>
 
 <template>
-    <Head :title="pedido ? `Pedido #${pedido.id}` : 'Rastrear pedido'" />
+    <Head :title="pedido ? `Pedido ${pedido.numero ?? pedido.id}` : 'Rastrear pedido'" />
 
     <AppLayout>
         <div class="mx-auto max-w-[720px] px-4 py-12 md:px-6">
@@ -69,7 +69,7 @@ const copiarCodigo = async () => {
             <template v-else>
                 <div class="mt-8 rounded-2xl border border-store-border bg-store-bg-raised p-6">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <p class="text-lg font-semibold">Pedido #{{ pedido.id }}</p>
+                        <p class="text-lg font-semibold">Pedido {{ pedido.numero ?? pedido.id }}</p>
                         <p class="text-xs text-store-fg-muted">{{ formatDate(pedido.criado_em) }}</p>
                     </div>
 

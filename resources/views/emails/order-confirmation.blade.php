@@ -1,7 +1,7 @@
 @extends('emails.layout')
 
-@section('title', "Pedido #{$order->id} confirmado")
-@section('preheader', "Seu pedido #{$order->id} foi confirmado e já está sendo preparado.")
+@section('title', "Pedido {$order->numero} confirmado")
+@section('preheader', "Seu pedido {$order->numero} foi confirmado e já está sendo preparado.")
 
 @section('content')
     @php
@@ -14,7 +14,7 @@
         ])->all();
     @endphp
 
-    @include('emails.partials.titulo', ['icone' => '🎉', 'texto' => "Pedido #{$order->id} confirmado!"])
+    @include('emails.partials.titulo', ['icone' => '🎉', 'texto' => "Pedido {$order->numero} confirmado!"])
 
     <p style="margin: 0 0 20px; text-align: center; color: #374151;">
         Olá, {{ $order->shipping_name }}! Recebemos seu pagamento e seu pedido já está sendo preparado com carinho.

@@ -87,6 +87,24 @@ class CorrigirNotasBlingTest extends TestCase
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/enviar'));
     }
 
+    public function test_uf_da_nota_manda_no_cfop(): void
+    {
+        // Pedido diz RN, mas a nota vai para SP (mesma UF da empresa): 5102.
+        Http::fake([
+            '*/pedidos/vendas/9' => Http::response(['data' => ['id' => 9, 'numeroLoja' => 'TK9', 'notaFiscal' => ['id' => 468]]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => [['id' => 9, 'numeroLoja' => 'TK9']]]),
+            '*/nfe/468' => fn (Request $r) => $r->method() === 'PUT'
+                ? Http::response(['data' => ['id' => 468]])
+                : Http::response(['data' => ['id' => 468, 'serie' => '3', 'numero' => '000468', 'situacao' => 4,
+                    'contato' => ['endereco' => ['uf' => 'SP']],
+                    'itens' => [['codigo' => 'NIV-1', 'cfop' => '6108', 'classificacaoFiscal' => '9015.30.00', 'origem' => 2]]]]),
+        ]);
+
+        $this->artisan('bling:corrigir-notas', ['--aplicar' => true])->assertSuccessful();
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT' && $r['itens'][0]['cfop'] === '5102');
+    }
+
     public function test_nao_mexe_em_pedido_com_nota_autorizada(): void
     {
         $this->fake();

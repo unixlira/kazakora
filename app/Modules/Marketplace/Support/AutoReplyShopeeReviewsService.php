@@ -129,7 +129,25 @@ class AutoReplyShopeeReviewsService
     public function __construct(
         private readonly MarketplaceDriverManager $drivers,
         private readonly ShopeeClient $shopeeClient,
+        private readonly RespostaAvaliacaoIa $ia,
     ) {}
+
+    /** O cron roda a cada 4 min: depois deste tempo, só texto pronto (sem esperar a IA). */
+    private const LIMITE_IA_SEGUNDOS = 120;
+
+    private ?float $inicio = null;
+
+    /** Texto do Gemini; se a IA falhar, demorar demais ou fugir das regras, null. */
+    private function respostaDaIa(int $rating, string $comentario, ?string $produto): ?string
+    {
+        $this->inicio ??= microtime(true);
+
+        if (microtime(true) - $this->inicio > self::LIMITE_IA_SEGUNDOS) {
+            return null;
+        }
+
+        return $this->ia->escrever($rating, $comentario, $produto);
+    }
 
     /**
      * @return array{checked: int, sent: int, failed: int, skipped: int}
@@ -172,11 +190,13 @@ class AutoReplyShopeeReviewsService
             ->each(function (Review $review) use ($driver, &$summary): void {
                 $summary['checked']++;
                 $rating = $this->normalizedRating($review->rating);
-                $reply = $this->pickTemplate($review, $rating);
+                $reply = $this->respostaDaIa($rating, (string) $review->comment, $review->product?->name);
+                $template = $reply !== null ? 'ia_rating_'.$rating : null;
+                $reply ??= $this->pickTemplate($review, $rating);
 
                 $review->forceFill([
                     'seller_reply' => $reply,
-                    'seller_reply_template' => $this->templateKey($reply, $rating),
+                    'seller_reply_template' => $template ?? $this->templateKey($reply, $rating),
                     'seller_reply_attempted_at' => now(),
                 ])->save();
 
@@ -274,7 +294,8 @@ class AutoReplyShopeeReviewsService
                     }
 
                     $summary['checked']++;
-                    $reply = $this->pickApiTemplate($commentId, $rating, (string) ($comment['comment'] ?? ''));
+                    $reply = $this->respostaDaIa($rating, (string) ($comment['comment'] ?? ''), $this->nomeDoAnuncio($itemId))
+                        ?? $this->pickApiTemplate($commentId, $rating, (string) ($comment['comment'] ?? ''));
 
                     try {
                         $driver->replyReview($commentId, $reply);
@@ -412,6 +433,15 @@ class AutoReplyShopeeReviewsService
         $index = abs(crc32($seed)) % count($templates);
 
         return $templates[$index];
+    }
+
+    private function nomeDoAnuncio(string $itemId): ?string
+    {
+        return ProductChannelListing::query()
+            ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
+            ->where('external_id', $itemId)
+            ->with('product:id,name')
+            ->first()?->product?->name;
     }
 
     private function reviewWordGroup(Review $review): ?string

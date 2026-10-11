@@ -407,8 +407,12 @@ const REDES = [
                     </div>
 
                     <div class="flex justify-center">
-                        <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
-                            class="h-24 w-auto rounded-md bg-white p-2 lg:h-32">
+                        <!-- Selo leva ao relatório do Google Safe Browsing do domínio (2026-10-11). -->
+                        <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
+                            class="cursor-pointer transition hover:opacity-90" title="Ver a verificação do Google Safe Browsing">
+                            <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
+                                class="h-24 w-auto cursor-pointer rounded-md bg-white p-2 lg:h-32">
+                        </a>
                     </div>
                 </div>
 

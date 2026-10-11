@@ -3,7 +3,7 @@
 # Pedido 2026-10-10. Pode rodar mais de uma vez: só cria o que falta.
 #
 # NÃO mexe no KoraSync (nginx "korasync", node :3101) nem na Naia (:8787).
-# Instala: PHP 8.3-FPM + OPcache, MySQL, Redis, Supervisor, Composer.
+# Instala: PHP 8.3-FPM + OPcache, MariaDB 11.8, Redis, Supervisor, Composer.
 # Cria: usuário "deploy", /var/www/kazakora/{releases,shared}, banco e
 # usuário MySQL (senha só em /root/kazakora-credenciais.txt), pool do
 # PHP-FPM, workers da fila, cron do agendador e o site do nginx (http; o
@@ -26,7 +26,13 @@ fi
 apt-get install -y -qq \
     php8.3-fpm php8.3-cli php8.3-mysql php8.3-redis php8.3-mbstring php8.3-xml \
     php8.3-curl php8.3-zip php8.3-gd php8.3-intl php8.3-bcmath php8.3-soap \
-    php8.3-opcache php8.3-readline mysql-server redis-server supervisor >/dev/null
+    php8.3-opcache php8.3-readline redis-server supervisor >/dev/null
+# MariaDB 11.8, o mesmo do homolog (o MySQL 8 não aceita os índices
+# "USING HASH" que o MariaDB cria — ver marketplace_settlement_details).
+if ! command -v mariadb >/dev/null; then
+    curl -fsSL https://r.mariadb.com/downloads/mariadb_repo_setup | bash -s -- --mariadb-server-version=mariadb-11.8 >/dev/null
+    apt-get install -y -qq mariadb-server mariadb-client >/dev/null
+fi
 if ! command -v composer >/dev/null; then
     curl -sS https://getcomposer.org/installer | php8.3 -- --install-dir=/usr/local/bin --filename=composer >/dev/null
 fi
@@ -51,14 +57,15 @@ echo "== MySQL"
 CRED=/root/kazakora-credenciais.txt
 if [ ! -f "$CRED" ]; then
     SENHA="$(openssl rand -base64 30 | tr -dc 'A-Za-z0-9' | head -c 32)"
-    mysql -e "CREATE DATABASE IF NOT EXISTS kazakora CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-    mysql -e "CREATE USER IF NOT EXISTS 'kazakora'@'localhost' IDENTIFIED BY '${SENHA}';"
-    mysql -e "GRANT ALL PRIVILEGES ON kazakora.* TO 'kazakora'@'localhost'; FLUSH PRIVILEGES;"
-    umask 077
-    printf 'DB_DATABASE=kazakora\nDB_USERNAME=kazakora\nDB_PASSWORD=%s\n' "$SENHA" > "$CRED"
+    ( umask 077; printf 'DB_DATABASE=kazakora\nDB_USERNAME=kazakora\nDB_PASSWORD=%s\n' "$SENHA" > "$CRED" )
     echo "   senha do banco gravada em $CRED (não é mostrada aqui)"
 fi
-cp "$AQUI/mysql-kazakora.cnf" /etc/mysql/mysql.conf.d/zz-kazakora.cnf
+SENHA="$(grep '^DB_PASSWORD=' "$CRED" | cut -d= -f2-)"
+systemctl start mariadb
+mariadb -e "CREATE DATABASE IF NOT EXISTS kazakora CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mariadb -e "CREATE USER IF NOT EXISTS 'kazakora'@'localhost' IDENTIFIED BY '${SENHA}';"
+mariadb -e "GRANT ALL PRIVILEGES ON kazakora.* TO 'kazakora'@'localhost'; FLUSH PRIVILEGES;"
+cp "$AQUI/mysql-kazakora.cnf" /etc/mysql/mariadb.conf.d/90-kazakora.cnf
 
 echo "== Redis"
 # Só escuta na própria máquina; memória limitada para não brigar com o resto.
@@ -86,12 +93,12 @@ cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora
 ln -sf /etc/nginx/sites-available/kazakora /etc/nginx/sites-enabled/kazakora
 nginx -t
 
-systemctl enable --now php8.3-fpm mysql redis-server supervisor >/dev/null 2>&1
-systemctl restart mysql redis-server php8.3-fpm
+systemctl enable --now php8.3-fpm mariadb redis-server supervisor >/dev/null 2>&1
+systemctl restart mariadb redis-server php8.3-fpm
 supervisorctl reread >/dev/null && supervisorctl update >/dev/null || true
 systemctl reload nginx
 
 echo "== Pronto"
-for s in php8.3-fpm mysql redis-server supervisor nginx; do echo "   $s: $(systemctl is-active $s)"; done
+for s in php8.3-fpm mariadb redis-server supervisor nginx; do echo "   $s: $(systemctl is-active $s)"; done
 echo "   KoraSync: HTTP $(curl -s -o /dev/null -w '%{http_code}' -H 'Host: sync.alphakora.com.br' http://127.0.0.1/)"
 echo "Próximos passos: deploy/producao/LEIA-ME.md"

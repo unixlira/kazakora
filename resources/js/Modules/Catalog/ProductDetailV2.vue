@@ -260,11 +260,11 @@ const addToCart = () => {
     });
 };
 
+// "Comprar": finalização só com este produto, sem colocar no carrinho
+// (pedido 2026-10-11). O carrinho continua com o que já tinha.
 const buyNow = () => {
     buyingNow.value = true;
-    router.post('/carrinho', { product_id: props.product.id, quantity: quantity.value }, {
-        preserveScroll: true,
-        onSuccess: () => router.get('/finalizacao'),
+    router.post('/comprar-agora', { product_id: props.product.id, quantity: quantity.value }, {
         onFinish: () => { buyingNow.value = false; },
     });
 };

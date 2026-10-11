@@ -223,6 +223,13 @@ class CheckoutController extends Controller
             $rules['guest.phone'] = ['nullable', 'string', 'max:20'];
         }
 
+        // Cliente logado com CPF vazio ou inválido no cadastro (pedido
+        // 2026-10-11: o admin com CPF de mentira travava o Pix no Mercado
+        // Pago com "Invalid user identification number"): pede aqui e grava.
+        if ($request->user() && ! CpfValido::valido((string) $request->user()->cpf)) {
+            $rules['cpf'] = ['required', 'string', 'max:14', new CpfValido];
+        }
+
         // Rua/bairro/cidade/UF vazios: completa pelo CEP antes de validar.
         if (is_array($request->input('new_address'))) {
             $request->merge(['new_address' => app(\App\Modules\Checkout\Support\CompletarEnderecoPeloCep::class)->completar($request->input('new_address'))]);
@@ -240,6 +247,7 @@ class CheckoutController extends Controller
             'new_address.state.size' => 'A UF tem 2 letras (ex.: SP).',
             'guest.name.required' => 'Digite seu nome completo.',
             'guest.cpf.required' => 'Digite seu CPF.',
+            'cpf.required' => 'Digite seu CPF.',
             'guest.name.min' => 'Digite seu nome completo (nome e sobrenome, com mais de 10 caracteres).',
         ]);
 
@@ -260,6 +268,11 @@ class CheckoutController extends Controller
         }
 
         $data = $validator->validated();
+
+        if (isset($data['cpf'])) {
+            $request->user()->forceFill(['cpf' => preg_replace('/\D/', '', $data['cpf'])])->save();
+            unset($data['cpf']);
+        }
 
         if ($request->user() && ! empty($data['address_id'])) {
             // find, não findOrFail: endereço apagado ou de rascunho antigo
@@ -455,6 +468,12 @@ class CheckoutController extends Controller
 
         if (! $draft) {
             return redirect()->route('finalizacao.entrega');
+        }
+
+        // CPF inválido nunca chega no Mercado Pago (ele recusa o Pix): volta
+        // pra entrega pedindo o CPF certo.
+        if ($request->user() && ! CpfValido::valido((string) $request->user()->cpf)) {
+            return redirect()->route('finalizacao.entrega')->withErrors(['cpf' => 'O CPF do seu cadastro está inválido. Digite o CPF correto para pagar.']);
         }
 
         // Trava contra duplo clique/retry: se já existe um pedido aguardando
@@ -699,6 +718,11 @@ class CheckoutController extends Controller
             // comprador. Log já guarda o texto real pra investigação; só a
             // mensagem genérica (mesma do catch do Stripe acima) vai pro
             // cliente agora.
+            // CPF recusado pelo Mercado Pago (código 2067): diz o motivo.
+            if (str_contains(strtolower($exception->getMessage()), 'identification')) {
+                return redirect()->route('finalizacao.entrega')->withErrors(['cpf' => 'O Mercado Pago recusou o CPF informado. Confira o CPF e tente de novo.']);
+            }
+
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         }
 

@@ -19,6 +19,9 @@ class CartController extends Controller
 
     public function index(): Response
     {
+        // Abriu o carrinho: desistiu da compra direta, volta ao carrinho normal.
+        $this->cart->encerrarCompraDireta();
+
         return Inertia::render('Cart/Index', [
             'items' => $this->cart->items(),
             'total' => $this->cart->total(),
@@ -81,5 +84,27 @@ class CartController extends Controller
         CartSnapshot::query()->whereKey($carrinho)->update(['lembretes_parados' => true]);
 
         return redirect()->route('catalogo.inicio')->with('success', 'Pronto! Não vamos mais mandar lembretes desse carrinho.');
+    }
+
+    /**
+     * "Comprar" na página do produto (pedido 2026-10-11): vai direto para a
+     * finalização só com este item, sem mexer no carrinho.
+     */
+    public function comprarAgora(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'quantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $product = Product::query()->where('is_active', true)->findOrFail($data['product_id']);
+
+        if ($product->stock < 1) {
+            return back()->withErrors(['cart' => 'Produto esgotado.']);
+        }
+
+        $this->cart->iniciarCompraDireta($product->id, min($data['quantity'], $product->stock));
+
+        return redirect()->route('finalizacao.entrega');
     }
 }

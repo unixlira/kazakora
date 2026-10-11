@@ -12,12 +12,42 @@ class CartManager
 {
     private const SESSION_KEY = 'cart';
 
+    /**
+     * Compra direta (pedido 2026-10-11): "Comprar" na página do produto leva
+     * à finalização SÓ com aquele item, sem colocar no carrinho nem levar
+     * junto o que já estava nele. Enquanto existir, a finalização enxerga
+     * só ela (raw()); o carrinho de verdade fica intocado.
+     */
+    private const COMPRA_DIRETA = 'compra_direta';
+
+    public function iniciarCompraDireta(int $productId, int $quantity): void
+    {
+        $this->session->put(self::COMPRA_DIRETA, [$productId => max(1, $quantity)]);
+    }
+
+    public function encerrarCompraDireta(): void
+    {
+        $this->session->forget(self::COMPRA_DIRETA);
+    }
+
+    public function emCompraDireta(): bool
+    {
+        return ! empty($this->session->get(self::COMPRA_DIRETA));
+    }
+
+    /** Itens do carrinho de verdade (ícone do topo), mesmo durante uma compra direta. */
+    public function quantidadeNoCarrinho(): int
+    {
+        return array_sum($this->session->get(self::SESSION_KEY, []));
+    }
+
     public function __construct(private readonly Session $session)
     {
     }
 
     public function add(int $productId, int $quantity): void
     {
+        $this->encerrarCompraDireta();
         $items = $this->raw();
         $items[$productId] = ($items[$productId] ?? 0) + $quantity;
         $this->save($items);
@@ -25,6 +55,7 @@ class CartManager
 
     public function update(int $productId, int $quantity): void
     {
+        $this->encerrarCompraDireta();
         $items = $this->raw();
 
         if ($quantity < 1) {
@@ -38,6 +69,7 @@ class CartManager
 
     public function remove(int $productId): void
     {
+        $this->encerrarCompraDireta();
         $items = $this->raw();
         unset($items[$productId]);
         $this->save($items);
@@ -45,6 +77,13 @@ class CartManager
 
     public function clear(): void
     {
+        // Pedido feito pela compra direta: só ela some; o carrinho continua.
+        if ($this->emCompraDireta()) {
+            $this->encerrarCompraDireta();
+
+            return;
+        }
+
         $this->session->forget(self::SESSION_KEY);
         CartSnapshot::where('session_id', $this->session->getId())->delete();
     }
@@ -80,6 +119,10 @@ class CartManager
 
     private function raw(): array
     {
+        if ($direta = $this->session->get(self::COMPRA_DIRETA)) {
+            return $direta;
+        }
+
         return $this->session->get(self::SESSION_KEY, []);
     }
 
@@ -132,6 +175,7 @@ class CartManager
      */
     public function restaurar(CartSnapshot $antigo): void
     {
+        $this->encerrarCompraDireta();
         $items = $this->raw();
         $ativos = Product::query()->whereIn('id', array_keys($antigo->itens ?? []))->where('is_active', true)->pluck('id')->all();
 

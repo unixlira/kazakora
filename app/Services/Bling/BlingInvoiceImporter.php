@@ -286,6 +286,16 @@ class BlingInvoiceImporter
     {
         $mensagem = 'Nota do Bling NÃO enviada à SEFAZ — divergência fiscal: '.implode('; ', $divergencias);
 
+        // A varredura roda a cada 5 min: sem isto, a MESMA divergência virava
+        // um alerta novo por admin a cada volta (2026-10-11: 432 alertas por
+        // hora para 9 pedidos). Avisa uma vez por pedido + mensagem a cada
+        // 24h; se a divergência mudar, avisa de novo na hora.
+        $chave = 'bling.invoice.divergencia_avisada.'.$order->id.'.'.md5($mensagem);
+
+        if (! Cache::add($chave, true, now()->addDay())) {
+            return;
+        }
+
         Log::warning('bling.invoice.fiscal_mismatch', ['order_id' => $order->id, 'divergencias' => $divergencias]);
 
         $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, $mensagem);

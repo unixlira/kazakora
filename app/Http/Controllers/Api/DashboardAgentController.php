@@ -81,6 +81,7 @@ class DashboardAgentController extends Controller
         $accounts = MarketplaceAccount::query()->get()->keyBy('channel');
 
         $lastOrders = Order::query()
+            ->nonPurchaseReturn()
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw('origin, MAX(id) as last_order_id')
             ->groupBy('origin')
@@ -127,6 +128,7 @@ class DashboardAgentController extends Controller
         // houvesse pedido com frete, mesma inconsistência visível do
         // dashboard admin.
         $revenueMonthByChannel = Order::query()
+            ->nonPurchaseReturn()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
@@ -134,6 +136,7 @@ class DashboardAgentController extends Controller
             ->pluck('total', 'origin');
 
         $revenueTodayByChannel = Order::query()
+            ->nonPurchaseReturn()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
@@ -141,6 +144,7 @@ class DashboardAgentController extends Controller
             ->pluck('total', 'origin');
 
         $salesMonthByChannel = Order::query()
+            ->nonPurchaseReturn()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw('origin, COUNT(*) as total')
@@ -148,6 +152,7 @@ class DashboardAgentController extends Controller
             ->pluck('total', 'origin');
 
         $ordersTodayByChannel = Order::query()
+            ->nonPurchaseReturn()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw('origin, COUNT(*) as total')
@@ -164,6 +169,7 @@ class DashboardAgentController extends Controller
         // tem — pagamento estornado (loja própria) OU claim do canal
         // (marketplace) — em vez de só uma.
         $returnsMonthByChannel = Order::query()
+            ->nonPurchaseReturn()
             ->where(function ($query) use ($monthStart) {
                 $query->whereHas('payments', function ($query) use ($monthStart) {
                     $query->where('status', Payment::STATUS_REFUNDED)
@@ -298,17 +304,25 @@ class DashboardAgentController extends Controller
         // Só CANCELLED sai. Pedido aguardando pagamento continua contando:
         // ele ainda pode virar venda, e tirá-lo faria o número de hoje
         // encolher e crescer sozinho ao longo do dia.
+        // 2026-10-11: venda é só pedido capturado (pago/enviado/entregue) e
+        // nunca o pedido técnico de NF-e de devolução — 51 notas de entrada
+        // emitidas num dia viraram "65 vendas" no KoraSync.
+        $vendaCapturada = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+
         $salesToday = Order::query()
+            ->nonPurchaseReturn()
             ->where('created_at', '>=', $today)
-            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->whereIn('status', $vendaCapturada)
             ->count();
 
         $salesYesterday = Order::query()
+            ->nonPurchaseReturn()
             ->whereBetween('created_at', [$yesterday, $today])
-            ->where('status', '!=', Order::STATUS_CANCELLED)
+            ->whereIn('status', $vendaCapturada)
             ->count();
 
         $cancelledToday = Order::query()
+            ->nonPurchaseReturn()
             ->where('status', Order::STATUS_CANCELLED)
             ->where('updated_at', '>=', $today)
             ->count();
@@ -319,6 +333,7 @@ class DashboardAgentController extends Controller
         // ex: Mercado Livre) — só Payment nunca pegava devolução real de
         // marketplace, já que esses pedidos não têm Payment local nenhum.
         $refundedToday = Order::query()
+            ->nonPurchaseReturn()
             ->where(function ($query) use ($today) {
                 $query->whereHas('payments', function ($query) use ($today) {
                     $query->where('status', Payment::STATUS_REFUNDED)
@@ -330,6 +345,7 @@ class DashboardAgentController extends Controller
             ->count();
 
         $returnsMonth = Order::query()
+            ->nonPurchaseReturn()
             ->where(function ($query) use ($monthStart) {
                 $query->whereHas('payments', function ($query) use ($monthStart) {
                     $query->where('status', Payment::STATUS_REFUNDED)
@@ -361,6 +377,7 @@ class DashboardAgentController extends Controller
         // (é o card único "Cancelamentos e devoluções do mês" do layout
         // novo), não reaproveita $cancelledToday (que é só HOJE).
         $cancelledMonth = Order::query()
+            ->nonPurchaseReturn()
             ->where('status', Order::STATUS_CANCELLED)
             ->where('updated_at', '>=', $monthStart)
             ->count();
@@ -373,6 +390,7 @@ class DashboardAgentController extends Controller
         // ontem/hoje de queue() — conta o dia inteiro, independente de
         // quando o pedido em si foi vendido.
         $packedToday = Order::query()
+            ->nonPurchaseReturn()
             ->where('packed_at', '>=', $today)
             ->count();
 

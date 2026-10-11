@@ -275,3 +275,6 @@ Schedule::command('produtos:gerar-conteudo-anuncio --limite=10')->everyFifteenMi
 
 // Métricas do Horizon (gráficos de vazão e tempo das filas), 2026-10-11.
 Schedule::command('horizon:snapshot')->everyFiveMinutes();
+
+// Vídeos da embalagem ficam 90 dias (2026-10-11).
+Schedule::command('videos:limpar-embalagem')->dailyAt('03:30');

@@ -357,6 +357,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->name('pedidos.criar.armazenar')
         ->middleware('permission:pedidos.edit');
     Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');
+    // Vídeo da embalagem gravado no KoraSync (2026-10-11): assistir/baixar.
+    Route::get('pedidos/{order}/videos/{packingVideo}', [AdminOrderController::class, 'packingVideo'])->name('pedidos.video');
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')
         ->middleware('permission:pedidos.edit');

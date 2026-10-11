@@ -150,6 +150,9 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     // antigo ainda chama ele, e este deploy não pode quebrar quem não
     // atualizou o app ainda.
     Route::post('/dashboard/queue/{order}/separar', [DashboardAgentController::class, 'separateOrder'])->name('dashboard.queue.separate');
+    // Vídeo da embalagem (2026-10-11): gravado no KoraSync até o "Separado".
+    Route::post('/dashboard/queue/{order}/video', [DashboardAgentController::class, 'uploadPackingVideo'])->name('dashboard.queue.video.upload');
+    Route::get('/dashboard/queue/{order}/video', [DashboardAgentController::class, 'packingVideo'])->name('dashboard.queue.video');
     Route::post('/dashboard/queue/{order}/desfazer-separacao', [DashboardAgentController::class, 'unseparateOrder'])->name('dashboard.queue.unseparate');
     Route::get('/dashboard/queue/{order}/etiqueta-status', [DashboardAgentController::class, 'labelStatus'])->name('dashboard.queue.label-status');
     Route::post('/dashboard/queue/{order}/reimprimir', [DashboardAgentController::class, 'reprintLabel'])->name('dashboard.queue.reprint');

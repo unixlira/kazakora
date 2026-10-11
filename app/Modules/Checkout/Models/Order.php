@@ -309,6 +309,12 @@ class Order extends Model
         return $this->hasOne(OrderChannelFee::class);
     }
 
+    /** Vídeos da embalagem gravados no KoraSync (2026-10-11). */
+    public function packingVideos(): HasMany
+    {
+        return $this->hasMany(OrderPackingVideo::class)->latest('id');
+    }
+
     public function fulfillmentEvents(): HasMany
     {
         return $this->hasMany(OrderFulfillmentEvent::class)->orderBy('created_at')->orderBy('id');

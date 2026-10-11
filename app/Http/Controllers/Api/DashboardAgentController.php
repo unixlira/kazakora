@@ -1472,6 +1472,55 @@ class DashboardAgentController extends Controller
      * packOrder() continua existindo e funcionando: um KoraSync antigo, que
      * ainda chama /pack, não quebra com este deploy.
      */
+    /**
+     * Vídeo da embalagem (2026-10-11): o KoraSync grava do momento em que o
+     * pedido é aberto até o "Separado" e manda aqui. Guarda o original e
+     * converte para MP4 compacto na fila. Pedidos do mesmo pacote apontam
+     * para o mesmo vídeo.
+     */
+    public function uploadPackingVideo(Request $request, Order $order): JsonResponse
+    {
+        $request->validate([
+            'video' => ['required', 'file', 'max:'.(\App\Modules\Checkout\Models\OrderPackingVideo::MAX_MB * 1024), 'mimetypes:video/webm,video/mp4,video/x-matroska,application/octet-stream'],
+        ]);
+
+        $arquivo = $request->file('video');
+        $extensao = in_array($arquivo->getClientOriginalExtension(), ['mp4', 'webm', 'mkv'], true) ? $arquivo->getClientOriginalExtension() : 'webm';
+        $path = $arquivo->storeAs("embalagem/{$order->id}", now()->format('Ymd-His').'-'.\Illuminate\Support\Str::random(6).".{$extensao}", 'local');
+
+        $video = \App\Modules\Checkout\Models\OrderPackingVideo::query()->create([
+            'order_id' => $order->id,
+            'path' => $path,
+            'status' => 'processando',
+            'tamanho_original' => $arquivo->getSize(),
+            'tamanho' => $arquivo->getSize(),
+            'expira_em' => now()->addDays(\App\Modules\Checkout\Models\OrderPackingVideo::DIAS_GUARDADO),
+        ]);
+
+        \App\Modules\Checkout\Jobs\ConverterVideoEmbalagem::dispatch($video->id);
+
+        foreach ($this->ordersShippedWith($order) as $pedido) {
+            app(OrderFulfillmentTimeline::class)->record($pedido, OrderFulfillmentEvent::STEP_ORDER_PACKED, OrderFulfillmentEvent::STATUS_SUCCESS,
+                'Vídeo da embalagem gravado no KoraSync'.($pedido->id !== $order->id ? " (junto com o pedido #{$order->id})" : ''), ['packing_video_id' => $video->id]);
+        }
+
+        return response()->json(['ok' => true, 'video_id' => $video->id]);
+    }
+
+    /** Último vídeo da embalagem do pedido, para assistir no KoraSync. */
+    public function packingVideo(Order $order): \Symfony\Component\HttpFoundation\BinaryFileResponse|JsonResponse
+    {
+        $video = \App\Modules\Checkout\Models\OrderPackingVideo::query()->where('order_id', $order->id)->latest('id')->first();
+
+        if (! $video || ! \Illuminate\Support\Facades\Storage::disk('local')->exists($video->path)) {
+            return response()->json(['ok' => false, 'message' => 'Pedido sem vídeo da embalagem.'], 404);
+        }
+
+        return response()->file(\Illuminate\Support\Facades\Storage::disk('local')->path($video->path), [
+            'Content-Type' => str_ends_with($video->path, '.mp4') ? 'video/mp4' : 'video/webm',
+        ]);
+    }
+
     public function separateOrder(Order $order): JsonResponse
     {
         if ($order->status !== Order::STATUS_PAID && $order->status !== Order::STATUS_CANCELLED) {

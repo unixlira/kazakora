@@ -45,8 +45,14 @@ const markNotificationRead = (item) => {
     router.visit(`/notificacoes/${item.id}`);
 };
 
+const marcandoTodas = ref(false);
 const markAllNotificationsRead = () => {
-    router.post('/notificacoes/ler-todas', {}, { preserveScroll: true, preserveState: true });
+    marcandoTodas.value = true;
+    router.post('/notificacoes/ler-todas', {}, {
+        preserveScroll: true,
+        preserveState: true,
+        onFinish: () => { marcandoTodas.value = false; },
+    });
 };
 
 const mobileMenuOpen = ref(false);
@@ -245,9 +251,13 @@ const REDES = [
                         </button>
 
                         <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
+                            <!-- Marcando todas como lidas: desfoque branco + loader até a requisição terminar (2026-10-11). -->
+                            <div v-if="marcandoTodas" class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-sm">
+                                <i class="fas fa-circle-notch animate-spin text-2xl text-[#F27A2A]"></i>
+                            </div>
                             <div class="flex items-center justify-between px-4 py-2">
                                 <h5 class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">🔔 Notificações</h5>
-                                <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-store-accent hover:underline" @click="markAllNotificationsRead">
+                                <button v-if="unreadNotifications > 0" type="button" class="text-xs font-medium text-store-accent hover:underline" @click="markAllNotificationsRead" :disabled="marcandoTodas">
                                     Marcar todas como lidas
                                 </button>
                             </div>

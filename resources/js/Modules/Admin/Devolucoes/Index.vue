@@ -302,6 +302,17 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                         <button type="button" class="mt-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90" @click="agir('veredito', { verdict: veredito, verdict_note: vereditoNota })">Salvar veredito</button>
                     </div>
 
+                    <!-- Nota de devolução automática (2026-10-11). -->
+                    <div v-if="aberto.notaDevolucao" class="rounded-lg border border-[var(--surface-border)] p-3 text-sm">
+                        <p class="font-semibold"><i class="fas fa-file-invoice me-1 text-primary"></i> Nota de devolução:
+                            <span :class="{ 'text-success': ['emitida', 'preparada'].includes(aberto.notaDevolucao.status), 'text-warning': aberto.notaDevolucao.status === 'pendencia', 'text-slate-500': ['descartada', 'pelo_canal', 'sem_nota'].includes(aberto.notaDevolucao.status) }">
+                                {{ { preparada: 'pronta, sai quando o produto chegar', emitida: 'emitida', descartada: 'descartada', pelo_canal: 'emitida pelo canal', sem_nota: 'sem nota de venda', pendencia: 'com pendência' }[aberto.notaDevolucao.status] }}
+                            </span>
+                        </p>
+                        <p class="mt-1 text-xs text-slate-500">{{ aberto.notaDevolucao.obs }}</p>
+                        <a v-if="aberto.notaDevolucao.nota" :href="`/admin/notas-fiscais/${aberto.notaDevolucao.nota.id}`" class="mt-1 inline-block text-xs font-semibold text-primary">Ver NF-e {{ aberto.notaDevolucao.nota.numero }} ({{ aberto.notaDevolucao.nota.status }})</a>
+                    </div>
+
                     <button v-if="aberto.pedidoId && !aberto.estoqueDevolvidoEm && aberto.veredito === 'ok'" type="button"
                         class="w-full rounded-lg border border-success px-3 py-2 text-sm font-semibold text-success hover:bg-lightsuccess" @click="agir('estoque')">
                         <i class="fas fa-warehouse me-1"></i> Devolver ao estoque

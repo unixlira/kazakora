@@ -54,10 +54,29 @@ class TikTokReportsImportTest extends TestCase
         $this->assertDatabaseHas('tiktok_report_uploads', ['nome_original' => 'orders.csv', 'tipo' => 'pedidos']);
     }
 
-    public function test_recusa_extensao_estranha(): void
+    public function test_recusa_extensao_estranha_e_avisa_em_vermelho(): void
     {
+        \Illuminate\Support\Facades\Notification::fake();
+        \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
         $this->withHeader('Authorization', 'Bearer segredo-de-teste')
             ->post('/api/tiktok/reports/import', ['file' => UploadedFile::fake()->createWithContent('virus.exe', 'x')])
             ->assertStatus(422);
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(\App\Models\User::first(), \App\Notifications\TikTokRelatorioNotification::class,
+            fn ($n, $canais, $quem) => $n->toArray($quem)['nivel'] === 'erro' && $n->toArray($quem)['message'] === 'Erro importação arquivo financeiro TikTok');
+    }
+
+    public function test_importou_avisa_em_verde(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        $this->withHeader('Authorization', 'Bearer segredo-de-teste')
+            ->post('/api/tiktok/reports/import', ['file' => UploadedFile::fake()->createWithContent('Income.xlsx', 'abc')])
+            ->assertOk();
+
+        \Illuminate\Support\Facades\Notification::assertSentTo(\App\Models\User::first(), \App\Notifications\TikTokRelatorioNotification::class,
+            fn ($n, $canais, $quem) => $n->toArray($quem)['nivel'] === 'sucesso');
     }
 }

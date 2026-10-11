@@ -323,7 +323,8 @@ watch(
                                 <div v-for="item in notifications" :key="item.id"
                                     class="group flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-[var(--surface-muted)]">
                                     <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" @click="openNotification(item)">
-                                        <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                                        <span class="mt-1.5 shrink-0 rounded-full"
+                                            :class="item.nivel === 'erro' ? 'h-2.5 w-2.5 bg-red-500 ring-2 ring-red-200' : item.nivel === 'sucesso' ? 'h-2.5 w-2.5 bg-green-500 ring-2 ring-green-200' : 'h-1.5 w-1.5 bg-primary'"></span>
                                         <span class="min-w-0">
                                             <span class="block break-words text-slate-700 dark:text-slate-200">{{ item.message }}</span>
                                             <span class="text-xs text-slate-400">{{ item.createdAt }}</span>

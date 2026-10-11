@@ -558,6 +558,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
             :open="paymentState !== 'idle'"
             :state="paymentState"
             :order-total="order?.total ?? total"
+            :order-code="order?.external_order_id ?? null"
             :pix-qr-image-url="pixQrImageUrl"
             :pix-qr-code="pixQrCode"
             :pix-seconds-left="pixSecondsLeft"

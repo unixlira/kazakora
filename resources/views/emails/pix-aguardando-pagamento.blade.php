@@ -1,13 +1,13 @@
 @extends('emails.layout')
 
 @section('title', 'Seu Pix está pronto')
-@section('preheader', 'Pague R$ '.number_format($valor, 2, ',', '.').' com o Pix e seu pedido #'.$order->id.' segue para separação.')
+@section('preheader', 'Pague R$ '.number_format($valor, 2, ',', '.').' com o Pix e seu pedido '.$order->numero.' segue para separação.')
 
 @section('content')
     @include('emails.partials.titulo', ['icone' => '⚡', 'texto' => 'Seu Pix está pronto!'])
 
     <p style="margin: 0 0 18px; text-align: center; color: #374151;">
-        Falta só pagar para o pedido <strong>#{{ $order->id }}</strong> seguir para separação. Abra o app do seu banco
+        Falta só pagar para o pedido <strong style="color: #F27A2A;">{{ $order->numero }}</strong> seguir para separação. Abra o app do seu banco
         e escaneie o QR Code ou use o Pix copia e cola.
     </p>
 

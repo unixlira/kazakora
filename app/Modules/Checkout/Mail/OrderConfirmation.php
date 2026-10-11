@@ -24,7 +24,7 @@ class OrderConfirmation extends Mailable
     public function build(): self
     {
         return $this
-            ->subject("Pedido #{$this->order->id} confirmado - Kazakora")
+            ->subject("Pedido {$this->order->numero} confirmado - KazaKora")
             ->view('emails.order-confirmation');
     }
 

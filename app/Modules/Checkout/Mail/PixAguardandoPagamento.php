@@ -25,7 +25,7 @@ class PixAguardandoPagamento extends Mailable
     public function build(): self
     {
         return $this
-            ->subject("Seu Pix do pedido #{$this->order->id} está pronto")
+            ->subject("Seu Pix do pedido {$this->order->numero} está pronto")
             ->view('emails.pix-aguardando-pagamento', [
                 'qrPng' => $this->qrCodeBase64 ? base64_decode($this->qrCodeBase64) : null,
                 'validade' => $this->expiraEm ? Carbon::parse($this->expiraEm)->timezone('America/Sao_Paulo') : null,

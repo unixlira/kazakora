@@ -90,6 +90,33 @@ class Order extends Model
      * tratada na plataforma/Bling pelo operador. Se o KazaKora também emitir
      * aqui, cria duplicidade fiscal para o mesmo pedido.
      */
+    /**
+     * Número do pedido da loja no formato da Shopee (pedido 2026-10-11):
+     * data AAMMDD + 8 letras/números, ex. 261011K7Q2M9XD. É o número de
+     * registro do pedido (como o ID do Mercado Livre) e fica em
+     * external_order_id. Alfabeto sem I, L, O e U pra não confundir ao ditar.
+     */
+    /** Número que o cliente vê: o do formato Shopee (loja) ou o do canal; sem ele, o ID. */
+    public function getNumeroAttribute(): string
+    {
+        return (string) ($this->external_order_id ?: $this->id);
+    }
+
+    public static function gerarNumeroDaLoja(): string
+    {
+        $alfabeto = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+        do {
+            $sufixo = '';
+            for ($i = 0; $i < 8; $i++) {
+                $sufixo .= $alfabeto[random_int(0, strlen($alfabeto) - 1)];
+            }
+            $numero = now('America/Sao_Paulo')->format('ymd').$sufixo;
+        } while (self::query()->where('origin', self::ORIGIN_STORE)->where('external_order_id', $numero)->exists());
+
+        return $numero;
+    }
+
     public function shouldAutoGenerateInvoice(): bool
     {
         return $this->origin !== self::ORIGIN_TIKTOK_SHOP;

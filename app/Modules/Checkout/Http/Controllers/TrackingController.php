@@ -28,7 +28,10 @@ class TrackingController extends Controller
             'documento' => ['required', 'string', 'max:255'],
         ], [], ['pedido' => 'número do pedido', 'documento' => 'e-mail ou CPF']);
 
-        $order = Order::query()->with('user')->find((int) preg_replace('/\D/', '', $data['pedido']));
+        // Aceita o número novo (261011K7Q2M9XD) ou o antigo (só dígitos).
+        $digitado = strtoupper(trim(str_replace(['#', ' '], '', $data['pedido'])));
+        $order = Order::query()->with('user')->where('origin', Order::ORIGIN_STORE)->where('external_order_id', $digitado)->first()
+            ?? (ctype_digit($digitado) ? Order::query()->with('user')->find((int) $digitado) : null);
         $documento = trim(mb_strtolower($data['documento']));
         $digitos = preg_replace('/\D/', '', $documento);
 
@@ -61,6 +64,7 @@ class TrackingController extends Controller
         return Inertia::render('Checkout/Rastreio', [
             'pedido' => [
                 'id' => $order->id,
+                'numero' => $order->numero,
                 'criado_em' => $order->created_at?->toIso8601String(),
                 'status' => $order->status,
                 'cancelado' => $order->status === Order::STATUS_CANCELLED,

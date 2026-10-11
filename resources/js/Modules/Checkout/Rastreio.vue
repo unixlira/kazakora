@@ -34,7 +34,7 @@ const copiarCodigo = async () => {
 </script>
 
 <template>
-    <Head :title="pedido ? `Pedido #${pedido.id}` : 'Rastrear pedido'" />
+    <Head :title="pedido ? `Pedido ${pedido.numero ?? pedido.id}` : 'Rastrear pedido'" />
 
     <AppLayout>
         <div class="mx-auto max-w-[720px] px-4 py-12 md:px-6">
@@ -69,7 +69,7 @@ const copiarCodigo = async () => {
             <template v-else>
                 <div class="mt-8 rounded-2xl border border-store-border bg-store-bg-raised p-6">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <p class="text-lg font-semibold">Pedido #{{ pedido.id }}</p>
+                        <p class="text-lg font-semibold">Pedido {{ pedido.numero ?? pedido.id }}</p>
                         <p class="text-xs text-store-fg-muted">{{ formatDate(pedido.criado_em) }}</p>
                     </div>
 

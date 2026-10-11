@@ -19,7 +19,7 @@ const formatPrice = (value) =>
     <AppLayout>
         <div class="mx-auto max-w-[640px] px-4 py-16 text-center md:px-6">
             <i class="fas fa-circle-check mb-4 text-5xl text-store-accent"></i>
-            <h1 class="font-display text-3xl font-semibold">Pedido #{{ order.id }} confirmado!</h1>
+            <h1 class="font-display text-3xl font-semibold">Pedido {{ order.numero ?? order.id }} confirmado!</h1>
             <p class="mt-2 text-store-fg-muted">Enviamos os detalhes para o seu e-mail. Acompanhe abaixo.</p>
 
             <div class="mt-8 rounded-2xl border border-store-border bg-store-bg-raised p-6 text-left">

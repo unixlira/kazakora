@@ -787,6 +787,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
             :open="estado !== 'idle'"
             :state="estado"
             :order-total="order ? Number(order.total) : totalAPagar"
+            :order-code="order?.external_order_id ?? null"
             :pix-qr-image-url="pixImagem"
             :pix-qr-code="pixCodigo"
             :pix-seconds-left="pixSegundos"

@@ -10,6 +10,8 @@ const props = defineProps({
         validator: (value) => ['processing', 'awaiting_pix', 'success', 'timeout', 'failed'].includes(value),
     },
     orderTotal: { type: Number, default: null },
+    // Número do pedido no formato da Shopee (pedido 2026-10-11).
+    orderCode: { type: String, default: null },
     pixQrImageUrl: { type: String, default: null },
     pixQrCode: { type: String, default: null },
     pixSecondsLeft: { type: Number, default: null },
@@ -29,6 +31,13 @@ const pixCountdown = computed(() => {
 });
 
 const copied = ref(false);
+const codigoCopiado = ref(false);
+const copiarCodigoDoPedido = async () => {
+    if (! props.orderCode) return;
+    await navigator.clipboard.writeText(props.orderCode);
+    codigoCopiado.value = true;
+    setTimeout(() => { codigoCopiado.value = false; }, 2000);
+};
 
 const copyPixCode = async () => {
     if (! props.pixQrCode) return;
@@ -66,7 +75,17 @@ const copyPixCode = async () => {
                             <i class="fa-brands fa-pix"></i>
                         </div>
                         <h2 class="mt-2 font-display text-xl font-bold">Pague com Pix</h2>
-                        <p v-if="orderTotal !== null" class="mt-1 text-3xl font-extrabold tracking-tight">{{ formatPrice(orderTotal) }}</p>
+                        <!-- Número do pedido em destaque (laranja da marca) com botão de copiar. -->
+                        <div v-if="orderCode" class="mx-auto mt-2 flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-1.5 shadow-md">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pedido</span>
+                            <span class="text-xl font-black uppercase italic tracking-tight text-[#F27A2A]">{{ orderCode }}</span>
+                            <button type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-sm transition"
+                                :class="codigoCopiado ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-50 text-[#F27A2A] hover:bg-orange-100'"
+                                :aria-label="codigoCopiado ? 'Número copiado' : 'Copiar número do pedido'" @click="copiarCodigoDoPedido">
+                                <i class="fas" :class="codigoCopiado ? 'fa-check' : 'fa-copy'"></i>
+                            </button>
+                        </div>
+                        <p v-if="orderTotal !== null" class="mt-2 text-sm font-semibold opacity-90">Total: {{ formatPrice(orderTotal) }}</p>
                         <p v-if="pixCountdown" class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1 text-xs font-bold">
                             <i class="fas fa-stopwatch animate-pulse"></i> Expira em {{ pixCountdown }}
                         </p>

@@ -149,7 +149,7 @@ class SalesReturnService
                 // Item sem produto do catálogo e sem NCM próprio (venda antiga
                 // da Shopee, 2026-10-11): a devolução espelha a nota de venda,
                 // então o dado fiscal sai do XML autorizado dela.
-                $doXml = (! $item->product_id && ! $item->ncm) ? ($fiscalDaVenda[$this->chaveDoNome($item->product_name)] ?? (count($fiscalDaVenda) === 1 ? reset($fiscalDaVenda) : [])) : [];
+                $doXml = (! $item->product && ! $item->ncm) ? ($fiscalDaVenda[$this->chaveDoNome($item->product_name)] ?? (count($fiscalDaVenda) === 1 ? reset($fiscalDaVenda) : [])) : [];
 
                 $order->items()->create([
                     ...$doXml,
@@ -191,7 +191,8 @@ class SalesReturnService
         $fiscal = $venda ? $this->fiscalDoXmlDaVenda($venda) : [];
         $completados = 0;
 
-        foreach ($devolucao->items()->whereNull('product_id')->where(fn ($q) => $q->whereNull('ncm')->orWhere('ncm', ''))->get() as $item) {
+        // Sem produto ATIVO: produto excluído do catálogo conta como sem cadastro.
+        foreach ($devolucao->items()->whereDoesntHave('product')->where(fn ($q) => $q->whereNull('ncm')->orWhere('ncm', ''))->get() as $item) {
             $dados = $fiscal[$this->chaveDoNome($item->product_name)] ?? (count($fiscal) === 1 ? reset($fiscal) : null);
             if ($dados) {
                 $item->update($dados);

@@ -42,6 +42,10 @@ class ShopeeImportMissingProducts extends Command
         $linkedExternalIds = ProductChannelListing::query()
             ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
             ->pluck('external_id')
+            // Vínculo antigo sem id (2026-10-11) derrubava o comando.
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->values()
             ->all();
 
         $unlinked = collect($items)->reject(fn (array $item) => in_array($item['external_id'], $linkedExternalIds, true))->values();
@@ -79,7 +83,7 @@ class ShopeeImportMissingProducts extends Command
 
             $excluded = false;
             foreach ($excludeTerms as $term) {
-                if ($term !== '' && str_contains($nameLower, $term)) {
+                if ($term !== '' && (str_contains($nameLower, $term) || $term === (string) $item['external_id'])) {
                     $excluded = true;
 
                     break;

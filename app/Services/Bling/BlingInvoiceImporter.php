@@ -184,6 +184,15 @@ class BlingInvoiceImporter
             }
         }
 
+        // O Bling RECALCULA o CFOP pela natureza de operação ao salvar: com
+        // "Venda de mercadoria a não contribuinte" o 6102 volta a 6108. A
+        // natureza "Venda de mercadoria" é a que gera 5102/6102.
+        $natureza = (int) config('services.bling.natureza_venda_id');
+        if ($natureza > 0 && (int) ($nota['naturezaOperacao']['id'] ?? 0) !== $natureza) {
+            $r['mudancas'][] = 'natureza de operação: '.($nota['naturezaOperacao']['id'] ?? '?')." → {$natureza}";
+            $nota['naturezaOperacao'] = ['id' => $natureza];
+        }
+
         if ($aplicar && $r['mudancas'] !== []) {
             $corpo = array_diff_key($nota, array_flip(['id', 'situacao', 'chaveAcesso', 'xml', 'linkDanfe', 'linkPDF']));
 

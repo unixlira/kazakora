@@ -441,8 +441,14 @@ const REDES = [
                     </div>
                 </div>
 
-                <div class="mt-12 border-t border-white/10 pt-6 text-center text-xs opacity-70">
-                    <span>© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
+                <div class="mt-12 border-t border-white/10 pt-6 text-center text-xs">
+                    <span class="opacity-70">© 2026 KazaKora · CNPJ {{ COMPANY.cnpj }} · {{ COMPANY.enderecoResumido }}</span>
+                    <!-- Crédito do desenvolvimento (2026-10-11). -->
+                    <p class="mt-2">
+                        <span class="opacity-70">Desenvolvido por</span>
+                        <a href="https://tech.alphakora.com.br/" target="_blank" rel="noopener"
+                            class="ml-1 bg-gradient-to-r from-[#F27A2A] via-[#ff9f43] to-[#22c55e] bg-clip-text font-extrabold tracking-wide text-transparent transition hover:brightness-125">KoraTech</a>
+                    </p>
                 </div>
             </div>
         </footer>

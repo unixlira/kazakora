@@ -27,6 +27,7 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    packingVideos: { type: Array, default: () => [] },
     fulfillmentEvents: {
         type: Array,
         default: () => [],
@@ -340,6 +341,22 @@ const cancelInvoice = () => {
                             </div>
                         </form>
                     </Can>
+
+                    <!-- Vídeo da embalagem gravado no KoraSync (2026-10-11): prova do que foi embalado. -->
+                    <template v-if="packingVideos.length">
+                        <h3 class="mt-6 text-sm font-semibold text-slate-500"><i class="fas fa-video mr-1"></i> Vídeo da embalagem</h3>
+                        <div v-for="video in packingVideos" :key="video.id" class="mt-2 rounded-xl border border-[var(--surface-border)] p-3">
+                            <p v-if="video.status === 'processando'" class="text-sm text-slate-500"><i class="fas fa-circle-notch animate-spin mr-1"></i> Convertendo o vídeo…</p>
+                            <video v-else :src="video.url" controls preload="metadata" class="w-full max-w-xl rounded-lg bg-black"></video>
+                            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                <span>Gravado em {{ formatDateTime(video.gravado_em) }}</span>
+                                <span v-if="video.duracao">· {{ Math.floor(video.duracao / 60) }}:{{ String(video.duracao % 60).padStart(2, '0') }}</span>
+                                <span v-if="video.tamanho_mb">· {{ video.tamanho_mb }} MB</span>
+                                <span>· guardado até {{ formatDateTime(video.expira_em) }}</span>
+                                <a :href="video.download" class="font-semibold text-primary"><i class="fas fa-download mr-1"></i> Baixar</a>
+                            </div>
+                        </div>
+                    </template>
 
                     <h3 class="mt-6 text-sm font-semibold text-slate-500">Linha do tempo do pedido</h3>
                     <ul v-if="fulfillmentEvents.length" class="mt-2 space-y-2 text-sm">

@@ -6,6 +6,9 @@ use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Models\User;
+use App\Modules\Analytics\Models\SiteVisit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -21,7 +24,7 @@ class DashboardController extends Controller
     /** "Vendas confirmadas" pros cards de faturamento — pending/awaiting_payment nunca foram pagos de verdade. */
     private const PAID_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $today = Carbon::today();
         $startOfMonth = Carbon::today()->startOfMonth();
@@ -82,6 +85,7 @@ class DashboardController extends Controller
             'abcCurve' => $this->curvaAbc(Carbon::today()->subDays(89)),
             'revenueByChannel' => $this->revenueByChannel($startOfMonth),
             'analytics' => $this->analytics($today, $margemMes),
+            'visitantes' => $this->visitantes((string) $request->query('mes', '')),
         ]);
     }
 
@@ -300,5 +304,78 @@ class DashboardController extends Controller
             ->push(['nome' => 'Outras', 'receita' => round($linhas->slice(6)->sum('receita'), 2)])
             ->values()
             ->all();
+    }
+
+    /** Acima disso num dia, o "visitante" é robô ou aba presa recarregando (ex.: 1.737 /entrar em 09/10/2026). */
+    private const VISITAS_DIA_ROBO = 300;
+
+    /**
+     * Acessos ao site no mês escolhido (pedido 2026-10-11: gráfico,
+     * visitantes do mês e do dia, filtro de mês). Conta só gente de fora:
+     * sai quem entrou como equipe (admin/gerente) no mês, com tudo o que o
+     * mesmo navegador visitou, e o visitante que passou de 300 páginas num
+     * dia. Visitante = código do navegador (cookie com o OK de cookies ou
+     * código da sessão sem ele, ver TrackSiteVisit).
+     *
+     * @return array<string, mixed>
+     */
+    private function visitantes(string $mes): array
+    {
+        $hoje = Carbon::today();
+        $inicio = preg_match('/^\d{4}-\d{2}$/', $mes)
+            ? Carbon::createFromFormat('!Y-m', $mes)->startOfMonth()
+            : $hoje->copy()->startOfMonth();
+        if ($inicio->greaterThan($hoje)) {
+            $inicio = $hoje->copy()->startOfMonth();
+        }
+        $fim = $inicio->copy()->addMonthNoOverflow();
+
+        $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id');
+        $doMes = SiteVisit::query()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim);
+        $navegadoresDaEquipe = (clone $doMes)->whereIn('user_id', $equipe)->distinct()->pluck('visitor_id')->all();
+
+        $linhas = (clone $doMes)
+            ->whereNotIn('visitor_id', $navegadoresDaEquipe)
+            ->where(fn ($q) => $q->whereNull('user_id')->orWhereNotIn('user_id', $equipe))
+            ->selectRaw('DATE(created_at) as dia, visitor_id, COUNT(*) as paginas')
+            ->groupBy(DB::raw('DATE(created_at)'), 'visitor_id')
+            ->get()
+            ->filter(fn ($l) => (int) $l->paginas <= self::VISITAS_DIA_ROBO);
+
+        $porDia = $linhas->groupBy(fn ($l) => substr((string) $l->dia, 0, 10));
+        $ultimoDia = $inicio->isSameMonth($hoje) ? $hoje->day : $inicio->daysInMonth;
+        $dias = [];
+        for ($d = 1; $d <= $ultimoDia; $d++) {
+            $data = $inicio->copy()->day($d)->toDateString();
+            $grupo = $porDia->get($data, collect());
+            $dias[] = ['dia' => $data, 'visitantes' => $grupo->count(), 'paginas' => (int) $grupo->sum('paginas')];
+        }
+
+        $hojeStr = $hoje->toDateString();
+        $deHoje = $porDia->get($hojeStr, collect());
+        $primeira = SiteVisit::query()->min('created_at');
+        $meses = [];
+        $cursor = $hoje->copy()->startOfMonth();
+        $limite = $primeira ? Carbon::parse($primeira)->startOfMonth() : $cursor->copy();
+        while ($cursor->greaterThanOrEqualTo($limite) && count($meses) < 24) {
+            $meses[] = $cursor->format('Y-m');
+            $cursor->subMonthNoOverflow();
+        }
+
+        $visitantesMes = $linhas->pluck('visitor_id')->unique()->count();
+        $diasComDado = max(1, count($dias));
+
+        return [
+            'mes' => $inicio->format('Y-m'),
+            'meses' => $meses,
+            'mesAtual' => $inicio->isSameMonth($hoje),
+            'dias' => $dias,
+            'visitantesMes' => $visitantesMes,
+            'paginasMes' => (int) $linhas->sum('paginas'),
+            'visitantesHoje' => $inicio->isSameMonth($hoje) ? $deHoje->count() : null,
+            'paginasHoje' => $inicio->isSameMonth($hoje) ? (int) $deHoje->sum('paginas') : null,
+            'mediaDia' => round(array_sum(array_column($dias, 'visitantes')) / $diasComDado, 1),
+            'melhorDia' => collect($dias)->sortByDesc('visitantes')->first(),
+        ];
     }
 }

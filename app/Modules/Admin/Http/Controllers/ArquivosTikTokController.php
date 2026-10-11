@@ -36,16 +36,18 @@ class ArquivosTikTokController extends Controller
         try {
             foreach ($request->file('arquivos') as $arquivo) {
                 $r = $relatorios->guardar($arquivo->getClientOriginalName(), (string) file_get_contents($arquivo->getRealPath()), $arquivo->getClientMimeType(), null);
-                $r['duplicado'] ? $repetidos++ : $novos[] = $r['nome'];
+                if ($r['duplicado']) {
+                    $repetidos++;
+
+                    continue;
+                }
+                $novos[] = $r['nome'];
+                $relatorios->avisar(! isset($r['erro_importacao']) && empty($r['importado']['divergencias'] ?? []), $relatorios->descrever($r));
             }
         } catch (Throwable $e) {
             $relatorios->avisar(false, mb_substr($e->getMessage(), 0, 200));
 
             return back()->with('error', 'Erro importação arquivo financeiro TikTok: '.$e->getMessage());
-        }
-
-        if ($novos !== []) {
-            $relatorios->avisar(true, implode(', ', $novos));
         }
 
         return back()->with('success', count($novos).' arquivo(s) recebido(s)'.($repetidos ? ", {$repetidos} já existia(m)" : '').'.');

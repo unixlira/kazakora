@@ -83,32 +83,53 @@ async function registrarTela(pagina, nome) {
   fs.writeFileSync(path.join(LOGS, `${nome}.html`), await pagina.content().catch(() => ''));
 }
 
-// Clica em "Exportar" e pega o arquivo — na hora ou pelo "Exportar histórico".
-async function exportar(pagina, prefixo) {
-  const t = cfg.textos;
-  const botao = pagina.getByRole('button', { name: t.exportar, exact: true }).first();
-  let download = null;
-  try {
-    [download] = await Promise.all([
-      pagina.waitForEvent('download', { timeout: 60000 }),
-      botao.click(),
-    ]);
-  } catch {
-    // Exportação assíncrona: o arquivo aparece no histórico depois de gerado.
-    log('download não veio direto — tentando pelo histórico');
-    await pagina.waitForTimeout(20000);
-    await pagina.getByText(t.historico, { exact: false }).first().click();
-    await pagina.waitForTimeout(3000);
-    [download] = await Promise.all([
-      pagina.waitForEvent('download', { timeout: 120000 }),
-      pagina.getByRole('button', { name: t.baixar }).first().click(),
-    ]);
+// Exportação do TikTok (mapeada em 11/10/2026): "Exportar" abre a janela de
+// datas -> escolhe o período -> "Exportar" de novo -> painel "Relatórios
+// exportados" com o arquivo em "Exportando" -> "Baixar" acende -> baixa.
+async function escolherPeriodo(pagina, modo) {
+  const janela = pagina.locator('.p-popover-inner-content').filter({ hasText: cfg.textos.janelaDatas });
+  await janela.getByText(cfg.textos.horaInicio, { exact: true }).click({ force: true });
+  await pagina.waitForTimeout(1200);
+  if (modo === 'mes') {
+    await pagina.getByText(cfg.textos.esteMes, { exact: true }).click();
+  } else {
+    // Mês anterior inteiro: volta um mês e marca o primeiro e o último dia válidos.
+    await pagina.locator('.p-picker-header').first().locator('.p-picker-header-icon').nth(1).click();
+    await pagina.waitForTimeout(800);
+    const dias = pagina.locator('.p-picker-body').first().locator('.p-picker-cell.p-picker-cell-in-view:not(.p-picker-cell-disabled)');
+    await dias.first().click();
+    await dias.last().click();
   }
-  const sugerido = download.suggestedFilename();
-  const extensao = path.extname(sugerido) || '.xlsx';
-  const nome = `${prefixo}${extensao}`;
+  await pagina.waitForTimeout(500);
+  await pagina.getByRole('button', { name: 'OK', exact: true }).click().catch(() => {});
+  await pagina.waitForTimeout(800);
+  const periodo = (await janela.innerText()).match(/\d{2}\/\d{2}\/\d{4} - \d{2}\/\d{2}\/\d{4}/)?.[0];
+  if (!periodo) throw new Error('não consegui escolher o período na janela de exportação');
+  return { janela, periodo };
+}
+
+async function exportar(pagina, modo, prefixo) {
+  await pagina.getByRole('button', { name: cfg.textos.exportar, exact: true }).first().click({ force: true });
+  await pagina.waitForTimeout(1500);
+  const { janela, periodo } = await escolherPeriodo(pagina, modo);
+  log(`exportando ${modo}: ${periodo}`);
+  await janela.getByRole('button', { name: cfg.textos.exportar, exact: true }).click();
+
+  // O arquivo novo entra no topo do painel; espera o "Baixar" dele acender (até 5 min).
+  const baixar = pagina.getByRole('button', { name: cfg.textos.baixar }).first();
+  const limite = Date.now() + 5 * 60 * 1000;
+  while (!(await baixar.isEnabled().catch(() => false))) {
+    if (Date.now() > limite) throw new Error('o relatório não ficou pronto em 5 minutos');
+    await pagina.waitForTimeout(5000);
+  }
+  const [download] = await Promise.all([pagina.waitForEvent('download', { timeout: 120000 }), baixar.click()]);
+  const extensao = path.extname(download.suggestedFilename()) || '.xlsx';
+  const nome = `${prefixo}_${periodo.replace(/\//g, '-').replace(/ /g, '')}${extensao}`;
   const destino = path.join(TMP, nome);
   await download.saveAs(destino);
+  // Fecha o painel para a próxima exportação começar limpa.
+  await pagina.keyboard.press('Escape').catch(() => {});
+  await pagina.waitForTimeout(1000);
   return { destino, nome };
 }
 
@@ -116,16 +137,21 @@ async function exportar(pagina, prefixo) {
 async function demonstrativo(pagina) {
   await garantirSessao(pagina, cfg.urls.demonstrativos);
   // "Exibir por pedidos": uma linha por pedido no arquivo.
-  await pagina.getByText(cfg.textos.porPedidos, { exact: false }).first().click().catch(() => log('aviso: não achei "Exibir por pedidos"'));
-  await pagina.waitForTimeout(2000);
-  const { destino, nome } = await exportar(pagina, `tiktok_demonstrativo_${dia(-7)}_a_${dia(-1)}_${Date.now()}`);
-  await enviar(destino, nome);
+  await pagina.getByText(cfg.textos.porPedidos, { exact: true }).first().click();
+  await pagina.waitForTimeout(2500);
+  // Até o dia 10 o fim do mês passado ainda está sendo liquidado.
+  const modos = Number(dia(0).slice(8, 10)) <= 10 ? ['mes-anterior', 'mes'] : ['mes'];
+  for (const modo of modos) {
+    const { destino, nome } = await exportar(pagina, modo, 'tiktok_demonstrativo');
+    await enviar(destino, nome);
+    fs.renameSync(destino, path.join(LOGS, nome));
+  }
 }
 
-async function pedidos(pagina) {
-  await garantirSessao(pagina, cfg.urls.pedidos);
-  const { destino, nome } = await exportar(pagina, `tiktok_pedidos_${dia(0)}_${Date.now()}`);
-  await enviar(destino, nome);
+async function pedidos() {
+  // Exportação de pedidos ainda não mapeada: os pedidos do TikTok já chegam
+  // em tempo real pelo Bling; o valor real vem do demonstrativo.
+  throw new Error('exportação de pedidos ainda não mapeada');
 }
 
 async function reconhecer(pagina) {
@@ -146,7 +172,7 @@ try {
   log(`início: ${tarefa}`);
   if (tarefa === 'reconhecer') await reconhecer(sessao.pagina);
   if (tarefa === 'demonstrativo' || tarefa === 'diario') await demonstrativo(sessao.pagina);
-  if (tarefa === 'pedidos' || tarefa === 'diario') await pedidos(sessao.pagina);
+  if (tarefa === 'pedidos') await pedidos(sessao.pagina);
   log(`fim: ${tarefa} ok`);
 } catch (erro) {
   log(`FALHA ${tarefa}: ${erro.message}`);

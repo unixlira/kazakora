@@ -10,6 +10,9 @@
     "exportar": "Exportar",
     "historico": "Exportar histórico",
     "baixar": "Baixar",
-    "porPedidos": "Exibir por pedidos"
+    "porPedidos": "Exibir por pedidos",
+    "janelaDatas": "Selecione um intervalo de datas para exportar",
+    "horaInicio": "Hora de início",
+    "esteMes": "Este mês"
   }
 }

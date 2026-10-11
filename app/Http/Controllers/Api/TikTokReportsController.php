@@ -60,9 +60,9 @@ class TikTokReportsController extends Controller
             return response()->json(['ok' => false, 'erro' => 'Nenhum arquivo recebido.'], 422);
         }
 
-        $novos = collect($resultado)->where('duplicado', false);
-        if ($novos->isNotEmpty()) {
-            $this->relatorios->avisar(true, $novos->pluck('nome')->implode(', '));
+        foreach (collect($resultado)->where('duplicado', false) as $r) {
+            $ok = ! isset($r['erro_importacao']) && empty($r['importado']['divergencias'] ?? []);
+            $this->relatorios->avisar($ok, $this->relatorios->descrever($r));
         }
 
         return response()->json(['ok' => true, 'arquivos' => $resultado]);

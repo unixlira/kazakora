@@ -119,6 +119,90 @@ class BlingInvoiceImporter
         return ['situacao' => $situacao, 'nota' => $nota, 'invoice' => $gravar ? $this->gravarInvoice($order, $nota) : null];
     }
 
+    /**
+     * Alinha os itens da NF-e do Bling ao NOSSO cadastro (CFOP, NCM, CEST,
+     * origem) por PUT, para a nota passar na conferência e poder ir à SEFAZ
+     * (2026-10-11: notas do TikTok com CFOP 6108 e NCM vazio, o Lira mandou
+     * usar 6102 — o mesmo CFOP das notas que a KazaKora já emite e a SEFAZ
+     * autoriza). Só mexe em nota pendente (1) ou rejeitada (4); nunca em
+     * autorizada. Não transmite nada: quem envia é o syncForOrder().
+     *
+     * @return array{nfe_id: int, situacao: int, numero: ?string, mudancas: list<string>, erro: ?string}
+     */
+    public function alinharNotaAoCadastro(Order $order, bool $aplicar): array
+    {
+        $r = ['nfe_id' => 0, 'situacao' => 0, 'numero' => null, 'mudancas' => [], 'erro' => null];
+
+        $blingOrder = $this->orders->findByOrderNumber((string) $order->external_order_id, $this->orders->lojaIdForChannel((string) $order->origin));
+        $r['nfe_id'] = $nfeId = (int) ($blingOrder['notaFiscal']['id'] ?? 0);
+        $nota = $nfeId > 0 ? $this->fetchNota($nfeId) : null;
+
+        if (! $nota) {
+            $r['erro'] = 'pedido sem nota no Bling';
+
+            return $r;
+        }
+
+        $r['situacao'] = (int) ($nota['situacao'] ?? 0);
+        $r['numero'] = ($nota['serie'] ?? '?').'-'.($nota['numero'] ?? '?');
+
+        if (! in_array($r['situacao'], [1, 4], true)) {
+            $r['erro'] = "nota na situação {$r['situacao']} — só pendente (1) ou rejeitada (4) pode ser alterada";
+
+            return $r;
+        }
+
+        $ufEmitente = Company::query()->value('state');
+        $interestadual = $ufEmitente && strcasecmp((string) $order->shipping_state, (string) $ufEmitente) !== 0;
+
+        foreach ($nota['itens'] ?? [] as $i => $item) {
+            $codigo = (string) ($item['codigo'] ?? '');
+            $fiscal = ProductChannelListing::query()->where('channel', $order->origin)->where('external_id', $codigo)->with('product.fiscalData')->first()?->product?->fiscalData
+                ?? \App\Modules\Catalog\Models\Product::query()->where('sku', $codigo)->with('fiscalData')->first()?->fiscalData;
+
+            if (! $fiscal || ! $fiscal->ncm) {
+                $r['erro'] = "item {$codigo} sem NCM no nosso cadastro — não dá para alinhar";
+
+                return $r;
+            }
+
+            $cfop = (string) ($interestadual ? $fiscal->cfop_outros_estados : $fiscal->cfop);
+            $ncm = preg_replace('/\D/', '', (string) $fiscal->ncm);
+            $ncmBling = substr($ncm, 0, 4).'.'.substr($ncm, 4, 2).'.'.substr($ncm, 6, 2);
+            $novo = ['cfop' => $cfop, 'classificacaoFiscal' => $ncmBling, 'origem' => (int) $fiscal->origem];
+            if ($fiscal->cest) {
+                $novo['cest'] = (string) $fiscal->cest;
+            }
+
+            foreach ($novo as $campo => $valor) {
+                $atual = (string) ($item[$campo] ?? '');
+                $comparavel = $campo === 'classificacaoFiscal' ? preg_replace('/\D/', '', $atual) : $atual;
+                $esperado = $campo === 'classificacaoFiscal' ? $ncm : (string) $valor;
+                if ($comparavel !== $esperado) {
+                    $r['mudancas'][] = "{$codigo} {$campo}: ".($atual === '' ? 'vazio' : $atual)." → {$valor}";
+                    $nota['itens'][$i][$campo] = $valor;
+                }
+            }
+        }
+
+        if ($aplicar && $r['mudancas'] !== []) {
+            $corpo = array_diff_key($nota, array_flip(['id', 'situacao', 'chaveAcesso', 'xml', 'linkDanfe', 'linkPDF']));
+
+            try {
+                $this->client->put("nfe/{$nfeId}", $corpo);
+            } catch (Throwable $e) {
+                $r['erro'] = 'PUT recusado pelo Bling: '.mb_substr($e->getMessage(), 0, 300);
+
+                return $r;
+            }
+
+            $this->timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS,
+                'Nota do Bling alinhada ao cadastro: '.implode('; ', $r['mudancas']));
+        }
+
+        return $r;
+    }
+
     public function statusDaSituacao(int $situacao): string
     {
         return self::SITUACAO_PARA_STATUS[$situacao] ?? Invoice::STATUS_PENDING;

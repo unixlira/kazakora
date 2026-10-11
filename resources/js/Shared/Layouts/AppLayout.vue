@@ -38,16 +38,11 @@ const notifMenuOpen = ref(false);
 const notifMenuRef = ref(null);
 useClickOutside(notifMenuRef, () => (notifMenuOpen.value = false));
 
+// Clique no sino abre a tela da notificação, que marca como lida e tem o
+// botão certo (pedido, senha, promoção) — 2026-10-11.
 const markNotificationRead = (item) => {
-    if (!item.read) {
-        router.post(`/notificacoes/${item.id}/lida`, {}, { preserveScroll: true, preserveState: true });
-    }
-
-    // Notificação promocional pode ter um link (cupom, categoria em
-    // promoção) — navega pra lá depois de marcar como lida.
-    if (item.link) {
-        router.visit(item.link);
-    }
+    notifMenuOpen.value = false;
+    router.visit(`/notificacoes/${item.id}`);
 };
 
 const markAllNotificationsRead = () => {

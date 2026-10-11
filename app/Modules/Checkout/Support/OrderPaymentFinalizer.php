@@ -74,6 +74,9 @@ class OrderPaymentFinalizer
         // 2026-10-10) — o job ignora pedido de marketplace e template vazio.
         if ($order->origin === Order::ORIGIN_STORE) {
             SendOrderApprovedWhatsAppJob::dispatch($order->id);
+
+            // Aviso no sino da loja com link para a compra (2026-10-11).
+            rescue(fn () => $order->user?->notify(new \App\Notifications\Cliente\PedidoConfirmado($order)));
         }
 
         return true;

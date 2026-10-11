@@ -35,6 +35,7 @@ class HandleInertiaRequests extends Middleware
         PrintJobFailedNotification::class,
         OversellDetectedNotification::class,
         LowStockNotification::class,
+        \App\Notifications\TikTokRelatorioNotification::class,
     ];
 
     /**
@@ -170,6 +171,8 @@ class HandleInertiaRequests extends Middleware
                 // já trata como opcional.
                 'body' => $notification->data['body'] ?? null,
                 'link' => $notification->data['link'] ?? null,
+                // Bolinha: verde (sucesso), vermelha (erro) — ex.: relatório do TikTok.
+                'nivel' => $notification->data['nivel'] ?? null,
                 'read' => $notification->read_at !== null,
                 'createdAt' => $notification->created_at->diffForHumans(),
             ])->all(),

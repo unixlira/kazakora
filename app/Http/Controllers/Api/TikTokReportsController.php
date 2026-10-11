@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Notifications\FiscalAlertNotification;
+use App\Notifications\TikTokRelatorioNotification;
+use Illuminate\Support\Facades\Cache;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -32,9 +34,29 @@ class TikTokReportsController extends Controller
         $recebido = (string) Str::after((string) $request->header('Authorization'), 'Bearer ');
 
         if ($esperado === '' || ! hash_equals($esperado, $recebido)) {
+            // Uma vez por hora no máximo: robô batendo na rota não enche o sino.
+            if (Cache::add('tiktok_reports.alerta_token', true, now()->addHour())) {
+                $this->avisar(false, 'Envio recusado: token inválido ou ausente (confira o ApiToken do app).');
+            }
+
             return response()->json(['ok' => false, 'erro' => 'Token inválido.'], 401);
         }
 
+        try {
+            return $this->receber($request);
+        } catch (HttpException $e) {
+            $this->avisar(false, $e->getMessage());
+
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->avisar(false, 'Falha ao gravar o arquivo: '.mb_substr($e->getMessage(), 0, 200));
+
+            return response()->json(['ok' => false, 'erro' => 'Falha ao gravar o arquivo.'], 500);
+        }
+    }
+
+    private function receber(Request $request): JsonResponse
+    {
         $arquivos = collect($request->allFiles())->flatten()->filter(fn ($f) => $f instanceof UploadedFile && $f->isValid());
         $resultado = [];
 
@@ -48,16 +70,23 @@ class TikTokReportsController extends Controller
         }
 
         if ($resultado === []) {
+            $this->avisar(false, 'Nenhum arquivo veio no envio.');
+
             return response()->json(['ok' => false, 'erro' => 'Nenhum arquivo recebido.'], 422);
         }
 
-        $novos = collect($resultado)->where('duplicado', false)->count();
-        if ($novos > 0) {
-            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
-            rescue(fn () => Notification::send($admins, new FiscalAlertNotification("TikTok: {$novos} relatório(s) novo(s) recebido(s) para a auditoria financeira.")), report: false);
+        $novos = collect($resultado)->where('duplicado', false);
+        if ($novos->isNotEmpty()) {
+            $this->avisar(true, $novos->pluck('nome')->implode(', '));
         }
 
         return response()->json(['ok' => true, 'arquivos' => $resultado]);
+    }
+
+    private function avisar(bool $sucesso, string $detalhe): void
+    {
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+        rescue(fn () => Notification::send($admins, new TikTokRelatorioNotification($sucesso, $detalhe)), report: false);
     }
 
     /** @return array{id: int, nome: string, sha256: string, duplicado: bool} */

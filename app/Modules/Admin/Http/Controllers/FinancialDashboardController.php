@@ -77,7 +77,7 @@ class FinancialDashboardController extends Controller
         // com frete, desde que essas métricas existem (2026-08-09).
         // CashFlowController já fazia certo (gross_amount = subtotal);
         // troquei 'total' por 'subtotal' aqui pra bater com essa definição.
-        $salesRevenueMonthFromOrders = (float) Order::query()->nonPurchaseReturn()
+        $salesRevenueMonthFromOrders = (float) Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
             ->when($hasSettlementDetails, function ($query) use ($startOfMonth) {
@@ -102,7 +102,7 @@ class FinancialDashboardController extends Controller
 
         $salesRevenueMonth = round($salesRevenueMonthFromOrders + $salesRevenueMonthFromSettlements, 2);
 
-        $productCostMonth = round((float) Order::query()->nonPurchaseReturn()
+        $productCostMonth = round((float) Order::query()->vendaEfetiva()
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $startOfMonth)
             ->join('order_items', 'order_items.order_id', '=', 'orders.id')
@@ -189,7 +189,7 @@ class FinancialDashboardController extends Controller
         // conta de lucro. O dado em si já vive em orders.shipping_cost
         // desde sempre (ShopeeDriver::importOrder()); isso só soma pra
         // exibição.
-        $shippingCostMonth = round((float) Order::query()->nonPurchaseReturn()
+        $shippingCostMonth = round((float) Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
             ->sum('shipping_cost'), 2);
@@ -215,7 +215,7 @@ class FinancialDashboardController extends Controller
         // faturamento bruto desde o primeiro dia, 2º lucro líquido também
         // desde o primeiro dia (mesma conta do mês, sem o filtro de data),
         // atualiza sozinho assim que custo de produto for cadastrado.
-        $salesRevenueAllTimeFromOrders = (float) Order::query()->nonPurchaseReturn()
+        $salesRevenueAllTimeFromOrders = (float) Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->when($hasSettlementDetails, function ($query) {
                 $query->whereNotExists(function ($settlement) {
@@ -237,7 +237,7 @@ class FinancialDashboardController extends Controller
 
         $salesRevenueAllTime = round($salesRevenueAllTimeFromOrders + $salesRevenueAllTimeFromSettlements, 2);
 
-        $productCostAllTime = round((float) Order::query()->nonPurchaseReturn()
+        $productCostAllTime = round((float) Order::query()->vendaEfetiva()
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->join('order_items', 'order_items.order_id', '=', 'orders.id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
@@ -286,6 +286,40 @@ class FinancialDashboardController extends Controller
         $netProfitAllTime = round($salesRevenueAllTime - $productCostAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime - $correiosCostAllTime, 2);
         $netRevenueAfterDeductionsAllTime = round($salesRevenueAllTime - $marketplaceFeeAllTime - $adSpendAllTime - $flexCostAllTime - $correiosCostAllTime, 2);
         $netRevenueAfterDeductionsMonth = round($salesRevenueMonth - $platformCostsMonth - $adSpendMonth, 2);
+        // CONTA OFICIAL (auditoria 2026-10-11): os números de cima vêm da
+        // mesma ContributionMargin do painel, do KoraSync e do e-mail diário.
+        // A conta antiga daqui misturava extrato e pedido de outro jeito,
+        // somava taxa de pedido cancelado e contava nota avulsa (reemissão)
+        // como venda — dava um lucro diferente em cada tela. A taxa real do
+        // TikTok (extrato) e do ML/site (Mercado Pago) já inclui frete,
+        // afiliado e GMV Max descontados no repasse.
+        $margem = app(ContributionMargin::class);
+        $amanha = Carbon::tomorrow();
+        $contaMes = $margem->periodo($startOfMonth, $amanha);
+        $contaTotal = $margem->periodo(Carbon::create(2026, 1, 1), $amanha);
+
+        $salesRevenueMonth = $contaMes['receita'];
+        $productCostMonth = $contaMes['custo_produtos'];
+        $marketplaceFeeMonth = $contaMes['taxas'];
+        $adSpendMonth = $contaMes['ads'];
+        $baseAdSpendMonth = $contaMes['ads'];
+        $settlementAdSpendMonth = 0.0;
+        $settlementShippingCostMonth = 0.0;
+        $settlementAffiliateCostMonth = 0.0;
+        $platformCostsMonth = round($contaMes['taxas'] + $contaMes['frete'] - $contaMes['bonificacoes'], 2);
+        $grossProfitMonth = round($salesRevenueMonth - $productCostMonth, 2);
+        $netProfitMonth = $contaMes['margem'];
+        $netProfitMarginMonth = $salesRevenueMonth > 0 ? round(($netProfitMonth / $salesRevenueMonth) * 100, 2) : 0.0;
+        $netRevenueMonth = round($salesRevenueMonth - $adSpendMonth, 2);
+        $netRevenueAfterDeductionsMonth = round($salesRevenueMonth - $platformCostsMonth - $adSpendMonth, 2);
+
+        $salesRevenueAllTime = $contaTotal['receita'];
+        $productCostAllTime = $contaTotal['custo_produtos'];
+        $marketplaceFeeAllTime = $contaTotal['taxas'];
+        $adSpendAllTime = $contaTotal['ads'];
+        $netProfitAllTime = $contaTotal['margem'];
+        $netRevenueAfterDeductionsAllTime = round($contaTotal['receita'] - $contaTotal['taxas'] - $contaTotal['frete'] + $contaTotal['bonificacoes'] - $contaTotal['ads'], 2);
+
         $settlementSummary = $this->settlementSummary($startOfMonth);
         $marketplaceMetricsMonth = $this->marketplaceMetrics($startOfMonth, $flexCostMonth, $settlementSummary['month']['channels'] ?? []);
 
@@ -556,12 +590,14 @@ class FinancialDashboardController extends Controller
             // Amazon fica sempre visível, mesmo zerada, porque ainda não há
             // métrica/settlement confiável; é um espaço reservado intencional.
             'amazon' => 'Amazon',
+            // Site próprio (2026-10-11): aparece mesmo sem venda.
+            'loja' => 'KazaKora (site)',
         ];
 
         $settlementsByChannel = collect($settlementChannels)->keyBy('channel');
         $settlementChannelKeys = $settlementsByChannel->keys()->all();
 
-        $orders = Order::query()->nonPurchaseReturn()
+        $orders = Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
             ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
@@ -573,7 +609,7 @@ class FinancialDashboardController extends Controller
         // venda local. Isso mantém a mesma base do topo: extrato para pedidos
         // conciliados, subtotal local para pedidos pendentes de liquidação.
         $unsettledOrders = Schema::hasTable('marketplace_settlement_details')
-            ? Order::query()->nonPurchaseReturn()
+            ? Order::query()->vendaEfetiva()
                 ->whereIn('status', self::REVENUE_STATUSES)
                 ->where('created_at', '>=', $startOfMonth)
                 ->whereNotExists(function ($settlement) use ($startOfMonth) {
@@ -685,7 +721,7 @@ class FinancialDashboardController extends Controller
             ->get()
             ->keyBy('channel');
 
-        $semTaxaReal = Order::query()->nonPurchaseReturn()
+        $semTaxaReal = Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
             ->whereDoesntHave('channelFee', fn ($taxa) => $taxa->where('fee_amount', '>', 0)->where('source', '!=', OrderChannelFee::SOURCE_ESTIMATE))
@@ -700,7 +736,9 @@ class FinancialDashboardController extends Controller
             ->groupBy('origin')
             ->pluck('total', 'channel');
 
-        return collect($channels)->map(function ($label, $channel) use ($quebra, $semTaxaReal, $correiosPorCanal, $orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
+        $porCanal = app(ContributionMargin::class)->porCanal($startOfMonth, Carbon::tomorrow());
+
+        return collect($channels)->map(function ($label, $channel) use ($porCanal, $quebra, $semTaxaReal, $correiosPorCanal, $orders, $unsettledOrders, $productCosts, $fees, $unsettledFees, $ads, $settlementAds, $settlementsByChannel, $settlementChannelKeys, $flexCostMonth) {
             $settlement = $settlementsByChannel->get($channel);
             $hasSettlement = $settlement !== null;
             $orderRow = $orders->get($channel);
@@ -744,6 +782,16 @@ class FinancialDashboardController extends Controller
                 $source = ($ordersCount > 0 || $revenue != 0.0 || $adSpend != 0.0 || $platformCosts != 0.0 || $productCost != 0.0)
                     ? 'Pedidos locais/API'
                     : ($channel === 'amazon' ? 'Aguardando dados' : 'Sem dados no mês');
+            }
+
+            // Conta oficial por canal (ver porCanal): substitui a soma local acima.
+            $oficial = $porCanal[$channel] ?? null;
+            if ($oficial) {
+                $revenue = $oficial['receita'];
+                $ordersCount = $oficial['pedidos'];
+                $productCost = $oficial['custo_produtos'];
+                $adSpend = $oficial['ads'];
+                $platformCosts = round($oficial['taxas'] + $oficial['frete'] - $oficial['bonificacoes'], 2);
             }
 
             $grossProfit = round($revenue - $productCost, 2);

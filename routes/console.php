@@ -278,3 +278,8 @@ Schedule::command('horizon:snapshot')->everyFiveMinutes();
 
 // Vídeos da embalagem ficam 90 dias (2026-10-11).
 Schedule::command('videos:limpar-embalagem')->dailyAt('03:30');
+
+// Conciliação do Mercado Pago (2026-10-11): o que entrou de verdade em cada
+// venda do ML e do site, estornos e bônus do Flex. 60 dias pra pegar
+// devoluções e mediações que fecham depois.
+Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping(60);

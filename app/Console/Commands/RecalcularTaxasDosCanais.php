@@ -54,7 +54,7 @@ class RecalcularTaxasDosCanais extends Command
         $depois = 0.0;
 
         foreach ($pedidos as $pedido) {
-            if ($pedido->channelFee?->source === OrderChannelFee::SOURCE_MANUAL) {
+            if (in_array($pedido->channelFee?->source, [OrderChannelFee::SOURCE_MANUAL, OrderChannelFee::SOURCE_REPORT], true)) {
                 $manuais++;
 
                 continue;

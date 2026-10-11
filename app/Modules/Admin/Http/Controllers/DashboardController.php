@@ -32,7 +32,9 @@ class DashboardController extends Controller
 
         return Inertia::render('Admin/Dashboard', [
             'stats' => [
-                'ordersCount' => Order::query()->nonPurchaseReturn()->count(),
+                // Pedidos = vendas confirmadas (auditoria 2026-10-11: antes
+                // contava cancelado e aguardando pagamento junto).
+                'ordersCount' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->count(),
                 // Achado real 2026-08-06: "FATURAMENTO" era all-time (sem
                 // filtro de data nenhum) — ao lado de "FATURADO HOJE",
                 // parecia representar um período, mas somava a loja inteira
@@ -52,20 +54,20 @@ class DashboardController extends Controller
                 // (gross_amount = subtotal); troquei 'total' por 'subtotal'
                 // aqui e em todo outro lugar que soma "receita/faturamento"
                 // pra bater com a definição já correta do Fluxo de Caixa.
-                'revenue' => (float) Order::query()->nonPurchaseReturn()
+                'revenue' => (float) Order::query()->vendaEfetiva()
                     ->where('created_at', '>=', $startOfMonth)
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum(DB::raw(ContributionMargin::receitaSql())),
-                'ordersToday' => Order::query()->nonPurchaseReturn()->whereDate('created_at', $today)->count(),
-                'ordersMonth' => Order::query()->nonPurchaseReturn()->where('created_at', '>=', $startOfMonth)->count(),
-                'revenueToday' => (float) Order::query()->nonPurchaseReturn()
+                'ordersToday' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->whereDate('created_at', $today)->count(),
+                'ordersMonth' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->where('created_at', '>=', $startOfMonth)->count(),
+                'revenueToday' => (float) Order::query()->vendaEfetiva()
                     ->whereDate('created_at', $today)
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum(DB::raw(ContributionMargin::receitaSql())),
                 // Faturamento de todos os canais desde o primeiro pedido e
                 // margem do mês corrente — cards de valor do topo (pedido do
                 // usuário 2026-10-06), mesma conta dos cards do mês/hoje.
-                'revenueTotal' => (float) Order::query()->nonPurchaseReturn()
+                'revenueTotal' => (float) Order::query()->vendaEfetiva()
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum(DB::raw(ContributionMargin::receitaSql())),
                 'contributionMarginMonth' => $margemMes,
@@ -112,7 +114,7 @@ class DashboardController extends Controller
      */
     private function vendasPorProduto(Carbon $desde): \Illuminate\Support\Collection
     {
-        $pedidos = Order::query()->nonPurchaseReturn()
+        $pedidos = Order::query()->vendaEfetiva()
             ->whereIn('status', self::PAID_STATUSES)
             ->where('created_at', '>=', $desde)
             ->select('id');
@@ -169,7 +171,7 @@ class DashboardController extends Controller
     {
         // subtotal, não total — ver comentário em index() sobre frete não
         // ser receita do vendedor.
-        return Order::query()->nonPurchaseReturn()
+        return Order::query()->vendaEfetiva()
             ->where('created_at', '>=', $startOfMonth)
             ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
             ->whereIn('status', self::PAID_STATUSES)
@@ -203,7 +205,7 @@ class DashboardController extends Controller
 
         // Uma leitura só dos pedidos dos últimos 12 meses; o resto agrega
         // em PHP (evita função de data específica de banco).
-        $pedidos = Order::query()->nonPurchaseReturn()
+        $pedidos = Order::query()->vendaEfetiva()
             ->whereIn('status', self::PAID_STATUSES)
             ->where('created_at', '>=', $inicio12Meses)
             ->selectRaw('id, origin, created_at, '.ContributionMargin::receitaSql().' as receita')
@@ -281,7 +283,7 @@ class DashboardController extends Controller
      */
     private function faturamentoPorCategoria(Carbon $desde): array
     {
-        $pedidos = Order::query()->nonPurchaseReturn()
+        $pedidos = Order::query()->vendaEfetiva()
             ->whereIn('status', self::PAID_STATUSES)
             ->where('created_at', '>=', $desde)
             ->select('id');

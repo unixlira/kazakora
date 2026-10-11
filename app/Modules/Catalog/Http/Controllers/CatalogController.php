@@ -131,14 +131,23 @@ class CatalogController extends Controller
             ->whereHas('order', fn ($query) => $query->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
             ->sum('quantity');
 
-        // Avaliações com foto/vídeo primeiro, depois as só com texto (pedido 2026-10-10).
+        // Avaliações (pedido 2026-10-11): do produto E das variações dele (a
+        // avaliação importada fica na variação vendida — Power Bank Rosa…).
+        // Ordem: mais estrelas primeiro; dentro da mesma nota, com foto/vídeo
+        // antes (mais fotos primeiro); depois as mais recentes. A última é a
+        // de 1 estrela. A tela mostra 20 e carrega o resto de 12 em 12.
         $reviews = Review::query()
-            ->where('product_id', $product->id)
+            ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
             ->with(['user:id,name', 'images'])
             ->withCount('images')
+            ->orderByDesc('rating')
             ->orderByDesc('images_count')
             ->latest()
             ->get();
+
+        // Nota e contagem do topo batendo com a lista (variações incluídas).
+        $product->setAttribute('reviews_count', $reviews->count());
+        $product->setAttribute('reviews_avg_rating', $reviews->count() ? round((float) $reviews->avg('rating'), 4) : null);
 
         $user = $request->user();
 

@@ -202,6 +202,13 @@ const precoPartes = computed(() => {
             </Link>
 
 
+            <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card). -->
+            <button v-if="canReview && !hasReviewed" type="button"
+                class="absolute left-2.5 top-2.5 z-10 flex items-center gap-1 rounded-full bg-store-bg-raised px-2.5 py-1 text-[11px] font-semibold text-store-accent shadow hover:underline"
+                @click.stop="showReviewModal = true">
+                <i class="fas fa-star text-amber-400"></i> Avaliar
+            </button>
+
             <!-- Selo promocional sobre a foto (canto inferior esquerdo): "Oferta do dia"
                  nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
             <div class="promo-badge">
@@ -238,23 +245,28 @@ const precoPartes = computed(() => {
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
                      centavos pequenos no alto. Estrelas ficam só na página do produto. -->
-                <div v-if="precoAntes" class="flex flex-wrap items-center gap-1.5">
-                    <span class="rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
-                    <s class="text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
+                <!-- Altura fixa em todas as linhas (pedido 2026-10-11): com ou sem
+                     desconto/vendidos, todo card tem o mesmo tamanho e o preço fica
+                     sempre na mesma posição. -->
+                <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
+                    <template v-if="precoAntes">
+                        <span class="rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
+                        <s class="truncate text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
+                    </template>
                 </div>
-                <div class="flex flex-wrap items-end gap-x-1.5 gap-y-0.5">
-                    <div class="flex items-start leading-none text-store-fg">
+                <div class="flex h-[30px] items-end gap-x-1.5 overflow-hidden">
+                    <div class="flex shrink-0 items-start leading-none text-store-fg">
                         <span class="mr-0.5 mt-[3px] text-sm font-medium md:text-base">R$</span>
                         <span class="text-[22px] font-semibold tracking-tight md:text-2xl">{{ precoPartes.inteiro }}</span>
                         <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
                     </div>
                     <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
-                    <span v-if="vendidosTexto(product.vendidos)" class="pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
+                    <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
                 </div>
                 <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
-                <p v-if="product.stock <= 0" class="mt-1.5 text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
+                <p v-if="product.stock <= 0" class="mt-1.5 flex h-5 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
                 <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
-                <p v-else class="mt-1.5 flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
+                <p v-else class="mt-1.5 flex h-5 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
                     Frete grátis
                     <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
                     <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
@@ -264,11 +276,6 @@ const precoPartes = computed(() => {
                     </span>
                 </p>
             </div>
-            <button v-if="canReview && !hasReviewed" type="button"
-                class="mt-1 self-start text-[11px] font-medium text-store-accent hover:underline"
-                @click="showReviewModal = true">
-                Avaliar produto
-            </button>
         </div>
     </article>
 

@@ -9,21 +9,49 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
-/** Avaliações com foto primeiro, depois as só com texto (pedido 2026-10-10). */
+/**
+ * Ordem das avaliações (pedido 2026-10-11): mais estrelas primeiro; dentro da
+ * mesma nota, com foto antes; a última é a de 1 estrela. Inclui as avaliações
+ * gravadas nas variações do produto.
+ */
 class AvaliacoesComMidiaPrimeiroTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_avaliacoes_com_midia_vem_antes(): void
+    private function avaliacao(Product $produto, int $nota, bool $foto = false): Review
     {
-        $product = Product::factory()->create(['is_active' => true]);
-        $semFoto = Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $product->id, 'rating' => 5, 'comment' => 'Só texto']);
-        $comFoto = Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $product->id, 'rating' => 4, 'comment' => 'Com foto']);
-        $comFoto->images()->create(['image_url' => 'https://exemplo.com/foto.jpg', 'position' => 0]);
-        $semFoto->forceFill(['created_at' => now()->addMinute()])->save();
+        $review = Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $produto->id, 'rating' => $nota, 'comment' => "Nota {$nota}"]);
+        if ($foto) {
+            $review->images()->create(['image_url' => 'https://exemplo.com/foto.jpg', 'position' => 0]);
+        }
 
-        $this->get('/produtos/'.$product->slug)->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('reviews.0.id', $comFoto->id)
-            ->where('reviews.1.id', $semFoto->id));
+        return $review;
+    }
+
+    public function test_mais_estrelas_primeiro_e_com_foto_antes_dentro_da_nota(): void
+    {
+        $produto = Product::factory()->create(['is_active' => true]);
+        $um = $this->avaliacao($produto, 1, foto: true);
+        $quatroComFoto = $this->avaliacao($produto, 4, foto: true);
+        $cincoSemFoto = $this->avaliacao($produto, 5);
+        $cincoComFoto = $this->avaliacao($produto, 5, foto: true);
+
+        $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('reviews.0.id', $cincoComFoto->id)
+            ->where('reviews.1.id', $cincoSemFoto->id)
+            ->where('reviews.2.id', $quatroComFoto->id)
+            ->where('reviews.3.id', $um->id));
+    }
+
+    public function test_inclui_avaliacoes_das_variacoes(): void
+    {
+        $pai = Product::factory()->create(['is_active' => true]);
+        $variacao = Product::factory()->create(['is_active' => true, 'parent_product_id' => $pai->id]);
+        $this->avaliacao($pai, 5);
+        $this->avaliacao($variacao, 4);
+
+        $this->get('/produtos/'.$pai->slug)->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('reviews', 2)
+            ->where('product.reviews_count', 2));
     }
 }

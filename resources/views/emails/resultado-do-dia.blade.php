@@ -66,7 +66,7 @@
             ['Custo dos produtos', $dia['custo_produto'], true],
             ['Taxas dos canais'.($dia['taxas_estimadas'] > 0 ? ' *' : ''), $dia['taxas_canal'], true],
             ['Anúncios', $dia['anuncios'], true],
-            ['Frete pago', $dia['frete'], true],
+            ['Frete pago pela loja (Correios/Flex)', $dia['frete'], true],
             ['Imposto (Simples '.$aliquota.'%)', $dia['impostos'], true],
         ] as [$rotulo, $valor, $desconta])
             <tr>
@@ -81,7 +81,7 @@
     </table>
     @if ($dia['taxas_estimadas'] > 0)
         <p style="margin: -14px 0 22px; font-size: 11px; color: #6b7280;">
-            * Inclui {{ $brl($dia['taxas_estimadas']) }} estimados pela média do extrato ({{ implode(', ', $dia['canais_estimados']) }}), até a taxa real chegar.
+            * Inclui {{ $brl($dia['taxas_estimadas']) }} de taxa estimada (TikTok antes do extrato), até a taxa real chegar.
         </p>
     @endif
 
@@ -116,7 +116,7 @@
     </table>
 
     <p style="margin: 18px 0 0; font-size: 11px; color: #9ca3af;">
-        Lucro líquido = receita − custo dos produtos − taxas dos canais − anúncios − frete − imposto. Imposto estimado
-        com a alíquota efetiva do Simples Nacional informada pelo contador ({{ $aliquota }}%); o valor oficial é o do DAS.
+        Mesma conta do painel financeiro: receita − custo dos produtos − taxas dos canais − frete pago pela loja − anúncios,
+        menos o imposto estimado pela alíquota do Simples Nacional ({{ $aliquota }}%). O valor oficial do imposto é o do DAS.
     </p>
 @endsection

@@ -67,6 +67,8 @@ servidor por fora: trazer pro git antes, nunca publicar por cima.
 
 ## Referências rápidas
 
+- Lucro, custos e armadilhas de anúncios: `docs/financeiro-mapa-de-custos.md`.
+  Lucro é sempre `ContributionMargin::periodo()`; nunca refazer a conta.
 - Cookies, sessão e LGPD da loja: `docs/privacidade-e-cookies.md`. Qualquer
   coleta nova de dado de visitante (pixel, analytics) segue as regras de lá.
 - Servidor: Hostinger compartilhada, PHP em `/opt/alt/php83/usr/bin/php`,

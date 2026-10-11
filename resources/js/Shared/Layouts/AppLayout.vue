@@ -423,7 +423,7 @@ const REDES = [
                                 :class="page.props.reclameAqui?.verificada ? 'px-2' : 'px-3 sm:px-4'"
                                 title="Ver a KazaKora no Reclame AQUI">
                                 <!-- Selo de verificada só com a chave LOJA_SELO_RA_VERIFICADA (só depois da aprovação). -->
-                                <img v-if="page.props.reclameAqui?.verificada" src="/images/selos/ra-verificada.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
+                                <img v-if="page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
                                     class="h-[24px] w-auto sm:h-[36px] lg:h-[42px]">
                                 <template v-else>
                                     <span class="text-[7px] font-semibold uppercase tracking-wider text-slate-500 sm:text-[9px]">Estamos no</span>

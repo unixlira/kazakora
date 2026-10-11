@@ -53,16 +53,17 @@ const irPara = (indice) => {
         <div v-if="slider" class="relative md:hidden">
             <div ref="trilho" class="no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
                 <div v-for="product in produtos" :key="product.id" class="w-full shrink-0 snap-center px-1">
-                    <ProductCard :product="product"
+                    <ProductCard :product="product" estrelas
                         :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                         :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />
                 </div>
             </div>
+            <!-- Setas laranja (pedido 2026-10-10): fica claro que é ali que passa. -->
             <button v-if="atual > 0" type="button" aria-label="Oferta anterior"
-                class="absolute left-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-lg text-slate-500 shadow"
+                class="absolute left-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual - 1)"><i class="fas fa-angle-left"></i></button>
             <button v-if="atual < produtos.length - 1" type="button" aria-label="Próxima oferta"
-                class="absolute right-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-lg text-slate-500 shadow"
+                class="absolute right-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
                 @click="irPara(atual + 1)"><i class="fas fa-angle-right"></i></button>
             <div class="mt-3 flex justify-center gap-2">
                 <button v-for="(product, indice) in produtos" :key="product.id" type="button" :aria-label="`Oferta ${indice + 1}`"

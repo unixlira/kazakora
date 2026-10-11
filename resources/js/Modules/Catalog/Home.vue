@@ -159,7 +159,7 @@ const carregarMais = () => {
         <template v-if="vitrine">
             <!-- Âncora da faixa promocional do topo. -->
             <span id="ofertas" class="block scroll-mt-28"></span>
-            <SecaoProdutos titulo="Ofertas do dia" :produtos="vitrine.ofertas" cinco slider
+            <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" cinco slider
                 subtitulo="Desconto extra só hoje, em produtos escolhidos a dedo."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
                 <template #acao>

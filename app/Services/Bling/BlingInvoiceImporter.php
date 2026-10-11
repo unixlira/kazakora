@@ -184,6 +184,28 @@ class BlingInvoiceImporter
             }
         }
 
+        // Nota sai pelo VALOR QUE O CLIENTE PAGOU (regra do Lira, 2026-10-11:
+        // cupom/subsídio da plataforma abate a nota e reduz o imposto). O
+        // Bling devolve os itens pelo preço cheio e as parcelas pelo valor
+        // pago; sem ajustar os itens, o PUT é recusado ("total das parcelas
+        // difere do total da nota"). Reparte o pago entre os itens na
+        // proporção do preço cheio; o último item fica com o arredondamento.
+        $pago = round(array_sum(array_map(fn ($p) => (float) ($p['valor'] ?? 0), $nota['parcelas'] ?? [])) - (float) ($nota['valorFrete'] ?? 0), 2);
+        $cheio = round(array_sum(array_map(fn ($i) => (float) ($i['valorTotal'] ?? 0), $nota['itens'] ?? [])), 2);
+
+        if ($pago > 0 && $cheio > 0 && abs($cheio - $pago) >= 0.01) {
+            $resto = $pago;
+            $ultimo = array_key_last($nota['itens']);
+            foreach ($nota['itens'] as $i => $item) {
+                $total = $i === $ultimo ? round($resto, 2) : round((float) $item['valorTotal'] * $pago / $cheio, 2);
+                $resto -= $total;
+                $qtd = max(1, (float) ($item['quantidade'] ?? 1));
+                $nota['itens'][$i]['valor'] = round($total / $qtd, 4);
+                $nota['itens'][$i]['valorTotal'] = $total;
+            }
+            $r['mudancas'][] = sprintf('valor dos itens: R$ %s (preço cheio) → R$ %s (valor pago)', number_format($cheio, 2, ',', '.'), number_format($pago, 2, ',', '.'));
+        }
+
         // O Bling RECALCULA o CFOP pela natureza de operação ao salvar: com
         // "Venda de mercadoria a não contribuinte" o 6102 volta a 6108. A
         // natureza "Venda de mercadoria" é a que gera 5102/6102.

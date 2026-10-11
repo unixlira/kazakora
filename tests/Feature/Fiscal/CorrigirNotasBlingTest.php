@@ -119,6 +119,25 @@ class CorrigirNotasBlingTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_nota_sai_pelo_valor_pago(): void
+    {
+        // Item R$ 85 cheio, cliente pagou R$ 47,90 (cupom do TikTok).
+        Http::fake([
+            '*/pedidos/vendas/9' => Http::response(['data' => ['id' => 9, 'numeroLoja' => 'TK9', 'notaFiscal' => ['id' => 468]]]),
+            '*/pedidos/vendas?*' => Http::response(['data' => [['id' => 9, 'numeroLoja' => 'TK9']]]),
+            '*/nfe/468' => fn (Request $r) => $r->method() === 'PUT'
+                ? Http::response(['data' => ['id' => 468]])
+                : Http::response(['data' => ['id' => 468, 'serie' => '3', 'numero' => '000468', 'situacao' => 1, 'valorFrete' => 0,
+                    'parcelas' => [['valor' => 47.9]],
+                    'itens' => [['codigo' => 'NIV-1', 'quantidade' => 2, 'valor' => 42.5, 'valorTotal' => 85, 'cfop' => '6102', 'classificacaoFiscal' => '9015.30.00', 'origem' => 2]]]]),
+        ]);
+
+        $this->artisan('bling:corrigir-notas', ['--aplicar' => true])->assertSuccessful();
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
+            && $r['itens'][0]['valorTotal'] == 47.9 && $r['itens'][0]['valor'] == 23.95);
+    }
+
     public function test_nao_mexe_em_pedido_com_nota_autorizada(): void
     {
         $this->fake();

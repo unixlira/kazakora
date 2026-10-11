@@ -36,6 +36,28 @@ class NotificationController extends Controller
         ]);
     }
 
+    /**
+     * Tela da notificação (2026-10-11): o clique no sino abre aqui, marca
+     * como lida e mostra o texto inteiro com o botão para onde ela leva.
+     */
+    public function show(Request $request, string $notification): Response
+    {
+        $item = $request->user()->notifications()->findOrFail($notification);
+        $item->markAsRead();
+
+        return Inertia::render('Notifications/Show', [
+            'notificacao' => [
+                'id' => $item->id,
+                'titulo' => $item->data['message'] ?? '',
+                'texto' => $item->data['body'] ?? null,
+                'link' => $item->data['link'] ?? null,
+                'acao' => $item->data['acao'] ?? ($item->data['link'] ?? null ? 'Abrir' : null),
+                'icone' => $item->data['icone'] ?? 'fa-bell',
+                'quando' => $item->created_at->translatedFormat('d \\d\\e F').' às '.$item->created_at->format('H:i'),
+            ],
+        ]);
+    }
+
     public function markRead(Request $request, string $notification): RedirectResponse
     {
         /** @var Model|null $record */

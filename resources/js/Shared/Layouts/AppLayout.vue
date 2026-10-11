@@ -447,7 +447,7 @@ const REDES = [
                     <p class="mt-2">
                         <span class="opacity-70">Desenvolvido por</span>
                         <a href="https://tech.alphakora.com.br/" target="_blank" rel="noopener"
-                            class="ml-1 bg-gradient-to-r from-[#F27A2A] via-[#ff9f43] to-[#22c55e] bg-clip-text font-extrabold tracking-wide text-transparent transition hover:brightness-125">KoraTech</a>
+                            class="ml-1 font-extrabold tracking-wide no-underline transition hover:brightness-125"><span class="text-[#F27A2A]">Kora</span><span class="koratech-brilho">Tech</span></a>
                     </p>
                 </div>
             </div>
@@ -481,3 +481,22 @@ const REDES = [
 
     </div>
 </template>
+
+<style>
+/* "Tech" do crédito do rodapé: brilho indo e vindo só na palavra (2026-10-11). */
+.koratech-brilho {
+    background: linear-gradient(90deg, #22c55e 0%, #ffffff 45%, #F27A2A 55%, #22c55e 100%);
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: koratech-vai-vem 2.6s ease-in-out infinite alternate;
+}
+@keyframes koratech-vai-vem {
+    from { background-position: 100% 0; }
+    to { background-position: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .koratech-brilho { animation: none; }
+}
+</style>

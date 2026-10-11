@@ -49,7 +49,7 @@ const CHANNEL_LABELS = {
 
 // Cor fixa por canal (nunca pela posição no ranking), na ordem da paleta
 // categórica validada pra daltonismo nos dois modos (validate_palette.js,
-// 2026-10-06, contra --surface #fffaff e #20162c). No claro, verde-água,
+// 2026-10-06, contra --surface claro e escuro). No claro, verde-água,
 // amarelo e magenta ficam abaixo de 3:1 no fundo — por isso todo gráfico
 // de canal leva legenda com o valor escrito ao lado da cor.
 const CHANNEL_ORDER = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja'];
@@ -58,8 +58,8 @@ const CHANNEL_COLORS = {
     dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181' },
 };
 const CHROME = {
-    light: { grid: '#ece5f2', text: '#6b5f78', surface: '#fffaff', accent: '#6d28d9', context: '#b9adc4' },
-    dark: { grid: '#3a2a4a', text: '#b9a8c8', surface: '#20162c', accent: '#a78bfa', context: '#6f6080' },
+    light: { grid: '#e6ecf3', text: '#5b6b80', surface: '#ffffff', accent: '#0d6efd', context: '#adb5bd' },
+    dark: { grid: '#2b384a', text: '#aebccd', surface: '#18212e', accent: '#6ea8fe', context: '#6c7a8c' },
 };
 
 // O tema muda na hora (botão do layout põe/tira .dark no <html>) — os
@@ -122,7 +122,7 @@ const kpiTiles = computed(() => [
         delta: null,
         hint: 'do faturamento do mês, depois de custo, taxas, frete e ADS',
         icon: 'fas fa-percent',
-        color: 'var(--color-warning)',
+        color: (kpis.value.margemPercentual ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)',
     },
     {
         label: 'Itens por pedido',
@@ -145,9 +145,9 @@ const baseOptions = computed(() => ({
     plugins: {
         legend: { display: false },
         tooltip: {
-            backgroundColor: isDark.value ? '#f4ecfa' : '#251830',
-            titleColor: isDark.value ? '#251830' : '#ffffff',
-            bodyColor: isDark.value ? '#251830' : '#ffffff',
+            backgroundColor: isDark.value ? '#edf2f8' : '#1b2533',
+            titleColor: isDark.value ? '#1b2533' : '#ffffff',
+            bodyColor: isDark.value ? '#1b2533' : '#ffffff',
             padding: 10,
             cornerRadius: 8,
             boxPadding: 4,
@@ -338,7 +338,7 @@ const categoryChartOptions = computed(() => ({
     indexAxis: 'y',
     scales: {
         x: { ...axisStyle.value, ticks: { ...axisStyle.value.ticks, callback: (v) => formatCompact(v), maxTicksLimit: 5 } },
-        y: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, color: isDark.value ? '#f4ecfa' : '#251830' } },
+        y: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, color: isDark.value ? '#edf2f8' : '#1b2533' } },
     },
     plugins: {
         ...baseOptions.value.plugins,
@@ -353,11 +353,9 @@ const categoryChartOptions = computed(() => ({
 
 // ---- 5. Acessos ao site (pedido 2026-10-11) ---------------------------
 // Ver DashboardController::visitantes(): sem equipe e sem robô.
-const VISIT_COLORS = {
-    light: { bar: '#0d9488', today: '#f26b1d', line: '#7c3aed' },
-    dark: { bar: '#2dd4bf', today: '#fb923c', line: '#c4b5fd' },
-};
-const visitColors = computed(() => VISIT_COLORS[isDark.value ? 'dark' : 'light']);
+// Card de acessos em verde (pedido 2026-10-11): tudo em branco por cima;
+// hoje em amarelo (o "agora"), páginas vistas em azul-claro.
+const visitColors = computed(() => ({ bar: 'rgba(255,255,255,0.88)', today: '#ffc107', line: '#9ec5fe' }));
 const mesVisitas = ref(props.visitantes?.mes ?? '');
 const carregandoVisitas = ref(false);
 const trocarMesVisitas = () => {
@@ -382,12 +380,12 @@ const visitTiles = computed(() => {
     const v = props.visitantes ?? {};
     const tiles = [];
     if (v.mesAtual) {
-        tiles.push({ label: 'Visitantes hoje', value: formatInt(v.visitantesHoje), hint: `${formatInt(v.paginasHoje)} páginas vistas hoje`, icon: 'fas fa-user-clock', color: '#f26b1d' });
+        tiles.push({ label: 'Visitantes hoje', value: formatInt(v.visitantesHoje), hint: `${formatInt(v.paginasHoje)} páginas vistas hoje`, icon: 'fas fa-user-clock', color: '#ffc107' });
     }
     tiles.push(
-        { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#0d9488' },
-        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#7c3aed' },
-        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#2563eb' },
+        { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#198754' },
+        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#0d6efd' },
+        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#0aa2c0' },
     );
     return tiles;
 });
@@ -431,9 +429,9 @@ const visitChartOptions = computed(() => ({
     ...baseOptions.value,
     interaction: { mode: 'index', intersect: false },
     scales: {
-        x: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, maxTicksLimit: 16 } },
-        y: { ...axisStyle.value, beginAtZero: true, ticks: { ...axisStyle.value.ticks, precision: 0 }, title: { display: true, text: 'Visitantes', color: chrome.value.text } },
-        y1: { ...axisStyle.value, beginAtZero: true, position: 'right', grid: { display: false }, ticks: { ...axisStyle.value.ticks, precision: 0 }, title: { display: true, text: 'Páginas', color: chrome.value.text } },
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', maxTicksLimit: 16 } },
+        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.15)', drawTicks: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', padding: 6, precision: 0 }, title: { display: true, text: 'Visitantes', color: 'rgba(255,255,255,0.85)' } },
+        y1: { beginAtZero: true, position: 'right', grid: { display: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', padding: 6, precision: 0 }, title: { display: true, text: 'Páginas', color: 'rgba(255,255,255,0.85)' } },
     },
     plugins: {
         ...baseOptions.value.plugins,
@@ -463,7 +461,7 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
             <CardStats stat-subtitle="FATURAMENTO HOJE" :stat-title="formatPrice(stats.revenueToday)"
                 stat-icon-name="fas fa-money-bill-wave" variant="info" vivid />
             <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO DO MÊS" :stat-title="formatPrice(stats.contributionMarginMonth)"
-                stat-icon-name="fas fa-wallet" variant="warning" vivid />
+                stat-icon-name="fas fa-wallet" :variant="stats.contributionMarginMonth >= 0 ? 'success' : 'error'" vivid />
         </div>
 
         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -474,12 +472,12 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
             <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
                 stat-icon-name="fas fa-cart-shopping" variant="primary" vivid />
             <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
-                stat-icon-name="fas fa-rotate-left" variant="warning" vivid />
+                stat-icon-name="fas fa-rotate-left" :variant="stats.returnsMonth > 0 ? 'error' : 'success'" vivid />
         </div>
 
         <section class="mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
             <div class="flex items-center gap-2">
-                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-orange-500 text-xs text-white"><i class="fas fa-store"></i></span>
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 text-xs text-white"><i class="fas fa-store"></i></span>
                 <h3 class="text-sm font-semibold">Faturamento por canal</h3>
                 <span class="text-xs text-[var(--texto-suave)]">· mês até hoje</span>
             </div>
@@ -499,37 +497,34 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
 
         <!-- Acessos ao site (pedido 2026-10-11): entre o faturamento e o
              desempenho do mês, com filtro de mês. -->
-        <section class="mt-4 overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" style="border-top: 3px solid #0d9488">
-            <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4"
-                style="background: linear-gradient(180deg, color-mix(in oklab, #0d9488 8%, var(--surface)) 0%, var(--surface) 100%)">
+        <section class="mt-4 overflow-hidden rounded-xl text-white shadow-md"
+            style="background: linear-gradient(135deg, #198754 0%, #157347 55%, #0f5132 100%)">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-cyan-600 text-white"><i class="fas fa-globe"></i></span>
-                    <div>
-                        <h3 class="text-base font-semibold">Acessos ao site KazaKora</h3>
-                        <p class="text-xs text-[var(--texto-suave)]">Visitantes por dia · sem a equipe e sem robôs</p>
-                    </div>
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white ring-1 ring-white/30"><i class="fas fa-globe"></i></span>
+                    <h3 class="text-lg font-semibold">Acessos ao site KazaKora</h3>
                 </div>
                 <label class="flex items-center gap-2 text-sm">
-                    <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin text-teal-500"></i>
-                    <span class="text-[var(--texto-suave)]">Mês</span>
+                    <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin"></i>
+                    <span class="text-white/85">Mês</span>
                     <select v-model="mesVisitas" @change="trocarMesVisitas"
-                        class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] py-1.5 pl-3 pr-8 text-sm text-[var(--surface-foreground)] focus:border-teal-500 focus:ring-teal-500">
+                        class="visitas-mes rounded-lg border-0 py-1.5 pl-3 pr-8 text-sm font-medium shadow-sm focus:ring-2 focus:ring-white/60">
                         <option v-for="m in visitantes.meses" :key="m" :value="m">{{ formatMonthLong(m) }}</option>
                     </select>
                 </label>
             </div>
             <div class="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4" :class="{ 'opacity-60': carregandoVisitas }">
-                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg border border-[var(--surface-border)] p-3" :style="tileStyle(tile.color)">
+                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg bg-white/12 p-3 ring-1 ring-white/20 backdrop-blur-sm">
                     <div class="flex items-center justify-between gap-2">
-                        <p class="truncate text-xs font-medium text-[var(--texto-suave)]">{{ tile.label }}</p>
-                        <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs text-white" :style="{ background: tile.color }"><i :class="tile.icon"></i></span>
+                        <p class="truncate text-xs font-semibold uppercase tracking-wide text-white/85">{{ tile.label }}</p>
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm shadow-sm" :style="{ color: tile.color }"><i :class="tile.icon"></i></span>
                     </div>
-                    <p class="mt-1 truncate text-2xl font-bold">{{ tile.value }}</p>
-                    <p class="truncate text-xs text-[var(--texto-suave)]">{{ tile.hint }}</p>
+                    <p class="mt-1 truncate text-3xl font-bold">{{ tile.value }}</p>
+                    <p class="truncate text-xs text-white/80">{{ tile.hint }}</p>
                 </div>
             </div>
             <div class="px-4 pb-4" :class="{ 'opacity-60': carregandoVisitas }">
-                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--texto-suave)]">
+                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/85">
                     <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.bar }"></span> Visitantes</span>
                     <span v-if="visitantes.mesAtual" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.today }"></span> Hoje</span>
                     <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: visitColors.line }"></span> Páginas vistas</span>
@@ -541,7 +536,7 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
         <!-- Indicadores do mês (pedido do usuário 2026-10-06): o mês até
              hoje sempre contra os MESMOS dias do mês passado. -->
         <h2 class="mt-8 mb-3 flex items-center gap-2 text-lg font-bold">
-            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-sm text-white"><i class="fas fa-gauge-high"></i></span>
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-sky-500 text-sm text-white"><i class="fas fa-gauge-high"></i></span>
             Desempenho do mês
         </h2>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -715,3 +710,12 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
         </div>
     </AdminLayout>
 </template>
+
+<style scoped>
+/* Select do mês no card verde: fundo branco e texto escuro nos dois temas. */
+.visitas-mes,
+.visitas-mes option {
+    background-color: #ffffff;
+    color: #1b2533;
+}
+</style>

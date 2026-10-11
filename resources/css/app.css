@@ -13,15 +13,14 @@
     --font-store: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     --font-store-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
 
-    /* KazaKora purple system: primary UI accents move from blue/orange to
-       a premium amethyst range. Semantic success/warning/error stay legible
-       for operational states, but the interface identity is purple. */
-    --color-primary: #6d28d9;
-    --color-secondary: #a855f7;
+    /* Pedido 2026-10-11: o roxo saiu — primary é o azul do Bootstrap
+       (#0d6efd). Sucesso/aviso/erro continuam com as cores de estado. */
+    --color-primary: #0d6efd;
+    --color-secondary: #3d8bfd;
     --color-success: #10b981;
     --color-warning: #d97706;
     --color-error: #dc2626;
-    --color-info: #7c3aed;
+    --color-info: #0aa2c0;
 
     --color-primary-emphasis: color-mix(in oklab, var(--color-primary) 80%, black);
     --color-secondary-emphasis: color-mix(in oklab, var(--color-secondary) 80%, black);
@@ -65,22 +64,22 @@
  * `.admin-shell` so they never bleed into the storefront below.
  */
 .admin-shell {
-    --surface: #fffaff;
-    --surface-muted: #f4eff8;
-    --surface-foreground: #251830;
-    --surface-border: #e6dcef;
-    --sidebar-foreground: #463450;
+    --surface: #ffffff;
+    --surface-muted: #f3f6fa;
+    --surface-foreground: #1b2533;
+    --surface-border: #e0e7f0;
+    --sidebar-foreground: #344256;
     /* Texto de apoio (legendas, dicas): legível nos dois temas. */
-    --texto-suave: #6b5f78;
+    --texto-suave: #5b6b80;
 }
 
 .dark .admin-shell {
-    --surface: #20162c;
-    --surface-muted: #140d1e;
-    --surface-foreground: #f4ecfa;
-    --surface-border: #3a2a4a;
-    --sidebar-foreground: #d9cae6;
-    --texto-suave: #c3b4d1;
+    --surface: #18212e;
+    --surface-muted: #0f1621;
+    --surface-foreground: #edf2f8;
+    --surface-border: #2b384a;
+    --sidebar-foreground: #cdd8e6;
+    --texto-suave: #aebccd;
 
     /* Pastel tints need more opacity to stay legible on dark surfaces. */
     --color-lightprimary: color-mix(in oklab, var(--color-primary) 20%, transparent);
@@ -102,12 +101,12 @@
 .dark .admin-shell .bg-slate-100, .dark .admin-shell .bg-gray-100, .dark .admin-shell .bg-slate-200, .dark .admin-shell .bg-gray-200 { background-color: var(--surface-muted); }
 .dark .admin-shell .hover\:bg-slate-50:hover, .dark .admin-shell .hover\:bg-gray-50:hover, .dark .admin-shell .hover\:bg-slate-100:hover, .dark .admin-shell .hover\:bg-gray-100:hover, .dark .admin-shell .hover\:bg-white:hover { background-color: color-mix(in oklab, var(--surface-border) 45%, transparent); }
 .dark .admin-shell .border-slate-100, .dark .admin-shell .border-slate-200, .dark .admin-shell .border-slate-300, .dark .admin-shell .border-gray-100, .dark .admin-shell .border-gray-200, .dark .admin-shell .border-gray-300, .dark .admin-shell .divide-slate-100 > * + *, .dark .admin-shell .divide-slate-200 > * + *, .dark .admin-shell .divide-gray-200 > * + * { border-color: var(--surface-border); }
-.dark .admin-shell .text-slate-500, .dark .admin-shell .text-gray-500 { color: #b3a6c2; }
-.dark .admin-shell .text-slate-600, .dark .admin-shell .text-gray-600 { color: #cbbfd8; }
+.dark .admin-shell .text-slate-500, .dark .admin-shell .text-gray-500 { color: #a9b7c8; }
+.dark .admin-shell .text-slate-600, .dark .admin-shell .text-gray-600 { color: #c5d0de; }
 .dark .admin-shell .text-slate-700, .dark .admin-shell .text-slate-800, .dark .admin-shell .text-slate-900, .dark .admin-shell .text-gray-700, .dark .admin-shell .text-gray-800, .dark .admin-shell .text-gray-900, .dark .admin-shell .text-black { color: var(--surface-foreground); }
-.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #c4b5fd; }
-.dark .admin-shell .text-secondary { color: #d8b4fe; }
-.dark .admin-shell .placeholder\:text-slate-400::placeholder { color: #8f80a0; }
+.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #6ea8fe; }
+.dark .admin-shell .text-secondary { color: #9ec5fe; }
+.dark .admin-shell .placeholder\:text-slate-400::placeholder { color: #7f8ea3; }
 .dark .admin-shell .bg-red-50, .dark .admin-shell .bg-red-100 { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 .dark .admin-shell .border-red-100, .dark .admin-shell .border-red-200, .dark .admin-shell .border-red-300 { border-color: color-mix(in oklab, #ef4444 40%, transparent); }
 .dark .admin-shell .text-red-600, .dark .admin-shell .text-red-700, .dark .admin-shell .text-red-800, .dark .admin-shell .text-red-900 { color: #fca5a5; }
@@ -170,8 +169,8 @@
  */
 .dark select,
 .dark select option {
-    background-color: var(--surface, #20162c);
-    color: var(--surface-foreground, #f4ecfa);
+    background-color: var(--surface, #18212e);
+    color: var(--surface-foreground, #edf2f8);
 }
 
 @media (prefers-color-scheme: dark) {

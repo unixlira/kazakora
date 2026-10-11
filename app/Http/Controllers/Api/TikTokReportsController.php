@@ -67,4 +67,18 @@ class TikTokReportsController extends Controller
 
         return response()->json(['ok' => true, 'arquivos' => $resultado]);
     }
+
+    /** O agente do TikTok avisa falha (sessão caída, tela mudou): bolinha vermelha no sino. */
+    public function status(Request $request): JsonResponse
+    {
+        $esperado = (string) config('services.tiktok_reports.token');
+        if ($esperado === '' || ! hash_equals($esperado, (string) Str::after((string) $request->header('Authorization'), 'Bearer '))) {
+            return response()->json(['ok' => false, 'erro' => 'Token inválido.'], 401);
+        }
+
+        $dados = $request->validate(['ok' => ['required', 'boolean'], 'mensagem' => ['required', 'string', 'max:500']]);
+        $this->relatorios->avisar((bool) $dados['ok'], $dados['mensagem']);
+
+        return response()->json(['ok' => true]);
+    }
 }

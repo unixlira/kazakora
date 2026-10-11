@@ -1,0 +1,15 @@
+{
+  "apiUrl": "https://kazakora.com/api/tiktok/reports/import",
+  "apiToken": "COLE_O_TOKEN_AQUI",
+  "cdpUrl": "http://127.0.0.1:9222",
+  "urls": {
+    "demonstrativos": "https://seller-br.tiktok.com/finance/bills?subTab=bills&tab=statements",
+    "pedidos": "https://seller-br.tiktok.com/order"
+  },
+  "textos": {
+    "exportar": "Exportar",
+    "historico": "Exportar histórico",
+    "baixar": "Baixar",
+    "porPedidos": "Exibir por pedidos"
+  }
+}

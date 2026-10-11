@@ -185,3 +185,6 @@ Route::prefix('v1')->group(function () {
 Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import'])
     ->middleware('throttle:60,1')
     ->name('api.tiktok.reports.import');
+Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status'])
+    ->middleware('throttle:30,1')
+    ->name('api.tiktok.reports.status');

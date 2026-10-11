@@ -89,6 +89,24 @@ class DevolucaoFiscalAutomaticaTest extends TestCase
         $this->assertNull(MarketplaceReturn::first()->devolucao_order_id);
     }
 
+    public function test_item_sem_cadastro_pega_o_ncm_do_xml_da_venda(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $order = $this->venda();
+        $order->items()->update(['product_id' => null, 'product_name' => 'Carregador USB-C Duplo 50W']);
+        \Illuminate\Support\Facades\Storage::disk('local')->put('invoices/x/venda.xml',
+            '<nfeProc><det nItem="1"><prod><xProd>Carregador USB-C Duplo 50W</xProd><NCM>85044010</NCM></prod><imposto><ICMS><ICMSSN102><orig>2</orig></ICMSSN102></ICMS></imposto></det></nfeProc>');
+        $order->invoice->update(['xml_path' => 'invoices/x/venda.xml']);
+
+        $caso = $this->caso($order)->fresh();
+
+        $item = Order::find($caso->devolucao_order_id)->items->first();
+        $this->assertSame('85044010', $item->ncm);
+        $this->assertSame(2, (int) $item->origem_mercadoria);
+    }
+
     public function test_sem_ncm_fica_pendente(): void
     {
         Bus::fake([GenerateInvoiceJob::class]);

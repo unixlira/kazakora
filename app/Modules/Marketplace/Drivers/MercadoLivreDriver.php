@@ -831,6 +831,14 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
     {
         $bufferingDate = $shipment['shipping_option']['buffering']['date'] ?? null;
 
+        // 2026-10-11 (#3018): o ML passou a mandar a data só em
+        // /shipments/{id}/lead_time. Sem ela, a venda agendada parecia
+        // "normal", os retries da nota acabavam em ~4h e a etiqueta (que só
+        // sai na data) nunca era buscada de novo.
+        if (! $bufferingDate && ($shipment['substatus'] ?? null) === 'buffered' && isset($shipment['id'])) {
+            $bufferingDate = rescue(fn () => $this->shipments->getLeadTime((string) $shipment['id'])['buffering']['date'] ?? null, null, false);
+        }
+
         if (! $bufferingDate) {
             return null;
         }

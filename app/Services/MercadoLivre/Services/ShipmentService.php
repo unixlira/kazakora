@@ -29,6 +29,12 @@ class ShipmentService
     /**
      * @return array<string, mixed>
      */
+    /** Prazo/agendamento do envio (buffering.date mora aqui desde out/2026). */
+    public function getLeadTime(string $shipmentId): array
+    {
+        return $this->client->get("shipments/{$shipmentId}/lead_time");
+    }
+
     public function getTrackingInfo(string $shipmentId): array
     {
         return $this->client->get("shipments/{$shipmentId}/history");

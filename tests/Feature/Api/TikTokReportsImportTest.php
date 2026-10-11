@@ -90,4 +90,17 @@ class TikTokReportsImportTest extends TestCase
 
         $this->assertDatabaseHas('tiktok_report_uploads', ['nome_original' => 'Income_out.xlsx', 'ip' => null]);
     }
+
+    public function test_agente_avisa_falha_em_vermelho(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        $this->withHeader('Authorization', 'Bearer segredo-de-teste')
+            ->postJson('/api/tiktok/reports/status', ['ok' => false, 'mensagem' => 'Sessão do TikTok caiu'])
+            ->assertOk();
+
+        \Illuminate\Support\Facades\Notification::assertSentTo($admin, \App\Notifications\TikTokRelatorioNotification::class,
+            fn ($n, $c, $quem) => $n->toArray($quem)['nivel'] === 'erro');
+    }
 }

@@ -28,6 +28,15 @@ return [
     'email_contato' => env('LOJA_EMAIL_CONTATO', 'korashopecom@gmail.com'),
 
     /*
+    | E-mail do pagador que vai para o Mercado Pago no Pix (pedido
+    | 2026-10-11): um endereço NOSSO por pedido, para o Mercado Pago não
+    | mandar e-mail de cobrança ao cliente — quem avisa é a KazaKora
+    | (PixAguardandoPagamento). {pedido} vira o número do pedido. Cartão
+    | continua com o e-mail real (entra na análise antifraude).
+    */
+    'email_pagador_pix' => env('MERCADOPAGO_EMAIL_PAGADOR_PIX', 'pedido-{pedido}@kazakora.com'),
+
+    /*
     | Relatórios internos por e-mail (resultado do dia, pedidos cancelados
     | depois de separados). Vários endereços separados por vírgula.
     */

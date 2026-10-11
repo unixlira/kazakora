@@ -77,6 +77,9 @@ class EnviarEmailsDeTeste extends Command
         ];
 
         if ($pedido) {
+            $emails['Pix aguardando pagamento (e-mail da KazaKora, não do Mercado Pago)'] = new \App\Modules\Checkout\Mail\PixAguardandoPagamento(
+                $pedido, 99.90, '00020101021226870014br.gov.bcb.pix2565exemplo.kazakora.com/pix/EXEMPLO5204000053039865406099.905802BR5908KAZAKORA6009SAO PAULO62070503***6304ABCD', null, now()->addMinutes(30)->toIso8601String(),
+            );
             $emails["Pedido concluído (#{$pedido->id}, com a nota em anexo se houver)"] = new OrderConfirmation($pedido);
         }
 

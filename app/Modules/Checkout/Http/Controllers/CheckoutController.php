@@ -1352,6 +1352,8 @@ class CheckoutController extends Controller
         // conta e nenhum e-mail com senha de conta inexistente sai.
         DB::afterCommit(function () use ($user, $senhaTemporaria) {
             rescue(fn () => Mail::to($user->email)->send(new WelcomeEmail($user, $senhaTemporaria)));
+            // Aviso no sino: senha temporária enviada (2026-10-11).
+            rescue(fn () => $user->notify(new \App\Notifications\Cliente\SenhaTemporariaEnviada));
         });
 
         return $user;

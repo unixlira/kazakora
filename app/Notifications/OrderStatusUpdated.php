@@ -29,7 +29,11 @@ class OrderStatusUpdated extends Notification
         return [
             'order_id' => $this->order->id,
             'status' => $this->order->status,
-            'message' => "Pedido #{$this->order->id} agora está: {$label}",
+            'message' => "Pedido {$this->order->numero} agora está: {$label}",
+            // Clicar no sino abre a notificação e o botão leva ao pedido (2026-10-11).
+            'link' => "/pedidos/{$this->order->id}",
+            'acao' => 'Ver pedido',
+            'icone' => 'fa-truck-fast',
         ];
     }
 }

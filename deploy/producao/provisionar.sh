@@ -63,8 +63,13 @@ fi
 SENHA="$(grep '^DB_PASSWORD=' "$CRED" | cut -d= -f2-)"
 systemctl start mariadb
 mariadb -e "CREATE DATABASE IF NOT EXISTS kazakora CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mariadb -e "CREATE USER IF NOT EXISTS 'kazakora'@'localhost' IDENTIFIED BY '${SENHA}';"
-mariadb -e "GRANT ALL PRIVILEGES ON kazakora.* TO 'kazakora'@'localhost'; FLUSH PRIVILEGES;"
+# localhost (socket) e 127.0.0.1 (TCP, o que o Laravel usa): com
+# skip-name-resolve, um não vale pelo outro.
+for HOST in localhost 127.0.0.1; do
+    mariadb -e "CREATE USER IF NOT EXISTS 'kazakora'@'${HOST}' IDENTIFIED BY '${SENHA}';"
+    mariadb -e "GRANT ALL PRIVILEGES ON kazakora.* TO 'kazakora'@'${HOST}';"
+done
+mariadb -e "FLUSH PRIVILEGES;"
 cp "$AQUI/mysql-kazakora.cnf" /etc/mysql/mariadb.conf.d/90-kazakora.cnf
 
 echo "== Redis"
@@ -92,7 +97,8 @@ CRON
 fi
 
 echo "== nginx (site novo; o korasync continua como está)"
-cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora
+# Só na primeira vez: depois o certbot acrescenta o https neste arquivo.
+[ -f /etc/nginx/sites-available/kazakora ] || cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora
 ln -sf /etc/nginx/sites-available/kazakora /etc/nginx/sites-enabled/kazakora
 nginx -t
 

@@ -184,8 +184,14 @@ class BlingInvoiceImporterTest extends TestCase
         $order = $this->makeOrder();
         $order->update(['shipping_state' => 'AM']);
 
-        $invoice = app(BlingInvoiceImporter::class)->syncForOrder($order);
+        \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+        \Illuminate\Support\Facades\Notification::fake();
 
+        $invoice = app(BlingInvoiceImporter::class)->syncForOrder($order);
+        // A varredura de 5 em 5 min passa de novo: a mesma divergência não avisa de novo.
+        app(BlingInvoiceImporter::class)->syncForOrder($order);
+
+        \Illuminate\Support\Facades\Notification::assertSentTimes(\App\Notifications\WebhookImportFailedNotification::class, 1);
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/enviar'));
         $this->assertSame(Invoice::STATUS_PENDING, $invoice->status, 'A nota fica pendente, não vai pra SEFAZ com CFOP errado.');
         $this->assertDatabaseHas('order_fulfillment_events', [

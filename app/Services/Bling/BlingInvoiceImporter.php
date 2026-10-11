@@ -152,8 +152,7 @@ class BlingInvoiceImporter
             return $r;
         }
 
-        $ufEmitente = Company::query()->value('state');
-        $interestadual = $ufEmitente && strcasecmp((string) $order->shipping_state, (string) $ufEmitente) !== 0;
+        $interestadual = $this->interestadual($order, $nota);
 
         foreach ($nota['itens'] ?? [] as $i => $item) {
             $codigo = (string) ($item['codigo'] ?? '');
@@ -327,10 +326,22 @@ class BlingInvoiceImporter
      * @param  array<string, mixed>  $nota
      * @return array<int, string>
      */
+    /**
+     * Interestadual pela UF de destino DA NOTA (o que vai para a SEFAZ), não
+     * pela do pedido: 2026-10-11, #2754 estava BA aqui e a nota ia para
+     * Presidente Prudente/SP — CFOP 6102 em nota para SP não sai.
+     */
+    private function interestadual(Order $order, array $nota): bool
+    {
+        $ufEmitente = (string) Company::query()->value('state');
+        $ufDestino = (string) ($nota['contato']['endereco']['uf'] ?? '') ?: (string) $order->shipping_state;
+
+        return $ufEmitente !== '' && strcasecmp($ufDestino, $ufEmitente) !== 0;
+    }
+
     private function conferirContraNossoCadastro(Order $order, array $nota): array
     {
-        $ufEmitente = Company::query()->value('state');
-        $interestadual = $ufEmitente && strcasecmp((string) $order->shipping_state, (string) $ufEmitente) !== 0;
+        $interestadual = $this->interestadual($order, $nota);
         $divergencias = [];
 
         foreach (($nota['itens'] ?? []) as $item) {

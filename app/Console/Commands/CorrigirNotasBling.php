@@ -53,7 +53,16 @@ class CorrigirNotasBling extends Command
                 continue;
             }
 
-            $r = $importer->alinharNotaAoCadastro($pedido, $aplicar);
+            // Bling: 3 req/s para a conta inteira (nota e etiqueta dividem).
+            usleep(1_200_000);
+
+            try {
+                $r = $importer->alinharNotaAoCadastro($pedido, $aplicar);
+            } catch (\Throwable $e) {
+                $this->error("{$linha}: ".mb_substr($e->getMessage(), 0, 160).' — fica para a próxima rodada');
+
+                continue;
+            }
             $this->line("{$linha}: nota {$r['numero']} situação {$r['situacao']}");
 
             if ($r['erro']) {
@@ -67,10 +76,13 @@ class CorrigirNotasBling extends Command
             }
 
             if ($enviar) {
+                usleep(1_200_000);
                 $invoice = $importer->syncForOrder($pedido->fresh());
                 $this->line('   -> '.($invoice ? "nota {$invoice->serie}-{$invoice->numero}: {$invoice->status}".($invoice->motivo_rejeicao ? " ({$invoice->motivo_rejeicao})" : '') : 'sem retorno do Bling'));
             }
         }
+
+        $this->info('Fim.');
 
         return self::SUCCESS;
     }

@@ -180,6 +180,7 @@ class OrderController extends Controller
             'invoiceGenerationLogs' => $order->invoiceGenerationLogs,
             'emailLogs' => $order->emailLogs,
             'fulfillmentEvents' => OrderFulfillmentEvent::compactar($order->fulfillmentEvents)[0]->values(),
+            'packingVideos' => $order->packingVideos()->get()->map->paraTela()->values(),
             'operationStatement' => $this->operationStatement($order),
             'auditLogs' => AuditLog::query()
                 ->where('entity', class_basename(Order::class))
@@ -713,5 +714,19 @@ class OrderController extends Controller
 
             return "Pedido cancelado, mas a NF-e não pôde ser cancelada automaticamente na SEFAZ: {$exception->getMessage()}";
         }
+    }
+
+    /** Vídeo da embalagem: toca no navegador (com Range) ou baixa com ?baixar=1. */
+    public function packingVideo(Request $request, Order $order, \App\Modules\Checkout\Models\OrderPackingVideo $packingVideo): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        abort_unless($packingVideo->order_id === $order->id, 404);
+        $disco = \Illuminate\Support\Facades\Storage::disk('local');
+        abort_unless($disco->exists($packingVideo->path), 404, 'Vídeo não encontrado (pode ter passado dos 90 dias).');
+
+        $nome = "embalagem-pedido-{$order->id}.".pathinfo($packingVideo->path, PATHINFO_EXTENSION);
+
+        return $request->boolean('baixar')
+            ? response()->download($disco->path($packingVideo->path), $nome)
+            : response()->file($disco->path($packingVideo->path), ['Content-Type' => str_ends_with($packingVideo->path, '.mp4') ? 'video/mp4' : 'video/webm']);
     }
 }

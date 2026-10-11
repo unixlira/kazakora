@@ -1,4 +1,4 @@
-# MySQL da loja KazaKora (VPS 4 vCPU / 15 GB, dividida com KoraSync e Naia).
+# MariaDB da loja KazaKora (VPS 4 vCPU / 15 GB, dividida com KoraSync e Naia).
 [mysqld]
 bind-address = 127.0.0.1
 innodb_buffer_pool_size = 2G
@@ -9,4 +9,5 @@ character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
 slow_query_log = 1
 slow_query_log_file = /var/log/mysql/lento.log
+skip-name-resolve
 long_query_time = 1

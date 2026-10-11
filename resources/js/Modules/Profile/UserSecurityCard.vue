@@ -1,4 +1,5 @@
 <script setup>
+import CampoSenha from '@/Shared/Components/CampoSenha.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
@@ -50,12 +51,12 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
         <form class="grid grid-cols-1 gap-4" @submit.prevent="submit">
             <div>
                 <label class="text-sm font-medium">Nova senha</label>
-                <input v-model="form.password" type="password" required minlength="8" :class="inputClass">
+                <CampoSenha v-model="form.password" required minlength="8" :class="inputClass" />
                 <p v-if="form.errors.password" class="mt-1 text-xs text-red-600">{{ form.errors.password }}</p>
             </div>
             <div>
                 <label class="text-sm font-medium">Confirmar nova senha</label>
-                <input v-model="form.password_confirmation" type="password" required minlength="8" :class="inputClass">
+                <CampoSenha v-model="form.password_confirmation" required minlength="8" :class="inputClass" />
             </div>
 
             <div class="flex items-center justify-end gap-3">

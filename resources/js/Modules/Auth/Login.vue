@@ -1,4 +1,5 @@
 <script setup>
+import CampoSenha from '@/Shared/Components/CampoSenha.vue';
 import AuthLayout from '@/Shared/Layouts/AuthLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -48,14 +49,12 @@ const submit = () => {
 
             <div>
                 <label for="password" class="block text-sm font-medium">Senha</label>
-                <input
+                <CampoSenha
                     id="password"
                     v-model="form.password"
-                    type="password"
                     required
                     autocomplete="current-password"
-                    :class="inputClass"
-                >
+                    :class="inputClass" />
                 <InputError :message="form.errors.password" />
             </div>
 

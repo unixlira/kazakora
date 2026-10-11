@@ -259,6 +259,10 @@ class AutoReplyShopeeReviewsService
             ->distinct()
             ->pluck('external_id')
             ->map(fn ($value) => (string) $value)
+            // Anúncio sem produto vinculado também recebe avaliação (2026-10-11:
+            // duas ficaram sem resposta no item 58217028672 por isso).
+            ->merge($this->todosOsAnunciosDaLoja())
+            ->unique()
             ->values();
 
         foreach ($itemIds as $itemId) {
@@ -435,13 +439,45 @@ class AutoReplyShopeeReviewsService
         return $templates[$index];
     }
 
+    /** @return list<string> ids de todos os anúncios ativos da loja (cache de 30 min). */
+    private function todosOsAnunciosDaLoja(): array
+    {
+        return \Illuminate\Support\Facades\Cache::remember('shopee.avaliacoes.todos_os_anuncios', now()->addMinutes(30), function (): array {
+            $ids = [];
+            $offset = 0;
+            try {
+                do {
+                    $pagina = $this->shopeeClient->get('/api/v2/product/get_item_list', ['offset' => $offset, 'page_size' => 100, 'item_status' => 'NORMAL']);
+                    foreach ($pagina['response']['item'] ?? [] as $item) {
+                        $ids[] = (string) $item['item_id'];
+                    }
+                    $offset = (int) ($pagina['response']['next_offset'] ?? $offset + 100);
+                } while ($pagina['response']['has_next_page'] ?? false);
+            } catch (Throwable $e) {
+                Log::channel('reviews')->warning('Falha ao listar anúncios da Shopee para responder avaliações', ['erro' => mb_substr($e->getMessage(), 0, 180)]);
+            }
+
+            return $ids;
+        });
+    }
+
     private function nomeDoAnuncio(string $itemId): ?string
     {
-        return ProductChannelListing::query()
+        $vinculado = ProductChannelListing::query()
             ->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)
             ->where('external_id', $itemId)
             ->with('product:id,name')
             ->first()?->product?->name;
+
+        if ($vinculado) {
+            return $vinculado;
+        }
+
+        try {
+            return $this->shopeeClient->get('/api/v2/product/get_item_base_info', ['item_id_list' => $itemId])['response']['item_list'][0]['item_name'] ?? null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function reviewWordGroup(Review $review): ?string

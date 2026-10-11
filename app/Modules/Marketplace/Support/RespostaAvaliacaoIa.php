@@ -38,7 +38,9 @@ class RespostaAvaliacaoIa
                 (string) config('services.gemini.chat_model'),
                 [['role' => 'user', 'parts' => [['text' => $pedido]]]],
                 $this->instrucoes(),
-                400,
+                // O modelo gasta parte do limite "pensando": com 400 a
+                // resposta saiu cortada no meio da frase (2026-10-11).
+                4096,
                 GeminiUsageLog::PURPOSE_REVIEW,
             );
         } catch (Throwable $e) {
@@ -57,6 +59,12 @@ class RespostaAvaliacaoIa
         $proibido = '/(https?:|www\.|\.com|@|whats|wa\.me|telefone|\d{4,}|reembols|devolv[ae]mos|estorn|garantimos|mercado livre|tiktok|amazon|kazakora\.com)/iu';
 
         if (mb_strlen($texto) < 20 || mb_strlen($texto) > self::MAXIMO || preg_match($proibido, $texto)) {
+            return null;
+        }
+
+        // Frase tem que terminar: ponto, exclamação, interrogação ou emoji.
+        // Resposta cortada no meio ("chegou dire") nunca vai para a Shopee.
+        if (! preg_match('/([.!?…]|\p{Extended_Pictographic}|\x{FE0F})$/u', $texto)) {
             return null;
         }
 

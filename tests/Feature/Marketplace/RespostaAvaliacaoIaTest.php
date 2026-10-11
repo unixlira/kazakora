@@ -66,6 +66,15 @@ class RespostaAvaliacaoIaTest extends TestCase
         $this->assertStringStartsWith('positive_rating_5_', $review->seller_reply_template);
     }
 
+    public function test_resposta_cortada_no_meio_cai_no_pronto(): void
+    {
+        $review = $this->cenario('Ficamos muito felizes em saber que o seu carregador turbo chegou dire');
+
+        app(AutoReplyShopeeReviewsService::class)->replyPendingPositiveShopeeReviews(1);
+
+        $this->assertStringStartsWith('positive_rating_5_', $review->fresh()->seller_reply_template);
+    }
+
     public function test_sem_ia_usa_o_texto_pronto(): void
     {
         $review = $this->cenario(null);

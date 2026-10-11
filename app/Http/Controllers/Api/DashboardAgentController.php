@@ -81,6 +81,7 @@ class DashboardAgentController extends Controller
         $accounts = MarketplaceAccount::query()->get()->keyBy('channel');
 
         $lastOrders = Order::query()
+            ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw('origin, MAX(id) as last_order_id')
             ->groupBy('origin')
             ->pluck('last_order_id', 'origin');
@@ -430,6 +431,8 @@ class DashboardAgentController extends Controller
 
         $orders = Order::query()
             ->where('origin', $channel)
+            // Só venda paga ou que já foi paga (pedido 2026-10-11).
+            ->whereNotIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
             ->with(['items:id,order_id,product_name,quantity'])
             ->latest('id')
             ->limit(100)
@@ -683,7 +686,9 @@ class DashboardAgentController extends Controller
 
         $displayOnlyOrders = Order::query()
             ->nonPurchaseReturn()
-            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED])
+            // Só venda paga (pedido 2026-10-11): Pix gerado e não pago na loja
+            // ("aguardando pagamento") ou pedido pendente não aparece no KoraSync.
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED, Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
             // Pedido explícito 2026-09-14 ("se já foram entregues, deve
             // sumir da fila de embalado ou entrega futura"): quando o CANAL
             // confirma que o pacote saiu — coleta escaneada ou entrega

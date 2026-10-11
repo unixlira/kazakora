@@ -77,8 +77,10 @@ class RastreioTest extends TestCase
                 ->where('pedido.id', $order->id)
                 ->where('pedido.codigo_rastreio', 'AB123456789BR')
                 ->where('pedido.etapas.1.feito', true)
+                ->where('pedido.etapas.3.titulo', 'Em preparação')
                 ->where('pedido.etapas.3.feito', true)
-                ->where('pedido.etapas.4.feito', false)
+                ->where('pedido.etapas.4.feito', true)
+                ->where('pedido.etapas.5.feito', false)
                 ->where('pedido.itens.0.nome', 'Organizador'));
     }
 

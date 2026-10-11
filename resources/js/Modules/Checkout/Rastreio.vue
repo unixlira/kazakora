@@ -16,7 +16,7 @@ const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(value));
 
-const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-truck-fast', 'fa-house-circle-check'];
+const ICONES = ['fa-receipt', 'fa-circle-check', 'fa-file-invoice', 'fa-box-open', 'fa-truck-fast', 'fa-house-circle-check'];
 
 // Etapa atual = a primeira que ainda não aconteceu.
 const etapaAtual = computed(() => props.pedido?.etapas.findIndex((etapa) => !etapa.feito) ?? -1);

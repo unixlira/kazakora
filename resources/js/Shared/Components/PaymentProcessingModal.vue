@@ -44,7 +44,7 @@ const copyPixCode = async () => {
         <div v-if="open" class="fixed inset-0 z-[120] flex items-center justify-center p-4" role="alertdialog" aria-modal="true">
             <div class="absolute inset-0 bg-store-fg/60 backdrop-blur-sm"></div>
 
-            <div class="relative w-full max-w-[440px] rounded-2xl bg-store-bg-raised p-8 text-center shadow-xl">
+            <div class="relative w-full max-w-[440px] rounded-2xl p-8 text-center shadow-xl" :class="state === 'awaiting_pix' ? 'max-h-[95vh] overflow-y-auto bg-white [color-scheme:light]' : 'bg-store-bg-raised'">
                 <template v-if="state === 'processing' || state === 'timeout'">
                     <div class="mx-auto flex h-14 w-14 items-center justify-center">
                         <i class="fas fa-circle-notch animate-spin text-4xl text-store-accent"></i>
@@ -59,22 +59,48 @@ const copyPixCode = async () => {
                 </template>
 
                 <template v-else-if="state === 'awaiting_pix'">
-                    <h2 class="font-display text-xl font-semibold text-store-fg">Aguardando pagamento via Pix</h2>
-                    <p class="mt-1 text-sm text-store-fg-muted">Escaneie o QR Code ou copie o código abaixo no app do seu banco.</p>
+                    <!-- Pix com mais cor (pedido 2026-10-11): faixa verde com o valor,
+                         QR em destaque, passo a passo e a tarja de confiança no rodapé. -->
+                    <div class="-mx-8 -mt-8 rounded-t-2xl bg-gradient-to-br from-[#0FB930] to-[#0a8a23] px-6 pb-5 pt-6 text-white">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-2xl">
+                            <i class="fa-brands fa-pix"></i>
+                        </div>
+                        <h2 class="mt-2 font-display text-xl font-bold">Pague com Pix</h2>
+                        <p v-if="orderTotal !== null" class="mt-1 text-3xl font-extrabold tracking-tight">{{ formatPrice(orderTotal) }}</p>
+                        <p v-if="pixCountdown" class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/25 px-3 py-1 text-xs font-bold">
+                            <i class="fas fa-stopwatch animate-pulse"></i> Expira em {{ pixCountdown }}
+                        </p>
+                    </div>
 
-                    <img v-if="pixQrImageUrl" :src="pixQrImageUrl" alt="QR Code Pix" class="mx-auto mt-4 h-48 w-48 rounded-xl border border-store-border">
+                    <div class="mx-auto mt-5 w-fit rounded-2xl border-4 border-[#0FB930] bg-white p-2 shadow-md">
+                        <img v-if="pixQrImageUrl" :src="pixQrImageUrl" alt="QR Code Pix" class="h-48 w-48">
+                    </div>
+
+                    <ol class="mx-auto mt-4 flex max-w-[320px] flex-col gap-1.5 text-left text-sm text-slate-700">
+                        <li class="flex gap-2"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0FB930] text-[11px] font-bold text-white">1</span><span>Abra o app do seu banco e escolha <strong>Pix</strong>.</span></li>
+                        <li class="flex gap-2"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0FB930] text-[11px] font-bold text-white">2</span><span>Escaneie o QR Code ou use o <strong>copia e cola</strong>.</span></li>
+                        <li class="flex gap-2"><span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0FB930] text-[11px] font-bold text-white">3</span><span>Pronto! A confirmação aparece aqui sozinha.</span></li>
+                    </ol>
 
                     <button v-if="pixQrCode" type="button"
-                        class="mt-4 w-full truncate rounded-lg border border-store-border-strong bg-store-bg px-3 py-2 text-xs text-store-fg-muted hover:border-store-accent"
+                        class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-bold text-white shadow-md transition"
+                        :class="copied ? 'bg-emerald-600' : 'bg-[#0FB930] hover:brightness-95'"
                         @click="copyPixCode">
-                        <i class="fas mr-1.5" :class="copied ? 'fa-check text-emerald-500' : 'fa-copy'"></i>
-                        {{ copied ? 'Copiado!' : 'Copiar código Pix' }}
+                        <i class="fas" :class="copied ? 'fa-check' : 'fa-copy'"></i>
+                        {{ copied ? 'Código copiado! Cole no app do banco' : 'Copiar código Pix' }}
                     </button>
+                    <p v-if="pixQrCode" class="mt-1.5 truncate px-2 font-mono text-[10px] text-slate-400">{{ pixQrCode }}</p>
 
-                    <p v-if="pixCountdown" class="mt-4 inline-flex items-center gap-2 rounded-full bg-store-bg-sunken px-3 py-1 text-sm font-semibold text-store-fg">
-                        <i class="fas fa-clock text-store-accent"></i>
-                        Expira em {{ pixCountdown }}
+                    <p class="mt-3 flex items-center justify-center gap-1.5 text-xs text-slate-500">
+                        <i class="fas fa-circle-notch animate-spin text-[#0FB930]"></i> Aguardando o pagamento…
                     </p>
+
+                    <!-- Tarja de confiança, como no topo da finalização. -->
+                    <div class="-mx-8 -mb-8 mt-5 flex items-center justify-center gap-2 rounded-b-2xl bg-[#111] px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-white sm:text-xs">
+                        <span class="whitespace-nowrap"><i class="fa-solid fa-truck-fast mr-1 text-[#0FB930]"></i>Frete grátis <span class="italic text-[#22c55e]"><i class="fa-solid fa-bolt"></i>FULL</span></span>
+                        <span class="opacity-40">|</span>
+                        <span class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1 text-[#0FB930]"></i>Compra 100% segura</span>
+                    </div>
                 </template>
 
                 <template v-else-if="state === 'success'">

@@ -131,6 +131,9 @@ jobs:
           fi
 
           # Guarda as 5 últimas versões para voltar rápido.
-          ls -1dt \$BASE/releases/* | tail -n +6 | xargs -r rm -rf
+          # Limpeza das versões antigas não derruba o deploy: em 11/10/2026 um
+          # arquivo criado como root dentro de uma versão antiga (prévia feita
+          # direto no servidor) fez o deploy dar falha com a loja já no ar.
+          ls -1dt \$BASE/releases/* | tail -n +6 | xargs -r rm -rf || echo "aviso: versão antiga com arquivo de outro dono — conferir no servidor"
           echo "No ar: ${{ steps.envio.outputs.release }}"
           SCRIPT

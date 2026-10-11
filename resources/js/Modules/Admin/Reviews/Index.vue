@@ -4,7 +4,7 @@ import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, router } from '@inertiajs/vue3';
-import { h } from 'vue';
+import { computed, h, ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
@@ -15,6 +15,20 @@ const props = defineProps({
 });
 
 const { can } = usePermissions();
+
+// Contadores por nota (pedido 2026-10-11). Clicar filtra a tabela; de novo, mostra todas.
+const notaFiltro = ref(null);
+const contagem = computed(() => {
+    const porNota = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    props.reviews.forEach((review) => { if (porNota[review.rating] !== undefined) porNota[review.rating]++; });
+    return porNota;
+});
+const media = computed(() => props.reviews.length
+    ? (props.reviews.reduce((soma, review) => soma + Number(review.rating), 0) / props.reviews.length).toFixed(2).replace('.', ',')
+    : '0');
+const reviewsFiltradas = computed(() => (notaFiltro.value ? props.reviews.filter((review) => Number(review.rating) === notaFiltro.value) : props.reviews));
+const filtrarNota = (nota) => { notaFiltro.value = notaFiltro.value === nota ? null : nota; };
+const corNota = { 5: '#16a34a', 4: '#65a30d', 3: '#ca8a04', 2: '#ea580c', 1: '#dc2626' };
 
 const channelBadge = {
     mercado_livre: { color: 'pending', label: 'Mercado Livre' },
@@ -108,9 +122,29 @@ const columns = [
             Avaliações reais dos clientes no site e importadas automaticamente dos marketplaces conectados (nota, comentário, fotos e nome do comprador).
         </p>
 
+        <div class="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
+            <button type="button" class="rounded-xl border p-3 text-left transition"
+                :class="notaFiltro === null ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-[var(--surface-border)] bg-[var(--surface)] hover:border-slate-400'"
+                @click="notaFiltro = null">
+                <span class="block text-xs font-semibold uppercase tracking-wide opacity-70">Total</span>
+                <span class="block text-2xl font-bold">{{ props.reviews.length }}</span>
+                <span class="block text-xs opacity-70">média {{ media }} <i class="fas fa-star text-amber-400"></i></span>
+            </button>
+            <button v-for="nota in [5, 4, 3, 2, 1]" :key="nota" type="button" class="rounded-xl border p-3 text-left transition"
+                :class="notaFiltro === nota ? 'ring-2 ring-offset-1' : 'hover:border-slate-400'"
+                :style="{ borderColor: notaFiltro === nota ? corNota[nota] : 'var(--surface-border)', background: 'var(--surface)', '--tw-ring-color': corNota[nota] }"
+                @click="filtrarNota(nota)">
+                <span class="flex items-center gap-1 text-xs font-semibold" :style="{ color: corNota[nota] }">
+                    {{ nota }} <i class="fas fa-star"></i>
+                </span>
+                <span class="block text-2xl font-bold">{{ contagem[nota] }}</span>
+                <span class="block text-xs text-slate-500">{{ props.reviews.length ? Math.round(contagem[nota] / props.reviews.length * 100) : 0 }}% do total</span>
+            </button>
+        </div>
+
         <DataTable
             :columns="columns"
-            :data="props.reviews"
+            :data="reviewsFiltradas"
             search-placeholder="Buscar por produto ou cliente..."
             empty-message="Nenhuma avaliação ainda." />
     </AdminLayout>

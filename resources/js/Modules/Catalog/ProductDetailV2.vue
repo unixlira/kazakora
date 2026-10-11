@@ -276,6 +276,33 @@ const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
 }));
 
 const showReviews = computed(() => props.reviews.length > 0 || (props.canReview && !props.hasReviewed));
+
+// Lista de avaliações (pedido 2026-10-11): já vem ordenada do servidor (mais
+// estrelas primeiro, com foto antes). Mostra 20 no computador e 6 no celular;
+// "Carregar mais" traz de 12 em 12 até a última.
+const ehCelular = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches;
+const avaliacoesVisiveis = ref(ehCelular ? 6 : 20);
+const reviewsNaTela = computed(() => props.reviews.slice(0, avaliacoesVisiveis.value));
+const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - avaliacoesVisiveis.value));
+const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
+
+// Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
+const fotoAberta = ref(null);
+const abrirFoto = (imagens, indice) => { fotoAberta.value = { imagens, indice }; };
+const fecharFoto = () => { fotoAberta.value = null; };
+const passarFoto = (passo) => {
+    if (!fotoAberta.value) return;
+    const total = fotoAberta.value.imagens.length;
+    fotoAberta.value = { ...fotoAberta.value, indice: (fotoAberta.value.indice + passo + total) % total };
+};
+const teclaFoto = (evento) => {
+    if (!fotoAberta.value) return;
+    if (evento.key === 'Escape') fecharFoto();
+    if (evento.key === 'ArrowRight') passarFoto(1);
+    if (evento.key === 'ArrowLeft') passarFoto(-1);
+};
+onMounted(() => window.addEventListener('keydown', teclaFoto));
+onUnmounted(() => window.removeEventListener('keydown', teclaFoto));
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
 const submitReview = () => {
@@ -597,20 +624,37 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     </div>
 
                     <div v-if="reviews.length" class="aval-grade">
-                        <div v-for="review in reviews" :key="review.id" class="aval-item">
+                        <div v-for="review in reviewsNaTela" :key="review.id" class="aval-item">
                             <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}</div>
                             <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
                             <p v-if="review.comment">{{ review.comment }}</p>
                             <div v-if="review.images?.length" class="fotos-avaliacao">
-                                <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                                    <img :src="image.image_url" alt="">
-                                </a>
+                                <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
+                                    :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
+                                    <img :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                </button>
                             </div>
                             <small>{{ formatDate(review.created_at) }}</small>
                         </div>
                     </div>
+                    <div v-if="avaliacoesRestantes > 0" class="aval-mais">
+                        <button type="button" class="btn-sec" @click="carregarMaisAvaliacoes">
+                            Carregar mais avaliações <span>({{ avaliacoesRestantes }} restantes)</span>
+                        </button>
+                    </div>
                     <p v-else class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
                 </section>
+
+                <!-- Foto da avaliação ampliada -->
+                <Teleport to="body">
+                    <div v-if="fotoAberta" class="aval-lightbox" role="dialog" aria-modal="true" aria-label="Foto da avaliação" @click.self="fecharFoto">
+                        <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
+                        <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
+                        <img :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
+                        <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
+                        <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
+                    </div>
+                </Teleport>
 
                 <!-- PERGUNTAS FREQUENTES (largura total) -->
                 <section class="card largura-total">
@@ -898,7 +942,20 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item p { margin: 6px 0; font-weight: 300; line-height: 1.5; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 2px; object-fit: cover; }
+.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; }
+.pd2 .foto-btn { padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
+.pd2 .aval-mais { margin-top: 18px; text-align: center; }
+.pd2 .aval-mais .btn-sec { display: inline-flex; width: auto; min-width: 260px; padding: 0 22px; }
+.pd2 .aval-mais span { opacity: .7; font-weight: 400; }
+@media (max-width: 767px) { .pd2 .aval-mais .btn-sec { width: 100%; min-width: 0; } }
+.aval-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); padding: 48px 12px; }
+.aval-lightbox img { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
+.aval-lightbox button { position: absolute; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; cursor: pointer; }
+.aval-lightbox button:hover { background: rgba(255,255,255,.28); }
+.aval-lightbox .lb-fechar { top: 14px; right: 14px; }
+.aval-lightbox .lb-esq { left: 10px; top: 50%; transform: translateY(-50%); }
+.aval-lightbox .lb-dir { right: 10px; top: 50%; transform: translateY(-50%); }
+.aval-lightbox .lb-contador { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 13px; opacity: .85; }
 
 .pd2 details { border-bottom: 1px solid #d5d8dc; }
 .dark .pd2 details { border-color: var(--line); }

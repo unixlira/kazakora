@@ -162,7 +162,7 @@ class HandleInertiaRequests extends Middleware
             // mostra as NÃO lidas agora (antes mostrava as últimas 8
             // independente de lida ou não). A lista completa (lida +
             // não lida) mora na tela /notificacoes, ver NotificationController::index().
-            'items' => $scope($user->notifications())->whereNull('read_at')->latest()->limit(8)->get()->map(fn ($notification) => [
+            'items' => $scope($user->notifications())->whereNull('read_at')->latest()->limit(30)->get()->map(fn ($notification) => [
                 'id' => $notification->id,
                 'message' => $notification->data['message'] ?? '',
                 // 'body'/'link' só existem em PromotionalNotification por

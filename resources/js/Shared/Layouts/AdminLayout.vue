@@ -308,12 +308,14 @@ watch(
                                     Nenhuma notificação nova.
                                 </p>
 
+                                <!-- Lista com rolagem (2026-10-11): cabeçalho e "Ver todas" ficam fixos. -->
+                                <div class="max-h-[60vh] overflow-y-auto overscroll-contain border-y border-[var(--surface-border)]">
                                 <div v-for="item in notifications" :key="item.id"
                                     class="group flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-[var(--surface-muted)]">
                                     <button type="button" class="flex min-w-0 flex-1 items-start gap-2 text-left" @click="openNotification(item)">
                                         <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
                                         <span class="min-w-0">
-                                            <span class="block text-slate-700 dark:text-slate-200">{{ item.message }}</span>
+                                            <span class="block break-words text-slate-700 dark:text-slate-200">{{ item.message }}</span>
                                             <span class="text-xs text-slate-400">{{ item.createdAt }}</span>
                                         </span>
                                     </button>
@@ -322,6 +324,7 @@ watch(
                                         @click.stop="removeNotification(item)">
                                         <i class="fas fa-xmark text-xs"></i>
                                     </button>
+                                </div>
                                 </div>
 
                                 <Link href="/notificacoes" class="block px-4 py-2 text-center text-xs font-medium text-primary hover:underline"

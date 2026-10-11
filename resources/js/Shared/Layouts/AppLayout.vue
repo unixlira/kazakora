@@ -261,6 +261,7 @@ const REDES = [
                                 Nenhuma notificação por aqui ainda.
                             </p>
 
+                            <div class="max-h-[60vh] overflow-y-auto overscroll-contain">
                             <button v-for="item in notifications" :key="item.id" type="button"
                                 class="flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-store-bg-sunken"
                                 :class="{ 'bg-store-accent-soft/40': !item.read }"
@@ -272,6 +273,7 @@ const REDES = [
                                     <span class="font-store-mono text-xs text-store-fg-faint">{{ item.createdAt }}</span>
                                 </span>
                             </button>
+                            </div>
                         </div>
                     </div>
 

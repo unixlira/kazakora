@@ -97,7 +97,8 @@ CRON
 fi
 
 echo "== nginx (site novo; o korasync continua como está)"
-cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora
+# Só na primeira vez: depois o certbot acrescenta o https neste arquivo.
+[ -f /etc/nginx/sites-available/kazakora ] || cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora
 ln -sf /etc/nginx/sites-available/kazakora /etc/nginx/sites-enabled/kazakora
 nginx -t
 

@@ -95,7 +95,9 @@ class DevolucaoFiscalAutomaticaTest extends TestCase
         \Illuminate\Support\Facades\Storage::fake('local');
 
         $order = $this->venda();
-        $order->items()->update(['product_id' => null, 'product_name' => 'Carregador USB-C Duplo 50W']);
+        // Produto excluído do catálogo (caso real: produto 36).
+        $order->items()->update(['product_name' => 'Carregador USB-C Duplo 50W']);
+        Product::find($order->items()->first()->product_id)->delete();
         \Illuminate\Support\Facades\Storage::disk('local')->put('invoices/x/venda.xml',
             '<nfeProc><det nItem="1"><prod><xProd>Carregador USB-C Duplo 50W</xProd><NCM>85044010</NCM></prod><imposto><ICMS><ICMSSN102><orig>2</orig></ICMSSN102></ICMS></imposto></det></nfeProc>');
         $order->invoice->update(['xml_path' => 'invoices/x/venda.xml']);

@@ -138,6 +138,19 @@ class CorrigirNotasBlingTest extends TestCase
             && $r['itens'][0]['valorTotal'] == 47.9 && $r['itens'][0]['valor'] == 23.95);
     }
 
+    /** 2026-10-11: o registro dizia série 3, mas o XML série 2 autorizado estava guardado — 35 notas em dobro. */
+    public function test_xml_serie_2_autorizado_bloqueia_mesmo_com_registro_sobrescrito(): void
+    {
+        $this->fake();
+        Storage::disk('local')->put("invoices/{$this->order->id}/nfe-35260965604590000107550020000021701030900286.xml", '<nfeProc><cStat>100</cStat></nfeProc>');
+
+        $this->artisan('bling:corrigir-notas', [$this->order->id, '--aplicar' => true, '--enviar' => true])->assertSuccessful();
+        app(\App\Services\Bling\BlingInvoiceImporter::class)->syncForOrder($this->order->fresh());
+
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'PUT' || str_contains($r->url(), '/enviar'));
+        $this->assertSame(3, (int) $this->order->invoice->fresh()->serie, 'o registro não é sobrescrito de novo');
+    }
+
     public function test_nao_mexe_em_pedido_com_nota_autorizada(): void
     {
         $this->fake();

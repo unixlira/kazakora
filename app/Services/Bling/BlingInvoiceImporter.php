@@ -133,6 +133,12 @@ class BlingInvoiceImporter
     {
         $r = ['nfe_id' => 0, 'situacao' => 0, 'numero' => null, 'mudancas' => [], 'erro' => null];
 
+        if ($this->temNotaNossaAutorizada($order)) {
+            $r['erro'] = 'pedido já tem NF-e nossa (série 2) autorizada — nota do Bling não é enviada (duplicidade)';
+
+            return $r;
+        }
+
         $blingOrder = $this->orders->findByOrderNumber((string) $order->external_order_id, $this->orders->lojaIdForChannel((string) $order->origin));
         $r['nfe_id'] = $nfeId = (int) ($blingOrder['notaFiscal']['id'] ?? 0);
         $nota = $nfeId > 0 ? $this->fetchNota($nfeId) : null;
@@ -264,6 +270,14 @@ class BlingInvoiceImporter
         // chave de acesso, não há XML, o TikTok não recebe nada e a
         // etiqueta nunca libera. Ver services.bling.auto_send_nfe pro
         // porquê de isso ser uma decisão explícita e não o padrão.
+        // TRAVA DE DUPLICIDADE (2026-10-11): pedido que já tem NF-e NOSSA
+        // autorizada (XML guardado) não recebe nota do Bling — nem envio,
+        // nem sobrescrever o registro (foi isso que gerou 35 notas em
+        // dobro: o registro local tinha virado a série 3 do Bling).
+        if ($this->temNotaNossaAutorizada($order)) {
+            return $order->invoice;
+        }
+
         if ($this->deveTransmitir($nfeId, $nota)) {
             $divergencias = $this->conferirContraNossoCadastro($order, $nota);
 
@@ -307,6 +321,24 @@ class BlingInvoiceImporter
      *
      * @param  array<string, mixed>  $nota
      */
+    /**
+     * Olha os XMLs AUTORIZADOS guardados do pedido, não o registro (que pode
+     * ter sido sobrescrito): alguma NF-e série 2 (a nossa) com cStat 100?
+     */
+    public function temNotaNossaAutorizada(Order $order): bool
+    {
+        $disco = Storage::disk('local');
+
+        foreach ($disco->files("invoices/{$order->id}") as $arquivo) {
+            // Chave: posições 23-25 = série. Série 2 = emitida pela KazaKora.
+            if (preg_match('/nfe-\d{22}002\d{19}\.xml$/', $arquivo) && str_contains((string) $disco->get($arquivo), '<cStat>100</cStat>')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function deveTransmitir(int $nfeId, array $nota): bool
     {
         if (! config('services.bling.auto_send_nfe')) {

@@ -26,4 +26,20 @@ return [
     | 2026-10-10) — o e-mail do dono da loja.
     */
     'email_contato' => env('LOJA_EMAIL_CONTATO', 'korashopecom@gmail.com'),
+
+    /*
+    | Relatórios internos por e-mail (resultado do dia, pedidos cancelados
+    | depois de separados). Vários endereços separados por vírgula.
+    */
+    'email_relatorios' => env('LOJA_EMAIL_RELATORIOS', env('LOJA_EMAIL_CONTATO', 'korashopecom@gmail.com')),
+
+    /*
+    | Simples Nacional (pedido 2026-10-10): alíquota efetiva informada pelo
+    | contador, em %, e a data em que a empresa entrou no Simples (antes era
+    | MEI). Usada para estimar o DAS do mês no e-mail de resultado.
+    */
+    'simples' => [
+        'aliquota' => (float) env('LOJA_SIMPLES_ALIQUOTA', 4.5),
+        'desde' => env('LOJA_SIMPLES_DESDE', '2026-09-01'),
+    ],
 ];

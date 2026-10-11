@@ -27,6 +27,10 @@ Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // de operação, não como parte do fluxo normal.
 // Texto só muda 1x por dia — rodar 2x (00h/12h) é redundante de propósito,
 // cobre o caso da tentativa da meia-noite falhar por instabilidade de rede.
+// Busca de etiquetas a cada 2 min (2026-10-10, migração para a VPS): no
+// homolog quem rodava isso era o agendador da Naia (kazakora-label-poll-tick),
+// por fora do Laravel — sem ele a impressão automática para. Agora fica aqui.
+Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoMinutes()->withoutOverlapping(5);
 Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 
 // Reconciliação periódica pedido/faturamento (2026-08-06) — rede de

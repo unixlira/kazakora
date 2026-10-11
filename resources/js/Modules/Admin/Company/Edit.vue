@@ -1,4 +1,5 @@
 <script setup>
+import CampoSenha from '@/Shared/Components/CampoSenha.vue';
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import InputError from '@/Shared/Components/InputError.vue';
@@ -272,12 +273,10 @@ const submit = () => {
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-600">Senha do certificado</label>
-                    <input
+                    <CampoSenha
                         v-model="form.certificado_senha"
-                        type="password"
                         autocomplete="new-password"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                    >
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2" />
                     <p class="mt-1 text-xs text-slate-400">Deixe em branco para manter a senha atual.</p>
                     <InputError :message="form.errors.certificado_senha" />
                 </div>

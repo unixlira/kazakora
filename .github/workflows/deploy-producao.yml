@@ -1,0 +1,127 @@
+name: Deploy (produção)
+
+# Push no main = loja kazakora.com na VPS (pedido 2026-10-10).
+# Testa, compila no GitHub, envia para uma pasta nova (releases/...), roda as
+# migrations e só então troca o link "current" — o site não sai do ar. Se a
+# loja não responder depois da troca, volta sozinha para a versão anterior.
+# Instalação da VPS e como voltar versão na mão: deploy/producao/LEIA-ME.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, intl, bcmath, zip, soap, pdo_sqlite
+          tools: composer:v2
+
+      - name: Dependências
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Front (os testes de página precisam do manifest do Vite)
+        run: npm ci && npm run build
+
+      - name: Testes
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan test --compact
+
+  deploy:
+    needs: testes
+    runs-on: ubuntu-latest
+    environment: producao
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+
+      - name: Dependências PHP (produção)
+        run: composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction --prefer-dist --no-progress
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Front
+        run: npm ci && npm run build
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+
+      - name: Servidor conhecido
+        run: |
+          for i in 1 2 3; do ssh-keyscan -T 15 ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts && break; sleep 5; done
+
+      - name: Enviar nova versão
+        id: envio
+        run: |
+          RELEASE=$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::7}
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          BASE=/var/www/kazakora
+          ssh deploy@${{ secrets.PROD_SSH_HOST }} "mkdir -p $BASE/releases/$RELEASE"
+          # --link-dest: o que não mudou vira hard link da versão atual (envio rápido).
+          rsync -az --delete \
+            --exclude='.git' --exclude='.github' --exclude='.env' --exclude='/storage' \
+            --exclude='node_modules' --exclude='tests' --exclude='/public/storage' \
+            --link-dest=$BASE/current/ \
+            ./ deploy@${{ secrets.PROD_SSH_HOST }}:$BASE/releases/$RELEASE/
+
+      - name: Ativar
+        run: |
+          ssh deploy@${{ secrets.PROD_SSH_HOST }} 'bash -s' <<SCRIPT
+          set -euo pipefail
+          BASE=/var/www/kazakora
+          R=\$BASE/releases/${{ steps.envio.outputs.release }}
+          PHP=php8.3
+          cd \$R
+          ln -sfn \$BASE/shared/.env .env
+          rm -rf storage && ln -sfn \$BASE/shared/storage storage
+          ln -sfn \$BASE/shared/storage/app/public public/storage
+          ANTERIOR=\$(readlink -f \$BASE/current || true)
+
+          \$PHP artisan migrate --force
+          \$PHP artisan optimize
+
+          # Troca atômica do link: quem está navegando não vê erro.
+          ln -sfn \$R \$BASE/current.novo && mv -Tf \$BASE/current.novo \$BASE/current
+          sudo /usr/bin/systemctl reload php8.3-fpm
+          \$PHP artisan queue:restart
+
+          # A loja tem que responder; senão volta para a versão anterior.
+          sleep 2
+          if ! curl -fsS -o /dev/null -m 20 -H 'Host: kazakora.com' http://127.0.0.1/up; then
+            echo "Loja não respondeu — voltando para a versão anterior"
+            if [ -n "\$ANTERIOR" ] && [ -d "\$ANTERIOR" ]; then
+              ln -sfn \$ANTERIOR \$BASE/current.novo && mv -Tf \$BASE/current.novo \$BASE/current
+              sudo /usr/bin/systemctl reload php8.3-fpm
+            fi
+            exit 1
+          fi
+
+          # Guarda as 5 últimas versões para voltar rápido.
+          ls -1dt \$BASE/releases/* | tail -n +6 | xargs -r rm -rf
+          echo "No ar: ${{ steps.envio.outputs.release }}"
+          SCRIPT

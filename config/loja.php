@@ -10,6 +10,15 @@ return [
     'desconto_pix' => (float) env('LOJA_DESCONTO_PIX', 5),
 
     /*
+    | Selo "Verificada por Reclame AQUI" no rodapé (2026-10-11). SÓ ligar
+    | depois que o Reclame Aqui aprovar a verificação da KazaKora: mostrar o
+    | selo sem ser verificada é uso indevido e eles fiscalizam. Desligado,
+    | o rodapé mostra "Estamos no Reclame AQUI".
+    */
+    'selo_ra_verificada' => (bool) env('LOJA_SELO_RA_VERIFICADA', false),
+    'reclame_aqui_url' => env('LOJA_RECLAME_AQUI_URL', 'https://www.reclameaqui.com.br/busca/?q=kazakora'),
+
+    /*
     | Dados da empresa nos e-mails (rodapé) — os mesmos de
     | resources/js/Shared/company.js.
     */

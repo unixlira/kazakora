@@ -9,6 +9,12 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    // Estrelas da avaliação ao lado do "Frete grátis FULL" — só no slide das
+    // Ofertas do Dia no celular (pedido 2026-10-10).
+    estrelas: {
+        type: Boolean,
+        default: false,
+    },
     isFavorite: {
         type: Boolean,
         default: false,
@@ -87,6 +93,10 @@ const submitReview = () => {
         },
     });
 };
+
+// Média das avaliações (0 = sem avaliação, aí não mostra estrela nenhuma).
+const nota = computed(() => Number(props.product.reviews_avg_rating ?? 0));
+const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
 
 // Selo do mês na faixa do celular: "Ofertas 10.10" em outubro, "11.11" em novembro...
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -196,7 +206,7 @@ const precoPartes = computed(() => {
                  nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
             <div class="promo-badge">
                 <span class="promo-badge-icon">%</span>
-                <span class="promo-badge-text">{{ product.oferta_do_dia ? 'Oferta do dia' : SELO_DO_MES }}</span>
+                <span class="promo-badge-text">{{ product.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES }}</span>
             </div>
 
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
@@ -215,13 +225,14 @@ const precoPartes = computed(() => {
                 <h4 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h4>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
-            <!-- Envio Express (pedido 2026-10-10): ocupa a linha inteira do card, laterais
-                 inclinadas "/ texto /", parte cinza do caminhão arredondada à direita. -->
-            <div class="envio-express flex h-7 w-full text-white">
-                <span class="relative z-[1] flex w-9 shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-1.5 pr-0.5">
-                    <i class="fa-solid fa-truck-fast -skew-x-12 text-xs md:text-sm"></i>
+            <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
+                 computador), laterais inclinadas "/ texto /", parte cinza do caminhão
+                 arredondada à direita e mais larga. -->
+            <div class="envio-express mx-auto flex h-6 text-white">
+                <span class="relative z-[1] flex w-[46px] shrink-0 items-center justify-center rounded-r-[40px] bg-slate-500 pl-2 pr-1">
+                    <i class="fa-solid fa-truck-fast -skew-x-12 text-[11px] md:text-xs"></i>
                 </span>
-                <span class="-ml-3 flex flex-1 items-center justify-center whitespace-nowrap bg-[#7B1E3A] pl-3 pr-3 text-[11px] font-extrabold uppercase italic leading-none tracking-tight md:text-xs">Envio Express</span>
+                <span class="-ml-3 flex items-center justify-center whitespace-nowrap bg-[#7B1E3A] pl-4 pr-4 text-[10px] font-extrabold uppercase italic leading-none tracking-tight md:text-[11px]">Envio Express</span>
             </div>
             <div class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
@@ -246,6 +257,11 @@ const precoPartes = computed(() => {
                 <p v-else class="mt-1.5 flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
                     Frete grátis
                     <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                    <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
+                    <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
+                        <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>
+                        <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
+                    </span>
                 </p>
             </div>
             <button v-if="canReview && !hasReviewed" type="button"

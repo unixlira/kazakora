@@ -30,6 +30,8 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            // CPF válido (o checkout exige — pedido 2026-10-11).
+            'cpf' => self::cpfValido(),
         ];
     }
 
@@ -41,5 +43,23 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /** CPF com dígitos verificadores corretos, gerado na hora. */
+    public static function cpfValido(): string
+    {
+        do {
+            $base = array_map(fn () => random_int(0, 9), range(1, 9));
+        } while (count(array_unique($base)) === 1);
+
+        foreach ([10, 11] as $peso) {
+            $soma = 0;
+            foreach ($base as $i => $digito) {
+                $soma += $digito * ($peso - $i);
+            }
+            $base[] = ((10 * $soma) % 11) % 10;
+        }
+
+        return implode('', $base);
     }
 }

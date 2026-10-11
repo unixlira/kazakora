@@ -23,11 +23,19 @@ class EnderecoNovoLogadoTest extends TestCase
         $this->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
         $props = $this->get('/finalizacao')->viewData('page')['props'];
 
+        // Cadastro sem CPF: a entrega pede o CPF (pedido 2026-10-11) e grava no cadastro.
+        $this->postJson('/finalizacao/entrega', [
+            'shipping_method_id' => $props['shippingMethods'][0]['id'],
+            'new_address' => ['zip' => '03187-040', 'street' => 'Rua Mogi Mirim', 'number' => '20', 'complement' => '', 'neighborhood' => 'Vila Bertioga', 'city' => 'São Paulo', 'state' => 'SP', 'recipient_name' => 'José Roberto Lira', 'phone' => '(11) 96572-3990', 'label' => 'Entrega'],
+        ])->assertStatus(422)->assertJsonPath('errors.cpf.0', 'Digite seu CPF.');
+
         $resposta = $this->postJson('/finalizacao/entrega', [
             'shipping_method_id' => $props['shippingMethods'][0]['id'],
+            'cpf' => '529.982.247-25',
             'new_address' => ['zip' => '03187-040', 'street' => 'Rua Mogi Mirim', 'number' => '20', 'complement' => '', 'neighborhood' => 'Vila Bertioga', 'city' => 'São Paulo', 'state' => 'SP', 'recipient_name' => 'José Roberto Lira', 'phone' => '(11) 96572-3990', 'label' => 'Entrega'],
         ]);
         $resposta->assertOk();
+        $this->assertSame('52998224725', $user->fresh()->cpf);
 
         // Sem celular em lugar nenhum: mensagem clara apontando o campo; sem número: "Informe o número."
         $this->postJson('/finalizacao/entrega', [

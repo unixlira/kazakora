@@ -84,9 +84,12 @@ cp "$AQUI/php-kazakora.ini" /etc/php/8.3/cli/conf.d/90-kazakora.ini
 
 echo "== Fila (Supervisor) e agendador (cron)"
 cp "$AQUI/supervisor-kazakora.conf" /etc/supervisor/conf.d/kazakora.conf
+# Só cria na primeira vez: se já existe (ligado ou desligado), não mexe.
+if [ ! -f /etc/cron.d/kazakora ]; then
 cat > /etc/cron.d/kazakora <<'CRON'
 * * * * * deploy cd /var/www/kazakora/current && php8.3 artisan schedule:run >> /dev/null 2>&1
 CRON
+fi
 
 echo "== nginx (site novo; o korasync continua como está)"
 cp "$AQUI/nginx-kazakora.conf" /etc/nginx/sites-available/kazakora

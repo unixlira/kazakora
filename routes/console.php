@@ -79,6 +79,12 @@ foreach (['orders:sync-shopee', 'orders:sync-mercadolivre'] as $comando) {
 
 Schedule::command('orders:sync-mercadolivre')->hourly();
 Schedule::command('orders:sync-shopee')->hourly();
+// Rede de segurança do webhook (2026-10-11, produção na VPS): venda de hoje
+// da Shopee e do Mercado Livre a cada 2 min, como já é no TikTok. Se o aviso
+// do canal se perder (painel apontando pro lugar errado, canal fora do ar),
+// a venda entra em no máximo 2 min em vez de 1 h. Barato: só o dia de hoje.
+Schedule::command('orders:sync-shopee --desde='.now()->toDateString())->everyTwoMinutes()->withoutOverlapping(5);
+Schedule::command('orders:sync-mercadolivre --desde='.now()->toDateString())->everyTwoMinutes()->withoutOverlapping(5);
 // Amazon via Bling (2026-09-25): o webhook é o caminho principal; isto é
 // só a rede de segurança. Janela de 2 dias, NÃO o mês inteiro como os
 // outros canais: pedido Amazon entra como pago e a NF-e dele é NOSSA — um

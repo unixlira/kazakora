@@ -204,6 +204,8 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(function () {
+    // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
+    Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
 
     Route::resource('produtos', ProductController::class)->except('show')

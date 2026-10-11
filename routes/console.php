@@ -272,3 +272,6 @@ Schedule::command('fiscal:atualizar-ufesp')->dailyAt('06:10');
 // descrição em blocos gerados pelo Gemini (regra própria se ele falhar), só
 // pra produto ativo novo ou que mudou — lote pequeno pra não estourar cota.
 Schedule::command('produtos:gerar-conteudo-anuncio --limite=10')->everyFifteenMinutes()->withoutOverlapping(30);
+
+// Métricas do Horizon (gráficos de vazão e tempo das filas), 2026-10-11.
+Schedule::command('horizon:snapshot')->everyFiveMinutes();

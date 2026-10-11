@@ -412,6 +412,12 @@ class LogFileReader
             return 'warning';
         }
 
+        // Saída de fila e de agendador (".... DONE", "RUNNING", "Processed"):
+        // é registro normal, não fica sem nível na tela (2026-10-11).
+        if (preg_match('/\b(DONE|RUNNING|Processing|Processed|Running|SUCCESS|OK)\b/', $raw)) {
+            return 'info';
+        }
+
         return null;
     }
 

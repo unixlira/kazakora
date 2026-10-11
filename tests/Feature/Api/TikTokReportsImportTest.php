@@ -79,4 +79,15 @@ class TikTokReportsImportTest extends TestCase
         \Illuminate\Support\Facades\Notification::assertSentTo(\App\Models\User::first(), \App\Notifications\TikTokRelatorioNotification::class,
             fn ($n, $canais, $quem) => $n->toArray($quem)['nivel'] === 'sucesso');
     }
+
+    public function test_admin_envia_pela_tela(): void
+    {
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/admin/arquivos-tiktok')->assertOk();
+        $this->actingAs($admin)->post('/admin/arquivos-tiktok', ['arquivos' => [UploadedFile::fake()->createWithContent('Income_out.xlsx', 'dados')]])
+            ->assertRedirect()->assertSessionHas('success');
+
+        $this->assertDatabaseHas('tiktok_report_uploads', ['nome_original' => 'Income_out.xlsx', 'ip' => null]);
+    }
 }

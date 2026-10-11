@@ -490,6 +490,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::middleware('permission:financeiro.view')->group(function () {
         Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
+        // Arquivos financeiros do TikTok enviados à mão (2026-10-11).
+        Route::get('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'index'])->name('arquivos-tiktok.listar');
+        Route::post('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'store'])->name('arquivos-tiktok.enviar');
         Route::get('fluxo-de-caixa', [CashFlowController::class, 'index'])->name('fluxo-de-caixa.listar');
         Route::get('anuncios/recargas', [AdsRechargeController::class, 'index'])->name('anuncios.recargas.listar');
     });

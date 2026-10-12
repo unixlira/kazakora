@@ -11,6 +11,8 @@
  * `permission: null` = qualquer pessoa da equipe vê.
  * `badgeKey` = contador de pendências (page.props.sidebarBadges).
  */
+import { RADAR_NOME } from '@/Shared/radarNome';
+
 export const sidebarSections = [
     {
         heading: 'Início',
@@ -23,9 +25,13 @@ export const sidebarSections = [
         heading: 'Vender',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', permission: 'cadastros.view' },
+            // Curva ABC (2026-10-12): mostra lucro, por isso financeiro.view.
+            { label: 'Curva ABC', href: '/admin/curva-abc', icon: 'fas fa-ranking-star', permission: 'financeiro.view' },
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-folder-tree', permission: 'cadastros.view' },
             { label: 'Calculadora de preço', href: '/admin/precificacao', icon: 'fas fa-calculator', permission: 'cadastros.view' },
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', permission: 'cadastros.view' },
+            // Nome visível em radarNome.js (o Lira ainda vai escolher).
+            { label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', permission: 'cadastros.view' },
         ],

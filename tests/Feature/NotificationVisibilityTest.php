@@ -61,6 +61,19 @@ class NotificationVisibilityTest extends TestCase
             ->has('notifications.items', 2));
     }
 
+    public function test_tiktok_report_alert_shows_on_admin_and_storefront_bell(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $admin->notify(new \App\Notifications\TikTokRelatorioNotification(false, 'Token inválido'));
+
+        foreach (['/', '/admin'] as $url) {
+            $this->actingAs($admin)->get($url)->assertInertia(fn ($page) => $page
+                ->where('notifications.unreadCount', 1)
+                ->where('notifications.items.0.message', 'Erro importação arquivo financeiro TikTok')
+                ->where('notifications.items.0.nivel', 'erro'));
+        }
+    }
+
     public function test_a_customer_never_sees_another_users_notifications(): void
     {
         $customerA = User::factory()->create(['role' => User::ROLE_CUSTOMER]);

@@ -97,23 +97,39 @@ class AnuncioConteudoService
     /** @return array<string, mixed> */
     private function viaGemini(Product $product): array
     {
+        $imagens = [];
+
+        foreach ($product->images->take(self::MAX_IMAGENS)->values() as $indice => $imagem) {
+            $caminho = (string) ($imagem->thumb_path ?: $imagem->path);
+            $imagens[$indice] = rescue(fn () => Storage::disk('public')->get($caminho), null, report: false);
+        }
+
+        return $this->gerarViaGemini('KazaKora', $product->name, (string) $product->description, $imagens, count($imagens));
+    }
+
+    /**
+     * Mesma geração para outra loja do grupo (Beauty Kora, 2026-10-12), que
+     * não tem o produto no banco: recebe nome, descrição e o conteúdo das
+     * fotos (índice => bytes, null quando não deu para baixar). Lança exceção
+     * quando o Gemini falha; quem chama decide o plano B (automaticoDe).
+     *
+     * @param  array<int, string|null>  $imagens
+     * @return array<string, mixed>
+     */
+    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens): array
+    {
         $partes = [];
-        $imagens = $product->images->take(self::MAX_IMAGENS)->values();
 
-        foreach ($imagens as $indice => $imagem) {
-            $conteudo = rescue(fn () => Storage::disk('public')->get($imagem->thumb_path ?: $imagem->path), null, report: false);
-
+        foreach ($imagens as $indice => $conteudo) {
             if (! $conteudo || strlen($conteudo) > self::MAX_BYTES_IMAGEM) {
                 continue;
             }
 
-            $mime = Str::endsWith(strtolower((string) ($imagem->thumb_path ?: $imagem->path)), '.png') ? 'image/png'
-                : (Str::endsWith(strtolower((string) ($imagem->thumb_path ?: $imagem->path)), '.webp') ? 'image/webp' : 'image/jpeg');
             $partes[] = ['text' => "Imagem {$indice}:"];
-            $partes[] = ['inline_data' => ['mime_type' => $mime, 'data' => base64_encode($conteudo)]];
+            $partes[] = ['inline_data' => ['mime_type' => $this->mime($conteudo), 'data' => base64_encode($conteudo)]];
         }
 
-        $partes[] = ['text' => $this->prompt($product, $imagens->count())];
+        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens)];
 
         $resposta = $this->gemini->generate(
             (string) config('services.gemini.chat_model'),
@@ -123,19 +139,29 @@ class AnuncioConteudoService
             GeminiUsageLog::PURPOSE_AD_CONTENT,
         );
 
-        return $this->validar($this->extrairJson($resposta), $imagens->count());
+        return $this->validar($this->extrairJson($resposta), $totalImagens);
     }
 
-    private function prompt(Product $product, int $totalImagens): string
+    /** Tipo da imagem pelos primeiros bytes (a URL da Hostinger nem sempre tem extensão). */
+    private function mime(string $conteudo): string
+    {
+        return match (true) {
+            str_starts_with($conteudo, "\x89PNG") => 'image/png',
+            str_starts_with($conteudo, 'RIFF') && substr($conteudo, 8, 4) === 'WEBP' => 'image/webp',
+            default => 'image/jpeg',
+        };
+    }
+
+    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens): string
     {
         $ultimaImagem = max(0, $totalImagens - 1);
 
         return <<<TXT
-        Monte o conteúdo da página de venda deste produto da loja KazaKora.
+        Monte o conteúdo da página de venda deste produto da loja {$loja}.
 
-        Produto: {$product->name}
+        Produto: {$nome}
         Descrição cadastrada:
-        {$product->description}
+        {$descricao}
 
         Há {$totalImagens} imagem(ns), numeradas de 0 a {$ultimaImagem} (a 0 é a foto principal).
 
@@ -250,10 +276,17 @@ class AnuncioConteudoService
     public function automatico(Product $product): array
     {
         $product->loadMissing('images');
+
+        return $this->automaticoDe($product->name, (string) $product->description, $product->images->count());
+    }
+
+    /** @return array<string, mixed> */
+    public function automaticoDe(string $nome, string $descricao, int $totalImagens): array
+    {
         $secoes = [];
         $atual = ['titulo' => null, 'textos' => [], 'itens' => []];
 
-        foreach (preg_split('/\R/', (string) $product->description) as $linha) {
+        foreach (preg_split('/\R/', $descricao) as $linha) {
             $linha = trim($linha);
 
             if ($linha === '') {
@@ -271,7 +304,6 @@ class AnuncioConteudoService
         }
         $secoes[] = $atual;
 
-        $totalImagens = $product->images->count();
         $proximaImagem = $totalImagens > 1 ? 1 : 0;
         $chamada = null;
         $blocos = [];
@@ -286,7 +318,7 @@ class AnuncioConteudoService
 
             if ($secao['titulo'] === null) {
                 $chamada ??= Str::limit($secao['textos'][0], 200, '…');
-                $secao['titulo'] = $product->name;
+                $secao['titulo'] = $nome;
             }
 
             $blocos[] = [

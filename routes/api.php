@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
+use App\Http\Controllers\Api\BeautyKoraProdutoController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -206,6 +207,9 @@ Route::post('/{site}/visita', [OutroSiteVisitaController::class, 'registrar'])
 Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
     Route::post('cadastro', [BeautyKoraContaController::class, 'cadastro'])->middleware('throttle:10,1')->name('cadastro');
     Route::post('login', [BeautyKoraContaController::class, 'login'])->middleware('throttle:10,1')->name('login');
+    // Página de produto (2026-10-12): conteúdo gerado pelo Gemini, igual ao da KazaKora.
+    Route::get('produtos/{id}/conteudo', [BeautyKoraProdutoController::class, 'conteudo'])
+        ->where('id', 'prod_[A-Za-z0-9]{10,40}')->middleware('throttle:30,1')->name('produto.conteudo');
 
     Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1'])->group(function () {
         Route::get('eu', [BeautyKoraContaController::class, 'eu'])->name('eu');

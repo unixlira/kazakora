@@ -287,6 +287,7 @@ Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.
 Schedule::command('beautykora:conciliar-pagamentos')->everyFiveMinutes()->withoutOverlapping(10);
+Schedule::command('beautykora:gerar-conteudo')->hourly()->withoutOverlapping(30);
 
 // Diagnóstico do Cauê (Shopee) e do Diego (Mercado Livre) no dashboard
 // (2026-10-11): só leitura das APIs, a cada 3 h.

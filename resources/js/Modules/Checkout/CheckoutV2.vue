@@ -742,7 +742,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             {{ processando ? 'Processando...' : 'Finalizar pedido' }}
                         </button>
                         <p class="mt-2 text-center text-xs text-slate-500">
-                            Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="underline">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="underline">política de privacidade</Link>.
+                            Ao finalizar, você concorda com os <Link href="/termos-de-uso" target="_blank" class="font-bold no-underline hover:text-slate-800">termos de uso</Link> e a <Link href="/politica-de-privacidade" target="_blank" class="font-bold no-underline hover:text-slate-800">política de privacidade</Link>.
                         </p>
                     </section>
                 </div>

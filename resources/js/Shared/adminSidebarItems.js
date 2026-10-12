@@ -160,7 +160,12 @@ export const sidebarSections = [
             { label: 'Logs', href: '/admin/logs', icon: 'fas fa-terminal', permission: 'configuracoes.auditoria' },
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', permission: 'configuracoes.auditoria' },
             // Visitas ao site (2026-10-12): páginas abertas na loja e o IP, só admin igual a Logs.
-            { label: 'Visitas ao site', href: '/admin/visitas-site', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
+            // Renomeado para Visitas KazaKora em 12/10 e para Visitas Casa Cora em 12/10 (pedido do Lira).
+            { label: 'Visitas Casa Cora', href: '/admin/visitas-site', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
+            // Visitas FerraKora (2026-10-12): o mesmo log para o site FerraKora.
+            { label: 'Visitas FerraKora', href: '/admin/visitas-ferrakora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
+            // Visitas Beauty Kora (2026-10-12): mesma tela, site = beautykora.
+            { label: 'Visitas Beauty Kora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
         ],
     },
 ];

@@ -47,7 +47,7 @@ class KpiController extends Controller
         // DashboardController). Refresh/navegação do mesmo visitante não
         // conta de novo.
         $uniqueVisitorsMonth = SiteVisit::visitantesPorDia(
-            SiteVisit::query()->where('created_at', '>=', $startOfMonth)
+            SiteVisit::query()->daLoja()->where('created_at', '>=', $startOfMonth)
         )->pluck('visitante')->unique()->count();
 
         $conversionRate = $uniqueVisitorsMonth > 0

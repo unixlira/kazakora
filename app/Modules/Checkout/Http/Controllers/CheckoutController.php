@@ -1497,7 +1497,7 @@ class CheckoutController extends Controller
         if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
             $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
             if ($turbo) {
-                return ['method_id' => null, 'carrier_name' => 'SEDEX (TURBO)', 'cost' => (float) $turbo['preco']];
+                return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];
             }
         }
 

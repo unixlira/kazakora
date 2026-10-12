@@ -24,6 +24,9 @@ return [
     // a primeira faixa que comporta o peso dele.
     'faixas_g' => [300, 500, 1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 30000],
 
+    // TURBO acima disto não aparece no checkout (pedido do Lira em 2026-10-12).
+    'turbo_max' => 60.0,
+
     // Produto sem peso no cadastro fiscal.
     'peso_padrao_g' => 1000,
 

@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\OrderChannelFee;
@@ -18,7 +19,8 @@ use Illuminate\Support\Facades\Schema;
  *   receita das vendas
  *   − custo dos produtos
  *   − taxa da plataforma (comissão)
- *   − frete pago pela loja (pré-postagem dos Correios, Flex)
+ *   − frete pago pela loja (pré-postagem dos Correios menos o TURBO que o
+ *     cliente do site pagou, Flex)
  *   − ADS
  *
  * Antes cada tela fazia a sua conta: o painel inicial subtraía o frete que
@@ -88,15 +90,43 @@ class ContributionMargin
             ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
             ->tap(fn ($q) => self::semDevolucao($q));
 
+        $turbo = self::turboCobrado($desde, $ate);
+
         if (! $porCanal) {
-            return round((float) $query->sum('correios_pre_postagens.postage_price'), 2);
+            return round((float) $query->sum('correios_pre_postagens.postage_price') - array_sum($turbo), 2);
         }
 
         return $query
             ->selectRaw('orders.origin as channel, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
             ->groupBy('orders.origin')
             ->pluck('total', 'channel')
-            ->map(fn ($total) => round((float) $total, 2))
+            ->map(fn ($total, $canal) => round((float) $total - ($turbo[$canal] ?? 0), 2))
+            ->all();
+    }
+
+    /**
+     * TURBO do site (2026-10-12): o cliente paga só a diferença SEDEX − PAC e
+     * a loja paga o SEDEX inteiro na pré-postagem. O que o cliente pagou NÃO
+     * é receita: abate o frete do pedido. Só de pedido com pré-postagem
+     * gerada, para o frete não ficar negativo antes da etiqueta.
+     *
+     * @return array<string, float> por canal
+     */
+    public static function turboCobrado(?Carbon $desde, ?Carbon $ate = null): array
+    {
+        return DB::table('orders')
+            ->where('orders.shipping_carrier_name', FreteEmbutido::TURBO)
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->when($desde, fn ($q) => $q->where('orders.created_at', '>=', $desde))
+            ->when($ate, fn ($q) => $q->where('orders.created_at', '<', $ate))
+            ->whereExists(fn ($q) => $q->from('correios_pre_postagens')
+                ->whereColumn('correios_pre_postagens.order_id', 'orders.id')
+                ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA))
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->selectRaw('orders.origin as canal, COALESCE(SUM(orders.shipping_cost), 0) as total')
+            ->groupBy('orders.origin')
+            ->pluck('total', 'canal')
+            ->map(fn ($total) => (float) $total)
             ->all();
     }
 
@@ -245,7 +275,9 @@ class ContributionMargin
                 COALESCE(order_items.quantity, 0) as quantidade, COALESCE(order_items.subtotal, 0) as subtotal,
                 '.self::receitaSql().' as receita_pedido,
                 CASE WHEN order_items.id IS NULL THEN 0 ELSE '.self::custoSql().' END as custo,
-                COALESCE(taxa_pedido.total, 0) as taxa_pedido, COALESCE(correios_pedido.total, 0) as frete_pedido')
+                COALESCE(taxa_pedido.total, 0) as taxa_pedido,
+                COALESCE(correios_pedido.total, 0) - CASE WHEN correios_pedido.total IS NOT NULL AND orders.shipping_carrier_name = ?
+                    THEN COALESCE(orders.shipping_cost, 0) ELSE 0 END as frete_pedido', [FreteEmbutido::TURBO])
             ->orderBy('orders.id')->orderBy('order_items.id')
             ->get()
             ->groupBy('order_id')

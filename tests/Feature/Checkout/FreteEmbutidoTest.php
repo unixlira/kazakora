@@ -130,6 +130,37 @@ class FreteEmbutidoTest extends TestCase
             ->assertJsonPath('desconto_plataforma', 20);
     }
 
+    public function test_turbo_acima_do_teto_nao_aparece(): void
+    {
+        $this->comCorreios();
+        config(['frete_embutido.turbo_max' => 9.99]);
+        $produto = $this->produto(100);
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 1]);
+
+        // TURBO do Ceará custa R$ 10: passa do teto.
+        $this->getJson('/finalizacao/entrega-gratis?cep=60025000')
+            ->assertOk()
+            ->assertJsonPath('turbo', null);
+    }
+
+    public function test_sem_resposta_dos_correios_o_turbo_aparece_pelo_valor_de_seguranca_ate_60(): void
+    {
+        $produto = $this->produto(100);
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 2]);
+
+        // R$ 60 (SEDEX) − R$ 30 (PAC) por unidade, sem prazo.
+        $this->getJson('/finalizacao/entrega-gratis?cep=60025000')
+            ->assertOk()
+            ->assertJsonPath('turbo.preco', 60)
+            ->assertJsonPath('turbo.prazo', null);
+
+        // 3 unidades: R$ 90, passa do teto de R$ 60.
+        $this->patch("/carrinho/{$produto->id}", ['quantity' => 3]);
+        $this->getJson('/finalizacao/entrega-gratis?cep=60025000')
+            ->assertOk()
+            ->assertJsonPath('turbo', null);
+    }
+
     public function test_na_area_full_nao_tem_turbo_e_embute_o_sedex_quando_e_mais_barato(): void
     {
         $this->comCorreios();

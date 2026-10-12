@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Models\MelhorEnvioToken;
 use App\Modules\Fiscal\Models\Company;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -71,7 +72,7 @@ class FretesPorEstadoTest extends TestCase
         $this->actingAs($this->admin())
             ->get('/admin/logistica/fretes-por-estado')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Admin/FretesPorEstado/Index', false)->has('produtos')->has('pacotePadrao'));
+            ->assertInertia(fn ($page) => $page->component('Admin/FretesPorEstado/Index', false)->has('produtos')->has('pacotePadrao')->where('melhorEnvio.conectado', false));
     }
 
     public function test_cota_as_27_capitais_em_lotes_de_5(): void
@@ -133,5 +134,59 @@ class FretesPorEstadoTest extends TestCase
             ->assertJsonCount(0, 'linhas');
 
         Http::assertNothingSent();
+    }
+
+    private function tokenMelhorEnvio(bool $vencido = false): void
+    {
+        MelhorEnvioToken::create([
+            'account_label' => 'KazaKora',
+            'access_token' => 'token-me',
+            'refresh_token' => 'refresh-me',
+            'token_expires_at' => $vencido ? now()->subDay() : now()->addDays(10),
+            'scopes' => ['shipping-calculate'],
+        ]);
+    }
+
+    public function test_melhor_envio_cota_as_27_capitais_com_a_mais_barata_primeiro(): void
+    {
+        $this->empresa();
+        $this->tokenMelhorEnvio();
+        config(['services.melhorenvio.api_base_url' => 'https://sandbox.melhorenvio.test/api/v2']);
+        Http::fake(['*/me/shipment/calculate' => Http::response([
+            ['id' => 1, 'name' => 'PAC', 'price' => '22.50', 'delivery_time' => 7, 'company' => ['name' => 'Correios']],
+            ['id' => 3, 'name' => '.Package', 'price' => '14.90', 'delivery_time' => 5, 'company' => ['name' => 'Jadlog']],
+            ['id' => 4, 'name' => '.Com', 'error' => 'Serviço indisponível para o trecho.', 'company' => ['name' => 'Jadlog']],
+        ])]);
+
+        $resposta = $this->actingAs($this->admin())
+            ->postJson('/admin/logistica/fretes-por-estado/cotar-melhor-envio', ['peso_g' => 300, 'comprimento' => 16, 'largura' => 11, 'altura' => 8, 'valor' => 49.9])
+            ->assertOk()
+            ->assertJsonPath('ambiente', 'sandbox')
+            ->assertJsonPath('erro', null)
+            ->assertJsonCount(27, 'linhas');
+
+        $ce = collect($resposta->json('linhas'))->firstWhere('uf', 'CE');
+        $this->assertCount(2, $ce['opcoes']);
+        $this->assertSame('Jadlog', $ce['opcoes'][0]['transportadora']);
+        $this->assertSame(14.9, $ce['opcoes'][0]['preco']);
+
+        Http::assertSentCount(27);
+        Http::assertSent(fn (Request $r) => $r['products'][0]['weight'] === 0.3 && $r['products'][0]['insurance_value'] === 49.9 && $r['from']['postal_code'] === '03187040');
+    }
+
+    public function test_melhor_envio_com_acesso_vencido_pede_para_conectar_de_novo(): void
+    {
+        $this->empresa();
+        $this->tokenMelhorEnvio(vencido: true);
+        Http::fake(['*/oauth/token' => Http::response(['error' => 'invalid_request', 'message' => 'The refresh token is invalid.'], 401)]);
+
+        $this->actingAs($this->admin())
+            ->postJson('/admin/logistica/fretes-por-estado/cotar-melhor-envio', ['peso_g' => 300, 'comprimento' => 16, 'largura' => 11, 'altura' => 8])
+            ->assertOk()
+            ->assertJsonPath('reconectar', true)
+            ->assertJsonPath('erro', 'O acesso ao Melhor Envio venceu. Conecte a conta de novo.')
+            ->assertJsonCount(0, 'linhas');
+
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'shipment/calculate'));
     }
 }

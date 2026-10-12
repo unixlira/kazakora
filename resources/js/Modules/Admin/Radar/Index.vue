@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
+import MarcaLogo from './MarcaLogo.vue';
 import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -107,6 +108,7 @@ const corDaFonte = (texto) => {
     if (texto.includes('Mercado Livre')) return 'fonte-ml';
     return 'fonte-google';
 };
+const marcaDaFonte = (texto) => corDaFonte(texto).replace('fonte-', '');
 
 const tudoCarregado = computed(() => props.tiktok && props.shopee && props.mercadoLivre && props.google);
 </script>
@@ -132,20 +134,20 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
 
             <!-- Faixa de números (horizontal; rola de lado no celular) -->
             <div class="mb-5 flex gap-3 overflow-x-auto pb-1">
-                <div class="kpi">
-                    <span class="kpi-icone fonte-destaque"><i class="fas fa-bullseye" aria-hidden="true"></i></span>
+                <div class="kpi fonte-destaque">
+                    <span class="kpi-icone"><i class="fas fa-bullseye" aria-hidden="true"></i></span>
                     <div><b>{{ tudoCarregado ? sinais.length : '…' }}</b><span>em alta em mais de um lugar</span></div>
                 </div>
-                <div class="kpi">
-                    <span class="kpi-icone fonte-tiktok"><i class="fab fa-tiktok" aria-hidden="true"></i></span>
+                <div class="kpi fonte-tiktok">
+                    <MarcaLogo marca="tiktok" />
                     <div><b>{{ tiktok ? formatPriceK(faturamentoTikTok) : '…' }}</b><span>top {{ tiktok?.produtos?.length ?? '' }} do TikTok em 7 dias</span></div>
                 </div>
-                <div class="kpi">
-                    <span class="kpi-icone fonte-shopee"><i class="fas fa-bag-shopping" aria-hidden="true"></i></span>
+                <div class="kpi fonte-shopee">
+                    <MarcaLogo marca="shopee" />
                     <div><b>{{ shopee ? Math.min(shopee.produtos?.length ?? 0, 20) : '…' }}</b><span>mais vendidos da Shopee</span></div>
                 </div>
-                <div class="kpi">
-                    <span class="kpi-icone fonte-ml"><i class="fas fa-handshake" aria-hidden="true"></i></span>
+                <div class="kpi fonte-ml">
+                    <MarcaLogo marca="ml" />
                     <div><b>{{ mercadoLivre ? voceVendeMl : '…' }}</b><span>que você já vende no ML</span></div>
                 </div>
             </div>
@@ -167,7 +169,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                             <span class="etiqueta fonte-destaque whitespace-nowrap">{{ s.fontes.length }} fontes</span>
                         </div>
                         <div class="mt-2 flex flex-wrap gap-1">
-                            <span v-for="f in s.fontes" :key="f" class="etiqueta" :class="corDaFonte(f)">{{ f }}</span>
+                            <span v-for="f in s.fontes" :key="f" class="etiqueta etiqueta-marca" :class="corDaFonte(f)"><MarcaLogo :marca="marcaDaFonte(f)" class="marca-mini" />{{ f }}</span>
                         </div>
                         <p v-for="e in s.exemplos.slice(0, 2)" :key="e" class="mt-1.5 truncate text-xs text-[var(--texto-suave)]" :title="e">{{ e }}</p>
                     </li>
@@ -178,7 +180,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                 <!-- TikTok Shop (Kalodata) -->
                 <section class="card-fonte fonte-tiktok">
                     <div class="card-cabeca">
-                        <span class="card-icone"><i class="fab fa-tiktok" aria-hidden="true"></i></span>
+                        <MarcaLogo marca="tiktok" />
                         <div class="min-w-0">
                             <h2 class="text-base font-bold">TikTok Shop · mais faturamento em 7 dias</h2>
                             <p class="text-xs text-[var(--texto-suave)]">Fonte: Kalodata. Atualiza uma vez por dia.</p>
@@ -202,6 +204,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                                         <th scope="col" class="text-right" title="Faturamento dividido pelas vendas">Preço médio</th>
                                         <th scope="col" class="pr-4 text-right" title="Faturamento contra os 7 dias anteriores">Cresc.</th>
                                     </tr>
+                                    <tr aria-hidden="true"><td colspan="6" class="faixa"></td></tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="p in tiktok.produtos" :key="p.id">
@@ -224,7 +227,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                 <!-- Shopee (API de Afiliados) -->
                 <section class="card-fonte fonte-shopee">
                     <div class="card-cabeca">
-                        <span class="card-icone"><i class="fas fa-bag-shopping" aria-hidden="true"></i></span>
+                        <MarcaLogo marca="shopee" />
                         <div class="min-w-0">
                             <h2 class="text-base font-bold">Shopee · mais vendidos</h2>
                             <p class="text-xs text-[var(--texto-suave)]">Fonte: API de Afiliados da Shopee. Busca por palavra em <a href="/admin/oportunidades/shopee" class="underline">Oportunidades › Shopee</a>.</p>
@@ -264,7 +267,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                 <!-- Mercado Livre -->
                 <section class="card-fonte fonte-ml">
                     <div class="card-cabeca">
-                        <span class="card-icone"><i class="fas fa-handshake" aria-hidden="true"></i></span>
+                        <MarcaLogo marca="ml" />
                         <div class="min-w-0">
                             <h2 class="text-base font-bold">Mercado Livre · buscas em alta e mais vendidos de Casa</h2>
                             <p class="text-xs text-[var(--texto-suave)]">Fonte: API do Mercado Livre. Outras categorias em <a href="/admin/oportunidades/mercado-livre" class="underline">Oportunidades › Mercado Livre</a>.</p>
@@ -312,7 +315,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                 <!-- Google Trends -->
                 <section class="card-fonte fonte-google">
                     <div class="card-cabeca">
-                        <span class="card-icone"><i class="fab fa-google" aria-hidden="true"></i></span>
+                        <MarcaLogo marca="google" />
                         <div class="min-w-0">
                             <h2 class="text-base font-bold">Google · buscas em alta hoje no Brasil</h2>
                             <p class="text-xs text-[var(--texto-suave)]">Fonte: Google Trends. Mistura notícia e esporte; vale quando cruza com produto (bloco do topo).</p>
@@ -325,6 +328,13 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                         <p v-if="google.erro" class="px-4 py-6 text-sm text-error" role="alert">{{ google.erro }}</p>
                         <p v-else-if="google.termos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Sem dados agora.</p>
                         <table v-else class="tabela">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="pl-4">Busca</th>
+                                    <th scope="col" class="pr-4 text-right">Volume</th>
+                                </tr>
+                                <tr aria-hidden="true"><td colspan="2" class="faixa"></td></tr>
+                            </thead>
                             <tbody>
                                 <tr v-for="t in google.termos" :key="t.termo">
                                     <td class="max-w-0 w-full pl-4">
@@ -366,6 +376,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
     align-items: center;
     gap: 0.75rem;
     border: 1px solid var(--surface-border);
+    border-top: 4px solid var(--cor-fundo, var(--cor));
     border-radius: 14px;
     background: var(--surface);
     padding: 0.85rem 1rem;
@@ -403,17 +414,10 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
     background: color-mix(in oklab, var(--cor-fundo, var(--cor)) var(--tinta), var(--surface));
     padding: 0.85rem 1rem;
 }
-.card-icone {
-    display: grid;
-    flex: none;
-    place-items: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 10px;
-    background: var(--cor-fundo, var(--cor));
-    color: #ffffff;
-}
-.fonte-ml .card-icone { color: #2d3277; }
+
+/* Etiqueta do cruzamento com o logo da fonte na frente. */
+.etiqueta-marca { display: inline-flex; align-items: center; gap: 0.3rem; padding-left: 0.2rem; }
+.marca-mini { --marca-tamanho: 1.1rem; --marca-raio: 999px; }
 
 .etiqueta {
     display: inline-block;
@@ -436,15 +440,26 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
 
 .tabela { width: 100%; text-align: left; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
 .tabela th {
-    border-bottom: 1px solid var(--surface-border);
-    padding: 0.5rem 0.75rem 0.5rem 0;
+    padding: 0.6rem 0.75rem 0.6rem 0;
     font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
+    font-weight: 700;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     white-space: nowrap;
-    color: var(--texto-suave);
+    background: var(--th-fundo);
+    color: var(--th-texto);
+    border-bottom: 3px solid var(--th-linha, var(--th-fundo));
 }
+/* Cabeçalho da tabela na cor da plataforma (pedido do Lira 2026-10-12). Tons
+   de laranja e azul um pouco mais escuros que os oficiais para o branco ler
+   bem (contraste acima de 4,5). TikTok e Google ganham a faixa de cores da
+   marca logo abaixo. */
+.fonte-tiktok { --th-fundo: #000000; --th-texto: #ffffff; --faixa: linear-gradient(90deg, #25f4ee, #fe2c55); }
+.fonte-shopee { --th-fundo: #d73a1e; --th-texto: #ffffff; --th-linha: #ee4d2d; }
+.fonte-ml { --th-fundo: #ffe600; --th-texto: #2d3277; --th-linha: #2d3277; }
+.fonte-google { --th-fundo: #1967d2; --th-texto: #ffffff; --faixa: linear-gradient(90deg, #4285f4 0 25%, #ea4335 25% 50%, #fbbc05 50% 75%, #34a853 75% 100%); }
+.tabela td.faixa { height: 4px; padding: 0; border: 0; background: var(--faixa); }
+.fonte-tiktok .tabela th, .fonte-google .tabela th { border-bottom: 0; }
 .tabela td { padding: 0.55rem 0.75rem 0.55rem 0; border-bottom: 1px solid var(--surface-border); }
 .tabela th.pl-4, .tabela td.pl-4 { padding-left: 1rem; }
 .tabela th.pr-4, .tabela td.pr-4 { padding-right: 1rem; }
@@ -462,5 +477,5 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
     font-weight: 700;
     color: var(--texto-suave);
 }
-.posicao-top { background: var(--primary-solido); color: #ffffff; }
+.posicao-top { background: var(--th-fundo, var(--primary-solido)); color: var(--th-texto, #ffffff); }
 </style>

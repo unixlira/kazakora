@@ -79,6 +79,8 @@ export const sidebarSections = [
             // pendência aberta (devolução, venda cancelada com o produto fora,
             // entregador que não iniciou a rota).
             { label: 'Envios Flex', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', permission: 'operacional.view', badgeKey: 'flexAlertas' },
+            // PAC e SEDEX para as 27 capitais, preço do contrato (2026-10-12).
+            { label: 'Fretes por estado', href: '/admin/logistica/fretes-por-estado', icon: 'fas fa-map-location-dot', permission: 'operacional.view' },
         ],
     },
     {

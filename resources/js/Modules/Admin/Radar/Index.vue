@@ -131,7 +131,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </div>
 
             <!-- Faixa de números (horizontal; rola de lado no celular) -->
-            <div class="mb-5 flex gap-3 overflow-x-auto pb-1">
+            <div class="mb-5 flex gap-3 overflow-x-auto pb-1 pt-1">
                 <div class="kpi fonte-destaque">
                     <span class="kpi-icone"><i class="fas fa-bullseye" aria-hidden="true"></i></span>
                     <div><b>{{ tudoCarregado ? sinais.length : '…' }}</b><span>em alta em mais de um lugar</span></div>
@@ -160,8 +160,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                 <p v-else-if="sinais.length === 0" class="pt-4 text-sm text-[var(--texto-suave)]">
                     Nenhuma busca em alta bate com os mais vendidos hoje. Veja as fontes abaixo uma a uma.
                 </p>
-                <ul v-else class="mt-3 flex snap-x gap-3 overflow-x-auto pb-2">
-                    <li v-for="s in sinais" :key="s.termo" class="w-72 shrink-0 snap-start rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3">
+                <ul v-else class="mt-2 flex snap-x gap-3 overflow-x-auto pb-2 pt-1">
+                    <li v-for="s in sinais" :key="s.termo" tabindex="0" class="card-sinal w-72 shrink-0 snap-start rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3">
                         <div class="flex items-center justify-between gap-2">
                             <span class="truncate font-bold" :title="s.termo">{{ s.termo }}</span>
                             <span class="etiqueta fonte-destaque whitespace-nowrap">{{ s.fontes.length }} fontes</span>
@@ -348,6 +348,28 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
     border-radius: 12px;
     background: color-mix(in oklab, var(--cor-fundo, var(--cor)) var(--tinta), var(--surface));
     color: var(--cor-texto);
+}
+
+/* Destaque ao passar o mouse ou focar pelo teclado (pedido do Lira
+   2026-10-12): o card sobe um pouco, a borda pega a cor da fonte e ganha
+   sombra. Sem movimento para quem pediu menos animação no sistema. */
+.kpi, .card-sinal, .card-fonte {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
+    border-color: color-mix(in oklab, var(--cor-texto, #c2410c) 55%, var(--surface-border));
+    box-shadow: 0 8px 20px -8px rgb(0 0 0 / 0.25);
+}
+.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: translateY(-2px); }
+.kpi:hover { border-top-color: var(--cor-fundo, var(--cor)); }
+.card-sinal:focus-visible { outline: 2px solid #c2410c; outline-offset: 2px; }
+.dark .kpi:hover, .dark .card-sinal:hover, .dark .card-sinal:focus-visible, .dark .card-fonte:hover, .dark .card-fonte:focus-within {
+    box-shadow: 0 8px 22px -8px rgb(0 0 0 / 0.7);
+}
+.dark .card-sinal:focus-visible { outline-color: #ff8c4d; }
+@media (prefers-reduced-motion: reduce) {
+    .kpi, .card-sinal, .card-fonte { transition: none; }
+    .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: none; }
 }
 
 .destaque {

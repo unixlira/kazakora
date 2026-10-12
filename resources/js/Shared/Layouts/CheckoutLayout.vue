@@ -30,7 +30,7 @@ let medidor = null;
 
 onMounted(() => {
     medidor = new ResizeObserver(([entrada]) => {
-        alturaSelo.value = Math.round(entrada.contentRect.height) || alturaSelo.value;
+        alturaSelo.value = entrada.contentRect.height || alturaSelo.value;
     });
     medidor.observe(bandeiras.value);
 });

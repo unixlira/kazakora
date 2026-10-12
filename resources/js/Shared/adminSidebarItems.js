@@ -26,7 +26,7 @@ export const sidebarSections = [
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-folder-tree', permission: 'cadastros.view' },
             { label: 'Calculadora de preço', href: '/admin/precificacao', icon: 'fas fa-calculator', permission: 'cadastros.view' },
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', permission: 'cadastros.view' },
-            { label: 'Fotos de Anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', permission: 'relatorios.view' },
+            { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', permission: 'cadastros.view' },
         ],
     },
@@ -52,7 +52,7 @@ export const sidebarSections = [
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', permission: 'operacional.view' },
             { label: 'Compras de fornecedor', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', permission: 'operacional.view' },
             { label: 'Fornecedores', href: '/admin/fornecedores', icon: 'fas fa-truck-field', permission: 'cadastros.view' },
-            { label: 'Ordens de Serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', permission: 'operacional.view' },
+            { label: 'Ordens de serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', permission: 'operacional.view' },
         ],
     },
     {

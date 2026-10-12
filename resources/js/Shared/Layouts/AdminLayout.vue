@@ -160,29 +160,22 @@ watch(
 <template>
     <div class="admin-shell min-h-screen bg-[var(--fundo)] text-[var(--surface-foreground)]">
         <!-- Sidebar -->
-        <nav class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
-            :class="sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64'">
+        <!-- Celular (2026-10-11): o cabeçalho é uma faixa só (a do topo, com
+        hambúrguer e logo). Este menu vira uma gaveta aberta por cima da
+        tela, logo abaixo do topo, e some quando está fechado. -->
+        <nav id="menu-admin" class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
+            :class="[sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64', collapseShow === 'hidden' ? 'max-md:hidden' : 'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-[69px] max-md:z-30 max-md:overflow-y-auto']">
             <div class="mx-auto flex w-full flex-wrap items-center justify-between px-0 md:min-h-full md:flex-col md:flex-nowrap md:items-stretch">
-                <button
-                    class="cursor-pointer rounded border border-solid border-transparent bg-transparent px-3 py-1 text-xl leading-none opacity-50 md:hidden"
-                    type="button" @click="collapseShow = collapseShow === 'hidden' ? 'block' : 'hidden'">
-                    <i class="fas fa-bars"></i>
-                </button>
-
                 <!-- Menu recolhido: logo em cima e botão embaixo (lado a lado não cabe em 80px). -->
                 <div class="hidden w-full items-center justify-between md:flex" :class="sidebarCollapsed ? 'flex-col gap-2' : ''">
                     <Link href="/admin" class="flex items-center py-3" title="KazaKora">
                         <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                         <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
                     </Link>
-                    <button type="button" class="text-[var(--icone-menu)] hover:text-[var(--destaque)]" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
+                    <button type="button" class="text-[var(--icone-menu)] hover:text-[var(--destaque)]" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
                         <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
                     </button>
                 </div>
-
-                <Link href="/admin" class="mr-0 inline-block p-4 px-0 md:hidden">
-                    <img :src="marcaLogo" alt="KazaKora" class="h-6 w-auto">
-                </Link>
 
                 <!-- Bug real reportado 2026-08-09: esse painel não tinha
                 largura própria — virava mais um item dentro do
@@ -271,8 +264,17 @@ watch(
         <div class="relative transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Topbar -->
             <nav class="sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
-                <div class="mx-auto flex w-full flex-wrap items-center justify-between gap-4 md:flex-nowrap md:px-4">
-                    <div class="flex items-center gap-2">
+                <div class="mx-auto flex w-full flex-nowrap items-center justify-between gap-2 sm:gap-4 md:px-4">
+                    <div class="flex min-w-0 items-center gap-1 sm:gap-2">
+                        <!-- Celular: hambúrguer e logo nesta mesma faixa. -->
+                        <button type="button" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--icone-menu)] hover:bg-[var(--surface-muted)] md:hidden"
+                            :aria-label="collapseShow === 'hidden' ? 'Abrir menu' : 'Fechar menu'" :aria-expanded="collapseShow !== 'hidden'" aria-controls="menu-admin"
+                            @click="collapseShow = collapseShow === 'hidden' ? 'block' : 'hidden'">
+                            <i :class="collapseShow === 'hidden' ? 'fas fa-bars' : 'fas fa-xmark'" class="text-lg"></i>
+                        </button>
+                        <Link href="/admin" class="shrink-0 md:hidden" title="KazaKora">
+                            <img :src="marcaLogo" alt="KazaKora" class="h-5 w-auto">
+                        </Link>
                         <!-- Voltar (pedido explícito 2026-08-15) — sempre
                         visível (não escondido em telas pequenas, diferente
                         do breadcrumb ao lado), mesmo estilo circular dos
@@ -280,7 +282,7 @@ watch(
                         onde "voltar" não teria destino nenhum. -->
                         <button v-if="page.url !== '/admin'" type="button"
                             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
-                            title="Voltar" @click="goBack">
+                            title="Voltar" aria-label="Voltar" @click="goBack">
                             <i class="fas fa-arrow-left"></i>
                         </button>
 
@@ -304,14 +306,14 @@ watch(
                     <div class="ml-auto flex items-center gap-1">
                         <!-- Dark mode toggle -->
                         <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
-                            title="Alternar tema" @click="toggleDarkMode">
+                            title="Alternar tema" :aria-label="isDark ? 'Usar tema claro' : 'Usar tema escuro'" @click="toggleDarkMode">
                             <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>
                         </button>
 
                         <!-- Notifications -->
                         <div ref="notifMenuRef" class="relative">
                             <button type="button" class="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
-                                title="Notificações" @click="notifMenuOpen = !notifMenuOpen">
+                                title="Notificações" :aria-label="`Notificações (${unreadNotifications})`" :aria-expanded="notifMenuOpen" @click="notifMenuOpen = !notifMenuOpen">
                                 <i class="fas fa-bell"></i>
                                 <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-error px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
                             </button>
@@ -362,14 +364,14 @@ watch(
                             </div>
                         </div>
 
-                        <div ref="userMenuRef" class="relative ml-2">
-                            <button type="button" class="flex items-center text-sm" @click="userMenuOpen = !userMenuOpen">
+                        <div ref="userMenuRef" class="relative ml-1 sm:ml-2">
+                            <button type="button" class="flex items-center text-sm" aria-label="Menu do usuário" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen">
                                 <img v-if="user?.avatar_url" :src="user.avatar_url" class="mr-2 h-9 w-9 rounded-full object-cover" alt="">
                                 <span v-else class="mr-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-lightprimary text-sm font-semibold text-primary">
                                     {{ user?.initials }}
                                 </span>
                                 <span class="hidden md:inline">{{ user?.name }}</span>
-                                <i class="fas fa-chevron-down ml-2 text-xs text-slate-400"></i>
+                                <i class="fas fa-chevron-down ml-2 hidden text-xs text-slate-400 sm:inline-block"></i>
                             </button>
                             <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
                                 <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-[var(--surface-muted)]">

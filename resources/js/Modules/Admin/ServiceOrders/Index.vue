@@ -48,10 +48,10 @@ const columns = [
 </script>
 
 <template>
-    <Head title="Ordens de Serviço" />
+    <Head title="Ordens de serviço" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Ordens de Serviço</h1>
+        <h1 class="mb-4 text-2xl font-bold">Ordens de serviço</h1>
 
         <DataTable
             :columns="columns"

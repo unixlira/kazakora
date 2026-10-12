@@ -201,6 +201,30 @@
 .dark .admin-shell .text-rose-600, .dark .admin-shell .text-rose-700, .dark .admin-shell .text-rose-800, .dark .admin-shell .text-rose-900 { color: #fda4af; }
 
 /*
+ * Ajustes do tema grafite (revisão do Jonathan, 2026-10-11).
+ * - color-scheme: barra de rolagem, campos de data e controles nativos
+ *   acompanham o tema escuro.
+ * - Links: no claro o grafite ficava igual ao texto; viram laranja #c2410c
+ *   (5,18 no branco) com sublinhado no hover. Só <a> com text-primary sem
+ *   fundo próprio (botões em forma de link ficam como estão).
+ * - Lucro em texto: #10b981 dá 2,5 no branco; valor escrito usa #047857
+ *   (5,48). O #10b981 fica para ícone e barra.
+ * - Botões de ação (ActionIcon): principal grafite no claro e laranja no
+ *   escuro; destrutivo só com contorno vermelho.
+ */
+html.dark:has(.admin-shell), .dark .admin-shell { color-scheme: dark; }
+.admin-shell a.text-primary:not([class*="bg-"]), .admin-shell a.hover\:text-primary:hover { color: #c2410c; }
+.admin-shell a.text-primary:not([class*="bg-"]):hover, .admin-shell a.hover\:text-primary:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dark .admin-shell a.text-primary:not([class*="bg-"]), .dark .admin-shell a.hover\:text-primary:hover { color: #ff8c4d; }
+.admin-shell .text-lucro { color: #047857; }
+.dark .admin-shell .text-lucro { color: #6ee7b7; }
+.admin-shell .text-link { color: #c2410c; }
+.dark .admin-shell .text-link { color: #ff8c4d; }
+.dark .admin-shell .acao-principal { background-color: color-mix(in oklab, #ff8c4d 16%, transparent); color: #ff8c4d; }
+.dark .admin-shell .acao-principal:hover { background-color: #ff8c4d; color: #000000; }
+.dark .admin-shell .acao-destrutiva:hover { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
+
+/*
  * <select>/<option> não herdam bem cor/fundo customizados no popup nativo
  * do navegador — o box fechado respeitava bg-[var(--surface)] certinho,
  * mas a lista aberta caía no branco padrão do SO com texto claro por cima

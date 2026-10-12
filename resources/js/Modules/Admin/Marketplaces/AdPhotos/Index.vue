@@ -57,7 +57,7 @@ const clearFilters = () => {
 </script>
 
 <template>
-    <Head title="Fotos de Anúncio" />
+    <Head title="Fotos de anúncio" />
 
     <AdminLayout>
         <section class="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-2xl shadow-slate-300">

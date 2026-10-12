@@ -27,6 +27,7 @@ use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -50,6 +51,10 @@ class CheckoutController extends Controller
 
     /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
     private const CHECKOUT_VERSION = 2;
+
+    private const MSG_EMAIL_EM_USO = 'Este e-mail já está em uso. Entre na sua conta para continuar.';
+
+    private const MSG_CPF_EM_USO = 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.';
 
     public function __construct(
         private readonly CartManager $cart,
@@ -337,6 +342,10 @@ class CheckoutController extends Controller
         $data = $validator->validated();
 
         if (isset($data['cpf'])) {
+            if (User::cpfEmUso($data['cpf'], $request->user()->id)) {
+                return redirect()->route('finalizacao.entrega')->withErrors(['cpf' => self::MSG_CPF_EM_USO]);
+            }
+
             $request->user()->forceFill(['cpf' => preg_replace('/\D/', '', $data['cpf'])])->save();
             unset($data['cpf']);
         }
@@ -351,8 +360,10 @@ class CheckoutController extends Controller
             }
         }
 
-        if (! $request->user() && User::where('email', $data['guest']['email'])->exists()) {
-            return redirect()->route('finalizacao.entrega')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        // Um CPF e um e-mail por conta (pedido 2026-10-12): dado já cadastrado
+        // volta como aviso, em vez de estourar o índice único (erro 500).
+        if (! $request->user() && $emUso = $this->dadosEmUso($data['guest'])) {
+            return redirect()->route('finalizacao.entrega')->withErrors($emUso);
         }
 
         // Reforço server-side: se o ID é de cotação ao vivo mas o front não
@@ -650,6 +661,8 @@ class CheckoutController extends Controller
             : 0.0;
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
+        $visitante = ! $request->user();
+
         try {
             [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
@@ -776,8 +789,16 @@ class CheckoutController extends Controller
             Log::warning('checkout.storePayment.stock_changed', ['products' => $exception->productNames]);
 
             return redirect()->route('carrinho.ver')->withErrors(['cart' => $exception->getMessage()]);
-        } catch (GuestEmailAlreadyExistsException) {
-            return redirect()->route('finalizacao.pagamento')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        } catch (GuestEmailAlreadyExistsException|UniqueConstraintViolationException) {
+            // E-mail ou CPF cadastrado entre a entrega e o pagamento (ou duas
+            // abas ao mesmo tempo): nada foi gravado, volta com o aviso.
+            if ($visitante && Auth::check()) {
+                // A conta criada nesta tentativa foi desfeita pelo rollback.
+                Auth::logout();
+            }
+            $emUso = $visitante && isset($draft['guest']) ? $this->dadosEmUso($draft['guest']) : [];
+
+            return redirect()->route('finalizacao.entrega')->withErrors($emUso ?: ['guest.email' => 'Este CPF ou e-mail já estão em uso. Entre na sua conta para continuar.']);
         } catch (ApiErrorException $exception) {
             // Erro real da API do Stripe (ex: método de pagamento não
             // ativado no dashboard, credencial inválida, instabilidade) —
@@ -1409,9 +1430,30 @@ class CheckoutController extends Controller
         }
     }
 
+    /**
+     * E-mail ou CPF do visitante que já pertencem a uma conta. A primeira
+     * mensagem é a que aparece no alerta do topo do checkout.
+     *
+     * @return array<string, string>
+     */
+    private function dadosEmUso(array $guest): array
+    {
+        $emailEmUso = User::emailEmUso($guest['email'] ?? null);
+        $cpfEmUso = User::cpfEmUso($guest['cpf'] ?? null);
+
+        if ($emailEmUso && $cpfEmUso) {
+            return ['guest.email' => 'Este CPF e este e-mail já estão em uso. Entre na sua conta para continuar.', 'guest.cpf' => self::MSG_CPF_EM_USO];
+        }
+
+        return array_filter([
+            'guest.email' => $emailEmUso ? self::MSG_EMAIL_EM_USO : null,
+            'guest.cpf' => $cpfEmUso ? self::MSG_CPF_EM_USO : null,
+        ]);
+    }
+
     private function createGuestAccount(array $guest): User
     {
-        if (User::where('email', $guest['email'])->exists()) {
+        if ($this->dadosEmUso($guest)) {
             throw new GuestEmailAlreadyExistsException();
         }
 

@@ -413,7 +413,7 @@ const finalizar = async () => {
     router.post('/finalizacao/pagamento', pagamento, {
         preserveScroll: true,
         preserveState: true,
-        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? 'Não foi possível concluir. Confira os dados.'; },
+        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? e['guest.cpf'] ?? e.cpf ?? 'Não foi possível concluir. Confira os dados.'; },
         onFinish: () => { processando.value = false; },
     });
 };
@@ -537,11 +537,11 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </div>
                 </div>
 
-                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
                         {{ erroGeral || serverErrors.payment || serverErrors.cart }}
-                        <Link v-if="erro('guest.email')" href="/entrar" class="ml-1 font-semibold underline">Entrar na minha conta</Link>
+                        <Link v-if="erro('guest.email') || erro('guest.cpf')" href="/entrar" class="ml-1 font-semibold underline">Entrar na minha conta</Link>
                     </div>
                 </div>
 

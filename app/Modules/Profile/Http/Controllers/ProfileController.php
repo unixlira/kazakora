@@ -33,7 +33,12 @@ class ProfileController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($target->id)],
             'phone' => ['nullable', 'string', 'max:20'],
-            'cpf' => ['nullable', 'string', 'max:14', Rule::unique('users', 'cpf')->ignore($target->id)],
+            // Compara só os números: o banco guarda com e sem máscara (2026-10-12).
+            'cpf' => ['nullable', 'string', 'max:14', function ($attribute, $value, $fail) use ($target): void {
+                if (User::cpfEmUso($value, $target->id)) {
+                    $fail('Este CPF já está em uso em outra conta.');
+                }
+            }],
             'birth_date' => ['nullable', 'date', 'before:today'],
         ]);
 

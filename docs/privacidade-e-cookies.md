@@ -56,10 +56,14 @@ Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 Não registra: admin, robôs, arquivos, recarga parcial do Inertia, nada que não
 seja GET 200.
 
-Contagem de visitantes (painel e Indicadores, `SiteVisit::contaveis`): só as
-linhas com `consentiu = true`, visitante único pelo `kazakora_visitor`. A
-página em que o cliente deu OK já conta. Sem o OK a linha é só registro de
-acesso (pedido 2026-10-11).
+Contagem de visitantes (painel e Indicadores, `SiteVisit::visitantesPorDia`,
+pedido 2026-10-11), sem repetir a mesma pessoa/IP:
+- Com o OK: visitante único pelo cookie `kazakora_visitor` (fator principal).
+  Dois cookies no mesmo IP são duas pessoas.
+- Sem o OK: o código da sessão muda a cada sessão, então conta um visitante
+  por IP no dia.
+- Visita sem OK de um IP que no mesmo dia deu OK entra no cookie dele (quem
+  navegou antes de dar OK não conta duas vezes). A página do OK já conta.
 
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Visitas com mais de 6 meses: IP, navegador, usuário e visitante apagados

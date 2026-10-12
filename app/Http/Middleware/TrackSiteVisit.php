@@ -22,9 +22,10 @@ use Symfony\Component\HttpFoundation\Response;
  * - Em todos: origem (UTM), aparelho (celular/tablet/computador) e o site
  *   de onde veio sem o "?..." (pode ter dado pessoal).
  *
- * - Contagem de visitantes (painel e Indicadores): só as visitas com o OK
- *   (SiteVisit::contaveis, pedido 2026-10-11). Sem o OK a linha é só o
- *   registro de acesso; a página do OK conta (registrarOk).
+ * - Contagem de visitantes (painel e Indicadores, pedido 2026-10-11): o
+ *   cookie kazakora_visitor é o visitante; sem o OK, um por IP no dia, e o
+ *   IP que deu OK no dia entra no cookie (SiteVisit::visitantesPorDia). A
+ *   página do OK conta (registrarOk).
  *
  * Depois de 6 meses o IP e o navegador são apagados (privacidade:limpar).
  */

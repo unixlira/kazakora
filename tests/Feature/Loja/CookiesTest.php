@@ -59,7 +59,7 @@ class CookiesTest extends TestCase
         $this->assertSame('/produtos/fone', $visita->path);
         $this->assertSame('instagram', $visita->utm_source);
         $this->assertSame(ConsentimentoCookie::sole()->visitante_id, $visita->visitor_id);
-        $this->assertSame(1, SiteVisit::query()->contaveis()->count());
+        $this->assertCount(1, SiteVisit::visitantesPorDia(SiteVisit::query()));
     }
 
     public function test_ok_vindo_de_outro_dominio_nao_conta_visita(): void
@@ -71,12 +71,15 @@ class CookiesTest extends TestCase
         $this->assertSame(0, SiteVisit::count());
     }
 
-    public function test_sem_ok_visita_fica_fora_da_contagem(): void
+    public function test_sem_ok_conta_um_visitante_por_ip(): void
     {
         $this->withHeader('User-Agent', self::NAVEGADOR)->get('/politica-de-entrega');
+        $this->withHeader('User-Agent', self::NAVEGADOR)->get('/politica-de-entrega');
 
-        $this->assertSame(1, SiteVisit::count());
-        $this->assertSame(0, SiteVisit::query()->contaveis()->count());
+        $this->assertSame(2, SiteVisit::count());
+        $visitantes = SiteVisit::visitantesPorDia(SiteVisit::query());
+        $this->assertCount(1, $visitantes);
+        $this->assertSame(2, $visitantes->first()->paginas);
     }
 
     public function test_com_ok_aviso_some_e_visita_usa_o_cookie(): void

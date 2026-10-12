@@ -47,8 +47,8 @@ class KpiConversionRateTest extends TestCase
     public function test_conversion_rate_ignores_marketplace_orders_that_never_visited_the_store(): void
     {
         // visitor_id é NOT NULL desde a criação de site_visits (o
-        // TrackSiteVisit sempre preenche). Só visita com OK de cookies
-        // entra na conta (SiteVisit::contaveis).
+        // TrackSiteVisit sempre preenche). Visitante = cookie; sem OK de
+        // cookies, IP (SiteVisit::visitantesPorDia).
         SiteVisit::create(['visitor_id' => 'visitor-1', 'ip' => '10.0.0.1', 'path' => '/', 'consentiu' => true]);
         SiteVisit::create(['visitor_id' => 'visitor-2', 'ip' => '10.0.0.2', 'path' => '/', 'consentiu' => true]);
 
@@ -74,8 +74,9 @@ class KpiConversionRateTest extends TestCase
         SiteVisit::create(['visitor_id' => 'visitor-2', 'ip' => '10.0.0.2', 'path' => '/', 'consentiu' => true]);
         SiteVisit::create(['visitor_id' => 'visitor-3', 'ip' => '10.0.0.3', 'path' => '/', 'consentiu' => true]);
         SiteVisit::create(['visitor_id' => 'visitor-4', 'ip' => '10.0.0.4', 'path' => '/', 'consentiu' => true]);
-        // Sem OK de cookies: registro de acesso, não entra na conta.
-        SiteVisit::create(['visitor_id' => 's-sessao', 'ip' => '10.0.0.9', 'path' => '/']);
+        // Sem OK de cookies, do mesmo IP do visitor-4: é a mesma pessoa
+        // antes do OK, não conta de novo.
+        SiteVisit::create(['visitor_id' => 's-sessao', 'ip' => '10.0.0.4', 'path' => '/']);
 
         $this->makeOrder(['origin' => Order::ORIGIN_STORE]);
         $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SHP-1']);

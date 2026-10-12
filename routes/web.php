@@ -117,6 +117,11 @@ Route::permanentRedirect('/quem-somos', '/');
 Route::permanentRedirect('/produtos', '/?todos=1');
 Route::permanentRedirect('/politica-de-frete', '/politica-de-entrega');
 Route::permanentRedirect('/contato', '/fale-conosco');
+// Mais URLs da Nuvemshop que o Search Console ainda lista como erro (2026-10-12).
+// As com barra final já resolvem; só estas não tinham equivalente.
+Route::permanentRedirect('/politica-de-devolucoes', '/trocas-e-devolucoes');
+Route::permanentRedirect('/account/login', '/entrar');
+Route::permanentRedirect('/account/register', '/cadastro');
 
 // Documentação da API pública de parceiros (ver routes/api_v1.php) — página
 // estática (Blade puro, não Inertia/SPA), pública de propósito pra

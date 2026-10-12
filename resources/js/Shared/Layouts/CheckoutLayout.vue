@@ -56,12 +56,12 @@ const tempo = computed(() => {
         <slot />
         <AvisoCookies />
         <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop): formas de
-             pagamento + dados da empresa, selo do Google à direita e a faixa
+             pagamento + dados da empresa, selos do Google e do Reclame AQUI à direita e a faixa
              preta com a marca e os selos de confiança. Sem links pra fora. -->
         <footer class="mt-auto">
             <div class="border-t border-slate-200 bg-white px-4 py-8">
                 <!-- Formas de pagamento numa linha própria em cima; embaixo, dados à
-                     esquerda e selo do Google à direita. -->
+                     esquerda e selos à direita. -->
                 <div class="mx-auto max-w-[1160px] border-b border-slate-100 pb-6 text-center">
                     <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
                     <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
@@ -77,8 +77,26 @@ const tempo = computed(() => {
                         E-mail: {{ COMPANY.email }}<br>
                         <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
                     </p>
-                    <img src="/images/payments/google.png" alt="Google Safe Browsing — site verificado"
-                        class="h-24 w-auto rounded-md bg-white p-2 md:h-28">
+                    <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
+                         imagem "Site 100% Seguro"). -->
+                    <div class="flex flex-wrap items-center justify-center gap-2 md:justify-end">
+                        <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
+                            class="flex h-[51px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white px-3 transition hover:opacity-90"
+                            title="Ver a verificação do Google Safe Browsing">
+                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[40px] w-auto">
+                        </a>
+                        <a :href="$page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
+                            class="flex h-[51px] flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white leading-none transition hover:opacity-90"
+                            :class="$page.props.reclameAqui?.verificada ? 'px-2' : 'px-4'"
+                            title="Ver a KazaKora no Reclame AQUI">
+                            <img v-if="$page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
+                                class="h-[42px] w-auto rounded-md">
+                            <template v-else>
+                                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Estamos no</span>
+                                <span class="mt-0.5 text-[20px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
+                            </template>
+                        </a>
+                    </div>
                 </div>
             </div>
 

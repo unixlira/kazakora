@@ -28,7 +28,7 @@ class PublicidadePageTest extends TestCase
 
         ChannelAdSpend::create(['date' => '2026-10-01', 'channel' => 'shopee', 'impressions' => 1000, 'clicks' => 50, 'attributed_orders' => 3, 'attributed_gmv' => 300, 'spend' => 60]);
         ChannelAdSpend::create(['date' => '2026-10-05', 'channel' => 'shopee', 'impressions' => 500, 'clicks' => 10, 'attributed_orders' => 1, 'attributed_gmv' => 100, 'spend' => 40]);
-        ChannelAdSpend::create(['date' => '2026-10-03', 'channel' => 'mercado_livre', 'impressions' => 200, 'clicks' => 5, 'attributed_orders' => 0, 'attributed_gmv' => 0, 'spend' => 0]);
+        ChannelAdSpend::create(['date' => '2026-10-03', 'channel' => 'mercado_livre', 'impressions' => 200, 'clicks' => 5, 'attributed_orders' => 2, 'attributed_gmv' => 0, 'spend' => 25]);
         ChannelAdSpend::create(['date' => '2026-09-20', 'channel' => 'shopee', 'impressions' => 10, 'clicks' => 1, 'attributed_orders' => 1, 'attributed_gmv' => 90, 'spend' => 30]);
 
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

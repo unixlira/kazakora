@@ -66,7 +66,10 @@ class PublicidadeController extends Controller
                     'cliques' => (int) $linha->cliques,
                     'pedidos' => (int) $linha->pedidos,
                     'vendas' => $vendas,
-                    'roas' => $gasto > 0 ? round($vendas / $gasto, 2) : null,
+                    // Venda zero com gasto = a plataforma não informou a
+                    // venda (hoje o Mercado Ads não traz total_amount na
+                    // sincronização), não ROAS zero. Fica em branco.
+                    'roas' => $gasto > 0 && $vendas > 0 ? round($vendas / $gasto, 2) : null,
                 ];
             })
             ->values()

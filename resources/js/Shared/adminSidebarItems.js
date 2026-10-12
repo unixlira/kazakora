@@ -47,6 +47,16 @@ export const sidebarSections = [
         ],
     },
     {
+        // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro de
+        // cada marketplace, que saiu de Oportunidades. Mostra lucro, por
+        // isso financeiro.view.
+        heading: 'Estatísticas',
+        items: [
+            { label: 'Curva ABC Mercado Livre', href: '/admin/estatisticas/curva-abc/mercado-livre', icon: 'fas fa-chart-column', permission: 'financeiro.view' },
+            { label: 'Curva ABC Shopee', href: '/admin/estatisticas/curva-abc/shopee', icon: 'fas fa-chart-bar', permission: 'financeiro.view' },
+        ],
+    },
+    {
         heading: 'Pedidos e Expedição',
         items: [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', permission: 'pedidos.view' },

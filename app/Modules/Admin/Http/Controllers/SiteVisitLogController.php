@@ -74,7 +74,7 @@ class SiteVisitLogController extends Controller
         $origem = (string) ($validated['origem'] ?? '');
         $esconder = ! (bool) ($validated['todos'] ?? false);
 
-        $periodo = fn (): Builder => SiteVisit::query()
+        $periodo = fn (): Builder => SiteVisit::query()->daLoja()
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim);
 
@@ -168,7 +168,7 @@ class SiteVisitLogController extends Controller
         $validated = $this->validarVisitante($request, ['todos' => ['nullable', 'boolean']]);
         [$de, $ate, $fim] = $this->periodo($validated);
 
-        $periodo = fn (): Builder => SiteVisit::query()
+        $periodo = fn (): Builder => SiteVisit::query()->daLoja()
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim);
 
@@ -280,7 +280,7 @@ class SiteVisitLogController extends Controller
         [$de, $ate, $fim] = $this->periodo($validated);
 
         $query = $this->doVisitante(
-            SiteVisit::query()->where('created_at', '>=', $de)->where('created_at', '<', $fim),
+            SiteVisit::query()->daLoja()->where('created_at', '>=', $de)->where('created_at', '<', $fim),
             $validated,
         );
 
@@ -355,7 +355,7 @@ class SiteVisitLogController extends Controller
         $ips = $linhas->pluck('ip')->filter()->unique()->values()->all();
         $anonimos = $linhas->whereNull('ip')->pluck('anonimo')->filter()->unique()->values()->all();
 
-        return SiteVisit::query()->toBase()
+        return SiteVisit::query()->daLoja()->toBase()
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim)
             ->where(fn ($q) => $q

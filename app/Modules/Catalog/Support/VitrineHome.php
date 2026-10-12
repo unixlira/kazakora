@@ -60,7 +60,7 @@ class VitrineHome
     /** Produtos mais vistos nos últimos 7 dias (visitas em /produtos/{slug}). */
     private function maisBuscados(): array
     {
-        $slugs = SiteVisit::query()
+        $slugs = SiteVisit::query()->daLoja()
             ->where('created_at', '>=', now()->subDays(7))
             ->where('path', 'like', '/produtos/%')
             ->selectRaw('path, count(*) as total')

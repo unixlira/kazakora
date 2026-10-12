@@ -70,6 +70,8 @@
 .admin-shell {
     --surface: #ffffff;
     --surface-muted: #f5f3f4;
+    /* Fundo da página. No claro é o cinza de apoio; no escuro, preto puro. */
+    --fundo: var(--surface-muted);
     --surface-foreground: #1f1a1c;
     --surface-border: #e6e2e3;
     --sidebar-foreground: #3d3538;
@@ -89,10 +91,14 @@
 }
 
 .dark .admin-shell {
-    --surface: #1b191a;
-    --surface-muted: #121011;
+    /* Preto chapado (pedido do Lira 2026-10-11): fundo, menu, topo e cards
+       em #000, separados só pela borda. O muted fica um tom acima para
+       campos, etiquetas e hover não sumirem no preto. */
+    --fundo: #000000;
+    --surface: #000000;
+    --surface-muted: #141414;
     --surface-foreground: #f1eced;
-    --surface-border: #302c2e;
+    --surface-border: #2a2a2a;
     --sidebar-foreground: #d9d2d4;
     --texto-suave: #b3a9ac;
     --icone-menu: #a99da1;
@@ -132,8 +138,16 @@
 .dark .admin-shell .text-slate-700, .dark .admin-shell .text-slate-800, .dark .admin-shell .text-slate-900, .dark .admin-shell .text-gray-700, .dark .admin-shell .text-gray-800, .dark .admin-shell .text-gray-900, .dark .admin-shell .text-black { color: var(--surface-foreground); }
 .dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #ff8c4d; }
 .dark .admin-shell .text-secondary { color: #fb9a5c; }
-.dark .admin-shell .bg-primary { color: #1b191a; }
+.dark .admin-shell .bg-primary { color: #000000; }
 .dark .admin-shell .placeholder\:text-slate-400::placeholder { color: #857a7e; }
+/* Fundos slate/gray escuros fixos nas telas (dark:bg-slate-800 etc.) eram
+   azulados e quebravam o preto: viram os tons neutros do tema. */
+.dark .admin-shell .dark\:bg-slate-900, .dark .admin-shell .dark\:bg-gray-900 { background-color: var(--surface); }
+.dark .admin-shell .dark\:bg-slate-800, .dark .admin-shell .dark\:bg-gray-800, .dark .admin-shell .dark\:bg-slate-700 { background-color: var(--surface-muted); }
+.dark .admin-shell .dark\:bg-slate-900\/30 { background-color: color-mix(in oklab, var(--surface-muted) 60%, transparent); }
+.dark .admin-shell .dark\:bg-slate-900\/60 { background-color: rgb(0 0 0 / 0.6); }
+/* Hover que usava o muted continua visível em cima do muted. */
+.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #1f1f1f; }
 .dark .admin-shell .bg-red-50, .dark .admin-shell .bg-red-100 { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 .dark .admin-shell .border-red-100, .dark .admin-shell .border-red-200, .dark .admin-shell .border-red-300 { border-color: color-mix(in oklab, #ef4444 40%, transparent); }
 .dark .admin-shell .text-red-600, .dark .admin-shell .text-red-700, .dark .admin-shell .text-red-800, .dark .admin-shell .text-red-900 { color: #fca5a5; }
@@ -196,7 +210,7 @@
  */
 .dark select,
 .dark select option {
-    background-color: var(--surface, #1b191a);
+    background-color: var(--surface-muted, #141414);
     color: var(--surface-foreground, #f1eced);
 }
 

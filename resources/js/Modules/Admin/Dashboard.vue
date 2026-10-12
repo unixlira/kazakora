@@ -63,8 +63,9 @@ const CHANNEL_COLORS = {
 };
 const CHROME = {
     // Tema grafite (2026-10-11): neutros quentes e o laranja como destaque.
+    // Escuro em preto chapado (#000), igual ao --surface do admin.
     light: { grid: '#e6e2e3', text: '#6b5f63', surface: '#ffffff', accent: '#c2410c', context: '#b3aaad' },
-    dark: { grid: '#302c2e', text: '#b3a9ac', surface: '#1b191a', accent: '#ff8c4d', context: '#7a6f73' },
+    dark: { grid: '#2a2a2a', text: '#b3a9ac', surface: '#000000', accent: '#ff8c4d', context: '#7a6f73' },
 };
 
 // O tema muda na hora (botão do layout põe/tira .dark no <html>) — os
@@ -151,8 +152,8 @@ const baseOptions = computed(() => ({
         legend: { display: false },
         tooltip: {
             backgroundColor: isDark.value ? '#f1eced' : '#2b2326',
-            titleColor: isDark.value ? '#1b191a' : '#ffffff',
-            bodyColor: isDark.value ? '#1b191a' : '#ffffff',
+            titleColor: isDark.value ? '#000000' : '#ffffff',
+            bodyColor: isDark.value ? '#000000' : '#ffffff',
             padding: 10,
             cornerRadius: 8,
             boxPadding: 4,

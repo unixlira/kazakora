@@ -119,9 +119,12 @@ const lerAbertas = () => {
 const secoesAbertas = ref(new Set(lerAbertas()));
 const secaoAtiva = computed(() => visibleSections.value.find((s) => s.items.some((i) => isActive(i.href)))?.heading ?? null);
 const secaoAberta = (heading) => heading === secaoAtiva.value || secoesAbertas.value.has(heading);
+// Alterna pelo que está na tela (secaoExpandida), não por secaoAberta: a
+// seção da tela atual é sempre "aberta", então depois de recolhida ela
+// nunca mais expandia (2026-10-12, Atendimento em E-mails do site).
 const alternarSecao = (heading) => {
     const abertas = new Set(secoesAbertas.value);
-    if (secaoAberta(heading)) {
+    if (secaoExpandida(heading)) {
         abertas.delete(heading);
         if (heading === secaoAtiva.value) abertas.add(`!${heading}`);
     } else {

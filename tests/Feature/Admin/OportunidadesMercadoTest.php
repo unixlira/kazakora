@@ -102,9 +102,10 @@ class OportunidadesMercadoTest extends TestCase
 
     /**
      * Tela dividida (Lira 2026-10-12): embaixo dos mais vendidos vem o bloco
-     * do Radar (Casa + buscas do site), e Mercado Livre › Radar abre a mesma tela.
+     * do Radar (Casa + buscas do site). O endereço antigo do Radar do ML
+     * redireciona para cá (sem item Radar no menu, Lira 2026-10-12).
      */
-    public function test_mercado_livre_traz_o_radar_embaixo_e_abre_pelo_menu_do_radar(): void
+    public function test_mercado_livre_traz_o_radar_embaixo_e_endereco_antigo_redireciona(): void
     {
         $api = 'https://api.mercadolibre.com/';
         Http::fake([
@@ -117,21 +118,20 @@ class OportunidadesMercadoTest extends TestCase
         ]);
         $admin = $this->admin();
 
-        $this->assertSame(url('/admin/radar/mercado-livre'), route('admin.radar.mercado-livre'));
+        $this->actingAs($admin)->get('/admin/radar/mercado-livre')
+            ->assertRedirect('/admin/oportunidades/mercado-livre');
 
-        foreach (['/admin/oportunidades/mercado-livre', '/admin/radar/mercado-livre'] as $url) {
-            $this->actingAs($admin)->get($url)
-                ->assertOk()
-                ->assertInertia(fn (Assert $page) => $page
-                    ->component('Admin/Oportunidades/Mercado', false)
-                    ->where('canal.slug', 'mercado-livre')
-                    ->where('base', $url)
-                    ->missing('mercadoLivre')
-                    ->loadDeferredProps('radar', fn (Assert $reload) => $reload
-                        ->where('mercadoLivre.produtos.0.nome', 'Organizador de Gaveta')
-                        ->where('mercadoLivre.buscas.0.termo', 'air fryer')
-                        ->etc()));
-        }
+        $this->actingAs($admin)->get('/admin/oportunidades/mercado-livre')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Admin/Oportunidades/Mercado', false)
+                ->where('canal.slug', 'mercado-livre')
+                ->where('base', '/admin/oportunidades/mercado-livre')
+                ->missing('mercadoLivre')
+                ->loadDeferredProps('radar', fn (Assert $reload) => $reload
+                    ->where('mercadoLivre.produtos.0.nome', 'Organizador de Gaveta')
+                    ->where('mercadoLivre.buscas.0.termo', 'air fryer')
+                    ->etc()));
     }
 
     public function test_categoria_invalida_volta_para_a_padrao_e_canal_desconhecido_da_404(): void

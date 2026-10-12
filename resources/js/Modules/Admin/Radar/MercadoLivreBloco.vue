@@ -8,7 +8,7 @@ import { computed } from 'vue';
 
 // Bloco do Mercado Livre do Radar (buscas em alta do site e mais vendidos de
 // Casa). Aparece no Radar geral e embaixo dos mais vendidos em
-// Oportunidades › Mercado Livre e Mercado Livre › Radar (pedido do Lira
+// Oportunidades › Mercado Livre (pedido do Lira
 // 2026-10-12). `mercadoLivre` é prop adiada da página com esse mesmo nome.
 const props = defineProps({
     mercadoLivre: { type: Object, default: null },

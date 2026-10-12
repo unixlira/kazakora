@@ -32,9 +32,9 @@ use Inertia\Response;
  * mesma tela só com o bloco daquela fonte, e só a consulta dela roda.
  *
  * Menu de 2026-10-12 (pedido do Lira): TikTok e Google viraram itens de
- * Oportunidades e o Mercado Livre virou Oportunidades › Mercado Livre ›
- * Radar, que abre a tela do OportunidadesController (mais vendidos em cima,
- * este bloco do ML embaixo). Por isso 'mercado-livre' saiu de FONTES; o
+ * Oportunidades e o bloco do ML ficou só em Oportunidades › Mercado Livre
+ * (tela do OportunidadesController: mais vendidos em cima, este bloco
+ * embaixo). Por isso 'mercado-livre' saiu de FONTES; o
  * bloco continua no Radar geral (/admin/radar).
  */
 class RadarController extends Controller

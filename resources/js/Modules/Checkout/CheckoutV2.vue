@@ -84,33 +84,51 @@ const enderecoSelecionado = computed(() => props.addresses.find((address) => add
 const cepEfetivo = computed(() => (usarNovoEndereco.value ? endereco.zip : (enderecoSelecionado.value?.zip ?? '')));
 
 // ---------- 3. Entrega ----------
+// Frete grátis com o frete embutido (pedido 2026-10-12): o preço dos produtos
+// já tem o frete da região. Quando o CEP muda, o servidor devolve itens e
+// subtotal com o frete exato desse CEP, a entrega FULL (Grande SP) ou a opção
+// TURBO (SEDEX pagando só a diferença).
 const freteCarregando = ref(false);
 const entregaExpressa = ref(null);
-// Só o frete grátis (pedido 2026-10-10). O CEP ainda é consultado pra
-// mostrar a entrega expressa, mas as cotações pagas não aparecem.
+const prazoGratis = ref(null);
+const turbo = ref(null);
+const turboEscolhido = ref(Boolean(props.draft?.turbo));
+const itens = ref(props.items);
+const subtotalAtual = ref(Number(props.subtotal) || 0);
 const opcoesEntrega = computed(() => props.shippingMethods);
 const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
-// O CEP só serve pro aviso de entrega expressa (não cota frete pago).
 watch(cepEfetivo, async (zip) => {
     const cep = (zip ?? '').replace(/\D/g, '');
     if (cep.length !== 8) {
         entregaExpressa.value = null;
+        turbo.value = null;
+        prazoGratis.value = null;
         return;
     }
     freteCarregando.value = true;
     try {
-        const response = await fetch(`/frete/prazo?cep=${cep}`, { headers: { Accept: 'application/json' } });
-        entregaExpressa.value = response.ok ? ((await response.json()).entrega_expressa ?? null) : null;
+        const response = await fetch(`/finalizacao/entrega-gratis?cep=${cep}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        entregaExpressa.value = data.entrega_expressa ?? null;
+        prazoGratis.value = data.prazo ?? null;
+        turbo.value = data.turbo ?? null;
+        if (!turbo.value) turboEscolhido.value = false;
+        itens.value = data.items ?? itens.value;
+        subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
+        if (cupomAplicado.value) descontoCupom.value = Number(data.discount_amount) || 0;
     } catch {
         entregaExpressa.value = null;
+        turbo.value = null;
     } finally {
         freteCarregando.value = false;
     }
 }, { immediate: true });
 
 const entregaEscolhida = computed(() => opcoesEntrega.value.find((option) => option.id === shippingMethodId.value) ?? null);
-const valorFrete = computed(() => Number(entregaEscolhida.value?.price ?? 0));
+const valorFrete = computed(() => (turboEscolhido.value && turbo.value ? Number(turbo.value.preco) : Number(entregaEscolhida.value?.price ?? 0)));
+const diasUteis = (dias) => `${dias} ${dias === 1 ? 'dia útil' : 'dias úteis'}`;
 
 // ---------- Cupom (pedido 2026-10-10) ----------
 // Aplica por JSON: busca o cupom na base, confere as regras e o desconto
@@ -181,9 +199,9 @@ const removerCupom = async () => {
 // ---------- 4. Pagamento ----------
 const metodo = ref('pix');
 const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0
-    ? round2((props.subtotal - descontoCupom.value) * props.pixDiscountPercentage / 100)
+    ? round2((subtotalAtual.value - descontoCupom.value) * props.pixDiscountPercentage / 100)
     : 0));
-const totalCartao = computed(() => round2(props.subtotal - descontoCupom.value + valorFrete.value));
+const totalCartao = computed(() => round2(subtotalAtual.value - descontoCupom.value + valorFrete.value));
 const totalAPagar = computed(() => (props.order ? Number(props.order.total) : round2(totalCartao.value - descontoPix.value)));
 const parcela12 = computed(() => totalCartao.value / 12);
 
@@ -259,7 +277,7 @@ const errosEndereco = computed(() => [...new Set(CAMPOS_ENDERECO.map((campo) => 
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
 
 const payloadEntrega = () => {
-    const data = { shipping_method_id: shippingMethodId.value };
+    const data = { shipping_method_id: shippingMethodId.value, turbo: Boolean(turboEscolhido.value && turbo.value) };
 
     if (!usarNovoEndereco.value && addressId.value) {
         data.address_id = addressId.value;
@@ -481,7 +499,7 @@ const fotoDoItem = (item) => {
     const imagens = item.product?.images ?? [];
     return (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.thumb_url ?? (imagens.find((imagem) => imagem.is_primary) ?? imagens[0])?.url ?? null;
 };
-const totalItens = computed(() => props.items.reduce((soma, item) => soma + item.quantity, 0));
+const totalItens = computed(() => itens.value.reduce((soma, item) => soma + item.quantity, 0));
 
 const inputClass = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-[15px] text-slate-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-200';
 const inputErroClass = 'border-red-500 ring-1 ring-red-200';
@@ -642,15 +660,31 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
                         </p>
 
-                        <!-- Sempre frete grátis, logado ou não, sem escolha (pedido 2026-10-10). -->
-                        <div class="flex items-center gap-3 rounded-lg border border-emerald-500 bg-emerald-50/60 p-3 ring-1 ring-emerald-500">
+                        <!-- Sempre frete grátis (pedido 2026-10-10); o frete já está no preço (2026-10-12). -->
+                        <div class="flex items-center gap-3 rounded-lg border p-3 transition"
+                            :class="turboEscolhido && turbo ? 'border-slate-200 bg-white' : 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500'">
                             <i class="fa-solid fa-truck-fast text-emerald-600"></i>
                             <span class="flex-1 text-sm text-slate-700">
                                 <strong class="text-slate-900">Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
-                                <span class="ml-1 text-slate-500">(1 à 7 dias úteis)</span>
+                                <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
                             </span>
                             <span class="text-sm font-bold text-emerald-600">Grátis</span>
                         </div>
+
+                        <!-- TURBO (2026-10-12): fora da área FULL, SEDEX pagando só a diferença. -->
+                        <label v-if="turbo && !entregaExpressa"
+                            class="mt-2 flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
+                            :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50/60 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
+                            <input v-model="turboEscolhido" type="checkbox" class="h-4 w-4 accent-[#F44D00]">
+                            <span class="flex-1 text-sm text-slate-700">
+                                <strong class="text-slate-900"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
+                                <span class="ml-1 text-slate-500">
+                                    <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
+                                    <template v-else>entrega mais rápida pelo SEDEX</template>
+                                </span>
+                            </span>
+                            <span class="text-sm font-bold text-slate-900">+ {{ formatPrice(turbo.preco) }}</span>
+                        </label>
                         <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
                     </section>
 
@@ -718,7 +752,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     <h2 class="mb-4 text-xl font-semibold text-slate-800">Resumo do seu pedido</h2>
 
                     <ul class="divide-y divide-slate-100">
-                        <li v-for="item in items" :key="item.product.id" class="flex items-center gap-3 py-3">
+                        <li v-for="item in itens" :key="item.product.id" class="flex items-center gap-3 py-3">
                             <span class="relative shrink-0">
                                 <img v-if="fotoDoItem(item)" :src="fotoDoItem(item)" :alt="item.product.name" class="h-16 w-16 rounded-lg border border-slate-200 object-cover">
                                 <span v-else class="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100"><i class="fa-solid fa-box text-slate-400"></i></span>
@@ -757,10 +791,10 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </div>
 
                     <dl class="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm text-slate-700">
-                        <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotal) }}</dd></div>
+                        <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixDiscountPercentage }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
-                        <div class="flex justify-between"><dt>Entrega</dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
+                        <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#F44D00]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
                             <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
                         <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">
                             <dt>Total</dt>

@@ -16,6 +16,7 @@ use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
@@ -107,6 +108,58 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Frete grátis com o frete embutido (pedido 2026-10-12): o checkout chama
+     * isto quando o CEP de entrega muda. Guarda o CEP (o preço dos produtos
+     * passa a ter o frete exato para ele) e devolve itens, subtotal e cupom
+     * recalculados, a entrega FULL (Grande SP) ou a opção TURBO (SEDEX, com o
+     * valor a mais e quantos dias chega antes).
+     */
+    public function entregaGratis(Request $request, EntregaExpressa $entregaExpressa, FreteEmbutido $frete): JsonResponse
+    {
+        $cep = preg_replace('/\D/', '', (string) $request->query('cep'));
+
+        if (strlen($cep) !== 8) {
+            return response()->json(['message' => 'Informe um CEP com 8 números.'], 422);
+        }
+
+        $this->guardarCep($request, $cep);
+        $frete->usarCep($cep);
+
+        $cartItems = $this->cart->items();
+        $subtotal = round($cartItems->sum('subtotal'), 2);
+        [$coupon] = $this->cupomDoRascunho($request->session()->get(self::SESSION_KEY) ?? [], $subtotal, $request->user());
+        $expressa = $entregaExpressa->consultar($cep);
+        $entrega = $frete->entregaDoCarrinho($cartItems);
+
+        return response()->json([
+            'items' => $cartItems,
+            'subtotal' => $subtotal,
+            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
+            'entrega_expressa' => $expressa,
+            'prazo' => $expressa ? null : $entrega['prazo'],
+            // Na área FULL a entrega já é a mais rápida: sem TURBO.
+            'turbo' => $expressa ? null : $entrega['turbo'],
+        ]);
+    }
+
+    /** CEP escolhido pelo cliente: sessão + cookie necessário de 1 ano (frete embutido). */
+    private function guardarCep(Request $request, string $cep): void
+    {
+        $request->session()->put('frete_embutido.cep', $cep);
+        cookie()->queue(cookie((string) config('frete_embutido.cookie'), $cep, 60 * 24 * 365, null, null, null, true, false, 'lax'));
+    }
+
+    /** CEP do endereço de entrega do rascunho do checkout (endereço salvo ou novo). */
+    private function cepDoRascunho(Request $request, array $draft): ?string
+    {
+        if (! empty($draft['address_id']) && $request->user()) {
+            return $request->user()->addresses()->whereKey($draft['address_id'])->value('zip');
+        }
+
+        return $draft['new_address']['zip'] ?? null;
+    }
+
+    /**
      * Prazo pelo CEP na página do produto (pedido 2026-10-09): só diz se o
      * CEP tem entrega expressa ("Receba hoje até as 21h" / "Receba amanhã").
      * Fora da área, entrega_expressa vem null e a tela mostra o prazo normal.
@@ -120,6 +173,11 @@ class CheckoutController extends Controller
         }
 
         $expressa = $entregaExpressa->consultar($cep);
+
+        // Frete embutido (2026-10-12): o CEP digitado no produto passa a valer
+        // para o preço em toda a loja.
+        $this->guardarCep($request, $cep);
+        app(FreteEmbutido::class)->usarCep($cep);
 
         // Fora da entrega expressa (pedido 2026-10-10): prazo mais rápido dos
         // Correios para esse CEP e produto. Até 3 dias úteis = "Flex"; mais
@@ -135,7 +193,12 @@ class CheckoutController extends Controller
             }) ?: null;
         }
 
+        $produto = $product ?? Product::query()->find((int) $request->query('produto'));
+
         return response()->json([
+            'final_price' => $produto?->final_price,
+            'preco_de' => $produto?->preco_de,
+            'preco_sem_oferta' => $produto?->preco_sem_oferta,
             'entrega_expressa' => $expressa,
             'prazo_dias' => $prazoDias,
             'modalidade' => $expressa ? 'full' : ($prazoDias !== null && $prazoDias <= 3 ? 'flex' : null),
@@ -192,6 +255,7 @@ class CheckoutController extends Controller
                 },
             ],
             'shipping_quote' => ['nullable', 'array'],
+            'turbo' => ['nullable', 'boolean'],
             'shipping_quote.name' => ['required_with:shipping_quote', 'string', 'max:255'],
             'shipping_quote.carrier_name' => ['nullable', 'string', 'max:255'],
             'shipping_quote.price' => ['required_with:shipping_quote', 'numeric', 'min:0'],
@@ -309,6 +373,13 @@ class CheckoutController extends Controller
                 'estimated_days' => $match['estimated_days'],
             ];
         }
+
+        // Frete embutido: o preço dos produtos passa a ser o do CEP de entrega.
+        $cepEntrega = $data['new_address']['zip'] ?? ($address ?? null)?->zip;
+        if ($cepEntrega) {
+            $this->guardarCep($request, preg_replace('/\D/', '', (string) $cepEntrega));
+        }
+        $data['turbo'] = (bool) ($data['turbo'] ?? false);
 
         // Cupom aplicado antes de preencher a entrega (checkout v2) não pode
         // se perder quando o rascunho é regravado.
@@ -507,6 +578,9 @@ class CheckoutController extends Controller
 
         $data = $paymentValidator->validated();
 
+        // Frete embutido: o pedido sai com o frete do CEP de entrega.
+        app(FreteEmbutido::class)->usarCep($this->cepDoRascunho($request, $draft));
+
         $cartItems = $this->cart->items();
 
         if ($cartItems->isEmpty()) {
@@ -545,7 +619,7 @@ class CheckoutController extends Controller
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
         }
 
-        $shipping = $this->resolveShipping($draft);
+        $shipping = $this->resolveShipping($draft, $cartItems, $this->cepDoRascunho($request, $draft));
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon, $motivoCupom] = $this->cupomDoRascunho($draft, $subtotal, $request->user());
         if ($motivoCupom) {
@@ -1215,9 +1289,11 @@ class CheckoutController extends Controller
 
     private function paymentProps(array $draft): array
     {
+        $cep = $this->cepDoRascunho(request(), $draft);
+        app(FreteEmbutido::class)->usarCep($cep);
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft)['cost'] : 0.0;
+        $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
         $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
 
@@ -1362,8 +1438,17 @@ class CheckoutController extends Controller
     /**
      * @return array{method_id: ?int, carrier_name: ?string, cost: float}
      */
-    private function resolveShipping(array $draft): array
+    private function resolveShipping(array $draft, $cartItems = null, ?string $cep = null): array
     {
+        // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
+        // recalculada aqui (nunca o valor que veio do navegador).
+        if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
+            $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
+            if ($turbo) {
+                return ['method_id' => null, 'carrier_name' => 'SEDEX (TURBO)', 'cost' => (float) $turbo['preco']];
+            }
+        }
+
         if (! empty($draft['shipping_quote'])) {
             $quote = $draft['shipping_quote'];
 
@@ -1425,6 +1510,9 @@ class CheckoutController extends Controller
     {
         $user = $request->user();
         $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        if ($cepDoRascunho = $this->cepDoRascunho($request, $draft)) {
+            app(FreteEmbutido::class)->usarCep($cepDoRascunho);
+        }
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);

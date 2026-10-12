@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -54,6 +55,8 @@ XML;
 
         // Mesmo motivo do OportunidadesMercadoTest: loadDeferredProps confere o componente.
         config(['inertia.testing.ensure_pages_exist' => false, 'services.gemini.api_key' => null]);
+        // O ranking do TikTok fica guardado em arquivo (MaisVendidosTikTok).
+        Storage::fake('local');
     }
 
     private function admin(): User

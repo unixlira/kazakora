@@ -490,9 +490,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
         Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
-        // Radar de Oportunidades (2026-10-12): uma tela só, no grupo
-        // Oportunidades do menu.
+        // Radar (2026-10-12): uma tela só, no grupo Oportunidades do menu.
+        // Submenu TikTok / Mercado Livre / Google (pedido do Lira 2026-10-12):
+        // a mesma tela mostrando só o bloco daquela fonte.
         Route::get('radar', [RadarController::class, 'index'])->name('radar.index');
+        Route::get('radar/{fonte}', [RadarController::class, 'index'])
+            ->whereIn('fonte', array_keys(RadarController::FONTES))
+            ->name('radar.fonte');
         // Oportunidades (correção do Lira 2026-10-12): mais vendidos e buscas
         // em alta de TERCEIROS no Mercado Livre e na Shopee (dado de mercado,
         // não as vendas da loja).

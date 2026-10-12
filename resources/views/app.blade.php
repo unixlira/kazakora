@@ -4,18 +4,60 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title inertia>{{ config('app.name', 'KazaKora') }}</title>
+        {{-- Página de produto: título, descrição, foto e dados estruturados já no HTML inicial
+             (Search Console, pedido 2026-10-12). O <Head> do Vue troca o título depois pelo mesmo texto. --}}
+        @php
+            $seoProduto = str_starts_with($page['component'] ?? '', 'Catalog/ProductDetail') ? ($page['props']['product'] ?? null) : null;
+            $seoProduto = $seoProduto !== null ? json_decode(json_encode($seoProduto), true) : null;
+            $seoProduto = is_array($seoProduto) && filled($seoProduto['name'] ?? null) ? $seoProduto : null;
+        @endphp
+        <title inertia>{{ config('app.name', 'KazaKora').($seoProduto ? ' - '.$seoProduto['name'] : '') }}</title>
 
         {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
              Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
         @unless (request()->is('admin*'))
-            @php($canonical = rtrim(config('app.url'), '/').'/'.ltrim(request()->path() === '/' ? '' : request()->path(), '/'))
+            @php
+                $canonical = rtrim(config('app.url'), '/').'/'.ltrim(request()->path() === '/' ? '' : request()->path(), '/');
+                // Variação é a mesma página do produto pai: canônica aponta para o pai.
+                if ($seoProduto && ! empty($seoProduto['parent_product_id'])) {
+                    $slugPai = \App\Modules\Catalog\Models\Product::query()->whereKey($seoProduto['parent_product_id'])->value('slug');
+                    $canonical = $slugPai ? rtrim(config('app.url'), '/').'/produtos/'.$slugPai : $canonical;
+                }
+                $descricao = $seoProduto && filled($seoProduto['description'] ?? null)
+                    ? \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/u', ' ', strip_tags(html_entity_decode($seoProduto['description'])))), 155)
+                    : 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.';
+                $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
+            @endphp
             <link rel="canonical" href="{{ $canonical }}">
-            <meta name="description" content="KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.">
+            <meta name="description" content="{{ $descricao }}">
             <meta property="og:site_name" content="KazaKora">
-            <meta property="og:type" content="website">
+            <meta property="og:type" content="{{ $seoProduto ? 'product' : 'website' }}">
             <meta property="og:url" content="{{ $canonical }}">
             <meta property="og:locale" content="pt_BR">
+            @if ($seoProduto)
+                <meta property="og:title" content="{{ $seoProduto['name'] }}">
+                <meta property="og:description" content="{{ $descricao }}">
+                @if ($imagens)
+                    <meta property="og:image" content="{{ $imagens[0] }}">
+                @endif
+                <script type="application/ld+json">{!! json_encode(array_filter([
+                    '@context' => 'https://schema.org',
+                    '@type' => 'Product',
+                    'name' => $seoProduto['name'],
+                    'description' => $descricao,
+                    'sku' => $seoProduto['sku'] ?? null,
+                    'brand' => filled($seoProduto['brand'] ?? null) ? ['@type' => 'Brand', 'name' => $seoProduto['brand']] : null,
+                    'image' => $imagens ?: null,
+                    'offers' => [
+                        '@type' => 'Offer',
+                        'url' => $canonical,
+                        'priceCurrency' => 'BRL',
+                        'price' => number_format((float) ($seoProduto['final_price'] ?? $seoProduto['price'] ?? 0), 2, '.', ''),
+                        'availability' => ((int) ($seoProduto['stock'] ?? 0)) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+                        'itemCondition' => 'https://schema.org/NewCondition',
+                    ],
+                ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+            @endif
         @endunless
 
         {{-- Favicon (Admin > Banners > Logos e favicon; padrão: laranja com logo branca). --}}

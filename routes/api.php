@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
+use App\Http\Controllers\Api\FerraKoraVisitaController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
@@ -188,3 +189,9 @@ Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import']
 Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status'])
     ->middleware('throttle:30,1')
     ->name('api.tiktok.reports.status');
+
+// Visitas do site FerraKora (2026-10-12): o navegador do visitante avisa
+// cada página aberta; só dos domínios em services.ferrakora.origens.
+Route::post('/ferrakora/visita', [FerraKoraVisitaController::class, 'registrar'])
+    ->middleware('throttle:120,1')
+    ->name('api.ferrakora.visita');

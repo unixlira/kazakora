@@ -426,6 +426,12 @@ return [
         'token' => env('TIKTOK_REPORTS_TOKEN'),
     ],
 
+    // Site FerraKora (2026-10-12): domínios que podem avisar visita em
+    // POST /api/ferrakora/visita (lista separada por vírgula, sem www).
+    'ferrakora' => [
+        'origens' => env('FERRAKORA_ORIGENS', 'ferrakora.devlira.com.br'),
+    ],
+
     // Kalodata (dados do TikTok Shop: ranking e detalhe de categoria, loja,
     // criador, produto, vídeo e live). Cobrança por crédito: cache das
     // respostas e teto diário de chamadas reais protegem o saldo. Ver

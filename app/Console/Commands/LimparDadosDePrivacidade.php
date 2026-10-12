@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Analytics\Models\ConsentimentoCookie;
+use App\Modules\Analytics\Models\FerraKoraVisit;
 use App\Modules\Analytics\Models\SiteVisit;
 use Illuminate\Console\Command;
 
@@ -25,6 +26,12 @@ class LimparDadosDePrivacidade extends Command
             ->where('created_at', '<', now()->subMonths(6)->subDay())
             ->where(fn ($query) => $query->whereNotNull('ip')->orWhereNotNull('user_agent')->orWhereNotNull('user_id')->orWhereNotNull('click_id')->orWhereNotNull('cookies')->orWhere('visitor_id', '!=', 'anonimo'))
             ->update(['ip' => null, 'user_agent' => null, 'user_id' => null, 'click_id' => null, 'cookies' => null, 'visitor_id' => 'anonimo']);
+
+        // Visitas do site FerraKora: mesmo prazo.
+        $visitas += FerraKoraVisit::query()
+            ->where('created_at', '<', now()->subMonths(6)->subDay())
+            ->where(fn ($query) => $query->whereNotNull('ip')->orWhereNotNull('user_agent'))
+            ->update(['ip' => null, 'user_agent' => null]);
 
         $consentimentos = ConsentimentoCookie::query()->where('aceito_em', '<', now()->subYears(5))->delete();
 

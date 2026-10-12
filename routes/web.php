@@ -64,6 +64,7 @@ use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
+use App\Modules\Admin\Http\Controllers\FerraKoraVisitLogController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
@@ -730,6 +731,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // visitas daquele IP no período), pedido 2026-10-12.
         Route::get('visitas-site/visitante', [SiteVisitLogController::class, 'visitante'])->name('visitas-site.visitante');
         Route::delete('visitas-site/visitante', [SiteVisitLogController::class, 'apagar'])->name('visitas-site.apagar');
+
+        // Visitas FerraKora (2026-10-12): o mesmo log para o site FerraKora,
+        // lido de ferrakora_visits (gravado por /api/ferrakora/visita).
+        Route::get('visitas-ferrakora', [FerraKoraVisitLogController::class, 'index'])->name('visitas-ferrakora.listar');
+        Route::get('visitas-ferrakora/visitante', [FerraKoraVisitLogController::class, 'visitante'])->name('visitas-ferrakora.visitante');
+        Route::delete('visitas-ferrakora/visitante', [FerraKoraVisitLogController::class, 'apagar'])->name('visitas-ferrakora.apagar');
 
         Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
         Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');

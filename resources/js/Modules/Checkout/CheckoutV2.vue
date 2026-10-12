@@ -92,7 +92,8 @@ const freteCarregando = ref(false);
 const entregaExpressa = ref(null);
 const prazoGratis = ref(null);
 const turbo = ref(null);
-const turboEscolhido = ref(Boolean(props.draft?.turbo));
+// A tela nasce sempre no frete grátis (pedido 2026-10-12).
+const turboEscolhido = ref(false);
 const itens = ref(props.items);
 const subtotalAtual = ref(Number(props.subtotal) || 0);
 const opcoesEntrega = computed(() => props.shippingMethods);
@@ -660,30 +661,31 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
                         </p>
 
-                        <!-- Sempre frete grátis (pedido 2026-10-10); o frete já está no preço (2026-10-12). -->
-                        <div class="flex items-center gap-3 rounded-lg border p-3 transition"
-                            :class="turboEscolhido && turbo ? 'border-slate-200 bg-white' : 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500'">
-                            <i class="fa-solid fa-truck-fast text-emerald-600"></i>
+                        <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): duas opções com caixinha,
+                             uma exclui a outra; a tela nasce no grátis e dá para voltar para ele clicando nele. -->
+                        <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
+                            :class="!turboEscolhido || !turbo ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-slate-200 bg-white hover:border-slate-300'">
+                            <input type="checkbox" class="h-4 w-4 accent-emerald-600" :checked="!turboEscolhido || !turbo" @change="$event.target.checked = true; turboEscolhido = false">
                             <span class="flex-1 text-sm text-slate-700">
-                                <strong class="text-slate-900">Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
+                                <strong class="text-slate-900"><i class="fa-solid fa-truck-fast text-emerald-600"></i> Frete GRÁTIS</strong> <span v-if="entregaExpressa" class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span>
                                 <span v-if="!entregaExpressa" class="ml-1 text-slate-500">({{ prazoGratis ? `até ${diasUteis(prazoGratis)}` : '1 à 7 dias úteis' }})</span>
                             </span>
                             <span class="text-sm font-bold text-emerald-600">Grátis</span>
-                        </div>
+                        </label>
 
-                        <!-- TURBO (2026-10-12): fora da área FULL, SEDEX pagando só a diferença. -->
+                        <!-- TURBO: fora da área FULL, SEDEX pagando só a diferença. Escolhido = laranja do tema. -->
                         <label v-if="turbo && !entregaExpressa"
                             class="mt-2 flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
-                            :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50/60 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
-                            <input v-model="turboEscolhido" type="checkbox" class="h-4 w-4 accent-[#F44D00]">
+                            :class="turboEscolhido ? 'border-[#F44D00] bg-orange-50 ring-1 ring-[#F44D00]' : 'border-slate-200 bg-white hover:border-slate-300'">
+                            <input type="checkbox" class="h-4 w-4 accent-[#F44D00]" :checked="turboEscolhido" @change="turboEscolhido = $event.target.checked">
                             <span class="flex-1 text-sm text-slate-700">
-                                <strong class="text-slate-900"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
+                                <strong :class="turboEscolhido ? 'text-[#F44D00]' : 'text-slate-900'"><i class="fa-solid fa-bolt text-[#F44D00]"></i> TURBO</strong>
                                 <span class="ml-1 text-slate-500">
                                     <template v-if="turbo.prazo">chega em até {{ diasUteis(turbo.prazo) }}<template v-if="turbo.dias_a_menos"> ({{ diasUteis(turbo.dias_a_menos) }} antes)</template></template>
                                     <template v-else>entrega mais rápida pelo SEDEX</template>
                                 </span>
                             </span>
-                            <span class="text-sm font-bold text-slate-900">+ {{ formatPrice(turbo.preco) }}</span>
+                            <span class="text-sm font-bold" :class="turboEscolhido ? 'text-[#F44D00]' : 'text-slate-900'">+ {{ formatPrice(turbo.preco) }}</span>
                         </label>
                         <small v-if="erro('shipping_method_id')" class="mt-1 block text-xs text-red-600">{{ erro('shipping_method_id') }}</small>
                     </section>

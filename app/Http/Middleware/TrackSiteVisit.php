@@ -22,6 +22,10 @@ use Symfony\Component\HttpFoundation\Response;
  * - Em todos: origem (UTM), aparelho (celular/tablet/computador) e o site
  *   de onde veio sem o "?..." (pode ter dado pessoal).
  *
+ * - Contagem de visitantes (painel e Indicadores): só as visitas com o OK
+ *   (SiteVisit::contaveis, pedido 2026-10-11). Sem o OK a linha é só o
+ *   registro de acesso; a página do OK conta (registrarOk).
+ *
  * Depois de 6 meses o IP e o navegador são apagados (privacidade:limpar).
  */
 class TrackSiteVisit
@@ -55,17 +59,50 @@ class TrackSiteVisit
             $visitorId = 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
         }
 
-        SiteVisit::create([
-            'visitor_id' => $visitorId,
-            'user_id' => $request->user()?->id,
-            'path' => Str::limit('/'.ltrim($request->path(), '/'), 250, ''),
-            'referer' => $this->origem($request->headers->get('referer')),
-            'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
-            'ip' => $request->ip(),
+        self::gravar($request, $visitorId, $consentiu, $request->path(), $this->origem($request->headers->get('referer')), [
             'utm_source' => $this->utm($request, 'utm_source', 80),
             'utm_medium' => $this->utm($request, 'utm_medium', 80),
             'utm_campaign' => $this->utm($request, 'utm_campaign', 120),
-            'dispositivo' => $this->dispositivo((string) $request->userAgent()),
+        ]);
+    }
+
+    /**
+     * Visita contável da página em que o cliente deu OK (CookiesController):
+     * sem ela, quem dá OK e sai sem abrir outra página nunca entra na conta.
+     */
+    public static function registrarOk(Request $request, string $visitorId): void
+    {
+        $pagina = parse_url((string) $request->headers->get('referer'));
+        $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
+
+        if (empty($pagina['host']) || ($dominio !== '' && preg_replace('/^www\./', '', $pagina['host']) !== $dominio)
+            || str_starts_with($pagina['path'] ?? '/', '/admin') || preg_match(self::BOT_PATTERN, (string) $request->userAgent()) === 1) {
+            return;
+        }
+
+        $query = [];
+        parse_str($pagina['query'] ?? '', $query);
+        $utm = fn (string $campo, int $limite) => is_string($query[$campo] ?? null) && $query[$campo] !== '' ? Str::limit(strip_tags($query[$campo]), $limite, '') : null;
+
+        rescue(fn () => self::gravar($request, $visitorId, true, $pagina['path'] ?? '/', null, [
+            'utm_source' => $utm('utm_source', 80),
+            'utm_medium' => $utm('utm_medium', 80),
+            'utm_campaign' => $utm('utm_campaign', 120),
+        ]), null, false);
+    }
+
+    /** @param  array<string, ?string>  $utm */
+    private static function gravar(Request $request, string $visitorId, bool $consentiu, string $path, ?string $referer, array $utm): void
+    {
+        SiteVisit::create([
+            'visitor_id' => $visitorId,
+            'user_id' => $request->user()?->id,
+            'path' => Str::limit('/'.ltrim($path, '/'), 250, ''),
+            'referer' => $referer,
+            'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
+            'ip' => $request->ip(),
+            ...$utm,
+            'dispositivo' => self::dispositivo((string) $request->userAgent()),
             'consentiu' => $consentiu,
         ]);
     }
@@ -92,7 +129,7 @@ class TrackSiteVisit
         return is_string($valor) && $valor !== '' ? Str::limit(strip_tags($valor), $limite, '') : null;
     }
 
-    private function dispositivo(string $userAgent): string
+    private static function dispositivo(string $userAgent): string
     {
         return match (true) {
             (bool) preg_match('/ipad|tablet|kindle|playbook|silk/i', $userAgent) => 'tablet',

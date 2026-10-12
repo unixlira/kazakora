@@ -16,12 +16,12 @@ class DashboardVisitantesTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function visita(string $visitante, string $quando, ?int $usuario = null, int $vezes = 1): void
+    private function visita(string $visitante, string $quando, ?int $usuario = null, int $vezes = 1, bool $consentiu = true): void
     {
         for ($i = 0; $i < $vezes; $i++) {
             DB::table('site_visits')->insert([
                 'visitor_id' => $visitante, 'user_id' => $usuario, 'path' => '/',
-                'ip' => '1.1.1.1', 'consentiu' => true, 'created_at' => $quando,
+                'ip' => '1.1.1.1', 'consentiu' => $consentiu, 'created_at' => $quando,
             ]);
         }
     }
@@ -41,6 +41,10 @@ class DashboardVisitantesTest extends TestCase
         $this->visita('robo', '2026-10-11 12:00:00', null, 301);
         // Outro mês.
         $this->visita('caio', '2026-09-20 10:00:00');
+        // Sem OK de cookies (pedido 2026-10-11): cada sessão é um código
+        // novo do mesmo IP, só registro de acesso, não conta.
+        $this->visita('s-sessao1', '2026-10-11 13:00:00', null, 1, false);
+        $this->visita('s-sessao2', '2026-10-11 13:01:00', null, 1, false);
 
         $this->actingAs($admin)->get('/admin')->assertOk()->assertInertia(fn ($page) => $page
             ->where('visitantes.mes', '2026-10')

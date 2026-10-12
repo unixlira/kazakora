@@ -42,14 +42,14 @@ class KpiController extends Controller
             ? (float) (clone $validOrders)->sum('subtotal') / (clone $validOrders)->count()
             : 0.0;
 
-        // IP diferente, não visitor_id (cookie) — mesma definição de
-        // "visita" usada em DashboardController, pedido explícito do
-        // usuário 2026-08-07 (refresh/navegação do mesmo visitante não pode
-        // contar como visita nova).
+        // Visitante único = cookie kazakora_visitor, só depois do OK de
+        // cookies (pedido 2026-10-11, mesma conta do DashboardController).
+        // Refresh/navegação do mesmo visitante não conta de novo.
         $uniqueVisitorsMonth = SiteVisit::query()
+            ->contaveis()
             ->where('created_at', '>=', $startOfMonth)
             ->distinct()
-            ->count('ip');
+            ->count('visitor_id');
 
         $conversionRate = $uniqueVisitorsMonth > 0
             ? ($storeOrdersMonth->count() / $uniqueVisitorsMonth) * 100

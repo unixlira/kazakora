@@ -56,6 +56,11 @@ Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 Não registra: admin, robôs, arquivos, recarga parcial do Inertia, nada que não
 seja GET 200.
 
+Contagem de visitantes (painel e Indicadores, `SiteVisit::contaveis`): só as
+linhas com `consentiu = true`, visitante único pelo `kazakora_visitor`. A
+página em que o cliente deu OK já conta. Sem o OK a linha é só registro de
+acesso (pedido 2026-10-11).
+
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Visitas com mais de 6 meses: IP, navegador, usuário e visitante apagados
   (`visitor_id = anonimo`). A estatística (página, dia, origem) fica.

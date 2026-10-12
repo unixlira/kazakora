@@ -317,8 +317,8 @@ class DashboardController extends Controller
      * visitantes do mês e do dia, filtro de mês). Conta só gente de fora:
      * sai quem entrou como equipe (admin/gerente) no mês, com tudo o que o
      * mesmo navegador visitou, e o visitante que passou de 300 páginas num
-     * dia. Visitante = código do navegador (cookie com o OK de cookies ou
-     * código da sessão sem ele, ver TrackSiteVisit).
+     * dia. Visitante = cookie kazakora_visitor: só conta visita depois do
+     * OK de cookies (SiteVisit::contaveis).
      *
      * @return array<string, mixed>
      */
@@ -334,7 +334,7 @@ class DashboardController extends Controller
         $fim = $inicio->copy()->addMonthNoOverflow();
 
         $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id');
-        $doMes = SiteVisit::query()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim);
+        $doMes = SiteVisit::query()->contaveis()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim);
         $navegadoresDaEquipe = (clone $doMes)->whereIn('user_id', $equipe)->distinct()->pluck('visitor_id')->all();
 
         $linhas = (clone $doMes)

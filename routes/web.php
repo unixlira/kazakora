@@ -637,6 +637,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('mensagens-site/chegando', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'chegando'])->name('mensagens-site.chegando');
         Route::post('mensagens-site/{mensagem}/lida', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'marcarLida'])->whereNumber('mensagem')->name('mensagens-site.lida');
         Route::post('mensagens-site/{mensagem}/nao-lida', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'marcarNaoLida'])->whereNumber('mensagem')->name('mensagens-site.nao-lida');
+        // Excluir vai para a lixeira (soft delete), com restaurar — pedido 2026-10-12.
+        Route::delete('mensagens-site/lidas', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'excluirLidas'])->name('mensagens-site.excluir-lidas');
+        Route::delete('mensagens-site', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'excluirSelecionadas'])->name('mensagens-site.excluir-selecionadas');
+        Route::delete('mensagens-site/{mensagem}', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'excluir'])->whereNumber('mensagem')->name('mensagens-site.excluir');
+        Route::post('mensagens-site/restaurar', [\App\Modules\Admin\Http\Controllers\MensagensSiteController::class, 'restaurar'])->name('mensagens-site.restaurar');
         // Suporte > Chamados (pedido 2026-10-11).
         Route::get('suporte', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'index'])->name('suporte.chamados');
         Route::post('suporte', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'criar'])->name('suporte.criar');

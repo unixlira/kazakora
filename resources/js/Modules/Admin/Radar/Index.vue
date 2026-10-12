@@ -9,8 +9,8 @@ import { computed, ref } from 'vue';
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
 // Mercado Livre (mais vendidos de Casa e buscas em alta) e Google Trends.
 // Layout v4 (Lira 2026-10-12): Shopee fora até a API de Afiliados trazer
-// dados; o Mercado Livre ocupa o lugar dela, ao lado do TikTok. Cada fonte
-// é prop adiada num grupo próprio (null até chegar). Ver RadarController.
+// dados. TikTok sozinho em cima; Mercado Livre e Google lado a lado embaixo.
+// Cada fonte é prop adiada num grupo próprio (null até chegar). Ver RadarController.
 const props = defineProps({
     tiktok: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
@@ -175,8 +175,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </section>
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <!-- TikTok Shop (Kalodata) -->
-                <section class="card-fonte fonte-tiktok">
+                <!-- TikTok Shop (Kalodata): sozinho em cima, ocupa a largura toda -->
+                <section class="card-fonte fonte-tiktok xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="tiktok" />
                         <div class="min-w-0">
@@ -222,7 +222,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Mercado Livre: no lugar que era da Shopee, ao lado do TikTok -->
+                <!-- Mercado Livre: embaixo, ao lado do Google -->
                 <section class="card-fonte fonte-ml">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
@@ -270,8 +270,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Google Trends: sozinho na linha de baixo, ocupa a largura toda -->
-                <section class="card-fonte fonte-google xl:col-span-2">
+                <!-- Google Trends: embaixo, ao lado do Mercado Livre -->
+                <section class="card-fonte fonte-google">
                     <div class="card-cabeca">
                         <MarcaLogo marca="google" />
                         <div class="min-w-0">

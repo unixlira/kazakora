@@ -63,7 +63,12 @@ XML;
 
     public function test_radar_junta_tiktok_mercado_livre_e_google(): void
     {
-        config(['services.kalodata.api_key' => 'chave-teste']);
+        config([
+            'services.kalodata.api_key' => 'chave-teste',
+            // Mesmo com a API de Afiliados configurada, o Radar não consulta a Shopee.
+            'services.shopee_afiliados.app_id' => 'app-teste',
+            'services.shopee_afiliados.secret' => 'segredo-teste',
+        ]);
         MercadoLivreToken::query()->create([
             'id' => (string) Str::uuid(), 'ml_user_id' => 123456789, 'ml_nickname' => 'LOJA_KAZAKORA',
             'access_token' => 'valid-access-token', 'refresh_token' => 'valid-refresh-token',
@@ -106,6 +111,7 @@ XML;
 
         // Kalodata: uma chamada só, ranking geral de 7 dias no Brasil.
         Http::assertSentCount(1 + 1 + 4 + 1); // Kalodata + Google + ML (ranking, produto, ofertas, tendência da categoria) + buscas do site
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'affiliate.shopee'));
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/tiktok/product/rank')
             && $r['date_range'] === 'last7Day' && $r['region'] === 'BR' && ! isset($r['category_ids']));
     }

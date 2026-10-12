@@ -16,16 +16,17 @@ use Inertia\Response;
  * em resources/js/Shared/radarNome.js.
  *
  * Pedido do Lira 2026-10-12: o Kalodata cobre só o TikTok, então o Radar
- * junta numa tela o que está vendendo e em alta em quatro fontes:
- * TikTok Shop (Kalodata), Shopee (API de Afiliados), Mercado Livre (mais
- * vendidos de Casa e buscas em alta do site) e Google Trends. Cada fonte é
+ * junta numa tela o que está vendendo e em alta em três fontes:
+ * TikTok Shop (Kalodata), Mercado Livre (mais vendidos de Casa e buscas em
+ * alta do site) e Google Trends. Cada fonte é
  * prop adiada num grupo próprio: a tela abre na hora e cada bloco chega
  * quando a sua consulta termina, sem uma fonte lenta segurar as outras.
  * O cruzamento ("em alta em mais de um lugar") é feito na tela.
  *
  * Layout v4 aprovado pelo Lira 2026-10-12: a Shopee sai da tela enquanto a
- * API de Afiliados não trouxer dados (a busca por palavra continua em
- * Oportunidades › Shopee). Ficam TikTok Shop, Mercado Livre e Google.
+ * API de Afiliados não for liberada. MaisVendidosShopee continua no código
+ * (usado em Oportunidades › Shopee); para religar, injetar aqui e repor a
+ * prop 'shopee' e o bloco na tela.
  */
 class RadarController extends Controller
 {

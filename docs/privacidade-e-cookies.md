@@ -51,6 +51,9 @@ Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 | navegador completo | **não** | sim |
 | aparelho (celular/tablet/computador) | sim | sim |
 | origem (site, sem `?...`) e UTM | sim | sim |
+| origem classificada (`origem`: instagram, google_ads, direto...) | sim | sim |
+| parâmetro de clique (`click_id_param`: fbclid, gclid, ttclid...) | sim | sim |
+| valor do clique (`click_id`) | **não** | sim |
 | `consentiu` | false | true |
 
 Não registra: admin, robôs, arquivos, recarga parcial do Inertia, nada que não
@@ -66,8 +69,9 @@ pedido 2026-10-11), sem repetir a mesma pessoa/IP:
   navegou antes de dar OK não conta duas vezes). A página do OK já conta.
 
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
-- Visitas com mais de 6 meses: IP, navegador, usuário e visitante apagados
-  (`visitor_id = anonimo`). A estatística (página, dia, origem) fica.
+- Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do
+  clique (`click_id`) apagados (`visitor_id = anonimo`). A estatística
+  (página, dia, origem) fica.
 - Prova de OK com mais de 5 anos: apagada.
 
 ## Regras para quem for mexer (Claude Code e Naia)

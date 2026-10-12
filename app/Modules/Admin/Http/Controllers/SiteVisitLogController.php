@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\OrigemVisita;
 use App\Modules\Audit\Models\AuditLog;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +34,11 @@ use Inertia\Response;
  *
  * "Esconder equipe e robôs" usa a mesma regra do painel
  * (SiteVisit::soDeFora), aplicada ao período escolhido.
+ *
+ * Origem (pedido 2026-10-12): a coluna mostra por onde o visitante entrou
+ * no período (primeira visita que não é navegação interna, regra em
+ * OrigemVisita); o olho mostra cada entrada com o site de onde veio, UTM e
+ * identificador de clique. Visita antiga sem Referer nem UTM = "Sem dado".
  */
 class SiteVisitLogController extends Controller
 {
@@ -55,6 +61,7 @@ class SiteVisitLogController extends Controller
             'ip' => ['nullable', 'string', 'max:45'],
             'pagina' => ['nullable', 'string', 'max:200'],
             'todos' => ['nullable', 'boolean'],
+            'origem' => ['nullable', 'string', 'in:'.implode(',', array_keys(self::filtrosDeOrigem()))],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
@@ -63,6 +70,7 @@ class SiteVisitLogController extends Controller
 
         $ip = trim((string) ($validated['ip'] ?? ''));
         $pagina = trim((string) ($validated['pagina'] ?? ''));
+        $origem = (string) ($validated['origem'] ?? '');
         $esconder = ! (bool) ($validated['todos'] ?? false);
 
         $periodo = fn (): Builder => SiteVisit::query()
@@ -73,7 +81,8 @@ class SiteVisitLogController extends Controller
             ->when($ip !== '', fn (Builder $q) => filter_var($ip, FILTER_VALIDATE_IP)
                 ? $q->where('ip', $ip)
                 : $q->where('ip', 'like', $this->like($ip).'%'))
-            ->when($pagina !== '', fn (Builder $q) => $q->where('path', 'like', '%'.$this->like($pagina).'%'));
+            ->when($pagina !== '', fn (Builder $q) => $q->where('path', 'like', '%'.$this->like($pagina).'%'))
+            ->when($origem !== '', fn (Builder $q) => $this->chegouPor($q, $periodo(), $origem));
 
         $escondidas = 0;
         if ($esconder) {
@@ -105,6 +114,7 @@ class SiteVisitLogController extends Controller
         $nomes = User::query()->whereIn('id', $linhas->pluck('user_id')->filter()->unique()->all())->pluck('name', 'id');
         $equipe = $this->equipe();
         $apagaveis = $this->contarApagaveis($linhas, $de, $fim);
+        $origens = $this->origensDeEntrada(clone $query, $linhas);
 
         $visitas = (new LengthAwarePaginator(
             $linhas->map(fn ($l) => [
@@ -116,6 +126,7 @@ class SiteVisitLogController extends Controller
                 'cliente' => $l->user_id !== null ? ($nomes[$l->user_id] ?? 'Cliente') : null,
                 'equipe' => $l->user_id !== null && in_array((int) $l->user_id, $equipe, true),
                 'apagaveis' => $apagaveis[$l->ip ?? 'v:'.$l->anonimo] ?? 0,
+                'origem' => $origens[$l->ip ?? 'v:'.$l->anonimo] ?? ['chave' => 'interno', 'rotulo' => OrigemVisita::rotulo('interno'), 'outras' => []],
             ])->values(),
             $total,
             self::POR_PAGINA,
@@ -137,7 +148,9 @@ class SiteVisitLogController extends Controller
                 'ip' => $ip,
                 'pagina' => $pagina,
                 'todos' => ! $esconder,
+                'origem' => $origem,
             ],
+            'origens' => collect(self::filtrosDeOrigem())->map(fn ($rotulo, $chave) => ['valor' => $chave, 'rotulo' => $rotulo])->values(),
             'hoje' => $hoje->toDateString(),
             'maxDias' => self::MAX_DIAS,
         ]);
@@ -181,12 +194,29 @@ class SiteVisitLogController extends Controller
                 'cliente' => $v->user?->name,
                 'equipe' => $v->user_id !== null && in_array((int) $v->user_id, $equipe, true),
                 'dispositivo' => $v->dispositivo,
-                'origem' => $this->origem($v),
+                'origem' => $this->origemDaVisita($v),
                 'navegador' => $this->navegador($v->user_agent),
                 'consentiu' => (bool) $v->consentiu,
             ]);
 
+        // Por onde entrou: cada visita que não é navegação interna, sem
+        // repetir a mesma origem seguida (recarregar a página repete o Referer).
+        $entradas = $visitas
+            ->filter(fn ($v) => ! in_array($v['origem']['chave'], ['interno', OrigemVisita::SEM_DADO], true))
+            ->reduce(function (Collection $lista, array $v) {
+                $assinatura = json_encode(array_diff_key($v['origem'], ['rotulo' => 1]));
+                if (($lista->last()['assinatura'] ?? null) === $assinatura) {
+                    return $lista;
+                }
+
+                return $lista->push(['assinatura' => $assinatura, 'quando' => $v['quando'], 'path' => $v['path'], ...$v['origem']]);
+            }, collect())
+            ->map(fn (array $e) => array_diff_key($e, ['assinatura' => 1]))
+            ->values();
+
         return response()->json([
+            'entradas' => $entradas,
+            'sem_dado' => $visitas->contains(fn ($v) => $v['origem']['chave'] === OrigemVisita::SEM_DADO),
             'ip' => $validated['ip'] ?? null,
             'visitor_id' => isset($validated['ip']) ? null : $validated['visitor_id'],
             'de' => $de->format('d/m/Y'),
@@ -375,21 +405,112 @@ class SiteVisitLogController extends Controller
         return addcslashes($texto, '\\%_');
     }
 
-    /** UTM primeiro (campanha marcada), senão o site de onde veio, senão acesso direto. */
-    private function origem(SiteVisit $v): ?string
+    /**
+     * Opções do filtro de origem (Interno fica de fora: quase todo
+     * visitante tem página interna).
+     *
+     * @return array<string, string>
+     */
+    private static function filtrosDeOrigem(): array
     {
-        $utm = array_filter([$v->utm_source, $v->utm_medium, $v->utm_campaign]);
-        if ($utm !== []) {
-            return implode(' / ', $utm);
+        return collect(OrigemVisita::ROTULOS)->except('interno')->all();
+    }
+
+    /**
+     * Visitantes (IP; sem IP, visitor_id) que chegaram pela origem no
+     * período: têm ao menos uma visita com essa chave. "Sem dado" = alguma
+     * visita antiga sem origem.
+     */
+    private function chegouPor(Builder $query, Builder $periodo, string $origem): void
+    {
+        $comOrigem = fn (): Builder => (clone $periodo)->when($origem === OrigemVisita::SEM_DADO,
+            fn (Builder $q) => $q->whereNull('origem'),
+            fn (Builder $q) => $q->where('origem', $origem));
+
+        $query->where(fn (Builder $q) => $q
+            ->whereIn('ip', $comOrigem()->whereNotNull('ip')->select('ip'))
+            ->orWhere(fn (Builder $s) => $s->whereNull('ip')
+                ->whereIn('visitor_id', $comOrigem()->whereNull('ip')->select('visitor_id'))));
+    }
+
+    /**
+     * Origem de entrada de cada visitante da página: a primeira visita do
+     * período (com os filtros) que não é navegação interna. Sem nenhuma e
+     * com visita antiga sem origem = "Sem dado"; só páginas internas =
+     * "Interno". "outras" = as demais origens do período.
+     *
+     * @return array<string, array{chave: string, rotulo: string, outras: array<int, string>}>
+     */
+    private function origensDeEntrada(Builder $query, Collection $linhas): array
+    {
+        if ($linhas->isEmpty()) {
+            return [];
         }
 
-        if ($v->referer) {
-            $host = parse_url($v->referer, PHP_URL_HOST);
+        $ips = $linhas->pluck('ip')->filter()->unique()->values()->all();
+        $anonimos = $linhas->whereNull('ip')->pluck('anonimo')->filter()->unique()->values()->all();
 
-            return is_string($host) && $host !== '' ? preg_replace('/^www\./', '', $host) : $v->referer;
+        $visitas = $query->toBase()
+            ->where(fn ($q) => $q
+                ->whereIn('ip', $ips)
+                ->orWhere(fn ($s) => $s->whereNull('ip')->whereIn('visitor_id', $anonimos)))
+            ->where(fn ($q) => $q->whereNull('origem')->orWhere('origem', '!=', 'interno'))
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get(['ip', 'visitor_id', 'origem', 'referer', 'utm_source', 'utm_medium'])
+            ->each(fn ($v) => $v->origem = self::chave($v))
+            ->reject(fn ($v) => $v->origem === 'interno');
+
+        return $visitas
+            ->groupBy(fn ($v) => $v->ip ?? 'v:'.$v->visitor_id)
+            ->map(function (Collection $doVisitante) {
+                $conhecidas = $doVisitante->whereNotNull('origem');
+                $rotulos = $conhecidas
+                    ->map(fn ($v) => OrigemVisita::rotulo($v->origem, $v->referer, $v->utm_source))
+                    ->unique()
+                    ->values();
+
+                if ($rotulos->isEmpty()) {
+                    return ['chave' => OrigemVisita::SEM_DADO, 'rotulo' => OrigemVisita::rotulo(null), 'outras' => []];
+                }
+
+                return ['chave' => $conhecidas->first()->origem, 'rotulo' => $rotulos->first(), 'outras' => $rotulos->slice(1)->values()->all()];
+            })
+            ->all();
+    }
+
+    /**
+     * Chave gravada; visita sem chave mas com Referer/UTM (gravada entre a
+     * migration e o deploy do código) é classificada na hora. Sem nada: null.
+     */
+    private static function chave(object $v): ?string
+    {
+        if ($v->origem !== null || ($v->referer === null && $v->utm_source === null)) {
+            return $v->origem;
         }
 
-        return null;
+        return OrigemVisita::classificar($v->referer, ['utm_source' => $v->utm_source, 'utm_medium' => $v->utm_medium]);
+    }
+
+    /**
+     * Origem de uma visita para o olho.
+     *
+     * @return array<string, ?string>
+     */
+    private function origemDaVisita(SiteVisit $v): array
+    {
+        $chave = self::chave($v);
+
+        return [
+            'chave' => $chave ?? OrigemVisita::SEM_DADO,
+            'rotulo' => OrigemVisita::rotulo($chave, $v->referer, $v->utm_source),
+            'referer' => $v->referer,
+            'utm_source' => $v->utm_source,
+            'utm_medium' => $v->utm_medium,
+            'utm_campaign' => $v->utm_campaign,
+            'click_id_param' => $v->click_id_param,
+            'click_id' => $v->click_id,
+        ];
     }
 
     /** "Chrome · Android". Sem o OK de cookies o navegador não é gravado. */

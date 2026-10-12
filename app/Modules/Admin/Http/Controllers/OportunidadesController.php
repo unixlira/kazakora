@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Support\Oportunidades\MaisVendidosMercadoLivre;
 use App\Modules\Marketplace\Support\Oportunidades\MaisVendidosShopee;
+use App\Modules\Marketplace\Support\Oportunidades\RadarShopee;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,6 +26,10 @@ use Inertia\Response;
  * mais vendidos da categoria e embaixo o bloco do Radar (prop adiada
  * `mercadoLivre`, grupo próprio). Só abre por Oportunidades › Mercado
  * Livre: /admin/radar/mercado-livre redireciona para cá (Lira 2026-10-12).
+ *
+ * Radar da Shopee (pedido do Lira 2026-10-12): na Shopee, o ranking
+ * "Produtos em alta" da Central do Vendedor, guardado no banco (RadarShopee),
+ * vem em cima, como prop adiada própria (`radarShopee`).
  */
 class OportunidadesController extends Controller
 {
@@ -36,7 +41,7 @@ class OportunidadesController extends Controller
     /** Categoria inicial do Mercado Livre: Casa, Móveis e Decoração. */
     public const CATEGORIA_PADRAO = 'MLB1574';
 
-    public function show(Request $request, string $canal, MaisVendidosMercadoLivre $ml, MaisVendidosShopee $shopee): Response
+    public function show(Request $request, string $canal, MaisVendidosMercadoLivre $ml, MaisVendidosShopee $shopee, RadarShopee $radarShopee): Response
     {
         abort_unless(isset(self::CANAIS[$canal]), 404);
 
@@ -66,6 +71,7 @@ class OportunidadesController extends Controller
             'filtros' => ['termo' => $termo],
             'categorias' => [],
             'mercado' => Inertia::defer(fn () => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0]),
+            'radarShopee' => Inertia::defer(fn () => $radarShopee->analisar(), 'radar'),
         ]);
     }
 }

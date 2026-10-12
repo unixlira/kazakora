@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import MercadoLivreBloco from '@/Modules/Admin/Radar/MercadoLivreBloco.vue';
+import ShopeeRadarBloco from './ShopeeRadarBloco.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
 import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -12,6 +13,8 @@ import { computed, ref } from 'vue';
 // de carregamento e os dados chegam logo depois (fica null até lá).
 // Tela dividida no Mercado Livre (pedido do Lira 2026-10-12): em cima os
 // mais vendidos, embaixo o bloco do Radar (`mercadoLivre`, adiado à parte).
+// Na Shopee (Lira 2026-10-12), o Radar da Shopee (`radarShopee`, ranking da
+// Central do Vendedor guardado no banco) vem em cima de tudo.
 const props = defineProps({
     canal: { type: Object, required: true },
     base: { type: String, default: null },
@@ -19,6 +22,7 @@ const props = defineProps({
     categorias: { type: Array, default: () => [] },
     mercado: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
+    radarShopee: { type: Object, default: null },
 });
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
@@ -62,7 +66,10 @@ const faixaPreco = (p) => {
             </p>
         </div>
 
+        <ShopeeRadarBloco v-if="!ehMl" :radar="radarShopee" />
+
         <h2 v-if="ehMl" class="mb-3 text-lg font-bold">Oportunidades mais vendidos</h2>
+        <h2 v-else class="mb-3 text-lg font-bold">Mais vendidos pela API de Afiliados</h2>
 
         <!-- Filtro -->
         <form class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="buscar()">

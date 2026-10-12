@@ -10,12 +10,15 @@ use Throwable;
 
 /**
  * Dólar comercial (compra) para a Calculadora de importação. Fonte: AwesomeAPI
- * (gratuita, sem chave). Guarda 15 minutos para não bater na API a cada tela
- * aberta. Se a API falhar, devolve null e a tela pede o valor à mão.
+ * (gratuita, sem chave) e, se ela falhar, a exchangerate-api. Guarda 15
+ * minutos para não bater na API a cada tela aberta. Se as duas falharem,
+ * devolve null e a tela pede o valor à mão.
  */
 class CotacaoDolarService
 {
     public const FONTE = 'https://economia.awesomeapi.com.br/json/last/USD-BRL';
+
+    public const FONTE_RESERVA = 'https://open.er-api.com/v6/latest/USD';
 
     private const CACHE = 'admin:cotacao-usd-brl';
 
@@ -41,6 +44,12 @@ class CotacaoDolarService
 
     private function buscar(): ?array
     {
+        return $this->awesomeApi() ?? $this->exchangeRateApi();
+    }
+
+    /** Cotação ao longo do dia. Responde 429 para IP de servidor sem chave. */
+    private function awesomeApi(): ?array
+    {
         try {
             $resposta = Http::timeout(8)->acceptJson()->get(self::FONTE);
             $dados = $resposta->json('USDBRL');
@@ -62,7 +71,35 @@ class CotacaoDolarService
                 'fonte' => 'AwesomeAPI',
             ];
         } catch (Throwable $e) {
-            Log::warning('Cotação do dólar indisponível: '.$e->getMessage());
+            Log::warning('Cotação do dólar (AwesomeAPI) indisponível: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /** Reserva: uma cotação por dia, a mesma fonte da calculadora original. */
+    private function exchangeRateApi(): ?array
+    {
+        try {
+            $resposta = Http::timeout(8)->acceptJson()->get(self::FONTE_RESERVA);
+            $valor = $resposta->json('rates.BRL');
+
+            if (! $resposta->successful() || ! is_numeric($valor) || (float) $valor <= 0) {
+                Log::warning('Cotação do dólar: resposta inesperada da exchangerate-api.', ['status' => $resposta->status()]);
+
+                return null;
+            }
+
+            $unix = $resposta->json('time_last_update_unix');
+
+            return [
+                'valor' => round((float) $valor, 4),
+                'atualizado_em' => (is_numeric($unix) ? Carbon::createFromTimestamp((int) $unix) : now())
+                    ->setTimezone('America/Sao_Paulo')->toIso8601String(),
+                'fonte' => 'exchangerate-api',
+            ];
+        } catch (Throwable $e) {
+            Log::warning('Cotação do dólar (exchangerate-api) indisponível: '.$e->getMessage());
 
             return null;
         }

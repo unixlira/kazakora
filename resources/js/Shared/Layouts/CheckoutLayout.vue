@@ -103,7 +103,7 @@ const tempo = computed(() => {
                             </template>
                         </a>
                     </div>
-                    <p class="mt-3 text-xs text-white/80"><i class="fa-solid fa-shield-halved mr-1.5 text-[#0FB930]"></i>Conexão criptografada (HTTPS/SSL)</p>
+                    <p class="mt-3 text-xs font-bold text-white/80"><i class="fa-solid fa-shield-halved mr-1.5 text-[#0FB930]"></i>Conexão criptografada</p>
                     <ul class="mt-5 space-y-2 text-sm font-medium">
                         <li><i class="fa-solid fa-lock mr-2 w-4 text-center text-[#0FB930]"></i>Compra segura</li>
                     </ul>

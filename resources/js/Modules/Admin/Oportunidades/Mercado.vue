@@ -12,6 +12,9 @@ import { computed, ref } from 'vue';
 // de carregamento e os dados chegam logo depois (fica null até lá).
 // Tela dividida no Mercado Livre (pedido do Lira 2026-10-12): em cima os
 // mais vendidos, embaixo o bloco do Radar (`mercadoLivre`, adiado à parte).
+// Shopee pela Central do Vendedor (2026-10-12): com mineração no banco
+// (`mercado.fonte === 'central_vendedor'`) entram o filtro de categoria e o
+// ranking de subcategorias por unidades vendidas.
 const props = defineProps({
     canal: { type: Object, required: true },
     base: { type: String, default: null },
@@ -23,18 +26,21 @@ const props = defineProps({
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
 const formatNumber = (value) => (value ?? 0).toLocaleString('pt-BR');
+const formatDate = (dia) => (dia ? dia.split('-').reverse().join('/') : '');
 const formatDateTime = (iso) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso));
 
 const ehMl = computed(() => props.canal.slug === 'mercado-livre');
 const titulo = computed(() => `Oportunidades · ${props.canal.nome}`);
-const categoria = ref(props.filtros.categoria ?? '');
+const categoria = ref(ehMl.value ? (props.filtros.categoria ?? '') : (props.filtros.categoria ?? '').split('.')[0]);
+const daCentral = computed(() => props.mercado?.fonte === 'central_vendedor');
+const comLateral = computed(() => ehMl.value || (props.mercado?.subcategorias?.length ?? 0) > 0);
 const termo = ref(props.filtros.termo ?? '');
 const carregando = ref(false);
 // Ocupado também enquanto os dados adiados não chegaram.
 const ocupado = computed(() => carregando.value || !props.mercado);
 
 const buscar = (extra = {}) => {
-    const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value };
+    const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value, categoria: categoria.value };
     router.get(props.base ?? `/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
@@ -43,6 +49,21 @@ const buscar = (extra = {}) => {
 };
 
 const nomeCategoria = computed(() => props.categorias.find((c) => c.id === props.filtros.categoria)?.nome ?? props.filtros.categoria);
+// Shopee: nome do nível 2 escolhido e, se houver, da subcategoria.
+const tituloShopee = computed(() => {
+    const [l2] = (props.filtros.categoria ?? '').split('.');
+    const nome2 = props.categorias.find((c) => c.id === l2)?.nome;
+    const nome3 = props.mercado?.subcategorias?.find((c) => c.id === props.filtros.categoria)?.nome;
+    return [nome2, nome3, props.filtros.termo ? `“${props.filtros.termo}”` : null].filter(Boolean).join(' › ');
+});
+const escolherSubcategoria = (id) => {
+    categoria.value = id.split('.')[0];
+    router.get(props.base ?? `/admin/oportunidades/${props.canal.slug}`, { termo: termo.value, categoria: id }, {
+        preserveScroll: true,
+        onStart: () => { carregando.value = true; },
+        onFinish: () => { carregando.value = false; },
+    });
+};
 const faixaPreco = (p) => {
     if (p.preco_min === null) return '—';
     if (p.preco_max !== null && p.preco_max > p.preco_min) return `${formatPrice(p.preco_min)} a ${formatPrice(p.preco_max)}`;
@@ -72,7 +93,13 @@ const faixaPreco = (p) => {
                     <option v-if="!categorias.some((c) => c.id === categoria)" :value="categoria">{{ categoria }}</option>
                 </select>
             </label>
-            <label v-else class="text-xs text-[var(--texto-suave)]">Palavra-chave (vazio = mais vendidos em geral)
+            <label v-if="!ehMl && categorias.length" class="text-xs text-[var(--texto-suave)]">Categoria
+                <select v-model="categoria" name="categoria" class="mt-1 block min-w-64 max-w-sm rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm" @change="buscar()">
+                    <option value="">Todas (Shopee inteira)</option>
+                    <option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nome }}</option>
+                </select>
+            </label>
+            <label v-if="!ehMl" class="text-xs text-[var(--texto-suave)]">Palavra-chave (vazio = mais vendidos em geral)
                 <input v-model="termo" type="search" name="termo" maxlength="80" autocomplete="off" placeholder="ex.: organizador, luminária…"
                     class="mt-1 block w-72 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm">
             </label>
@@ -81,7 +108,7 @@ const faixaPreco = (p) => {
             </button>
             <div class="ml-auto flex items-center gap-3 text-xs text-[var(--texto-suave)]">
                 <span v-if="mercado?.atualizado_em">Consultado em {{ formatDateTime(mercado.atualizado_em) }}</span>
-                <button v-if="mercado?.configurado !== false" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:opacity-50" :disabled="ocupado" @click="buscar({ atualizar: 1 })">
+                <button v-if="mercado?.configurado !== false && !daCentral" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:opacity-50" :disabled="ocupado" @click="buscar({ atualizar: 1 })">
                     {{ ocupado ? 'Consultando…' : 'Consultar de novo' }}
                 </button>
             </div>
@@ -132,12 +159,12 @@ const faixaPreco = (p) => {
         <template v-else>
             <p v-if="mercado.erro" class="mb-6 rounded-xl border border-[var(--color-error)] bg-[var(--surface)] px-4 py-3 text-sm text-error" role="alert">{{ mercado.erro }}</p>
 
-            <div class="grid grid-cols-1 gap-6" :class="ehMl ? 'xl:grid-cols-[1fr_300px]' : ''">
+            <div class="grid grid-cols-1 gap-6" :class="comLateral ? 'xl:grid-cols-[1fr_300px]' : ''">
                 <!-- Mais vendidos -->
                 <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" style="border-top: 3px solid var(--faixa-card)">
                     <div class="border-b border-[var(--surface-border)] px-4 py-3">
                         <h2 class="text-base font-semibold">
-                            Mais vendidos{{ ehMl ? ` · ${nomeCategoria}` : (filtros.termo ? ` · “${filtros.termo}”` : '') }} ({{ mercado.produtos.length }})
+                            Mais vendidos{{ ehMl ? ` · ${nomeCategoria}` : (tituloShopee ? ` · ${tituloShopee}` : '') }} ({{ mercado.produtos.length }})
                         </h2>
                     </div>
 
@@ -155,7 +182,7 @@ const faixaPreco = (p) => {
                                     <th v-if="ehMl" scope="col" class="py-2 pr-4 text-right" title="Quantos vendedores anunciam este produto no catálogo">Vendedores</th>
                                     <template v-else>
                                         <th scope="col" class="py-2 pr-3 text-right" title="Vendas informadas pela Shopee">Vendas</th>
-                                        <th scope="col" class="py-2 pr-4 text-right">Nota</th>
+                                        <th v-if="!daCentral" scope="col" class="py-2 pr-4 text-right">Nota</th>
                                     </template>
                                 </tr>
                             </thead>
@@ -168,6 +195,7 @@ const faixaPreco = (p) => {
                                             <div class="min-w-0">
                                                 <a :href="p.link" target="_blank" rel="noopener noreferrer" class="line-clamp-2 hover:text-[var(--destaque)] hover:underline">{{ p.nome }}</a>
                                                 <span v-if="p.loja" class="block truncate text-xs text-[var(--texto-suave)]">{{ p.loja }}</span>
+                                                <span v-if="p.categoria" class="block truncate text-xs text-[var(--texto-suave)]">{{ p.categoria }}</span>
                                                 <span v-if="p.voce_vende" class="mt-0.5 inline-block rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-xs">A KazaKora já vende</span>
                                             </div>
                                         </div>
@@ -176,7 +204,7 @@ const faixaPreco = (p) => {
                                     <td v-if="ehMl" class="py-2 pr-4 text-right tabular-nums">{{ p.vendedores === null ? '—' : formatNumber(p.vendedores) }}</td>
                                     <template v-else>
                                         <td class="py-2 pr-3 text-right font-semibold tabular-nums">{{ p.vendas === null ? '—' : formatNumber(p.vendas) }}</td>
-                                        <td class="py-2 pr-4 text-right tabular-nums">{{ p.nota ? p.nota.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—' }}</td>
+                                        <td v-if="!daCentral" class="py-2 pr-4 text-right tabular-nums">{{ p.nota ? p.nota.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '—' }}</td>
                                     </template>
                                 </tr>
                             </tbody>
@@ -187,8 +215,25 @@ const faixaPreco = (p) => {
                             Ranking "Mais vendidos" do próprio Mercado Livre na categoria. Preço = menor e maior entre os vendedores do catálogo.
                             <template v-if="mercado.ocultos"> {{ mercado.ocultos }} anúncio(s) do ranking não são de catálogo e o ML não libera os dados deles.</template>
                         </template>
+                        <template v-else-if="daCentral">
+                            Ranking "Produtos Mais Vendidos" da Central do Vendedor da Shopee (unidades vendidas<template v-if="mercado.periodo?.inicio"> de {{ formatDate(mercado.periodo.inicio) }} a {{ formatDate(mercado.periodo.fim) }}</template>, sem os produtos da KazaKora).
+                            Coletado em {{ formatDateTime(mercado.atualizado_em) }}.
+                        </template>
                         <template v-else>Ordenado pelas vendas informadas pela API de Afiliados da Shopee.</template>
                     </p>
+                </section>
+
+                <!-- Subcategorias que mais vendem (Shopee pela Central do Vendedor) -->
+                <section v-if="!ehMl && mercado.subcategorias?.length" class="h-fit rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-label="Categorias que mais vendem">
+                    <h2 class="text-base font-semibold">Categorias que mais vendem</h2>
+                    <p class="mb-3 text-xs text-[var(--texto-suave)]">Unidades vendidas na Shopee {{ filtros.categoria ? 'nesta categoria' : 'inteira' }}. Clique para ver os produtos.</p>
+                    <ol class="space-y-1 text-sm">
+                        <li v-for="(c, i) in mercado.subcategorias" :key="c.id" class="flex gap-2">
+                            <span class="w-5 shrink-0 text-right tabular-nums text-[var(--texto-suave)]">{{ i + 1 }}.</span>
+                            <button type="button" class="min-w-0 flex-1 truncate text-left hover:text-[var(--destaque)] hover:underline" :class="c.id === filtros.categoria ? 'font-semibold text-[var(--destaque)]' : ''" :title="c.nome" @click="escolherSubcategoria(c.id)">{{ c.nome }}</button>
+                            <span class="shrink-0 tabular-nums text-xs text-[var(--texto-suave)]">{{ formatNumber(c.unidades) }}</span>
+                        </li>
+                    </ol>
                 </section>
 
                 <!-- Buscas em alta (só ML) -->

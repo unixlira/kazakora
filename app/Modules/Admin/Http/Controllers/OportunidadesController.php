@@ -59,13 +59,18 @@ class OportunidadesController extends Controller
         }
 
         $termo = mb_substr(trim((string) $request->query('termo', '')), 0, 80);
+        // Categoria da mineração da Central do Vendedor: "L2" ou "L2.L3" (2026-10-12).
+        $categoria = (string) $request->query('categoria', '');
+        if (! preg_match('/^\d{1,12}(\.\d{1,12})?$/', $categoria)) {
+            $categoria = '';
+        }
 
         return Inertia::render('Admin/Oportunidades/Mercado', [
             'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
             'base' => '/'.$request->path(),
-            'filtros' => ['termo' => $termo],
-            'categorias' => [],
-            'mercado' => Inertia::defer(fn () => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0]),
+            'filtros' => ['termo' => $termo, 'categoria' => $categoria],
+            'categorias' => $shopee->categorias(),
+            'mercado' => Inertia::defer(fn () => $shopee->analisar($termo, $atualizar, $categoria) + ['tendencias' => [], 'ocultos' => 0]),
         ]);
     }
 }

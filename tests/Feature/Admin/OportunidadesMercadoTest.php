@@ -3,8 +3,10 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\MercadoLivreToken;
+use App\Models\ShopeeMaisVendidosColeta;
 use App\Models\User;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Support\Oportunidades\ImportarMaisVendidosShopee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -206,6 +208,92 @@ class OportunidadesMercadoTest extends TestCase
                 && str_starts_with($r->header('Authorization')[0], 'SHA256 Credential=18000000001, ')
                 && $m && $m[2] === hash('sha256', '18000000001'.$m[1].$corpo.'segredo');
         });
+    }
+
+    /** Mineração mínima no formato do arquivo da Central do Vendedor. */
+    private function importarColeta(): void
+    {
+        $item = fn (int $id, string $nome, int $vendas, int $rank, ?int $l3) => [
+            'itemid' => $id, 'shopid' => 50, 'image' => 'br-img-'.$id, 'title' => $nome, 'price' => 16.49,
+            'min_price' => 16.49, 'max_price' => 48.99, 'units_sold' => $vendas, 'rank' => $rank,
+            'scope_l1' => 100636, 'scope_l2' => 100716, 'scope_l3' => $l3,
+        ];
+
+        app(ImportarMaisVendidosShopee::class)->importar([
+            'periodo_inicio' => '2026-09-11', 'periodo_fim' => '2026-10-11', 'coletado_em' => '2026-10-12T20:00:00-03:00',
+            'cats' => [[
+                'l1_id' => 100636, 'l1_name' => 'Casa e Decoração', 'l2_id' => 100716, 'l2_name' => 'Artigos de Cuidados com a Casa',
+                'l3' => [
+                    ['l3_cat_id' => 101213, 'l3_cat_name' => 'Produtos de Limpeza', 'l3_unit_sold' => 421417],
+                    ['l3_cat_id' => 101214, 'l3_cat_name' => 'Lavanderia', 'l3_unit_sold' => 174374],
+                ],
+            ]],
+            'items' => [
+                $item(1, 'Percarbonato Tira Manchas', 71458, 1, null),
+                $item(2, 'Pregador de Roupa', 30000, 2, null),
+                $item(1, 'Percarbonato Tira Manchas', 71458, 1, 101213),
+                $item(2, 'Pregador de Roupa', 30000, 1, 101214),
+            ],
+        ]);
+    }
+
+    public function test_shopee_com_mineracao_da_central_do_vendedor_le_do_banco(): void
+    {
+        config(['services.shopee_afiliados.app_id' => null, 'services.shopee_afiliados.secret' => null]);
+        Http::fake();
+        $this->importarColeta();
+
+        // Visão geral: cada produto uma vez, ordenado por unidades, e as subcategorias que mais vendem.
+        $this->actingAs($this->admin())->get('/admin/oportunidades/shopee')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('categorias.0.id', '100716')
+                ->where('categorias.0.nome', 'Casa e Decoração › Artigos de Cuidados com a Casa')
+                ->loadDeferredProps(fn (Assert $reload) => $reload
+                ->where('mercado.configurado', true)
+                ->where('mercado.fonte', 'central_vendedor')
+                ->where('mercado.periodo.inicio', '2026-09-11')
+                ->has('mercado.produtos', 2)
+                ->where('mercado.produtos.0.nome', 'Percarbonato Tira Manchas')
+                ->where('mercado.produtos.0.vendas', 71458)
+                ->where('mercado.produtos.0.link', 'https://shopee.com.br/product/50/1')
+                ->where('mercado.produtos.0.imagem', 'https://down-br.img.susercontent.com/file/br-img-1')
+                ->where('mercado.subcategorias.0.id', '100716.101213')
+                ->where('mercado.subcategorias.0.unidades', 421417)));
+
+        // Subcategoria: o ranking que a Shopee mostra para ela.
+        $this->get('/admin/oportunidades/shopee?categoria=100716.101214')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filtros.categoria', '100716.101214')
+                ->loadDeferredProps(fn (Assert $reload) => $reload
+                ->has('mercado.produtos', 1)
+                ->where('mercado.produtos.0.nome', 'Pregador de Roupa')
+                ->where('mercado.subcategorias.1.nome', 'Lavanderia')));
+
+        // Palavra-chave procura nos produtos minerados.
+        $this->get('/admin/oportunidades/shopee?termo=pregador')
+            ->assertInertia(fn (Assert $page) => $page->loadDeferredProps(fn (Assert $reload) => $reload
+                ->has('mercado.produtos', 1)
+                ->where('mercado.produtos.0.id', '2')));
+
+        Http::assertNothingSent();
+    }
+
+    public function test_comando_importa_o_arquivo_minerado(): void
+    {
+        $arquivo = tempnam(sys_get_temp_dir(), 'shopee');
+        file_put_contents($arquivo, json_encode(['periodo_inicio' => '2026-09-11', 'periodo_fim' => '2026-10-11', 'cats' => [[
+            'l1_id' => 1, 'l1_name' => 'A', 'l2_id' => 2, 'l2_name' => 'B', 'l3' => [['l3_cat_id' => 3, 'l3_cat_name' => 'C', 'l3_unit_sold' => 10]],
+        ]], 'items' => [['itemid' => 9, 'shopid' => 8, 'title' => 'X', 'units_sold' => 5, 'rank' => 1, 'scope_l1' => 1, 'scope_l2' => 2, 'scope_l3' => null]]]));
+
+        $this->artisan('shopee:importar-mais-vendidos', ['arquivo' => $arquivo])
+            ->expectsOutputToContain('1 subcategorias e 1 posições')
+            ->assertSuccessful();
+        $this->assertSame(1, ShopeeMaisVendidosColeta::ultima()->total_produtos);
+
+        file_put_contents($arquivo, '{"cats": []}');
+        $this->artisan('shopee:importar-mais-vendidos', ['arquivo' => $arquivo])->assertFailed();
+        unlink($arquivo);
     }
 
     public function test_cliente_nao_abre_e_visitante_vai_para_o_login(): void

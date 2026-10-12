@@ -147,6 +147,8 @@ export const sidebarSections = [
             // Logs (2026-09-14): tudo de storage/logs numa lista, só admin.
             { label: 'Logs', href: '/admin/logs', icon: 'fas fa-terminal', permission: 'configuracoes.auditoria' },
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', permission: 'configuracoes.auditoria' },
+            // Visitas ao site (2026-10-12): páginas abertas na loja e o IP, só admin igual a Logs.
+            { label: 'Visitas ao site', href: '/admin/visitas-site', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
         ],
     },
 ];

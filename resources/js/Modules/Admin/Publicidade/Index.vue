@@ -22,7 +22,14 @@ const roas = (v) => (v === null || v === undefined ? '—' : `${v.toFixed(2).rep
 const atual = computed(() => props.periodos[0] ?? { canais: [] });
 const totalGasto = computed(() => atual.value.canais.reduce((s, c) => s + c.gasto, 0));
 const totalVendas = computed(() => atual.value.canais.reduce((s, c) => s + c.vendas, 0));
-const roasGeral = computed(() => (totalGasto.value > 0 ? totalVendas.value / totalGasto.value : null));
+// ROAS geral só com os canais que informam a venda atribuída: somar o gasto
+// de um canal sem venda informada derrubaria o número sem motivo.
+const roasGeral = computed(() => {
+    const comVenda = atual.value.canais.filter((c) => c.roas !== null);
+    const gasto = comVenda.reduce((s, c) => s + c.gasto, 0);
+    return gasto > 0 ? comVenda.reduce((s, c) => s + c.vendas, 0) / gasto : null;
+});
+const semVenda = (periodo) => periodo.canais.filter((c) => c.gasto > 0 && c.roas === null).map((c) => CANAIS[c.canal]?.label ?? c.canal);
 
 const atalhos = [
     { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', texto: 'Saldo da Shopee Ads e histórico de recargas.' },
@@ -89,11 +96,17 @@ const atalhos = [
                             <td class="px-4 py-2 text-right tabular-nums">{{ numero(c.impressoes) }}</td>
                             <td class="px-4 py-2 text-right tabular-nums">{{ numero(c.cliques) }}</td>
                             <td class="px-4 py-2 text-right tabular-nums">{{ numero(c.pedidos) }}</td>
-                            <td class="px-4 py-2 text-right tabular-nums">{{ dinheiro(c.vendas) }}</td>
+                            <td class="px-4 py-2 text-right tabular-nums">
+                                <span v-if="c.gasto > 0 && c.roas === null" class="text-slate-400 dark:text-slate-500">sem dado</span>
+                                <template v-else>{{ dinheiro(c.vendas) }}</template>
+                            </td>
                             <td class="px-4 py-2 text-right font-semibold tabular-nums">{{ roas(c.roas) }}</td>
                         </tr>
                     </tbody>
                 </table>
+                <p v-if="semVenda(periodo).length" class="border-t border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+                    {{ semVenda(periodo).join(' e ') }}: a sincronização não traz a venda atribuída, por isso o ROAS fica em branco.
+                </p>
             </div>
         </section>
 

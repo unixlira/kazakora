@@ -313,7 +313,7 @@ watch(
                             <button type="button" class="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-[var(--surface-muted)] hover:text-primary"
                                 title="Notificações" @click="notifMenuOpen = !notifMenuOpen">
                                 <i class="fas fa-bell"></i>
-                                <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-primary px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
+                                <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-error px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
                             </button>
 
                             <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">

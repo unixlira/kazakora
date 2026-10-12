@@ -9,8 +9,8 @@ import { computed, ref } from 'vue';
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
 // Mercado Livre (mais vendidos de Casa e buscas em alta) e Google Trends.
 // Layout v4 (Lira 2026-10-12): Shopee fora até a API de Afiliados trazer
-// dados; o Mercado Livre ocupa o lugar dela, ao lado do TikTok. Cada fonte
-// é prop adiada num grupo próprio (null até chegar). Ver RadarController.
+// dados. TikTok sozinho em cima; Mercado Livre e Google lado a lado embaixo.
+// Cada fonte é prop adiada num grupo próprio (null até chegar). Ver RadarController.
 const props = defineProps({
     tiktok: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
@@ -175,8 +175,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </section>
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <!-- TikTok Shop (Kalodata) -->
-                <section class="card-fonte fonte-tiktok">
+                <!-- TikTok Shop (Kalodata): sozinho em cima, ocupa a largura toda -->
+                <section class="card-fonte fonte-tiktok xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="tiktok" />
                         <div class="min-w-0">
@@ -222,7 +222,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Mercado Livre: no lugar que era da Shopee, ao lado do TikTok -->
+                <!-- Mercado Livre: embaixo, ao lado do Google -->
                 <section class="card-fonte fonte-ml">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
@@ -270,8 +270,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Google Trends: sozinho na linha de baixo, ocupa a largura toda -->
-                <section class="card-fonte fonte-google xl:col-span-2">
+                <!-- Google Trends: embaixo, ao lado do Mercado Livre -->
+                <section class="card-fonte fonte-google">
                     <div class="card-cabeca">
                         <MarcaLogo marca="google" />
                         <div class="min-w-0">
@@ -314,8 +314,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 
 <style scoped>
 /* Visual do Radar (pedido do Lira 2026-10-12): cada fonte com a cor dela no
-   cabeçalho do card e nas etiquetas; no escuro o fundo vira grafite (ver
-   .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
+   cabeçalho do card e nas etiquetas; no escuro só o fundo do corpo fica
+   cinza claro e os cards continuam pretos (ver .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
    legível em cima do fundo tingido. */
 .fonte-tiktok { --cor: #111111; --cor-texto: #111111; --tinta: 9%; }
 .fonte-ml { --cor: #2d3277; --cor-texto: #2d3277; --cor-fundo: #ffe600; --tinta: 18%; }
@@ -332,7 +332,6 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
     align-items: center;
     gap: 0.75rem;
     border: 1px solid var(--surface-border);
-    border-top: 4px solid var(--cor-fundo, var(--cor));
     border-radius: 14px;
     background: var(--surface);
     padding: 0.85rem 1rem;
@@ -352,16 +351,19 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 
 /* Destaque ao passar o mouse ou focar pelo teclado (pedido do Lira
    2026-10-12): o card sobe um pouco, a borda pega a cor da fonte e ganha
-   sombra. Sem movimento para quem pediu menos animação no sistema. */
+   sombra. Sem movimento para quem pediu menos animação no sistema.
+   Os números do topo (.kpi) não pegam a cor da fonte na borda: o Lira
+   pediu sem esse destaque colorido (2026-10-12), só a sombra neutra. */
 .kpi, .card-sinal, .card-fonte {
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
-.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
+.card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
     border-color: color-mix(in oklab, var(--cor-texto, #c2410c) 55%, var(--surface-border));
+}
+.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
     box-shadow: 0 8px 20px -8px rgb(0 0 0 / 0.25);
 }
 .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: translateY(-2px); }
-.kpi:hover { border-top-color: var(--cor-fundo, var(--cor)); }
 .card-sinal:focus-visible { outline: 2px solid #c2410c; outline-offset: 2px; }
 .dark .kpi:hover, .dark .card-sinal:hover, .dark .card-sinal:focus-visible, .dark .card-fonte:hover, .dark .card-fonte:focus-within {
     box-shadow: 0 8px 22px -8px rgb(0 0 0 / 0.7);

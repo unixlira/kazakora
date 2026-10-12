@@ -14,7 +14,7 @@ const props = defineProps({
 });
 
 const VARIANTS = {
-    primary: { bg: 'bg-lightprimary', text: 'text-primary', color: 'var(--color-primary)' },
+    primary: { bg: 'bg-lightprimary', text: 'text-primary', color: 'var(--primary-solido, var(--color-primary))' },
     secondary: { bg: 'bg-lightsecondary', text: 'text-secondary', color: 'var(--color-secondary)' },
     success: { bg: 'bg-lightsuccess', text: 'text-success', color: 'var(--color-success)' },
     warning: { bg: 'bg-lightwarning', text: 'text-warning', color: 'var(--color-warning)' },

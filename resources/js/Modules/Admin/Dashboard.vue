@@ -62,8 +62,9 @@ const CHANNEL_COLORS = {
     dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181' },
 };
 const CHROME = {
-    light: { grid: '#e6ecf3', text: '#5b6b80', surface: '#ffffff', accent: '#0d6efd', context: '#adb5bd' },
-    dark: { grid: '#2b384a', text: '#aebccd', surface: '#18212e', accent: '#6ea8fe', context: '#6c7a8c' },
+    // Tema grafite (2026-10-11): neutros quentes e o laranja como destaque.
+    light: { grid: '#e6e2e3', text: '#6b5f63', surface: '#ffffff', accent: '#c2410c', context: '#b3aaad' },
+    dark: { grid: '#302c2e', text: '#b3a9ac', surface: '#1b191a', accent: '#ff8c4d', context: '#7a6f73' },
 };
 
 // O tema muda na hora (botão do layout põe/tira .dark no <html>) — os
@@ -102,7 +103,7 @@ const kpiTiles = computed(() => [
         delta: delta(kpis.value.ticketMedio, kpis.value.ticketMedioAnterior),
         hint: 'vs mesmos dias do mês passado',
         icon: 'fas fa-receipt',
-        color: 'var(--color-primary)',
+        color: 'var(--primary-solido)',
     },
     {
         label: 'Crescimento do mês',
@@ -149,9 +150,9 @@ const baseOptions = computed(() => ({
     plugins: {
         legend: { display: false },
         tooltip: {
-            backgroundColor: isDark.value ? '#edf2f8' : '#1b2533',
-            titleColor: isDark.value ? '#1b2533' : '#ffffff',
-            bodyColor: isDark.value ? '#1b2533' : '#ffffff',
+            backgroundColor: isDark.value ? '#f1eced' : '#2b2326',
+            titleColor: isDark.value ? '#1b191a' : '#ffffff',
+            bodyColor: isDark.value ? '#1b191a' : '#ffffff',
             padding: 10,
             cornerRadius: 8,
             boxPadding: 4,
@@ -342,7 +343,7 @@ const categoryChartOptions = computed(() => ({
     indexAxis: 'y',
     scales: {
         x: { ...axisStyle.value, ticks: { ...axisStyle.value.ticks, callback: (v) => formatCompact(v), maxTicksLimit: 5 } },
-        y: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, color: isDark.value ? '#edf2f8' : '#1b2533' } },
+        y: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, color: isDark.value ? '#f1eced' : '#1f1a1c' } },
     },
     plugins: {
         ...baseOptions.value.plugins,
@@ -358,8 +359,9 @@ const categoryChartOptions = computed(() => ({
 // ---- 5. Acessos ao site (pedido 2026-10-11) ---------------------------
 // Ver DashboardController::visitantes(): sem equipe e sem robô.
 // Card de acessos em verde (pedido 2026-10-11): tudo em branco por cima;
-// hoje em amarelo (o "agora"), páginas vistas em azul-claro.
-const visitColors = computed(() => ({ bar: 'rgba(255,255,255,0.88)', today: '#ffc107', line: '#9ec5fe' }));
+// hoje em amarelo (o "agora"), páginas vistas em laranja-claro (era azul-claro
+// do tema anterior).
+const visitColors = computed(() => ({ bar: 'rgba(255,255,255,0.88)', today: '#ffc107', line: '#fed7aa' }));
 const mesVisitas = ref(props.visitantes?.mes ?? '');
 const carregandoVisitas = ref(false);
 const trocarMesVisitas = () => {
@@ -388,8 +390,8 @@ const visitTiles = computed(() => {
     }
     tiles.push(
         { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#198754' },
-        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#0d6efd' },
-        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#0aa2c0' },
+        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#2b2326' },
+        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#c2410c' },
     );
     return tiles;
 });
@@ -583,7 +585,7 @@ const quandoGerado = (iso) => {
         <!-- Indicadores do mês (pedido do usuário 2026-10-06): o mês até
              hoje sempre contra os MESMOS dias do mês passado. -->
         <h2 class="mt-8 mb-3 flex items-center gap-2 text-lg font-bold">
-            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-sky-500 text-sm text-white"><i class="fas fa-gauge-high"></i></span>
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm text-white"><i class="fas fa-gauge-high"></i></span>
             Desempenho do mês
         </h2>
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -773,10 +775,10 @@ const quandoGerado = (iso) => {
         <!-- Produtos: cada card com a sua cor, ranking e a barra de peso. -->
         <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition duration-200 hover:shadow-md"
-                style="border-top: 3px solid var(--color-primary)">
+                style="border-top: 3px solid var(--primary-solido)">
                 <div class="flex items-center gap-3 border-b border-[var(--surface-border)] px-4 py-4"
-                    style="background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, var(--surface)) 0%, var(--surface) 80%)">
-                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white" style="background: var(--color-primary)"><i class="fas fa-fire"></i></span>
+                    style="background: linear-gradient(135deg, color-mix(in oklab, var(--primary-solido) 10%, var(--surface)) 0%, var(--surface) 80%)">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white" style="background: var(--primary-solido)"><i class="fas fa-fire"></i></span>
                     <div>
                         <h3 class="text-base font-semibold">Produtos mais vendidos</h3>
                         <p class="text-xs text-[var(--texto-suave)]">Unidades vendidas nos últimos 30 dias</p>
@@ -790,7 +792,7 @@ const quandoGerado = (iso) => {
                                 <span class="flex min-w-0 items-center gap-2">
                                     <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
                                         :class="index < 3 ? 'text-white' : 'bg-lightprimary text-primary'"
-                                        :style="index < 3 ? { background: 'var(--color-primary)' } : {}">{{ index + 1 }}</span>
+                                        :style="index < 3 ? { background: 'var(--primary-solido)' } : {}">{{ index + 1 }}</span>
                                     <span class="min-w-0 truncate">
                                         <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
                                         <span v-else>{{ product.name }}</span>
@@ -803,7 +805,7 @@ const quandoGerado = (iso) => {
                                 </span>
                             </div>
                             <div class="mt-1.5 ml-8 h-1.5 rounded-full bg-lightprimary">
-                                <div class="h-1.5 rounded-full" style="background: var(--color-primary)" :style="{ width: `${(product.quantity / topMax) * 100}%` }"></div>
+                                <div class="h-1.5 rounded-full" style="background: var(--primary-solido)" :style="{ width: `${(product.quantity / topMax) * 100}%` }"></div>
                             </div>
                         </li>
                     </ol>
@@ -872,6 +874,6 @@ const quandoGerado = (iso) => {
 .visitas-mes,
 .visitas-mes option {
     background-color: #ffffff;
-    color: #1b2533;
+    color: #1f1a1c;
 }
 </style>

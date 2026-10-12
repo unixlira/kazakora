@@ -40,7 +40,11 @@ class TrackSiteVisit
 {
     private const VISITOR_COOKIE = Cookies::COOKIE_VISITANTE;
 
-    private const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|whatsapp/i';
+    /**
+     * Robôs e programas que não são navegador (pedido 2026-10-12: curl,
+     * scanners e monitores entravam como visita "Direto").
+     */
+    private const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|headless|scan|censys|zgrab|lighthouse|uptime/i';
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -86,7 +90,7 @@ class TrackSiteVisit
         $dominio = preg_replace('/^www\./', '', (string) parse_url((string) config('app.url'), PHP_URL_HOST));
 
         if (empty($pagina['host']) || ($dominio !== '' && preg_replace('/^www\./', '', $pagina['host']) !== $dominio)
-            || str_starts_with($pagina['path'] ?? '/', '/admin') || preg_match(self::BOT_PATTERN, (string) $request->userAgent()) === 1) {
+            || str_starts_with($pagina['path'] ?? '/', '/admin') || self::naoENavegador($request)) {
             return;
         }
 
@@ -187,12 +191,24 @@ class TrackSiteVisit
             return false;
         }
 
+        return ! self::naoENavegador($request);
+    }
+
+    /**
+     * Todo navegador de verdade se apresenta como "Mozilla/..." e, quando
+     * manda Referer http(s), manda com caminho ("https://site.com/"). Referer
+     * sem caminho ("http://kazakora.com") é robô fingindo que veio da loja.
+     */
+    private static function naoENavegador(Request $request): bool
+    {
         $userAgent = (string) $request->userAgent();
 
-        if ($userAgent === '' || preg_match(self::BOT_PATTERN, $userAgent) === 1) {
-            return false;
+        if (! str_starts_with($userAgent, 'Mozilla/') || preg_match(self::BOT_PATTERN, $userAgent) === 1) {
+            return true;
         }
 
-        return true;
+        $referer = (string) $request->headers->get('referer');
+
+        return preg_match('#^https?://[^/?\#]+$#i', $referer) === 1;
     }
 }

@@ -71,6 +71,27 @@ class VisitasOrigemTest extends TestCase
         $this->assertSame(['direto', 'interno'], SiteVisit::query()->orderBy('id')->pluck('origem')->all());
     }
 
+    public function test_robo_e_programa_que_nao_e_navegador_nao_viram_visita_direto(): void
+    {
+        foreach (['curl/8.5.0', 'python-requests/2.31', 'Mozlila/5.0 (Linux; Android 7.0)', 'Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/120.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) visionheight.com/scan Chrome/126.0'] as $ua) {
+            $this->withHeader('User-Agent', $ua)->get('https://kazakora.com/politica-de-entrega');
+        }
+
+        // Robô que finge ter vindo da loja: Referer sem caminho, que navegador não manda.
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withHeader('Referer', 'http://kazakora.com')
+            ->get('https://kazakora.com/politica-de-entrega');
+
+        $this->assertSame(0, SiteVisit::count());
+
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->withHeader('Referer', 'https://www.google.com/')
+            ->get('https://kazakora.com/politica-de-entrega');
+
+        $this->assertSame('google', SiteVisit::sole()->origem);
+    }
+
     public function test_lista_mostra_a_origem_de_entrada_sem_dado_e_filtra(): void
     {
         $this->travelTo('2026-10-12 15:00:00');

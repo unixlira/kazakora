@@ -196,7 +196,8 @@ XML;
 
         $this->assertSame(url('/admin/radar/tiktok'), route('admin.radar.fonte', 'tiktok'));
 
-        foreach (['tiktok' => ['tiktok', 'TikTok'], 'mercado-livre' => ['mercadoLivre', 'Mercado Livre'], 'google' => ['google', 'Google']] as $fonte => [$prop, $nome]) {
+        // Mercado Livre › Radar abre a tela de Oportunidades (OportunidadesMercadoTest).
+        foreach (['tiktok' => ['tiktok', 'TikTok'], 'google' => ['google', 'Google']] as $fonte => [$prop, $nome]) {
             $this->actingAs($admin)->get("/admin/radar/{$fonte}")
                 ->assertOk()
                 ->assertInertia(fn (Assert $page) => $page

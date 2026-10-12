@@ -4,6 +4,7 @@ import { RADAR_NOME } from '@/Shared/radarNome';
 import MarcaLogo from './MarcaLogo.vue';
 import BuscaTabela from './BuscaTabela.vue';
 import Paginacao from './Paginacao.vue';
+import MercadoLivreBloco from './MercadoLivreBloco.vue';
 import { normalizar, useBuscaPaginada } from './useBuscaPaginada';
 import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -51,12 +52,6 @@ const consultarDeNovo = () => {
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
     });
-};
-
-const faixaPreco = (p) => {
-    if (p.preco_min === null || p.preco_min === undefined) return '—';
-    if (p.preco_max !== null && p.preco_max > p.preco_min) return `${formatPrice(p.preco_min)} a ${formatPrice(p.preco_max)}`;
-    return formatPrice(p.preco_min);
 };
 
 // Cruzamento: termo em alta (buscas do ML e do Google) que também aparece em
@@ -110,7 +105,6 @@ const sinais = computed(() => {
 // gasta consulta nem crédito (o Kalodata cobra por consulta). A posição
 // mostrada continua a do ranking, mesmo com a busca ativa.
 const tt = useBuscaPaginada(computed(() => props.tiktok?.produtos ?? []), (p) => p.nome, 20);
-const ml = useBuscaPaginada(computed(() => props.mercadoLivre?.produtos ?? []), (p) => p.nome, 20);
 
 // Faixa de números do topo; cada um espera a própria fonte chegar.
 const faturamentoTikTok = computed(() => (props.tiktok?.produtos ?? []).reduce((soma, p) => soma + (p.receita ?? 0), 0));
@@ -267,58 +261,7 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                 </section>
 
                 <!-- Mercado Livre: embaixo do TikTok, largura toda (o Google virou 6 cards) -->
-                <section v-if="mostra('mercado-livre')" class="card-fonte fonte-ml xl:col-span-2">
-                    <div class="card-cabeca">
-                        <MarcaLogo marca="ml" />
-                        <div class="min-w-0">
-                            <h2 class="text-base font-bold">Mercado Livre · buscas em alta e mais vendidos de Casa</h2>
-                            <p class="text-xs text-[var(--texto-suave)]">Fonte: API do Mercado Livre. Outras categorias em <a href="/admin/oportunidades/mercado-livre" class="underline">Oportunidades › Mercado Livre</a>.</p>
-                        </div>
-                    </div>
-                    <Deferred data="mercadoLivre">
-                        <template #fallback>
-                            <p class="px-4 py-6 text-sm text-[var(--texto-suave)]" role="status"><i class="fas fa-circle-notch mr-1 animate-spin" aria-hidden="true"></i> Consultando o Mercado Livre (a primeira consulta do dia leva alguns segundos)…</p>
-                        </template>
-                        <p v-if="mercadoLivre.erro" class="px-4 pt-4 text-sm text-error" role="alert">{{ mercadoLivre.erro }}</p>
-                        <div class="px-4 py-3">
-                            <h3 class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">Buscas que mais crescem no site</h3>
-                            <p v-if="mercadoLivre.buscas.length === 0" class="mt-1 text-sm text-[var(--texto-suave)]">Sem dados agora.</p>
-                            <div v-else class="mt-2 flex flex-wrap gap-1.5">
-                                <a v-for="t in mercadoLivre.buscas" :key="t.termo" :href="t.link || null" target="_blank" rel="noopener"
-                                    class="etiqueta etiqueta-busca">{{ t.termo }}</a>
-                            </div>
-                        </div>
-                        <div v-if="mercadoLivre.produtos.length" class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--surface-border)] px-4 py-3">
-                            <BuscaTabela v-model="ml.busca.value" rotulo="Buscar produto entre os mais vendidos do Mercado Livre" placeholder="Buscar produto (ex.: organizador)" />
-                            <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ ml.faixa.value }} produtos</span>
-                        </div>
-                        <p v-if="mercadoLivre.produtos.length && ml.filtrados.value.length === 0" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com “{{ ml.busca.value }}” entre os mais vendidos.</p>
-                        <table v-else-if="mercadoLivre.produtos.length" class="tabela border-t border-[var(--surface-border)]">
-                            <thead>
-                                <tr>
-                                    <th scope="col" class="pl-4">#</th>
-                                    <th scope="col">Produto</th>
-                                    <th scope="col" class="text-right">Vendedores</th>
-                                    <th scope="col" class="pr-4 text-right">Preço</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="p in ml.daPagina.value" :key="p.id">
-                                    <td class="pl-4"><span class="posicao" :class="{ 'posicao-top': p.posicao <= 3 }">{{ p.posicao }}</span></td>
-                                    <td class="max-w-0 w-full">
-                                        <div class="flex items-center gap-2">
-                                            <a :href="p.link" target="_blank" rel="noopener" class="min-w-0 truncate font-medium hover:underline" :title="p.nome">{{ p.nome }}</a>
-                                            <span v-if="p.voce_vende" class="etiqueta shrink-0 bg-lightsuccess text-success">você vende</span>
-                                        </div>
-                                    </td>
-                                    <td class="whitespace-nowrap text-right">{{ p.vendedores === null ? '' : formatK(p.vendedores) }}</td>
-                                    <td class="whitespace-nowrap pr-4 text-right font-bold">{{ faixaPreco(p) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <Paginacao :pagina="ml.pagina.value" :total="ml.totalPaginas.value" rotulo="Páginas dos mais vendidos do Mercado Livre" @ir="ml.irParaPagina" />
-                    </Deferred>
-                </section>
+                <MercadoLivreBloco v-if="mostra('mercado-livre')" :mercado-livre="mercadoLivre" class="xl:col-span-2" />
 
             </div>
 
@@ -384,149 +327,6 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
     </AdminLayout>
 </template>
 
-<style scoped>
-/* Visual do Radar (pedido do Lira 2026-10-12): cada fonte com a cor dela no
-   cabeçalho do card e nas etiquetas; no escuro o fundo do tema todo (corpo,
-   topo, menu e rodapé) fica cinza #3D3D3D e os cards continuam pretos (ver .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
-   legível em cima do fundo tingido. */
-.fonte-tiktok { --cor: #111111; --cor-texto: #111111; --tinta: 9%; }
-.fonte-ml { --cor: #2d3277; --cor-texto: #2d3277; --cor-fundo: #ffe600; --tinta: 18%; }
-.fonte-google { --cor: #1a73e8; --cor-texto: #1557b0; --tinta: 10%; }
-.fonte-destaque { --cor: #c2410c; --cor-texto: #c2410c; --tinta: 12%; }
-.dark .fonte-tiktok { --cor: #000000; --cor-texto: #e8e3e5; --tinta: 14%; }
-.dark .fonte-ml { --cor-texto: #ffe866; --tinta: 12%; }
-.dark .fonte-google { --cor-texto: #8ab4f8; --tinta: 16%; }
-.dark .fonte-destaque { --cor: #ff8c4d; --cor-texto: #ff8c4d; --tinta: 16%; }
-
-.kpi {
-    display: flex;
-    flex: 1 0 13rem;
-    align-items: center;
-    gap: 0.75rem;
-    border: 1px solid var(--surface-border);
-    border-radius: 14px;
-    background: var(--surface);
-    padding: 0.85rem 1rem;
-}
-.kpi b { display: block; font-size: 1.375rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.kpi span:not(.kpi-icone) { font-size: 0.75rem; color: var(--texto-suave); }
-.kpi-icone {
-    display: grid;
-    flex: none;
-    place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 12px;
-    background: color-mix(in oklab, var(--cor-fundo, var(--cor)) var(--tinta), var(--surface));
-    color: var(--cor-texto);
-}
-
-/* Destaque ao passar o mouse ou focar pelo teclado (pedido do Lira
-   2026-10-12): o card sobe um pouco, a borda pega a cor da fonte e ganha
-   sombra. Sem movimento para quem pediu menos animação no sistema.
-   Os números do topo (.kpi) não pegam a cor da fonte na borda: o Lira
-   pediu sem esse destaque colorido (2026-10-12), só a sombra neutra. */
-.kpi, .card-sinal, .card-fonte {
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-.card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
-    border-color: color-mix(in oklab, var(--cor-texto, #c2410c) 55%, var(--surface-border));
-}
-.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
-    box-shadow: 0 8px 20px -8px rgb(0 0 0 / 0.25);
-}
-.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: translateY(-2px); }
-.card-sinal:focus-visible { outline: 2px solid #c2410c; outline-offset: 2px; }
-.dark .kpi:hover, .dark .card-sinal:hover, .dark .card-sinal:focus-visible, .dark .card-fonte:hover, .dark .card-fonte:focus-within {
-    box-shadow: 0 8px 22px -8px rgb(0 0 0 / 0.7);
-}
-.dark .card-sinal:focus-visible { outline-color: #ff8c4d; }
-@media (prefers-reduced-motion: reduce) {
-    .kpi, .card-sinal, .card-fonte { transition: none; }
-    .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: none; }
-}
-
-.destaque {
-    border-left: 4px solid #c2410c;
-    background: linear-gradient(135deg, color-mix(in oklab, #c2410c 7%, var(--surface)) 0%, var(--surface) 60%);
-}
-
-.card-fonte {
-    overflow: hidden;
-    border: 1px solid var(--surface-border);
-    border-radius: 16px;
-    background: var(--surface);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
-}
-.card-cabeca {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    border-bottom: 1px solid var(--surface-border);
-    background: color-mix(in oklab, var(--cor-fundo, var(--cor)) var(--tinta), var(--surface));
-    padding: 0.85rem 1rem;
-}
-
-/* Etiqueta do cruzamento com o logo da fonte na frente. */
-.etiqueta-marca { display: inline-flex; align-items: center; gap: 0.3rem; padding-left: 0.2rem; }
-.marca-mini { --marca-tamanho: 1.1rem; --marca-raio: 999px; }
-
-.etiqueta {
-    display: inline-block;
-    border-radius: 999px;
-    padding: 0.125rem 0.5rem;
-    font-size: 0.6875rem;
-    font-weight: 700;
-}
-.etiqueta.fonte-tiktok, .etiqueta.fonte-ml, .etiqueta.fonte-google, .etiqueta.fonte-destaque, .etiqueta-fonte {
-    background: color-mix(in oklab, var(--cor-fundo, var(--cor)) var(--tinta), var(--surface));
-    color: var(--cor-texto);
-}
-.etiqueta-busca {
-    border: 1px solid color-mix(in oklab, var(--cor-fundo) 45%, var(--surface));
-    background: color-mix(in oklab, var(--cor-fundo) var(--tinta), var(--surface));
-    font-weight: 500;
-    color: var(--surface-foreground);
-}
-.etiqueta-busca:hover { background: color-mix(in oklab, var(--cor-fundo) 35%, var(--surface)); }
-
-.tabela { width: 100%; text-align: left; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
-.tabela th {
-    padding: 0.6rem 0.75rem 0.6rem 0;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    background: var(--th-fundo);
-    color: var(--th-texto);
-    border-bottom: 3px solid var(--th-linha, var(--th-fundo));
-}
-/* Cabeçalho da tabela na cor da plataforma (pedido do Lira 2026-10-12). Tons
-   de azul um pouco mais escuros que os oficiais para o branco ler
-   bem (contraste acima de 4,5). TikTok e Google ganham a faixa de cores da
-   marca logo abaixo. */
-.fonte-tiktok { --th-fundo: #000000; --th-texto: #ffffff; --faixa: linear-gradient(90deg, #25f4ee, #fe2c55); }
-.fonte-ml { --th-fundo: #ffe600; --th-texto: #2d3277; --th-linha: #2d3277; }
-.fonte-google { --th-fundo: #1967d2; --th-texto: #ffffff; --faixa: linear-gradient(90deg, #4285f4 0 25%, #ea4335 25% 50%, #fbbc05 50% 75%, #34a853 75% 100%); }
-.tabela td.faixa { height: 4px; padding: 0; border: 0; background: var(--faixa); }
-.fonte-tiktok .tabela th, .fonte-google .tabela th { border-bottom: 0; }
-.tabela td { padding: 0.55rem 0.75rem 0.55rem 0; border-bottom: 1px solid var(--surface-border); }
-.tabela th.pl-4, .tabela td.pl-4 { padding-left: 1rem; }
-.tabela th.pr-4, .tabela td.pr-4 { padding-right: 1rem; }
-.tabela tbody tr:last-child td { border-bottom: 0; }
-.tabela tbody tr:nth-child(even) td { background: color-mix(in oklab, var(--surface-muted) 60%, var(--surface)); }
-
-.posicao {
-    display: inline-grid;
-    place-items: center;
-    width: 1.4rem;
-    height: 1.4rem;
-    border-radius: 7px;
-    background: var(--surface-muted);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--texto-suave);
-}
-.posicao-top { background: var(--th-fundo, var(--primary-solido)); color: var(--th-texto, #ffffff); }
-</style>
+<!-- Estilo das fontes do Radar num arquivo só: o bloco do Mercado Livre
+     (MercadoLivreBloco.vue) também aparece em Oportunidades › Mercado Livre. -->
+<style scoped src="./radar.css"></style>

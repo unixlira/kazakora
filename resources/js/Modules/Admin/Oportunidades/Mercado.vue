@@ -1,5 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import MercadoLivreBloco from '@/Modules/Admin/Radar/MercadoLivreBloco.vue';
+import { RADAR_NOME } from '@/Shared/radarNome';
 import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -8,11 +10,16 @@ import { computed, ref } from 'vue';
 // Não são as vendas da KazaKora. Ver OportunidadesController.
 // `mercado` é prop adiada (2026-10-12): a tela abre na hora com o esqueleto
 // de carregamento e os dados chegam logo depois (fica null até lá).
+// Tela dividida no Mercado Livre (pedido do Lira 2026-10-12): em cima os
+// mais vendidos, embaixo o bloco do Radar (`mercadoLivre`, adiado à parte).
+// Abre também em /admin/radar/mercado-livre (`base`).
 const props = defineProps({
     canal: { type: Object, required: true },
+    base: { type: String, default: null },
     filtros: { type: Object, required: true },
     categorias: { type: Array, default: () => [] },
     mercado: { type: Object, default: null },
+    mercadoLivre: { type: Object, default: null },
 });
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
@@ -20,6 +27,8 @@ const formatNumber = (value) => (value ?? 0).toLocaleString('pt-BR');
 const formatDateTime = (iso) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso));
 
 const ehMl = computed(() => props.canal.slug === 'mercado-livre');
+const ehRadar = computed(() => props.base?.startsWith('/admin/radar') ?? false);
+const titulo = computed(() => (ehRadar.value ? `${RADAR_NOME} · ${props.canal.nome}` : `Oportunidades · ${props.canal.nome}`));
 const categoria = ref(props.filtros.categoria ?? '');
 const termo = ref(props.filtros.termo ?? '');
 const carregando = ref(false);
@@ -28,7 +37,7 @@ const ocupado = computed(() => carregando.value || !props.mercado);
 
 const buscar = (extra = {}) => {
     const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value };
-    router.get(`/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
+    router.get(props.base ?? `/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
@@ -44,16 +53,18 @@ const faixaPreco = (p) => {
 </script>
 
 <template>
-    <Head :title="`Oportunidades · ${canal.nome}`" />
+    <Head :title="titulo" />
 
     <AdminLayout>
         <div class="mb-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">Oportunidades</p>
-            <h1 class="text-2xl font-bold">Mais vendidos e em alta · {{ canal.nome }}</h1>
+            <p class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">{{ ehRadar ? canal.nome : 'Oportunidades' }}</p>
+            <h1 class="text-2xl font-bold">{{ ehRadar ? titulo : `Mais vendidos e em alta · ${canal.nome}` }}</h1>
             <p class="mt-1 text-sm text-[var(--texto-suave)]">
                 Produtos de outros vendedores com muita venda no {{ canal.nome }}. Servem para achar produto novo: não são as vendas da KazaKora.
             </p>
         </div>
+
+        <h2 v-if="ehMl" class="mb-3 text-lg font-bold">Oportunidades mais vendidos</h2>
 
         <!-- Filtro -->
         <form class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="buscar()">
@@ -197,5 +208,11 @@ const faixaPreco = (p) => {
             </div>
         </template>
         </Deferred>
+
+        <!-- Embaixo, a tabela do Radar (pedido do Lira 2026-10-12) -->
+        <section v-if="ehMl" class="mt-8" aria-labelledby="radar-titulo">
+            <h2 id="radar-titulo" class="mb-3 text-lg font-bold">{{ RADAR_NOME }}</h2>
+            <MercadoLivreBloco :mercado-livre="mercadoLivre" :link-outras-categorias="false" />
+        </section>
     </AdminLayout>
 </template>

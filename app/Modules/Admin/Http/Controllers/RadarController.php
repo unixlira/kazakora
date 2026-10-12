@@ -30,13 +30,18 @@ use Inertia\Response;
  *
  * Submenu do Radar (pedido do Lira 2026-10-12): /admin/radar/{fonte} abre a
  * mesma tela só com o bloco daquela fonte, e só a consulta dela roda.
+ *
+ * Menu de 2026-10-12 (pedido do Lira): TikTok e Google viraram itens de
+ * Oportunidades e o Mercado Livre virou Oportunidades › Mercado Livre ›
+ * Radar, que abre a tela do OportunidadesController (mais vendidos em cima,
+ * este bloco do ML embaixo). Por isso 'mercado-livre' saiu de FONTES; o
+ * bloco continua no Radar geral (/admin/radar).
  */
 class RadarController extends Controller
 {
     /** Fonte da URL => nome visível (o mesmo do submenu). */
     public const FONTES = [
         'tiktok' => 'TikTok',
-        'mercado-livre' => 'Mercado Livre',
         'google' => 'Google',
     ];
 
@@ -54,8 +59,7 @@ class RadarController extends Controller
         // Chave = fonte da URL; a prop adiada só roda se a fonte ficar na tela.
         $blocos = [
             'tiktok' => ['tiktok', Inertia::defer(fn () => $tiktok->analisar(), 'tiktok')],
-            'mercado-livre' => ['mercadoLivre', Inertia::defer(fn () => $ml->analisar(OportunidadesController::CATEGORIA_PADRAO, $atualizar)
-                + ['buscas' => $ml->tendenciasGerais($atualizar)['tendencias']], 'mercado-livre')],
+            'mercado-livre' => ['mercadoLivre', Inertia::defer(fn () => self::mercadoLivre($ml, $atualizar), 'mercado-livre')],
             'google' => ['google', Inertia::defer(fn () => $google->analisar($atualizar), 'google')],
         ];
         if ($fonte !== null) {
@@ -67,5 +71,12 @@ class RadarController extends Controller
             'fonteNome' => $fonte === null ? null : self::FONTES[$fonte],
             ...array_column($blocos, 1, 0),
         ]);
+    }
+
+    /** Bloco do Mercado Livre: mais vendidos de Casa e as buscas em alta do site. */
+    public static function mercadoLivre(MaisVendidosMercadoLivre $ml, bool $atualizar = false): array
+    {
+        return $ml->analisar(OportunidadesController::CATEGORIA_PADRAO, $atualizar)
+            + ['buscas' => $ml->tendenciasGerais($atualizar)['tendencias']];
     }
 }

@@ -166,8 +166,8 @@ export const sidebarSections = [
             { label: 'Visitas KazaKora', href: '/admin/visitas-site', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
             // Visitas FerraKora (2026-10-12): o mesmo log para o site FerraKora.
             { label: 'Visitas FerraKora', href: '/admin/visitas-ferrakora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
-            // Visitas Beauty Kora (2026-10-12): mesma tela, site = beautykora.
-            { label: 'Visitas Beauty Kora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
+            // Visitas BeautyKora (2026-10-12): mesma tela, site = beautykora. Nomes do menu pelo Lira: KazaKora, FerraKora, BeautyKora.
+            { label: 'Visitas BeautyKora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
         ],
     },
 ];

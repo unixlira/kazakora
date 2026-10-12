@@ -330,6 +330,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->name('precificacao.calculadora')
         ->middleware('permission:cadastros.view');
 
+    // Calculadora de importação (2026-10-12): só calcula, não grava nada.
+    Route::get('calculadora-importacao', [\App\Modules\Admin\Http\Controllers\CalculadoraImportacaoController::class, 'index'])
+        ->name('calculadora-importacao')
+        ->middleware('permission:cadastros.view');
+    Route::get('calculadora-importacao/cotacao', [\App\Modules\Admin\Http\Controllers\CalculadoraImportacaoController::class, 'cotacao'])
+        ->name('calculadora-importacao.cotacao')
+        ->middleware('permission:cadastros.view');
+
     Route::resource('fornecedores', SupplierController::class)->except('show')
         ->parameters(['fornecedores' => 'supplier'])
         ->names([

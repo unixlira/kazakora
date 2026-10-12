@@ -34,21 +34,13 @@ export const sidebarSections = [
         // Oportunidades (pedido do Lira 2026-10-12): Google e TikTok (antes
         // submenu do Radar) e os mais vendidos de TERCEIROS em cada
         // marketplace (correção do Lira 2026-10-12: não são as vendas da
-        // loja). Sem item "Radar" solto (Lira, 2026-10-12): a tabela do Radar
-        // do ML fica embaixo dos mais vendidos em Oportunidades › Mercado Livre.
-        // Correção do Lira 2026-10-12: "Mercado Livre" não é link, só abre e
-        // fecha o submenu; quem leva para a tela é o item interno.
+        // loja). Sem item "Radar" (Lira, 2026-10-12): a tabela do Radar do
+        // ML fica só embaixo dos mais vendidos em Oportunidades › Mercado Livre.
         heading: 'Oportunidades',
         items: [
             { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google', permission: 'relatorios.view' },
             { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok', permission: 'relatorios.view' },
-            // `children` herda a permissão do pai. Item sem `href` = só agrupa.
-            {
-                label: 'Mercado Livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view',
-                children: [
-                    { label: 'Mais vendidos e Radar', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-satellite-dish' },
-                ],
-            },
+            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
             { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
         ],
     },
@@ -94,6 +86,9 @@ export const sidebarSections = [
         items: [
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', permission: 'operacional.view' },
             { label: 'Compras de fornecedor', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', permission: 'operacional.view' },
+            // Calculadora de importação (2026-10-12): lugar provisório, o Lira
+            // ainda vai decidir onde fica no menu.
+            { label: 'Calculadora de importação', href: '/admin/calculadora-importacao', icon: 'fas fa-ship', permission: 'cadastros.view' },
             { label: 'Fornecedores', href: '/admin/fornecedores', icon: 'fas fa-truck-field', permission: 'cadastros.view' },
             { label: 'Ordens de serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', permission: 'operacional.view' },
         ],

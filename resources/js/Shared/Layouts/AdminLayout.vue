@@ -97,10 +97,10 @@ const activeHref = computed(() => {
     if (urlPath.value === '/admin') return '/admin';
     return sidebarSections
         .flatMap((section) => section.items.flatMap(comFilhos).map((item) => item.href))
-        .filter((href) => href && href !== '/admin' && matchesPath(href))
+        .filter((href) => href !== '/admin' && matchesPath(href))
         .sort((a, b) => b.length - a.length)[0] ?? null;
 });
-const isActive = (href) => !!href && href === activeHref.value;
+const isActive = (href) => href === activeHref.value;
 
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
@@ -139,18 +139,15 @@ const alternarSecao = (heading) => {
 const secaoExpandida = (heading) => !secoesAbertas.value.has(`!${heading}`) && secaoAberta(heading);
 // Submenu recolhível (Radar, pedido do Lira 2026-10-12): abre e fecha pela
 // setinha. Sem escolha guardada, fica aberto só se um filho for a tela atual.
-// Pai sem href (Mercado Livre, correção do Lira 2026-10-12) não é link: o
-// clique no nome abre e fecha o submenu.
 const SUBMENUS = 'admin_menu_submenus';
-const chaveItem = (item) => item.href ?? item.label;
 const lerSubmenus = () => {
     try { return JSON.parse(localStorage.getItem(SUBMENUS) ?? '{}') ?? {}; } catch { return {}; }
 };
 const submenusEscolhidos = ref(lerSubmenus());
-const submenuAberto = (item) => submenusEscolhidos.value[chaveItem(item)]
+const submenuAberto = (item) => submenusEscolhidos.value[item.href]
     ?? item.children.some((filho) => isActive(filho.href));
 const alternarSubmenu = (item) => {
-    submenusEscolhidos.value = { ...submenusEscolhidos.value, [chaveItem(item)]: !submenuAberto(item) };
+    submenusEscolhidos.value = { ...submenusEscolhidos.value, [item.href]: !submenuAberto(item) };
     try { localStorage.setItem(SUBMENUS, JSON.stringify(submenusEscolhidos.value)); } catch { /* sem storage: só não lembra */ }
 };
 const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
@@ -268,14 +265,13 @@ watch(
                         </button>
 
                         <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
-                            <li v-for="item in section.items" :key="chaveItem(item)">
+                            <li v-for="item in section.items" :key="item.href">
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja
                                 no escuro) e barra de 3px à esquerda. Ícones numa cor só. -->
                                 <div class="flex items-center">
-                                    <component :is="item.href ? Link : 'button'" v-bind="item.href ? { href: item.href } : { type: 'button', 'aria-expanded': submenuAberto(item) }" :title="item.label"
-                                        v-on="item.href ? {} : { click: () => alternarSubmenu(item) }"
-                                        class="flex min-w-0 flex-1 items-center gap-2 text-left rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
+                                    <Link :href="item.href" :title="item.label"
+                                        class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
                                         :class="isActive(item.href)
                                             ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
@@ -287,7 +283,7 @@ watch(
                                             :title="`${sidebarBadge(item)} pendência(s)`">
                                             {{ sidebarBadge(item) }}
                                         </span>
-                                    </component>
+                                    </Link>
                                     <button v-if="item.children && !sidebarCollapsed" type="button"
                                         class="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30"
                                         :title="submenuAberto(item) ? 'Recolher' : 'Expandir'" :aria-label="`${submenuAberto(item) ? 'Recolher' : 'Expandir'} ${item.label}`"

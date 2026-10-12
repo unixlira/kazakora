@@ -137,7 +137,7 @@ const tendenciaCor = (p) => {
             </button>
 
             <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-label="Lucro do canal">
-                <p class="font-semibold">Lucro do {{ canal.nome }}</p>
+                <p class="font-semibold">Lucro no canal</p>
                 <dl class="mt-2 space-y-1 text-sm tabular-nums">
                     <div class="flex justify-between gap-3"><dt class="text-[var(--texto-suave)]">Faturamento</dt><dd>{{ formatPrice(curva.total) }}</dd></div>
                     <div class="flex justify-between gap-3"><dt class="text-[var(--texto-suave)]">Lucro dos produtos</dt><dd :class="lucroClasse(curva.lucro_produtos)">{{ formatPrice(curva.lucro_produtos) }}</dd></div>
@@ -167,7 +167,7 @@ const tendenciaCor = (p) => {
             </div>
 
             <p v-if="curva.produtos.length === 0" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
-                Nenhuma venda efetiva do {{ canal.nome }} neste período.
+                Nenhuma venda efetiva neste canal no período.
             </p>
             <p v-else-if="linhas.length === 0" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">Nenhum produto com esse filtro.</p>
 

@@ -206,7 +206,6 @@ XML;
                     ->where('fonteNome', $nome)
                     ->loadDeferredProps(fn (Assert $reload) => $reload
                         ->has($prop)
-                        ->where('fonte', $fonte)
                         ->etc()));
         }
 

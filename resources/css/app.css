@@ -123,6 +123,20 @@
 }
 
 /*
+ * Radar de Oportunidades no escuro (pedido do Lira 2026-10-12: "muito
+ * escura"): só nessa tela o preto vira grafite, com cards um tom acima do
+ * fundo para separar sem depender só da borda. Vale para menu e topo também,
+ * para a tela não ficar com duas cores de fundo.
+ */
+.dark .admin-shell:has(.radar-grafite) {
+    --fundo: #1c1a1b;
+    --surface: #262324;
+    --surface-muted: #302c2e;
+    --surface-border: #3e393b;
+    --faixa-card: #a39a9d;
+}
+
+/*
  * Tema escuro do admin (pedido 2026-10-11: "várias fontes não aparecem").
  * As telas foram feitas no claro com bg-white, cinzas escuros e caixas de
  * aviso em tons -50; no escuro isso virava texto escuro em fundo escuro (ou

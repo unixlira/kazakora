@@ -53,8 +53,8 @@ const copyPixCode = async () => {
     <!-- Não fechável: sem botão de X, sem clique fora, sem ESC — de propósito. -->
     <Teleport to="body">
         <div v-if="open" class="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4" role="alertdialog" aria-modal="true">
-            <!-- Pix (pedido 2026-10-12): fundo cinza claro em vez do preto. -->
-            <div class="absolute inset-0 backdrop-blur-sm" :class="state === 'awaiting_pix' ? 'bg-neutral-300/80' : 'bg-store-fg/60'"></div>
+            <!-- Pix (pedido 2026-10-12): fundo cinza grafite suave em vez do preto. -->
+            <div class="absolute inset-0 backdrop-blur-sm" :class="state === 'awaiting_pix' ? 'bg-zinc-700/60' : 'bg-store-fg/60'"></div>
 
             <!-- Pix (pedido 2026-10-12): sem padding no cartão, cada faixa cuida do seu,
                  e tudo dimensionado pela altura da tela para caber sem rolagem. -->
@@ -126,9 +126,9 @@ const copyPixCode = async () => {
 
                     <!-- Tarja de confiança, como no topo da finalização. -->
                     <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 rounded-b-2xl bg-[#111] px-3 py-2.5 text-[10px] min-[360px]:text-[11px] font-bold uppercase tracking-wide text-white sm:text-xs">
-                        <span class="whitespace-nowrap"><i class="fa-solid fa-truck-fast mr-1 text-[#F27A2A]"></i>Frete grátis</span>
+                        <span class="whitespace-nowrap"><i class="fa-solid fa-truck-fast mr-1 text-[#0FB930]"></i>Frete grátis</span>
                         <span class="opacity-40">|</span>
-                        <span class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1 text-[#F27A2A]"></i>Compra 100% segura</span>
+                        <span class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1 text-[#0FB930]"></i>Compra 100% segura</span>
                     </div>
                 </template>
 

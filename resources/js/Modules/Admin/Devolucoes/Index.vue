@@ -55,7 +55,7 @@ const cards = computed(() => [
     { chave: 'responder', titulo: 'Aguardando nossa resposta', icone: 'fas fa-reply', cor: 'var(--color-warning)', valor: props.resumo.responder },
     { chave: 'mediacao', titulo: 'Em mediação', icone: 'fas fa-scale-balanced', cor: 'var(--color-warning)', valor: props.resumo.mediacao },
     { chave: 'voltando', titulo: 'Produto voltando', icone: 'fas fa-truck-arrow-right', cor: 'var(--color-info)', valor: props.resumo.voltando },
-    { chave: 'conferir', titulo: 'Chegou — falta conferir', icone: 'fas fa-box-open', cor: 'var(--color-primary)', valor: props.resumo.conferir },
+    { chave: 'conferir', titulo: 'Chegou — falta conferir', icone: 'fas fa-box-open', cor: 'var(--primary-solido)', valor: props.resumo.conferir },
 ]);
 
 // ---- Detalhe -----------------------------------------------------------

@@ -79,7 +79,7 @@ const copyPixCode = async () => {
                     <div class="rounded-t-2xl bg-gradient-to-br from-[#1c1c1e] to-[#111] px-5 pb-4 pt-4 text-white">
                         <div class="flex items-center justify-between gap-3">
                             <h2 class="flex items-center gap-2 whitespace-nowrap font-display text-lg font-bold">
-                                <i class="fa-brands fa-pix text-[#F27A2A]"></i> Pague com Pix
+                                <i class="fa-brands fa-pix text-[#32BCAD]"></i> Pague com Pix
                             </h2>
                             <p v-if="orderTotal !== null" class="whitespace-nowrap text-lg font-extrabold">{{ formatPrice(orderTotal) }}</p>
                         </div>

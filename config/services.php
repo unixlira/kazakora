@@ -426,4 +426,20 @@ return [
         'token' => env('TIKTOK_REPORTS_TOKEN'),
     ],
 
+    // Kalodata (dados do TikTok Shop: ranking e detalhe de categoria, loja,
+    // criador, produto, vídeo e live). Cobrança por crédito: cache das
+    // respostas e teto diário de chamadas reais protegem o saldo. Ver
+    // docs/kalodata-api.md e App\Services\Kalodata\KalodataService.
+    'kalodata' => [
+        'api_key' => env('KALODATA_API_KEY'),
+        'base_url' => env('KALODATA_BASE_URL', 'https://www.kalodata.com/openapi/v1'),
+        'regiao' => env('KALODATA_REGIAO', 'BR'),
+        'cache_horas' => (int) env('KALODATA_CACHE_HORAS', 24),
+        'teto_diario' => (int) env('KALODATA_TETO_DIARIO', 20),
+        'timeout' => (int) env('KALODATA_TIMEOUT', 30),
+        'tentativas' => (int) env('KALODATA_TENTATIVAS', 3),
+        // Espera entre tentativas quando o Kalodata responde code 2000 (multiplica pela tentativa).
+        'espera_ms' => (int) env('KALODATA_ESPERA_MS', 500),
+    ],
+
 ];

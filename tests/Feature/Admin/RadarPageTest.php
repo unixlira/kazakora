@@ -14,8 +14,8 @@ use Tests\TestCase;
 /**
  * Radar de Oportunidades (2026-10-12): uma tela só no grupo Oportunidades
  * do menu, sem separar por marketplace. Junta TikTok Shop (Kalodata),
- * Shopee (Afiliados), Mercado Livre e Google Trends, cada um como prop
- * adiada.
+ * Mercado Livre e Google Trends, cada um como prop adiada. A Shopee saiu da
+ * tela no layout v4 (Lira 2026-10-12) até a API de Afiliados trazer dados.
  */
 class RadarPageTest extends TestCase
 {
@@ -57,18 +57,13 @@ XML;
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/Radar/Index', false)
                 ->missing('tiktok')
-                ->missing('shopee')
                 ->missing('mercadoLivre')
                 ->missing('google'));
     }
 
     public function test_radar_junta_tiktok_mercado_livre_e_google(): void
     {
-        config([
-            'services.kalodata.api_key' => 'chave-teste',
-            'services.shopee_afiliados.app_id' => null,
-            'services.shopee_afiliados.secret' => null,
-        ]);
+        config(['services.kalodata.api_key' => 'chave-teste']);
         MercadoLivreToken::query()->create([
             'id' => (string) Str::uuid(), 'ml_user_id' => 123456789, 'ml_nickname' => 'LOJA_KAZAKORA',
             'access_token' => 'valid-access-token', 'refresh_token' => 'valid-refresh-token',
@@ -98,7 +93,7 @@ XML;
                 ->where('tiktok.produtos.0.receita', 249241.08)
                 ->where('tiktok.produtos.0.vendas', 4063)
                 ->where('tiktok.produtos.0.crescimento', -8.35)
-                ->where('shopee.configurado', false)
+                ->missing('shopee')
                 ->where('mercadoLivre.produtos.0.nome', 'Organizador de Gaveta')
                 ->where('mercadoLivre.tendencias.0.termo', 'cortina blackout')
                 ->where('mercadoLivre.buscas.0.termo', 'air fryer')

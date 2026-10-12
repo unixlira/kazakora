@@ -7,12 +7,12 @@ import { computed, ref } from 'vue';
 
 // Radar de Oportunidades (pedido do Lira 2026-10-12): o que está vendendo e
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
-// Shopee (API de Afiliados), Mercado Livre (mais vendidos de Casa e buscas
-// em alta) e Google Trends. Cada fonte é prop adiada num grupo próprio
-// (null até chegar). Ver RadarController.
+// Mercado Livre (mais vendidos de Casa e buscas em alta) e Google Trends.
+// Layout v4 (Lira 2026-10-12): Shopee fora até a API de Afiliados trazer
+// dados; o Mercado Livre ocupa o lugar dela, ao lado do TikTok. Cada fonte
+// é prop adiada num grupo próprio (null até chegar). Ver RadarController.
 const props = defineProps({
     tiktok: { type: Object, default: null },
-    shopee: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
     google: { type: Object, default: null },
 });
@@ -69,7 +69,6 @@ const sinais = computed(() => {
     ];
     const listas = [
         ['TikTok Shop', props.tiktok?.produtos ?? []],
-        ['Shopee', props.shopee?.produtos ?? []],
         ['Mercado Livre', props.mercadoLivre?.produtos ?? []],
     ];
 
@@ -104,13 +103,12 @@ const voceVendeMl = computed(() => (props.mercadoLivre?.produtos ?? []).filter((
 // Etiqueta de fonte do cruzamento: a cor diz de onde veio.
 const corDaFonte = (texto) => {
     if (texto.includes('TikTok')) return 'fonte-tiktok';
-    if (texto.includes('Shopee')) return 'fonte-shopee';
     if (texto.includes('Mercado Livre')) return 'fonte-ml';
     return 'fonte-google';
 };
 const marcaDaFonte = (texto) => corDaFonte(texto).replace('fonte-', '');
 
-const tudoCarregado = computed(() => props.tiktok && props.shopee && props.mercadoLivre && props.google);
+const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props.google);
 </script>
 
 <template>
@@ -122,11 +120,11 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                     <p class="text-xs font-bold uppercase tracking-wider text-[var(--destaque)]">Oportunidades</p>
                     <h1 class="text-2xl font-bold">{{ RADAR_NOME }}</h1>
                     <p class="mt-1 max-w-3xl text-sm text-[var(--texto-suave)]">
-                        O que está vendendo e em alta fora da loja: TikTok Shop, Shopee, Mercado Livre e Google. Serve para achar produto novo; não são as vendas da KazaKora.
+                        O que está vendendo e em alta fora da loja: TikTok Shop, Mercado Livre e Google. Serve para achar produto novo; não são as vendas da KazaKora.
                     </p>
                 </div>
                 <button type="button" class="rounded-lg bg-[var(--primary-solido)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                    :disabled="carregando || !tudoCarregado" title="Refaz Shopee, Mercado Livre e Google. O TikTok atualiza uma vez por dia (o Kalodata cobra por consulta)." @click="consultarDeNovo">
+                    :disabled="carregando || !tudoCarregado" title="Refaz Mercado Livre e Google. O TikTok atualiza uma vez por dia (o Kalodata cobra por consulta)." @click="consultarDeNovo">
                     <i class="fas fa-rotate-right mr-1" :class="{ 'animate-spin': carregando || !tudoCarregado }" aria-hidden="true"></i>
                     {{ carregando || !tudoCarregado ? 'Consultando…' : 'Consultar de novo' }}
                 </button>
@@ -142,13 +140,13 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                     <MarcaLogo marca="tiktok" />
                     <div><b>{{ tiktok ? formatPriceK(faturamentoTikTok) : '…' }}</b><span>top {{ tiktok?.produtos?.length ?? '' }} do TikTok em 7 dias</span></div>
                 </div>
-                <div class="kpi fonte-shopee">
-                    <MarcaLogo marca="shopee" />
-                    <div><b>{{ shopee ? Math.min(shopee.produtos?.length ?? 0, 20) : '…' }}</b><span>mais vendidos da Shopee</span></div>
-                </div>
                 <div class="kpi fonte-ml">
                     <MarcaLogo marca="ml" />
                     <div><b>{{ mercadoLivre ? voceVendeMl : '…' }}</b><span>que você já vende no ML</span></div>
+                </div>
+                <div class="kpi fonte-google">
+                    <MarcaLogo marca="google" />
+                    <div><b>{{ google ? (google.termos?.length ?? 0) : '…' }}</b><span>buscas em alta no Google hoje</span></div>
                 </div>
             </div>
 
@@ -224,47 +222,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                     </Deferred>
                 </section>
 
-                <!-- Shopee (API de Afiliados) -->
-                <section class="card-fonte fonte-shopee">
-                    <div class="card-cabeca">
-                        <MarcaLogo marca="shopee" />
-                        <div class="min-w-0">
-                            <h2 class="text-base font-bold">Shopee · mais vendidos</h2>
-                            <p class="text-xs text-[var(--texto-suave)]">Fonte: API de Afiliados da Shopee. Busca por palavra em <a href="/admin/oportunidades/shopee" class="underline">Oportunidades › Shopee</a>.</p>
-                        </div>
-                    </div>
-                    <Deferred data="shopee">
-                        <template #fallback>
-                            <p class="px-4 py-6 text-sm text-[var(--texto-suave)]" role="status"><i class="fas fa-circle-notch mr-1 animate-spin" aria-hidden="true"></i> Consultando a Shopee…</p>
-                        </template>
-                        <div v-if="!shopee.configurado" class="px-4 py-6 text-sm text-[var(--texto-suave)]">
-                            <p class="font-semibold text-[var(--surface-foreground)]">Falta conectar a API de Afiliados da Shopee.</p>
-                            <p class="mt-1">A integração de vendedor só enxerga a própria loja. As vendas de outras lojas vêm da API de Afiliados (affiliate.shopee.com.br › Open API); com o AppID e a senha de lá no servidor (SHOPEE_AFILIADOS_APP_ID e SHOPEE_AFILIADOS_SECRET) este bloco passa a listar os mais vendidos.</p>
-                        </div>
-                        <p v-else-if="shopee.erro" class="px-4 py-6 text-sm text-error" role="alert">{{ shopee.erro }}</p>
-                        <p v-else-if="shopee.produtos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto encontrado.</p>
-                        <table v-else class="tabela">
-                            <thead>
-                                <tr>
-                                    <th scope="col" class="pl-4">#</th>
-                                    <th scope="col">Produto</th>
-                                    <th scope="col" class="text-right">Vendas</th>
-                                    <th scope="col" class="pr-4 text-right">Preço</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="p in shopee.produtos.slice(0, 20)" :key="p.id">
-                                    <td class="pl-4"><span class="posicao" :class="{ 'posicao-top': p.posicao <= 3 }">{{ p.posicao }}</span></td>
-                                    <td class="max-w-0 w-full truncate font-medium"><a :href="p.link" target="_blank" rel="noopener" class="hover:underline" :title="p.nome">{{ p.nome }}</a></td>
-                                    <td class="whitespace-nowrap text-right" :title="p.vendas === null ? null : formatNumber(p.vendas)">{{ p.vendas === null ? '' : formatK(p.vendas) }}</td>
-                                    <td class="whitespace-nowrap pr-4 text-right font-bold">{{ faixaPreco(p) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </Deferred>
-                </section>
-
-                <!-- Mercado Livre -->
+                <!-- Mercado Livre: no lugar que era da Shopee, ao lado do TikTok -->
                 <section class="card-fonte fonte-ml">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
@@ -312,8 +270,8 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
                     </Deferred>
                 </section>
 
-                <!-- Google Trends -->
-                <section class="card-fonte fonte-google">
+                <!-- Google Trends: sozinho na linha de baixo, ocupa a largura toda -->
+                <section class="card-fonte fonte-google xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="google" />
                         <div class="min-w-0">
@@ -360,12 +318,10 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
    .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
    legível em cima do fundo tingido. */
 .fonte-tiktok { --cor: #111111; --cor-texto: #111111; --tinta: 9%; }
-.fonte-shopee { --cor: #ee4d2d; --cor-texto: #b5341b; --tinta: 11%; }
 .fonte-ml { --cor: #2d3277; --cor-texto: #2d3277; --cor-fundo: #ffe600; --tinta: 18%; }
 .fonte-google { --cor: #1a73e8; --cor-texto: #1557b0; --tinta: 10%; }
 .fonte-destaque { --cor: #c2410c; --cor-texto: #c2410c; --tinta: 12%; }
 .dark .fonte-tiktok { --cor: #000000; --cor-texto: #e8e3e5; --tinta: 14%; }
-.dark .fonte-shopee { --cor-texto: #ff9a80; --tinta: 16%; }
 .dark .fonte-ml { --cor-texto: #ffe866; --tinta: 12%; }
 .dark .fonte-google { --cor-texto: #8ab4f8; --tinta: 16%; }
 .dark .fonte-destaque { --cor: #ff8c4d; --cor-texto: #ff8c4d; --tinta: 16%; }
@@ -426,7 +382,7 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
     font-size: 0.6875rem;
     font-weight: 700;
 }
-.etiqueta.fonte-tiktok, .etiqueta.fonte-shopee, .etiqueta.fonte-ml, .etiqueta.fonte-google, .etiqueta.fonte-destaque, .etiqueta-fonte {
+.etiqueta.fonte-tiktok, .etiqueta.fonte-ml, .etiqueta.fonte-google, .etiqueta.fonte-destaque, .etiqueta-fonte {
     background: color-mix(in oklab, var(--cor-fundo, var(--cor)) var(--tinta), var(--surface));
     color: var(--cor-texto);
 }
@@ -451,11 +407,10 @@ const tudoCarregado = computed(() => props.tiktok && props.shopee && props.merca
     border-bottom: 3px solid var(--th-linha, var(--th-fundo));
 }
 /* Cabeçalho da tabela na cor da plataforma (pedido do Lira 2026-10-12). Tons
-   de laranja e azul um pouco mais escuros que os oficiais para o branco ler
+   de azul um pouco mais escuros que os oficiais para o branco ler
    bem (contraste acima de 4,5). TikTok e Google ganham a faixa de cores da
    marca logo abaixo. */
 .fonte-tiktok { --th-fundo: #000000; --th-texto: #ffffff; --faixa: linear-gradient(90deg, #25f4ee, #fe2c55); }
-.fonte-shopee { --th-fundo: #d73a1e; --th-texto: #ffffff; --th-linha: #ee4d2d; }
 .fonte-ml { --th-fundo: #ffe600; --th-texto: #2d3277; --th-linha: #2d3277; }
 .fonte-google { --th-fundo: #1967d2; --th-texto: #ffffff; --faixa: linear-gradient(90deg, #4285f4 0 25%, #ea4335 25% 50%, #fbbc05 50% 75%, #34a853 75% 100%); }
 .tabela td.faixa { height: 4px; padding: 0; border: 0; background: var(--faixa); }

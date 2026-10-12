@@ -17,8 +17,9 @@ defineProps({
             <text x="12" y="18.6" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="10.5" fill="#ee4d2d">S</text>
         </svg>
         <svg v-else-if="marca === 'ml'" viewBox="0 0 24 24">
-            <ellipse cx="12" cy="12" rx="10.6" ry="7.6" fill="#fff" stroke="#2d3277" stroke-width="1.6" />
-            <path d="M5.2 11.2l3-2.1 2.6 1.1 2.2-1.4 2.9.4 2.9 2.2M8.4 13.2l1.4 1.3m.6-2.4l2.3 2.2m.4-2.4l2 1.9m-7.7-1.1l1.2 1.2" fill="none" stroke="#2d3277" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            <!-- Mãozinhas em branco sobre o oval azul (pedido do Lira 2026-10-12: mais contraste). -->
+            <ellipse cx="12" cy="12" rx="10.6" ry="7.6" fill="#2d3277" />
+            <path d="M5.2 11.2l3-2.1 2.6 1.1 2.2-1.4 2.9.4 2.9 2.2M8.4 13.2l1.4 1.3m.6-2.4l2.3 2.2m.4-2.4l2 1.9m-7.7-1.1l1.2 1.2" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         <svg v-else viewBox="0 0 48 48">
             <path fill="#fbbc05" d="M43.6 20.1H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.6C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z" />

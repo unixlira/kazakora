@@ -11,6 +11,8 @@
  * `permission: null` = qualquer pessoa da equipe vê.
  * `badgeKey` = contador de pendências (page.props.sidebarBadges).
  */
+import { RADAR_NOME } from '@/Shared/radarNome';
+
 export const sidebarSections = [
     {
         heading: 'Início',
@@ -23,11 +25,35 @@ export const sidebarSections = [
         heading: 'Vender',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', permission: 'cadastros.view' },
+            // Curva ABC (2026-10-12): mostra lucro, por isso financeiro.view.
+            { label: 'Curva ABC', href: '/admin/curva-abc', icon: 'fas fa-ranking-star', permission: 'financeiro.view' },
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-folder-tree', permission: 'cadastros.view' },
             { label: 'Calculadora de preço', href: '/admin/precificacao', icon: 'fas fa-calculator', permission: 'cadastros.view' },
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', permission: 'cadastros.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', permission: 'cadastros.view' },
+        ],
+    },
+    {
+        // Oportunidades (pedido do Lira 2026-10-12): o Radar de Oportunidades
+        // (uma tela só, sem separar por marketplace; nome em radarNome.js) e
+        // os mais vendidos de TERCEIROS em cada marketplace (correção do
+        // Lira 2026-10-12: não são as vendas da loja).
+        heading: 'Oportunidades',
+        items: [
+            { label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
+            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
+            { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
+        ],
+    },
+    {
+        // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro de
+        // cada marketplace, que saiu de Oportunidades. Mostra lucro, por
+        // isso financeiro.view.
+        heading: 'Estatísticas',
+        items: [
+            { label: 'Curva ABC Mercado Livre', href: '/admin/estatisticas/curva-abc/mercado-livre', icon: 'fas fa-chart-column', permission: 'financeiro.view' },
+            { label: 'Curva ABC Shopee', href: '/admin/estatisticas/curva-abc/shopee', icon: 'fas fa-chart-bar', permission: 'financeiro.view' },
         ],
     },
     {
@@ -62,7 +88,6 @@ export const sidebarSections = [
             { label: 'Fluxo de caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', permission: 'financeiro.view' },
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', permission: 'pedidos.view' },
-            { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', permission: 'configuracoes.integracoes' },
             { label: 'Extratos do TikTok', href: '/admin/arquivos-tiktok', icon: 'fab fa-tiktok', permission: 'financeiro.view' },
             { label: 'Centros de custo', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', permission: 'cadastros.view' },
@@ -76,10 +101,23 @@ export const sidebarSections = [
             { label: 'Banners do site', href: '/admin/banners', icon: 'fas fa-images', permission: 'cadastros.view' },
             { label: 'Notificações promocionais', href: '/admin/notificacoes-promocionais', icon: 'fas fa-bullhorn', permission: 'cadastros.view' },
             { label: 'Disparos de WhatsApp', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', permission: 'configuracoes.integracoes' },
-            { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
-            { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },
             { label: 'Oportunidades em PDF', href: '/admin/pdf-oportunidades', icon: 'fas fa-file-pdf', permission: 'relatorios.view' },
             { label: 'Baixar vídeos', href: '/admin/download-videos', icon: 'fas fa-download', permission: 'operacional.create' },
+        ],
+    },
+    {
+        // Publicidade (pedido do Lira em 2026-10-12): junta o que é de ADS,
+        // que antes ficava espalhado entre Financeiro e Marketing.
+        heading: 'Publicidade',
+        items: [
+            { label: 'Visão geral de ADS', href: '/admin/publicidade', icon: 'fas fa-rectangle-ad', permission: 'financeiro.view' },
+            // Meta ADS e Google ADS (2026-10-12): integração ainda não
+            // conectada, a tela mostra o estado vazio (PlataformaDeAnuncio).
+            { label: 'Meta ADS', href: '/admin/publicidade/meta-ads', icon: 'fab fa-meta', permission: 'financeiro.view' },
+            { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', permission: 'financeiro.view' },
+            { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
+            { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
+            { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },
         ],
     },
     {

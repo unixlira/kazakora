@@ -55,6 +55,7 @@ use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
 use App\Modules\Admin\Http\Controllers\ProductVideoController;
 use App\Modules\Admin\Http\Controllers\VideoDownloadController;
 use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
+use App\Modules\Admin\Http\Controllers\RadarController;
 use App\Modules\Admin\Http\Controllers\ReportController;
 use App\Modules\Admin\Http\Controllers\ReviewController as AdminReviewController;
 use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
@@ -106,6 +107,14 @@ Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cook
 ]))->name('legal.cookies');
 Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
+
+// URLs da loja antiga (Nuvemshop) que o Google ainda mostra nos resultados
+// (pedido 2026-10-12: clicar em "kazakora.com › quem-somos" dava 404).
+// 301 para a página atual equivalente, o Google troca o link sozinho.
+Route::permanentRedirect('/quem-somos', '/');
+Route::permanentRedirect('/produtos', '/?todos=1');
+Route::permanentRedirect('/politica-de-frete', '/politica-de-entrega');
+Route::permanentRedirect('/contato', '/fale-conosco');
 
 // Documentação da API pública de parceiros (ver routes/api_v1.php) — página
 // estática (Blade puro, não Inertia/SPA), pública de propósito pra
@@ -464,6 +473,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
         Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
+        // Radar de Oportunidades (2026-10-12): uma tela só, no grupo
+        // Oportunidades do menu.
+        Route::get('radar', [RadarController::class, 'index'])->name('radar.index');
+        // Oportunidades (correção do Lira 2026-10-12): mais vendidos e buscas
+        // em alta de TERCEIROS no Mercado Livre e na Shopee (dado de mercado,
+        // não as vendas da loja).
+        Route::get('oportunidades/{canal}', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
+            ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\OportunidadesController::CANAIS))
+            ->middleware('throttle:30,1')
+            ->name('oportunidades.ver');
         // Gerador de fotos de anúncio (Naia, 28-30/08) — feito direto no
         // servidor, apagado por um deploy e restaurado em 2026-09-29.
         Route::get('marketplaces/fotos-anuncio', [MarketplaceAdPhotoController::class, 'index'])->name('marketplaces.fotos-anuncio');
@@ -491,11 +510,23 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::middleware('permission:financeiro.view')->group(function () {
         Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
+        // Curva ABC dos produtos com lucro e diagnóstico (2026-10-12).
+        Route::get('curva-abc', [\App\Modules\Admin\Http\Controllers\CurvaAbcController::class, 'index'])->name('curva-abc.ver');
+        // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro por
+        // marketplace. Saiu do menu Oportunidades (só dado de mercado).
+        Route::get('estatisticas/curva-abc/{canal}', [\App\Modules\Admin\Http\Controllers\EstatisticasController::class, 'curvaAbc'])
+            ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\EstatisticasController::CANAIS))
+            ->name('estatisticas.curva-abc');
         // Arquivos financeiros do TikTok enviados à mão (2026-10-11).
         Route::get('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'index'])->name('arquivos-tiktok.listar');
         Route::post('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'store'])->name('arquivos-tiktok.enviar');
         Route::get('fluxo-de-caixa', [CashFlowController::class, 'index'])->name('fluxo-de-caixa.listar');
         Route::get('anuncios/recargas', [AdsRechargeController::class, 'index'])->name('anuncios.recargas.listar');
+        // Menu Publicidade (2026-10-12): resumo de gasto de ADS por canal.
+        Route::get('publicidade', [\App\Modules\Admin\Http\Controllers\PublicidadeController::class, 'index'])->name('publicidade.ver');
+        // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
+        Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
+        Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
     });
     Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
     Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');

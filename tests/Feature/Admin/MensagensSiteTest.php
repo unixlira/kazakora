@@ -71,10 +71,98 @@ class MensagensSiteTest extends TestCase
             ->assertJsonPath('mensagens.0.assunto', 'Nota fiscal');
     }
 
+    public function test_excluir_uma_vai_para_a_lixeira_e_restaura(): void
+    {
+        $mensagem = $this->mensagem();
+        $outra = $this->mensagem(['assunto' => 'Troca']);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->delete("/admin/mensagens-site/{$mensagem->id}")->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSoftDeleted($mensagem);
+        $this->assertNotSoftDeleted($outra);
+
+        $this->actingAs($admin)->get('/admin/mensagens-site')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('mensagens.data', 1)
+                ->where('naLixeira', 1)
+                ->where('sidebarBadges.emailsSiteNaoLidos', 1));
+
+        $this->actingAs($admin)->get('/admin/mensagens-site?filtro=lixeira')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('filtro', 'lixeira')
+                ->has('mensagens.data', 1)
+                ->where('mensagens.data.0.id', $mensagem->id)
+                ->whereNot('mensagens.data.0.excluida_em', null));
+
+        $this->actingAs($admin)->post('/admin/mensagens-site/restaurar', ['ids' => [$mensagem->id]])->assertRedirect();
+        $this->assertNotSoftDeleted($mensagem);
+    }
+
+    public function test_excluir_selecionadas(): void
+    {
+        $a = $this->mensagem();
+        $b = $this->mensagem(['assunto' => 'Troca']);
+        $c = $this->mensagem(['assunto' => 'Nota']);
+
+        $this->actingAs($this->admin())->delete('/admin/mensagens-site', ['ids' => [$a->id, $c->id]])
+            ->assertRedirect()->assertSessionHas('success', '2 mensagens enviadas para a lixeira.');
+
+        $this->assertSoftDeleted($a);
+        $this->assertSoftDeleted($c);
+        $this->assertNotSoftDeleted($b);
+    }
+
+    public function test_excluir_selecionadas_exige_ids(): void
+    {
+        $this->actingAs($this->admin())->delete('/admin/mensagens-site', [])->assertSessionHasErrors('ids');
+    }
+
+    public function test_excluir_todas_as_lidas_mantem_as_nao_lidas(): void
+    {
+        $naoLida = $this->mensagem();
+        $lida1 = $this->mensagem(['assunto' => 'Troca', 'lida_em' => now()]);
+        $lida2 = $this->mensagem(['assunto' => 'Nota', 'lida_em' => now()]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->get('/admin/mensagens-site')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('lidas', 2));
+
+        $this->actingAs($admin)->delete('/admin/mensagens-site/lidas')
+            ->assertRedirect()->assertSessionHas('success', '2 mensagens lidas enviadas para a lixeira.');
+
+        $this->assertSoftDeleted($lida1);
+        $this->assertSoftDeleted($lida2);
+        $this->assertNotSoftDeleted($naoLida);
+    }
+
     public function test_cliente_nao_acessa(): void
     {
         $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
 
         $this->actingAs($cliente)->get('/admin/mensagens-site')->assertForbidden();
+    }
+
+    public function test_cliente_nao_exclui_nem_restaura(): void
+    {
+        $mensagem = $this->mensagem(['lida_em' => now()]);
+        $cliente = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        $this->actingAs($cliente)->delete("/admin/mensagens-site/{$mensagem->id}")->assertForbidden();
+        $this->actingAs($cliente)->delete('/admin/mensagens-site', ['ids' => [$mensagem->id]])->assertForbidden();
+        $this->actingAs($cliente)->delete('/admin/mensagens-site/lidas')->assertForbidden();
+        $this->assertNotSoftDeleted($mensagem);
+
+        $mensagem->delete();
+        $this->actingAs($cliente)->post('/admin/mensagens-site/restaurar', ['ids' => [$mensagem->id]])->assertForbidden();
+        $this->assertSoftDeleted($mensagem);
+    }
+
+    public function test_visitante_nao_logado_nao_exclui(): void
+    {
+        $mensagem = $this->mensagem();
+
+        $this->delete("/admin/mensagens-site/{$mensagem->id}")->assertRedirect('/entrar');
+        $this->assertNotSoftDeleted($mensagem);
     }
 }

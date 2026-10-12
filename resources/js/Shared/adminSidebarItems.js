@@ -2,7 +2,8 @@
  * Menu do admin (reformulação aprovada pelo Lira em 2026-10-11, Entrega 2
  * de Documents/2026-10-11-admin-cores-e-menu.md): 9 grupos por tarefa do
  * dia, os mesmos 49 itens, com o mesmo href, permission e badgeKey de antes.
- * Nenhuma rota nova e nenhuma permissão mudou.
+ * Nenhuma rota nova e nenhuma permissão mudou. Depois disso entrou o grupo
+ * "Pesquisas" (2026-10-12), com rotas novas e as permissões de sempre.
  *
  * Sem campo de cor por item: o ícone fica numa cor neutra só e a cor vem
  * do estado ativo (ver AdminLayout.vue). Cada item tem ícone próprio, sem
@@ -28,6 +29,15 @@ export const sidebarSections = [
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', permission: 'cadastros.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', permission: 'cadastros.view' },
+        ],
+    },
+    {
+        // Pesquisas de mercado (pedido 2026-10-12): menu novo, separado do
+        // Radar. As abas ML / Shopee / Outras ficam dentro da tela.
+        heading: 'Pesquisas',
+        items: [
+            { label: 'Pesquisas de mercado', href: '/admin/pesquisas', icon: 'fas fa-flask', permission: 'cadastros.view' },
+            { label: 'Curva ABC por canal', href: '/admin/pesquisas/curva-abc', icon: 'fas fa-ranking-star', permission: 'financeiro.view' },
         ],
     },
     {

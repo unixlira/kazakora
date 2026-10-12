@@ -15,6 +15,7 @@ use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
+use App\Modules\Admin\Http\Controllers\PesquisaMercadoController;
 use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
@@ -302,6 +303,19 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('precificacao', [PricingCalculatorController::class, 'index'])
         ->name('precificacao.calculadora')
         ->middleware('permission:cadastros.view');
+
+    // Pesquisas de mercado por plataforma + Curva ABC por canal (pedido
+    // 2026-10-12). Menu novo, separado do Radar.
+    Route::prefix('pesquisas')->name('pesquisas.')->controller(PesquisaMercadoController::class)->group(function () {
+        Route::get('/', 'index')->middleware('permission:cadastros.view')->name('listar');
+        Route::get('curva-abc', 'curvaAbc')->middleware('permission:financeiro.view')->name('curva-abc');
+        Route::get('nova', 'create')->middleware('permission:cadastros.create')->name('criar');
+        Route::post('/', 'store')->middleware('permission:cadastros.create')->name('armazenar');
+        Route::get('{pesquisa}', 'show')->whereNumber('pesquisa')->middleware('permission:cadastros.view')->name('ver');
+        Route::get('{pesquisa}/editar', 'edit')->whereNumber('pesquisa')->middleware('permission:cadastros.edit')->name('editar');
+        Route::put('{pesquisa}', 'update')->whereNumber('pesquisa')->middleware('permission:cadastros.edit')->name('atualizar');
+        Route::delete('{pesquisa}', 'destroy')->whereNumber('pesquisa')->middleware('permission:cadastros.delete')->name('excluir');
+    });
 
     Route::resource('fornecedores', SupplierController::class)->except('show')
         ->parameters(['fornecedores' => 'supplier'])

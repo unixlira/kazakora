@@ -158,7 +158,7 @@ watch(
 </script>
 
 <template>
-    <div class="admin-shell min-h-screen bg-[var(--fundo)] text-[var(--surface-foreground)]">
+    <div class="admin-shell flex min-h-screen flex-col bg-[var(--fundo)] text-[var(--surface-foreground)]">
         <!-- Sidebar -->
         <!-- Celular (2026-10-11): o cabeçalho é uma faixa só (a do topo, com
         hambúrguer e logo). Este menu vira uma gaveta aberta por cima da
@@ -261,7 +261,7 @@ watch(
             </div>
         </nav>
 
-        <div class="relative transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
+        <div class="relative flex flex-1 flex-col transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Topbar -->
             <nav class="sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
                 <div class="mx-auto flex w-full flex-nowrap items-center justify-between gap-2 sm:gap-4 md:px-4">
@@ -390,7 +390,7 @@ watch(
                 </div>
             </nav>
 
-            <div class="mx-auto mt-4 w-full max-w-[1600px] p-4 md:p-6">
+            <div class="mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6">
                 <slot />
             </div>
 
@@ -398,7 +398,9 @@ watch(
             cobria o final do conteúdo real em telas com bastante coisa
             (tabelas grandes, formulários longos), dando a impressão de que
             o scroll nunca "chegava no final". Bug real reportado pelo
-            usuário 2026-08-05. -->
+            usuário 2026-08-05. Em tela curta (Radar de Oportunidades,
+            2026-10-12) ele ficava solto no meio da tela: o conteúdo cresce
+            (flex-1) e empurra o rodapé para o fim da janela. -->
             <footer class="border-t border-[var(--surface-border)] bg-[var(--surface)]">
                 <div class="px-4 py-3 text-center text-sm text-slate-500 md:px-10">
                     © 2026 KazaKora · CNPJ: 65.604.590/0001-07

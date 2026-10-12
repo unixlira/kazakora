@@ -88,6 +88,7 @@ class DashboardController extends Controller
             'revenueByChannel' => $this->revenueByChannel($startOfMonth),
             'analytics' => $this->analytics($today, $margemMes),
             'visitantes' => $this->visitantes((string) $request->query('mes', '')),
+            'diagnosticos' => $this->diagnosticos(),
         ]);
     }
 
@@ -378,6 +379,25 @@ class DashboardController extends Controller
             'paginasHoje' => $inicio->isSameMonth($hoje) ? (int) $deHoje->sum('paginas') : null,
             'mediaDia' => round(array_sum(array_column($dias, 'visitantes')) / $diasComDado, 1),
             'melhorDia' => collect($dias)->sortByDesc('visitantes')->first(),
+        ];
+    }
+
+    /**
+     * Últimos diagnósticos do Cauê (Shopee) e do Diego (Mercado Livre),
+     * gerados pelo marketplace:diagnostico (ver DiagnosticarCanais).
+     *
+     * @return array<string, ?array>
+     */
+    private function diagnosticos(): array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('diagnosticos_canal')) {
+            return ['shopee' => null, 'mercado_livre' => null];
+        }
+        $linhas = DB::table('diagnosticos_canal')->pluck('dados', 'canal');
+
+        return [
+            'shopee' => isset($linhas['shopee']) ? json_decode($linhas['shopee'], true) : null,
+            'mercado_livre' => isset($linhas['mercado_livre']) ? json_decode($linhas['mercado_livre'], true) : null,
         ];
     }
 }

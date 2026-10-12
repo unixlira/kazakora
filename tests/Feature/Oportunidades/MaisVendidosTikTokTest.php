@@ -7,12 +7,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
  * Radar de Oportunidades (Lira 2026-10-12): o TikTok traz o ranking inteiro
- * do Kalodata (páginas de 100), não só os 20 primeiros, guardado em arquivo.
+ * do Kalodata (páginas de 100), não só os 20 primeiros, guardado no banco.
  */
 class MaisVendidosTikTokTest extends TestCase
 {
@@ -30,7 +29,6 @@ class MaisVendidosTikTokTest extends TestCase
             'services.kalodata.teto_diario' => 20,
             'services.kalodata.espera_ms' => 0,
         ]);
-        Storage::fake('local');
     }
 
     private static function pagina(int $inicio, int $quantos): array
@@ -66,6 +64,7 @@ class MaisVendidosTikTokTest extends TestCase
         Artisan::call('cache:clear');
         $this->assertCount(237, app(MaisVendidosTikTok::class)->analisar()['produtos']);
         Http::assertSentCount(3);
+        $this->assertDatabaseHas('kalodata_rankings', ['periodo' => 'last7Day', 'total' => 237, 'completo' => true]);
     }
 
     public function test_falha_no_dia_seguinte_mostra_o_ultimo_ranking(): void

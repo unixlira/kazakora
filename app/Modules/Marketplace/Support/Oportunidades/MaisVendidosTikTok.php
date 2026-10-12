@@ -2,10 +2,10 @@
 
 namespace App\Modules\Marketplace\Support\Oportunidades;
 
+use App\Models\KalodataRanking;
 use App\Services\Kalodata\Exceptions\KalodataException;
 use App\Services\Kalodata\KalodataService;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -21,18 +21,17 @@ use Throwable;
  * Radar não força nova consulta aqui. A tela pagina e filtra a lista sem
  * nova consulta.
  *
- * O resultado fica num arquivo em storage/app, não no cache: o deploy do
- * homolog roda optimize:clear e, com o cache, cada deploy refazia as
- * consultas (12/10: 9 deploys, 9 chamadas). Se a consulta nova falhar (teto,
- * crédito), a tela mostra o último ranking guardado.
+ * O resultado fica no banco (tabela kalodata_rankings), não no cache: o
+ * deploy do homolog roda optimize:clear e, com o cache, cada deploy refazia
+ * as consultas (12/10: 9 deploys, 9 chamadas, e o ranking baixado se perdeu).
+ * Se a consulta nova falhar (teto, crédito), a tela mostra o último ranking
+ * guardado.
  */
 class MaisVendidosTikTok
 {
     public const POR_PAGINA = 100;
 
     public const PERIODO = 'last7Day';
-
-    public const ARQUIVO = 'oportunidades/tiktok-'.self::PERIODO.'.json';
 
     private const VALIDADE_HORAS = 24;
 
@@ -48,7 +47,7 @@ class MaisVendidosTikTok
         }
 
         $guardado = $this->guardado();
-        if ($guardado !== null && Carbon::parse($guardado['valido_ate'])->isFuture()) {
+        if ($guardado !== null && $guardado['valido_ate']->isFuture()) {
             return $guardado['resultado'];
         }
 
@@ -66,26 +65,41 @@ class MaisVendidosTikTok
             return ['configurado' => true, 'produtos' => [], 'atualizado_em' => null, 'erro' => $erro];
         }
 
-        Storage::disk('local')->put(self::ARQUIVO, (string) json_encode([
-            'valido_ate' => now()->addHours($completo ? self::VALIDADE_HORAS : self::VALIDADE_HORAS_PARCIAL)->toIso8601String(),
-            'resultado' => $resultado,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        KalodataRanking::create([
+            'periodo' => self::PERIODO,
+            'completo' => $completo,
+            'total' => count($resultado['produtos']),
+            'produtos' => $resultado['produtos'],
+            'coletado_em' => now(),
+        ]);
 
         return $resultado;
     }
 
     /**
-     * @return array{valido_ate: string, resultado: array<string, mixed>}|null
+     * @return array{valido_ate: Carbon, resultado: array<string, mixed>}|null
      */
     private function guardado(): ?array
     {
-        $disco = Storage::disk('local');
-        if (! $disco->exists(self::ARQUIVO)) {
+        $ranking = KalodataRanking::query()
+            ->where('periodo', self::PERIODO)
+            ->where('total', '>', 0)
+            ->latest('coletado_em')
+            ->latest('id')
+            ->first();
+        if ($ranking === null) {
             return null;
         }
-        $dados = json_decode((string) $disco->get(self::ARQUIVO), true);
 
-        return is_array($dados) && isset($dados['valido_ate'], $dados['resultado']['produtos']) ? $dados : null;
+        return [
+            'valido_ate' => $ranking->coletado_em->copy()->addHours($ranking->completo ? self::VALIDADE_HORAS : self::VALIDADE_HORAS_PARCIAL),
+            'resultado' => [
+                'configurado' => true,
+                'produtos' => $ranking->produtos,
+                'atualizado_em' => $ranking->coletado_em->toIso8601String(),
+                'erro' => null,
+            ],
+        ];
     }
 
     /**

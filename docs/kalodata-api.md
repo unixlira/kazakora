@@ -26,11 +26,11 @@ lista pura, sem total. Para "pegar tudo" é preciso ir página a página até
 uma vir incompleta; o freio real é o teto diário de chamadas e o crédito.
 O Radar (`MaisVendidosTikTok`) faz isso até `KALODATA_RADAR_PAGINAS`.
 
-O ranking do Radar fica em `storage/app/private/oportunidades/tiktok-last7Day.json`
-(24 h, ou 1 h se veio incompleto), não no cache: o deploy do homolog roda
+O ranking do Radar fica no banco, tabela `kalodata_rankings` (uma linha por coleta;
+vale 24 h, ou 1 h se veio incompleto), não no cache: o deploy do homolog roda
 `optimize:clear`, que apaga o cache e fazia cada deploy gastar chamadas de
 novo. Se a consulta do dia falhar, a tela mostra o último ranking guardado.
-Para forçar nova consulta, apague esse arquivo.
+Para forçar nova consulta, marque a coleta como vencida (`coletado_em` antigo).
 
 Lidas em `config/services.php`, chave `kalodata`.
 

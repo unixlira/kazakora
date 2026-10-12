@@ -158,7 +158,7 @@ watch(
 </script>
 
 <template>
-    <div class="admin-shell min-h-screen bg-[var(--surface-muted)] text-[var(--surface-foreground)]">
+    <div class="admin-shell min-h-screen bg-[var(--fundo)] text-[var(--surface-foreground)]">
         <!-- Sidebar -->
         <nav class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
             :class="sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64'">

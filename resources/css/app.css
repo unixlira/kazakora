@@ -213,6 +213,12 @@
  *   escuro; destrutivo só com contorno vermelho.
  */
 html.dark:has(.admin-shell), .dark .admin-shell { color-scheme: dark; }
+/* Barra de rolagem do admin escuro no tom do fundo preto (pedido 2026-10-11):
+   a barra nativa escura fica cinza e destoa do #000. Na página o trilho é o
+   fundo; em caixas com rolagem (inclusive modais teleportados para o body)
+   o trilho some e fica só o polegar. */
+html.dark:has(.admin-shell) { scrollbar-color: #3a3a3a #000000; }
+html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
 .admin-shell a.text-primary:not([class*="bg-"]), .admin-shell a.hover\:text-primary:hover { color: #c2410c; }
 .admin-shell a.text-primary:not([class*="bg-"]):hover, .admin-shell a.hover\:text-primary:hover { text-decoration: underline; text-underline-offset: 2px; }
 .dark .admin-shell a.text-primary:not([class*="bg-"]), .dark .admin-shell a.hover\:text-primary:hover { color: #ff8c4d; }
@@ -253,6 +259,21 @@ html.dark:has(.admin-shell), .dark .admin-shell { color-scheme: dark; }
         --color-store-border: rgba(245, 245, 245, 0.13);
         --color-store-border-strong: rgba(245, 245, 245, 0.24);
         --store-shadow: rgba(0, 0, 0, 0.55);
+    }
+
+    /* Barra de rolagem acompanha o tema escuro da loja (pedido 2026-10-11).
+       Sem color-scheme o navegador desenhava a barra clara do sistema em
+       cima do fundo #0b0b0b. O checkout não usa .storefront-shell e segue
+       claro ([color-scheme:light] no CheckoutLayout). Trilho da página =
+       fundo da loja; em caixas com rolagem (menu, carrinho, modais) o
+       trilho some e fica só o polegar. */
+    html:has(.storefront-shell) {
+        color-scheme: dark;
+        scrollbar-color: #3d3d3d #0b0b0b;
+    }
+
+    html:has(.storefront-shell) body * {
+        scrollbar-color: #3d3d3d transparent;
     }
 }
 

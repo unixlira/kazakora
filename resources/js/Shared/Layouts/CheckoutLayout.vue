@@ -22,6 +22,20 @@ onMounted(() => {
 });
 onBeforeUnmount(() => clearInterval(relogio));
 
+// Selos de segurança com a mesma altura das bandeiras (pedido 2026-10-12).
+// As bandeiras encolhem com a coluna, então a altura é medida na tela.
+const bandeiras = ref(null);
+const alturaSelo = ref(37);
+let medidor = null;
+
+onMounted(() => {
+    medidor = new ResizeObserver(([entrada]) => {
+        alturaSelo.value = Math.round(entrada.contentRect.height) || alturaSelo.value;
+    });
+    medidor.observe(bandeiras.value);
+});
+onBeforeUnmount(() => medidor?.disconnect());
+
 const tempo = computed(() => {
     const minutos = String(Math.floor(restante.value / 60)).padStart(2, '0');
     const segundos = String(restante.value % 60).padStart(2, '0');
@@ -73,7 +87,7 @@ const tempo = computed(() => {
                     <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
                     <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
                          juntas com a coluna em vez de quebrar. -->
-                    <div class="mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5">
+                    <div ref="bandeiras" class="mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
                             width="265" height="180" class="h-auto w-full min-w-0 flex-1">
                     </div>
@@ -85,19 +99,21 @@ const tempo = computed(() => {
                     <p class="text-sm font-semibold text-white">Segurança:</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                            class="flex h-[44px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white px-3 transition hover:opacity-90"
+                            class="box-border flex items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white px-2 transition hover:opacity-90"
+                            :style="{ height: `${alturaSelo}px` }"
                             title="Ver a verificação do Google Safe Browsing">
-                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[34px] w-auto">
+                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
                         </a>
                         <a :href="$page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
-                            class="flex h-[44px] flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white leading-none transition hover:opacity-90"
-                            :class="$page.props.reclameAqui?.verificada ? 'px-2' : 'px-4'"
+                            class="box-border flex flex-col items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white leading-none transition hover:opacity-90"
+                            :class="$page.props.reclameAqui?.verificada ? 'px-1' : 'px-2'"
+                            :style="{ height: `${alturaSelo}px` }"
                             title="Ver a KazaKora no Reclame AQUI">
                             <img v-if="$page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
-                                class="h-[38px] w-auto rounded-md">
+                                class="h-[86%] w-auto rounded-sm">
                             <template v-else>
-                                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Estamos no</span>
-                                <span class="mt-0.5 text-[18px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
+                                <span class="text-[7px] font-semibold uppercase tracking-wider text-slate-500">Estamos no</span>
+                                <span class="text-[14px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
                             </template>
                         </a>
                     </div>

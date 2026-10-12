@@ -579,6 +579,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::middleware('permission:operacional.view')->group(function () {
         Route::get('logistica', [ShippingMethodController::class, 'index'])->name('logistica.listar');
+        // Fretes dos Correios para as 27 capitais (2026-10-12): só consulta.
+        Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
+        Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

@@ -142,7 +142,7 @@ class KalodataServiceTest extends TestCase
         foreach ([
             fn () => $this->servico()->rank('produto'),
             fn () => $this->servico()->rank('product', periodo: 'ontem'),
-            fn () => $this->servico()->rank('product', pagina: 6),
+            fn () => $this->servico()->rank('product', pagina: 0),
             fn () => $this->servico()->rank('product', porPagina: 2),
             fn () => $this->servico()->buscarCategorias('x', 'AR'),
         ] as $chamada) {

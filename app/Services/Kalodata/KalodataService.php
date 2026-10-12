@@ -91,8 +91,10 @@ class KalodataService
         $this->validarModulo($modulo);
         $this->validarPeriodo($periodo);
 
-        if ($pagina < 1 || $pagina > 5) {
-            throw new KalodataException('Página tem que ser de 1 a 5.', 'parametro');
+        // Sem teto de página: em 2026-10-12 a API devolveu 100 itens também
+        // na página 6. O limite real é o teto diário de chamadas.
+        if ($pagina < 1) {
+            throw new KalodataException('Página tem que ser 1 ou mais.', 'parametro');
         }
         if ($porPagina < 5 || $porPagina > 100) {
             throw new KalodataException('Itens por página tem que ser de 5 a 100.', 'parametro');

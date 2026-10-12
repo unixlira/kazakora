@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
 use App\Notifications\TikTokRelatorioNotification;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
@@ -98,8 +99,28 @@ class RelatoriosTikTok
 
     public function avisar(bool $sucesso, string $detalhe): void
     {
+        $contagem = rescue(fn () => $this->contarDoDia($sucesso), null, false);
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
-        rescue(fn () => Notification::send($admins, new TikTokRelatorioNotification($sucesso, $detalhe)), report: false);
+        rescue(fn () => Notification::send($admins, new TikTokRelatorioNotification($sucesso, $detalhe, $contagem)), report: false);
+    }
+
+    /**
+     * Cada aviso é um envio do dia (America/Sao_Paulo); devolve falhas e total
+     * até agora para o "Erro: 1/10" do sino.
+     *
+     * @return array{falhas: int, total: int}
+     */
+    public function contarDoDia(bool $sucesso): array
+    {
+        $dia = now()->format('Y-m-d');
+        $chave = fn (string $tipo) => "tiktok_reports.{$tipo}.{$dia}";
+
+        Cache::add($chave('total'), 0, now()->addDays(2));
+        Cache::add($chave('falhas'), 0, now()->addDays(2));
+        $total = (int) Cache::increment($chave('total'));
+        $falhas = $sucesso ? (int) Cache::get($chave('falhas'), 0) : (int) Cache::increment($chave('falhas'));
+
+        return ['falhas' => $falhas, 'total' => $total];
     }
 
     public function tipo(string $nome): ?string

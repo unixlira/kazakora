@@ -5,12 +5,14 @@ namespace Tests\Feature\Oportunidades;
 use App\Modules\Marketplace\Support\Oportunidades\MaisVendidosTikTok;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
  * Radar de Oportunidades (Lira 2026-10-12): o TikTok traz o ranking inteiro
- * do Kalodata (até 5 páginas de 100), não só os 20 primeiros.
+ * do Kalodata (páginas de 100), não só os 20 primeiros, guardado em arquivo.
  */
 class MaisVendidosTikTokTest extends TestCase
 {
@@ -28,6 +30,7 @@ class MaisVendidosTikTokTest extends TestCase
             'services.kalodata.teto_diario' => 20,
             'services.kalodata.espera_ms' => 0,
         ]);
+        Storage::fake('local');
     }
 
     private static function pagina(int $inicio, int $quantos): array
@@ -58,9 +61,26 @@ class MaisVendidosTikTokTest extends TestCase
             Http::assertSent(fn (Request $r) => $r['page_number'] === $n && $r['page_size'] === 100 && $r['date_range'] === 'last7Day');
         }
 
-        // Segunda abertura do Radar no mesmo dia: nenhuma chamada nova.
-        app(MaisVendidosTikTok::class)->analisar();
+        // Segunda abertura do Radar no mesmo dia, mesmo depois de um deploy
+        // limpar o cache (optimize:clear): nenhuma chamada nova.
+        Artisan::call('cache:clear');
+        $this->assertCount(237, app(MaisVendidosTikTok::class)->analisar()['produtos']);
         Http::assertSentCount(3);
+    }
+
+    public function test_falha_no_dia_seguinte_mostra_o_ultimo_ranking(): void
+    {
+        Http::fake([self::RANK => Http::sequence()
+            ->push(self::pagina(1, 40))
+            ->push(['success' => false, 'message' => 'quota exceeded', 'code' => '2016'])]);
+
+        app(MaisVendidosTikTok::class)->analisar();
+        $this->travel(25)->hours();
+        $resultado = app(MaisVendidosTikTok::class)->analisar();
+
+        Http::assertSentCount(2);
+        $this->assertNull($resultado['erro']);
+        $this->assertCount(40, $resultado['produtos']);
     }
 
     public function test_para_no_limite_de_paginas_do_radar(): void

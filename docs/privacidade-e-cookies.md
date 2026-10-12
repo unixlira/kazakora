@@ -52,6 +52,17 @@ Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 | aparelho (celular/tablet/computador) | sim | sim |
 | origem (site, sem `?...`) e UTM | sim | sim |
 | `consentiu` | false | true |
+| cookies do visitante (`cookies`, JSON) | **não** | sim, só a lista permitida |
+
+**Cookies no log de visitas (pedido 2026-10-12, olho de Visitas ao site):**
+só com o OK, e só os da lista permitida `Cookies::COOKIES_REGISTRAVEIS`
+(`kazakora_visitor`, `kazakora_cookies`, `_fbp`, `_fbc`, `_ga`, `_ga_*`, `_gid`,
+`_gcl_au`, `_gcl_aw`, `_ttp`, `ttclid`), valor cortado em 200 caracteres.
+Sessão (`kazakora-session`), `XSRF-TOKEN`, `remember_*` e qualquer cookie fora
+da lista **nunca** são gravados. Cookie novo? Entrar na lista é decisão
+consciente (e política atualizada). A loja hoje não carrega pixel nenhum; os de
+terceiros só aparecem se o navegador já os tiver. Apagados junto com o IP aos 6
+meses. Visitas anteriores a 12/10/2026 não têm cookies.
 
 Não registra: admin, robôs, arquivos, recarga parcial do Inertia, nada que não
 seja GET 200.

@@ -18,7 +18,10 @@ use Symfony\Component\HttpFoundation\Response;
  *   Civil da Internet (Lei 12.965/2014, art. 15) obriga a loja a guardar
  *   por 6 meses. Sem o OK, o "visitante" é um código tirado da sessão (sem
  *   cookie novo) e o navegador fica de fora.
- * - Com o OK: cookie de visitante (kazakora_visitor) e navegador completo.
+ * - Com o OK: cookie de visitante (kazakora_visitor), navegador completo e
+ *   os cookies permitidos do visitante (Cookies::COOKIES_REGISTRAVEIS,
+ *   coluna site_visits.cookies, pedido 2026-10-12). Sem o OK nenhum cookie
+ *   é gravado.
  * - Em todos: origem (UTM), aparelho (celular/tablet/computador) e o site
  *   de onde veio sem o "?..." (pode ter dado pessoal).
  *
@@ -89,13 +92,24 @@ class TrackSiteVisit
             'utm_source' => $utm('utm_source', 80),
             'utm_medium' => $utm('utm_medium', 80),
             'utm_campaign' => $utm('utm_campaign', 120),
+        ], [
+            // Estão sendo criados nesta mesma resposta (CookiesController).
+            Cookies::COOKIE_VISITANTE => $visitorId,
+            Cookies::COOKIE_OK => Cookies::VERSAO,
         ]), null, false);
     }
 
-    /** @param  array<string, ?string>  $utm */
-    private static function gravar(Request $request, string $visitorId, bool $consentiu, string $path, ?string $referer, array $utm): void
+    /**
+     * @param  array<string, ?string>  $utm
+     * @param  array<string, string>  $cookiesNovos  cookies criados nesta resposta, ainda não enviados pelo navegador
+     */
+    private static function gravar(Request $request, string $visitorId, bool $consentiu, string $path, ?string $referer, array $utm, array $cookiesNovos = []): void
     {
+        $cookies = $consentiu ? [...Cookies::doVisitante($request), ...$cookiesNovos] : [];
+        ksort($cookies);
+
         SiteVisit::create([
+            'cookies' => $cookies === [] ? null : $cookies,
             'visitor_id' => $visitorId,
             'user_id' => $request->user()?->id,
             'path' => Str::limit('/'.ltrim($path, '/'), 250, ''),

@@ -35,6 +35,9 @@ class FreteEmbutido
 
     public const SEDEX = '03220';
 
+    /** shipping_carrier_name do pedido com TURBO (ContributionMargin abate do frete). */
+    public const TURBO = 'SEDEX (TURBO)';
+
     private bool $ligado = false;
 
     private ?string $cepForcado = null;
@@ -210,10 +213,11 @@ class FreteEmbutido
         $caixa = $estimado ? null : $this->faixa($this->tabela($this->destino()['cep']), $peso);
 
         if (! $caixa) {
-            // Sem cotação (ou acima de 30 kg): fica o frete item a item, sem desconto.
+            // Sem cotação (ou acima de 30 kg): fica o frete item a item, sem
+            // desconto. O TURBO continua aparecendo, pelo valor de segurança.
             return [
                 'prazo' => null,
-                'turbo' => $extraItemAItem > 0 ? ['preco' => round($extraItemAItem, 2), 'prazo' => null, 'dias_a_menos' => null] : null,
+                'turbo' => self::turboAteOTeto($extraItemAItem > 0 ? ['preco' => round($extraItemAItem, 2), 'prazo' => null, 'dias_a_menos' => null] : null),
                 'estimado' => true,
                 'desconto_plataforma' => 0.0,
             ];
@@ -234,10 +238,16 @@ class FreteEmbutido
 
         return [
             'prazo' => $prazo,
-            'turbo' => $turbo,
+            'turbo' => self::turboAteOTeto($turbo),
             'estimado' => false,
             'desconto_plataforma' => $unidades > 1 ? round(max(0, $embutido - $real), 2) : 0.0,
         ];
+    }
+
+    /** TURBO acima de frete_embutido.turbo_max some do checkout (pedido 2026-10-12). */
+    private static function turboAteOTeto(?array $turbo): ?array
+    {
+        return $turbo && $turbo['preco'] <= (float) config('frete_embutido.turbo_max', 60) ? $turbo : null;
     }
 
     /** Linha da tabela que comporta o peso (null = sem tabela ou acima da última faixa). */

@@ -271,7 +271,8 @@ const REDES = [
                                 class="flex w-full items-start gap-2 px-4 py-2.5 text-left text-sm hover:bg-store-bg-sunken"
                                 :class="{ 'bg-store-accent-soft/40': !item.read }"
                                 @click="markNotificationRead(item)">
-                                <span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" :class="item.read ? 'bg-transparent' : 'bg-store-accent'"></span>
+                                <span class="mt-1.5 shrink-0 rounded-full"
+                                    :class="item.nivel === 'erro' ? 'h-2.5 w-2.5 bg-red-500 ring-2 ring-red-200' : item.nivel === 'sucesso' ? 'h-2.5 w-2.5 bg-green-500 ring-2 ring-green-200' : item.read ? 'h-1.5 w-1.5 bg-transparent' : 'h-1.5 w-1.5 bg-store-accent'"></span>
                                 <span>
                                     <span class="block font-medium text-store-fg">{{ item.message }}</span>
                                     <span v-if="item.body" class="block text-xs text-store-fg-muted">{{ item.body }}</span>

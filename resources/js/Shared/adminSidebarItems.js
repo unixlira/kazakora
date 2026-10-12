@@ -35,13 +35,22 @@ export const sidebarSections = [
         ],
     },
     {
-        // Oportunidades (pedido do Lira 2026-10-12): o Radar de Oportunidades
-        // (uma tela só, sem separar por marketplace; nome em radarNome.js) e
+        // Oportunidades (pedido do Lira 2026-10-12): o Radar (nome em
+        // radarNome.js), com submenu por fonte, e
         // os mais vendidos de TERCEIROS em cada marketplace (correção do
         // Lira 2026-10-12: não são as vendas da loja).
         heading: 'Oportunidades',
         items: [
-            { label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
+            // Submenu do Radar (pedido do Lira 2026-10-12): a mesma tela só
+            // com o bloco de cada fonte. `children` herda a permissão do pai.
+            {
+                label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view',
+                children: [
+                    { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok' },
+                    { label: 'Mercado Livre', href: '/admin/radar/mercado-livre', icon: 'fas fa-handshake' },
+                    { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google' },
+                ],
+            },
             { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
             { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
         ],

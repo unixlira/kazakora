@@ -11,7 +11,11 @@ import { computed, ref } from 'vue';
 // Layout v4 (Lira 2026-10-12): Shopee fora até a API de Afiliados trazer
 // dados. TikTok sozinho em cima; Mercado Livre e Google lado a lado embaixo.
 // Cada fonte é prop adiada num grupo próprio (null até chegar). Ver RadarController.
+// Submenu do Radar (Lira 2026-10-12): com `fonte` (/admin/radar/tiktok etc.)
+// a tela mostra só o bloco daquela fonte, sem números do topo e sem cruzamento.
 const props = defineProps({
+    fonte: { type: String, default: null },
+    fonteNome: { type: String, default: null },
     tiktok: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
     google: { type: Object, default: null },
@@ -37,7 +41,7 @@ const formatPercent = (value) => `${value > 0 ? '+' : ''}${value.toLocaleString(
 
 const carregando = ref(false);
 const consultarDeNovo = () => {
-    router.get('/admin/radar', { atualizar: 1 }, {
+    router.get(props.fonte ? `/admin/radar/${props.fonte}` : '/admin/radar', { atualizar: 1 }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
@@ -108,19 +112,23 @@ const corDaFonte = (texto) => {
 };
 const marcaDaFonte = (texto) => corDaFonte(texto).replace('fonte-', '');
 
-const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props.google);
+const mostra = (fonte) => !props.fonte || props.fonte === fonte;
+const titulo = computed(() => (props.fonteNome ? `${RADAR_NOME} · ${props.fonteNome}` : RADAR_NOME));
+const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
+    && (!mostra('mercado-livre') || props.mercadoLivre)
+    && (!mostra('google') || props.google));
 </script>
 
 <template>
-    <Head :title="RADAR_NOME" />
+    <Head :title="titulo" />
     <AdminLayout>
         <div class="radar-grafite">
             <div class="radar-topo mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-wider text-[var(--destaque)]">Oportunidades</p>
-                    <h1 class="text-2xl font-bold">{{ RADAR_NOME }}</h1>
+                    <h1 class="text-2xl font-bold">{{ titulo }}</h1>
                     <p class="mt-1 max-w-3xl text-sm text-[var(--texto-suave)]">
-                        O que está vendendo e em alta fora da loja: TikTok Shop, Mercado Livre e Google. Serve para achar produto novo; não são as vendas da KazaKora.
+                        O que está vendendo e em alta fora da loja: {{ fonteNome ?? 'TikTok Shop, Mercado Livre e Google' }}. Serve para achar produto novo; não são as vendas da KazaKora.
                     </p>
                 </div>
                 <button type="button" class="rounded-lg bg-[var(--primary-solido)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
@@ -131,7 +139,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </div>
 
             <!-- Faixa de números (horizontal; rola de lado no celular) -->
-            <div class="mb-5 flex gap-3 overflow-x-auto pb-1 pt-1">
+            <div v-if="!fonte" class="mb-5 flex gap-3 overflow-x-auto pb-1 pt-1">
                 <div class="kpi fonte-destaque">
                     <span class="kpi-icone"><i class="fas fa-bullseye" aria-hidden="true"></i></span>
                     <div><b>{{ tudoCarregado ? sinais.length : '…' }}</b><span>em alta em mais de um lugar</span></div>
@@ -151,7 +159,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </div>
 
             <!-- Em alta em mais de um lugar -->
-            <section class="destaque mb-6 rounded-2xl border border-[var(--surface-border)] p-4 md:p-5">
+            <section v-if="!fonte" class="destaque mb-6 rounded-2xl border border-[var(--surface-border)] p-4 md:p-5">
                 <h2 class="text-base font-bold"><i class="fas fa-bullseye mr-1 text-[var(--destaque)]" aria-hidden="true"></i> Em alta em mais de um lugar</h2>
                 <p class="text-xs text-[var(--texto-suave)]">Busca em alta que também aparece entre os mais vendidos de outra fonte. É o sinal mais forte da tela.</p>
                 <p v-if="!tudoCarregado" class="pt-4 text-sm text-[var(--texto-suave)]" role="status">
@@ -176,7 +184,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 <!-- TikTok Shop (Kalodata): sozinho em cima, ocupa a largura toda -->
-                <section class="card-fonte fonte-tiktok xl:col-span-2">
+                <section v-if="mostra('tiktok')" class="card-fonte fonte-tiktok xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="tiktok" />
                         <div class="min-w-0">
@@ -223,7 +231,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                 </section>
 
                 <!-- Mercado Livre: embaixo, ao lado do Google -->
-                <section class="card-fonte fonte-ml">
+                <section v-if="mostra('mercado-livre')" class="card-fonte fonte-ml" :class="{ 'xl:col-span-2': fonte }">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
                         <div class="min-w-0">
@@ -271,7 +279,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                 </section>
 
                 <!-- Google Trends: embaixo, ao lado do Mercado Livre -->
-                <section class="card-fonte fonte-google">
+                <section v-if="mostra('google')" class="card-fonte fonte-google" :class="{ 'xl:col-span-2': fonte }">
                     <div class="card-cabeca">
                         <MarcaLogo marca="google" />
                         <div class="min-w-0">

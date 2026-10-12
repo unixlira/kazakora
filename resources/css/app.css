@@ -124,11 +124,11 @@
 
 /*
  * Radar de Oportunidades no escuro (pedido do Lira 2026-10-12: "muito
- * escura"): só nessa tela o preto vira grafite, com cards um tom acima do
- * fundo para separar sem depender só da borda. Vale para menu e topo também,
- * para a tela não ficar com duas cores de fundo.
+ * escura"): só o conteúdo dessa tela troca o preto por grafite, com cards
+ * um tom acima para separar sem depender só da borda. Menu lateral, topo e
+ * rodapé ficam no escuro de sempre (Lira, 2026-10-12: não mexer neles).
  */
-.dark .admin-shell:has(.radar-grafite) {
+.dark .admin-shell .radar-grafite {
     --fundo: #1c1a1b;
     --surface: #262324;
     --surface-muted: #302c2e;

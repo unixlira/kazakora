@@ -56,36 +56,25 @@ const tempo = computed(() => {
         <slot />
         <AvisoCookies />
         <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop; preto com fonte
-             branca desde 2026-10-12): formas de pagamento, dados da empresa com o logo
-             branco em cima, selos do Google e do Reclame AQUI à direita e, embaixo, só
+             branca desde 2026-10-12): formas de pagamento e, ao lado, selos
+             do Google e do Reclame AQUI; dados da empresa (sem logo) e, embaixo, só
              os selos de confiança centralizados. Sem links pra fora. -->
         <footer class="mt-auto">
             <div class="bg-black px-4 py-8 text-white">
-                <!-- Formas de pagamento numa linha própria em cima; embaixo, dados à
-                     esquerda e selos à direita. -->
-                <div class="mx-auto max-w-[1160px] border-b border-white/15 pb-10 text-center">
-                    <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
-                    <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
-                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
-                            class="h-[51px] w-auto">
-                    </div>
-                </div>
-                <div class="mx-auto mt-8 flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
-                    <div class="flex flex-col items-center md:items-start">
-                        <!-- Logo da faixa preta acima dos dados da empresa (rodapé preto
-                             com fonte branca, pedido 2026-10-12). -->
-                        <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia" class="mb-3 h-8 w-auto">
-                        <p class="text-xs leading-relaxed text-white">
-                            © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
-                            CNPJ: {{ COMPANY.cnpj }}<br>
-                            WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                            E-mail: {{ COMPANY.email }}<br>
-                            <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
-                        </p>
+                <!-- Formas de pagamento à esquerda e Segurança à direita, na mesma linha
+                     (pedido 2026-10-12, sem o logo); no celular uma embaixo da outra.
+                     Embaixo, os dados da empresa. -->
+                <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-8 border-b border-white/15 pb-10 text-center md:flex-row md:items-start md:justify-between md:gap-10 md:text-left">
+                    <div>
+                        <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
+                        <div class="mt-2 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                            <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
+                                class="h-[51px] w-auto">
+                        </div>
                     </div>
                     <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
                          imagem "Site 100% Seguro"). -->
-                    <div class="md:text-right">
+                    <div class="md:shrink-0 md:text-right">
                         <p class="text-sm font-semibold text-white">Segurança:</p>
                         <div class="mt-2 flex flex-wrap items-center justify-center gap-2 md:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
@@ -107,9 +96,16 @@ const tempo = computed(() => {
                         </div>
                     </div>
                 </div>
+                <p class="mx-auto mt-8 max-w-[1160px] text-center text-xs leading-relaxed text-white md:text-left">
+                    © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
+                    CNPJ: {{ COMPANY.cnpj }}<br>
+                    WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
+                    E-mail: {{ COMPANY.email }}<br>
+                    <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
+                </p>
             </div>
 
-            <!-- Só os selos de confiança, centralizados (o logo já está acima dos dados). -->
+            <!-- Só os selos de confiança, centralizados. -->
             <div class="border-t border-white/15 bg-black px-4 py-5 text-white">
                 <ul class="mx-auto flex max-w-[1160px] flex-row flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-medium sm:text-sm md:gap-6">
                     <li class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]"></i>Compra Segura</li>

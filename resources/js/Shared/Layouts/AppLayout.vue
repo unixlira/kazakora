@@ -101,6 +101,24 @@ onMounted(() => {
     // aparecer limpa primeiro. Ofertas já ficam visíveis nos cards e CTAs.
 });
 
+// Pedido do Lira 2026-10-12: o topo é branco parado no lugar e fica
+// translúcido e fumê quando passa a flutuar (a marcação logo acima dele
+// sumiu da tela). Estilo em .loja-topo-fume (app.css).
+const marcaDoTopo = ref(null);
+const topoFlutuando = ref(false);
+const medirRolagem = () => {
+    topoFlutuando.value = (marcaDoTopo.value?.getBoundingClientRect().top ?? 0) < 0;
+};
+onMounted(() => {
+    medirRolagem();
+    window.addEventListener('scroll', medirRolagem, { passive: true });
+    window.addEventListener('resize', medirRolagem, { passive: true });
+});
+onUnmounted(() => {
+    window.removeEventListener('scroll', medirRolagem);
+    window.removeEventListener('resize', medirRolagem);
+});
+
 const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
 // Ao passar o mouse, cada ícone fica na cor oficial da rede (pedido 2026-10-10).
@@ -135,13 +153,15 @@ const REDES = [
         </div>
 
         <!-- Header -->
-        <header class="sticky top-0 z-40 border-b border-store-border bg-store-bg/90 backdrop-blur">
+        <div ref="marcaDoTopo" aria-hidden="true"></div>
+        <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
+            :class="{ 'loja-topo-fume': topoFlutuando }">
             <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
-                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
+                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro e no topo fumê usa a clara do rodapé. -->
                 <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
                     <picture>
-                        <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
-                        <img :src="marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
+                        <source v-if="!topoFlutuando" media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
+                        <img :src="topoFlutuando ? marca.logoRodape : marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
                     </picture>
                 </Link>
 
@@ -156,7 +176,7 @@ const REDES = [
 
                         <!-- Mega menu: ocupa a largura do topo, logo abaixo dele. -->
                         <Transition enter-from-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1" leave-active-class="transition duration-100">
-                            <div v-if="menuAberto === 'departamentos'" class="absolute inset-x-0 top-full z-50 border-b border-store-border bg-store-bg-raised shadow-2xl">
+                            <div v-if="menuAberto === 'departamentos'" class="topo-menu absolute inset-x-0 top-full z-50 border-b border-store-border bg-store-bg-raised shadow-2xl">
                                 <div class="mx-auto grid max-w-[1320px] grid-cols-[1fr_280px] gap-8 px-6 py-7">
                                     <div>
                                         <p class="font-store-mono text-xs uppercase tracking-wider text-store-fg-faint">Compre por departamento</p>
@@ -202,7 +222,7 @@ const REDES = [
                             <i class="fa-solid fa-chevron-down text-[0.6rem] transition-transform" :class="{ 'rotate-180': menuAberto === 'contato' }"></i>
                         </button>
                         <Transition enter-from-class="opacity-0 -translate-y-1" enter-active-class="transition duration-150" leave-to-class="opacity-0 -translate-y-1" leave-active-class="transition duration-100">
-                            <div v-if="menuAberto === 'contato'" class="absolute right-0 top-full z-50 pt-3">
+                            <div v-if="menuAberto === 'contato'" class="topo-menu absolute right-0 top-full z-50 pt-3">
                                 <div class="w-72 rounded-2xl border border-store-border bg-store-bg-raised p-2 shadow-2xl">
                                     <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener"
                                         class="flex items-center gap-3 rounded-xl p-3 no-underline transition hover:bg-store-bg-sunken">
@@ -250,7 +270,7 @@ const REDES = [
                             <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ unreadNotifications }}</span>
                         </button>
 
-                        <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
+                        <div v-if="notifMenuOpen" class="topo-menu absolute right-0 z-50 mt-2 w-80 rounded-xl border border-store-border bg-store-bg-raised py-2 text-left shadow-lg">
                             <!-- Marcando todas como lidas: desfoque branco + loader até a requisição terminar (2026-10-11). -->
                             <div v-if="marcandoTodas" class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-sm">
                                 <i class="fas fa-circle-notch animate-spin text-2xl text-[#F27A2A]"></i>
@@ -293,7 +313,7 @@ const REDES = [
                         </Link>
 
                         <!-- Menu da conta (2026-10-11): DM Sans, ícones no lugar dos emojis. -->
-                        <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised text-left font-sans shadow-xl">
+                        <div v-if="userMenuOpen" class="topo-menu absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-store-border bg-store-bg-raised text-left font-sans shadow-xl">
                             <div class="border-b border-store-border bg-store-bg-sunken px-4 py-3">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-store-fg-faint">Olá,</p>
                                 <p class="truncate text-[15px] font-bold text-store-fg">{{ user?.name }}</p>

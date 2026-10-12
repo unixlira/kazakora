@@ -464,9 +464,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
         Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
-        // Radar (2026-10-12): estrutura pronta, nome visível ainda em aberto
-        // (resources/js/Shared/radarNome.js). URL e nome da rota são fixos.
+        // Radar (2026-10-12): grupo próprio no menu, uma tela por canal.
+        // /admin/radar sozinho leva para a Shopee.
         Route::get('radar', [RadarController::class, 'index'])->name('radar.index');
+        Route::get('radar/{canal}', [RadarController::class, 'show'])
+            ->whereIn('canal', array_keys(RadarController::CANAIS))
+            ->name('radar.canal');
         // Gerador de fotos de anúncio (Naia, 28-30/08) — feito direto no
         // servidor, apagado por um deploy e restaurado em 2026-09-29.
         Route::get('marketplaces/fotos-anuncio', [MarketplaceAdPhotoController::class, 'index'])->name('marketplaces.fotos-anuncio');

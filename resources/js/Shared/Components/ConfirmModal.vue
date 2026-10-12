@@ -56,7 +56,10 @@ watch(
 
 <template>
     <Teleport to="body">
-        <div v-if="open" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <!-- admin-shell: o Teleport tira o modal de dentro do AdminLayout, e as
+             cores do admin (--surface etc.) só valem dentro dessa classe; sem
+             ela o modal ficava transparente (visto em 12/10/2026). -->
+        <div v-if="open" class="admin-shell fixed inset-0 z-[100] flex items-center justify-center p-4 text-[var(--surface-foreground)]">
             <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="!loading && emit('close')"></div>
             <div class="relative w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-6 shadow-xl"
                 style="max-height: 90vh;">

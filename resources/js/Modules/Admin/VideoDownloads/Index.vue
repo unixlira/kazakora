@@ -167,7 +167,7 @@ const submitDownload = async () => {
 </script>
 
 <template>
-    <Head title="Download de vídeos" />
+    <Head title="Baixar vídeos" />
 
     <AdminLayout>
         <div class="mb-6 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -176,7 +176,7 @@ const submitDownload = async () => {
                     Ferramenta interna
                 </p>
                 <h1 class="mt-1 text-2xl font-bold text-[var(--text-primary)] md:text-3xl">
-                    Download de vídeos
+                    Baixar vídeos
                 </h1>
                 <p class="mt-1 max-w-3xl text-sm text-slate-500">
                     Cole uma URL pública ou autorizada do YouTube, TikTok, Facebook ou Instagram e baixe o arquivo pelo navegador.
@@ -184,7 +184,7 @@ const submitDownload = async () => {
             </div>
         </div>
 
-        <section class="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-2xl shadow-slate-300/30 md:p-7">
+        <section class="mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-[#1f1a1c] via-[#2b2326] to-[#4a2616] p-5 text-white shadow-2xl shadow-black/10 md:p-7">
             <div class="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-center">
                 <div>
                     <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-xl">

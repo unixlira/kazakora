@@ -92,20 +92,20 @@ const totalWalletBalance = computed(() => {
 // estiver negativo. Margem positiva, mesmo baixa, fica verde para não sugerir prejuízo.
 const profitVariant = computed(() => (props.summary.profitMonth >= 0 ? 'success' : 'error'));
 const profitMarginBadgeClass = computed(() => (
-    props.summary.profitMonth >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'
+    props.summary.profitMonth >= 0 ? 'bg-lightsuccess text-lucro' : 'bg-lighterror text-error'
 ));
 const channelStyle = (channel) => CHANNEL_STYLES[channel] ?? { label: channel, color: '#64748b' };
 const metricMarginVariant = (netProfit) => (
-    netProfit >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'
+    netProfit >= 0 ? 'bg-lightsuccess text-lucro' : 'bg-lighterror text-error'
 );
-const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
+const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
 </script>
 
 <template>
-    <Head title="Financeiro" />
+    <Head title="Resultado e margem" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Financeiro</h1>
+        <h1 class="mb-4 text-2xl font-bold">Resultado e margem</h1>
 
         <!-- Pedido explícito 2026-08-27: cards do topo em duas linhas de 3,
              para não ficar espremido. Ordem atual: valor bruto vitalício no
@@ -304,7 +304,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
             </div>
             <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">
                 <span class="font-bold">(=) Lucro Líquido do Mês</span>
-                <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-success' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }} · {{ formatPercent(netProfitMarginMonth) }}</span>
+                <span class="text-xl font-bold" :class="profitVariant === 'success' ? 'text-lucro' : 'text-error'">{{ formatPrice(netProfit.netProfitMonth) }} · {{ formatPercent(netProfitMarginMonth) }}</span>
             </div>
 
             <Link href="/admin/integracoes/mercado-livre/flex" class="mt-3 block border-t border-dashed border-[var(--surface-border)] pt-3 text-xs text-primary hover:underline">
@@ -347,21 +347,21 @@ const metricProfitClass = (value) => value >= 0 ? 'text-success' : 'text-error';
                     <div class="space-y-1.5 text-sm">
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Subtotal anunciado</span><strong>{{ formatPrice(row.itemSubtotalBeforeDiscounts) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Vendas líquidas dos produtos</span><strong>{{ formatPrice(row.productNetSales) }}</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Recebido</span><strong class="text-success">{{ formatPrice(row.paidPayoutAmount ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Recebido</span><strong class="text-lucro">{{ formatPrice(row.paidPayoutAmount ?? 0) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">A receber</span><strong class="text-warning">{{ formatPrice(row.pendingPayoutAmount ?? 0) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Total liquidável</span><strong>{{ formatPrice(row.payoutAmount) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Taxas da plataforma</span><strong class="text-error">{{ formatPrice(row.platformFeesTaxes) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Descontos do vendedor</span><strong class="text-error">{{ formatPrice(row.sellerDiscounts) }}</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Desconto produto pago pela plataforma</span><strong class="text-success">{{ formatPrice(row.platformProductDiscounts ?? 0) }}</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Cupom plataforma</span><strong class="text-success">{{ formatPrice(row.platformCouponDiscounts ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Desconto produto pago pela plataforma</span><strong class="text-lucro">{{ formatPrice(row.platformProductDiscounts ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Cupom plataforma</span><strong class="text-lucro">{{ formatPrice(row.platformCouponDiscounts ?? 0) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Frete líquido</span><strong>{{ formatPrice(row.netShippingImpact) }}</strong></div>
-                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Desconto frete TikTok ao cliente</span><strong class="text-success">{{ formatPrice(row.platformShippingDiscounts ?? 0) }}</strong></div>
+                        <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Desconto frete TikTok ao cliente</span><strong class="text-lucro">{{ formatPrice(row.platformShippingDiscounts ?? 0) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Ajustes</span><strong>{{ formatPrice(row.adjustmentAmount) }}</strong></div>
                         <div class="flex justify-between gap-3 border-t border-[var(--surface-border)] pt-2"><span class="text-slate-500 dark:text-slate-400">Vendas conciliadas com pedido</span><strong>{{ formatPrice(row.matchedProductNetSales) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Valor liquidado conciliado</span><strong>{{ formatPrice(row.matchedPayoutAmount) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Custo de produto conciliado</span><strong class="text-error">{{ formatPrice(row.productCostMatched) }}</strong></div>
                         <div class="flex justify-between gap-3"><span class="font-medium">Lucro bruto conhecido</span><strong>{{ formatPrice(row.grossProfitKnown) }}</strong></div>
-                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Lucro líquido conhecido</span><strong :class="row.netProfitKnown >= 0 ? 'text-success' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
+                        <div class="flex justify-between gap-3 text-base"><span class="font-bold">Lucro líquido conhecido</span><strong :class="row.netProfitKnown >= 0 ? 'text-lucro' : 'text-error'">{{ formatPrice(row.netProfitKnown) }}</strong></div>
                     </div>
 
                     <p v-if="row.missingOrders > 0 || row.costMissingItems > 0" class="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-400">

@@ -317,8 +317,8 @@ class DashboardController extends Controller
      * visitantes do mês e do dia, filtro de mês). Conta só gente de fora:
      * sai quem entrou como equipe (admin/gerente) no mês, com tudo o que o
      * mesmo navegador visitou, e o visitante que passou de 300 páginas num
-     * dia. Visitante = código do navegador (cookie com o OK de cookies ou
-     * código da sessão sem ele, ver TrackSiteVisit).
+     * dia. Visitante = cookie kazakora_visitor; sem OK de cookies, um por
+     * IP no dia (SiteVisit::visitantesPorDia).
      *
      * @return array<string, mixed>
      */
@@ -333,17 +333,16 @@ class DashboardController extends Controller
         }
         $fim = $inicio->copy()->addMonthNoOverflow();
 
-        $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id');
-        $doMes = SiteVisit::query()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim);
-        $navegadoresDaEquipe = (clone $doMes)->whereIn('user_id', $equipe)->distinct()->pluck('visitor_id')->all();
+        $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $porVisitante = SiteVisit::visitantesPorDia(
+            SiteVisit::query()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim),
+            $equipe,
+        );
+        $daEquipe = $porVisitante->where('equipe', true)->pluck('visitante')->unique()->all();
 
-        $linhas = (clone $doMes)
-            ->whereNotIn('visitor_id', $navegadoresDaEquipe)
-            ->where(fn ($q) => $q->whereNull('user_id')->orWhereNotIn('user_id', $equipe))
-            ->selectRaw('DATE(created_at) as dia, visitor_id, COUNT(*) as paginas')
-            ->groupBy(DB::raw('DATE(created_at)'), 'visitor_id')
-            ->get()
-            ->filter(fn ($l) => (int) $l->paginas <= self::VISITAS_DIA_ROBO);
+        $linhas = $porVisitante
+            ->whereNotIn('visitante', $daEquipe)
+            ->filter(fn ($l) => $l->paginas <= self::VISITAS_DIA_ROBO);
 
         $porDia = $linhas->groupBy(fn ($l) => substr((string) $l->dia, 0, 10));
         $ultimoDia = $inicio->isSameMonth($hoje) ? $hoje->day : $inicio->daysInMonth;
@@ -365,7 +364,7 @@ class DashboardController extends Controller
             $cursor->subMonthNoOverflow();
         }
 
-        $visitantesMes = $linhas->pluck('visitor_id')->unique()->count();
+        $visitantesMes = $linhas->pluck('visitante')->unique()->count();
         $diasComDado = max(1, count($dias));
 
         return [

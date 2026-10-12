@@ -3,6 +3,7 @@
 namespace App\Modules\Analytics\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\TrackSiteVisit;
 use App\Modules\Analytics\Models\ConsentimentoCookie;
 use App\Support\Privacidade\Cookies;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,8 @@ class CookiesController extends Controller
                 'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
                 'aceito_em' => now(),
             ]);
+
+            TrackSiteVisit::registrarOk($request, $visitante);
         }
 
         Cookie::queue(Cookies::COOKIE_OK, Cookies::VERSAO, Cookies::DURACAO_MINUTOS);

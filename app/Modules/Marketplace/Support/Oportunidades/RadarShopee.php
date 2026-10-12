@@ -102,50 +102,121 @@ class RadarShopee
         });
     }
 
-    /** Última coleta para a tela: categorias agrupadas por nível 2 e produtos por vendas. */
-    public function analisar(): array
+    /** Produtos por página na tela. */
+    public const POR_PAGINA = 20;
+
+    /** Categoria de nível 1 que a tela abre: Casa e Decoração (o forte da loja). */
+    public const L1_PADRAO = 100636;
+
+    /**
+     * Última coleta para a tela, filtrada e paginada no servidor: a mineração
+     * completa tem dezenas de milhares de produtos e não cabe no navegador
+     * (2026-10-12).
+     *
+     * $filtros: l1 (id ou 0 = todas), categoria ('g:<l2>' ou 's:<l3>'),
+     * busca (palavra no título) e pagina.
+     */
+    public function analisar(array $filtros = []): array
     {
         $coleta = ShopeeRadarColeta::query()->latest('coletado_em')->latest('id')->first();
         if ($coleta === null) {
-            return ['coletado_em' => null, 'grupos' => [], 'produtos' => []];
+            return ['coletado_em' => null, 'filtros' => null, 'niveis1' => [], 'grupos' => [], 'totais' => null, 'produtos' => [], 'paginacao' => null];
         }
 
         $nossaLoja = (string) MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->value('seller_id');
 
-        $categorias = $coleta->categorias()->orderBy('l1_id')->orderBy('l2_id')->orderBy('posicao')->get();
-        $nomes = $categorias->keyBy('l3_id');
-        $grupos = $categorias->groupBy('l2_id')->map(fn ($filhas) => [
-            'l1_nome' => $filhas->first()->l1_nome,
-            'l2_id' => $filhas->first()->l2_id,
-            'l2_nome' => $filhas->first()->l2_nome,
+        $categorias = $coleta->categorias()->orderBy('posicao')->get();
+        $niveis1 = $categorias->groupBy('l1_id')->map(fn ($filhas) => [
+            'id' => (int) $filhas->first()->l1_id,
+            'nome' => $filhas->first()->l1_nome,
             'unidades_vendidas' => (int) $filhas->sum('unidades_vendidas'),
-            'subcategorias' => $filhas->map(fn ($c) => [
-                'id' => $c->l3_id,
-                'nome' => $c->l3_nome,
-                'posicao' => $c->posicao,
-                'unidades_vendidas' => $c->unidades_vendidas,
-            ])->values()->all(),
-        ])->sortByDesc('unidades_vendidas')->values()->all();
+        ])->sortByDesc('unidades_vendidas')->values();
 
-        $produtos = $coleta->produtos()->orderByDesc('unidades_vendidas')->get()->map(fn ($p) => [
-            'id' => "{$p->l3_id}-{$p->item_id}",
-            'nome' => $p->titulo,
-            'imagem' => $p->imagem ? self::URL_IMAGEM.$p->imagem : null,
-            'link' => self::URL_PRODUTO."{$p->shop_id}/{$p->item_id}",
-            'posicao' => $p->posicao,
-            'preco_min' => $p->preco_min ?? $p->preco,
-            'preco_max' => $p->preco_max,
-            'vendas' => $p->unidades_vendidas,
-            'l2_id' => $p->l2_id,
-            'l3_id' => $p->l3_id,
-            'categoria' => $nomes[$p->l3_id]->l3_nome ?? null,
-            'voce_vende' => $nossaLoja !== '' && (string) $p->shop_id === $nossaLoja,
-        ])->all();
+        $l1 = array_key_exists('l1', $filtros) ? (int) $filtros['l1'] : self::L1_PADRAO;
+        if ($l1 && ! $niveis1->contains('id', $l1)) {
+            $l1 = 0;
+        }
+        $categoria = preg_match('/^[gs]:\d{1,12}$/', (string) ($filtros['categoria'] ?? '')) ? (string) $filtros['categoria'] : '';
+        $busca = mb_substr(trim((string) ($filtros['busca'] ?? '')), 0, 80);
+        // Categoria escolhida leva os cartões para o nível 1 dela.
+        if ($categoria !== '') {
+            $dona = $categorias->firstWhere($categoria[0] === 'g' ? 'l2_id' : 'l3_id', (int) substr($categoria, 2));
+            $l1 = $dona ? (int) $dona->l1_id : $l1;
+            $categoria = $dona ? $categoria : '';
+        }
+
+        // Cartões: com nível 1 escolhido, cada nível 2 com as subcategorias;
+        // em "todas", cada nível 1 com os níveis 2 que mais vendem.
+        $doNivel = $l1 ? $categorias->where('l1_id', $l1) : $categorias;
+        $grupos = $l1
+            ? $doNivel->groupBy('l2_id')->map(fn ($filhas) => [
+                'id' => 'g:'.$filhas->first()->l2_id,
+                'sobre' => $filhas->first()->l1_nome,
+                'nome' => $filhas->first()->l2_nome,
+                'unidades_vendidas' => (int) $filhas->sum('unidades_vendidas'),
+                'itens' => $filhas->sortBy('posicao')->map(fn ($c) => [
+                    'id' => 's:'.$c->l3_id, 'nome' => $c->l3_nome, 'posicao' => $c->posicao, 'unidades_vendidas' => $c->unidades_vendidas,
+                ])->values()->all(),
+            ])
+            : $doNivel->groupBy('l1_id')->map(fn ($filhas) => [
+                'id' => 'l1:'.$filhas->first()->l1_id,
+                'sobre' => 'Categoria',
+                'nome' => $filhas->first()->l1_nome,
+                'unidades_vendidas' => (int) $filhas->sum('unidades_vendidas'),
+                'itens' => $filhas->groupBy('l2_id')->map(fn ($l2) => [
+                    'id' => 'g:'.$l2->first()->l2_id, 'nome' => $l2->first()->l2_nome, 'unidades_vendidas' => (int) $l2->sum('unidades_vendidas'),
+                ])->sortByDesc('unidades_vendidas')->values()->take(8)
+                    ->map(fn ($item, $i) => $item + ['posicao' => $i + 1])->all(),
+            ]);
+        $grupos = $grupos->sortByDesc('unidades_vendidas')->values()->all();
+
+        $query = $coleta->produtos();
+        if ($categoria !== '') {
+            $query->where($categoria[0] === 'g' ? 'l2_id' : 'l3_id', (int) substr($categoria, 2));
+        } elseif ($l1) {
+            $query->where('l1_id', $l1);
+        }
+        if ($busca !== '') {
+            $query->where('titulo', 'like', '%'.addcslashes($busca, '%_\\').'%');
+        }
+        $total = (clone $query)->count();
+        $paginas = max(1, (int) ceil($total / self::POR_PAGINA));
+        $pagina = min(max(1, (int) ($filtros['pagina'] ?? 1)), $paginas);
+
+        $nomes = $categorias->keyBy('l3_id');
+        $produtos = $query
+            ->when(str_starts_with($categoria, 's:'), fn ($q) => $q->orderBy('posicao'), fn ($q) => $q->orderByDesc('unidades_vendidas'))
+            ->orderBy('id')
+            ->forPage($pagina, self::POR_PAGINA)
+            ->get()
+            ->map(fn ($p) => [
+                'id' => "{$p->l3_id}-{$p->item_id}",
+                'nome' => $p->titulo,
+                'imagem' => $p->imagem ? self::URL_IMAGEM.$p->imagem : null,
+                'link' => self::URL_PRODUTO."{$p->shop_id}/{$p->item_id}",
+                'posicao' => $p->posicao,
+                'preco_min' => $p->preco_min ?? $p->preco,
+                'preco_max' => $p->preco_max,
+                'vendas' => $p->unidades_vendidas,
+                'l2_id' => $p->l2_id,
+                'l3_id' => $p->l3_id,
+                'categoria' => $nomes[$p->l3_id]->l3_nome ?? null,
+                'voce_vende' => $nossaLoja !== '' && (string) $p->shop_id === $nossaLoja,
+            ])->all();
 
         return [
             'coletado_em' => $coleta->coletado_em->toIso8601String(),
+            'filtros' => ['l1' => $l1, 'categoria' => $categoria, 'busca' => $busca],
+            'niveis1' => $niveis1->all(),
             'grupos' => $grupos,
+            'totais' => [
+                'niveis2' => $categorias->unique('l2_id')->count(),
+                'subcategorias' => $categorias->count(),
+                'produtos' => $coleta->total_produtos,
+                'voce_vende' => $nossaLoja === '' ? 0 : $coleta->produtos()->where('shop_id', $nossaLoja)->count(),
+            ],
             'produtos' => $produtos,
+            'paginacao' => ['pagina' => $pagina, 'paginas' => $paginas, 'total' => $total, 'por_pagina' => self::POR_PAGINA],
         ];
     }
 }

@@ -72,7 +72,7 @@ const alternarTodas = () => {
     marcadas.value = todasMarcadas.value ? [] : lista.value.map((m) => m.id);
 };
 const plural = (n, um, varios) => (n === 1 ? `1 ${um}` : `${n} ${varios}`);
-const vaiParaLixeira = (n) => (n === 1 ? 'Ela vai para a Lixeira e dá para restaurar.' : 'Elas vão para a Lixeira e dá para restaurar.');
+const vaiParaLixeira = (n) => (n === 1 ? 'Ele vai para a Lixeira e dá para restaurar.' : 'Eles vão para a Lixeira e dá para restaurar.');
 const processando = ref(false);
 const opcoes = (aoTerminar) => ({
     preserveState: true,

@@ -30,6 +30,8 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
+        <!-- Frete embutido (2026-10-12): desligado nos testes antigos; FreteEmbutidoTest liga. -->
+        <env name="FRETE_EMBUTIDO_ATIVO" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <env name="ML_APP_ID" value="test-app-id"/>

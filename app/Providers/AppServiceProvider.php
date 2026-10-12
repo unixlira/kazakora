@@ -22,7 +22,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Uma por requisição: guarda o destino e a tabela de frete dela.
+        $this->app->scoped(\App\Modules\Checkout\Support\FreteEmbutido::class);
     }
 
     /**

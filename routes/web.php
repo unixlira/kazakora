@@ -183,6 +183,8 @@ Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('thr
 Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
 
 Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
+// Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.
+Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGratis'])->middleware('throttle:30,1')->name('finalizacao.entrega-gratis');
 
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');

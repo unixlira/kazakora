@@ -428,7 +428,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <aside class="rounded-[1.75rem] border border-store-border bg-store-bg/80 p-5 shadow-sm backdrop-blur md:p-6">
                         <div class="flex items-start justify-between gap-4">
                             <div>
-                                <span v-if="product.has_discount" class="block text-sm text-store-fg-faint line-through decoration-1">{{ formatPrice(product.price) }}</span>
+                                <span v-if="product.has_discount" class="block text-sm text-store-fg-faint line-through decoration-1">{{ formatPrice(product.preco_de ?? product.price) }}</span>
                                 <div class="flex items-start gap-3">
                                     <span class="font-display text-4xl font-bold leading-none md:text-5xl" :class="product.has_discount ? 'text-store-accent' : 'text-store-fg'">
                                         {{ priceParts.whole }}<sup class="text-xl md:text-2xl">,{{ priceParts.cents }}</sup>

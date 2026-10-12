@@ -127,7 +127,7 @@ const pixPrice = computed(() => Math.round(Number(props.product.final_price) * (
 // não há promoção e existe desconto no Pix); "por" = valor no Pix.
 const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(props.product.final_price)));
 const precoDe = computed(() => {
-    if (props.product.has_discount) return Number(props.product.price);
+    if (props.product.has_discount) return Number(props.product.preco_de ?? props.product.price);
     return DESCONTO_PIX > 0 ? Number(props.product.final_price) : null;
 });
 const percentualTotal = computed(() => (precoDe.value ? Math.round((1 - precoPor.value / precoDe.value) * 100) : 0));
@@ -242,6 +242,11 @@ const consultarPrazo = async () => {
         if (!response.ok) throw new Error();
         const data = await response.json();
         prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null };
+        // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
+        // recarrega os preços da página para o CEP digitado.
+        if (data.final_price !== undefined && Number(data.final_price) !== Number(props.product.final_price)) {
+            router.reload({ preserveScroll: true, preserveState: true });
+        }
     } catch {
         erroPrazo.value = 'Não foi possível consultar o prazo agora.';
     } finally {

@@ -4,7 +4,8 @@ namespace App\Modules\Marketplace\Support\Oportunidades;
 
 use App\Services\Kalodata\Exceptions\KalodataException;
 use App\Services\Kalodata\KalodataService;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -15,10 +16,15 @@ use Throwable;
  * primeiros): o /rank devolve no máximo 100 itens por página e não informa
  * o total, então busca página a página (KALODATA_RADAR_PAGINAS, padrão 10 =
  * 1.000 produtos), parando na primeira página incompleta. Cada página é uma
- * chamada, uma vez por dia (cache de 24 h): o Kalodata é pago por crédito e
- * tem teto diário (docs/kalodata-api.md). Por isso o botão "Consultar de
- * novo" do Radar não força nova consulta aqui. A tela pagina e filtra a
- * lista sem nova consulta.
+ * chamada, uma vez por dia: o Kalodata é pago por crédito e tem teto
+ * diário (docs/kalodata-api.md). Por isso o botão "Consultar de novo" do
+ * Radar não força nova consulta aqui. A tela pagina e filtra a lista sem
+ * nova consulta.
+ *
+ * O resultado fica num arquivo em storage/app, não no cache: o deploy do
+ * homolog roda optimize:clear e, com o cache, cada deploy refazia as
+ * consultas (12/10: 9 deploys, 9 chamadas). Se a consulta nova falhar (teto,
+ * crédito), a tela mostra o último ranking guardado.
  */
 class MaisVendidosTikTok
 {
@@ -26,10 +32,12 @@ class MaisVendidosTikTok
 
     public const PERIODO = 'last7Day';
 
-    private const CACHE_HORAS = 24;
+    public const ARQUIVO = 'oportunidades/tiktok-'.self::PERIODO.'.json';
 
-    /** Se uma página do meio falhar, o que veio fica só 1 h no cache. */
-    private const CACHE_HORAS_PARCIAL = 1;
+    private const VALIDADE_HORAS = 24;
+
+    /** Se uma página do meio falhar, o que veio vale só 1 h. */
+    private const VALIDADE_HORAS_PARCIAL = 1;
 
     public function __construct(private readonly KalodataService $kalodata) {}
 
@@ -39,28 +47,45 @@ class MaisVendidosTikTok
             return ['configurado' => false, 'produtos' => [], 'atualizado_em' => null, 'erro' => null];
         }
 
-        $chave = 'oportunidades:tiktok:'.self::PERIODO.':completo';
-        $guardado = Cache::get($chave);
-        if (is_array($guardado)) {
-            return $guardado;
+        $guardado = $this->guardado();
+        if ($guardado !== null && Carbon::parse($guardado['valido_ate'])->isFuture()) {
+            return $guardado['resultado'];
         }
 
         try {
             [$resultado, $completo] = $this->coletar();
-        } catch (KalodataException $e) {
-            report($e);
-
-            return ['configurado' => true, 'produtos' => [], 'atualizado_em' => null, 'erro' => self::mensagem($e)];
         } catch (Throwable $e) {
             report($e);
+            if ($guardado !== null) {
+                return $guardado['resultado'];
+            }
+            $erro = $e instanceof KalodataException
+                ? self::mensagem($e)
+                : 'Não foi possível consultar o Kalodata agora. Tente de novo mais tarde.';
 
-            return ['configurado' => true, 'produtos' => [], 'atualizado_em' => null,
-                'erro' => 'Não foi possível consultar o Kalodata agora. Tente de novo mais tarde.'];
+            return ['configurado' => true, 'produtos' => [], 'atualizado_em' => null, 'erro' => $erro];
         }
 
-        Cache::put($chave, $resultado, now()->addHours($completo ? self::CACHE_HORAS : self::CACHE_HORAS_PARCIAL));
+        Storage::disk('local')->put(self::ARQUIVO, (string) json_encode([
+            'valido_ate' => now()->addHours($completo ? self::VALIDADE_HORAS : self::VALIDADE_HORAS_PARCIAL)->toIso8601String(),
+            'resultado' => $resultado,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
         return $resultado;
+    }
+
+    /**
+     * @return array{valido_ate: string, resultado: array<string, mixed>}|null
+     */
+    private function guardado(): ?array
+    {
+        $disco = Storage::disk('local');
+        if (! $disco->exists(self::ARQUIVO)) {
+            return null;
+        }
+        $dados = json_decode((string) $disco->get(self::ARQUIVO), true);
+
+        return is_array($dados) && isset($dados['valido_ate'], $dados['resultado']['produtos']) ? $dados : null;
     }
 
     /**

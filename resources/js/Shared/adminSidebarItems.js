@@ -94,6 +94,9 @@ export const sidebarSections = [
         items: [
             { label: 'Estoque', href: '/admin/estoque', icon: 'fas fa-warehouse', permission: 'operacional.view' },
             { label: 'Compras de fornecedor', href: '/admin/pedidos-de-compra', icon: 'fas fa-cart-arrow-down', permission: 'operacional.view' },
+            // Calculadora de importação (2026-10-12): lugar provisório, o Lira
+            // ainda vai decidir onde fica no menu.
+            { label: 'Calculadora de importação', href: '/admin/calculadora-importacao', icon: 'fas fa-ship', permission: 'cadastros.view' },
             { label: 'Fornecedores', href: '/admin/fornecedores', icon: 'fas fa-truck-field', permission: 'cadastros.view' },
             { label: 'Ordens de serviço', href: '/admin/ordens-de-servico', icon: 'fas fa-screwdriver-wrench', permission: 'operacional.view' },
         ],

@@ -8,7 +8,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
 // Visitas dos outros sites do grupo (FerraKora, Beauty Kora; 2026-10-12):
-// mesmo layout de Visitas KazaKora, só com Data/Hora, IP, Cliente e Ações.
+// mesmo layout de Visitas Casa Cora, só com Data/Hora, IP, Cliente e Ações.
 // Uma tela para todos: site é a coluna site_visits.site.
 const props = defineProps({
     site: { type: String, required: true },

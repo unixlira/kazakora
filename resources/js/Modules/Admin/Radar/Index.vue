@@ -19,7 +19,7 @@ defineProps({
             <div class="mt-8 flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-300 px-6 py-14 text-center">
                 <i class="text-3xl text-slate-400" :class="canal.icone" aria-hidden="true"></i>
                 <p class="text-lg font-bold text-slate-700">Em construção</p>
-                <p class="max-w-md text-sm text-slate-500">O {{ RADAR_NOME }} do {{ canal.nome }} ainda está sendo preparado.</p>
+                <p class="max-w-md text-sm text-slate-500">Esta tela ainda está sendo preparada.</p>
             </div>
         </section>
     </AdminLayout>

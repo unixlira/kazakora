@@ -137,6 +137,19 @@ const alternarSecao = (heading) => {
     try { localStorage.setItem(SECOES_ABERTAS, JSON.stringify([...abertas])); } catch { /* sem storage: só não lembra */ }
 };
 const secaoExpandida = (heading) => !secoesAbertas.value.has(`!${heading}`) && secaoAberta(heading);
+// Submenu recolhível (Radar, pedido do Lira 2026-10-12): abre e fecha pela
+// setinha. Sem escolha guardada, fica aberto só se um filho for a tela atual.
+const SUBMENUS = 'admin_menu_submenus';
+const lerSubmenus = () => {
+    try { return JSON.parse(localStorage.getItem(SUBMENUS) ?? '{}') ?? {}; } catch { return {}; }
+};
+const submenusEscolhidos = ref(lerSubmenus());
+const submenuAberto = (item) => submenusEscolhidos.value[item.href]
+    ?? item.children.some((filho) => isActive(filho.href));
+const alternarSubmenu = (item) => {
+    submenusEscolhidos.value = { ...submenusEscolhidos.value, [item.href]: !submenuAberto(item) };
+    try { localStorage.setItem(SUBMENUS, JSON.stringify(submenusEscolhidos.value)); } catch { /* sem storage: só não lembra */ }
+};
 const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
 
 const logout = () => router.post('/sair');
@@ -256,23 +269,31 @@ watch(
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja
                                 no escuro) e barra de 3px à esquerda. Ícones numa cor só. -->
-                                <Link :href="item.href" :title="item.label"
-                                    class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
-                                    :class="isActive(item.href)
-                                        ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
-                                        : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
-                                    :aria-current="isActive(item.href) ? 'page' : undefined">
-                                    <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
-                                    <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
-                                    <span v-if="sidebarBadge(item) > 0"
-                                        class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
-                                        :title="`${sidebarBadge(item)} pendência(s)`">
-                                        {{ sidebarBadge(item) }}
-                                    </span>
-                                </Link>
-                                <!-- Submenu (Radar, pedido do Lira 2026-10-12): sempre aberto,
+                                <div class="flex items-center">
+                                    <Link :href="item.href" :title="item.label"
+                                        class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
+                                        :class="isActive(item.href)
+                                            ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
+                                            : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                        :aria-current="isActive(item.href) ? 'page' : undefined">
+                                        <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                        <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
+                                        <span v-if="sidebarBadge(item) > 0"
+                                            class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
+                                            :title="`${sidebarBadge(item)} pendência(s)`">
+                                            {{ sidebarBadge(item) }}
+                                        </span>
+                                    </Link>
+                                    <button v-if="item.children && !sidebarCollapsed" type="button"
+                                        class="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30"
+                                        :title="submenuAberto(item) ? 'Recolher' : 'Expandir'" :aria-label="`${submenuAberto(item) ? 'Recolher' : 'Expandir'} ${item.label}`"
+                                        :aria-expanded="submenuAberto(item)" @click="alternarSubmenu(item)">
+                                        <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': submenuAberto(item) }"></i>
+                                    </button>
+                                </div>
+                                <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
                                 recuado embaixo do pai; com o menu recolhido fica só o ícone. -->
-                                <ul v-if="item.children" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
+                                <ul v-if="item.children" v-show="sidebarCollapsed || submenuAberto(item)" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
                                     <li v-for="filho in item.children" :key="filho.href">
                                         <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
                                             class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"

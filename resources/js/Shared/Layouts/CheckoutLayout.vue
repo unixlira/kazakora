@@ -106,7 +106,7 @@ const tempo = computed(() => {
 
             <hr class="mx-auto mt-8 max-w-[1160px] border-white/15">
             <ul class="mx-auto mt-6 flex max-w-[1160px] flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-medium">
-                <li class="font-bold"><i class="fa-solid fa-shield-halved mr-2 text-[#0FB930]"></i>Conexão criptografada</li>
+                <li class="font-bold"><i class="fa-solid fa-shield-halved mr-2 text-[#0FB930]"></i>CRIPTOGRAFIA SSL</li>
                 <li><i class="fa-solid fa-bag-shopping mr-2 text-[#0FB930]"></i>Compra segura</li>
                 <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados protegidos</li>
                 <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega gratuita</li>

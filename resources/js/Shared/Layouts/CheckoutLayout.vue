@@ -84,11 +84,11 @@ const tempo = computed(() => {
                             </li>
                             <li class="flex gap-2.5">
                                 <i class="fa-brands fa-whatsapp mt-0.5 w-4 shrink-0 text-center text-[#0FB930]" aria-hidden="true"></i>
-                                <a :href="COMPANY.whatsappLink" target="_blank" rel="noopener" class="hover:underline">{{ COMPANY.whatsappDisplay }}</a>
+                                <span>{{ COMPANY.whatsappDisplay }}</span>
                             </li>
                             <li class="flex gap-2.5">
                                 <i class="fa-solid fa-envelope mt-0.5 w-4 shrink-0 text-center text-[#0FB930]" aria-hidden="true"></i>
-                                <a :href="`mailto:${COMPANY.email}`" class="break-all hover:underline">{{ COMPANY.email }}</a>
+                                <span class="break-all">{{ COMPANY.email }}</span>
                             </li>
                         </ul>
                     </address>

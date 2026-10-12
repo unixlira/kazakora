@@ -128,4 +128,66 @@ class CookiesTest extends TestCase
         $this->assertSame('anonimo', $antiga->fresh()->visitor_id);
         $this->assertSame('5.6.7.8', $recente->fresh()->ip);
     }
+
+    public function test_com_ok_grava_so_os_cookies_da_lista_permitida(): void
+    {
+        $this->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+            ->withCookie(Cookies::COOKIE_VISITANTE, 'visitante-123')
+            // Cookies de terceiros chegam em texto puro no cabeçalho Cookie.
+            ->withHeader('Cookie', '_fbp=fb.1.1700000000.111; _ga_ABC123=GS1.1.99; kazakora-session=sessao-secreta; XSRF-TOKEN=token-secreto; outro=qualquer')
+            ->withHeader('User-Agent', self::NAVEGADOR)
+            ->get('/politica-de-entrega')->assertOk();
+
+        $cookies = SiteVisit::sole()->cookies;
+
+        $this->assertSame([
+            '_fbp' => 'fb.1.1700000000.111',
+            '_ga_ABC123' => 'GS1.1.99',
+            Cookies::COOKIE_OK => Cookies::VERSAO,
+            Cookies::COOKIE_VISITANTE => 'visitante-123',
+        ], $cookies);
+        $this->assertStringNotContainsString('secret', json_encode($cookies));
+    }
+
+    public function test_sem_ok_nao_grava_nenhum_cookie(): void
+    {
+        $this->withHeader('Cookie', '_fbp=fb.1.1700000000.111')
+            ->withHeader('User-Agent', self::NAVEGADOR)
+            ->get('/politica-de-entrega')->assertOk();
+
+        $this->assertNull(SiteVisit::sole()->cookies);
+    }
+
+    public function test_valor_de_cookie_muito_longo_e_cortado(): void
+    {
+        $this->withCookie(Cookies::COOKIE_OK, Cookies::VERSAO)
+            ->withHeader('Cookie', '_fbc='.str_repeat('a', 500))
+            ->withHeader('User-Agent', self::NAVEGADOR)
+            ->get('/politica-de-entrega');
+
+        $this->assertSame(Cookies::LIMITE_VALOR_COOKIE, strlen(SiteVisit::sole()->cookies['_fbc']));
+    }
+
+    public function test_pagina_do_ok_grava_os_cookies_recem_criados(): void
+    {
+        config(['app.url' => 'https://kazakora.com']);
+
+        $this->withHeader('User-Agent', self::NAVEGADOR)
+            ->from('https://kazakora.com/produtos/fone')
+            ->post('https://kazakora.com/cookies/aceitar');
+
+        $visita = SiteVisit::sole();
+        $this->assertSame($visita->visitor_id, $visita->cookies[Cookies::COOKIE_VISITANTE]);
+        $this->assertSame(Cookies::VERSAO, $visita->cookies[Cookies::COOKIE_OK]);
+    }
+
+    public function test_limpeza_apaga_cookies_de_visita_com_mais_de_6_meses(): void
+    {
+        $antiga = SiteVisit::create(['visitor_id' => 'abc', 'path' => '/', 'cookies' => ['_fbp' => 'x']]);
+        $antiga->forceFill(['created_at' => now()->subMonths(7)])->save();
+
+        $this->artisan('privacidade:limpar')->assertSuccessful();
+
+        $this->assertNull($antiga->fresh()->cookies);
+    }
 }

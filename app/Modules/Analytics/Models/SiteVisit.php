@@ -31,11 +31,12 @@ class SiteVisit extends Model
         'click_id',
         'dispositivo',
         'consentiu',
+        'cookies',
     ];
 
     protected function casts(): array
     {
-        return ['consentiu' => 'boolean'];
+        return ['consentiu' => 'boolean', 'cookies' => 'array'];
     }
 
     /**

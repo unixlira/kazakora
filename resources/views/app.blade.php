@@ -6,6 +6,18 @@
 
         <title inertia>{{ config('app.name', 'KazaKora') }}</title>
 
+        {{-- SEO no HTML inicial (pedido 2026-10-12): o Google lê isto antes de rodar o JavaScript.
+             Canonical sem parâmetros (busca e filtros apontam para a página limpa). --}}
+        @unless (request()->is('admin*'))
+            @php($canonical = rtrim(config('app.url'), '/').'/'.ltrim(request()->path() === '/' ? '' : request()->path(), '/'))
+            <link rel="canonical" href="{{ $canonical }}">
+            <meta name="description" content="KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.">
+            <meta property="og:site_name" content="KazaKora">
+            <meta property="og:type" content="website">
+            <meta property="og:url" content="{{ $canonical }}">
+            <meta property="og:locale" content="pt_BR">
+        @endunless
+
         {{-- Favicon (Admin > Banners > Logos e favicon; padrão: laranja com logo branca). --}}
         @php($marca = rescue(fn () => \App\Support\Marca::urls(), ['favicon' => '/images/marca/favicon-32.png', 'faviconTipo' => 'image/png'], false))
         <link rel="icon" type="{{ $marca['faviconTipo'] }}" href="{{ $marca['favicon'] }}">

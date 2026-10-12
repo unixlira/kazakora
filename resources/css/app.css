@@ -96,7 +96,7 @@
        campos, etiquetas e hover não sumirem no preto. */
     --fundo: #000000;
     --surface: #000000;
-    --surface-muted: #141414;
+    --surface-muted: #000000;
     --surface-foreground: #f1eced;
     --surface-border: #2a2a2a;
     --sidebar-foreground: #d9d2d4;
@@ -123,16 +123,16 @@
 }
 
 /*
- * Radar de Oportunidades no escuro (Lira, 2026-10-12): o fundo de TODO o
- * tema na tela do Radar fica cinza #3D3D3D: corpo, topo, menu lateral e
- * rodapé. Antes só o corpo. Os cards continuam pretos (--surface) para se
- * destacar do fundo; os menus que abrem do topo também.
+ * Radar de Oportunidades no escuro: tinha fundo cinza #3D3D3D (pedido de
+ * 2026-10-12). Mesmo dia, o Lira pediu preto absoluto em todo o tema escuro
+ * do admin, então o Radar também ficou #000. Para voltar ao cinza, troque os
+ * dois #000000 abaixo por #3d3d3d.
  */
 .dark .admin-shell:has(.radar-grafite) {
-    --fundo: #3d3d3d;
+    --fundo: #000000;
 }
 .dark .admin-shell:has(.radar-grafite) :is(#menu-admin, .admin-topo, .admin-rodape) {
-    background-color: #3d3d3d;
+    background-color: #000000;
 }
 
 /*
@@ -170,7 +170,7 @@
 }
 /* No escuro o grafite clareia um pouco para o vidro não sumir no preto. */
 .dark :is(.admin-shell, .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
-    background-color: rgb(64 64 68 / 0.62);
+    background-color: rgb(0 0 0 / 0.85);
     border-color: rgb(255 255 255 / 0.14);
     box-shadow: 0 10px 30px rgb(0 0 0 / 0.6);
 }
@@ -193,7 +193,7 @@
     color: var(--surface-foreground);
 }
 .dark .admin-topo-fume .topo-menu {
-    --surface-muted: #141414;
+    --surface-muted: #000000;
     --surface-border: #2a2a2a;
 }
 
@@ -265,7 +265,7 @@
 .dark .admin-shell .dark\:bg-slate-900\/30 { background-color: color-mix(in oklab, var(--surface-muted) 60%, transparent); }
 .dark .admin-shell .dark\:bg-slate-900\/60 { background-color: rgb(0 0 0 / 0.6); }
 /* Hover que usava o muted continua visível em cima do muted. */
-.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #1f1f1f; }
+.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #000000; }
 .dark .admin-shell .bg-red-50, .dark .admin-shell .bg-red-100 { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 .dark .admin-shell .border-red-100, .dark .admin-shell .border-red-200, .dark .admin-shell .border-red-300 { border-color: color-mix(in oklab, #ef4444 40%, transparent); }
 .dark .admin-shell .text-red-600, .dark .admin-shell .text-red-700, .dark .admin-shell .text-red-800, .dark .admin-shell .text-red-900 { color: #fca5a5; }
@@ -358,7 +358,7 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
  */
 .dark select,
 .dark select option {
-    background-color: var(--surface-muted, #141414);
+    background-color: var(--surface-muted, #000000);
     color: var(--surface-foreground, #f1eced);
 }
 

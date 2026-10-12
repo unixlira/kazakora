@@ -26,7 +26,7 @@ class SiteVisit extends Model
     /** Outros sites: chave gravada em site => nome na tela. */
     public const OUTROS_SITES = [
         'ferrakora' => 'FerraKora',
-        'beautykora' => 'Beauty Kora',
+        'beautykora' => 'BeautyKora',
     ];
 
     protected $fillable = [

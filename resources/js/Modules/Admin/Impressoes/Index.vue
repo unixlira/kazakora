@@ -72,12 +72,12 @@ onBeforeUnmount(() => document.removeEventListener('fullscreenchange', handleFul
 </script>
 
 <template>
-    <Head title="Painel de Expedição" />
+    <Head title="Painel de Logística" />
 
     <AdminLayout>
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h1 class="mb-1 text-2xl font-bold">Painel de Expedição</h1>
+                <h1 class="mb-1 text-2xl font-bold">Painel de Logística</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Pedidos pagos aguardando separação e envio, do mais recente pro mais antigo.</p>
             </div>
             <div class="flex gap-2">

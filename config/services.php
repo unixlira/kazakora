@@ -518,4 +518,11 @@ return [
         'site_url' => 'https://kazakora.com',
     ],
 
+    // Relatórios de pagamento da Amazon enviados pelo agente (2026-10-12).
+    // Sem AMAZON_REPORTS_TOKEN usa o mesmo token do agente do TikTok (os dois
+    // rodam no mesmo PC da operação).
+    'amazon_reports' => [
+        'token' => env('AMAZON_REPORTS_TOKEN', env('TIKTOK_REPORTS_TOKEN')),
+    ],
+
 ];

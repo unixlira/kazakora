@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AmazonController;
+use App\Http\Controllers\Api\AmazonReportsController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraCatalogoController;
 use App\Http\Controllers\Api\BeautyKoraCheckoutController;
@@ -314,3 +315,12 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
         });
     });
 });
+
+// Relatórios de pagamento da Amazon (agente no PC da operação, 2026-10-12).
+// Autenticação por Bearer AMAZON_REPORTS_TOKEN (ou o do TikTok).
+Route::post('/amazon/reports/import', [AmazonReportsController::class, 'import'])
+    ->middleware('throttle:60,1')
+    ->name('api.amazon.reports.import');
+Route::post('/amazon/reports/status', [AmazonReportsController::class, 'status'])
+    ->middleware('throttle:30,1')
+    ->name('api.amazon.reports.status');

@@ -96,6 +96,9 @@ const turbo = ref(null);
 const turboEscolhido = ref(false);
 const itens = ref(props.items);
 const subtotalAtual = ref(Number(props.subtotal) || 0);
+// Vários itens numa caixa só (2026-10-12): o frete real sai menor que o
+// somado no preço de cada item; a diferença entra como "Desconto da plataforma".
+const descontoPlataforma = ref(0);
 const opcoesEntrega = computed(() => props.shippingMethods);
 const shippingMethodId = ref(props.shippingMethods[0]?.id ?? null);
 
@@ -115,6 +118,7 @@ watch(cepEfetivo, async (zip) => {
         entregaExpressa.value = data.entrega_expressa ?? null;
         prazoGratis.value = data.prazo ?? null;
         turbo.value = data.turbo ?? null;
+        descontoPlataforma.value = Number(data.desconto_plataforma) || 0;
         if (!turbo.value) turboEscolhido.value = false;
         itens.value = data.items ?? itens.value;
         subtotalAtual.value = Number(data.subtotal ?? subtotalAtual.value);
@@ -122,6 +126,7 @@ watch(cepEfetivo, async (zip) => {
     } catch {
         entregaExpressa.value = null;
         turbo.value = null;
+        descontoPlataforma.value = 0;
     } finally {
         freteCarregando.value = false;
     }
@@ -200,9 +205,9 @@ const removerCupom = async () => {
 // ---------- 4. Pagamento ----------
 const metodo = ref('pix');
 const descontoPix = computed(() => (metodo.value === 'pix' && props.pixDiscountPercentage > 0
-    ? round2((subtotalAtual.value - descontoCupom.value) * props.pixDiscountPercentage / 100)
+    ? round2((subtotalAtual.value - descontoCupom.value - descontoPlataforma.value) * props.pixDiscountPercentage / 100)
     : 0));
-const totalCartao = computed(() => round2(subtotalAtual.value - descontoCupom.value + valorFrete.value));
+const totalCartao = computed(() => round2(subtotalAtual.value - descontoCupom.value - descontoPlataforma.value + valorFrete.value));
 const totalAPagar = computed(() => (props.order ? Number(props.order.total) : round2(totalCartao.value - descontoPix.value)));
 const parcela12 = computed(() => totalCartao.value / 12);
 
@@ -340,6 +345,7 @@ const conferirCpf = () => {
 };
 
 const finalizar = async () => {
+    if (freteCarregando.value) return;
     erros.value = {};
     erroGeral.value = null;
     tentouAqui.value = true;
@@ -661,6 +667,16 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <span class="font-extrabold"><i class="fa-solid fa-bolt"></i> Full</span> {{ entregaExpressa.mensagem }}
                         </p>
 
+                        <!-- Vários itens: recalcula com todos na mesma caixa antes de pagar (2026-10-12). -->
+                        <div v-if="freteCarregando && totalItens > 1" role="status" class="mb-3 flex items-center gap-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
+                            <i class="fa-solid fa-box-open fa-bounce text-lg text-sky-600"></i>
+                            <span>Seus <strong>{{ totalItens }} itens</strong> vão juntos na mesma caixa. Recalculando o frete para você pagar menos…</span>
+                        </div>
+                        <div v-else-if="descontoPlataforma > 0" role="status" class="mb-3 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+                            <i class="fa-solid fa-box text-lg text-emerald-600"></i>
+                            <span>Seus {{ totalItens }} itens vão na mesma caixa e o frete ficou mais barato: <strong>{{ formatPrice(descontoPlataforma) }} de desconto</strong> já aplicado no total.</span>
+                        </div>
+
                         <!-- Frete grátis (já no preço) ou TURBO (2026-10-12): duas opções com caixinha,
                              uma exclui a outra; a tela nasce no grátis e dá para voltar para ele clicando nele. -->
                         <label class="flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition"
@@ -735,7 +751,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <p v-if="brickErro" class="mt-2 text-sm text-red-600">{{ brickErro }}</p>
                         </div>
 
-                        <button id="finalizar-pedido" type="button" :disabled="processando || !!order || (metodo === 'card' && !brickPronto)"
+                        <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"
                             class="mt-5 flex w-full items-center justify-center gap-3 rounded-xl bg-[#0FB930] px-6 py-4 text-xl font-bold text-white shadow-[0_4px_0_#0a8a23] transition hover:brightness-105 active:translate-y-0.5 active:shadow-[0_2px_0_#0a8a23] disabled:cursor-not-allowed disabled:opacity-60 md:text-2xl"
                             @click="finalizar">
                             <i class="fa-solid" :class="processando ? 'fa-spinner animate-spin' : 'fa-lock'"></i>
@@ -795,6 +811,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     <dl class="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm text-slate-700">
                         <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
+                        <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
                         <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixDiscountPercentage }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
                         <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#F44D00]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
                             <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>

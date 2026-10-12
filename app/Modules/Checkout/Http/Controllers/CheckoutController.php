@@ -137,6 +137,8 @@ class CheckoutController extends Controller
             'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'entrega_expressa' => $expressa,
             'prazo' => $expressa ? null : $entrega['prazo'],
+            // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
+            'desconto_plataforma' => $entrega['desconto_plataforma'],
             // Na área FULL a entrega já é a mais rápida: sem TURBO.
             'turbo' => $expressa ? null : $entrega['turbo'],
         ]);
@@ -632,6 +634,10 @@ class CheckoutController extends Controller
                 ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
         }
         $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        // Frete embutido com vários itens numa caixa só (2026-10-12).
+        $descontoPlataforma = app(FreteEmbutido::class)->ligado()
+            ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma']
+            : 0.0;
 
         $methods = $data['split'] ?? false
             ? $this->sortMethodsSafely([$data['payment_method'], $data['payment_method_secondary']])
@@ -640,12 +646,12 @@ class CheckoutController extends Controller
         // Desconto no Pix (pedido 2026-10-09): só pagando 100% no Pix, sobre os
         // produtos (já com cupom e desconto por quantidade), nunca no frete.
         $pixDiscount = $methods === [Payment::METHOD_PIX]
-            ? DescontoPix::desconto(max(0, $subtotal - $discount))
+            ? DescontoPix::desconto(max(0, $subtotal - $discount - $descontoPlataforma))
             : 0.0;
-        $total = round($subtotal - $discount - $pixDiscount + $shipping['cost'], 2);
+        $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
                 // conta de convidado, pedido ou qualquer cobrança — ver
                 // lockProductsForCart().
@@ -677,10 +683,11 @@ class CheckoutController extends Controller
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
                     // discount_amount é o desconto TOTAL do pedido (vDesc da
-                    // NF-e, financeiro, devolução) — cupom + Pix; o do Pix
-                    // fica também à parte em pix_discount_amount.
-                    'discount_amount' => round($discount + $pixDiscount, 2),
+                    // NF-e, financeiro, devolução) — cupom + Pix + plataforma;
+                    // Pix e plataforma ficam também à parte.
+                    'discount_amount' => round($discount + $pixDiscount + $descontoPlataforma, 2),
                     'pix_discount_amount' => $pixDiscount,
+                    'desconto_plataforma_amount' => $descontoPlataforma,
                     'total' => $total,
                 ]);
 
@@ -1034,8 +1041,9 @@ class CheckoutController extends Controller
                 'valores' => [
                     'subtotal' => (float) $order->subtotal,
                     'frete' => (float) $order->shipping_cost,
-                    'desconto_cupom' => round((float) $order->discount_amount - (float) $order->pix_discount_amount, 2),
+                    'desconto_cupom' => round((float) $order->discount_amount - (float) $order->pix_discount_amount - (float) $order->desconto_plataforma_amount, 2),
                     'desconto_pix' => (float) $order->pix_discount_amount,
+                    'desconto_plataforma' => (float) $order->desconto_plataforma_amount,
                     'total' => (float) $order->total,
                 ],
                 'pagamento' => $pagamento ? [
@@ -1296,6 +1304,8 @@ class CheckoutController extends Controller
         $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
         $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
+        $discount = round($discount + $plataforma, 2);
 
         return [
             'items' => $cartItems,

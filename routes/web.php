@@ -82,6 +82,8 @@ use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
+// Mapa do site para o Google Search Console (pedido 2026-10-12).
+Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])->name('produtos.ver');
 Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shipping'])->name('produtos.envio.detalhes');
 
@@ -115,6 +117,11 @@ Route::permanentRedirect('/quem-somos', '/');
 Route::permanentRedirect('/produtos', '/?todos=1');
 Route::permanentRedirect('/politica-de-frete', '/politica-de-entrega');
 Route::permanentRedirect('/contato', '/fale-conosco');
+// Mais URLs da Nuvemshop que o Search Console ainda lista como erro (2026-10-12).
+// As com barra final já resolvem; só estas não tinham equivalente.
+Route::permanentRedirect('/politica-de-devolucoes', '/trocas-e-devolucoes');
+Route::permanentRedirect('/account/login', '/entrar');
+Route::permanentRedirect('/account/register', '/cadastro');
 
 // Documentação da API pública de parceiros (ver routes/api_v1.php) — página
 // estática (Blade puro, não Inertia/SPA), pública de propósito pra

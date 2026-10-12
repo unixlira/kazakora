@@ -1,2 +1,7 @@
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /carrinho
+Disallow: /finalizacao
+Disallow: /api/
+
+Sitemap: https://kazakora.com/sitemap.xml

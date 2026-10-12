@@ -108,6 +108,14 @@ Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cook
 Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 
+// URLs da loja antiga (Nuvemshop) que o Google ainda mostra nos resultados
+// (pedido 2026-10-12: clicar em "kazakora.com › quem-somos" dava 404).
+// 301 para a página atual equivalente, o Google troca o link sozinho.
+Route::permanentRedirect('/quem-somos', '/');
+Route::permanentRedirect('/produtos', '/?todos=1');
+Route::permanentRedirect('/politica-de-frete', '/politica-de-entrega');
+Route::permanentRedirect('/contato', '/fale-conosco');
+
 // Documentação da API pública de parceiros (ver routes/api_v1.php) — página
 // estática (Blade puro, não Inertia/SPA), pública de propósito pra
 // desenvolvedor de integrador externo conseguir consultar sem login. Nunca

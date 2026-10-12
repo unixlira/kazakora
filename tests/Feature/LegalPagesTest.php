@@ -27,4 +27,24 @@ class LegalPagesTest extends TestCase
     {
         $this->get($uri)->assertOk();
     }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function legacyUrls(): array
+    {
+        return [
+            'quem somos' => ['/quem-somos', '/'],
+            'quem somos com barra' => ['/quem-somos/', '/'],
+            'produtos' => ['/produtos', '/?todos=1'],
+            'política de frete' => ['/politica-de-frete', '/politica-de-entrega'],
+            'contato' => ['/contato', '/fale-conosco'],
+        ];
+    }
+
+    #[DataProvider('legacyUrls')]
+    public function test_legacy_store_url_redirects_permanently(string $uri, string $destino): void
+    {
+        $this->get($uri)->assertStatus(301)->assertRedirect($destino);
+    }
 }

@@ -91,6 +91,10 @@ export const sidebarSections = [
         heading: 'Publicidade',
         items: [
             { label: 'Visão geral de ADS', href: '/admin/publicidade', icon: 'fas fa-rectangle-ad', permission: 'financeiro.view' },
+            // Meta ADS e Google ADS (2026-10-12): integração ainda não
+            // conectada, a tela mostra o estado vazio (PlataformaDeAnuncio).
+            { label: 'Meta ADS', href: '/admin/publicidade/meta-ads', icon: 'fab fa-meta', permission: 'financeiro.view' },
+            { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', permission: 'financeiro.view' },
             { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
             { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },

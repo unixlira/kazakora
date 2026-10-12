@@ -501,8 +501,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::middleware('permission:financeiro.view')->group(function () {
         Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
-        // Curva ABC dos produtos com lucro e diagnóstico (2026-10-12).
-        Route::get('curva-abc', [\App\Modules\Admin\Http\Controllers\CurvaAbcController::class, 'index'])->name('curva-abc.ver');
         // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro por
         // marketplace. Saiu do menu Oportunidades (só dado de mercado).
         Route::get('estatisticas/curva-abc/{canal}', [\App\Modules\Admin\Http\Controllers\EstatisticasController::class, 'curvaAbc'])

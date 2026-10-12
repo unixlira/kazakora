@@ -25,8 +25,6 @@ export const sidebarSections = [
         heading: 'Vender',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', permission: 'cadastros.view' },
-            // Curva ABC (2026-10-12): mostra lucro, por isso financeiro.view.
-            { label: 'Curva ABC', href: '/admin/curva-abc', icon: 'fas fa-ranking-star', permission: 'financeiro.view' },
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-folder-tree', permission: 'cadastros.view' },
             { label: 'Calculadora de preço', href: '/admin/precificacao', icon: 'fas fa-calculator', permission: 'cadastros.view' },
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', permission: 'cadastros.view' },

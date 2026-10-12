@@ -309,9 +309,6 @@ class DashboardController extends Controller
             ->all();
     }
 
-    /** Acima disso num dia, o "visitante" é robô ou aba presa recarregando (ex.: 1.737 /entrar em 09/10/2026). */
-    private const VISITAS_DIA_ROBO = 300;
-
     /**
      * Acessos ao site no mês escolhido (pedido 2026-10-11: gráfico,
      * visitantes do mês e do dia, filtro de mês). Conta só gente de fora:
@@ -338,11 +335,8 @@ class DashboardController extends Controller
             SiteVisit::query()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim),
             $equipe,
         );
-        $daEquipe = $porVisitante->where('equipe', true)->pluck('visitante')->unique()->all();
-
-        $linhas = $porVisitante
-            ->whereNotIn('visitante', $daEquipe)
-            ->filter(fn ($l) => $l->paginas <= self::VISITAS_DIA_ROBO);
+        // Regra de equipe e robô num lugar só: o Log de visitas usa a mesma.
+        $linhas = SiteVisit::soDeFora($porVisitante);
 
         $porDia = $linhas->groupBy(fn ($l) => substr((string) $l->dia, 0, 10));
         $ultimoDia = $inicio->isSameMonth($hoje) ? $hoje->day : $inicio->daysInMonth;

@@ -62,6 +62,7 @@ use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
+use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
@@ -653,6 +654,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // data/hora, nível e busca por texto. Admin-only igual à auditoria —
         // log de produção carrega dado de cliente e payload de marketplace.
         Route::get('logs', [SystemLogController::class, 'index'])->name('logs.listar');
+
+        // Visitas ao site (2026-10-12): páginas abertas na loja e o IP de
+        // quem abriu, lidas de site_visits. Só leitura, admin-only como Logs
+        // (IP é dado pessoal).
+        Route::get('visitas-site', [SiteVisitLogController::class, 'index'])->name('visitas-site.listar');
 
         Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
         Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');

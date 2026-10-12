@@ -2,8 +2,11 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
 import MarcaLogo from './MarcaLogo.vue';
+import BuscaTabela from './BuscaTabela.vue';
+import Paginacao from './Paginacao.vue';
+import { normalizar, useBuscaPaginada } from './useBuscaPaginada';
 import { Deferred, Head, router } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 // Radar de Oportunidades (pedido do Lira 2026-10-12): o que está vendendo e
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
@@ -60,7 +63,6 @@ const faixaPreco = (p) => {
 // nome de produto vendendo muito em outra fonte, ou nas duas listas de busca.
 // Comparação por palavra, sem acento; palavras curtas e genéricas não contam.
 const IGNORAR = new Set(['para', 'com', 'sem', 'kit', 'jogo', 'the', 'dos', 'das', 'por', 'uma', 'novo', 'nova', 'original', 'pro', 'max', 'plus']);
-const normalizar = (texto) => (texto ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const palavrasDe = (texto) => normalizar(texto).split(' ').filter((p) => p.length >= 3 && !IGNORAR.has(p));
 const contem = (nome, palavras) => {
     const doNome = new Set(palavrasDe(nome));
@@ -103,43 +105,12 @@ const sinais = computed(() => {
 
     return resultado.sort((a, b) => b.fontes.length - a.fontes.length).slice(0, 12);
 });
-// Tabela do TikTok com busca e paginação na tela (pedido do Lira
-// 2026-10-12): o Kalodata manda o ranking inteiro de uma vez (centenas de
-// produtos), então filtrar e paginar aqui não gasta crédito. A posição
+// Busca e paginação na tela das três fontes (pedido do Lira 2026-10-12): cada
+// fonte manda a lista inteira de uma vez, então filtrar e paginar aqui não
+// gasta consulta nem crédito (o Kalodata cobra por consulta). A posição
 // mostrada continua a do ranking, mesmo com a busca ativa.
-const POR_PAGINA = 20;
-const buscaTikTok = ref('');
-const paginaTikTok = ref(1);
-const tiktokFiltrado = computed(() => {
-    const palavras = normalizar(buscaTikTok.value).split(' ').filter(Boolean);
-    const produtos = props.tiktok?.produtos ?? [];
-    if (palavras.length === 0) return produtos;
-    return produtos.filter((p) => {
-        const nome = normalizar(p.nome);
-        return palavras.every((palavra) => nome.includes(palavra));
-    });
-});
-const totalPaginasTikTok = computed(() => Math.max(1, Math.ceil(tiktokFiltrado.value.length / POR_PAGINA)));
-const tiktokPagina = computed(() => tiktokFiltrado.value.slice((paginaTikTok.value - 1) * POR_PAGINA, paginaTikTok.value * POR_PAGINA));
-const faixaTikTok = computed(() => {
-    const total = tiktokFiltrado.value.length;
-    if (total === 0) return '0';
-    const inicio = (paginaTikTok.value - 1) * POR_PAGINA + 1;
-    return `${inicio} a ${Math.min(paginaTikTok.value * POR_PAGINA, total)} de ${formatNumber(total)}`;
-});
-// Números de página com reticências: 1 … 4 5 6 … 25.
-const paginasTikTok = computed(() => {
-    const total = totalPaginasTikTok.value;
-    const atual = paginaTikTok.value;
-    const lista = [];
-    for (let n = 1; n <= total; n++) {
-        if (n === 1 || n === total || Math.abs(n - atual) <= 1) lista.push(n);
-        else if (lista[lista.length - 1] !== '…') lista.push('…');
-    }
-    return lista;
-});
-const irParaPaginaTikTok = (n) => { paginaTikTok.value = Math.min(Math.max(1, n), totalPaginasTikTok.value); };
-watch(buscaTikTok, () => { paginaTikTok.value = 1; });
+const tt = useBuscaPaginada(computed(() => props.tiktok?.produtos ?? []), (p) => p.nome, 20);
+const ml = useBuscaPaginada(computed(() => props.mercadoLivre?.produtos ?? []), (p) => p.nome, 20);
 
 // Faixa de números do topo; cada um espera a própria fonte chegar.
 const faturamentoTikTok = computed(() => (props.tiktok?.produtos ?? []).reduce((soma, p) => soma + (p.receita ?? 0), 0));
@@ -163,10 +134,11 @@ const CARDS_GOOGLE = [
     { chave: 'noticias', titulo: 'Notícias', icone: 'fa-newspaper', dica: 'Acontecimentos, política, economia e clima.' },
     { chave: 'produtos', titulo: 'Produtos', icone: 'fa-bag-shopping', dica: 'Marcas, lançamentos e coisas que se compram. O mais útil para a loja.' },
 ];
-const cardsGoogle = computed(() => CARDS_GOOGLE.map((c) => ({
-    ...c,
-    termos: (c.chave === 'geral' ? props.google?.termos : props.google?.grupos?.[c.chave]) ?? [],
-})));
+// Cada card tem a própria busca e paginação (10 por página: o card é estreito).
+const cardsGoogle = CARDS_GOOGLE.map((c) => {
+    const termos = computed(() => (c.chave === 'geral' ? props.google?.termos : props.google?.grupos?.[c.chave]) ?? []);
+    return { ...c, termos, ...useBuscaPaginada(termos, (t) => `${t.termo} ${t.noticia ?? ''}`, 10) };
+});
 
 const mostra = (fonte) => !props.fonte || props.fonte === fonte;
 const titulo = computed(() => (props.fonteNome ? `${RADAR_NOME} · ${props.fonteNome}` : RADAR_NOME));
@@ -257,14 +229,10 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                         <p v-else-if="tiktok.produtos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto no período.</p>
                         <template v-else>
                         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-border)] px-4 py-3">
-                            <label class="busca">
-                                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-                                <span class="sr-only">Buscar produto no ranking do TikTok</span>
-                                <input v-model.trim="buscaTikTok" type="search" placeholder="Buscar produto (ex.: garrafa, luminária)" autocomplete="off">
-                            </label>
-                            <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ faixaTikTok }} produtos</span>
+                            <BuscaTabela v-model="tt.busca.value" rotulo="Buscar produto no ranking do TikTok" placeholder="Buscar produto (ex.: garrafa, luminária)" />
+                            <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ tt.faixa.value }} produtos</span>
                         </div>
-                        <p v-if="tiktokFiltrado.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com “{{ buscaTikTok }}” no ranking.</p>
+                        <p v-if="tt.filtrados.value.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com “{{ tt.busca.value }}” no ranking.</p>
                         <div v-else class="overflow-x-auto">
                             <table class="tabela min-w-[520px]">
                                 <thead>
@@ -279,7 +247,7 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                                     <tr aria-hidden="true"><td colspan="6" class="faixa"></td></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in tiktokPagina" :key="p.id">
+                                    <tr v-for="p in tt.daPagina.value" :key="p.id">
                                         <td class="pl-4"><span class="posicao" :class="{ 'posicao-top': p.posicao <= 3 }">{{ p.posicao }}</span></td>
                                         <td class="max-w-0 w-full truncate font-medium" :title="p.nome">{{ p.nome }}</td>
                                         <td class="text-right" :title="p.receita === null ? null : formatPrice(p.receita)">{{ p.receita === null ? '—' : formatPriceK(p.receita) }}</td>
@@ -293,19 +261,7 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                                 </tbody>
                             </table>
                         </div>
-                        <nav v-if="totalPaginasTikTok > 1" class="paginacao" aria-label="Páginas do ranking do TikTok">
-                            <button type="button" :disabled="paginaTikTok === 1" aria-label="Página anterior" @click="irParaPaginaTikTok(paginaTikTok - 1)">
-                                <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                            </button>
-                            <template v-for="(n, i) in paginasTikTok" :key="`${n}-${i}`">
-                                <span v-if="n === '…'" class="reticencias" aria-hidden="true">…</span>
-                                <button v-else type="button" :class="{ atual: n === paginaTikTok }" :aria-current="n === paginaTikTok ? 'page' : null"
-                                    :aria-label="`Página ${n}`" @click="irParaPaginaTikTok(n)">{{ n }}</button>
-                            </template>
-                            <button type="button" :disabled="paginaTikTok === totalPaginasTikTok" aria-label="Próxima página" @click="irParaPaginaTikTok(paginaTikTok + 1)">
-                                <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                            </button>
-                        </nav>
+                        <Paginacao :pagina="tt.pagina.value" :total="tt.totalPaginas.value" rotulo="Páginas do ranking do TikTok" @ir="tt.irParaPagina" />
                         </template>
                     </Deferred>
                 </section>
@@ -332,7 +288,12 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                                     class="etiqueta etiqueta-busca">{{ t.termo }}</a>
                             </div>
                         </div>
-                        <table v-if="mercadoLivre.produtos.length" class="tabela border-t border-[var(--surface-border)]">
+                        <div v-if="mercadoLivre.produtos.length" class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--surface-border)] px-4 py-3">
+                            <BuscaTabela v-model="ml.busca.value" rotulo="Buscar produto entre os mais vendidos do Mercado Livre" placeholder="Buscar produto (ex.: organizador)" />
+                            <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ ml.faixa.value }} produtos</span>
+                        </div>
+                        <p v-if="mercadoLivre.produtos.length && ml.filtrados.value.length === 0" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com “{{ ml.busca.value }}” entre os mais vendidos.</p>
+                        <table v-else-if="mercadoLivre.produtos.length" class="tabela border-t border-[var(--surface-border)]">
                             <thead>
                                 <tr>
                                     <th scope="col" class="pl-4">#</th>
@@ -342,7 +303,7 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="p in mercadoLivre.produtos" :key="p.id">
+                                <tr v-for="p in ml.daPagina.value" :key="p.id">
                                     <td class="pl-4"><span class="posicao" :class="{ 'posicao-top': p.posicao <= 3 }">{{ p.posicao }}</span></td>
                                     <td class="max-w-0 w-full">
                                         <div class="flex items-center gap-2">
@@ -355,6 +316,7 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                                 </tr>
                             </tbody>
                         </table>
+                        <Paginacao :pagina="ml.pagina.value" :total="ml.totalPaginas.value" rotulo="Páginas dos mais vendidos do Mercado Livre" @ir="ml.irParaPagina" />
                     </Deferred>
                 </section>
 
@@ -385,27 +347,35 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
                                 </div>
                             </div>
                             <p v-if="c.chave === 'geral' && google.erro" class="px-4 py-6 text-sm text-error" role="alert">{{ google.erro }}</p>
-                            <p v-else-if="c.termos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nada em alta neste assunto agora.</p>
-                            <table v-else class="tabela">
-                                <thead>
-                                    <tr>
-                                        <th scope="col" class="pl-4">Busca</th>
-                                        <th scope="col" class="pr-4 text-right">Volume</th>
-                                    </tr>
-                                    <tr aria-hidden="true"><td colspan="2" class="faixa"></td></tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="t in c.termos" :key="t.termo">
-                                        <td class="max-w-0 w-full pl-4">
-                                            <a :href="t.link" target="_blank" rel="noopener" class="block truncate font-semibold hover:underline">{{ t.termo }}</a>
-                                            <p v-if="t.noticia" class="truncate text-xs text-[var(--texto-suave)]" :title="t.noticia">{{ t.noticia }}</p>
-                                        </td>
-                                        <td class="pr-4 text-right">
-                                            <span v-if="t.trafego" class="etiqueta etiqueta-fonte whitespace-nowrap" :title="`${t.trafego} buscas`">{{ trafegoK(t.trafego) }}</span>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <p v-else-if="c.termos.value.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nada em alta neste assunto agora.</p>
+                            <template v-else>
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-border)] px-4 py-3">
+                                    <BuscaTabela v-model="c.busca.value" :rotulo="`Buscar em ${c.titulo}`" placeholder="Buscar" />
+                                    <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ c.faixa.value }}</span>
+                                </div>
+                                <p v-if="c.filtrados.value.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nada com “{{ c.busca.value }}” neste assunto.</p>
+                                <table v-else class="tabela">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col" class="pl-4">Busca</th>
+                                            <th scope="col" class="pr-4 text-right">Volume</th>
+                                        </tr>
+                                        <tr aria-hidden="true"><td colspan="2" class="faixa"></td></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="t in c.daPagina.value" :key="t.termo">
+                                            <td class="max-w-0 w-full pl-4">
+                                                <a :href="t.link" target="_blank" rel="noopener" class="block truncate font-semibold hover:underline">{{ t.termo }}</a>
+                                                <p v-if="t.noticia" class="truncate text-xs text-[var(--texto-suave)]" :title="t.noticia">{{ t.noticia }}</p>
+                                            </td>
+                                            <td class="pr-4 text-right">
+                                                <span v-if="t.trafego" class="etiqueta etiqueta-fonte whitespace-nowrap" :title="`${t.trafego} buscas`">{{ trafegoK(t.trafego) }}</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <Paginacao :pagina="c.pagina.value" :total="c.totalPaginas.value" :rotulo="`Páginas de ${c.titulo}`" @ir="c.irParaPagina" />
+                            </template>
                         </section>
                     </div>
                 </Deferred>
@@ -546,47 +516,6 @@ const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
 .tabela th.pr-4, .tabela td.pr-4 { padding-right: 1rem; }
 .tabela tbody tr:last-child td { border-bottom: 0; }
 .tabela tbody tr:nth-child(even) td { background: color-mix(in oklab, var(--surface-muted) 60%, var(--surface)); }
-
-/* Busca e paginação da tabela do TikTok. */
-.busca {
-    display: flex;
-    flex: 1 1 16rem;
-    max-width: 24rem;
-    align-items: center;
-    gap: 0.5rem;
-    border: 1px solid var(--surface-border);
-    border-radius: 10px;
-    background: var(--surface);
-    padding: 0.4rem 0.75rem;
-    color: var(--texto-suave);
-}
-.busca:focus-within { border-color: color-mix(in oklab, var(--cor-texto) 55%, var(--surface-border)); }
-.busca input { width: 100%; border: 0; background: transparent; padding: 0; font-size: 0.875rem; color: var(--surface-foreground); outline: none; box-shadow: none; }
-.paginacao {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0.25rem;
-    border-top: 1px solid var(--surface-border);
-    padding: 0.75rem 1rem;
-}
-.paginacao button {
-    min-width: 2rem;
-    height: 2rem;
-    border: 1px solid var(--surface-border);
-    border-radius: 8px;
-    background: var(--surface);
-    padding: 0 0.5rem;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}
-.paginacao button:hover:not(:disabled):not(.atual) { background: var(--surface-muted); }
-.paginacao button:disabled { opacity: 0.4; cursor: not-allowed; }
-.paginacao button.atual { border-color: var(--th-fundo); background: var(--th-fundo); color: var(--th-texto); }
-.dark .paginacao button.atual { border-color: var(--th-texto); }
-.paginacao .reticencias { padding: 0 0.25rem; color: var(--texto-suave); }
 
 .posicao {
     display: inline-grid;

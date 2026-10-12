@@ -35,19 +35,12 @@ export const sidebarSections = [
         ],
     },
     {
-        // Radar (pedido do Lira em 2026-10-12): saiu de Vender e virou grupo
-        // próprio, uma tela por canal. Nome do grupo em radarNome.js.
-        heading: RADAR_NOME,
-        items: [
-            { label: 'Shopee', href: '/admin/radar/shopee', icon: 'fas fa-bag-shopping', permission: 'relatorios.view' },
-            { label: 'Mercado Livre', href: '/admin/radar/mercado-livre', icon: 'fas fa-handshake', permission: 'relatorios.view' },
-        ],
-    },
-    {
-        // Oportunidades (pedido do Lira 2026-10-12): curva ABC com lucro de
-        // cada marketplace. Mostra lucro, por isso financeiro.view.
+        // Oportunidades (pedido do Lira 2026-10-12): o Radar de Oportunidades
+        // (uma tela só, sem separar por marketplace; nome em radarNome.js) e
+        // a curva ABC com lucro de cada marketplace (financeiro.view).
         heading: 'Oportunidades',
         items: [
+            { label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
             { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'financeiro.view' },
             { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'financeiro.view' },
         ],

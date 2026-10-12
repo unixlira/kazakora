@@ -54,14 +54,16 @@ const tempo = computed(() => {
         <AvisoCookies />
         <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop; preto com fonte
              branca desde 2026-10-12). Grade 4-4-4 (pedido 2026-10-12): logo, nome e
-             CNPJ (sem razão social, endereço e contato) | formas de pagamento + dados protegidos e entrega gratuita |
-             selos de segurança + compra segura. Sem a faixa centralizada embaixo.
+             CNPJ (sem razão social, endereço e contato) | formas de pagamento | selos
+             de segurança. As colunas se alinham pela base, para a linha do CNPJ
+             ficar na altura da parte de baixo dos selos; embaixo, uma linha
+             divisória e os três itens de confiança centralizados numa linha só.
              No celular, uma coluna embaixo da outra, centralizadas. -->
         <footer class="mt-auto bg-black px-4 py-10 text-white">
-            <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:gap-8 md:text-left">
+            <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8 md:text-left">
                 <div class="flex flex-col items-center md:col-span-4 md:items-start">
                     <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto">
-                    <p class="mt-4 text-xs leading-relaxed text-white/80">
+                    <p class="mt-4 text-xs leading-relaxed text-white/80 md:-mb-1">
                         © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                         CNPJ: {{ COMPANY.cnpj }}
                     </p>
@@ -75,10 +77,6 @@ const tempo = computed(() => {
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
                             width="265" height="180" class="h-auto w-full min-w-0 flex-1">
                     </div>
-                    <ul class="mt-5 space-y-2 text-sm font-medium">
-                        <li><i class="fa-solid fa-fingerprint mr-2 w-4 text-center text-[#0FB930]"></i>Dados protegidos</li>
-                        <li><i class="fa-solid fa-box-open mr-2 w-4 text-center text-[#0FB930]"></i>Entrega gratuita</li>
-                    </ul>
                 </div>
 
                 <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
@@ -103,12 +101,15 @@ const tempo = computed(() => {
                             </template>
                         </a>
                     </div>
-                    <p class="mt-3 text-xs font-bold text-white/80"><i class="fa-solid fa-shield-halved mr-1.5 text-[#0FB930]"></i>Conexão criptografada</p>
-                    <ul class="mt-5 space-y-2 text-sm font-medium">
-                        <li><i class="fa-solid fa-lock mr-2 w-4 text-center text-[#0FB930]"></i>Compra segura</li>
-                    </ul>
                 </div>
             </div>
+
+            <hr class="mx-auto mt-8 max-w-[1160px] border-white/15">
+            <ul class="mx-auto mt-6 flex max-w-[1160px] flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-medium">
+                <li><i class="fa-solid fa-shield-halved mr-2 text-[#0FB930]"></i>Conexão criptografada</li>
+                <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados protegidos</li>
+                <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega gratuita</li>
+            </ul>
         </footer>
     </div>
 </template>

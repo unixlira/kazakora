@@ -68,7 +68,6 @@ export const sidebarSections = [
             { label: 'Fluxo de caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', permission: 'financeiro.view' },
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', permission: 'pedidos.view' },
-            { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', permission: 'configuracoes.integracoes' },
             { label: 'Extratos do TikTok', href: '/admin/arquivos-tiktok', icon: 'fab fa-tiktok', permission: 'financeiro.view' },
             { label: 'Centros de custo', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', permission: 'cadastros.view' },
@@ -82,10 +81,19 @@ export const sidebarSections = [
             { label: 'Banners do site', href: '/admin/banners', icon: 'fas fa-images', permission: 'cadastros.view' },
             { label: 'Notificações promocionais', href: '/admin/notificacoes-promocionais', icon: 'fas fa-bullhorn', permission: 'cadastros.view' },
             { label: 'Disparos de WhatsApp', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', permission: 'configuracoes.integracoes' },
-            { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
-            { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },
             { label: 'Oportunidades em PDF', href: '/admin/pdf-oportunidades', icon: 'fas fa-file-pdf', permission: 'relatorios.view' },
             { label: 'Baixar vídeos', href: '/admin/download-videos', icon: 'fas fa-download', permission: 'operacional.create' },
+        ],
+    },
+    {
+        // Publicidade (pedido do Lira em 2026-10-12): junta o que é de ADS,
+        // que antes ficava espalhado entre Financeiro e Marketing.
+        heading: 'Publicidade',
+        items: [
+            { label: 'Visão geral de ADS', href: '/admin/publicidade', icon: 'fas fa-rectangle-ad', permission: 'financeiro.view' },
+            { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
+            { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
+            { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },
         ],
     },
     {

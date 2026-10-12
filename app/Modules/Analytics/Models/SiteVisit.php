@@ -19,13 +19,13 @@ class SiteVisit extends Model
     /**
      * Coluna site (pedido 2026-10-12): o banco é compartilhado com os outros
      * sites do grupo, que avisam as visitas em /api/{site}/visita. A loja
-     * (painel, Visitas Casa Cora, vitrine) só lê site = kazakora.
+     * (painel, Visitas Kazakora, vitrine) só lê site = kazakora.
      */
     public const SITE_LOJA = 'kazakora';
 
     /** Outros sites: chave gravada em site => nome na tela. */
     public const OUTROS_SITES = [
-        'ferrakora' => 'FerraKora',
+        'ferrakora' => 'Ferrakora',
         'beautykora' => 'BeautyKora',
     ];
 

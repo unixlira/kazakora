@@ -8,8 +8,9 @@ import { computed, ref } from 'vue';
 // Radar de Oportunidades (pedido do Lira 2026-10-12): o que está vendendo e
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
 // Mercado Livre (mais vendidos de Casa e buscas em alta) e Google Trends.
-// A Shopee saiu da tela até a API de Afiliados ser liberada. Cada fonte é
-// prop adiada num grupo próprio (null até chegar). Ver RadarController.
+// Layout v4 (Lira 2026-10-12): Shopee fora até a API de Afiliados trazer
+// dados. TikTok sozinho em cima; Mercado Livre e Google lado a lado embaixo.
+// Cada fonte é prop adiada num grupo próprio (null até chegar). Ver RadarController.
 const props = defineProps({
     tiktok: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
@@ -114,7 +115,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
     <Head :title="RADAR_NOME" />
     <AdminLayout>
         <div class="radar-grafite">
-            <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div class="radar-topo mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-wider text-[var(--destaque)]">Oportunidades</p>
                     <h1 class="text-2xl font-bold">{{ RADAR_NOME }}</h1>
@@ -130,7 +131,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </div>
 
             <!-- Faixa de números (horizontal; rola de lado no celular) -->
-            <div class="mb-5 flex gap-3 overflow-x-auto pb-1">
+            <div class="mb-5 flex gap-3 overflow-x-auto pb-1 pt-1">
                 <div class="kpi fonte-destaque">
                     <span class="kpi-icone"><i class="fas fa-bullseye" aria-hidden="true"></i></span>
                     <div><b>{{ tudoCarregado ? sinais.length : '…' }}</b><span>em alta em mais de um lugar</span></div>
@@ -159,8 +160,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                 <p v-else-if="sinais.length === 0" class="pt-4 text-sm text-[var(--texto-suave)]">
                     Nenhuma busca em alta bate com os mais vendidos hoje. Veja as fontes abaixo uma a uma.
                 </p>
-                <ul v-else class="mt-3 flex snap-x gap-3 overflow-x-auto pb-2">
-                    <li v-for="s in sinais" :key="s.termo" class="w-72 shrink-0 snap-start rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3">
+                <ul v-else class="mt-2 flex snap-x gap-3 overflow-x-auto pb-2 pt-1">
+                    <li v-for="s in sinais" :key="s.termo" tabindex="0" class="card-sinal w-72 shrink-0 snap-start rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3">
                         <div class="flex items-center justify-between gap-2">
                             <span class="truncate font-bold" :title="s.termo">{{ s.termo }}</span>
                             <span class="etiqueta fonte-destaque whitespace-nowrap">{{ s.fontes.length }} fontes</span>
@@ -174,7 +175,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </section>
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <!-- TikTok Shop (Kalodata) -->
+                <!-- TikTok Shop (Kalodata): sozinho em cima, ocupa a largura toda -->
                 <section class="card-fonte fonte-tiktok xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="tiktok" />
@@ -221,7 +222,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Mercado Livre -->
+                <!-- Mercado Livre: embaixo, ao lado do Google -->
                 <section class="card-fonte fonte-ml">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
@@ -269,7 +270,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Google Trends -->
+                <!-- Google Trends: embaixo, ao lado do Mercado Livre -->
                 <section class="card-fonte fonte-google">
                     <div class="card-cabeca">
                         <MarcaLogo marca="google" />
@@ -349,6 +350,28 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
     color: var(--cor-texto);
 }
 
+/* Destaque ao passar o mouse ou focar pelo teclado (pedido do Lira
+   2026-10-12): o card sobe um pouco, a borda pega a cor da fonte e ganha
+   sombra. Sem movimento para quem pediu menos animação no sistema. */
+.kpi, .card-sinal, .card-fonte {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
+    border-color: color-mix(in oklab, var(--cor-texto, #c2410c) 55%, var(--surface-border));
+    box-shadow: 0 8px 20px -8px rgb(0 0 0 / 0.25);
+}
+.kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: translateY(-2px); }
+.kpi:hover { border-top-color: var(--cor-fundo, var(--cor)); }
+.card-sinal:focus-visible { outline: 2px solid #c2410c; outline-offset: 2px; }
+.dark .kpi:hover, .dark .card-sinal:hover, .dark .card-sinal:focus-visible, .dark .card-fonte:hover, .dark .card-fonte:focus-within {
+    box-shadow: 0 8px 22px -8px rgb(0 0 0 / 0.7);
+}
+.dark .card-sinal:focus-visible { outline-color: #ff8c4d; }
+@media (prefers-reduced-motion: reduce) {
+    .kpi, .card-sinal, .card-fonte { transition: none; }
+    .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: none; }
+}
+
 .destaque {
     border-left: 4px solid #c2410c;
     background: linear-gradient(135deg, color-mix(in oklab, #c2410c 7%, var(--surface)) 0%, var(--surface) 60%);
@@ -405,7 +428,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
     color: var(--th-texto);
     border-bottom: 3px solid var(--th-linha, var(--th-fundo));
 }
-/* Cabeçalho da tabela na cor da plataforma (pedido do Lira 2026-10-12). Tom
+/* Cabeçalho da tabela na cor da plataforma (pedido do Lira 2026-10-12). Tons
    de azul um pouco mais escuros que os oficiais para o branco ler
    bem (contraste acima de 4,5). TikTok e Google ganham a faixa de cores da
    marca logo abaixo. */

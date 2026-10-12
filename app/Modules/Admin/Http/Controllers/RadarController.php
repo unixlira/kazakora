@@ -23,9 +23,9 @@ use Inertia\Response;
  * quando a sua consulta termina, sem uma fonte lenta segurar as outras.
  * O cruzamento ("em alta em mais de um lugar") é feito na tela.
  *
- * Shopee fora do Radar (Lira 2026-10-12): a API de Afiliados ainda não foi
- * liberada e o bloco ficava vazio. MaisVendidosShopee continua no código
- * (usado em Oportunidades › Shopee); para voltar, injetar aqui e repor a
+ * Layout v4 aprovado pelo Lira 2026-10-12: a Shopee sai da tela enquanto a
+ * API de Afiliados não for liberada. MaisVendidosShopee continua no código
+ * (usado em Oportunidades › Shopee); para religar, injetar aqui e repor a
  * prop 'shopee' e o bloco na tela.
  */
 class RadarController extends Controller

@@ -129,11 +129,22 @@
  * rodapé ficam no escuro de sempre (Lira, 2026-10-12: não mexer neles).
  */
 .dark .admin-shell .radar-grafite {
-    --fundo: #1c1a1b;
     --surface: #262324;
     --surface-muted: #302c2e;
     --surface-border: #3e393b;
     --faixa-card: #a39a9d;
+}
+/* Fundo da página do Radar cinza clarinho no escuro, cards continuam
+   escuros (Lira, 2026-10-12). Só a área do conteúdo usa --fundo; menu,
+   topo e rodapé pintam com --surface. O título fica fora dos cards, então
+   volta ao texto escuro do tema claro. */
+.dark .admin-shell:has(.radar-grafite) {
+    --fundo: #e9e7e8;
+}
+.dark .admin-shell .radar-grafite .radar-topo {
+    --texto-suave: #5b5054;
+    --destaque: #c2410c;
+    color: #1f1a1c;
 }
 
 /*

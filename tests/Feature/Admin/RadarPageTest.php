@@ -15,7 +15,7 @@ use Tests\TestCase;
  * Radar de Oportunidades (2026-10-12): uma tela só no grupo Oportunidades
  * do menu, sem separar por marketplace. Junta TikTok Shop (Kalodata),
  * Mercado Livre e Google Trends, cada um como prop adiada. A Shopee saiu da
- * tela até a API de Afiliados ser liberada (Lira 2026-10-12).
+ * tela no layout v4 (Lira 2026-10-12) até a API de Afiliados trazer dados.
  */
 class RadarPageTest extends TestCase
 {

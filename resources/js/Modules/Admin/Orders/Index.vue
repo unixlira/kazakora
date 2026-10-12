@@ -92,22 +92,26 @@ const columns = [
         header: 'Status',
         cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order' }),
     },
+    // Nota e e-mail na mesma coluna, um selo embaixo do outro (2026-10-11):
+    // em 1440px a tabela passava 42px da tela e cortava a coluna Ações.
     {
-        id: 'invoice_status',
-        header: 'Nota Fiscal',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.invoice?.status ?? null, context: 'invoice' }),
-    },
-    {
-        id: 'email_status',
-        header: 'E-mail',
+        id: 'invoice_email',
+        header: 'Nota / e-mail',
         cell: ({ row }) => {
             const log = row.original.latest_email_log;
-            if (!log) return h(StatusBadge, { status: null, context: 'email' });
-            return h('div', { class: 'flex items-center gap-1.5' }, [
-                h(StatusBadge, { status: log.status, context: 'email' }),
-                log.status === 'sent' && !log.invoice_attached
-                    ? h('span', { class: 'text-xs text-amber-600 dark:text-amber-400', title: 'Enviado sem a nota fiscal em anexo' }, 'sem anexo')
-                    : null,
+            const rotulo = (texto) => h('span', { class: 'w-10 shrink-0 text-[10px] font-semibold uppercase text-[var(--texto-suave)]' }, texto);
+            return h('div', { class: 'flex flex-col items-start gap-1' }, [
+                h('div', { class: 'flex items-center gap-1' }, [
+                    rotulo('Nota'),
+                    h(StatusBadge, { status: row.original.invoice?.status ?? null, context: 'invoice' }),
+                ]),
+                h('div', { class: 'flex items-center gap-1' }, [
+                    rotulo('E-mail'),
+                    h(StatusBadge, { status: log?.status ?? null, context: 'email' }),
+                    log && log.status === 'sent' && !log.invoice_attached
+                        ? h('span', { class: 'text-xs text-amber-600 dark:text-amber-400', title: 'Enviado sem a nota fiscal em anexo' }, 'sem anexo')
+                        : null,
+                ]),
             ]);
         },
     },

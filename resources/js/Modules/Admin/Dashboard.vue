@@ -63,8 +63,11 @@ const CHANNEL_COLORS = {
 };
 const CHROME = {
     // Tema grafite (2026-10-11): neutros quentes e o laranja como destaque.
-    light: { grid: '#e6e2e3', text: '#6b5f63', surface: '#ffffff', accent: '#c2410c', context: '#b3aaad' },
-    dark: { grid: '#302c2e', text: '#b3a9ac', surface: '#1b191a', accent: '#ff8c4d', context: '#7a6f73' },
+    // Escuro em preto chapado (#000), igual ao --surface do admin.
+    // Destaque grafite no claro (2026-10-11): o laranja se confundia com a
+    // Shopee nos gráficos "Este mês" e "Faturamento por categoria".
+    light: { grid: '#e6e2e3', text: '#6b5f63', surface: '#ffffff', accent: '#2b2326', context: '#b3aaad' },
+    dark: { grid: '#2a2a2a', text: '#b3a9ac', surface: '#000000', accent: '#ff8c4d', context: '#7a6f73' },
 };
 
 // O tema muda na hora (botão do layout põe/tira .dark no <html>) — os
@@ -151,8 +154,8 @@ const baseOptions = computed(() => ({
         legend: { display: false },
         tooltip: {
             backgroundColor: isDark.value ? '#f1eced' : '#2b2326',
-            titleColor: isDark.value ? '#1b191a' : '#ffffff',
-            bodyColor: isDark.value ? '#1b191a' : '#ffffff',
+            titleColor: isDark.value ? '#000000' : '#ffffff',
+            bodyColor: isDark.value ? '#000000' : '#ffffff',
             padding: 10,
             cornerRadius: 8,
             boxPadding: 4,
@@ -342,7 +345,7 @@ const categoryChartOptions = computed(() => ({
     ...baseOptions.value,
     indexAxis: 'y',
     scales: {
-        x: { ...axisStyle.value, ticks: { ...axisStyle.value.ticks, callback: (v) => formatCompact(v), maxTicksLimit: 5 } },
+        x: { ...axisStyle.value, ticks: { ...axisStyle.value.ticks, callback: (v) => formatCompact(v), maxTicksLimit: 4, autoSkipPadding: 24, maxRotation: 0 } },
         y: { ...axisStyle.value, grid: { display: false }, ticks: { ...axisStyle.value.ticks, color: isDark.value ? '#f1eced' : '#1f1a1c' } },
     },
     plugins: {
@@ -386,7 +389,7 @@ const visitTiles = computed(() => {
     const v = props.visitantes ?? {};
     const tiles = [];
     if (v.mesAtual) {
-        tiles.push({ label: 'Visitantes hoje', value: formatInt(v.visitantesHoje), hint: `${formatInt(v.paginasHoje)} páginas vistas hoje`, icon: 'fas fa-user-clock', color: '#ffc107' });
+        tiles.push({ label: 'Visitantes hoje', value: formatInt(v.visitantesHoje), hint: `${formatInt(v.paginasHoje)} páginas vistas hoje`, icon: 'fas fa-user-clock', color: '#b45309' });
     }
     tiles.push(
         { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#198754' },
@@ -464,7 +467,7 @@ const PRIORIDADES = {
     OK: { rotulo: 'Oportunidade', cor: '#16a34a', icone: 'fas fa-rocket' },
 };
 const ESPECIALISTAS = [
-    { canal: 'shopee', nome: 'Cauê', canalNome: 'Shopee', fundo: 'linear-gradient(120deg, #ee4d2d 0%, #f7743d 100%)', texto: '#ffffff', icone: 'fas fa-bag-shopping' },
+    { canal: 'shopee', nome: 'Cauê', canalNome: 'Shopee', fundo: 'linear-gradient(120deg, #c2410c 0%, #c2410c 50%, #ee4d2d 100%)', texto: '#ffffff', icone: 'fas fa-bag-shopping' },
     { canal: 'mercado_livre', nome: 'Diego', canalNome: 'Mercado Livre', fundo: 'linear-gradient(120deg, #ffe600 0%, #ffd000 100%)', texto: '#2d3277', icone: 'fas fa-handshake' },
 ];
 const filtroDiag = ref({ shopee: 'P0', mercado_livre: 'P0' });
@@ -498,26 +501,26 @@ const quandoGerado = (iso) => {
     <Head title="Dashboard" />
 
     <AdminLayout>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <CardStats stat-subtitle="FATURAMENTO TOTAL" :stat-title="formatPrice(stats.revenueTotal)"
-                stat-icon-name="fas fa-sack-dollar" variant="success" vivid />
+                stat-icon-name="fas fa-sack-dollar" variant="success" vivid compact />
             <CardStats stat-subtitle="FATURAMENTO DO MÊS" :stat-title="formatPrice(stats.revenue)"
-                stat-icon-name="fas fa-calendar-days" variant="primary" vivid />
+                stat-icon-name="fas fa-calendar-days" variant="primary" vivid compact />
             <CardStats stat-subtitle="FATURAMENTO HOJE" :stat-title="formatPrice(stats.revenueToday)"
-                stat-icon-name="fas fa-money-bill-wave" variant="info" vivid />
+                stat-icon-name="fas fa-money-bill-wave" variant="info" vivid compact />
             <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO DO MÊS" :stat-title="formatPrice(stats.contributionMarginMonth)"
-                stat-icon-name="fas fa-wallet" :variant="stats.contributionMarginMonth >= 0 ? 'success' : 'error'" vivid />
+                stat-icon-name="fas fa-wallet" :variant="stats.contributionMarginMonth >= 0 ? 'success' : 'error'" vivid compact />
         </div>
 
-        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-4">
             <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
-                stat-icon-name="fas fa-receipt" variant="primary" vivid />
+                stat-icon-name="fas fa-receipt" variant="primary" vivid compact />
             <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
-                stat-icon-name="fas fa-calendar-check" variant="secondary" vivid />
+                stat-icon-name="fas fa-calendar-check" variant="secondary" vivid compact />
             <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
-                stat-icon-name="fas fa-cart-shopping" variant="primary" vivid />
+                stat-icon-name="fas fa-cart-shopping" variant="primary" vivid compact />
             <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
-                stat-icon-name="fas fa-rotate-left" :variant="stats.returnsMonth > 0 ? 'error' : 'success'" vivid />
+                stat-icon-name="fas fa-rotate-left" :variant="stats.returnsMonth > 0 ? 'error' : 'success'" vivid compact />
         </div>
 
         <!-- Fundos em degradê (pedido 2026-10-11, mesmas cores dos cards
@@ -690,7 +693,7 @@ const quandoGerado = (iso) => {
                     <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-lg ring-1 ring-white/40"><i :class="esp.icone"></i></span>
                     <div>
                         <h2 class="text-lg font-bold leading-tight">{{ esp.nome }} · {{ esp.canalNome }}</h2>
-                        <p class="text-xs opacity-85">O que ajustar para vender mais · últimos 30 dias<template v-if="diagnosticos?.[esp.canal]"> · atualizado {{ quandoGerado(diagnosticos[esp.canal].gerado_em) }}</template></p>
+                        <p class="text-xs font-semibold">O que ajustar para vender mais · últimos 30 dias<template v-if="diagnosticos?.[esp.canal]"> · atualizado {{ quandoGerado(diagnosticos[esp.canal].gerado_em) }}</template></p>
                     </div>
                 </div>
             </div>

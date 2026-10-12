@@ -49,9 +49,9 @@ const thumbnail = (item) => item.images?.find((image) => image.is_primary)?.url 
             </p>
         </div>
 
-        <div v-if="variations.parent" class="rounded border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <div v-if="variations.parent" class="rounded border border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--surface-foreground)]">
             Este produto é uma variação de
-            <a :href="`/admin/produtos/${variations.parent.id}/editar`" class="font-semibold underline">{{ variations.parent.name }}</a>
+            <a :href="`/admin/produtos/${variations.parent.id}/editar`" class="text-link font-semibold underline">{{ variations.parent.name }}</a>
             (SKU {{ variations.parent.sku }}).
         </div>
 

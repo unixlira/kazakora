@@ -41,7 +41,7 @@ const columns = [
                 h('p', { class: 'text-xs text-slate-400' }, [
                     row.original.sku,
                     row.original.parent
-                        ? h('span', { class: 'ml-1.5 text-blue-500' }, `· Variação de ${row.original.parent.name}`)
+                        ? h('span', { class: 'ml-1.5 text-link' }, `· Variação de ${row.original.parent.name}`)
                         : row.original.children_count
                             ? h('span', { class: 'ml-1.5 text-emerald-600' }, `· ${row.original.children_count} variação(ões)`)
                             : null,

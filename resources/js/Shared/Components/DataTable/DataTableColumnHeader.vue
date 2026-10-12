@@ -7,12 +7,12 @@ defineProps({
 
 <template>
     <button v-if="column.getCanSort()" type="button"
-        class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400 hover:text-primary"
+        class="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)] hover:text-[var(--surface-foreground)]"
         @click="column.toggleSorting(column.getIsSorted() === 'asc')">
         {{ label }}
         <i v-if="column.getIsSorted() === 'asc'" class="fas fa-arrow-up text-[10px]"></i>
         <i v-else-if="column.getIsSorted() === 'desc'" class="fas fa-arrow-down text-[10px]"></i>
         <i v-else class="fas fa-sort text-[10px] opacity-40"></i>
     </button>
-    <span v-else class="text-xs font-semibold uppercase tracking-wide text-slate-400">{{ label }}</span>
+    <span v-else class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">{{ label }}</span>
 </template>

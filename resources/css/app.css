@@ -136,32 +136,55 @@
 }
 
 /*
- * Topo flutuante (Lira, 2026-10-12): com a página rolada o topo fica
- * translúcido e puxado para o fumê, nos dois temas e também no Radar
- * (o :is dá a especificidade para passar por cima da regra acima).
- * Texto e ícones ficam claros no vidro; os menus que abrem do topo
- * (.topo-menu) voltam às cores normais.
+ * Topo flutuante (Lira, 2026-10-12): no alto da página o topo é a faixa
+ * branca padrão (preta no tema escuro, pedido de 2026-10-11). Com a página
+ * rolada ele descola das bordas (flutua, com cantos arredondados) e vira um
+ * vidro fumê grafite translúcido, nos dois temas e também no Radar (o :is dá
+ * a especificidade para passar por cima da regra acima). Texto e ícones
+ * ficam claros no vidro; os menus que abrem do topo (.topo-menu) voltam às
+ * cores normais. O prefixo .admin-shell nas regras de texto é para ganhar
+ * das cores fixas do tema escuro (.dark .admin-shell .text-slate-500).
  */
 :is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo {
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease,
+        box-shadow 0.25s ease, top 0.25s ease, margin 0.25s ease, border-radius 0.25s ease;
 }
 :is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
     --icone-menu: #e4dee0;
     --surface-muted: rgb(255 255 255 / 0.12);
-    --surface-border: rgb(255 255 255 / 0.12);
-    background-color: rgb(34 32 33 / 0.62);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    backdrop-filter: blur(14px) saturate(140%);
+    --surface-border: rgb(255 255 255 / 0.1);
+    top: 0.75rem;
+    margin-inline: 0.75rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 1rem;
+    background-color: rgb(30 30 32 / 0.72);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
     color: #f1eced;
-    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
-.admin-topo-fume :is(.text-slate-300, .text-slate-400, .text-slate-500):not(.topo-menu *) {
-    color: rgb(241 236 237 / 0.78);
+@media (min-width: 768px) {
+    :is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
+        margin-inline: 1.5rem;
+    }
 }
-.admin-topo-fume .hover\:text-primary:hover:not(.topo-menu *) {
+/* No escuro o grafite clareia um pouco para o vidro não sumir no preto. */
+.dark :is(.admin-shell, .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
+    background-color: rgb(64 64 68 / 0.62);
+    border-color: rgb(255 255 255 / 0.14);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.6);
+}
+.admin-shell .admin-topo-fume :is(.text-slate-300, .text-slate-400, .text-slate-500):not(.topo-menu *) {
+    color: rgb(241 236 237 / 0.8);
+}
+.admin-shell .admin-topo-fume .hover\:text-primary:hover:not(.topo-menu *) {
     color: #ffffff;
 }
-.admin-topo-fume input:not(.topo-menu *)::placeholder {
+.admin-shell .admin-topo-fume .bg-lightprimary:not(.topo-menu *) {
+    background-color: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+}
+.admin-shell .admin-topo-fume input:not(.topo-menu *)::placeholder {
     color: rgb(241 236 237 / 0.6);
 }
 .admin-topo-fume .topo-menu {

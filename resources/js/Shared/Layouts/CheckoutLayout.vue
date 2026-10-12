@@ -10,9 +10,6 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 // 00:00; atualizar a página recomeça dos 15 (pedido do Lira, sem guardar).
 const BANDEIRAS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
-// Endereço em duas linhas (rua/bairro e cidade/CEP), como na referência.
-const enderecoEmLinhas = COMPANY.enderecoCompleto.split(/,\s*(?=[^,]+\/[A-Z]{2})/);
-
 const restante = ref(15 * 60);
 let relogio = null;
 
@@ -64,26 +61,25 @@ const tempo = computed(() => {
         <footer class="mt-auto bg-black text-white" aria-labelledby="rodape-checkout-titulo">
             <h2 id="rodape-checkout-titulo" class="sr-only">Informações da loja, pagamento e segurança</h2>
             <div class="mx-auto grid max-w-[1160px] grid-cols-12 gap-y-10 px-4 py-10 text-center md:gap-x-8 md:text-left">
-                <!-- Coluna 1: logo (versão clara, para fundo escuro) e dados da empresa. -->
+                <!-- Coluna 1: logo (versão clara, para fundo escuro), nome e CNPJ. Sem
+                     razão social, endereço e contato (pedido 2026-10-12, simetria). -->
                 <div class="col-span-12 md:col-span-4">
                     <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia"
                         width="160" height="32" class="mx-auto h-8 w-auto md:mx-0">
                     <address class="mt-4 text-xs not-italic leading-relaxed text-white">
                         © {{ new Date().getFullYear() }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora<br>
-                        {{ COMPANY.razaoSocial }}<br>
-                        CNPJ: {{ COMPANY.cnpj }}<br>
-                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index">{{ linha }}<br></template>
-                        WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                        E-mail: {{ COMPANY.email }}
+                        CNPJ: {{ COMPANY.cnpj }}
                     </address>
                 </div>
 
-                <!-- Coluna 2: formas de pagamento (mesmas bandeiras do checkout). -->
+                <!-- Coluna 2: formas de pagamento (mesmas bandeiras do checkout). As seis
+                     numa linha só (pedido 2026-10-12): encolhem juntas com a coluna em
+                     vez de quebrar. -->
                 <div class="col-span-12 md:col-span-4">
                     <h3 class="text-sm font-semibold text-white">Formas de pagamento</h3>
-                    <ul class="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start" aria-label="Bandeiras aceitas">
-                        <li v-for="bandeira in BANDEIRAS" :key="bandeira">
-                            <img :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira" class="h-[44px] w-auto">
+                    <ul class="mx-auto mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5 md:mx-0" aria-label="Bandeiras aceitas">
+                        <li v-for="bandeira in BANDEIRAS" :key="bandeira" class="min-w-0 flex-1">
+                            <img :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira" width="265" height="180" class="h-auto w-full">
                         </li>
                     </ul>
                 </div>

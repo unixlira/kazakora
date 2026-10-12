@@ -168,7 +168,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
         <!-- Resumo: o que pede ação agora -->
         <div class="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <div v-for="card in cards" :key="card.chave" class="rounded-xl border border-[var(--surface-border)] p-3 shadow-sm"
-                :style="{ borderTop: `3px solid ${card.cor}`, background: `linear-gradient(135deg, color-mix(in oklab, ${card.cor} ${card.valor ? 12 : 4}%, var(--surface)) 0%, var(--surface) 75%)` }">
+                :style="{ borderTop: '3px solid var(--faixa-card)',background: `linear-gradient(135deg, color-mix(in oklab, ${card.cor} ${card.valor ? 12 : 4}%, var(--surface)) 0%, var(--surface) 75%)` }">
                 <div class="flex items-center justify-between">
                     <span class="text-2xl font-bold">{{ card.valor ?? 0 }}</span>
                     <span class="flex h-8 w-8 items-center justify-center rounded-full text-sm text-white" :style="{ background: card.cor, opacity: card.valor ? 1 : 0.45 }"><i :class="card.icone"></i></span>

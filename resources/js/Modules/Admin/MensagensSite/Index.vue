@@ -158,7 +158,7 @@ const linkWhats = (m) => {
                         <p class="text-xs text-slate-400">{{ quandoCompleto(selecionada.recebida_em) }}</p>
                     </div>
 
-                    <div class="mt-6 whitespace-pre-line rounded-xl border-l-4 border-[#f27a2a] bg-orange-50/60 p-5 text-[15px] leading-relaxed dark:bg-orange-500/5">{{ selecionada.mensagem }}</div>
+                    <div class="mt-6 whitespace-pre-line rounded-xl border-l-4 border-[var(--faixa-card)] bg-orange-50/60 p-5 text-[15px] leading-relaxed dark:bg-orange-500/5">{{ selecionada.mensagem }}</div>
 
                     <div class="mt-6 flex flex-wrap gap-2">
                         <a :href="linkResposta(selecionada)" class="inline-flex items-center gap-2 rounded-lg bg-[#f27a2a] px-4 py-2.5 text-sm font-semibold text-white hover:brightness-95">

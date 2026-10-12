@@ -83,6 +83,9 @@
        ícone, barras, ranking). No escuro vira o laranja, porque o primary
        de lá é claro (botão invertido) e apagaria o branco. */
     --primary-solido: var(--color-primary);
+    /* Faixa de destaque dos cards (topo/margem), pedido 2026-10-11: grafite
+       em todo o admin. A cor do card fica no ícone e no fundo. */
+    --faixa-card: var(--color-primary);
 }
 
 .dark .admin-shell {
@@ -95,6 +98,8 @@
     --icone-menu: #a99da1;
     --destaque: #ff8c4d;
     --primary-solido: #c2410c;
+    /* Grafite claro: o escuro do tema some no fundo (1,14); este dá 4,6. */
+    --faixa-card: #8f8589;
 
     /* Botão invertido: grafite não aparece no fundo escuro (1,14), então o
        botão principal fica claro com texto escuro (14,20). */

@@ -177,6 +177,17 @@ onBeforeUnmount(() => {
     pararLoader();
 });
 
+// Pedido do Lira 2026-10-12: com a página rolada, o topo fixo fica
+// translúcido e fumê (o conteúdo aparece borrado por baixo). No alto da
+// página volta ao normal. Estilo em .admin-topo-fume (app.css).
+const topoFlutuando = ref(false);
+const medirRolagem = () => { topoFlutuando.value = window.scrollY > 8; };
+onMounted(() => {
+    medirRolagem();
+    window.addEventListener('scroll', medirRolagem, { passive: true });
+});
+onBeforeUnmount(() => window.removeEventListener('scroll', medirRolagem));
+
 // Pedido explícito 2026-08-15: botão de voltar visível em toda tela do
 // admin, sem atrapalhar o layout de nenhuma página — colocado só uma vez
 // aqui no layout compartilhado (não em cada tela) em vez de duplicado.
@@ -319,7 +330,8 @@ watch(
 
         <div class="relative flex flex-1 flex-col transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Topbar -->
-            <nav class="admin-topo sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
+            <nav class="admin-topo sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start"
+                :class="{ 'admin-topo-fume': topoFlutuando }">
                 <div class="mx-auto flex w-full flex-nowrap items-center justify-between gap-2 sm:gap-4 md:px-4">
                     <div class="flex min-w-0 items-center gap-1 sm:gap-2">
                         <!-- Celular: hambúrguer e logo nesta mesma faixa. -->
@@ -374,7 +386,7 @@ watch(
                                 <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-error px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
                             </button>
 
-                            <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
+                            <div v-if="notifMenuOpen" class="topo-menu absolute right-0 z-50 mt-2 w-80 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
                                 <!-- Marcando todas como lidas: desfoque branco + loader até a requisição terminar (2026-10-11). -->
                                 <div v-if="marcandoTodas" class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-sm dark:bg-slate-900/60">
                                     <i class="fas fa-circle-notch animate-spin text-2xl text-primary"></i>
@@ -429,7 +441,7 @@ watch(
                                 <span class="hidden md:inline">{{ user?.name }}</span>
                                 <i class="fas fa-chevron-down ml-2 hidden text-xs text-slate-400 sm:inline-block"></i>
                             </button>
-                            <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
+                            <div v-if="userMenuOpen" class="topo-menu absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
                                 <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-[var(--surface-muted)]">
                                     <i class="fas fa-user mr-2 text-slate-400"></i> Meu Perfil
                                 </Link>

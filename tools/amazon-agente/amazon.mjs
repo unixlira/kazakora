@@ -6,6 +6,11 @@
 //   node amazon.mjs diario       -> extratos (Flat File V2) + transações do mês
 //   node amazon.mjs extratos     -> só os Flat File V2 das últimas liquidações
 //   node amazon.mjs transacoes   -> só o relatório de transações do mês (por datas)
+//   node amazon.mjs mostrar      -> traz o Chrome do agente para a frente (para o Lira logar)
+//
+// Roda em segundo plano: aba nova sem foco e janela minimizada, para não
+// cobrir a tela do KoraSync (testado em 11/10/2026: clique e download
+// funcionam minimizado; só o print de log não sai).
 //
 // Nunca digita senha nem resolve captcha/código: sessão caída = para e avisa.
 import { chromium } from 'playwright';
@@ -63,9 +68,21 @@ async function avisarFalha(mensagem) {
 async function abrir() {
   const navegador = await chromium.connectOverCDP(cfg.cdpUrl || 'http://127.0.0.1:9222');
   const contexto = navegador.contexts()[0];
-  const pagina = await contexto.newPage();
+  // Aba aberta sem foco: não puxa o Chrome para a frente do KoraSync.
+  const cdp = await navegador.newBrowserCDPSession();
+  const nova = contexto.waitForEvent('page');
+  const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', background: true });
+  const pagina = await nova;
   pagina.setDefaultTimeout(30000);
-  return { navegador, pagina };
+  return { navegador, pagina, cdp, targetId };
+}
+
+// O Chrome do agente trabalha minimizado; "mostrar" devolve a janela.
+async function janela({ cdp, targetId }, estado) {
+  try {
+    const { windowId } = await cdp.send('Browser.getWindowForTarget', { targetId });
+    await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: estado } });
+  } catch {}
 }
 
 async function garantirSessao(pagina, url) {
@@ -79,7 +96,8 @@ async function garantirSessao(pagina, url) {
 }
 
 async function registrarTela(pagina, nome) {
-  await pagina.screenshot({ path: path.join(LOGS, `${nome}.png`), fullPage: true }).catch(() => {});
+  // Minimizado o print não sai; o HTML basta para ver onde parou.
+  await pagina.screenshot({ path: path.join(LOGS, `${nome}.png`), fullPage: true, timeout: 10000 }).catch(() => {});
   fs.writeFileSync(path.join(LOGS, `${nome}.html`), await pagina.content().catch(() => ''));
 }
 
@@ -162,22 +180,31 @@ let sessao;
 const falhas = [];
 try {
   sessao = await abrir();
-  log(`início: ${tarefa}`);
-  if (tarefa === 'reconhecer') await reconhecer(sessao.pagina);
-  // Um job falhar não impede o outro: o V2 é o que vale para a taxa real.
-  for (const [nome, job] of [['extratos', extratos], ['transacoes', transacoes]]) {
-    if (tarefa !== nome && tarefa !== 'diario') continue;
-    try {
-      await job(sessao.pagina);
-    } catch (erro) {
-      falhas.push(`${nome}: ${erro.message}`);
-      log(`FALHA ${nome}: ${erro.message}`);
-      await registrarTela(sessao.pagina, `falha-${nome}-${Date.now()}`);
-      if (/Sessão da Amazon caiu/.test(erro.message)) break;
+  if (tarefa === 'mostrar') {
+    await janela(sessao, 'normal');
+    await sessao.pagina.goto(cfg.urls.extratos).catch(() => {});
+    await sessao.cdp.send('Target.activateTarget', { targetId: sessao.targetId }).catch(() => {});
+    sessao.pagina = null; // deixa a aba aberta para o login
+    log('Chrome do agente na frente, na tela da Amazon');
+  } else {
+    await janela(sessao, 'minimized');
+    log(`início: ${tarefa}`);
+    if (tarefa === 'reconhecer') await reconhecer(sessao.pagina);
+    // Um job falhar não impede o outro: o V2 é o que vale para a taxa real.
+    for (const [nome, job] of [['extratos', extratos], ['transacoes', transacoes]]) {
+      if (tarefa !== nome && tarefa !== 'diario') continue;
+      try {
+        await job(sessao.pagina);
+      } catch (erro) {
+        falhas.push(`${nome}: ${erro.message}`);
+        log(`FALHA ${nome}: ${erro.message}`);
+        await registrarTela(sessao.pagina, `falha-${nome}-${Date.now()}`);
+        if (/Sessão da Amazon caiu/.test(erro.message)) break;
+      }
     }
+    if (falhas.length) throw new Error(falhas.join(' | '));
+    log(`fim: ${tarefa} ok`);
   }
-  if (falhas.length) throw new Error(falhas.join(' | '));
-  log(`fim: ${tarefa} ok`);
 } catch (erro) {
   if (!falhas.length) log(`FALHA ${tarefa}: ${erro.message}`);
   await avisarFalha(`Agente Amazon (${tarefa}): ${erro.message}`.slice(0, 500));

@@ -123,6 +123,31 @@
 }
 
 /*
+ * Radar de Oportunidades no escuro (pedido do Lira 2026-10-12: "muito
+ * escura"): só o conteúdo dessa tela troca o preto por grafite, com cards
+ * um tom acima para separar sem depender só da borda. Menu lateral, topo e
+ * rodapé ficam no escuro de sempre (Lira, 2026-10-12: não mexer neles).
+ */
+.dark .admin-shell .radar-grafite {
+    --surface: #262324;
+    --surface-muted: #302c2e;
+    --surface-border: #3e393b;
+    --faixa-card: #a39a9d;
+}
+/* Fundo da página do Radar cinza clarinho no escuro, cards continuam
+   escuros (Lira, 2026-10-12). Só a área do conteúdo usa --fundo; menu,
+   topo e rodapé pintam com --surface. O título fica fora dos cards, então
+   volta ao texto escuro do tema claro. */
+.dark .admin-shell:has(.radar-grafite) {
+    --fundo: #e9e7e8;
+}
+.dark .admin-shell .radar-grafite .radar-topo {
+    --texto-suave: #5b5054;
+    --destaque: #c2410c;
+    color: #1f1a1c;
+}
+
+/*
  * Tema escuro do admin (pedido 2026-10-11: "várias fontes não aparecem").
  * As telas foram feitas no claro com bg-white, cinzas escuros e caixas de
  * aviso em tons -50; no escuro isso virava texto escuro em fundo escuro (ou

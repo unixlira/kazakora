@@ -3,9 +3,10 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 
-// Oportunidades (pedido do Lira 2026-10-12): curva ABC de um marketplace com
+// Estatísticas (pedido do Lira 2026-10-12): curva ABC de um marketplace com
 // lucro pela conta oficial (ContributionMargin) e tendência contra o período
-// anterior. Ver OportunidadesController e CurvaAbc.
+// anterior. Saiu do menu Oportunidades, que ficou só com dado de mercado.
+// Ver EstatisticasController e CurvaAbc.
 const props = defineProps({
     canal: { type: Object, required: true },
     filtros: { type: Object, required: true },
@@ -46,7 +47,7 @@ const atalhos = computed(() => {
 const periodo = reactive({ de: props.filtros.de, ate: props.filtros.ate });
 const carregando = ref(false);
 const aplicar = (de = periodo.de, ate = periodo.ate) => {
-    router.get(`/admin/oportunidades/${props.canal.slug}`, { de, ate }, {
+    router.get(`/admin/estatisticas/curva-abc/${props.canal.slug}`, { de, ate }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
@@ -78,12 +79,12 @@ const tendenciaCor = (p) => {
 </script>
 
 <template>
-    <Head :title="`Oportunidades · ${canal.nome}`" />
+    <Head :title="`Curva ABC · ${canal.nome}`" />
 
     <AdminLayout>
         <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">Oportunidades</p>
+                <p class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">Estatísticas</p>
                 <h1 class="text-2xl font-bold">Curva ABC · {{ canal.nome }}</h1>
                 <p class="mt-1 text-sm text-[var(--texto-suave)]">
                     Vendas efetivas de {{ formatDate(filtros.de) }} a {{ formatDate(filtros.ate) }} · variações do mesmo produto juntas · lucro pela margem de contribuição

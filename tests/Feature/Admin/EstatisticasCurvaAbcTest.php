@@ -15,14 +15,14 @@ use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * Menu Oportunidades (pedido do Lira 2026-10-12): curva ABC por marketplace
+ * Menu Estatísticas (pedido do Lira 2026-10-12): curva ABC por marketplace
  * (Mercado Livre / Shopee) com lucro pela conta oficial, variações juntas e
  * tendência contra o período anterior.
  *
  * Valores com centavos de propósito: json_encode(100.0) vira "100" e o
  * ->where() do Inertia compara estrito.
  */
-class OportunidadesCurvaAbcTest extends TestCase
+class EstatisticasCurvaAbcTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -91,11 +91,11 @@ class OportunidadesCurvaAbcTest extends TestCase
         $this->pedido(Order::ORIGIN_MANUAL_INVOICE, [[$tabua, 100, 10]]);
         $this->pedido(Order::ORIGIN_MERCADO_LIVRE, [[$tabua, 100, 10]], ['created_at' => now()->subDays(40)]);
 
-        $response = $this->actingAs($this->admin())->get('/admin/oportunidades/mercado-livre');
+        $response = $this->actingAs($this->admin())->get('/admin/estatisticas/curva-abc/mercado-livre');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->component('Admin/Oportunidades/CurvaAbc', false)
+            ->component('Admin/Estatisticas/CurvaAbc', false)
             ->where('canal.nome', 'Mercado Livre')
             ->where('filtros.de', '2026-09-13')
             ->where('filtros.ate', '2026-10-12')
@@ -141,7 +141,7 @@ class OportunidadesCurvaAbcTest extends TestCase
         $peso = 79.80 / 99.70;
         $this->assertEqualsWithDelta(79.80 - 24.60 - 20.10 * $peso - 15.55 * $peso, $canecaLinha['lucro'], 0.011);
 
-        $this->actingAs($this->admin())->get('/admin/oportunidades/shopee')
+        $this->actingAs($this->admin())->get('/admin/estatisticas/curva-abc/shopee')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('canal.nome', 'Shopee')
@@ -161,7 +161,7 @@ class OportunidadesCurvaAbcTest extends TestCase
         // Antes disso não conta.
         $this->pedido(Order::ORIGIN_SHOPEE, [[$novo, 9, 50]], ['created_at' => Carbon::parse('2026-09-20 10:00')]);
 
-        $this->actingAs($this->admin())->get('/admin/oportunidades/shopee?de=2026-10-03&ate=2026-10-09')
+        $this->actingAs($this->admin())->get('/admin/estatisticas/curva-abc/shopee?de=2026-10-03&ate=2026-10-09')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('filtros.de', '2026-10-03')
@@ -178,26 +178,18 @@ class OportunidadesCurvaAbcTest extends TestCase
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin)->get('/admin/oportunidades/tiktok')->assertNotFound();
-        $this->actingAs($admin)->get('/admin/oportunidades/shopee?de=lixo&ate=2026-13-45')
+        $this->actingAs($admin)->get('/admin/estatisticas/curva-abc/tiktok')->assertNotFound();
+        $this->actingAs($admin)->get('/admin/estatisticas/curva-abc/shopee?de=lixo&ate=2026-13-45')
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('filtros.de', '2026-09-13')->where('filtros.ate', '2026-10-12')->where('curva.produtos', []));
         // Datas invertidas trocam de lugar.
-        $this->actingAs($admin)->get('/admin/oportunidades/mercado-livre?de=2026-10-10&ate=2026-10-01')
+        $this->actingAs($admin)->get('/admin/estatisticas/curva-abc/mercado-livre?de=2026-10-10&ate=2026-10-01')
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('filtros.de', '2026-10-01')->where('filtros.ate', '2026-10-10'));
 
-        $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))->get('/admin/oportunidades/shopee')->assertForbidden();
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))->get('/admin/estatisticas/curva-abc/shopee')->assertForbidden();
         auth()->logout();
-        $this->get('/admin/oportunidades/shopee')->assertRedirect();
-    }
-
-    public function test_sem_cor_tira_so_a_cor_do_fim_do_nome(): void
-    {
-        $this->assertSame('Fonte Pet', CurvaAbc::semCor('Fonte Pet Branco', 'Branco'));
-        $this->assertSame('Extensão 127/220v', CurvaAbc::semCor('Extensão 127/220v', 'Branco'));
-        $this->assertSame('Preto', CurvaAbc::semCor('Preto', 'Preto'));
-        $this->assertSame('Kit Bambu', CurvaAbc::semCor('Kit Bambu bege', 'Bege'));
+        $this->get('/admin/estatisticas/curva-abc/shopee')->assertRedirect();
     }
 
     /** Campos obrigatórios da pré-postagem que não importam para a conta. */

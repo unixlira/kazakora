@@ -37,12 +37,23 @@ export const sidebarSections = [
     {
         // Oportunidades (pedido do Lira 2026-10-12): o Radar de Oportunidades
         // (uma tela só, sem separar por marketplace; nome em radarNome.js) e
-        // a curva ABC com lucro de cada marketplace (financeiro.view).
+        // os mais vendidos de TERCEIROS em cada marketplace (correção do
+        // Lira 2026-10-12: não são as vendas da loja).
         heading: 'Oportunidades',
         items: [
             { label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
-            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'financeiro.view' },
-            { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'financeiro.view' },
+            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
+            { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
+        ],
+    },
+    {
+        // Estatísticas (pedido do Lira 2026-10-12): curva ABC com lucro de
+        // cada marketplace, que saiu de Oportunidades. Mostra lucro, por
+        // isso financeiro.view.
+        heading: 'Estatísticas',
+        items: [
+            { label: 'Curva ABC Mercado Livre', href: '/admin/estatisticas/curva-abc/mercado-livre', icon: 'fas fa-chart-column', permission: 'financeiro.view' },
+            { label: 'Curva ABC Shopee', href: '/admin/estatisticas/curva-abc/shopee', icon: 'fas fa-chart-bar', permission: 'financeiro.view' },
         ],
     },
     {

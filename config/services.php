@@ -440,6 +440,8 @@ return [
         'tentativas' => (int) env('KALODATA_TENTATIVAS', 3),
         // Espera entre tentativas quando o Kalodata responde code 2000 (multiplica pela tentativa).
         'espera_ms' => (int) env('KALODATA_ESPERA_MS', 500),
+        // Páginas de 100 produtos que o Radar busca por dia (1 chamada cada).
+        'radar_paginas' => (int) env('KALODATA_RADAR_PAGINAS', 10),
     ],
 
 ];

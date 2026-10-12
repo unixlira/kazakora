@@ -27,24 +27,45 @@ use Inertia\Response;
  * API de Afiliados não for liberada. MaisVendidosShopee continua no código
  * (usado em Oportunidades › Shopee); para religar, injetar aqui e repor a
  * prop 'shopee' e o bloco na tela.
+ *
+ * Submenu do Radar (pedido do Lira 2026-10-12): /admin/radar/{fonte} abre a
+ * mesma tela só com o bloco daquela fonte, e só a consulta dela roda.
  */
 class RadarController extends Controller
 {
+    /** Fonte da URL => nome visível (o mesmo do submenu). */
+    public const FONTES = [
+        'tiktok' => 'TikTok',
+        'mercado-livre' => 'Mercado Livre',
+        'google' => 'Google',
+    ];
+
     public function index(
         Request $request,
         MaisVendidosTikTok $tiktok,
         MaisVendidosMercadoLivre $ml,
         TendenciasGoogle $google,
+        ?string $fonte = null,
     ): Response {
         // "Consultar de novo" refaz ML e Google; o TikTok fica no
         // cache de 24 h porque o Kalodata gasta crédito.
         $atualizar = $request->boolean('atualizar');
 
+        // Chave = fonte da URL; a prop adiada só roda se a fonte ficar na tela.
+        $blocos = [
+            'tiktok' => ['tiktok', Inertia::defer(fn () => $tiktok->analisar(), 'tiktok')],
+            'mercado-livre' => ['mercadoLivre', Inertia::defer(fn () => $ml->analisar(OportunidadesController::CATEGORIA_PADRAO, $atualizar)
+                + ['buscas' => $ml->tendenciasGerais($atualizar)['tendencias']], 'mercado-livre')],
+            'google' => ['google', Inertia::defer(fn () => $google->analisar($atualizar), 'google')],
+        ];
+        if ($fonte !== null) {
+            $blocos = [$fonte => $blocos[$fonte]];
+        }
+
         return Inertia::render('Admin/Radar/Index', [
-            'tiktok' => Inertia::defer(fn () => $tiktok->analisar(), 'tiktok'),
-            'mercadoLivre' => Inertia::defer(fn () => $ml->analisar(OportunidadesController::CATEGORIA_PADRAO, $atualizar)
-                + ['buscas' => $ml->tendenciasGerais($atualizar)['tendencias']], 'mercado-livre'),
-            'google' => Inertia::defer(fn () => $google->analisar($atualizar), 'google'),
+            'fonte' => $fonte,
+            'fonteNome' => $fonte === null ? null : self::FONTES[$fonte],
+            ...array_column($blocos, 1, 0),
         ]);
     }
 }

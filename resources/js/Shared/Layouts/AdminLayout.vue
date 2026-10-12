@@ -91,10 +91,12 @@ const toggleSidebar = () => {
 // ficavam selecionados porque um href é prefixo do outro.
 const urlPath = computed(() => page.url.split(/[?#]/)[0]);
 const matchesPath = (href) => urlPath.value === href || urlPath.value.startsWith(`${href}/`);
+// Item com submenu (ex.: Radar): os filhos entram na disputa do mais específico.
+const comFilhos = (item) => [item, ...(item.children ?? [])];
 const activeHref = computed(() => {
     if (urlPath.value === '/admin') return '/admin';
     return sidebarSections
-        .flatMap((section) => section.items.map((item) => item.href))
+        .flatMap((section) => section.items.flatMap(comFilhos).map((item) => item.href))
         .filter((href) => href !== '/admin' && matchesPath(href))
         .sort((a, b) => b.length - a.length)[0] ?? null;
 });
@@ -102,7 +104,7 @@ const isActive = (href) => href === activeHref.value;
 
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
-        const match = section.items.find((item) => isActive(item.href));
+        const match = section.items.flatMap(comFilhos).find((item) => isActive(item.href));
         if (match) return match;
     }
     return null;
@@ -117,7 +119,7 @@ const lerAbertas = () => {
     try { return JSON.parse(localStorage.getItem(SECOES_ABERTAS) ?? '[]'); } catch { return []; }
 };
 const secoesAbertas = ref(new Set(lerAbertas()));
-const secaoAtiva = computed(() => visibleSections.value.find((s) => s.items.some((i) => isActive(i.href)))?.heading ?? null);
+const secaoAtiva = computed(() => visibleSections.value.find((s) => s.items.flatMap(comFilhos).some((i) => isActive(i.href)))?.heading ?? null);
 const secaoAberta = (heading) => heading === secaoAtiva.value || secoesAbertas.value.has(heading);
 // Alterna pelo que está na tela (secaoExpandida), não por secaoAberta: a
 // seção da tela atual é sempre "aberta", então depois de recolhida ela
@@ -257,6 +259,21 @@ watch(
                                         {{ sidebarBadge(item) }}
                                     </span>
                                 </Link>
+                                <!-- Submenu (Radar, pedido do Lira 2026-10-12): sempre aberto,
+                                recuado embaixo do pai; com o menu recolhido fica só o ícone. -->
+                                <ul v-if="item.children" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
+                                    <li v-for="filho in item.children" :key="filho.href">
+                                        <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
+                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"
+                                            :class="isActive(filho.href)
+                                                ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
+                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                            :aria-current="isActive(filho.href) ? 'page' : undefined">
+                                            <i class="w-8 text-center text-xs" :class="[filho.icon, isActive(filho.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                            <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>
+                                        </Link>
+                                    </li>
+                                </ul>
                             </li>
                         </ul>
                     </div>

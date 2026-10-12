@@ -185,12 +185,38 @@ XML;
             && str_contains($r['contents'][0]['parts'][0]['text'], '2 | iphone 17 | Tecnologia | iphone 17 preço'));
     }
 
-    public function test_radar_has_no_page_per_channel(): void
+    /** Submenu do Radar (Lira 2026-10-12): a mesma tela só com o bloco da fonte. */
+    public function test_submenu_abre_so_a_fonte_escolhida(): void
     {
+        Http::fake(['*' => Http::response([])]);
         $admin = $this->admin();
 
-        $this->actingAs($admin)->get('/admin/radar/shopee')->assertNotFound();
-        $this->actingAs($admin)->get('/admin/radar/mercado-livre')->assertNotFound();
+        $this->assertSame(url('/admin/radar/tiktok'), route('admin.radar.fonte', 'tiktok'));
+
+        foreach (['tiktok' => ['tiktok', 'TikTok'], 'mercado-livre' => ['mercadoLivre', 'Mercado Livre'], 'google' => ['google', 'Google']] as $fonte => [$prop, $nome]) {
+            $this->actingAs($admin)->get("/admin/radar/{$fonte}")
+                ->assertOk()
+                ->assertInertia(fn (Assert $page) => $page
+                    ->component('Admin/Radar/Index', false)
+                    ->where('fonte', $fonte)
+                    ->where('fonteNome', $nome)
+                    ->loadDeferredProps(fn (Assert $reload) => $reload
+                        ->has($prop)
+                        ->where('fonte', $fonte)
+                        ->etc()));
+        }
+
+        // Só o Google: nem o Kalodata nem o Mercado Livre são consultados.
+        Http::fake(['*' => Http::response('', 200)]);
+        $this->actingAs($admin)->get('/admin/radar/google')
+            ->assertInertia(fn (Assert $page) => $page->loadDeferredProps(fn (Assert $reload) => $reload
+                ->has('google')->missing('tiktok')->missing('mercadoLivre')->etc()));
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'kalodata') || str_contains($r->url(), 'mercadolibre'));
+    }
+
+    public function test_radar_has_no_page_for_other_channels(): void
+    {
+        $this->actingAs($this->admin())->get('/admin/radar/shopee')->assertNotFound();
     }
 
     public function test_customer_cannot_open_radar_page(): void

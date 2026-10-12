@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
 import MarcaLogo from './MarcaLogo.vue';
 import { Deferred, Head, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 // Radar de Oportunidades (pedido do Lira 2026-10-12): o que está vendendo e
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
@@ -13,7 +13,11 @@ import { computed, ref } from 'vue';
 // cards por assunto (gerais, música, personalidades, vídeos, notícias e
 // produtos; pedido do Lira 2026-10-12).
 // Cada fonte é prop adiada num grupo próprio (null até chegar). Ver RadarController.
+// Submenu do Radar (Lira 2026-10-12): com `fonte` (/admin/radar/tiktok etc.)
+// a tela mostra só o bloco daquela fonte, sem números do topo e sem cruzamento.
 const props = defineProps({
+    fonte: { type: String, default: null },
+    fonteNome: { type: String, default: null },
     tiktok: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
     google: { type: Object, default: null },
@@ -39,7 +43,7 @@ const formatPercent = (value) => `${value > 0 ? '+' : ''}${value.toLocaleString(
 
 const carregando = ref(false);
 const consultarDeNovo = () => {
-    router.get('/admin/radar', { atualizar: 1 }, {
+    router.get(props.fonte ? `/admin/radar/${props.fonte}` : '/admin/radar', { atualizar: 1 }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
@@ -99,6 +103,44 @@ const sinais = computed(() => {
 
     return resultado.sort((a, b) => b.fontes.length - a.fontes.length).slice(0, 12);
 });
+// Tabela do TikTok com busca e paginação na tela (pedido do Lira
+// 2026-10-12): o Kalodata manda o ranking inteiro de uma vez (centenas de
+// produtos), então filtrar e paginar aqui não gasta crédito. A posição
+// mostrada continua a do ranking, mesmo com a busca ativa.
+const POR_PAGINA = 20;
+const buscaTikTok = ref('');
+const paginaTikTok = ref(1);
+const tiktokFiltrado = computed(() => {
+    const palavras = normalizar(buscaTikTok.value).split(' ').filter(Boolean);
+    const produtos = props.tiktok?.produtos ?? [];
+    if (palavras.length === 0) return produtos;
+    return produtos.filter((p) => {
+        const nome = normalizar(p.nome);
+        return palavras.every((palavra) => nome.includes(palavra));
+    });
+});
+const totalPaginasTikTok = computed(() => Math.max(1, Math.ceil(tiktokFiltrado.value.length / POR_PAGINA)));
+const tiktokPagina = computed(() => tiktokFiltrado.value.slice((paginaTikTok.value - 1) * POR_PAGINA, paginaTikTok.value * POR_PAGINA));
+const faixaTikTok = computed(() => {
+    const total = tiktokFiltrado.value.length;
+    if (total === 0) return '0';
+    const inicio = (paginaTikTok.value - 1) * POR_PAGINA + 1;
+    return `${inicio} a ${Math.min(paginaTikTok.value * POR_PAGINA, total)} de ${formatNumber(total)}`;
+});
+// Números de página com reticências: 1 … 4 5 6 … 25.
+const paginasTikTok = computed(() => {
+    const total = totalPaginasTikTok.value;
+    const atual = paginaTikTok.value;
+    const lista = [];
+    for (let n = 1; n <= total; n++) {
+        if (n === 1 || n === total || Math.abs(n - atual) <= 1) lista.push(n);
+        else if (lista[lista.length - 1] !== '…') lista.push('…');
+    }
+    return lista;
+});
+const irParaPaginaTikTok = (n) => { paginaTikTok.value = Math.min(Math.max(1, n), totalPaginasTikTok.value); };
+watch(buscaTikTok, () => { paginaTikTok.value = 1; });
+
 // Faixa de números do topo; cada um espera a própria fonte chegar.
 const faturamentoTikTok = computed(() => (props.tiktok?.produtos ?? []).reduce((soma, p) => soma + (p.receita ?? 0), 0));
 const voceVendeMl = computed(() => (props.mercadoLivre?.produtos ?? []).filter((p) => p.voce_vende).length);
@@ -126,19 +168,23 @@ const cardsGoogle = computed(() => CARDS_GOOGLE.map((c) => ({
     termos: (c.chave === 'geral' ? props.google?.termos : props.google?.grupos?.[c.chave]) ?? [],
 })));
 
-const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props.google);
+const mostra = (fonte) => !props.fonte || props.fonte === fonte;
+const titulo = computed(() => (props.fonteNome ? `${RADAR_NOME} · ${props.fonteNome}` : RADAR_NOME));
+const tudoCarregado = computed(() => (!mostra('tiktok') || props.tiktok)
+    && (!mostra('mercado-livre') || props.mercadoLivre)
+    && (!mostra('google') || props.google));
 </script>
 
 <template>
-    <Head :title="RADAR_NOME" />
+    <Head :title="titulo" />
     <AdminLayout>
         <div class="radar-grafite">
             <div class="radar-topo mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-wider text-[var(--destaque)]">Oportunidades</p>
-                    <h1 class="text-2xl font-bold">{{ RADAR_NOME }}</h1>
+                    <h1 class="text-2xl font-bold">{{ titulo }}</h1>
                     <p class="mt-1 max-w-3xl text-sm text-[var(--texto-suave)]">
-                        O que está vendendo e em alta fora da loja: TikTok Shop, Mercado Livre e Google. Serve para achar produto novo; não são as vendas da KazaKora.
+                        O que está vendendo e em alta fora da loja: {{ fonteNome ?? 'TikTok Shop, Mercado Livre e Google' }}. Serve para achar produto novo; não são as vendas da KazaKora.
                     </p>
                 </div>
                 <button type="button" class="rounded-lg bg-[var(--primary-solido)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
@@ -149,7 +195,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </div>
 
             <!-- Faixa de números (horizontal; rola de lado no celular) -->
-            <div class="mb-5 flex gap-3 overflow-x-auto pb-1 pt-1">
+            <div v-if="!fonte" class="mb-5 flex gap-3 overflow-x-auto pb-1 pt-1">
                 <div class="kpi fonte-destaque">
                     <span class="kpi-icone"><i class="fas fa-bullseye" aria-hidden="true"></i></span>
                     <div><b>{{ tudoCarregado ? sinais.length : '…' }}</b><span>em alta em mais de um lugar</span></div>
@@ -169,7 +215,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
             </div>
 
             <!-- Em alta em mais de um lugar -->
-            <section class="destaque mb-6 rounded-2xl border border-[var(--surface-border)] p-4 md:p-5">
+            <section v-if="!fonte" class="destaque mb-6 rounded-2xl border border-[var(--surface-border)] p-4 md:p-5">
                 <h2 class="text-base font-bold"><i class="fas fa-bullseye mr-1 text-[var(--destaque)]" aria-hidden="true"></i> Em alta em mais de um lugar</h2>
                 <p class="text-xs text-[var(--texto-suave)]">Busca em alta que também aparece entre os mais vendidos de outra fonte. É o sinal mais forte da tela.</p>
                 <p v-if="!tudoCarregado" class="pt-4 text-sm text-[var(--texto-suave)]" role="status">
@@ -194,7 +240,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 <!-- TikTok Shop (Kalodata): sozinho em cima, ocupa a largura toda -->
-                <section class="card-fonte fonte-tiktok xl:col-span-2">
+                <section v-if="mostra('tiktok')" class="card-fonte fonte-tiktok xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="tiktok" />
                         <div class="min-w-0">
@@ -209,6 +255,16 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                         <p v-if="!tiktok.configurado" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Falta a chave do Kalodata (KALODATA_API_KEY) no servidor.</p>
                         <p v-else-if="tiktok.erro" class="px-4 py-6 text-sm text-error" role="alert">{{ tiktok.erro }}</p>
                         <p v-else-if="tiktok.produtos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto no período.</p>
+                        <template v-else>
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-border)] px-4 py-3">
+                            <label class="busca">
+                                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                                <span class="sr-only">Buscar produto no ranking do TikTok</span>
+                                <input v-model.trim="buscaTikTok" type="search" placeholder="Buscar produto (ex.: garrafa, luminária)" autocomplete="off">
+                            </label>
+                            <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ faixaTikTok }} produtos</span>
+                        </div>
+                        <p v-if="tiktokFiltrado.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com “{{ buscaTikTok }}” no ranking.</p>
                         <div v-else class="overflow-x-auto">
                             <table class="tabela min-w-[520px]">
                                 <thead>
@@ -223,7 +279,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                                     <tr aria-hidden="true"><td colspan="6" class="faixa"></td></tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in tiktok.produtos" :key="p.id">
+                                    <tr v-for="p in tiktokPagina" :key="p.id">
                                         <td class="pl-4"><span class="posicao" :class="{ 'posicao-top': p.posicao <= 3 }">{{ p.posicao }}</span></td>
                                         <td class="max-w-0 w-full truncate font-medium" :title="p.nome">{{ p.nome }}</td>
                                         <td class="text-right" :title="p.receita === null ? null : formatPrice(p.receita)">{{ p.receita === null ? '—' : formatPriceK(p.receita) }}</td>
@@ -237,11 +293,25 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                                 </tbody>
                             </table>
                         </div>
+                        <nav v-if="totalPaginasTikTok > 1" class="paginacao" aria-label="Páginas do ranking do TikTok">
+                            <button type="button" :disabled="paginaTikTok === 1" aria-label="Página anterior" @click="irParaPaginaTikTok(paginaTikTok - 1)">
+                                <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                            </button>
+                            <template v-for="(n, i) in paginasTikTok" :key="`${n}-${i}`">
+                                <span v-if="n === '…'" class="reticencias" aria-hidden="true">…</span>
+                                <button v-else type="button" :class="{ atual: n === paginaTikTok }" :aria-current="n === paginaTikTok ? 'page' : null"
+                                    :aria-label="`Página ${n}`" @click="irParaPaginaTikTok(n)">{{ n }}</button>
+                            </template>
+                            <button type="button" :disabled="paginaTikTok === totalPaginasTikTok" aria-label="Próxima página" @click="irParaPaginaTikTok(paginaTikTok + 1)">
+                                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                            </button>
+                        </nav>
+                        </template>
                     </Deferred>
                 </section>
 
                 <!-- Mercado Livre: embaixo do TikTok, largura toda (o Google virou 6 cards) -->
-                <section class="card-fonte fonte-ml xl:col-span-2">
+                <section v-if="mostra('mercado-livre')" class="card-fonte fonte-ml xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
                         <div class="min-w-0">
@@ -292,7 +362,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 
             <!-- Google Trends em cards por assunto (pedido do Lira 2026-10-12):
                  gerais, música, personalidades, vídeos, notícias e produtos. -->
-            <section class="mt-6" aria-labelledby="google-titulo">
+            <section v-if="mostra('google')" class="mt-6" aria-labelledby="google-titulo">
                 <div class="mb-3 flex items-center gap-3">
                     <MarcaLogo marca="google" />
                     <div class="min-w-0">
@@ -476,6 +546,47 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 .tabela th.pr-4, .tabela td.pr-4 { padding-right: 1rem; }
 .tabela tbody tr:last-child td { border-bottom: 0; }
 .tabela tbody tr:nth-child(even) td { background: color-mix(in oklab, var(--surface-muted) 60%, var(--surface)); }
+
+/* Busca e paginação da tabela do TikTok. */
+.busca {
+    display: flex;
+    flex: 1 1 16rem;
+    max-width: 24rem;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 0.4rem 0.75rem;
+    color: var(--texto-suave);
+}
+.busca:focus-within { border-color: color-mix(in oklab, var(--cor-texto) 55%, var(--surface-border)); }
+.busca input { width: 100%; border: 0; background: transparent; padding: 0; font-size: 0.875rem; color: var(--surface-foreground); outline: none; box-shadow: none; }
+.paginacao {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    border-top: 1px solid var(--surface-border);
+    padding: 0.75rem 1rem;
+}
+.paginacao button {
+    min-width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface);
+    padding: 0 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.paginacao button:hover:not(:disabled):not(.atual) { background: var(--surface-muted); }
+.paginacao button:disabled { opacity: 0.4; cursor: not-allowed; }
+.paginacao button.atual { border-color: var(--th-fundo); background: var(--th-fundo); color: var(--th-texto); }
+.dark .paginacao button.atual { border-color: var(--th-texto); }
+.paginacao .reticencias { padding: 0 0.25rem; color: var(--texto-suave); }
 
 .posicao {
     display: inline-grid;

@@ -60,8 +60,8 @@ const tempo = computed(() => {
              divisória e os quatro itens de confiança centralizados numa linha só.
              No celular, uma coluna embaixo da outra, centralizadas. -->
         <footer class="mt-auto bg-black px-4 py-10 text-white">
-            <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8 md:text-left">
-                <div class="flex flex-col items-center md:col-span-4 md:items-start">
+            <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8">
+                <div class="flex flex-col items-center justify-center md:col-span-4">
                     <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto">
                     <p class="mt-4 text-xs leading-relaxed text-white/80 md:-mb-1">
                         © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
@@ -69,7 +69,7 @@ const tempo = computed(() => {
                     </p>
                 </div>
 
-                <div class="flex flex-col items-center md:col-span-4 md:items-start">
+                <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
                     <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
                          juntas com a coluna em vez de quebrar. -->
@@ -81,9 +81,9 @@ const tempo = computed(() => {
 
                 <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
                      imagem "Site 100% Seguro"). -->
-                <div class="flex flex-col items-center md:col-span-4 md:items-start">
+                <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Segurança:</p>
-                    <div class="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                    <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
                             class="flex h-[44px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white px-3 transition hover:opacity-90"
                             title="Ver a verificação do Google Safe Browsing">

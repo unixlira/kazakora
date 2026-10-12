@@ -315,7 +315,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
 <style scoped>
 /* Visual do Radar (pedido do Lira 2026-10-12): cada fonte com a cor dela no
    cabeçalho do card e nas etiquetas; no escuro só o fundo do corpo fica
-   cinza claro e os cards continuam pretos (ver .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
+   cinza #3D3D3D e os cards continuam pretos (ver .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
    legível em cima do fundo tingido. */
 .fonte-tiktok { --cor: #111111; --cor-texto: #111111; --tinta: 9%; }
 .fonte-ml { --cor: #2d3277; --cor-texto: #2d3277; --cor-fundo: #ffe600; --tinta: 18%; }

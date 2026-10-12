@@ -3,75 +3,55 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Checkout\Models\Order;
-use App\Modules\Marketplace\Support\CurvaAbc;
+use App\Modules\Marketplace\Support\Oportunidades\MaisVendidosMercadoLivre;
+use App\Modules\Marketplace\Support\Oportunidades\MaisVendidosShopee;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Menu Oportunidades (pedido do Lira 2026-10-12): curva ABC dos produtos de
- * cada marketplace, com lucro pela conta oficial (ContributionMargin) e
- * tendência contra o período anterior. Uma tela por canal.
+ * Menu Oportunidades (correção do Lira 2026-10-12): produtos de TERCEIROS
+ * que estão vendendo muito ou em alta no Mercado Livre e na Shopee, para
+ * achar produto novo. Não mostra as vendas da KazaKora (a curva ABC da loja
+ * continua no painel inicial). Uma tela por canal.
  */
 class OportunidadesController extends Controller
 {
     public const CANAIS = [
-        'mercado-livre' => ['origin' => Order::ORIGIN_MERCADO_LIVRE, 'nome' => 'Mercado Livre'],
-        'shopee' => ['origin' => Order::ORIGIN_SHOPEE, 'nome' => 'Shopee'],
+        'mercado-livre' => ['nome' => 'Mercado Livre'],
+        'shopee' => ['nome' => 'Shopee'],
     ];
 
-    /** Período padrão: últimos 30 dias, hoje incluído. */
-    private const DIAS_PADRAO = 30;
+    /** Categoria inicial do Mercado Livre: Casa, Móveis e Decoração. */
+    public const CATEGORIA_PADRAO = 'MLB1574';
 
-    /** Teto do filtro, para a tela não varrer anos de pedido. */
-    private const DIAS_MAXIMO = 366;
-
-    public function show(Request $request, string $canal, CurvaAbc $curva): Response
+    public function show(Request $request, string $canal, MaisVendidosMercadoLivre $ml, MaisVendidosShopee $shopee): Response
     {
         abort_unless(isset(self::CANAIS[$canal]), 404);
 
-        [$de, $ate] = $this->periodo($request);
+        $atualizar = $request->boolean('atualizar');
 
-        return Inertia::render('Admin/Oportunidades/CurvaAbc', [
-            'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome'], 'origin' => self::CANAIS[$canal]['origin']],
-            'filtros' => ['de' => $de->toDateString(), 'ate' => $ate->toDateString()],
-            'curva' => $curva->analisar($de, $ate->copy()->addDay(), self::CANAIS[$canal]['origin']),
-            'limites' => ['a' => CurvaAbc::LIMITE_A, 'b' => CurvaAbc::LIMITE_B],
+        if ($canal === 'mercado-livre') {
+            $categoria = (string) $request->query('categoria', self::CATEGORIA_PADRAO);
+            if (! preg_match('/^MLB\d{1,10}$/', $categoria)) {
+                $categoria = self::CATEGORIA_PADRAO;
+            }
+
+            return Inertia::render('Admin/Oportunidades/Mercado', [
+                'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
+                'filtros' => ['categoria' => $categoria],
+                'categorias' => $ml->categorias(),
+                'mercado' => $ml->analisar($categoria, $atualizar) + ['configurado' => true],
+            ]);
+        }
+
+        $termo = mb_substr(trim((string) $request->query('termo', '')), 0, 80);
+
+        return Inertia::render('Admin/Oportunidades/Mercado', [
+            'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
+            'filtros' => ['termo' => $termo],
+            'categorias' => [],
+            'mercado' => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0],
         ]);
-    }
-
-    /**
-     * Datas do filtro (?de=AAAA-MM-DD&ate=AAAA-MM-DD, as duas incluídas) no
-     * fuso da loja. Data inválida volta para o padrão; data invertida troca.
-     *
-     * @return array{0: Carbon, 1: Carbon}
-     */
-    private function periodo(Request $request): array
-    {
-        $hoje = Carbon::today();
-        $ler = function (?string $valor) {
-            if (! $valor || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) {
-                return null;
-            }
-            [$ano, $mes, $dia] = array_map('intval', explode('-', $valor));
-            if (! checkdate($mes, $dia, $ano)) {
-                return null;
-            }
-
-            return Carbon::create($ano, $mes, $dia)->startOfDay();
-        };
-
-        $ate = $ler($request->query('ate')) ?? $hoje->copy();
-        $de = $ler($request->query('de')) ?? $ate->copy()->subDays(self::DIAS_PADRAO - 1);
-        if ($de->greaterThan($ate)) {
-            [$de, $ate] = [$ate, $de];
-        }
-        if ($de->diffInDays($ate) > self::DIAS_MAXIMO) {
-            $de = $ate->copy()->subDays(self::DIAS_MAXIMO);
-        }
-
-        return [$de, $ate];
     }
 }

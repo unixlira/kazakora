@@ -467,6 +467,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Radar de Oportunidades (2026-10-12): uma tela só, no grupo
         // Oportunidades do menu.
         Route::get('radar', [RadarController::class, 'index'])->name('radar.index');
+        // Oportunidades (correção do Lira 2026-10-12): mais vendidos e buscas
+        // em alta de TERCEIROS no Mercado Livre e na Shopee (dado de mercado,
+        // não as vendas da loja).
+        Route::get('oportunidades/{canal}', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
+            ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\OportunidadesController::CANAIS))
+            ->middleware('throttle:30,1')
+            ->name('oportunidades.ver');
         // Gerador de fotos de anúncio (Naia, 28-30/08) — feito direto no
         // servidor, apagado por um deploy e restaurado em 2026-09-29.
         Route::get('marketplaces/fotos-anuncio', [MarketplaceAdPhotoController::class, 'index'])->name('marketplaces.fotos-anuncio');
@@ -496,10 +503,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('dashboard-financeiro', [FinancialDashboardController::class, 'index'])->name('dashboard-financeiro.ver');
         // Curva ABC dos produtos com lucro e diagnóstico (2026-10-12).
         Route::get('curva-abc', [\App\Modules\Admin\Http\Controllers\CurvaAbcController::class, 'index'])->name('curva-abc.ver');
-        // Oportunidades (2026-10-12): curva ABC com lucro por marketplace.
-        Route::get('oportunidades/{canal}', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
-            ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\OportunidadesController::CANAIS))
-            ->name('oportunidades.ver');
         // Arquivos financeiros do TikTok enviados à mão (2026-10-11).
         Route::get('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'index'])->name('arquivos-tiktok.listar');
         Route::post('arquivos-tiktok', [\App\Modules\Admin\Http\Controllers\ArquivosTikTokController::class, 'store'])->name('arquivos-tiktok.enviar');

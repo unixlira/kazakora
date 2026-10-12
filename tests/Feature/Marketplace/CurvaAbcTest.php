@@ -1,8 +1,7 @@
 <?php
 
-namespace Tests\Feature\Admin;
+namespace Tests\Feature\Marketplace;
 
-use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
@@ -15,14 +14,15 @@ use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
- * Menu Oportunidades (pedido do Lira 2026-10-12): curva ABC por marketplace
- * (Mercado Livre / Shopee) com lucro pela conta oficial, variações juntas e
- * tendência contra o período anterior.
+ * CurvaAbc (2026-10-12): curva ABC por canal com lucro pela conta oficial,
+ * variações juntas e tendência contra o período anterior. Usada pelo painel
+ * inicial; a tela Oportunidades passou a mostrar dado de mercado
+ * (OportunidadesMercadoTest).
  *
  * Valores com centavos de propósito: json_encode(100.0) vira "100" e o
  * ->where() do Inertia compara estrito.
  */
-class OportunidadesCurvaAbcTest extends TestCase
+class CurvaAbcTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -36,11 +36,6 @@ class OportunidadesCurvaAbcTest extends TestCase
     {
         Carbon::setTestNow();
         parent::tearDown();
-    }
-
-    private function admin(): User
-    {
-        return User::factory()->create(['role' => User::ROLE_ADMIN]);
     }
 
     /** @param list<array{0: Product|null, 1: int, 2: float}> $itens */
@@ -91,27 +86,21 @@ class OportunidadesCurvaAbcTest extends TestCase
         $this->pedido(Order::ORIGIN_MANUAL_INVOICE, [[$tabua, 100, 10]]);
         $this->pedido(Order::ORIGIN_MERCADO_LIVRE, [[$tabua, 100, 10]], ['created_at' => now()->subDays(40)]);
 
-        $response = $this->actingAs($this->admin())->get('/admin/oportunidades/mercado-livre');
+        $curva = app(CurvaAbc::class)->analisar(Carbon::today()->subDays(29), Carbon::tomorrow(), Order::ORIGIN_MERCADO_LIVRE);
 
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->component('Admin/Oportunidades/CurvaAbc', false)
-            ->where('canal.nome', 'Mercado Livre')
-            ->where('filtros.de', '2026-09-13')
-            ->where('filtros.ate', '2026-10-12')
-            ->where('curva.total', 1000.5)
-            ->where('curva.unidades', 11)
-            ->where('curva.produtos', fn ($produtos) => collect($produtos)->map(fn ($p) => [$p['nome'], $p['classe']])->all() === [
-                ['Power Bank 10000mah', 'A'], ['Fonte Pet', 'A'], ['Lanterna', 'B'], ['Tabua', 'C'],
-            ])
-            ->where('curva.produtos.0.variacoes', ['Rosa', 'Verde'])
-            ->where('curva.produtos.0.id', $pai->id)
-            ->where('curva.produtos.0.unidades', 2)
-            ->where('curva.produtos.1.variacoes', ['Branco', 'Preto'])
-            ->where('curva.produtos.1.acumulado', 90)
-            ->where('curva.produtos.3.unidades', 4)
-            ->where('curva.classes.A.produtos', 2)
-            ->where('curva.classes.C.receita', 40));
+        $this->assertSame(1000.5, $curva['total']);
+        $this->assertSame(11, $curva['unidades']);
+        $this->assertSame([
+            ['Power Bank 10000mah', 'A'], ['Fonte Pet', 'A'], ['Lanterna', 'B'], ['Tabua', 'C'],
+        ], collect($curva['produtos'])->map(fn ($p) => [$p['nome'], $p['classe']])->all());
+        $this->assertSame(['Rosa', 'Verde'], $curva['produtos'][0]['variacoes']);
+        $this->assertSame($pai->id, $curva['produtos'][0]['id']);
+        $this->assertSame(2, $curva['produtos'][0]['unidades']);
+        $this->assertSame(['Branco', 'Preto'], $curva['produtos'][1]['variacoes']);
+        $this->assertEquals(90, $curva['produtos'][1]['acumulado']);
+        $this->assertSame(4, $curva['produtos'][3]['unidades']);
+        $this->assertSame(2, $curva['classes']['A']['produtos']);
+        $this->assertEquals(40, $curva['classes']['C']['receita']);
     }
 
     public function test_lucro_por_produto_fecha_com_a_conta_oficial_do_canal(): void
@@ -140,13 +129,6 @@ class OportunidadesCurvaAbcTest extends TestCase
         $canecaLinha = collect($curva['produtos'])->firstWhere('nome', 'Caneca');
         $peso = 79.80 / 99.70;
         $this->assertEqualsWithDelta(79.80 - 24.60 - 20.10 * $peso - 15.55 * $peso, $canecaLinha['lucro'], 0.011);
-
-        $this->actingAs($this->admin())->get('/admin/oportunidades/shopee')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('canal.nome', 'Shopee')
-                ->where('curva.ads', 8.75)
-                ->where('curva.lucro', $curva['lucro']));
     }
 
     public function test_tendencia_compara_com_o_periodo_anterior_de_mesmo_tamanho(): void
@@ -161,35 +143,14 @@ class OportunidadesCurvaAbcTest extends TestCase
         // Antes disso não conta.
         $this->pedido(Order::ORIGIN_SHOPEE, [[$novo, 9, 50]], ['created_at' => Carbon::parse('2026-09-20 10:00')]);
 
-        $this->actingAs($this->admin())->get('/admin/oportunidades/shopee?de=2026-10-03&ate=2026-10-09')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->where('filtros.de', '2026-10-03')
-                ->where('filtros.ate', '2026-10-09')
-                ->where('curva.anterior.desde', '2026-09-26')
-                ->where('curva.anterior.ate', '2026-10-02')
-                ->where('curva.produtos.0.nome', 'Sobe')
-                ->where('curva.produtos.0.tendencia', 50)
-                ->where('curva.produtos.1.nome', 'Novo')
-                ->where('curva.produtos.1.tendencia', null));
-    }
+        $curva = app(CurvaAbc::class)->analisar(Carbon::parse('2026-10-03'), Carbon::parse('2026-10-10'), Order::ORIGIN_SHOPEE);
 
-    public function test_rotas_canal_desconhecido_datas_invalidas_e_acesso(): void
-    {
-        $admin = $this->admin();
-
-        $this->actingAs($admin)->get('/admin/oportunidades/tiktok')->assertNotFound();
-        $this->actingAs($admin)->get('/admin/oportunidades/shopee?de=lixo&ate=2026-13-45')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('filtros.de', '2026-09-13')->where('filtros.ate', '2026-10-12')->where('curva.produtos', []));
-        // Datas invertidas trocam de lugar.
-        $this->actingAs($admin)->get('/admin/oportunidades/mercado-livre?de=2026-10-10&ate=2026-10-01')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('filtros.de', '2026-10-01')->where('filtros.ate', '2026-10-10'));
-
-        $this->actingAs(User::factory()->create(['role' => User::ROLE_CUSTOMER]))->get('/admin/oportunidades/shopee')->assertForbidden();
-        auth()->logout();
-        $this->get('/admin/oportunidades/shopee')->assertRedirect();
+        $this->assertSame('2026-09-26', $curva['anterior']['desde']);
+        $this->assertSame('2026-10-02', $curva['anterior']['ate']);
+        $this->assertSame('Sobe', $curva['produtos'][0]['nome']);
+        $this->assertEquals(50, $curva['produtos'][0]['tendencia']);
+        $this->assertSame('Novo', $curva['produtos'][1]['nome']);
+        $this->assertNull($curva['produtos'][1]['tendencia']);
     }
 
     public function test_sem_cor_tira_so_a_cor_do_fim_do_nome(): void

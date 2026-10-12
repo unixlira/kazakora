@@ -261,6 +261,16 @@ return [
         ))),
     ],
 
+    // API de Afiliados da Shopee (2026-10-12): única fonte oficial com as
+    // vendas de OUTRAS lojas, usada na tela Oportunidades › Shopee. AppID e
+    // senha vêm do painel de afiliados (affiliate.shopee.com.br › Open API),
+    // não da Open Platform de vendedor abaixo.
+    'shopee_afiliados' => [
+        'app_id' => env('SHOPEE_AFILIADOS_APP_ID'),
+        'secret' => env('SHOPEE_AFILIADOS_SECRET'),
+        'url' => env('SHOPEE_AFILIADOS_URL', 'https://open-api.affiliate.shopee.com.br/graphql'),
+    ],
+
     'shopee' => [
         // Credenciais atuais são de teste/sandbox (SHOPEE_TEST_*, confirmado
         // pelo próprio nome) — pareiam com o host test-stable, não o de

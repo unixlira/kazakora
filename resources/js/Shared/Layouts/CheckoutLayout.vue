@@ -62,21 +62,25 @@ const tempo = computed(() => {
             <div class="border-t border-slate-200 bg-white px-4 py-8">
                 <!-- Formas de pagamento numa linha própria em cima; embaixo, dados à
                      esquerda e selos à direita. -->
-                <div class="mx-auto max-w-[1160px] border-b border-slate-100 pb-6 text-center">
+                <div class="mx-auto max-w-[1160px] border-b border-slate-100 pb-10 text-center">
                     <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
                     <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
                             class="h-[51px] w-auto">
                     </div>
                 </div>
-                <div class="mx-auto mt-6 flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
-                    <p class="text-xs leading-relaxed text-slate-500">
-                        © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
-                        CNPJ: {{ COMPANY.cnpj }}<br>
-                        WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                        E-mail: {{ COMPANY.email }}<br>
-                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
-                    </p>
+                <div class="mx-auto mt-8 flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
+                    <div class="flex flex-col items-center md:items-start">
+                        <!-- Logo colorido (fundo branco) acima dos dados da empresa. -->
+                        <img :src="$page.props.marca?.logoNav ?? '/images/marca/logo-nav.png'" :alt="COMPANY.nomeFantasia" class="mb-3 h-8 w-auto">
+                        <p class="text-xs leading-relaxed text-slate-500">
+                            © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
+                            CNPJ: {{ COMPANY.cnpj }}<br>
+                            WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
+                            E-mail: {{ COMPANY.email }}<br>
+                            <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
+                        </p>
+                    </div>
                     <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
                          imagem "Site 100% Seguro"). -->
                     <div class="flex flex-wrap items-center justify-center gap-2 md:justify-end">

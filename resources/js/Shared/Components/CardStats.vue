@@ -26,7 +26,7 @@ const style = computed(() => VARIANTS[props.variant] ?? VARIANTS.primary);
 
 const vividStyle = computed(() => (props.vivid
     ? {
-        borderTop: `3px solid ${style.value.color}`,
+        borderTop: '3px solid var(--faixa-card)',
         background: `linear-gradient(135deg, color-mix(in oklab, ${style.value.color} 10%, var(--surface)) 0%, var(--surface) 70%)`,
     }
     : {}));

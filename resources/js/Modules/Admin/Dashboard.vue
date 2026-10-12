@@ -140,7 +140,7 @@ const kpiTiles = computed(() => [
 ]);
 
 const tileStyle = (color) => ({
-    borderTop: `3px solid ${color}`,
+    borderTop: '3px solid var(--faixa-card)',
     background: `linear-gradient(135deg, color-mix(in oklab, ${color} 10%, var(--surface)) 0%, var(--surface) 70%)`,
 });
 
@@ -531,7 +531,7 @@ const quandoGerado = (iso) => {
             <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                 <div v-for="row in channelStrip" :key="row.origin"
                     class="min-w-0 rounded-lg bg-white/12 px-3 py-2.5 ring-1 ring-white/20"
-                    :style="{ borderLeft: `4px solid ${channelColor(row.origin)}` }">
+                    style="border-left: 4px solid var(--faixa-card)">
                     <p class="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90">
                         <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
                         {{ channelName(row.origin) }}
@@ -775,7 +775,7 @@ const quandoGerado = (iso) => {
         <!-- Produtos: cada card com a sua cor, ranking e a barra de peso. -->
         <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition duration-200 hover:shadow-md"
-                style="border-top: 3px solid var(--primary-solido)">
+                style="border-top: 3px solid var(--faixa-card)">
                 <div class="flex items-center gap-3 border-b border-[var(--surface-border)] px-4 py-4"
                     style="background: linear-gradient(135deg, color-mix(in oklab, var(--primary-solido) 10%, var(--surface)) 0%, var(--surface) 80%)">
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white" style="background: var(--primary-solido)"><i class="fas fa-fire"></i></span>
@@ -814,7 +814,7 @@ const quandoGerado = (iso) => {
 
             <section v-for="curva in abcCards" :key="curva.key"
                 class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition duration-200 hover:shadow-md"
-                :style="{ borderTop: `3px solid ${curva.color}` }">
+                style="border-top: 3px solid var(--faixa-card)">
                 <div class="flex items-center gap-3 border-b border-[var(--surface-border)] px-4 py-4"
                     :style="{ background: `linear-gradient(135deg, color-mix(in oklab, ${curva.color} 10%, var(--surface)) 0%, var(--surface) 80%)` }">
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white" :style="{ background: curva.color }"><i :class="curva.icon"></i></span>

@@ -47,6 +47,34 @@ class MaisVendidosMercadoLivre
         }
     }
 
+    /**
+     * Buscas que mais crescem no Mercado Livre inteiro (/trends/MLB), sem
+     * categoria. Usado pelo Radar de Oportunidades (2026-10-12). 1 chamada.
+     */
+    public function tendenciasGerais(bool $atualizar = false): array
+    {
+        $chave = 'oportunidades:ml:tendencias:'.self::SITE;
+        if ($atualizar) {
+            Cache::forget($chave);
+        }
+
+        try {
+            return Cache::remember($chave, now()->addHours(self::CACHE_HORAS), fn () => [
+                'tendencias' => array_values(array_map(
+                    fn (array $t) => ['termo' => (string) $t['keyword'], 'link' => (string) ($t['url'] ?? '')],
+                    array_slice($this->ml->get('trends/'.self::SITE), 0, 30),
+                )),
+                'atualizado_em' => now()->toIso8601String(),
+                'erro' => null,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return ['tendencias' => [], 'atualizado_em' => null,
+                'erro' => 'Não foi possível consultar as buscas em alta do Mercado Livre agora.'];
+        }
+    }
+
     public function analisar(string $categoria, bool $atualizar = false): array
     {
         $chave = "oportunidades:ml:{$categoria}";

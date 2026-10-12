@@ -432,6 +432,12 @@ return [
         'origens' => env('FERRAKORA_ORIGENS', 'ferrakora.devlira.com.br'),
     ],
 
+    // Site Beauty Kora (2026-10-12): domínios que podem avisar visita em
+    // POST /api/beautykora/visita (lista separada por vírgula, sem www).
+    'beautykora' => [
+        'origens' => env('BEAUTYKORA_ORIGENS', 'beautykora.devlira.com.br'),
+    ],
+
     // Kalodata (dados do TikTok Shop: ranking e detalhe de categoria, loja,
     // criador, produto, vídeo e live). Cobrança por crédito: cache das
     // respostas e teto diário de chamadas reais protegem o saldo. Ver

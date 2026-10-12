@@ -16,7 +16,21 @@ class SiteVisit extends Model
     /** Acima disso num dia, o "visitante" é robô ou aba presa recarregando (ex.: 1.737 /entrar em 09/10/2026). */
     public const VISITAS_DIA_ROBO = 300;
 
+    /**
+     * Coluna site (pedido 2026-10-12): o banco é compartilhado com os outros
+     * sites do grupo, que avisam as visitas em /api/{site}/visita. A loja
+     * (painel, Visitas KazaKora, vitrine) só lê site = kazakora.
+     */
+    public const SITE_LOJA = 'kazakora';
+
+    /** Outros sites: chave gravada em site => nome na tela. */
+    public const OUTROS_SITES = [
+        'ferrakora' => 'FerraKora',
+        'beautykora' => 'Beauty Kora',
+    ];
+
     protected $fillable = [
+        'site',
         'visitor_id',
         'user_id',
         'path',
@@ -109,6 +123,12 @@ class SiteVisit extends Model
         return $porVisitante
             ->whereNotIn('visitante', $daEquipe)
             ->filter(fn ($l) => $l->paginas <= self::VISITAS_DIA_ROBO);
+    }
+
+    /** Só as visitas da loja (kazakora.com). */
+    public function scopeDaLoja(Builder $query): Builder
+    {
+        return $query->where('site_visits.site', self::SITE_LOJA);
     }
 
     public function user(): BelongsTo

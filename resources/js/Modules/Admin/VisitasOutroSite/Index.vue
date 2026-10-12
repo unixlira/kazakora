@@ -7,9 +7,12 @@ import ServerPagination from '@/Shared/Components/ServerPagination.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
-// Visitas FerraKora (2026-10-12): mesmo layout de Visitas KazaKora, só com
-// Data/Hora, IP, Cliente e Ações.
+// Visitas dos outros sites do grupo (FerraKora, Beauty Kora; 2026-10-12):
+// mesmo layout de Visitas KazaKora, só com Data/Hora, IP, Cliente e Ações.
+// Uma tela para todos: site é a coluna site_visits.site.
 const props = defineProps({
+    site: { type: String, required: true },
+    nome: { type: String, required: true },
     visitas: { type: Object, default: () => ({ data: [], links: [] }) },
     totais: { type: Object, default: () => ({ visitas: 0, ips: 0, visitantes: 0 }) },
     filtros: { type: Object, default: () => ({}) },
@@ -24,7 +27,7 @@ const filtros = reactive({
 });
 
 const buscar = () => {
-    router.get('/admin/visitas-ferrakora', {
+    router.get(`/admin/visitas-${props.site}`, {
         de: filtros.de || undefined,
         ate: filtros.ate || undefined,
         ip: filtros.ip || undefined,
@@ -70,7 +73,7 @@ const abrirDetalhe = async (linha) => {
     Object.assign(detalhe, { aberto: true, carregando: true, erro: '', linha, dados: null });
     document.body.style.overflow = 'hidden';
     try {
-        const r = await fetch(`/admin/visitas-ferrakora/visitante?${new URLSearchParams(alvo(linha))}`, {
+        const r = await fetch(`/admin/visitas-${props.site}/visitante?${new URLSearchParams(alvo(linha))}`, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
         const dados = await r.json().catch(() => ({}));
@@ -105,7 +108,7 @@ const paraApagar = ref(null);
 const confirmarApagar = () => {
     const linha = paraApagar.value;
     if (!linha) return;
-    router.delete('/admin/visitas-ferrakora/visitante', {
+    router.delete(`/admin/visitas-${props.site}/visitante`, {
         data: alvo(linha),
         preserveScroll: true,
         onStart: () => { apagando.value = true; },
@@ -118,14 +121,14 @@ const confirmarApagar = () => {
 </script>
 
 <template>
-    <Head title="Visitas FerraKora" />
+    <Head :title="`Visitas ${props.nome}`" />
 
     <AdminLayout>
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div class="max-w-3xl">
-                <h1 class="mb-1 text-2xl font-bold">Visitas FerraKora</h1>
+                <h1 class="mb-1 text-2xl font-bold">Visitas {{ props.nome }}</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Quem visitou o site FerraKora, uma linha por IP no período, com a hora do primeiro acesso, do mais recente para o mais antigo.
+                    Quem visitou o site {{ props.nome }}, uma linha por IP no período, com a hora do primeiro acesso, do mais recente para o mais antigo.
                     Cliente "Sim" é o IP de quem já entrou logado como cliente no kazakora.com. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP (privacidade).
                 </p>
             </div>
@@ -147,21 +150,21 @@ const confirmarApagar = () => {
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="buscar">
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
-                    <label for="ferrakora-de" class="block text-xs font-medium text-slate-500 dark:text-slate-400">De</label>
-                    <input id="ferrakora-de" v-model="filtros.de" type="date" :max="props.hoje"
+                    <label for="outro-site-de" class="block text-xs font-medium text-slate-500 dark:text-slate-400">De</label>
+                    <input id="outro-site-de" v-model="filtros.de" type="date" :max="props.hoje"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm"
                         @change="buscar()">
                 </div>
                 <div>
-                    <label for="ferrakora-ate" class="block text-xs font-medium text-slate-500 dark:text-slate-400">Até</label>
-                    <input id="ferrakora-ate" v-model="filtros.ate" type="date" :max="props.hoje"
+                    <label for="outro-site-ate" class="block text-xs font-medium text-slate-500 dark:text-slate-400">Até</label>
+                    <input id="outro-site-ate" v-model="filtros.ate" type="date" :max="props.hoje"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm"
                         @change="buscar()">
                 </div>
                 <div>
-                    <label for="ferrakora-ip" class="block text-xs font-medium text-slate-500 dark:text-slate-400">IP</label>
+                    <label for="outro-site-ip" class="block text-xs font-medium text-slate-500 dark:text-slate-400">IP</label>
                     <div class="mt-1 flex gap-2">
-                        <input id="ferrakora-ip" v-model="filtros.ip" type="search" inputmode="decimal" autocomplete="off" spellcheck="false"
+                        <input id="outro-site-ip" v-model="filtros.ip" type="search" inputmode="decimal" autocomplete="off" spellcheck="false"
                             placeholder="189.40.12.7 ou começo do IP…"
                             class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm">
                         <button type="submit"
@@ -238,12 +241,12 @@ const confirmarApagar = () => {
              do admin (--surface etc.) só valem dentro do .admin-shell. -->
         <div v-if="detalhe.aberto" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="fecharDetalhe"></div>
-            <div role="dialog" aria-modal="true" aria-labelledby="ferrakora-visitante-titulo"
+            <div role="dialog" aria-modal="true" aria-labelledby="outro-site-visitante-titulo"
                 class="relative flex w-full max-w-lg flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl"
                 style="max-height: 90vh;">
                 <div class="flex items-start justify-between gap-3 border-b border-[var(--surface-border)] px-6 py-4">
                     <div>
-                        <h2 id="ferrakora-visitante-titulo" class="text-lg font-semibold">
+                        <h2 id="outro-site-visitante-titulo" class="text-lg font-semibold">
                             Visitas do IP {{ detalhe.linha?.ip }}
                         </h2>
                         <p class="text-sm text-slate-500 dark:text-slate-400">

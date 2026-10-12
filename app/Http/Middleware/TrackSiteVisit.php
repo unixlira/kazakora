@@ -122,6 +122,7 @@ class TrackSiteVisit
         ksort($cookies);
 
         SiteVisit::create([
+            'site' => SiteVisit::SITE_LOJA,
             'cookies' => $cookies === [] ? null : $cookies,
             'visitor_id' => $visitorId,
             'user_id' => $request->user()?->id,

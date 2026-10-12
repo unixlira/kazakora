@@ -4,16 +4,17 @@ use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
-use App\Http\Controllers\Api\FerraKoraVisitaController;
 use App\Http\Controllers\Api\MelhorEnvioController;
 use App\Http\Controllers\Api\MercadoLivreController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
+use App\Http\Controllers\Api\OutroSiteVisitaController;
 use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\TikTokReportsController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
+use App\Modules\Analytics\Models\SiteVisit;
 use Illuminate\Support\Facades\Route;
 
 // Chamado pelos servidores do Stripe, não por um navegador — sem sessão/CSRF
@@ -190,8 +191,10 @@ Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status']
     ->middleware('throttle:30,1')
     ->name('api.tiktok.reports.status');
 
-// Visitas do site FerraKora (2026-10-12): o navegador do visitante avisa
-// cada página aberta; só dos domínios em services.ferrakora.origens.
-Route::post('/ferrakora/visita', [FerraKoraVisitaController::class, 'registrar'])
+// Visitas dos outros sites (FerraKora, Beauty Kora; 2026-10-12): o navegador
+// do visitante avisa cada página aberta; só dos domínios em
+// services.{site}.origens. Grava em site_visits com a coluna site.
+Route::post('/{site}/visita', [OutroSiteVisitaController::class, 'registrar'])
+    ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
     ->middleware('throttle:120,1')
-    ->name('api.ferrakora.visita');
+    ->name('api.outro-site.visita');

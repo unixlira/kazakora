@@ -331,7 +331,7 @@ class DashboardController extends Controller
 
         $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id')->map(fn ($id) => (int) $id)->all();
         $porVisitante = SiteVisit::visitantesPorDia(
-            SiteVisit::query()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim),
+            SiteVisit::query()->daLoja()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim),
             $equipe,
         );
         // Regra de equipe e robô num lugar só: o Log de visitas usa a mesma.
@@ -348,7 +348,7 @@ class DashboardController extends Controller
 
         $hojeStr = $hoje->toDateString();
         $deHoje = $porDia->get($hojeStr, collect());
-        $primeira = SiteVisit::query()->min('created_at');
+        $primeira = SiteVisit::query()->daLoja()->min('created_at');
         $meses = [];
         $cursor = $hoje->copy()->startOfMonth();
         $limite = $primeira ? Carbon::parse($primeira)->startOfMonth() : $cursor->copy();

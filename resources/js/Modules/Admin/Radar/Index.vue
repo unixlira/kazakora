@@ -115,7 +115,7 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
     <Head :title="RADAR_NOME" />
     <AdminLayout>
         <div class="radar-grafite">
-            <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div class="radar-topo mb-5 flex flex-wrap items-end justify-between gap-3">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-wider text-[var(--destaque)]">Oportunidades</p>
                     <h1 class="text-2xl font-bold">{{ RADAR_NOME }}</h1>

@@ -1,6 +1,6 @@
 /**
  * Menu do admin (reformulação aprovada pelo Lira em 2026-10-11, Entrega 2
- * de Documents/2026-10-11-admin-cores-e-menu.md): 9 grupos por tarefa do
+ * de Documents/2026-10-11-admin-cores-e-menu.md): 10 grupos por tarefa do
  * dia, os mesmos 49 itens, com o mesmo href, permission e badgeKey de antes.
  * Nenhuma rota nova e nenhuma permissão mudou.
  *
@@ -57,10 +57,21 @@ export const sidebarSections = [
         ],
     },
     {
-        heading: 'Pedidos e Expedição',
+        // Pedidos x Logística (pedido do Lira 2026-10-12): Pedidos é o que
+        // diz respeito ao pedido em si (ver, importar, devolução/reclamação);
+        // Logística é o que move a caixa (etiqueta, pré-postagem, fila de
+        // impressão, Flex). Mesmos hrefs e permissões de antes.
+        heading: 'Pedidos',
         items: [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', permission: 'pedidos.view' },
             { label: 'Importar pedido', href: '/admin/importar-pedido', icon: 'fas fa-file-import', permission: 'configuracoes.integracoes' },
+            // Devoluções e reclamações de todas as plataformas (2026-10-06).
+            { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', permission: 'operacional.view', badgeKey: 'devolucoes' },
+        ],
+    },
+    {
+        heading: 'Logística',
+        items: [
             { label: 'Pré-postagem Correios', href: '/admin/correios', icon: 'fas fa-qrcode', permission: 'operacional.view' },
             { label: 'Etiqueta avulsa', href: '/admin/etiquetas-manuais/nova', icon: 'fas fa-tag', permission: 'configuracoes.integracoes' },
             { label: 'Fila de impressão', href: '/admin/impressoes', icon: 'fas fa-print', permission: 'configuracoes.integracoes' },
@@ -68,8 +79,6 @@ export const sidebarSections = [
             // pendência aberta (devolução, venda cancelada com o produto fora,
             // entregador que não iniciou a rota).
             { label: 'Envios Flex', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', permission: 'operacional.view', badgeKey: 'flexAlertas' },
-            // Devoluções e reclamações de todas as plataformas (2026-10-06).
-            { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', permission: 'operacional.view', badgeKey: 'devolucoes' },
         ],
     },
     {

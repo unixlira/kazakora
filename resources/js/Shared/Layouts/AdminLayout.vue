@@ -110,8 +110,9 @@ const activeItem = computed(() => {
 
 // Menu em dropdown (pedido 2026-10-11): cada seção abre e fecha; a seção da
 // tela atual já vem aberta e o item continua marcado. O que o usuário abriu
-// fica lembrado neste navegador.
-const SECOES_ABERTAS = 'admin_sidebar_secoes';
+// fica lembrado neste navegador. Chave nova desde o menu de 9 grupos
+// (2026-10-11): a antiga guardava os nomes das seções que não existem mais.
+const SECOES_ABERTAS = 'admin_menu_grupos';
 const lerAbertas = () => {
     try { return JSON.parse(localStorage.getItem(SECOES_ABERTAS) ?? '[]'); } catch { return []; }
 };
@@ -174,7 +175,7 @@ watch(
                         <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                         <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
                     </Link>
-                    <button type="button" class="text-slate-400 hover:text-primary" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
+                    <button type="button" class="text-[var(--icone-menu)] hover:text-[var(--destaque)]" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
                         <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
                     </button>
                 </div>
@@ -196,8 +197,8 @@ watch(
                         <button v-if="!sidebarCollapsed" type="button"
                             class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold uppercase tracking-wide transition-colors"
                             :class="secaoExpandida(section.heading)
-                                ? 'bg-primary/10 text-primary'
-                                : 'text-slate-400 hover:bg-[var(--surface-border)]/30 hover:text-[var(--sidebar-foreground)]'"
+                                ? 'text-[var(--surface-foreground)]'
+                                : 'text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30 hover:text-[var(--sidebar-foreground)]'"
                             :aria-expanded="secaoExpandida(section.heading)" @click="alternarSecao(section.heading)">
                             <span class="flex-1 truncate">{{ section.heading }}</span>
                             <span v-if="!secaoExpandida(section.heading) && badgeDaSecao(section) > 0"
@@ -207,12 +208,16 @@ watch(
 
                         <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
                             <li v-for="item in section.items" :key="item.href">
+                                <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
+                                texto e ícone na cor de destaque (grafite no claro, laranja
+                                no escuro) e barra de 3px à esquerda. Ícones numa cor só. -->
                                 <Link :href="item.href" :title="item.label"
-                                    class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium transition-colors"
+                                    class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
                                     :class="isActive(item.href)
-                                        ? 'border-primary bg-[var(--surface-border)]/40 text-primary'
-                                        : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'">
-                                    <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? item.color : 'text-slate-400']"></i>
+                                        ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
+                                        : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                    :aria-current="isActive(item.href) ? 'page' : undefined">
+                                    <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
                                     <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                     <span v-if="sidebarBadge(item) > 0"
                                         class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
@@ -228,21 +233,21 @@ watch(
 
                     <ul class="mb-4 flex list-none flex-col md:min-w-full md:flex-col">
                         <li v-if="user?.role === 'admin'">
-                            <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-4 py-2.5 text-sm font-medium transition-colors"
-                                :class="urlPath === '/admin/filas' ? 'border-primary bg-[var(--surface-border)]/40 text-primary' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
-                                <i class="fas fa-layer-group w-8 text-center text-sm" :class="urlPath === '/admin/filas' ? 'text-primary' : 'text-slate-400'"></i>
+                            <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
+                                :class="urlPath === '/admin/filas' ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
+                                <i class="fas fa-layer-group w-8 text-center text-sm" :class="urlPath === '/admin/filas' ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]'"></i>
                                 <span v-if="!sidebarCollapsed">Horizon</span>
                             </Link>
                         </li>
                         <li>
-                            <Link href="/" class="flex items-center gap-2 rounded-lg border-l-4 border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
-                                <i class="fas fa-store w-8 text-center text-sm text-slate-400"></i>
+                            <Link href="/" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
+                                <i class="fas fa-store w-8 text-center text-sm text-[var(--icone-menu)]"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
                             </Link>
                         </li>
                         <li>
-                            <button type="button" class="flex w-full items-center gap-2 py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
-                                <i class="fas fa-sign-out-alt w-8 text-center text-sm text-slate-400"></i>
+                            <button type="button" class="flex w-full items-center gap-2 border-l-[3px] border-transparent py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
+                                <i class="fas fa-sign-out-alt w-8 text-center text-sm text-[var(--icone-menu)]"></i>
                                 <span v-if="!sidebarCollapsed">Sair</span>
                             </button>
                         </li>

@@ -13,13 +13,17 @@
     --font-store: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     --font-store-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
 
-    /* Pedido 2026-10-11: o roxo saiu — primary é o azul do Bootstrap
-       (#0d6efd). Sucesso/aviso/erro continuam com as cores de estado. */
-    --color-primary: #0d6efd;
-    --color-secondary: #3d8bfd;
+    /* Opção C aprovada pelo Lira (2026-10-11): grafite com acento laranja.
+       Segue o preto da logo; cor de verdade fica para os degradês do
+       dashboard e para os estados (sucesso, aviso, erro, info). No tema
+       escuro o botão inverte e o acento vira laranja (ver .dark .admin-shell). */
+    --color-primary: #2b2326;
+    --color-secondary: #c2410c;
     --color-success: #10b981;
     --color-warning: #d97706;
     --color-error: #dc2626;
+    /* Info continua ciano: é cor de estado (previsão, envio, devolução),
+       não do tema, e precisa se separar do aviso e do neutro. */
     --color-info: #0aa2c0;
 
     --color-primary-emphasis: color-mix(in oklab, var(--color-primary) 80%, black);
@@ -65,24 +69,46 @@
  */
 .admin-shell {
     --surface: #ffffff;
-    --surface-muted: #f3f6fa;
-    --surface-foreground: #1b2533;
-    --surface-border: #e0e7f0;
-    --sidebar-foreground: #344256;
+    --surface-muted: #f5f3f4;
+    --surface-foreground: #1f1a1c;
+    --surface-border: #e6e2e3;
+    --sidebar-foreground: #3d3538;
     /* Texto de apoio (legendas, dicas): legível nos dois temas. */
-    --texto-suave: #5b6b80;
+    --texto-suave: #6b5f63;
+    /* Ícone do menu: uma cor neutra só (contraste 6,10 no branco). */
+    --icone-menu: #6b5f63;
+    /* Cor do item ativo do menu e de texto em destaque. */
+    --destaque: var(--color-primary);
+    /* Preenchimento sólido com texto/ícone branco por cima (bolinhas de
+       ícone, barras, ranking). No escuro vira o laranja, porque o primary
+       de lá é claro (botão invertido) e apagaria o branco. */
+    --primary-solido: var(--color-primary);
+    /* Faixa de destaque dos cards (topo/margem), pedido 2026-10-11: grafite
+       em todo o admin. A cor do card fica no ícone e no fundo. */
+    --faixa-card: var(--color-primary);
 }
 
 .dark .admin-shell {
-    --surface: #18212e;
-    --surface-muted: #0f1621;
-    --surface-foreground: #edf2f8;
-    --surface-border: #2b384a;
-    --sidebar-foreground: #cdd8e6;
-    --texto-suave: #aebccd;
+    --surface: #1b191a;
+    --surface-muted: #121011;
+    --surface-foreground: #f1eced;
+    --surface-border: #302c2e;
+    --sidebar-foreground: #d9d2d4;
+    --texto-suave: #b3a9ac;
+    --icone-menu: #a99da1;
+    --destaque: #ff8c4d;
+    --primary-solido: #c2410c;
+    /* Grafite claro: o escuro do tema some no fundo (1,14); este dá 4,6. */
+    --faixa-card: #8f8589;
 
-    /* Pastel tints need more opacity to stay legible on dark surfaces. */
-    --color-lightprimary: color-mix(in oklab, var(--color-primary) 20%, transparent);
+    /* Botão invertido: grafite não aparece no fundo escuro (1,14), então o
+       botão principal fica claro com texto escuro (14,20). */
+    --color-primary: #ece6e8;
+    --color-primary-emphasis: #d8cfd2;
+
+    /* Pastel tints need more opacity to stay legible on dark surfaces.
+       O lightprimary do escuro é laranja: fundo do item ativo do menu. */
+    --color-lightprimary: color-mix(in oklab, #ff8c4d 16%, transparent);
     --color-lightsecondary: color-mix(in oklab, var(--color-secondary) 20%, transparent);
     --color-lightsuccess: color-mix(in oklab, var(--color-success) 20%, transparent);
     --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
@@ -101,12 +127,13 @@
 .dark .admin-shell .bg-slate-100, .dark .admin-shell .bg-gray-100, .dark .admin-shell .bg-slate-200, .dark .admin-shell .bg-gray-200 { background-color: var(--surface-muted); }
 .dark .admin-shell .hover\:bg-slate-50:hover, .dark .admin-shell .hover\:bg-gray-50:hover, .dark .admin-shell .hover\:bg-slate-100:hover, .dark .admin-shell .hover\:bg-gray-100:hover, .dark .admin-shell .hover\:bg-white:hover { background-color: color-mix(in oklab, var(--surface-border) 45%, transparent); }
 .dark .admin-shell .border-slate-100, .dark .admin-shell .border-slate-200, .dark .admin-shell .border-slate-300, .dark .admin-shell .border-gray-100, .dark .admin-shell .border-gray-200, .dark .admin-shell .border-gray-300, .dark .admin-shell .divide-slate-100 > * + *, .dark .admin-shell .divide-slate-200 > * + *, .dark .admin-shell .divide-gray-200 > * + * { border-color: var(--surface-border); }
-.dark .admin-shell .text-slate-500, .dark .admin-shell .text-gray-500 { color: #a9b7c8; }
-.dark .admin-shell .text-slate-600, .dark .admin-shell .text-gray-600 { color: #c5d0de; }
+.dark .admin-shell .text-slate-500, .dark .admin-shell .text-gray-500 { color: #a99da1; }
+.dark .admin-shell .text-slate-600, .dark .admin-shell .text-gray-600 { color: #c9c0c3; }
 .dark .admin-shell .text-slate-700, .dark .admin-shell .text-slate-800, .dark .admin-shell .text-slate-900, .dark .admin-shell .text-gray-700, .dark .admin-shell .text-gray-800, .dark .admin-shell .text-gray-900, .dark .admin-shell .text-black { color: var(--surface-foreground); }
-.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #6ea8fe; }
-.dark .admin-shell .text-secondary { color: #9ec5fe; }
-.dark .admin-shell .placeholder\:text-slate-400::placeholder { color: #7f8ea3; }
+.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #ff8c4d; }
+.dark .admin-shell .text-secondary { color: #fb9a5c; }
+.dark .admin-shell .bg-primary { color: #1b191a; }
+.dark .admin-shell .placeholder\:text-slate-400::placeholder { color: #857a7e; }
 .dark .admin-shell .bg-red-50, .dark .admin-shell .bg-red-100 { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 .dark .admin-shell .border-red-100, .dark .admin-shell .border-red-200, .dark .admin-shell .border-red-300 { border-color: color-mix(in oklab, #ef4444 40%, transparent); }
 .dark .admin-shell .text-red-600, .dark .admin-shell .text-red-700, .dark .admin-shell .text-red-800, .dark .admin-shell .text-red-900 { color: #fca5a5; }
@@ -169,8 +196,8 @@
  */
 .dark select,
 .dark select option {
-    background-color: var(--surface, #18212e);
-    color: var(--surface-foreground, #edf2f8);
+    background-color: var(--surface, #1b191a);
+    color: var(--surface-foreground, #f1eced);
 }
 
 @media (prefers-color-scheme: dark) {

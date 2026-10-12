@@ -14,7 +14,7 @@ const props = defineProps({
 });
 
 const VARIANTS = {
-    primary: { bg: 'bg-lightprimary', text: 'text-primary', color: 'var(--color-primary)' },
+    primary: { bg: 'bg-lightprimary', text: 'text-primary', color: 'var(--primary-solido, var(--color-primary))' },
     secondary: { bg: 'bg-lightsecondary', text: 'text-secondary', color: 'var(--color-secondary)' },
     success: { bg: 'bg-lightsuccess', text: 'text-success', color: 'var(--color-success)' },
     warning: { bg: 'bg-lightwarning', text: 'text-warning', color: 'var(--color-warning)' },
@@ -26,7 +26,7 @@ const style = computed(() => VARIANTS[props.variant] ?? VARIANTS.primary);
 
 const vividStyle = computed(() => (props.vivid
     ? {
-        borderTop: `3px solid ${style.value.color}`,
+        borderTop: '3px solid var(--faixa-card)',
         background: `linear-gradient(135deg, color-mix(in oklab, ${style.value.color} 10%, var(--surface)) 0%, var(--surface) 70%)`,
     }
     : {}));

@@ -13,6 +13,9 @@ class SiteVisit extends Model
 {
     public const UPDATED_AT = null;
 
+    /** Acima disso num dia, o "visitante" é robô ou aba presa recarregando (ex.: 1.737 /entrar em 09/10/2026). */
+    public const VISITAS_DIA_ROBO = 300;
+
     protected $fillable = [
         'visitor_id',
         'user_id',
@@ -23,13 +26,17 @@ class SiteVisit extends Model
         'utm_source',
         'utm_medium',
         'utm_campaign',
+        'origem',
+        'click_id_param',
+        'click_id',
         'dispositivo',
         'consentiu',
+        'cookies',
     ];
 
     protected function casts(): array
     {
-        return ['consentiu' => 'boolean'];
+        return ['consentiu' => 'boolean', 'cookies' => 'array'];
     }
 
     /**
@@ -43,8 +50,10 @@ class SiteVisit extends Model
      * - IP sem OK no dia em que o mesmo IP tem cookie entra nesse cookie
      *   (quem navegou antes de dar OK não conta duas vezes).
      *
-     * Devolve uma linha por dia e visitante: dia, visitante, paginas e
-     * equipe (alguma página logado como equipe).
+     * Devolve uma linha por dia e visitante: dia, visitante, paginas,
+     * equipe (alguma página logado como equipe) e origens (os pares
+     * visitor_id/ip daquele dia que formam o visitante, para achar as
+     * linhas de volta no Log de visitas).
      *
      * @param  array<int, int>  $equipe  ids de usuário da equipe
      * @return Collection<int, object>
@@ -76,10 +85,30 @@ class SiteVisit extends Model
                         'visitante' => $visitante,
                         'paginas' => (int) $g->sum('paginas'),
                         'equipe' => $g->contains(fn ($l) => $l->user_id !== null && in_array((int) $l->user_id, $equipe, true)),
+                        'origens' => $g->map(fn ($l) => [(string) $l->visitor_id, $l->ip])->unique()->values()->all(),
                     ])
                     ->values();
             })
             ->values();
+    }
+
+    /**
+     * Só gente de fora (regra do painel, pedido 2026-10-11): sai o
+     * visitante que entrou como equipe em algum dia do período, com tudo o
+     * que o mesmo navegador visitou, e o visitante que passou de
+     * VISITAS_DIA_ROBO páginas num dia. Recebe e devolve linhas de
+     * visitantesPorDia().
+     *
+     * @param  Collection<int, object>  $porVisitante
+     * @return Collection<int, object>
+     */
+    public static function soDeFora(Collection $porVisitante): Collection
+    {
+        $daEquipe = $porVisitante->where('equipe', true)->pluck('visitante')->unique()->all();
+
+        return $porVisitante
+            ->whereNotIn('visitante', $daEquipe)
+            ->filter(fn ($l) => $l->paginas <= self::VISITAS_DIA_ROBO);
     }
 
     public function user(): BelongsTo

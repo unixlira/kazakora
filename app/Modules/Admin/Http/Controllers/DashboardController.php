@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Modules\Marketplace\Support\ContributionMargin;
+use App\Modules\Marketplace\Support\CurvaAbc;
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Inventory\Models\StockMovement;
@@ -138,34 +139,32 @@ class DashboardController extends Controller
     }
 
     /**
-     * Curva ABC pelo faturamento: do produto que mais fatura pro que menos,
-     * somando — A até 80% do faturamento, B até 95%, o resto é C (não vai
-     * pra tela). O produto que cruza o limite fica na faixa de cima.
+     * Curva ABC do painel (A e B; C não vai para a tela). A conta e a regra
+     * das faixas são as mesmas do menu Oportunidades: CurvaAbc, com as
+     * variações (cores) do mesmo produto juntas numa linha (2026-10-12).
      *
      * @return array{total: float, a: list<array>, b: list<array>}
      */
     private function curvaAbc(Carbon $desde): array
     {
-        $produtos = $this->vendasPorProduto($desde)->where('revenue', '>', 0)->sortByDesc('revenue')->values();
-        $total = round((float) $produtos->sum('revenue'), 2);
-        $curva = ['total' => $total, 'a' => [], 'b' => []];
-        $acumulado = 0.0;
+        $curva = app(CurvaAbc::class);
+        $produtos = $curva->classificar($curva->agrupar(app(ContributionMargin::class)
+            ->porItem($desde, Carbon::tomorrow())['linhas']));
 
-        foreach ($produtos as $produto) {
-            $antes = $total > 0 ? $acumulado / $total * 100 : 100;
-            $acumulado += $produto['revenue'];
-            $produto['share'] = $total > 0 ? round($produto['revenue'] / $total * 100, 1) : 0.0;
+        $linha = fn (array $p) => [
+            'id' => $p['id'],
+            'name' => $p['nome'],
+            'color' => count($p['variacoes']) > 1 ? count($p['variacoes']).' cores' : ($p['variacoes'][0] ?? null),
+            'quantity' => $p['unidades'],
+            'revenue' => $p['receita'],
+            'share' => $p['participacao'],
+        ];
 
-            if ($antes < 80) {
-                $curva['a'][] = $produto;
-            } elseif ($antes < 95) {
-                $curva['b'][] = $produto;
-            } else {
-                break;
-            }
-        }
-
-        return $curva;
+        return [
+            'total' => round((float) $produtos->sum('receita'), 2),
+            'a' => $produtos->where('classe', 'A')->map($linha)->values()->all(),
+            'b' => $produtos->where('classe', 'B')->map($linha)->values()->all(),
+        ];
     }
 
     private function revenueByChannel(Carbon $startOfMonth): array

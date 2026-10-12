@@ -44,6 +44,15 @@ export const sidebarSections = [
         ],
     },
     {
+        // Oportunidades (pedido do Lira 2026-10-12): curva ABC com lucro de
+        // cada marketplace. Mostra lucro, por isso financeiro.view.
+        heading: 'Oportunidades',
+        items: [
+            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'financeiro.view' },
+            { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'financeiro.view' },
+        ],
+    },
+    {
         heading: 'Pedidos e Expedição',
         items: [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', permission: 'pedidos.view' },

@@ -202,6 +202,93 @@ class ContributionMargin
     }
 
     /**
+     * A mesma conta de porCanal(), aberta por linha de pedido (Oportunidades,
+     * 2026-10-12: curva ABC com lucro por produto). Nada de conta nova: a
+     * receita do pedido (receitaSql), a taxa (order_channel_fees) e o frete
+     * dos Correios do pedido são repartidos entre os itens pelo peso do item
+     * no pedido (subtotal; sem subtotal, quantidade). Custo é custoSql() do
+     * próprio item.
+     *
+     * ADS, Flex e bônus do Flex são do canal inteiro, não de um pedido: ficam
+     * em 'canal' e NÃO entram na margem de cada linha. Por isso
+     *   soma(linhas.margem) − ads − flex + bonificacoes = porCanal()[canal].margem
+     * (o teste OportunidadesCurvaAbcTest confere essa igualdade).
+     *
+     * @return array{linhas: list<array{order_id: int, product_id: ?int, product_name: string, quantidade: int, receita: float, custo_produtos: float, taxas: float, frete: float, margem: float}>, canal: array{ads: float, flex: float, bonificacoes: float}}
+     */
+    public function porItem(Carbon $desde, Carbon $ate, ?string $canal = null): array
+    {
+        $taxas = DB::table('order_channel_fees')->selectRaw('order_id, SUM(fee_amount) as total')->groupBy('order_id');
+        $correios = DB::table('correios_pre_postagens')
+            ->where('status', CorreiosPrePostagem::STATUS_GERADA)
+            ->selectRaw('order_id, SUM(postage_price) as total')->groupBy('order_id');
+
+        $linhas = DB::table('orders')
+            ->leftJoin('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->leftJoinSub($taxas, 'taxa_pedido', 'taxa_pedido.order_id', '=', 'orders.id')
+            ->leftJoinSub($correios, 'correios_pedido', 'correios_pedido.order_id', '=', 'orders.id')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->when($canal, fn ($q) => $q->where('orders.origin', $canal))
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->selectRaw('orders.id as order_id, order_items.id as item_id, order_items.product_id, order_items.product_name,
+                COALESCE(order_items.quantity, 0) as quantidade, COALESCE(order_items.subtotal, 0) as subtotal,
+                '.self::receitaSql().' as receita_pedido,
+                CASE WHEN order_items.id IS NULL THEN 0 ELSE '.self::custoSql().' END as custo,
+                COALESCE(taxa_pedido.total, 0) as taxa_pedido, COALESCE(correios_pedido.total, 0) as frete_pedido')
+            ->orderBy('orders.id')->orderBy('order_items.id')
+            ->get()
+            ->groupBy('order_id')
+            ->flatMap(function ($itens) {
+                $somaSubtotal = (float) $itens->sum('subtotal');
+                $somaQuantidade = (float) $itens->sum('quantidade');
+
+                return $itens->map(function ($item) use ($itens, $somaSubtotal, $somaQuantidade) {
+                    $peso = match (true) {
+                        $somaSubtotal > 0 => (float) $item->subtotal / $somaSubtotal,
+                        $somaQuantidade > 0 => (float) $item->quantidade / $somaQuantidade,
+                        default => 1 / $itens->count(),
+                    };
+                    $receita = (float) $item->receita_pedido * $peso;
+                    $taxas = (float) $item->taxa_pedido * $peso;
+                    $frete = (float) $item->frete_pedido * $peso;
+                    $custo = (float) $item->custo;
+
+                    return [
+                        'order_id' => (int) $item->order_id,
+                        'product_id' => $item->product_id !== null ? (int) $item->product_id : null,
+                        'product_name' => (string) ($item->product_name ?? ''),
+                        'quantidade' => (int) $item->quantidade,
+                        'receita' => $receita,
+                        'custo_produtos' => $custo,
+                        'taxas' => $taxas,
+                        'frete' => $frete,
+                        'margem' => $receita - $custo - $taxas - $frete,
+                    ];
+                });
+            })
+            ->values()
+            ->all();
+
+        $ml = $canal === null || $canal === Order::ORIGIN_MERCADO_LIVRE;
+
+        return [
+            'linhas' => $linhas,
+            'canal' => [
+                'ads' => round((float) ChannelAdSpend::query()
+                    ->where('date', '>=', $desde->toDateString())
+                    ->where('date', '<', $ate->toDateString())
+                    ->when($canal, fn ($q) => $q->where('channel', $canal))
+                    ->sum('spend'), 2),
+                'flex' => $ml ? (float) app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'] : 0.0,
+                'bonificacoes' => $ml ? self::bonificacoes($desde, $ate) : 0.0,
+            ],
+        ];
+    }
+
+    /**
      * Bônus do Flex que o Mercado Livre deposita no Mercado Pago
      * ("bonificaciones_flex", ver ConciliacaoMercadoPago) — dinheiro que
      * entra e abate o custo do motoboy. Pela data em que caiu.

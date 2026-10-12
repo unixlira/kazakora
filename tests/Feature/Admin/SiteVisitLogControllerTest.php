@@ -312,4 +312,41 @@ class SiteVisitLogControllerTest extends TestCase
         $this->assertSame(2, DB::table('site_visits')->count());
         $this->assertSame(0, AuditLog::query()->where('entity', 'SiteVisit')->count());
     }
+
+    public function test_olho_mostra_cookies_do_visitante_sem_repetir_e_ignora_nome_fora_da_lista(): void
+    {
+        $this->travelTo('2026-10-12 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->visita('ana', '2026-10-12 10:00:00', '1.1.1.1', '/');
+        $this->visita('ana', '2026-10-12 11:00:00', '1.1.1.1', '/carrinho');
+        $this->visita('ana', '2026-10-12 12:00:00', '1.1.1.1', '/checkout');
+        DB::table('site_visits')->where('path', '/')->update(['cookies' => json_encode(['_fbp' => 'fb.1.123.456', 'kazakora_visitor' => 'ana'])]);
+        // Linha antiga (antes do recurso) não tem cookies; nome fora da lista
+        // que, por engano, tenha sido gravado não aparece.
+        DB::table('site_visits')->where('path', '/carrinho')->update(['cookies' => json_encode(['_fbp' => 'fb.1.123.456', 'kazakora-session' => 'segredo'])]);
+
+        $resposta = $this->actingAs($admin)
+            ->getJson('/admin/visitas-site/visitante?de=2026-10-12&ate=2026-10-12&ip=1.1.1.1')
+            ->assertOk();
+
+        $resposta->assertJsonCount(2, 'cookies')
+            ->assertJsonPath('cookies.0.nome', '_fbp')
+            ->assertJsonPath('cookies.0.valor', 'fb.1.123.456')
+            ->assertJsonPath('cookies.0.visitas', 2)
+            ->assertJsonPath('cookies.1.nome', 'kazakora_visitor');
+        $this->assertStringNotContainsString('segredo', $resposta->getContent());
+    }
+
+    public function test_olho_sem_cookies_devolve_lista_vazia(): void
+    {
+        $this->travelTo('2026-10-12 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->visita('ana', '2026-10-12 10:00:00', '1.1.1.1');
+
+        $this->actingAs($admin)
+            ->getJson('/admin/visitas-site/visitante?de=2026-10-12&ate=2026-10-12&ip=1.1.1.1')
+            ->assertOk()
+            ->assertJsonPath('cookies', []);
+    }
 }

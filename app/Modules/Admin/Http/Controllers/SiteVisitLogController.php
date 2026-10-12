@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Analytics\Support\OrigemVisita;
 use App\Modules\Audit\Models\AuditLog;
+use App\Support\Privacidade\Cookies;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -177,6 +178,7 @@ class SiteVisitLogController extends Controller
         }
 
         $total = (clone $query)->count();
+        $cookies = $this->cookiesDoVisitante($query);
         $equipe = $this->equipe();
         $site = rtrim((string) config('app.url'), '/');
 
@@ -217,6 +219,7 @@ class SiteVisitLogController extends Controller
         return response()->json([
             'entradas' => $entradas,
             'sem_dado' => $visitas->contains(fn ($v) => $v['origem']['chave'] === OrigemVisita::SEM_DADO),
+            'cookies' => $cookies,
             'ip' => $validated['ip'] ?? null,
             'visitor_id' => isset($validated['ip']) ? null : $validated['visitor_id'],
             'de' => $de->format('d/m/Y'),
@@ -225,6 +228,43 @@ class SiteVisitLogController extends Controller
             'limite' => self::MAX_HISTORICO,
             'visitas' => $visitas,
         ]);
+    }
+
+    /**
+     * Cookies do visitante no período (registrados só com o OK, lista
+     * permitida em Cookies::COOKIES_REGISTRAVEIS): cada nome/valor uma vez,
+     * com em quantas visitas apareceu e quando foi visto pela última vez.
+     * Dois cookies de visitante no mesmo IP (casa, 4G) aparecem os dois.
+     * Lê o mesmo conjunto do histórico (sem o limite de linhas), e filtra
+     * de novo pela lista permitida caso a lista tenha encolhido.
+     *
+     * @return array<int, array{nome: string, valor: string, visitas: int, ultimo: string}>
+     */
+    private function cookiesDoVisitante(Builder $query): array
+    {
+        $achados = [];
+
+        (clone $query)->whereNotNull('cookies')
+            ->select(['id', 'cookies', 'created_at'])
+            ->orderBy('created_at')->orderBy('id')
+            ->chunk(500, function ($visitas) use (&$achados) {
+                foreach ($visitas as $v) {
+                    foreach ((array) $v->cookies as $nome => $valor) {
+                        if (! is_string($nome) || ! is_scalar($valor) || ! Cookies::registravel($nome)) {
+                            continue;
+                        }
+                        $chave = $nome."\0".$valor;
+                        $achados[$chave] ??= ['nome' => $nome, 'valor' => (string) $valor, 'visitas' => 0, 'ultimo' => ''];
+                        $achados[$chave]['visitas']++;
+                        $achados[$chave]['ultimo'] = $v->created_at?->format('d/m/Y H:i:s') ?? '';
+                    }
+                }
+            });
+
+        $lista = array_values($achados);
+        usort($lista, fn ($a, $b) => [$a['nome'], $a['valor']] <=> [$b['nome'], $b['valor']]);
+
+        return $lista;
     }
 
     /**

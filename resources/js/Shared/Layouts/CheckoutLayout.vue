@@ -10,9 +10,6 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 // 00:00; atualizar a página recomeça dos 15 (pedido do Lira, sem guardar).
 const BANDEIRAS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
 
-// Endereço em duas linhas (rua/bairro e cidade/CEP), como na referência.
-const enderecoEmLinhas = COMPANY.enderecoCompleto.split(/,\s*(?=[^,]+\/[A-Z]{2})/);
-
 const restante = ref(15 * 60);
 let relogio = null;
 
@@ -56,8 +53,8 @@ const tempo = computed(() => {
         <slot />
         <AvisoCookies />
         <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop; preto com fonte
-             branca desde 2026-10-12). Grade 4-4-4 (pedido 2026-10-12): logo e dados
-             completos da empresa | formas de pagamento (bandeiras 3x2) | selos
+             branca desde 2026-10-12). Grade 4-4-4 (pedido 2026-10-12): logo, nome e
+             CNPJ (sem razão social, endereço e contato) | formas de pagamento | selos
              de segurança. As colunas se alinham pela base, para a linha do CNPJ
              ficar na altura da parte de baixo dos selos; embaixo, uma linha
              divisória e os quatro itens de confiança centralizados numa linha só.
@@ -68,19 +65,17 @@ const tempo = computed(() => {
                     <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto">
                     <p class="mt-4 text-xs leading-relaxed text-white/80 md:-mb-1">
                         © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
-                        CNPJ: {{ COMPANY.cnpj }}<br>
-                        WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                        E-mail: {{ COMPANY.email }}<br>
-                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
+                        CNPJ: {{ COMPANY.cnpj }}
                     </p>
                 </div>
 
                 <div class="flex flex-col items-center md:col-span-4 md:items-start">
                     <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
-                    <!-- Bandeiras em 3x2: cabem na coluna em qualquer largura. -->
-                    <div class="mt-3 grid w-fit grid-cols-3 gap-2">
+                    <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
+                         juntas com a coluna em vez de quebrar. -->
+                    <div class="mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
-                            width="265" height="180" class="h-[40px] w-auto">
+                            width="265" height="180" class="h-auto w-full min-w-0 flex-1">
                     </div>
                 </div>
 

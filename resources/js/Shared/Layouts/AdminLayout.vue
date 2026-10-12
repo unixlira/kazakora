@@ -1,6 +1,6 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { useClickOutside } from '@/Shared/useClickOutside';
 import { useDarkMode } from '@/Shared/useDarkMode';
@@ -138,6 +138,42 @@ const secaoExpandida = (heading) => !secoesAbertas.value.has(`!${heading}`) && s
 const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
 
 const logout = () => router.post('/sair');
+
+// Loader na área de conteúdo (pedido do Lira 2026-10-12): tela lenta (ex.:
+// Oportunidades do Mercado Livre) deixava a página anterior parada sem
+// aviso nenhum. Em toda troca de tela do admin, se a resposta passar de
+// 250 ms, cobre o conteúdo com o mesmo desfoque + spinner do "Marcar todas
+// como lidas". Fica de fora o que já tem retorno próprio ou roda por trás:
+// POST/PUT/DELETE (formulários têm botão "Salvando…"), recarga parcial e
+// prop adiada (only/except), prefetch, requisição async (polling) e
+// preserveState (filtros que atualizam a mesma tela enquanto se digita).
+const navegando = ref(false);
+let timerNavegacao = null;
+const pararLoader = () => {
+    clearTimeout(timerNavegacao);
+    timerNavegacao = null;
+    navegando.value = false;
+};
+const ehTrocaDeTela = (visit) => visit
+    && String(visit.method).toLowerCase() === 'get'
+    && !visit.async && !visit.prefetch && !visit.deferredProps
+    && !(visit.only?.length) && !(visit.except?.length)
+    && visit.preserveState !== true;
+const removerOuvintes = [];
+onMounted(() => {
+    removerOuvintes.push(
+        router.on('start', (event) => {
+            if (!ehTrocaDeTela(event.detail.visit)) return;
+            clearTimeout(timerNavegacao);
+            timerNavegacao = setTimeout(() => { navegando.value = true; }, 250);
+        }),
+        router.on('finish', pararLoader),
+    );
+});
+onBeforeUnmount(() => {
+    removerOuvintes.forEach((remover) => remover());
+    pararLoader();
+});
 
 // Pedido explícito 2026-08-15: botão de voltar visível em toda tela do
 // admin, sem atrapalhar o layout de nenhuma página — colocado só uma vez
@@ -393,8 +429,18 @@ watch(
                 </div>
             </nav>
 
-            <div class="mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6">
+            <div class="relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
                 <slot />
+
+                <!-- Loader de troca de tela: só a área de conteúdo, menu e topo
+                continuam usáveis. Spinner preso no meio da janela (sticky)
+                mesmo com a página rolada. -->
+                <div v-if="navegando" class="absolute inset-0 z-[5] rounded-xl bg-white/60 backdrop-blur-sm dark:bg-slate-900/60" role="status" aria-live="polite">
+                    <div class="sticky top-[35vh] flex flex-col items-center gap-3 py-10">
+                        <i class="fas fa-circle-notch animate-spin text-4xl text-primary" aria-hidden="true"></i>
+                        <span class="text-sm font-medium text-[var(--surface-foreground)]">Carregando…</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Rodapé no fluxo normal da página (não mais fixed) — fixo

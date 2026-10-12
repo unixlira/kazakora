@@ -264,10 +264,10 @@ async function packOrder(order) {
         <div class="mb-4 flex items-center gap-2">
             <i class="fas fa-truck-fast text-lg" style="color: var(--ks-brand)"></i>
             <h1 class="text-lg font-bold" style="color: var(--ks-text)">KoraSync</h1>
-            <span class="text-sm" style="color: var(--ks-text-secondary)">— {{ section === 'expedicao' ? 'Expedição' : (section === 'separados' ? 'Separados' : 'Cancelados') }}</span>
+            <span class="text-sm" style="color: var(--ks-text-secondary)">— {{ section === 'expedicao' ? 'Logística' : (section === 'separados' ? 'Separados' : 'Cancelados') }}</span>
         </div>
 
-        <!-- Abas da Expedição — mesmas 3 do app desktop, some fora dela -->
+        <!-- Abas da Logística — mesmas 3 do app desktop, some fora dela -->
         <div v-if="section === 'expedicao'" class="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
             <button
                 v-for="tab in EXPEDICAO_TABS"

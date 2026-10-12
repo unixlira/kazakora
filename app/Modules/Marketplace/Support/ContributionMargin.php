@@ -30,7 +30,8 @@ class ContributionMargin
     public const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
     /**
-     * Receita de um pedido: o valor dos produtos (subtotal). O frete fica
+     * Receita de um pedido: o valor dos produtos (subtotal; no site, menos
+     * os descontos da loja). O frete fica
      * de fora — na Shopee/ML/TikTok ele é pago pelo comprador direto à
      * logística do canal. EXCEÇÃO Amazon: pelo Bling ela sai pelos
      * Correios da própria loja (envio do vendedor), e o frete que o
@@ -47,7 +48,14 @@ class ContributionMargin
             ." WHERE msd.channel = 'tiktok_shop' AND msd.transaction_type = 'Pedido' AND msd.external_order_id = {$orders}.external_order_id),"
             ." CASE WHEN {$orders}.total - COALESCE({$orders}.shipping_cost, 0) > 0 THEN {$orders}.total - COALESCE({$orders}.shipping_cost, 0) ELSE 0 END)";
 
+        // Site (2026-10-12): os descontos são da própria loja (cupom, Pix e o
+        // desconto da plataforma do frete embutido, todos em discount_amount),
+        // então a receita é o que sobra dos produtos depois deles.
+        $loja = "CASE WHEN {$orders}.subtotal - COALESCE({$orders}.discount_amount, 0) > 0"
+            ." THEN {$orders}.subtotal - COALESCE({$orders}.discount_amount, 0) ELSE 0 END";
+
         return "(CASE WHEN {$orders}.origin = 'tiktok_shop' THEN {$tiktok}"
+            ." WHEN {$orders}.origin = 'loja' THEN {$loja}"
             ." ELSE {$orders}.subtotal + CASE WHEN {$orders}.origin = 'amazon' THEN COALESCE({$orders}.shipping_cost, 0) ELSE 0 END END)";
     }
 

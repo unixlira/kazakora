@@ -18,7 +18,7 @@ lucro líquido = receita
 
 | Linha | Fonte | Observação |
 |---|---|---|
-| Receita | `orders.subtotal` dos pedidos pagos/enviados/entregues, sem notas de devolução | **Frete do comprador fica fora** (Shopee/ML/TikTok: ele paga direto à logística do canal). **Exceção Amazon:** a loja envia pelos próprios Correios e o frete do comprador vem no repasse — é receita. |
+| Receita | `orders.subtotal` dos pedidos pagos/enviados/entregues, sem notas de devolução | **Frete do comprador fica fora** (Shopee/ML/TikTok: ele paga direto à logística do canal). **Exceção Amazon:** a loja envia pelos próprios Correios e o frete do comprador vem no repasse — é receita. **Site (2026-10-12):** subtotal − `discount_amount` (cupom, Pix e desconto da plataforma do frete embutido são da própria loja); o frete embutido no preço é receita e o custo dos Correios sai na linha de frete. |
 | Custo dos produtos | `products.cost_price × quantidade`; item sem produto: `order_items.manual_cost_price` (já é o **total da linha**, não multiplicar) | Produto sem custo cadastrado conta como custo zero → lucro inflado. Conferir em Financeiro. |
 | Taxas dos canais | `order_channel_fees` (por pedido) | `source`: `api` (real, ML/Shopee), `report`/`tiktok_income_settlement` (extrato real), **`estimate`** (TikTok antes do extrato — provisão), `manual`. |
 | Frete pago pela loja | Correios (`correios_pre_postagens.postage_price`) + Flex (entregas × custo por entrega) | `orders.shipping_cost` **não é custo** — é o frete do comprador (fica só informativo). |

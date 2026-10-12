@@ -49,20 +49,46 @@ class CalculadoraImportacaoTest extends TestCase
 
     public function test_tela_abre_sem_cotacao_quando_a_api_falha(): void
     {
-        Http::fake([CotacaoDolarService::FONTE => Http::response('erro', 500)]);
+        Http::fake([
+            CotacaoDolarService::FONTE => Http::response('erro', 500),
+            CotacaoDolarService::FONTE_RESERVA => Http::response('erro', 500),
+        ]);
 
         $this->actingAs($this->admin())->get('/admin/calculadora-importacao')
             ->assertOk()
             ->assertInertia(fn ($page) => $page->where('cotacao', null));
     }
 
+    public function test_usa_a_exchangerate_api_quando_a_awesomeapi_bloqueia(): void
+    {
+        // AwesomeAPI responde 429 para IP de servidor (visto no homolog e na VPS).
+        Http::fake([
+            CotacaoDolarService::FONTE => Http::response(['status' => 429, 'code' => 'QuotaExceeded'], 429),
+            CotacaoDolarService::FONTE_RESERVA => Http::response([
+                'result' => 'success',
+                'time_last_update_unix' => 1791763352,
+                'rates' => ['USD' => 1, 'BRL' => 4.9861],
+            ]),
+        ]);
+
+        $this->actingAs($this->admin())->get('/admin/calculadora-importacao')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('cotacao.valor', 4.9861)
+                ->where('cotacao.fonte', 'exchangerate-api')
+                ->where('cotacao.atualizado_em', '2026-10-11T21:02:32-03:00'));
+    }
+
     public function test_atualizar_ignora_o_cache(): void
     {
-        $this->fakeCotacao('5.0000');
-        $admin = $this->admin();
-        $this->actingAs($admin)->get('/admin/calculadora-importacao')->assertOk();
+        $resposta = fn (string $bid) => ['USDBRL' => ['bid' => $bid, 'create_date' => '2026-10-12 11:27:17']];
+        Http::fake([CotacaoDolarService::FONTE => Http::sequence()
+            ->push($resposta('4.9000'))
+            ->push($resposta('5.1234'))]);
 
-        $this->fakeCotacao('5.1234');
+        $admin = $this->admin();
+        $this->actingAs($admin)->get('/admin/calculadora-importacao')
+            ->assertInertia(fn ($page) => $page->where('cotacao.valor', 4.9));
 
         $this->actingAs($admin)->getJson('/admin/calculadora-importacao/cotacao')
             ->assertOk()
@@ -71,7 +97,10 @@ class CalculadoraImportacaoTest extends TestCase
 
     public function test_atualizar_responde_503_quando_a_api_falha(): void
     {
-        Http::fake([CotacaoDolarService::FONTE => Http::response([], 200)]);
+        Http::fake([
+            CotacaoDolarService::FONTE => Http::response([], 200),
+            CotacaoDolarService::FONTE_RESERVA => Http::response([], 200),
+        ]);
 
         $this->actingAs($this->admin())->getJson('/admin/calculadora-importacao/cotacao')
             ->assertStatus(503);

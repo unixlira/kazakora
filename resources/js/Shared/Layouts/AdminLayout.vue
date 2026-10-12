@@ -319,7 +319,7 @@ watch(
 
         <div class="relative flex flex-1 flex-col transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Topbar -->
-            <nav class="sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
+            <nav class="admin-topo sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
                 <div class="mx-auto flex w-full flex-nowrap items-center justify-between gap-2 sm:gap-4 md:px-4">
                     <div class="flex min-w-0 items-center gap-1 sm:gap-2">
                         <!-- Celular: hambúrguer e logo nesta mesma faixa. -->
@@ -467,7 +467,7 @@ watch(
             usuário 2026-08-05. Em tela curta (Radar de Oportunidades,
             2026-10-12) ele ficava solto no meio da tela: o conteúdo cresce
             (flex-1) e empurra o rodapé para o fim da janela. -->
-            <footer class="border-t border-[var(--surface-border)] bg-[var(--surface)]">
+            <footer class="admin-rodape border-t border-[var(--surface-border)] bg-[var(--surface)]">
                 <div class="px-4 py-3 text-center text-sm text-slate-500 md:px-10">
                     © 2026 KazaKora · CNPJ: 65.604.590/0001-07
                 </div>

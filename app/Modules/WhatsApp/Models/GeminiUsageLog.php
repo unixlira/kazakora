@@ -19,6 +19,9 @@ class GeminiUsageLog extends Model
     /** Alinhamento do catálogo / dados fiscais (2026-10-11). */
     public const PURPOSE_CATALOGO = 'catalogo';
 
+    /** Separação das buscas do Google Trends por assunto no Radar (2026-10-12). */
+    public const PURPOSE_RADAR = 'radar';
+
     protected $fillable = ['model', 'purpose', 'prompt_tokens', 'output_tokens', 'total_tokens'];
 
     protected function casts(): array

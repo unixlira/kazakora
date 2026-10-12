@@ -521,7 +521,8 @@ const quandoGerado = (iso) => {
         </div>
 
         <!-- Fundos em degradê (pedido 2026-10-11, mesmas cores dos cards
-             "Adapta"): vinho/rosa aqui, verde nos acessos. Texto branco. -->
+             "Adapta"): vinho/rosa aqui, verde nos acessos. Texto branco.
+             Cards de canal sem faixa lateral (pedido 2026-10-11). -->
         <section class="card-degrade card-degrade--vinho mt-4 p-4 text-white">
             <div class="flex items-center gap-2">
                 <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm ring-1 ring-white/30"><i class="fas fa-store"></i></span>
@@ -530,8 +531,7 @@ const quandoGerado = (iso) => {
             </div>
             <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
                 <div v-for="row in channelStrip" :key="row.origin"
-                    class="min-w-0 rounded-lg bg-white/12 px-3 py-2.5 ring-1 ring-white/20"
-                    style="border-left: 4px solid var(--faixa-card)">
+                    class="min-w-0 rounded-lg bg-white/12 px-3 py-2.5 ring-1 ring-white/20">
                     <p class="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90">
                         <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
                         {{ channelName(row.origin) }}

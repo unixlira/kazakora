@@ -17,6 +17,7 @@ use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Checkout\Support\GuestCpfAlreadyExistsException;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
@@ -50,6 +51,8 @@ class CheckoutController extends Controller
 
     /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
     private const CHECKOUT_VERSION = 2;
+
+    private const MENSAGEM_CPF_JA_CADASTRADO = 'Já existe uma conta com esse CPF. Entre na sua conta para continuar.';
 
     public function __construct(
         private readonly CartManager $cart,
@@ -353,6 +356,10 @@ class CheckoutController extends Controller
 
         if (! $request->user() && User::where('email', $data['guest']['email'])->exists()) {
             return redirect()->route('finalizacao.entrega')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        }
+
+        if (! $request->user() && $this->cpfJaCadastrado($data['guest']['cpf'])) {
+            return redirect()->route('finalizacao.entrega')->withErrors(['guest.cpf' => self::MENSAGEM_CPF_JA_CADASTRADO]);
         }
 
         // Reforço server-side: se o ID é de cotação ao vivo mas o front não
@@ -778,6 +785,8 @@ class CheckoutController extends Controller
             return redirect()->route('carrinho.ver')->withErrors(['cart' => $exception->getMessage()]);
         } catch (GuestEmailAlreadyExistsException) {
             return redirect()->route('finalizacao.pagamento')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        } catch (GuestCpfAlreadyExistsException) {
+            return redirect()->route('finalizacao.pagamento')->withErrors(['guest.cpf' => self::MENSAGEM_CPF_JA_CADASTRADO]);
         } catch (ApiErrorException $exception) {
             // Erro real da API do Stripe (ex: método de pagamento não
             // ativado no dashboard, credencial inválida, instabilidade) —
@@ -1415,6 +1424,10 @@ class CheckoutController extends Controller
             throw new GuestEmailAlreadyExistsException();
         }
 
+        if ($this->cpfJaCadastrado($guest['cpf'])) {
+            throw new GuestCpfAlreadyExistsException();
+        }
+
         // Pedido 2026-10-10: quem compra sem conta recebe uma senha
         // temporária no e-mail de boas-vindas (entra só com e-mail + essa
         // senha e troca no perfil). Quem se cadastra antes, com senha e
@@ -1541,6 +1554,24 @@ class CheckoutController extends Controller
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => \App\Services\MercadoPago\CredenciaisCheckout::publicKey(),
         ];
+    }
+
+    /**
+     * BUG REAL 2026-10-12: CPF de uma conta existente com e-mail diferente
+     * (ex.: "gmail.com.br") estourava users_cpf_unique e virava erro 500.
+     * O CPF fica gravado com ou sem máscara, então procura os dois.
+     */
+    private function cpfJaCadastrado(?string $cpf): bool
+    {
+        $digitos = preg_replace('/\D/', '', (string) $cpf);
+
+        if (strlen($digitos) !== 11) {
+            return false;
+        }
+
+        $comMascara = substr($digitos, 0, 3).'.'.substr($digitos, 3, 3).'.'.substr($digitos, 6, 3).'-'.substr($digitos, 9, 2);
+
+        return User::whereIn('cpf', array_unique([$digitos, $comMascara, (string) $cpf]))->exists();
     }
 
     private function wantsJsonDelivery(Request $request): bool

@@ -140,6 +140,20 @@ class CheckoutV2Test extends TestCase
             ->assertJsonValidationErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
     }
 
+    public function test_cpf_que_ja_tem_conta_com_outro_email_pede_login_sem_erro_500(): void
+    {
+        // BUG REAL 2026-10-12: e-mail "gmail.com.br" + CPF de conta existente = 500.
+        User::factory()->create(['email' => 'dono@exemplo.com', 'cpf' => '123.456.789-09']);
+        $this->noCarrinho();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'dono@exemplo.com.br', 'cpf' => '12345678909']]))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Já existe uma conta com esse CPF. Entre na sua conta para continuar.')
+            ->assertJsonValidationErrors(['guest.cpf']);
+
+        $this->assertSame(1, User::count());
+    }
+
     public function test_cupom_aplicado_antes_da_entrega_nao_se_perde(): void
     {
         Coupon::create(['code' => 'DEZOFF', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 10, 'is_active' => true]);

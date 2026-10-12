@@ -235,7 +235,11 @@ const submit = () => {
                         <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.session }}
                         <Link href="/entrar" class="ml-1 font-semibold underline">Fazer login</Link>
                     </p>
-                    <p v-if="form.errors.address_id" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                    <p v-if="form.errors['guest.cpf']?.startsWith('Já existe')" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors['guest.cpf'] }}
+                        <Link href="/entrar" class="ml-1 font-semibold underline">Fazer login</Link>
+                    </p>
+                    <p v-if="form.errors.address_id"class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <i class="fas fa-triangle-exclamation mr-2"></i>{{ form.errors.address_id }}
                     </p>
                     <p v-if="form.errors.shipping_method_id" class="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">

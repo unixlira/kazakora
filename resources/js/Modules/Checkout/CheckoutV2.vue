@@ -413,7 +413,7 @@ const finalizar = async () => {
     router.post('/finalizacao/pagamento', pagamento, {
         preserveScroll: true,
         preserveState: true,
-        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? 'Não foi possível concluir. Confira os dados.'; },
+        onError: (e) => { erros.value = e; erroGeral.value = e.payment ?? e.cart ?? e['guest.email'] ?? e['guest.cpf'] ??'Não foi possível concluir. Confira os dados.'; },
         onFinish: () => { processando.value = false; },
     });
 };
@@ -541,7 +541,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
                         {{ erroGeral || serverErrors.payment || serverErrors.cart }}
-                        <Link v-if="erro('guest.email')" href="/entrar" class="ml-1 font-semibold underline">Entrar na minha conta</Link>
+                        <Link v-if="erro('guest.email') || String(erro('guest.cpf') ?? '').startsWith('Já existe')" href="/entrar" class="ml-1 font-semibold underline">Entrar na minha conta</Link>
                     </div>
                 </div>
 

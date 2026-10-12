@@ -43,7 +43,7 @@ class Product extends Model
         'is_new_release',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'preco_sem_oferta'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'preco_sem_oferta', 'preco_de'];
 
     protected function casts(): array
     {
@@ -81,7 +81,25 @@ class Product extends Model
         $base = $this->precoSemOferta();
         $oferta = $this->precoOfertaDeHoje();
 
-        return $oferta !== null ? min($base, $oferta) : $base;
+        return round(($oferta !== null ? min($base, $oferta) : $base) + $this->freteEmbutido(), 2);
+    }
+
+    /**
+     * Frete somado ao preço nas telas da loja (frete grátis com o frete
+     * embutido, pedido 2026-10-12). Fora da loja é 0: admin, marketplaces e
+     * filas veem o preço de cadastro.
+     */
+    public function freteEmbutido(): float
+    {
+        return $this->id ? app(\App\Modules\Checkout\Support\FreteEmbutido::class)->acrescimo($this) : 0.0;
+    }
+
+    /** Preço "de" riscado no card quando há desconto, com o mesmo frete embutido do final_price. */
+    public function getPrecoDeAttribute(): ?float
+    {
+        return $this->has_discount && ($this->discount_percentage || $this->discount_amount)
+            ? round((float) $this->price + $this->freteEmbutido(), 2)
+            : null;
     }
 
     /** Preço da oferta do dia deste produto (null = não está em oferta hoje). */
@@ -98,7 +116,7 @@ class Product extends Model
     /** Preço normal (riscado no card) quando está em oferta hoje; null fora da oferta. */
     public function getPrecoSemOfertaAttribute(): ?float
     {
-        return $this->precoOfertaDeHoje() !== null ? $this->precoSemOferta() : null;
+        return $this->precoOfertaDeHoje() !== null ? round($this->precoSemOferta() + $this->freteEmbutido(), 2) : null;
     }
 
     /** Preço sem a oferta do dia — o que vale para os marketplaces. */

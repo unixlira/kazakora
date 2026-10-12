@@ -24,6 +24,15 @@ const submit = () => {
     <Head title="Criar conta" />
 
     <AuthLayout>
+        <!-- E-mail já cadastrado (pedido 2026-10-12): alerta vermelho no topo. -->
+        <div v-if="form.errors.email?.includes('em uso')" role="alert" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+            <div>
+                {{ form.errors.email }}
+                <Link href="/entrar" class="ml-1 font-semibold underline">Entrar</Link>
+            </div>
+        </div>
+
         <h1 class="font-display text-xl font-semibold">Criar conta</h1>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">

@@ -164,7 +164,7 @@ onBeforeUnmount(() => observador?.disconnect());
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 const precoAntes = computed(() => {
     if (props.product.oferta_do_dia && props.product.preco_sem_oferta) return Number(props.product.preco_sem_oferta);
-    return props.product.has_discount ? Number(props.product.price) : null;
+    return props.product.has_discount ? Number(props.product.preco_de ?? props.product.price) : null;
 });
 const descontoPct = computed(() => (precoAntes.value
     ? Math.max(1, Math.round((1 - Number(props.product.final_price) / precoAntes.value) * 100))

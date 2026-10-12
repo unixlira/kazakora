@@ -35,6 +35,7 @@ visita a loja.
 | `kazakora-session` | Necessário | login, carrinho, checkout | `SESSION_LIFETIME` (120 min sem uso) | art. 7º V e IX |
 | `XSRF-TOKEN` | Necessário | proteção contra CSRF | igual à sessão | art. 7º IX, art. 46 |
 | `kazakora_cookies` | Necessário | lembra o OK | 12 meses | art. 8º § 2º |
+| `kazakora_cep` | Necessário | CEP que o cliente digitou, para o preço já sair com o frete dele (frete embutido, 2026-10-12) | 12 meses | art. 7º V |
 | `kazakora_visitor` | Estatística | contar visitante único | 12 meses | art. 7º I (consentimento) |
 
 Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
@@ -78,6 +79,13 @@ pedido 2026-10-11), sem repetir a mesma pessoa/IP:
   por IP no dia.
 - Visita sem OK de um IP que no mesmo dia deu OK entra no cookie dele (quem
   navegou antes de dar OK não conta duas vezes). A página do OK já conta.
+
+### Localização no pedido (pedido 2026-10-12)
+O pedido do site grava `orders.visitante_latitude` e `visitante_longitude`,
+aproximadas pelo IP, dos cabeçalhos `CF-IPLatitude`/`CF-IPLongitude` da
+Cloudflare (regra "Add visitor location headers"). Não é o GPS do aparelho nem
+pede permissão ao navegador. Base legal: execução do contrato e prevenção a
+fraude (art. 7º V e IX). Sem Cloudflare fica nulo.
 
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do

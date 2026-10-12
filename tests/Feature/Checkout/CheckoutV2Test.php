@@ -137,7 +137,89 @@ class CheckoutV2Test extends TestCase
 
         $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'ja@exemplo.com', 'cpf' => '123.456.789-09']]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+            ->assertJsonValidationErrors(['guest.email' => 'Este e-mail já está em uso. Entre na sua conta para continuar.'])
+            ->assertJsonPath('message', 'Este e-mail já está em uso. Entre na sua conta para continuar.');
+    }
+
+    // Erro 500 real (2026-10-12): CPF de outra conta estourava o índice único.
+    public function test_cpf_de_outra_conta_avisa_em_vez_de_erro_500(): void
+    {
+        User::factory()->create(['email' => 'dono@exemplo.com', 'cpf' => '123.456.789-09']);
+        $this->noCarrinho();
+
+        // Mesmo CPF sem máscara e com outro e-mail.
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'outro@exemplo.com', 'cpf' => '12345678909']]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['guest.cpf' => 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.'])
+            ->assertJsonMissingValidationErrors(['guest.email']);
+    }
+
+    public function test_cpf_e_email_ja_cadastrados_avisam_os_dois(): void
+    {
+        User::factory()->create(['email' => 'ja@exemplo.com', 'cpf' => '12345678909']);
+        $this->noCarrinho();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'ja@exemplo.com', 'cpf' => '123.456.789-09']]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['guest.email', 'guest.cpf'])
+            ->assertJsonPath('message', 'Este CPF e este e-mail já estão em uso. Entre na sua conta para continuar.');
+    }
+
+    public function test_conta_apagada_tambem_segura_cpf_e_email(): void
+    {
+        User::factory()->create(['email' => 'apagado@exemplo.com', 'cpf' => '123.456.789-09'])->delete();
+        $this->noCarrinho();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'apagado@exemplo.com', 'cpf' => '529.982.247-25']]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['guest.email']);
+    }
+
+    public function test_cpf_cadastrado_depois_da_entrega_volta_com_aviso_no_pagamento(): void
+    {
+        $this->noCarrinho();
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldNotReceive('createPixPayment');
+        });
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09']]))->assertOk();
+        User::factory()->create(['email' => 'outra@exemplo.com', 'cpf' => '12345678909']);
+
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])
+            ->assertRedirect(route('finalizacao.entrega'))
+            ->assertSessionHasErrors(['guest.cpf']);
+
+        $this->assertGuest();
+        $this->assertSame(0, Order::count());
+    }
+
+    public function test_logado_nao_pode_usar_cpf_de_outra_conta(): void
+    {
+        User::factory()->create(['cpf' => '123.456.789-09']);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => null]);
+        $this->actingAs($user);
+        $this->noCarrinho();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['cpf' => '12345678909']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cpf']);
+
+        $this->assertNull($user->fresh()->cpf);
+    }
+
+    public function test_cpf_que_ja_tem_conta_com_outro_email_pede_login_sem_erro_500(): void
+    {
+        // BUG REAL 2026-10-12: e-mail "gmail.com.br" + CPF de conta existente = 500.
+        User::factory()->create(['email' => 'dono@exemplo.com', 'cpf' => '123.456.789-09']);
+        $this->noCarrinho();
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Xavier da Silva', 'email' => 'dono@exemplo.com.br', 'cpf' => '12345678909']]))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.')
+            ->assertJsonValidationErrors(['guest.cpf']);
+
+        $this->assertSame(1, User::count());
     }
 
     public function test_cupom_aplicado_antes_da_entrega_nao_se_perde(): void
@@ -188,6 +270,54 @@ class CheckoutV2Test extends TestCase
                 && $mail->senhaTemporaria !== null
                 && Hash::check($mail->senhaTemporaria, $user->password);
         });
+    }
+
+    public function test_pedido_grava_latitude_e_longitude_da_cloudflare(): void
+    {
+        Mail::fake();
+        $this->noCarrinho(105);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->andReturn([
+                'id' => 78, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000']]))->assertOk();
+
+        $this->withHeaders(['CF-IPLatitude' => '-23.55052', 'CF-IPLongitude' => '-46.63331'])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])
+            ->assertOk();
+
+        $order = Order::firstOrFail();
+        $this->assertEquals(-23.55052, (float) $order->visitante_latitude);
+        $this->assertEquals(-46.63331, (float) $order->visitante_longitude);
+    }
+
+    public function test_pedido_sem_cloudflare_fica_sem_localizacao(): void
+    {
+        Mail::fake();
+        $this->noCarrinho(105);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->andReturn([
+                'id' => 79, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000']]))->assertOk();
+
+        $this->withHeaders(['CF-IPLatitude' => 'abc', 'CF-IPLongitude' => '999'])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])
+            ->assertOk();
+
+        $order = Order::firstOrFail();
+        $this->assertNull($order->visitante_latitude);
+        $this->assertNull($order->visitante_longitude);
     }
 
     public function test_cadastro_normal_nao_manda_senha(): void

@@ -108,6 +108,7 @@ const chatAberto = ref(false);
                             <div class="flex justify-between"><dt class="text-store-fg-muted">Produtos</dt><dd>{{ formatPrice(pedido.valores.subtotal) }}</dd></div>
                             <div class="flex justify-between"><dt class="text-store-fg-muted">Frete</dt><dd class="font-semibold text-[#0FB930]">{{ pedido.valores.frete > 0 ? formatPrice(pedido.valores.frete) : 'Grátis ⚡FULL' }}</dd></div>
                             <div v-if="pedido.valores.desconto_cupom > 0" class="flex justify-between"><dt class="text-store-fg-muted">Cupom</dt><dd class="text-[#0FB930]">− {{ formatPrice(pedido.valores.desconto_cupom) }}</dd></div>
+                            <div v-if="pedido.valores.desconto_plataforma > 0" class="flex justify-between"><dt class="text-store-fg-muted">Desconto da plataforma</dt><dd class="text-[#0FB930]">− {{ formatPrice(pedido.valores.desconto_plataforma) }}</dd></div>
                             <div v-if="pedido.valores.desconto_pix > 0" class="flex justify-between"><dt class="text-store-fg-muted">Desconto Pix</dt><dd class="text-[#0FB930]">− {{ formatPrice(pedido.valores.desconto_pix) }}</dd></div>
                             <div class="flex justify-between border-t border-store-border pt-2 text-base font-extrabold"><dt>Total</dt><dd>{{ formatPrice(pedido.valores.total) }}</dd></div>
                         </dl>

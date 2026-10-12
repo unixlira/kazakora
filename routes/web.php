@@ -183,6 +183,8 @@ Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('thr
 Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
 
 Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
+// Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.
+Route::get('/finalizacao/entrega-gratis', [CheckoutController::class, 'entregaGratis'])->middleware('throttle:30,1')->name('finalizacao.entrega-gratis');
 
 Route::prefix('finalizacao')->name('finalizacao.')->group(function () {
     Route::get('/', [CheckoutController::class, 'delivery'])->name('entrega');
@@ -597,6 +599,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Fretes dos Correios para as 27 capitais (2026-10-12): só consulta.
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
+        Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

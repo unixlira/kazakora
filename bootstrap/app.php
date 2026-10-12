@@ -50,6 +50,8 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->web(append: [
+            // Antes do Inertia: os preços da loja já saem com o frete (2026-10-12).
+            \App\Http\Middleware\AtivarFreteEmbutido::class,
             HandleInertiaRequests::class,
             TrackSiteVisit::class,
             PreventBrowserCaching::class,

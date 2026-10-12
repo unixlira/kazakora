@@ -80,6 +80,37 @@ class User extends Authenticatable
         return $this->hasMany(Address::class)->orderByDesc('is_default')->latest();
     }
 
+    /**
+     * CPF já usado por outra conta (pedido 2026-10-12: CPF repetido virava
+     * erro 500 no checkout). O banco guarda com máscara ou só números, então
+     * confere os dois formatos. Inclui conta apagada: o índice único do banco
+     * também vale para ela.
+     */
+    public static function cpfEmUso(?string $cpf, ?int $ignorarId = null): bool
+    {
+        $numeros = preg_replace('/\D/', '', (string) $cpf);
+
+        if (strlen($numeros) !== 11) {
+            return false;
+        }
+
+        $mascarado = substr($numeros, 0, 3).'.'.substr($numeros, 3, 3).'.'.substr($numeros, 6, 3).'-'.substr($numeros, 9, 2);
+
+        return static::withTrashed()
+            ->whereIn('cpf', [$numeros, $mascarado])
+            ->when($ignorarId, fn ($q) => $q->whereKeyNot($ignorarId))
+            ->exists();
+    }
+
+    /** E-mail já usado por outra conta, inclusive apagada (índice único do banco). */
+    public static function emailEmUso(?string $email, ?int $ignorarId = null): bool
+    {
+        return static::withTrashed()
+            ->where('email', trim((string) $email))
+            ->when($ignorarId, fn ($q) => $q->whereKeyNot($ignorarId))
+            ->exists();
+    }
+
     public function getAvatarUrlAttribute(): ?string
     {
         return $this->avatar_path ? asset('storage/'.$this->avatar_path) : null;

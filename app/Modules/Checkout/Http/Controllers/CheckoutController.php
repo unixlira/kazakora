@@ -16,6 +16,7 @@ use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\Inventory\Models\StockMovement;
@@ -26,6 +27,7 @@ use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,6 +51,10 @@ class CheckoutController extends Controller
 
     /** Checkout padrão: 2 = tela única (pedido 2026-10-10); 1 = antigo em 2 etapas. */
     private const CHECKOUT_VERSION = 2;
+
+    private const MSG_EMAIL_EM_USO = 'Este e-mail já está em uso. Entre na sua conta para continuar.';
+
+    private const MSG_CPF_EM_USO = 'Este CPF já está em uso em outra conta. Entre nessa conta para continuar.';
 
     public function __construct(
         private readonly CartManager $cart,
@@ -107,6 +113,60 @@ class CheckoutController extends Controller
     }
 
     /**
+     * Frete grátis com o frete embutido (pedido 2026-10-12): o checkout chama
+     * isto quando o CEP de entrega muda. Guarda o CEP (o preço dos produtos
+     * passa a ter o frete exato para ele) e devolve itens, subtotal e cupom
+     * recalculados, a entrega FULL (Grande SP) ou a opção TURBO (SEDEX, com o
+     * valor a mais e quantos dias chega antes).
+     */
+    public function entregaGratis(Request $request, EntregaExpressa $entregaExpressa, FreteEmbutido $frete): JsonResponse
+    {
+        $cep = preg_replace('/\D/', '', (string) $request->query('cep'));
+
+        if (strlen($cep) !== 8) {
+            return response()->json(['message' => 'Informe um CEP com 8 números.'], 422);
+        }
+
+        $this->guardarCep($request, $cep);
+        $frete->usarCep($cep);
+
+        $cartItems = $this->cart->items();
+        $subtotal = round($cartItems->sum('subtotal'), 2);
+        [$coupon] = $this->cupomDoRascunho($request->session()->get(self::SESSION_KEY) ?? [], $subtotal, $request->user());
+        $expressa = $entregaExpressa->consultar($cep);
+        $entrega = $frete->entregaDoCarrinho($cartItems);
+
+        return response()->json([
+            'items' => $cartItems,
+            'subtotal' => $subtotal,
+            'discount_amount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
+            'entrega_expressa' => $expressa,
+            'prazo' => $expressa ? null : $entrega['prazo'],
+            // Vários itens numa caixa só: o frete real sai menor que o somado no preço.
+            'desconto_plataforma' => $entrega['desconto_plataforma'],
+            // Na área FULL a entrega já é a mais rápida: sem TURBO.
+            'turbo' => $expressa ? null : $entrega['turbo'],
+        ]);
+    }
+
+    /** CEP escolhido pelo cliente: sessão + cookie necessário de 1 ano (frete embutido). */
+    private function guardarCep(Request $request, string $cep): void
+    {
+        $request->session()->put('frete_embutido.cep', $cep);
+        cookie()->queue(cookie((string) config('frete_embutido.cookie'), $cep, 60 * 24 * 365, null, null, null, true, false, 'lax'));
+    }
+
+    /** CEP do endereço de entrega do rascunho do checkout (endereço salvo ou novo). */
+    private function cepDoRascunho(Request $request, array $draft): ?string
+    {
+        if (! empty($draft['address_id']) && $request->user()) {
+            return $request->user()->addresses()->whereKey($draft['address_id'])->value('zip');
+        }
+
+        return $draft['new_address']['zip'] ?? null;
+    }
+
+    /**
      * Prazo pelo CEP na página do produto (pedido 2026-10-09): só diz se o
      * CEP tem entrega expressa ("Receba hoje até as 21h" / "Receba amanhã").
      * Fora da área, entrega_expressa vem null e a tela mostra o prazo normal.
@@ -120,6 +180,11 @@ class CheckoutController extends Controller
         }
 
         $expressa = $entregaExpressa->consultar($cep);
+
+        // Frete embutido (2026-10-12): o CEP digitado no produto passa a valer
+        // para o preço em toda a loja.
+        $this->guardarCep($request, $cep);
+        app(FreteEmbutido::class)->usarCep($cep);
 
         // Fora da entrega expressa (pedido 2026-10-10): prazo mais rápido dos
         // Correios para esse CEP e produto. Até 3 dias úteis = "Flex"; mais
@@ -135,7 +200,12 @@ class CheckoutController extends Controller
             }) ?: null;
         }
 
+        $produto = $product ?? Product::query()->find((int) $request->query('produto'));
+
         return response()->json([
+            'final_price' => $produto?->final_price,
+            'preco_de' => $produto?->preco_de,
+            'preco_sem_oferta' => $produto?->preco_sem_oferta,
             'entrega_expressa' => $expressa,
             'prazo_dias' => $prazoDias,
             'modalidade' => $expressa ? 'full' : ($prazoDias !== null && $prazoDias <= 3 ? 'flex' : null),
@@ -192,6 +262,7 @@ class CheckoutController extends Controller
                 },
             ],
             'shipping_quote' => ['nullable', 'array'],
+            'turbo' => ['nullable', 'boolean'],
             'shipping_quote.name' => ['required_with:shipping_quote', 'string', 'max:255'],
             'shipping_quote.carrier_name' => ['nullable', 'string', 'max:255'],
             'shipping_quote.price' => ['required_with:shipping_quote', 'numeric', 'min:0'],
@@ -271,6 +342,10 @@ class CheckoutController extends Controller
         $data = $validator->validated();
 
         if (isset($data['cpf'])) {
+            if (User::cpfEmUso($data['cpf'], $request->user()->id)) {
+                return redirect()->route('finalizacao.entrega')->withErrors(['cpf' => self::MSG_CPF_EM_USO]);
+            }
+
             $request->user()->forceFill(['cpf' => preg_replace('/\D/', '', $data['cpf'])])->save();
             unset($data['cpf']);
         }
@@ -285,8 +360,10 @@ class CheckoutController extends Controller
             }
         }
 
-        if (! $request->user() && User::where('email', $data['guest']['email'])->exists()) {
-            return redirect()->route('finalizacao.entrega')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        // Um CPF e um e-mail por conta (pedido 2026-10-12): dado já cadastrado
+        // volta como aviso, em vez de estourar o índice único (erro 500).
+        if (! $request->user() && $emUso = $this->dadosEmUso($data['guest'])) {
+            return redirect()->route('finalizacao.entrega')->withErrors($emUso);
         }
 
         // Reforço server-side: se o ID é de cotação ao vivo mas o front não
@@ -309,6 +386,13 @@ class CheckoutController extends Controller
                 'estimated_days' => $match['estimated_days'],
             ];
         }
+
+        // Frete embutido: o preço dos produtos passa a ser o do CEP de entrega.
+        $cepEntrega = $data['new_address']['zip'] ?? ($address ?? null)?->zip;
+        if ($cepEntrega) {
+            $this->guardarCep($request, preg_replace('/\D/', '', (string) $cepEntrega));
+        }
+        $data['turbo'] = (bool) ($data['turbo'] ?? false);
 
         // Cupom aplicado antes de preencher a entrega (checkout v2) não pode
         // se perder quando o rascunho é regravado.
@@ -507,6 +591,9 @@ class CheckoutController extends Controller
 
         $data = $paymentValidator->validated();
 
+        // Frete embutido: o pedido sai com o frete do CEP de entrega.
+        app(FreteEmbutido::class)->usarCep($this->cepDoRascunho($request, $draft));
+
         $cartItems = $this->cart->items();
 
         if ($cartItems->isEmpty()) {
@@ -545,7 +632,7 @@ class CheckoutController extends Controller
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Pagamento ainda não está disponível — aguarde a configuração do Stripe.']);
         }
 
-        $shipping = $this->resolveShipping($draft);
+        $shipping = $this->resolveShipping($draft, $cartItems, $this->cepDoRascunho($request, $draft));
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon, $motivoCupom] = $this->cupomDoRascunho($draft, $subtotal, $request->user());
         if ($motivoCupom) {
@@ -558,6 +645,10 @@ class CheckoutController extends Controller
                 ->withErrors(['code' => $motivoCupom.' O desconto foi removido — confira o total e finalize de novo.']);
         }
         $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        // Frete embutido com vários itens numa caixa só (2026-10-12).
+        $descontoPlataforma = app(FreteEmbutido::class)->ligado()
+            ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma']
+            : 0.0;
 
         $methods = $data['split'] ?? false
             ? $this->sortMethodsSafely([$data['payment_method'], $data['payment_method_secondary']])
@@ -566,12 +657,14 @@ class CheckoutController extends Controller
         // Desconto no Pix (pedido 2026-10-09): só pagando 100% no Pix, sobre os
         // produtos (já com cupom e desconto por quantidade), nunca no frete.
         $pixDiscount = $methods === [Payment::METHOD_PIX]
-            ? DescontoPix::desconto(max(0, $subtotal - $discount))
+            ? DescontoPix::desconto(max(0, $subtotal - $discount - $descontoPlataforma))
             : 0.0;
-        $total = round($subtotal - $discount - $pixDiscount + $shipping['cost'], 2);
+        $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
+
+        $visitante = ! $request->user();
 
         try {
-            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
+            [$order, $paymentResult] = DB::transaction(function () use ($request, $draft, $cartItems, $shipping, $subtotal, $coupon, $discount, $descontoPlataforma, $pixDiscount, $total, $methods, $data, $useMercadoPago) {
                 // BUG REAL 2026-09-29: trava/valida o estoque ANTES de criar
                 // conta de convidado, pedido ou qualquer cobrança — ver
                 // lockProductsForCart().
@@ -599,14 +692,16 @@ class CheckoutController extends Controller
                     'shipping_neighborhood' => $address->neighborhood,
                     'shipping_city' => $address->city,
                     'shipping_state' => $address->state,
+                    ...$this->localizacaoDoVisitante($request),
                     'subtotal' => $subtotal,
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
                     // discount_amount é o desconto TOTAL do pedido (vDesc da
-                    // NF-e, financeiro, devolução) — cupom + Pix; o do Pix
-                    // fica também à parte em pix_discount_amount.
-                    'discount_amount' => round($discount + $pixDiscount, 2),
+                    // NF-e, financeiro, devolução) — cupom + Pix + plataforma;
+                    // Pix e plataforma ficam também à parte.
+                    'discount_amount' => round($discount + $pixDiscount + $descontoPlataforma, 2),
                     'pix_discount_amount' => $pixDiscount,
+                    'desconto_plataforma_amount' => $descontoPlataforma,
                     'total' => $total,
                 ]);
 
@@ -695,8 +790,16 @@ class CheckoutController extends Controller
             Log::warning('checkout.storePayment.stock_changed', ['products' => $exception->productNames]);
 
             return redirect()->route('carrinho.ver')->withErrors(['cart' => $exception->getMessage()]);
-        } catch (GuestEmailAlreadyExistsException) {
-            return redirect()->route('finalizacao.pagamento')->withErrors(['guest.email' => 'Já existe uma conta com esse e-mail. Faça login para continuar.']);
+        } catch (GuestEmailAlreadyExistsException|UniqueConstraintViolationException) {
+            // E-mail ou CPF cadastrado entre a entrega e o pagamento (ou duas
+            // abas ao mesmo tempo): nada foi gravado, volta com o aviso.
+            if ($visitante && Auth::check()) {
+                // A conta criada nesta tentativa foi desfeita pelo rollback.
+                Auth::logout();
+            }
+            $emUso = $visitante && isset($draft['guest']) ? $this->dadosEmUso($draft['guest']) : [];
+
+            return redirect()->route('finalizacao.entrega')->withErrors($emUso ?: ['guest.email' => 'Este CPF ou e-mail já estão em uso. Entre na sua conta para continuar.']);
         } catch (ApiErrorException $exception) {
             // Erro real da API do Stripe (ex: método de pagamento não
             // ativado no dashboard, credencial inválida, instabilidade) —
@@ -960,8 +1063,9 @@ class CheckoutController extends Controller
                 'valores' => [
                     'subtotal' => (float) $order->subtotal,
                     'frete' => (float) $order->shipping_cost,
-                    'desconto_cupom' => round((float) $order->discount_amount - (float) $order->pix_discount_amount, 2),
+                    'desconto_cupom' => round((float) $order->discount_amount - (float) $order->pix_discount_amount - (float) $order->desconto_plataforma_amount, 2),
                     'desconto_pix' => (float) $order->pix_discount_amount,
+                    'desconto_plataforma' => (float) $order->desconto_plataforma_amount,
                     'total' => (float) $order->total,
                 ],
                 'pagamento' => $pagamento ? [
@@ -1215,11 +1319,15 @@ class CheckoutController extends Controller
 
     private function paymentProps(array $draft): array
     {
+        $cep = $this->cepDoRascunho(request(), $draft);
+        app(FreteEmbutido::class)->usarCep($cep);
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
-        $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft)['cost'] : 0.0;
+        $shippingCost = ! empty($draft['shipping_method_id']) ? $this->resolveShipping($draft, $cartItems, $cep)['cost'] : 0.0;
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, request()->user());
         $discount = $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0;
+        $plataforma = app(FreteEmbutido::class)->ligado() ? app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['desconto_plataforma'] : 0.0;
+        $discount = round($discount + $plataforma, 2);
 
         return [
             'items' => $cartItems,
@@ -1323,9 +1431,49 @@ class CheckoutController extends Controller
         }
     }
 
+    /**
+     * E-mail ou CPF do visitante que já pertencem a uma conta. A primeira
+     * mensagem é a que aparece no alerta do topo do checkout.
+     *
+     * @return array<string, string>
+     */
+    private function dadosEmUso(array $guest): array
+    {
+        $emailEmUso = User::emailEmUso($guest['email'] ?? null);
+        $cpfEmUso = User::cpfEmUso($guest['cpf'] ?? null);
+
+        if ($emailEmUso && $cpfEmUso) {
+            return ['guest.email' => 'Este CPF e este e-mail já estão em uso. Entre na sua conta para continuar.', 'guest.cpf' => self::MSG_CPF_EM_USO];
+        }
+
+        return array_filter([
+            'guest.email' => $emailEmUso ? self::MSG_EMAIL_EM_USO : null,
+            'guest.cpf' => $cpfEmUso ? self::MSG_CPF_EM_USO : null,
+        ]);
+    }
+
+    /**
+     * Latitude/longitude do IP de quem compra, dos cabeçalhos "visitor
+     * location" da Cloudflare (pedido do Lira, 2026-10-12). Sem Cloudflare
+     * ou com valor fora da faixa, grava nulo.
+     *
+     * @return array{visitante_latitude: ?float, visitante_longitude: ?float}
+     */
+    private function localizacaoDoVisitante(Request $request): array
+    {
+        $lat = $request->header('CF-IPLatitude');
+        $lng = $request->header('CF-IPLongitude');
+
+        if (! is_numeric($lat) || ! is_numeric($lng) || abs((float) $lat) > 90 || abs((float) $lng) > 180) {
+            return ['visitante_latitude' => null, 'visitante_longitude' => null];
+        }
+
+        return ['visitante_latitude' => (float) $lat, 'visitante_longitude' => (float) $lng];
+    }
+
     private function createGuestAccount(array $guest): User
     {
-        if (User::where('email', $guest['email'])->exists()) {
+        if ($this->dadosEmUso($guest)) {
             throw new GuestEmailAlreadyExistsException();
         }
 
@@ -1362,8 +1510,17 @@ class CheckoutController extends Controller
     /**
      * @return array{method_id: ?int, carrier_name: ?string, cost: float}
      */
-    private function resolveShipping(array $draft): array
+    private function resolveShipping(array $draft, $cartItems = null, ?string $cep = null): array
     {
+        // TURBO (2026-10-12): SEDEX no lugar do grátis, cobrando só a diferença,
+        // recalculada aqui (nunca o valor que veio do navegador).
+        if (! empty($draft['turbo']) && $cartItems && $cep && ! app(EntregaExpressa::class)->atende($cep)) {
+            $turbo = app(FreteEmbutido::class)->entregaDoCarrinho($cartItems)['turbo'];
+            if ($turbo) {
+                return ['method_id' => null, 'carrier_name' => FreteEmbutido::TURBO, 'cost' => (float) $turbo['preco']];
+            }
+        }
+
         if (! empty($draft['shipping_quote'])) {
             $quote = $draft['shipping_quote'];
 
@@ -1425,6 +1582,9 @@ class CheckoutController extends Controller
     {
         $user = $request->user();
         $draft = $request->session()->get(self::SESSION_KEY) ?? [];
+        if ($cepDoRascunho = $this->cepDoRascunho($request, $draft)) {
+            app(FreteEmbutido::class)->usarCep($cepDoRascunho);
+        }
         $cartItems = $this->cart->items();
         $subtotal = round($cartItems->sum('subtotal'), 2);
         [$coupon] = $this->cupomDoRascunho($draft, $subtotal, $user);

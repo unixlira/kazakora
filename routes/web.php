@@ -82,6 +82,8 @@ use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
+// Mapa do site para o Google Search Console (pedido 2026-10-12).
+Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])->name('produtos.ver');
 Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shipping'])->name('produtos.envio.detalhes');
 

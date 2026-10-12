@@ -34,13 +34,21 @@ export const sidebarSections = [
         // Oportunidades (pedido do Lira 2026-10-12): Google e TikTok (antes
         // submenu do Radar) e os mais vendidos de TERCEIROS em cada
         // marketplace (correção do Lira 2026-10-12: não são as vendas da
-        // loja). Sem item "Radar" (Lira, 2026-10-12): a tabela do Radar do
-        // ML fica só embaixo dos mais vendidos em Oportunidades › Mercado Livre.
+        // loja). Sem item "Radar" solto (Lira, 2026-10-12): a tabela do Radar
+        // do ML fica embaixo dos mais vendidos em Oportunidades › Mercado Livre.
+        // Correção do Lira 2026-10-12: "Mercado Livre" não é link, só abre e
+        // fecha o submenu; quem leva para a tela é o item interno.
         heading: 'Oportunidades',
         items: [
             { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google', permission: 'relatorios.view' },
             { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok', permission: 'relatorios.view' },
-            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
+            // `children` herda a permissão do pai. Item sem `href` = só agrupa.
+            {
+                label: 'Mercado Livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view',
+                children: [
+                    { label: 'Mais vendidos e Radar', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-satellite-dish' },
+                ],
+            },
             { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
         ],
     },

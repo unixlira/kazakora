@@ -33,22 +33,18 @@ export const sidebarSections = [
         ],
     },
     {
-        // Oportunidades (pedido do Lira 2026-10-12): Google e TikTok (antes
+        // Oportunidades (pedido do Lira 2026-10-12): o Radar (conteúdo do
+        // Mercado Livre, nome em radarNome.js), Google e TikTok (antes
         // submenu do Radar) e os mais vendidos de TERCEIROS em cada
         // marketplace (correção do Lira 2026-10-12: não são as vendas da
-        // loja). O Radar do Mercado Livre virou submenu do Mercado Livre e
-        // abre a mesma tela dividida (mais vendidos em cima, Radar embaixo).
+        // loja). O Radar NÃO fica dentro do item Mercado Livre (Lira,
+        // 2026-10-12).
         heading: 'Oportunidades',
         items: [
+            { label: RADAR_NOME, href: '/admin/radar/mercado-livre', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
             { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google', permission: 'relatorios.view' },
             { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok', permission: 'relatorios.view' },
-            // `children` herda a permissão do pai.
-            {
-                label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view',
-                children: [
-                    { label: RADAR_NOME, href: '/admin/radar/mercado-livre', icon: 'fas fa-satellite-dish' },
-                ],
-            },
+            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
             { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
         ],
     },

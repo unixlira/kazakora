@@ -4,7 +4,6 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Modules\Analytics\Models\FerraKoraVisit;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Audit\Models\AuditLog;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,20 +19,20 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Sistema › Visitas FerraKora (pedido 2026-10-12): o log das visitas ao
- * site FerraKora, no layout de Visitas KazaKora (SiteVisitLogController),
- * com Data/Hora, IP, Cliente e Ações. Lê ferrakora_visits, gravada por
- * /api/ferrakora/visita.
+ * Sistema › Visitas FerraKora e Visitas Beauty Kora (pedido 2026-10-12):
+ * o log das visitas aos outros sites do grupo, no layout de Visitas
+ * KazaKora (SiteVisitLogController), com Data/Hora, IP, Cliente e Ações.
+ * Lê site_visits com site = o da rota (gravada por /api/{site}/visita).
  *
  * Uma linha por IP no período, com a hora do primeiro acesso. O olho mostra
  * os horários de cada página aberta; a lixeira apaga as visitas do IP no
  * período (fica na auditoria).
  *
- * Cliente: o FerraKora não tem login, então "Sim" é o IP que entrou logado
+ * Cliente: esses sites não têm login no KazaKora, então "Sim" é o IP que entrou logado
  * como cliente (não equipe) no kazakora.com nos últimos 6 meses
  * (site_visits.user_id). O nome aparece ao passar o mouse.
  */
-class FerraKoraVisitLogController extends Controller
+class OutroSiteVisitLogController extends Controller
 {
     private const POR_PAGINA = 50;
 
@@ -53,7 +52,8 @@ class FerraKoraVisitLogController extends Controller
         [$de, $ate, $fim] = $this->periodo($validated);
         $ip = trim((string) ($validated['ip'] ?? ''));
 
-        $query = FerraKoraVisit::query()
+        $site = $this->site($request);
+        $query = $this->doSite($site)
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim)
             ->when($ip !== '', fn (Builder $q) => filter_var($ip, FILTER_VALIDATE_IP)
@@ -93,7 +93,9 @@ class FerraKoraVisitLogController extends Controller
             ['path' => $request->url(), 'pageName' => 'page'],
         ))->withQueryString();
 
-        return Inertia::render('Admin/VisitasFerraKora/Index', [
+        return Inertia::render('Admin/VisitasOutroSite/Index', [
+            'site' => $site,
+            'nome' => SiteVisit::OUTROS_SITES[$site],
             'visitas' => $visitas,
             'totais' => [
                 'visitas' => (int) ($totais->visitas ?? 0),
@@ -116,7 +118,7 @@ class FerraKoraVisitLogController extends Controller
         $validated = $this->validarVisitante($request);
         [$de, $ate, $fim] = $this->periodo($validated);
 
-        $query = FerraKoraVisit::query()
+        $query = $this->doSite($this->site($request))
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim)
             ->where('ip', $validated['ip']);
@@ -132,7 +134,7 @@ class FerraKoraVisitLogController extends Controller
             'limite' => self::MAX_HISTORICO,
             'cliente' => $cliente,
             'visitas' => $query->orderBy('created_at')->orderBy('id')->limit(self::MAX_HISTORICO)->get()
-                ->map(fn (FerraKoraVisit $v) => ['id' => $v->id, 'quando' => $v->created_at?->format('d/m/Y H:i:s')]),
+                ->map(fn (SiteVisit $v) => ['id' => $v->id, 'quando' => $v->created_at?->format('d/m/Y H:i:s')]),
         ]);
     }
 
@@ -142,13 +144,15 @@ class FerraKoraVisitLogController extends Controller
         $validated = $this->validarVisitante($request);
         [$de, $ate, $fim] = $this->periodo($validated);
 
-        $apagadas = DB::transaction(fn () => FerraKoraVisit::query()
+        $site = $this->site($request);
+        $apagadas = DB::transaction(fn () => $this->doSite($site)
             ->where('created_at', '>=', $de)
             ->where('created_at', '<', $fim)
             ->where('ip', $validated['ip'])
             ->delete());
 
         $dados = [
+            'site' => $site,
             'ip' => $validated['ip'],
             'de' => $de->toDateString(),
             'ate' => $ate->toDateString(),
@@ -158,13 +162,13 @@ class FerraKoraVisitLogController extends Controller
         AuditLog::query()->create([
             'user_id' => $request->user()?->id,
             'action' => AuditLog::ACTION_DELETE,
-            'entity' => 'FerraKoraVisit',
+            'entity' => 'SiteVisit',
             'entity_id' => null,
             'old_values' => $dados,
             'new_values' => ['ip_de_quem_apagou' => $request->ip()],
             'created_at' => now(),
         ]);
-        Log::info('Visitas FerraKora apagadas pelo admin', [...$dados, 'user_id' => $request->user()?->id]);
+        Log::info('Visitas de '.SiteVisit::OUTROS_SITES[$site].' apagadas pelo admin', [...$dados, 'user_id' => $request->user()?->id]);
 
         return back()->with('success', sprintf(
             '%s %s do IP %s apagada%s (%s a %s).',
@@ -175,6 +179,20 @@ class FerraKoraVisitLogController extends Controller
             $de->format('d/m'),
             $ate->format('d/m'),
         ));
+    }
+
+    /** Site da rota (visitas-ferrakora, visitas-beautykora): ->defaults('site', ...). */
+    private function site(Request $request): string
+    {
+        $site = (string) $request->route('site');
+        abort_unless(array_key_exists($site, SiteVisit::OUTROS_SITES), 404);
+
+        return $site;
+    }
+
+    private function doSite(string $site): Builder
+    {
+        return SiteVisit::query()->where('site', $site);
     }
 
     /** @return array<string, mixed> */
@@ -200,7 +218,7 @@ class FerraKoraVisitLogController extends Controller
             return [];
         }
 
-        $ultimos = SiteVisit::query()->toBase()
+        $ultimos = SiteVisit::query()->daLoja()->toBase()
             ->join('users', 'users.id', '=', 'site_visits.user_id')
             ->whereIn('site_visits.ip', $ips->all())
             ->whereNotIn('users.role', User::STAFF_ROLES)

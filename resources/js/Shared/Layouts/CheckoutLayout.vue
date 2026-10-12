@@ -55,72 +55,64 @@ const tempo = computed(() => {
         </div>
         <slot />
         <AvisoCookies />
-        <!-- Rodapé do checkout (pedido 2026-10-12): todo preto com fonte branca.
-             Grade de 12 colunas no desktop, 4/4/4: logo e dados da empresa,
-             formas de pagamento e segurança (só os selos que a loja tem de
-             verdade). No celular as três empilham. Embaixo, linha centralizada
-             com os selos de confiança. Só vale para o checkout; o rodapé da loja
-             fica no AppLayout. -->
-        <footer class="mt-auto bg-black text-white" aria-labelledby="rodape-checkout-titulo">
-            <h2 id="rodape-checkout-titulo" class="sr-only">Informações da loja, pagamento e segurança</h2>
-            <div class="mx-auto grid max-w-[1160px] grid-cols-12 gap-y-10 px-4 py-10 text-center md:gap-x-8 md:text-left">
-                <!-- Coluna 1: logo (versão clara, para fundo escuro) e dados da empresa. -->
-                <div class="col-span-12 md:col-span-4">
-                    <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia"
-                        width="160" height="32" class="mx-auto h-8 w-auto md:mx-0">
-                    <address class="mt-4 text-xs not-italic leading-relaxed text-white">
-                        © {{ new Date().getFullYear() }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora<br>
-                        {{ COMPANY.razaoSocial }}<br>
+        <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop; preto com fonte
+             branca desde 2026-10-12). Grade 4-4-4 (pedido 2026-10-12): logo e dados
+             da empresa | formas de pagamento + dados protegidos e entrega gratuita |
+             selos de segurança + compra segura. Sem a faixa centralizada embaixo.
+             No celular, uma coluna embaixo da outra, centralizadas. -->
+        <footer class="mt-auto bg-black px-4 py-10 text-white">
+            <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:gap-8 md:text-left">
+                <div class="flex flex-col items-center md:col-span-4 md:items-start">
+                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto">
+                    <p class="mt-4 text-xs leading-relaxed text-white/80">
+                        © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                         CNPJ: {{ COMPANY.cnpj }}<br>
-                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index">{{ linha }}<br></template>
                         WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                        E-mail: {{ COMPANY.email }}
-                    </address>
+                        E-mail: {{ COMPANY.email }}<br>
+                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
+                    </p>
                 </div>
 
-                <!-- Coluna 2: formas de pagamento (mesmas bandeiras do checkout). -->
-                <div class="col-span-12 md:col-span-4">
-                    <h3 class="text-sm font-semibold text-white">Formas de pagamento</h3>
-                    <ul class="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start" aria-label="Bandeiras aceitas">
-                        <li v-for="bandeira in BANDEIRAS" :key="bandeira">
-                            <img :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira" class="h-[44px] w-auto">
-                        </li>
+                <div class="flex flex-col items-center md:col-span-4 md:items-start">
+                    <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
+                    <!-- Bandeiras em 3x2: cabem na coluna em qualquer largura. -->
+                    <div class="mt-3 grid w-fit grid-cols-3 gap-2">
+                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
+                            width="265" height="180" class="h-[40px] w-auto">
+                    </div>
+                    <ul class="mt-5 space-y-2 text-sm font-medium">
+                        <li><i class="fa-solid fa-fingerprint mr-2 w-4 text-center text-[#0FB930]"></i>Dados protegidos</li>
+                        <li><i class="fa-solid fa-box-open mr-2 w-4 text-center text-[#0FB930]"></i>Entrega gratuita</li>
                     </ul>
                 </div>
 
-                <!-- Coluna 3: segurança. Mesmos selos do rodapé da loja (Google Safe
-                     Browsing e Reclame AQUI); nada de selo que a loja não tem. -->
-                <div class="col-span-12 md:col-span-4">
-                    <h3 class="text-sm font-semibold text-white">Segurança</h3>
+                <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
+                     imagem "Site 100% Seguro"). -->
+                <div class="flex flex-col items-center md:col-span-4 md:items-start">
+                    <p class="text-sm font-semibold text-white">Segurança:</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                            class="flex h-[51px] items-center justify-center overflow-hidden rounded-xl bg-white px-3 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                            class="flex h-[44px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white px-3 transition hover:opacity-90"
                             title="Ver a verificação do Google Safe Browsing">
-                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[40px] w-auto">
+                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[34px] w-auto">
                         </a>
                         <a :href="$page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
-                            class="flex h-[51px] flex-col items-center justify-center overflow-hidden rounded-xl bg-white leading-none transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                            class="flex h-[44px] flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white leading-none transition hover:opacity-90"
                             :class="$page.props.reclameAqui?.verificada ? 'px-2' : 'px-4'"
                             title="Ver a KazaKora no Reclame AQUI">
                             <img v-if="$page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
-                                class="h-[42px] w-auto rounded-md">
+                                class="h-[38px] w-auto rounded-md">
                             <template v-else>
-                                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-600">Estamos no</span>
-                                <span class="mt-0.5 text-[20px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
+                                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Estamos no</span>
+                                <span class="mt-0.5 text-[18px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
                             </template>
                         </a>
                     </div>
-                    <p class="mt-3 text-xs text-white"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Conexão criptografada (HTTPS/SSL)</p>
+                    <p class="mt-3 text-xs text-white/80"><i class="fa-solid fa-shield-halved mr-1.5 text-[#0FB930]"></i>Conexão criptografada (HTTPS/SSL)</p>
+                    <ul class="mt-5 space-y-2 text-sm font-medium">
+                        <li><i class="fa-solid fa-lock mr-2 w-4 text-center text-[#0FB930]"></i>Compra segura</li>
+                    </ul>
                 </div>
-            </div>
-
-            <!-- Linha 2: selos de confiança, centralizados. -->
-            <div class="border-t border-white/15 px-4 py-5">
-                <ul class="mx-auto flex max-w-[1160px] flex-row flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-white sm:text-sm">
-                    <li class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Compra segura</li>
-                    <li class="whitespace-nowrap"><i class="fa-solid fa-fingerprint mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Dados protegidos</li>
-                    <li class="whitespace-nowrap"><i class="fa-solid fa-box-open mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Entrega garantida</li>
-                </ul>
             </div>
         </footer>
     </div>

@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Services\CorreiosTabelaPorEstado;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -48,7 +49,9 @@ class FretesPorEstadoController extends Controller
     {
         // Limites do PAC/SEDEX para "Pacote": até 30 kg, 16x11x2 cm no mínimo
         // e 100 cm por lado no máximo.
-        $dados = $request->validate([
+        // Validator manual: fora de api/* o app redireciona no erro de
+        // validação (bootstrap/app.php), e esta rota responde JSON para a tela.
+        $validador = Validator::make($request->all(), [
             'peso_g' => ['required', 'integer', 'min:1', 'max:30000'],
             'comprimento' => ['required', 'numeric', 'min:16', 'max:100'],
             'largura' => ['required', 'numeric', 'min:11', 'max:100'],
@@ -62,6 +65,11 @@ class FretesPorEstadoController extends Controller
             'largura.max' => 'Cada lado pode ter no máximo 100 cm.',
             'altura.max' => 'Cada lado pode ter no máximo 100 cm.',
         ]);
+
+        if ($validador->fails()) {
+            return response()->json(['message' => 'Medidas inválidas.', 'errors' => $validador->errors()], 422);
+        }
+        $dados = $validador->validated();
 
         return response()->json($tabela->cotar([
             'peso_g' => (int) $dados['peso_g'],

@@ -84,7 +84,7 @@ const tempo = computed(() => {
                 </div>
 
                 <div class="flex flex-col items-center justify-center md:col-span-4">
-                    <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
+                    <p class="text-sm font-semibold text-white">Formas de pagamento</p>
                     <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
                          juntas com a coluna em vez de quebrar. -->
                     <div ref="bandeiras" class="mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5">
@@ -96,7 +96,7 @@ const tempo = computed(() => {
                 <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
                      imagem "Site 100% Seguro"). -->
                 <div class="flex flex-col items-center justify-center md:col-span-4">
-                    <p class="text-sm font-semibold text-white">Segurança:</p>
+                    <p class="text-sm font-semibold text-white">Segurança</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
                             class="box-border flex items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white px-2 transition hover:opacity-90"

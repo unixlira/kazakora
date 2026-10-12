@@ -98,9 +98,9 @@ const submitReview = () => {
 const nota = computed(() => Number(props.product.reviews_avg_rating ?? 0));
 const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
 
-// Selo do mês na faixa do celular: "Ofertas 10.10" em outubro, "11.11" em novembro...
-const mes = String(new Date().getMonth() + 1).padStart(2, '0');
-const SELO_DO_MES = `Oferta ${mes}.${mes}`;
+// Selo da campanha na faixa do celular (pedido 2026-10-11): "Black November",
+// igual à faixa do topo (FaixaPromo). Antes era "Oferta MM.MM" pelo mês.
+const SELO_DO_MES = 'Black November';
 
 // Nome do produto (pedido 2026-10-10): 2 linhas no celular e 3 no computador.
 // Se não couber, mede de verdade e corta na última palavra que deixa espaço

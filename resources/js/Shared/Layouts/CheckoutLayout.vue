@@ -55,61 +55,71 @@ const tempo = computed(() => {
         </div>
         <slot />
         <AvisoCookies />
-        <!-- Rodapé do checkout (pedido 2026-10-10; preto com fonte branca e grid de
-             12 desde 2026-10-12): uma linha com 3 colunas iguais (logo e dados da
-             empresa, formas de pagamento, Segurança) e, embaixo, os selos de
-             confiança centralizados. No celular as colunas empilham. -->
-        <footer class="mt-auto">
-            <div class="bg-black px-4 py-10 text-white">
-                <div class="mx-auto grid max-w-[1160px] grid-cols-12 gap-x-8 gap-y-10 text-center">
-                    <div class="col-span-12 flex flex-col items-center md:col-span-4">
-                        <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia" class="mb-3 h-8 w-auto">
-                        <p class="text-xs leading-relaxed text-white">
-                            © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
-                            CNPJ: {{ COMPANY.cnpj }}<br>
-                            WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
-                            E-mail: {{ COMPANY.email }}<br>
-                            <template v-for="(linha, index) in enderecoEmLinhas" :key="index"><br v-if="index">{{ linha }}</template>
-                        </p>
+        <!-- Rodapé do checkout (pedido 2026-10-12): todo preto com fonte branca.
+             Grade de 12 colunas no desktop, 4/4/4: logo e dados da empresa,
+             formas de pagamento e segurança (só os selos que a loja tem de
+             verdade). No celular as três empilham. Embaixo, linha centralizada
+             com os selos de confiança. Só vale para o checkout; o rodapé da loja
+             fica no AppLayout. -->
+        <footer class="mt-auto bg-black text-white" aria-labelledby="rodape-checkout-titulo">
+            <h2 id="rodape-checkout-titulo" class="sr-only">Informações da loja, pagamento e segurança</h2>
+            <div class="mx-auto grid max-w-[1160px] grid-cols-12 gap-y-10 px-4 py-10 text-center md:gap-x-8 md:text-left">
+                <!-- Coluna 1: logo (versão clara, para fundo escuro) e dados da empresa. -->
+                <div class="col-span-12 md:col-span-4">
+                    <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia"
+                        width="160" height="32" class="mx-auto h-8 w-auto md:mx-0">
+                    <address class="mt-4 text-xs not-italic leading-relaxed text-white">
+                        © {{ new Date().getFullYear() }} {{ COMPANY.nomeFantasia }} | Grupo AlphaKora<br>
+                        {{ COMPANY.razaoSocial }}<br>
+                        CNPJ: {{ COMPANY.cnpj }}<br>
+                        <template v-for="(linha, index) in enderecoEmLinhas" :key="index">{{ linha }}<br></template>
+                        WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
+                        E-mail: {{ COMPANY.email }}
+                    </address>
+                </div>
+
+                <!-- Coluna 2: formas de pagamento (mesmas bandeiras do checkout). -->
+                <div class="col-span-12 md:col-span-4">
+                    <h3 class="text-sm font-semibold text-white">Formas de pagamento</h3>
+                    <ul class="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start" aria-label="Bandeiras aceitas">
+                        <li v-for="bandeira in BANDEIRAS" :key="bandeira">
+                            <img :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira" class="h-[44px] w-auto">
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Coluna 3: segurança. Mesmos selos do rodapé da loja (Google Safe
+                     Browsing e Reclame AQUI); nada de selo que a loja não tem. -->
+                <div class="col-span-12 md:col-span-4">
+                    <h3 class="text-sm font-semibold text-white">Segurança</h3>
+                    <div class="mt-3 flex flex-wrap items-center justify-center gap-2 md:justify-start">
+                        <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
+                            class="flex h-[51px] items-center justify-center overflow-hidden rounded-xl bg-white px-3 transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                            title="Ver a verificação do Google Safe Browsing">
+                            <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[40px] w-auto">
+                        </a>
+                        <a :href="$page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
+                            class="flex h-[51px] flex-col items-center justify-center overflow-hidden rounded-xl bg-white leading-none transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                            :class="$page.props.reclameAqui?.verificada ? 'px-2' : 'px-4'"
+                            title="Ver a KazaKora no Reclame AQUI">
+                            <img v-if="$page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
+                                class="h-[42px] w-auto rounded-md">
+                            <template v-else>
+                                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-600">Estamos no</span>
+                                <span class="mt-0.5 text-[20px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
+                            </template>
+                        </a>
                     </div>
-                    <div class="col-span-12 flex flex-col items-center md:col-span-4">
-                        <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
-                        <div class="mt-3 flex max-w-[300px] flex-wrap items-center justify-center gap-2">
-                            <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
-                                class="h-[44px] w-auto">
-                        </div>
-                    </div>
-                    <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12). -->
-                    <div class="col-span-12 flex flex-col items-center md:col-span-4">
-                        <p class="text-sm font-semibold text-white">Segurança:</p>
-                        <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
-                            <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                                class="flex h-[51px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white px-3 transition hover:opacity-90"
-                                title="Ver a verificação do Google Safe Browsing">
-                                <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[40px] w-auto">
-                            </a>
-                            <a :href="$page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
-                                class="flex h-[51px] flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white leading-none transition hover:opacity-90"
-                                :class="$page.props.reclameAqui?.verificada ? 'px-2' : 'px-4'"
-                                title="Ver a KazaKora no Reclame AQUI">
-                                <img v-if="$page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
-                                    class="h-[42px] w-auto rounded-md">
-                                <template v-else>
-                                    <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Estamos no</span>
-                                    <span class="mt-0.5 text-[20px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
-                                </template>
-                            </a>
-                        </div>
-                    </div>
+                    <p class="mt-3 text-xs text-white"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Conexão criptografada (HTTPS/SSL)</p>
                 </div>
             </div>
 
-            <!-- Só os selos de confiança, centralizados. -->
-            <div class="border-t border-white/15 bg-black px-4 py-5 text-white">
-                <ul class="mx-auto flex max-w-[1160px] flex-row flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-medium sm:text-sm md:gap-6">
-                    <li class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]"></i>Compra Segura</li>
-                    <li class="whitespace-nowrap"><i class="fa-solid fa-fingerprint mr-1.5 text-[#0FB930]"></i>Dados Protegidos</li>
-                    <li class="whitespace-nowrap"><i class="fa-solid fa-box-open mr-1.5 text-[#0FB930]"></i>Entrega Garantida</li>
+            <!-- Linha 2: selos de confiança, centralizados. -->
+            <div class="border-t border-white/15 px-4 py-5">
+                <ul class="mx-auto flex max-w-[1160px] flex-row flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-white sm:text-sm">
+                    <li class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Compra segura</li>
+                    <li class="whitespace-nowrap"><i class="fa-solid fa-fingerprint mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Dados protegidos</li>
+                    <li class="whitespace-nowrap"><i class="fa-solid fa-box-open mr-1.5 text-[#0FB930]" aria-hidden="true"></i>Entrega garantida</li>
                 </ul>
             </div>
         </footer>

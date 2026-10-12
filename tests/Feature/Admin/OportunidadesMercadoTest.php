@@ -80,7 +80,8 @@ class OportunidadesMercadoTest extends TestCase
                 ->where('filtros.categoria', 'MLB263532')
                 ->where('categorias.1.nome', 'Ferramentas')
                 ->missing('mercado')
-                ->loadDeferredProps(fn (Assert $reload) => $reload
+                ->missing('mercadoLivre')
+                ->loadDeferredProps('default', fn (Assert $reload) => $reload
                 ->where('mercado.erro', null)
                 ->where('mercado.ocultos', 1)
                 ->has('mercado.produtos', 2)
@@ -97,6 +98,40 @@ class OportunidadesMercadoTest extends TestCase
 
         // Nada das vendas da loja: só chamadas de mercado (ranking, catálogo, tendências).
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/orders') || str_contains($r->url(), '/users/'));
+    }
+
+    /**
+     * Tela dividida (Lira 2026-10-12): embaixo dos mais vendidos vem o bloco
+     * do Radar (Casa + buscas do site), e Mercado Livre › Radar abre a mesma tela.
+     */
+    public function test_mercado_livre_traz_o_radar_embaixo_e_abre_pelo_menu_do_radar(): void
+    {
+        $api = 'https://api.mercadolibre.com/';
+        Http::fake([
+            $api.'sites/MLB/categories*' => Http::response([['id' => 'MLB1574', 'name' => 'Casa, Móveis e Decoração']]),
+            $api.'highlights/MLB/category/MLB1574*' => Http::response(['content' => [['id' => 'MLB111', 'position' => 1, 'type' => 'PRODUCT']]]),
+            $api.'products/MLB111/items*' => Http::response(['paging' => ['total' => 4], 'results' => [['seller_id' => 9, 'price' => 49.9]]]),
+            $api.'products/MLB111*' => Http::response(['name' => 'Organizador de Gaveta', 'pictures' => []]),
+            $api.'trends/MLB/MLB1574*' => Http::response([['keyword' => 'cortina blackout', 'url' => 'https://lista.mercadolivre.com.br/cortina-blackout']]),
+            $api.'trends/MLB' => Http::response([['keyword' => 'air fryer', 'url' => 'https://lista.mercadolivre.com.br/air-fryer']]),
+        ]);
+        $admin = $this->admin();
+
+        $this->assertSame(url('/admin/radar/mercado-livre'), route('admin.radar.mercado-livre'));
+
+        foreach (['/admin/oportunidades/mercado-livre', '/admin/radar/mercado-livre'] as $url) {
+            $this->actingAs($admin)->get($url)
+                ->assertOk()
+                ->assertInertia(fn (Assert $page) => $page
+                    ->component('Admin/Oportunidades/Mercado', false)
+                    ->where('canal.slug', 'mercado-livre')
+                    ->where('base', $url)
+                    ->missing('mercadoLivre')
+                    ->loadDeferredProps('radar', fn (Assert $reload) => $reload
+                        ->where('mercadoLivre.produtos.0.nome', 'Organizador de Gaveta')
+                        ->where('mercadoLivre.buscas.0.termo', 'air fryer')
+                        ->etc()));
+        }
     }
 
     public function test_categoria_invalida_volta_para_a_padrao_e_canal_desconhecido_da_404(): void

@@ -20,6 +20,12 @@ use Inertia\Response;
  * de mercado agora são prop adiada (Inertia::defer): a tela abre na hora com
  * o esqueleto de carregamento e os números chegam numa segunda requisição.
  * A conta e os números não mudaram.
+ *
+ * Tela dividida (pedido do Lira 2026-10-12): no Mercado Livre, em cima os
+ * mais vendidos da categoria e embaixo o bloco do Radar (prop adiada
+ * `mercadoLivre`, grupo próprio). A mesma tela abre em
+ * /admin/radar/mercado-livre (menu Oportunidades › Mercado Livre › Radar);
+ * `base` guarda a URL aberta para o filtro não trocar de item no menu.
  */
 class OportunidadesController extends Controller
 {
@@ -45,9 +51,11 @@ class OportunidadesController extends Controller
 
             return Inertia::render('Admin/Oportunidades/Mercado', [
                 'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
+                'base' => '/'.$request->path(),
                 'filtros' => ['categoria' => $categoria],
                 'categorias' => $ml->categorias(),
                 'mercado' => Inertia::defer(fn () => $ml->analisar($categoria, $atualizar) + ['configurado' => true]),
+                'mercadoLivre' => Inertia::defer(fn () => RadarController::mercadoLivre($ml, $atualizar), 'radar'),
             ]);
         }
 
@@ -55,6 +63,7 @@ class OportunidadesController extends Controller
 
         return Inertia::render('Admin/Oportunidades/Mercado', [
             'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
+            'base' => '/'.$request->path(),
             'filtros' => ['termo' => $termo],
             'categorias' => [],
             'mercado' => Inertia::defer(fn () => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0]),

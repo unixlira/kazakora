@@ -494,6 +494,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Submenu TikTok / Mercado Livre / Google (pedido do Lira 2026-10-12):
         // a mesma tela mostrando só o bloco daquela fonte.
         Route::get('radar', [RadarController::class, 'index'])->name('radar.index');
+        // Oportunidades › Mercado Livre › Radar (pedido do Lira 2026-10-12): a
+        // tela de Oportunidades do ML (mais vendidos em cima, Radar embaixo).
+        // Vem antes de radar/{fonte}.
+        Route::get('radar/mercado-livre', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
+            ->defaults('canal', 'mercado-livre')
+            ->middleware('throttle:30,1')
+            ->name('radar.mercado-livre');
         Route::get('radar/{fonte}', [RadarController::class, 'index'])
             ->whereIn('fonte', array_keys(RadarController::FONTES))
             ->name('radar.fonte');

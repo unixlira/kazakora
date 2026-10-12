@@ -32,12 +32,28 @@ class RadarPageTest extends TestCase
 </rss>
 XML;
 
+    /** Resposta da lista "Tendências agora" no formato do Google (batchexecute). */
+    private static function agora(): string
+    {
+        $item = fn (string $termo, int $volume, array $categorias, array $relacionadas) => [$termo, null, 'BR', [1791741600], null, null, $volume, null, 1000, $relacionadas, $categorias];
+        $lista = [null, [
+            $item('flamengo x fluminense', 1000000, [17], ['onde assistir flamengo']),
+            $item('anitta', 50000, [4], ['anitta', 'anitta música nova']),
+            $item('iphone 17', 20000, [18], ['iphone 17 preço']),
+            $item('frente fria', 10000, [20], ['previsão do tempo']),
+            $item('a fazenda 18', 5000, [4], ['a fazenda 18 temporada']),
+            $item('virginia', 2000, [4], ['virginia idade']),
+        ]];
+
+        return ")]}'\n\n".json_encode([['wrb.fr', 'i0OFE', json_encode($lista), null, null, null, 'generic']])."\n25\n[[\"e\",4]]";
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
 
         // Mesmo motivo do OportunidadesMercadoTest: loadDeferredProps confere o componente.
-        config(['inertia.testing.ensure_pages_exist' => false]);
+        config(['inertia.testing.ensure_pages_exist' => false, 'services.gemini.api_key' => null]);
     }
 
     private function admin(): User
@@ -81,6 +97,7 @@ XML;
                 ['product_id' => '17', 'product_name' => 'Air Fryer 4L Digital', 'revenue' => 249241.08, 'sales_volumn' => 4063,
                     'unit_price' => 61.34, 'revenue_growth_rate' => -8.35, 'commission_rate' => 5, 'launch_date' => '2026-07-30', 'master_image_url' => null],
             ]]]),
+            'trends.google.com/_/*' => Http::response(self::agora()),
             'trends.google.com/*' => Http::response(self::RSS, 200, ['Content-Type' => 'application/rss+xml']),
             $ml.'highlights/MLB/category/MLB1574*' => Http::response(['content' => [['id' => 'MLB111', 'position' => 1, 'type' => 'PRODUCT']]]),
             $ml.'products/MLB111/items*' => Http::response(['paging' => ['total' => 4], 'results' => [['seller_id' => 9, 'price' => 49.9]]]),
@@ -107,10 +124,20 @@ XML;
                 ->where('google.termos.0.termo', 'air fryer')
                 ->where('google.termos.0.trafego', '20.000+')
                 ->where('google.termos.0.noticia', 'Air fryer em promoção')
-                ->where('google.termos.1.noticia', null)));
+                ->where('google.termos.1.noticia', null)
+                // Cards por assunto sem o Gemini: palavras das buscas
+                // relacionadas e categoria do Google; esporte fica só nas gerais.
+                ->where('google.erro_grupos', null)
+                ->where('google.grupos.musica.0.termo', 'anitta')
+                ->where('google.grupos.musica.0.trafego', '50000+')
+                ->where('google.grupos.produtos.0.termo', 'iphone 17')
+                ->where('google.grupos.noticias.0.termo', 'frente fria')
+                ->where('google.grupos.videos.0.termo', 'a fazenda 18')
+                ->where('google.grupos.personalidades.0.termo', 'virginia')
+                ->where('google.grupos', fn ($grupos) => collect($grupos)->flatten(1)->pluck('termo')->doesntContain('flamengo x fluminense'))));
 
         // Kalodata: uma chamada só, ranking geral de 7 dias no Brasil.
-        Http::assertSentCount(1 + 1 + 4 + 1); // Kalodata + Google + ML (ranking, produto, ofertas, tendência da categoria) + buscas do site
+        Http::assertSentCount(1 + 2 + 4 + 1); // Kalodata + Google (RSS e tendências agora) + ML (ranking, produto, ofertas, tendência da categoria) + buscas do site
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'affiliate.shopee'));
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/tiktok/product/rank')
             && $r['date_range'] === 'last7Day' && $r['region'] === 'BR' && ! isset($r['category_ids']));
@@ -127,7 +154,35 @@ XML;
                 ->where('tiktok.configurado', false)
                 ->where('google.termos', [])
                 ->where('google.erro', fn ($erro) => str_contains($erro, 'Google Trends'))
+                ->where('google.grupos.produtos', [])
+                ->where('google.erro_grupos', fn ($erro) => str_contains($erro, 'por assunto'))
                 ->where('mercadoLivre.buscas', [])));
+    }
+
+    public function test_gemini_separa_as_buscas_do_google_por_assunto(): void
+    {
+        config(['services.gemini.api_key' => 'chave-teste', 'services.kalodata.api_key' => null]);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response(['candidates' => [['content' => ['parts' => [['text' => "```json\n"
+                .json_encode(['0' => 'outro', '1' => 'musica', '2' => 'produtos', '3' => 'noticias', '4' => 'videos', '5' => 'produtos'])
+                ."\n```"]]]]]]),
+            'trends.google.com/_/*' => Http::response(self::agora()),
+            'trends.google.com/*' => Http::response(self::RSS),
+            '*' => Http::response([]),
+        ]);
+
+        $this->actingAs($this->admin())->get('/admin/radar')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->loadDeferredProps('google', fn (Assert $reload) => $reload
+                ->where('google.grupos.musica.0.termo', 'anitta')
+                ->where('google.grupos.produtos.0.termo', 'iphone 17')
+                // Sem o Gemini, "virginia idade" iria para personalidades.
+                ->where('google.grupos.personalidades', [])
+                ->where('google.grupos.produtos.1.termo', 'virginia')
+                ->has('google.grupos.produtos', 2)));
+
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'generativelanguage')
+            && str_contains($r['contents'][0]['parts'][0]['text'], '2 | iphone 17 | Tecnologia | iphone 17 preço'));
     }
 
     public function test_radar_has_no_page_per_channel(): void

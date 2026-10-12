@@ -9,7 +9,9 @@ import { computed, ref } from 'vue';
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
 // Mercado Livre (mais vendidos de Casa e buscas em alta) e Google Trends.
 // Layout v4 (Lira 2026-10-12): Shopee fora até a API de Afiliados trazer
-// dados. TikTok sozinho em cima; Mercado Livre e Google lado a lado embaixo.
+// dados. TikTok sozinho em cima, Mercado Livre embaixo e o Google em seis
+// cards por assunto (gerais, música, personalidades, vídeos, notícias e
+// produtos; pedido do Lira 2026-10-12).
 // Cada fonte é prop adiada num grupo próprio (null até chegar). Ver RadarController.
 const props = defineProps({
     tiktok: { type: Object, default: null },
@@ -66,6 +68,7 @@ const sinais = computed(() => {
         ...(props.mercadoLivre?.buscas ?? []).map((t) => ({ termo: t.termo, origem: 'Busca no Mercado Livre' })),
         ...(props.mercadoLivre?.tendencias ?? []).map((t) => ({ termo: t.termo, origem: 'Busca no Mercado Livre' })),
         ...(props.google?.termos ?? []).map((t) => ({ termo: t.termo, origem: 'Busca no Google' })),
+        ...(props.google?.grupos?.produtos ?? []).map((t) => ({ termo: t.termo, origem: 'Busca no Google' })),
     ];
     const listas = [
         ['TikTok Shop', props.tiktok?.produtos ?? []],
@@ -107,6 +110,21 @@ const corDaFonte = (texto) => {
     return 'fonte-google';
 };
 const marcaDaFonte = (texto) => corDaFonte(texto).replace('fonte-', '');
+
+// Cards do Google por assunto (pedido do Lira 2026-10-12). "Gerais" é o RSS
+// de sempre; os outros vêm separados pelo TendenciasGoogle.
+const CARDS_GOOGLE = [
+    { chave: 'geral', titulo: 'Tendências gerais', icone: 'fa-arrow-trend-up', dica: 'Tudo o que mais cresce hoje: notícia, esporte, gente.' },
+    { chave: 'musica', titulo: 'Música', icone: 'fa-music', dica: 'Cantores, músicas, shows e clipes.' },
+    { chave: 'personalidades', titulo: 'Personalidades', icone: 'fa-star', dica: 'Artistas, influenciadores, atletas e famosos.' },
+    { chave: 'videos', titulo: 'Vídeos', icone: 'fa-circle-play', dica: 'Filmes, séries, novelas, TV e streaming.' },
+    { chave: 'noticias', titulo: 'Notícias', icone: 'fa-newspaper', dica: 'Acontecimentos, política, economia e clima.' },
+    { chave: 'produtos', titulo: 'Produtos', icone: 'fa-bag-shopping', dica: 'Marcas, lançamentos e coisas que se compram. O mais útil para a loja.' },
+];
+const cardsGoogle = computed(() => CARDS_GOOGLE.map((c) => ({
+    ...c,
+    termos: (c.chave === 'geral' ? props.google?.termos : props.google?.grupos?.[c.chave]) ?? [],
+})));
 
 const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props.google);
 </script>
@@ -222,8 +240,8 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Mercado Livre: embaixo, ao lado do Google -->
-                <section class="card-fonte fonte-ml">
+                <!-- Mercado Livre: embaixo do TikTok, largura toda (o Google virou 6 cards) -->
+                <section class="card-fonte fonte-ml xl:col-span-2">
                     <div class="card-cabeca">
                         <MarcaLogo marca="ml" />
                         <div class="min-w-0">
@@ -270,52 +288,66 @@ const tudoCarregado = computed(() => props.tiktok && props.mercadoLivre && props
                     </Deferred>
                 </section>
 
-                <!-- Google Trends: embaixo, ao lado do Mercado Livre -->
-                <section class="card-fonte fonte-google">
-                    <div class="card-cabeca">
-                        <MarcaLogo marca="google" />
-                        <div class="min-w-0">
-                            <h2 class="text-base font-bold">Google · buscas em alta hoje no Brasil</h2>
-                            <p class="text-xs text-[var(--texto-suave)]">Fonte: Google Trends. Mistura notícia e esporte; vale quando cruza com produto (bloco do topo).</p>
-                        </div>
-                    </div>
-                    <Deferred data="google">
-                        <template #fallback>
-                            <p class="px-4 py-6 text-sm text-[var(--texto-suave)]" role="status"><i class="fas fa-circle-notch mr-1 animate-spin" aria-hidden="true"></i> Consultando o Google Trends…</p>
-                        </template>
-                        <p v-if="google.erro" class="px-4 py-6 text-sm text-error" role="alert">{{ google.erro }}</p>
-                        <p v-else-if="google.termos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Sem dados agora.</p>
-                        <table v-else class="tabela">
-                            <thead>
-                                <tr>
-                                    <th scope="col" class="pl-4">Busca</th>
-                                    <th scope="col" class="pr-4 text-right">Volume</th>
-                                </tr>
-                                <tr aria-hidden="true"><td colspan="2" class="faixa"></td></tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="t in google.termos" :key="t.termo">
-                                    <td class="max-w-0 w-full pl-4">
-                                        <a :href="t.link" target="_blank" rel="noopener" class="block truncate font-semibold hover:underline">{{ t.termo }}</a>
-                                        <p v-if="t.noticia" class="truncate text-xs text-[var(--texto-suave)]" :title="t.noticia">{{ t.noticia }}</p>
-                                    </td>
-                                    <td class="pr-4 text-right">
-                                        <span v-if="t.trafego" class="etiqueta etiqueta-fonte whitespace-nowrap" :title="`${t.trafego} buscas`">{{ trafegoK(t.trafego) }}</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </Deferred>
-                </section>
             </div>
+
+            <!-- Google Trends em cards por assunto (pedido do Lira 2026-10-12):
+                 gerais, música, personalidades, vídeos, notícias e produtos. -->
+            <section class="mt-6" aria-labelledby="google-titulo">
+                <div class="mb-3 flex items-center gap-3">
+                    <MarcaLogo marca="google" />
+                    <div class="min-w-0">
+                        <h2 id="google-titulo" class="text-base font-bold">Google Trends · em alta hoje no Brasil</h2>
+                        <p class="text-xs text-[var(--texto-suave)]">Gerais pelo RSS do Google Trends; os outros cards separam as buscas das últimas 24 h por assunto.</p>
+                    </div>
+                </div>
+                <Deferred data="google">
+                    <template #fallback>
+                        <p class="card-fonte fonte-google px-4 py-6 text-sm text-[var(--texto-suave)]" role="status"><i class="fas fa-circle-notch mr-1 animate-spin" aria-hidden="true"></i> Consultando o Google Trends…</p>
+                    </template>
+                    <p v-if="google.erro_grupos" class="mb-3 text-sm text-error" role="alert">{{ google.erro_grupos }}</p>
+                    <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <section v-for="c in cardsGoogle" :key="c.chave" class="card-fonte fonte-google">
+                            <div class="card-cabeca">
+                                <span class="kpi-icone"><i class="fas" :class="c.icone" aria-hidden="true"></i></span>
+                                <div class="min-w-0">
+                                    <h3 class="text-base font-bold">{{ c.titulo }}</h3>
+                                    <p class="text-xs text-[var(--texto-suave)]">{{ c.dica }}</p>
+                                </div>
+                            </div>
+                            <p v-if="c.chave === 'geral' && google.erro" class="px-4 py-6 text-sm text-error" role="alert">{{ google.erro }}</p>
+                            <p v-else-if="c.termos.length === 0" class="px-4 py-6 text-sm text-[var(--texto-suave)]">Nada em alta neste assunto agora.</p>
+                            <table v-else class="tabela">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="pl-4">Busca</th>
+                                        <th scope="col" class="pr-4 text-right">Volume</th>
+                                    </tr>
+                                    <tr aria-hidden="true"><td colspan="2" class="faixa"></td></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="t in c.termos" :key="t.termo">
+                                        <td class="max-w-0 w-full pl-4">
+                                            <a :href="t.link" target="_blank" rel="noopener" class="block truncate font-semibold hover:underline">{{ t.termo }}</a>
+                                            <p v-if="t.noticia" class="truncate text-xs text-[var(--texto-suave)]" :title="t.noticia">{{ t.noticia }}</p>
+                                        </td>
+                                        <td class="pr-4 text-right">
+                                            <span v-if="t.trafego" class="etiqueta etiqueta-fonte whitespace-nowrap" :title="`${t.trafego} buscas`">{{ trafegoK(t.trafego) }}</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </section>
+                    </div>
+                </Deferred>
+            </section>
         </div>
     </AdminLayout>
 </template>
 
 <style scoped>
 /* Visual do Radar (pedido do Lira 2026-10-12): cada fonte com a cor dela no
-   cabeçalho do card e nas etiquetas; no escuro só o fundo do corpo fica
-   cinza #3D3D3D e os cards continuam pretos (ver .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
+   cabeçalho do card e nas etiquetas; no escuro o fundo do tema todo (corpo,
+   topo, menu e rodapé) fica cinza #3D3D3D e os cards continuam pretos (ver .radar-grafite no app.css). --cor é o sólido do ícone e --cor-texto o tom
    legível em cima do fundo tingido. */
 .fonte-tiktok { --cor: #111111; --cor-texto: #111111; --tinta: 9%; }
 .fonte-ml { --cor: #2d3277; --cor-texto: #2d3277; --cor-fundo: #ffe600; --tinta: 18%; }

@@ -177,12 +177,12 @@ const confirmarApagar = () => {
 </script>
 
 <template>
-    <Head title="Visitas Casa Cora" />
+    <Head title="Visitas Kazakora" />
 
     <AdminLayout>
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div class="max-w-3xl">
-                <h1 class="mb-1 text-2xl font-bold">Visitas Casa Cora</h1>
+                <h1 class="mb-1 text-2xl font-bold">Visitas Kazakora</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
                     Quem visitou o kazakora.com, uma linha por IP no período, com a hora do primeiro acesso, do mais recente para o mais antigo.
                     O olho mostra todas as páginas que a pessoa abriu. Horário de Brasília. Visitas com mais de 6 meses ficam sem IP e sem navegador (privacidade).

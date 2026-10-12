@@ -26,6 +26,9 @@ class SiteVisit extends Model
         'utm_source',
         'utm_medium',
         'utm_campaign',
+        'origem',
+        'click_id_param',
+        'click_id',
         'dispositivo',
         'consentiu',
     ];

@@ -26,6 +26,10 @@ const props = defineProps({
         type: Object,
         default: () => ({ kpis: {}, ritmo: { dia: 0, atual: [], anterior: [] }, mensal: [], categorias: [] }),
     },
+    diagnosticos: {
+        type: Object,
+        default: () => ({ shopee: null, mercado_livre: null }),
+    },
     visitantes: {
         type: Object,
         default: () => ({ mes: '', meses: [], mesAtual: true, dias: [], visitantesMes: 0, paginasMes: 0, visitantesHoje: 0, paginasHoje: 0, mediaDia: 0, melhorDia: null }),
@@ -447,6 +451,45 @@ const visitChartOptions = computed(() => ({
 
 // ---- Cards de produto --------------------------------------------------
 const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quantity)));
+
+// ---- Diagnóstico Cauê (Shopee) e Diego (Mercado Livre), pedido 2026-10-11 --
+// Vem pronto do marketplace:diagnostico (a cada 3 h). Aqui só agrupa os
+// alertas por produto e filtra pela prioridade.
+const PRIORIDADES = {
+    P0: { rotulo: 'Urgente', cor: '#dc2626', icone: 'fas fa-triangle-exclamation' },
+    P1: { rotulo: 'Atenção', cor: '#d97706', icone: 'fas fa-circle-exclamation' },
+    P2: { rotulo: 'Melhorar', cor: '#0d6efd', icone: 'fas fa-wand-magic-sparkles' },
+    OK: { rotulo: 'Oportunidade', cor: '#16a34a', icone: 'fas fa-rocket' },
+};
+const ESPECIALISTAS = [
+    { canal: 'shopee', nome: 'Cauê', canalNome: 'Shopee', fundo: 'linear-gradient(120deg, #ee4d2d 0%, #f7743d 100%)', texto: '#ffffff', icone: 'fas fa-bag-shopping' },
+    { canal: 'mercado_livre', nome: 'Diego', canalNome: 'Mercado Livre', fundo: 'linear-gradient(120deg, #ffe600 0%, #ffd000 100%)', texto: '#2d3277', icone: 'fas fa-handshake' },
+];
+const filtroDiag = ref({ shopee: 'P0', mercado_livre: 'P0' });
+const mostrarTodosDiag = ref({ shopee: false, mercado_livre: false });
+
+function diagnostico(canal) {
+    const d = props.diagnosticos?.[canal];
+    if (!d) return null;
+    const contagem = { P0: 0, P1: 0, P2: 0, OK: 0 };
+    const porProduto = new Map();
+    for (const a of d.alertas ?? []) {
+        contagem[a.prioridade] = (contagem[a.prioridade] ?? 0) + 1;
+        const id = a.produto?.item_id;
+        if (!porProduto.has(id)) porProduto.set(id, { produto: a.produto, alertas: [] });
+        porProduto.get(id).alertas.push(a);
+    }
+    const filtro = filtroDiag.value[canal];
+    const produtos = [...porProduto.values()].filter((g) => g.alertas.some((a) => a.prioridade === filtro));
+    return { ...d, contagem, produtos, filtro };
+}
+
+const formatNum = (v, casas = 1) => (v === null || v === undefined ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }));
+const quandoGerado = (iso) => {
+    if (!iso) return '';
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    return min < 60 ? `há ${Math.max(1, min)} min` : `há ${Math.round(min / 60)} h`;
+};
 </script>
 
 <template>
@@ -636,6 +679,96 @@ const topMax = computed(() => Math.max(1, ...props.topProducts.map((p) => p.quan
                 <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 90 dias.</p>
             </section>
         </div>
+
+        <!-- Cauê (Shopee) e Diego (Mercado Livre): o que ajustar para vender
+             mais, anúncio por anúncio (pedido 2026-10-11). -->
+        <section v-for="esp in ESPECIALISTAS" :key="esp.canal" class="mt-8 overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3" :style="{ background: esp.fundo, color: esp.texto }">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-lg ring-1 ring-white/40"><i :class="esp.icone"></i></span>
+                    <div>
+                        <h2 class="text-lg font-bold leading-tight">{{ esp.nome }} · {{ esp.canalNome }}</h2>
+                        <p class="text-xs opacity-85">O que ajustar para vender mais · últimos 30 dias<template v-if="diagnosticos?.[esp.canal]"> · atualizado {{ quandoGerado(diagnosticos[esp.canal].gerado_em) }}</template></p>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="!diagnostico(esp.canal)" class="p-6 text-sm text-[var(--texto-suave)]">
+                O primeiro diagnóstico ainda está sendo gerado (roda a cada 3 horas).
+            </div>
+            <template v-else>
+                <div class="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-6">
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3">
+                        <p class="text-xs text-[var(--texto-suave)]">Pedidos</p>
+                        <p class="text-xl font-bold">{{ diagnostico(esp.canal).kpis.pedidos }}</p>
+                    </div>
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3">
+                        <p class="text-xs text-[var(--texto-suave)]">Faturamento</p>
+                        <p class="text-xl font-bold">{{ formatPrice(diagnostico(esp.canal).kpis.faturamento) }}</p>
+                    </div>
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3">
+                        <p class="text-xs text-[var(--texto-suave)]">Gasto com ADS</p>
+                        <p class="text-xl font-bold">{{ formatPrice(diagnostico(esp.canal).kpis.ads_gasto) }}</p>
+                    </div>
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3">
+                        <p class="text-xs text-[var(--texto-suave)]">ROAS do ADS</p>
+                        <p class="text-xl font-bold">{{ formatNum(diagnostico(esp.canal).kpis.ads_roas) }}</p>
+                    </div>
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3" title="ROAS mínimo para sobrar 15% de lucro, na média do que a loja vende">
+                        <p class="text-xs text-[var(--texto-suave)]">Meta de ROAS (15% de lucro)</p>
+                        <p class="text-xl font-bold" :class="(diagnostico(esp.canal).kpis.ads_roas ?? 0) >= (diagnostico(esp.canal).kpis.roas_meta_loja ?? 0) ? 'text-success' : 'text-error'">{{ formatNum(diagnostico(esp.canal).kpis.roas_meta_loja) }}</p>
+                    </div>
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3">
+                        <p class="text-xs text-[var(--texto-suave)]">{{ esp.canal === 'mercado_livre' ? 'Qualidade média (ML)' : 'Anúncios em ADS' }}</p>
+                        <p class="text-xl font-bold">
+                            <template v-if="esp.canal === 'mercado_livre'">{{ diagnostico(esp.canal).kpis.qualidade_media ?? '—' }}<span class="text-sm font-normal text-[var(--texto-suave)]">/100</span></template>
+                            <template v-else>{{ diagnostico(esp.canal).kpis.em_ads }}<span class="text-sm font-normal text-[var(--texto-suave)]"> de {{ diagnostico(esp.canal).kpis.anuncios }}</span></template>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 px-4">
+                    <button v-for="(cfg, chave) in PRIORIDADES" :key="chave" type="button"
+                        class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition"
+                        :style="filtroDiag[esp.canal] === chave ? { background: cfg.cor, borderColor: cfg.cor, color: '#fff' } : { borderColor: cfg.cor, color: cfg.cor }"
+                        @click="filtroDiag[esp.canal] = chave; mostrarTodosDiag[esp.canal] = false">
+                        <i :class="cfg.icone" class="text-xs"></i> {{ cfg.rotulo }}
+                        <span class="rounded-full bg-black/10 px-2 text-xs">{{ diagnostico(esp.canal).contagem[chave] }}</span>
+                    </button>
+                </div>
+
+                <div class="p-4">
+                    <p v-if="!diagnostico(esp.canal).produtos.length" class="text-sm text-[var(--texto-suave)]">Nada nesta categoria. 👍</p>
+                    <ul v-else class="divide-y divide-[var(--surface-border)]">
+                        <li v-for="g in (mostrarTodosDiag[esp.canal] ? diagnostico(esp.canal).produtos : diagnostico(esp.canal).produtos.slice(0, 6))" :key="g.produto.item_id" class="flex gap-3 py-3">
+                            <img v-if="g.produto.imagem" :src="g.produto.imagem" alt="" class="h-14 w-14 shrink-0 rounded-lg border border-[var(--surface-border)] object-cover" loading="lazy">
+                            <span v-else class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-muted)] text-[var(--texto-suave)]"><i class="fas fa-image"></i></span>
+                            <div class="min-w-0 flex-1">
+                                <a :href="g.produto.link" target="_blank" rel="noopener" class="block truncate font-semibold hover:text-primary hover:underline">{{ g.produto.nome }}</a>
+                                <p class="mt-0.5 flex flex-wrap gap-x-3 text-xs text-[var(--texto-suave)]">
+                                    <span>{{ formatPrice(g.produto.preco) }}</span>
+                                    <span>{{ g.produto.vendas_30d }} {{ g.produto.vendas_30d === 1 ? 'vendido' : 'vendidos' }}</span>
+                                    <span>margem {{ formatNum(g.produto.margem) }}%</span>
+                                    <span v-if="g.produto.roas_empate">ROAS empate {{ formatNum(g.produto.roas_empate) }}</span>
+                                    <span v-if="g.produto.roas_meta && g.produto.roas_meta <= 25">meta {{ formatNum(g.produto.roas_meta) }}</span>
+                                    <span v-if="g.produto.qualidade">qualidade: {{ g.produto.qualidade }}</span>
+                                </p>
+                                <ul class="mt-1.5 space-y-1">
+                                    <li v-for="(a, i) in g.alertas" :key="i" class="flex items-start gap-2 text-sm">
+                                        <span class="mt-0.5 shrink-0 rounded px-1.5 text-[10px] font-bold uppercase text-white" :style="{ background: PRIORIDADES[a.prioridade]?.cor }">{{ PRIORIDADES[a.prioridade]?.rotulo }}</span>
+                                        <span>{{ a.texto }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                    </ul>
+                    <button v-if="diagnostico(esp.canal).produtos.length > 6" type="button" class="mt-2 text-sm font-semibold text-primary hover:underline"
+                        @click="mostrarTodosDiag[esp.canal] = !mostrarTodosDiag[esp.canal]">
+                        {{ mostrarTodosDiag[esp.canal] ? 'Mostrar menos' : `Ver todos (${diagnostico(esp.canal).produtos.length})` }}
+                    </button>
+                </div>
+            </template>
+        </section>
 
         <!-- Produtos: cada card com a sua cor, ranking e a barra de peso. -->
         <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">

@@ -283,3 +283,7 @@ Schedule::command('videos:limpar-embalagem')->dailyAt('03:30');
 // venda do ML e do site, estornos e bônus do Flex. 60 dias pra pegar
 // devoluções e mediações que fecham depois.
 Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping(60);
+
+// Diagnóstico do Cauê (Shopee) e do Diego (Mercado Livre) no dashboard
+// (2026-10-11): só leitura das APIs, a cada 3 h.
+Schedule::command('marketplace:diagnostico')->cron('20 */3 * * *')->withoutOverlapping(60);

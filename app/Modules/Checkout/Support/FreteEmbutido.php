@@ -106,12 +106,13 @@ class FreteEmbutido
 
     /**
      * Estado pelo IP: cabeçalhos "visitor location" da Cloudflare (precisa da
-     * regra "Add visitor location headers" ligada no painel). Fora da
-     * produção, ?simular_uf=CE na URL testa sem Cloudflare (homolog).
+     * regra "Add visitor location headers" ligada no painel). Fora do
+     * kazakora.com, ?simular_uf=CE na URL testa sem Cloudflare (o homolog
+     * roda com APP_ENV=production, então a regra é pelo domínio).
      */
     private function ufPeloIp(): ?string
     {
-        if (! app()->isProduction()) {
+        if (parse_url((string) config('app.url'), PHP_URL_HOST) !== 'kazakora.com') {
             $simulada = strtoupper((string) ($this->request->query('simular_uf') ?? ($this->request->hasSession() ? $this->request->session()->get('frete_embutido.simular_uf') : '')));
             if (isset(CorreiosTabelaPorEstado::CAPITAIS[$simulada])) {
                 if ($this->request->hasSession()) {

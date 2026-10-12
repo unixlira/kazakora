@@ -272,6 +272,54 @@ class CheckoutV2Test extends TestCase
         });
     }
 
+    public function test_pedido_grava_latitude_e_longitude_da_cloudflare(): void
+    {
+        Mail::fake();
+        $this->noCarrinho(105);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->andReturn([
+                'id' => 78, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000']]))->assertOk();
+
+        $this->withHeaders(['CF-IPLatitude' => '-23.55052', 'CF-IPLongitude' => '-46.63331'])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])
+            ->assertOk();
+
+        $order = Order::firstOrFail();
+        $this->assertEquals(-23.55052, (float) $order->visitante_latitude);
+        $this->assertEquals(-46.63331, (float) $order->visitante_longitude);
+    }
+
+    public function test_pedido_sem_cloudflare_fica_sem_localizacao(): void
+    {
+        Mail::fake();
+        $this->noCarrinho(105);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->andReturn([
+                'id' => 79, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(['guest' => ['name' => 'Maria Cliente', 'email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09', 'phone' => '(11) 99999-0000']]))->assertOk();
+
+        $this->withHeaders(['CF-IPLatitude' => 'abc', 'CF-IPLongitude' => '999'])
+            ->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])
+            ->assertOk();
+
+        $order = Order::firstOrFail();
+        $this->assertNull($order->visitante_latitude);
+        $this->assertNull($order->visitante_longitude);
+    }
+
     public function test_cadastro_normal_nao_manda_senha(): void
     {
         Mail::fake();

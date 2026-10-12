@@ -80,6 +80,13 @@ pedido 2026-10-11), sem repetir a mesma pessoa/IP:
 - Visita sem OK de um IP que no mesmo dia deu OK entra no cookie dele (quem
   navegou antes de dar OK não conta duas vezes). A página do OK já conta.
 
+### Localização no pedido (pedido 2026-10-12)
+O pedido do site grava `orders.visitante_latitude` e `visitante_longitude`,
+aproximadas pelo IP, dos cabeçalhos `CF-IPLatitude`/`CF-IPLongitude` da
+Cloudflare (regra "Add visitor location headers"). Não é o GPS do aparelho nem
+pede permissão ao navegador. Base legal: execução do contrato e prevenção a
+fraude (art. 7º V e IX). Sem Cloudflare fica nulo.
+
 ### Prazos de guarda (`php artisan privacidade:limpar`, todo dia 03:50)
 - Visitas com mais de 6 meses: IP, navegador, usuário, visitante e valor do
   clique (`click_id`) apagados (`visitor_id = anonimo`). A estatística

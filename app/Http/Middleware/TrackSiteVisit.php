@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Analytics\Support\OrigemVisita;
 use App\Support\Privacidade\Cookies;
 use Closure;
 use Illuminate\Http\Request;
@@ -21,6 +22,9 @@ use Symfony\Component\HttpFoundation\Response;
  * - Com o OK: cookie de visitante (kazakora_visitor) e navegador completo.
  * - Em todos: origem (UTM), aparelho (celular/tablet/computador) e o site
  *   de onde veio sem o "?..." (pode ter dado pessoal).
+ * - Em todos: a origem classificada (OrigemVisita: Instagram, Google Ads,
+ *   Direto, Interno...) e o nome do parâmetro de clique (fbclid, gclid...).
+ *   O valor do clique só com o OK (pedido 2026-10-12).
  *
  * - Contagem de visitantes (painel e Indicadores, pedido 2026-10-11): o
  *   cookie kazakora_visitor é o visitante; sem o OK, um por IP no dia, e o
@@ -60,11 +64,13 @@ class TrackSiteVisit
             $visitorId = 's-'.substr(hash('sha256', $request->session()->getId()), 0, 34);
         }
 
-        self::gravar($request, $visitorId, $consentiu, $request->path(), $this->origem($request->headers->get('referer')), [
+        $referer = $request->headers->get('referer');
+
+        self::gravar($request, $visitorId, $consentiu, $request->path(), $this->origem($referer), [
             'utm_source' => $this->utm($request, 'utm_source', 80),
             'utm_medium' => $this->utm($request, 'utm_medium', 80),
             'utm_campaign' => $this->utm($request, 'utm_campaign', 120),
-        ]);
+        ], $referer, OrigemVisita::clickId($request->query()));
     }
 
     /**
@@ -85,15 +91,20 @@ class TrackSiteVisit
         parse_str($pagina['query'] ?? '', $query);
         $utm = fn (string $campo, int $limite) => is_string($query[$campo] ?? null) && $query[$campo] !== '' ? Str::limit(strip_tags($query[$campo]), $limite, '') : null;
 
+        // O Referer aqui é a própria página da loja: sem UTM/clique, a origem é Interno.
         rescue(fn () => self::gravar($request, $visitorId, true, $pagina['path'] ?? '/', null, [
             'utm_source' => $utm('utm_source', 80),
             'utm_medium' => $utm('utm_medium', 80),
             'utm_campaign' => $utm('utm_campaign', 120),
-        ]), null, false);
+        ], (string) $request->headers->get('referer'), OrigemVisita::clickId($query)), null, false);
     }
 
-    /** @param  array<string, ?string>  $utm */
-    private static function gravar(Request $request, string $visitorId, bool $consentiu, string $path, ?string $referer, array $utm): void
+    /**
+     * @param  array<string, ?string>  $utm
+     * @param  ?string  $refererCompleto  Referer como veio, só para classificar a origem (não é gravado)
+     * @param  array{0: ?string, 1: ?string}  $clique  [parâmetro, valor] de OrigemVisita::clickId
+     */
+    private static function gravar(Request $request, string $visitorId, bool $consentiu, string $path, ?string $referer, array $utm, ?string $refererCompleto = null, array $clique = [null, null]): void
     {
         SiteVisit::create([
             'visitor_id' => $visitorId,
@@ -103,6 +114,9 @@ class TrackSiteVisit
             'user_agent' => $consentiu ? Str::limit((string) $request->userAgent(), 250, '') : null,
             'ip' => $request->ip(),
             ...$utm,
+            'origem' => OrigemVisita::classificar($refererCompleto, $utm, $clique[0]),
+            'click_id_param' => $clique[0],
+            'click_id' => $consentiu ? $clique[1] : null,
             'dispositivo' => self::dispositivo((string) $request->userAgent()),
             'consentiu' => $consentiu,
         ]);

@@ -13,7 +13,37 @@ const props = defineProps({
     filtros: { type: Object, default: () => ({}) },
     hoje: { type: String, default: '' },
     maxDias: { type: Number, default: 92 },
+    origens: { type: Array, default: () => [] },
 });
+
+// Cor do selo de origem (classes inteiras para o Tailwind achar).
+const CORES_ORIGEM = {
+    instagram: 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+    facebook: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    meta: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    meta_ads: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+    google: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+    google_ads: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+    tiktok: 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100',
+    tiktok_ads: 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100',
+    whatsapp: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    shopee: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+    mercado_livre: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+    mercado_pago: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
+    youtube: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+    bing: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+    bing_ads: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+    campanha: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+};
+const corOrigem = (chave) => CORES_ORIGEM[chave] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+
+// UTM e identificador de clique de uma visita, em pares nome/valor.
+const marcas = (o) => [
+    ['utm_source', o.utm_source],
+    ['utm_medium', o.utm_medium],
+    ['utm_campaign', o.utm_campaign],
+    [o.click_id_param, o.click_id_param ? (o.click_id ?? 'sem valor (sem OK de cookies)') : null],
+].filter(([nome, valor]) => nome && valor);
 
 const DISPOSITIVOS = {
     celular: { label: 'Celular', icone: 'fa-mobile-screen' },
@@ -26,6 +56,7 @@ const filtros = reactive({
     ate: props.filtros.ate ?? props.hoje,
     ip: props.filtros.ip ?? '',
     pagina: props.filtros.pagina ?? '',
+    origem: props.filtros.origem ?? '',
     todos: Boolean(props.filtros.todos),
 });
 
@@ -35,6 +66,7 @@ const buscar = () => {
         ate: filtros.ate || undefined,
         ip: filtros.ip || undefined,
         pagina: filtros.pagina || undefined,
+        origem: filtros.origem || undefined,
         todos: filtros.todos ? 1 : undefined,
     }, { preserveState: true, preserveScroll: true, replace: true });
 };
@@ -59,6 +91,7 @@ const limpar = () => {
     filtros.ate = props.hoje;
     filtros.ip = '';
     filtros.pagina = '';
+    filtros.origem = '';
     filtros.todos = false;
     buscar();
 };
@@ -165,7 +198,7 @@ const confirmarApagar = () => {
 
         <!-- Filtros -->
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="buscar">
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
                     <label for="visitas-de" class="block text-xs font-medium text-slate-500 dark:text-slate-400">De</label>
                     <input id="visitas-de" v-model="filtros.de" type="date" :max="props.hoje"
@@ -183,6 +216,15 @@ const confirmarApagar = () => {
                     <input id="visitas-ip" v-model="filtros.ip" type="search" inputmode="decimal" autocomplete="off" spellcheck="false"
                         placeholder="189.40.12.7 ou começo do IP…"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm">
+                </div>
+                <div>
+                    <label for="visitas-origem" class="block text-xs font-medium text-slate-500 dark:text-slate-400">Origem</label>
+                    <select id="visitas-origem" v-model="filtros.origem"
+                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm"
+                        @change="buscar()">
+                        <option value="">Todas</option>
+                        <option v-for="o in props.origens" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
+                    </select>
                 </div>
                 <div>
                     <label for="visitas-pagina" class="block text-xs font-medium text-slate-500 dark:text-slate-400">Página contém</label>
@@ -223,6 +265,7 @@ const confirmarApagar = () => {
                         <tr>
                             <th scope="col" class="px-4 py-3">Data/Hora</th>
                             <th scope="col" class="px-4 py-3">IP</th>
+                            <th scope="col" class="px-4 py-3">Origem</th>
                             <th scope="col" class="px-4 py-3">Cliente</th>
                             <th scope="col" class="px-4 py-3 text-right">Ações</th>
                         </tr>
@@ -239,6 +282,13 @@ const confirmarApagar = () => {
                                 <span class="ml-2 text-xs tabular-nums text-slate-400">{{ visita.paginas }} {{ visita.paginas === 1 ? 'página' : 'páginas' }}</span>
                             </td>
                             <td class="whitespace-nowrap px-4 py-2.5">
+                                <span v-if="visita.origem" class="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                                    :class="[corOrigem(visita.origem.chave), visita.origem.chave === 'sem_dado' ? 'italic' : '']"
+                                    :title="visita.origem.chave === 'sem_dado' ? 'Visita gravada antes do registro de origem' : `Entrou por ${visita.origem.rotulo}`">{{ visita.origem.rotulo }}</span>
+                                <span v-if="visita.origem?.outras?.length" class="ml-1 text-xs tabular-nums text-slate-400"
+                                    :title="`Também veio de: ${visita.origem.outras.join(', ')}`">+{{ visita.origem.outras.length }}</span>
+                            </td>
+                            <td class="whitespace-nowrap px-4 py-2.5">
                                 <span v-if="visita.cliente" :title="tituloCliente(visita)"
                                     class="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300">Sim</span>
                                 <span v-else :title="tituloCliente(visita)"
@@ -253,7 +303,7 @@ const confirmarApagar = () => {
                         </tr>
 
                         <tr v-if="props.visitas.data.length === 0">
-                            <td colspan="4" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                            <td colspan="5" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                                 Nenhuma visita encontrada com esses filtros.
                             </td>
                         </tr>
@@ -293,7 +343,38 @@ const confirmarApagar = () => {
                         <i class="fas fa-spinner fa-spin mr-1.5" aria-hidden="true"></i> Carregando…
                     </p>
                     <p v-else-if="detalhe.erro" class="px-4 py-10 text-center text-red-600">{{ detalhe.erro }}</p>
-                    <table v-else-if="detalhe.dados" class="w-full text-left text-sm">
+                    <section v-if="detalhe.dados && !detalhe.carregando" class="mx-4 mt-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/40 p-4" aria-labelledby="visitante-origem">
+                        <h3 id="visitante-origem" class="mb-2 text-sm font-semibold">De onde veio</h3>
+                        <ul v-if="detalhe.dados.entradas?.length" class="space-y-3">
+                            <li v-for="(e, i) in detalhe.dados.entradas" :key="i" class="text-sm">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-medium" :class="corOrigem(e.chave)">{{ e.rotulo }}</span>
+                                    <span class="text-xs tabular-nums text-slate-500 dark:text-slate-400">{{ e.quando }}</span>
+                                    <span class="text-xs text-slate-500 dark:text-slate-400">entrou em <span class="font-mono">{{ e.path }}</span></span>
+                                </div>
+                                <p class="mt-1 text-xs">
+                                    <span class="text-slate-500 dark:text-slate-400">Referência: </span>
+                                    <a v-if="e.referer" :href="e.referer" target="_blank" rel="noopener noreferrer"
+                                        class="break-all font-mono text-primary hover:underline">{{ e.referer }}</a>
+                                    <span v-else class="text-slate-400">nenhuma (o navegador ou app não mandou)</span>
+                                </p>
+                                <dl v-if="marcas(e).length" class="mt-1 flex flex-wrap gap-1.5 text-xs">
+                                    <div v-for="[nome, valor] in marcas(e)" :key="nome"
+                                        class="flex max-w-full items-center gap-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-0.5">
+                                        <dt class="text-slate-500 dark:text-slate-400">{{ nome }}</dt>
+                                        <dd class="max-w-[16rem] truncate font-mono" :title="valor">{{ valor }}</dd>
+                                    </div>
+                                </dl>
+                            </li>
+                        </ul>
+                        <p v-else-if="detalhe.dados.sem_dado" class="text-sm italic text-slate-500 dark:text-slate-400">
+                            Sem dado: essas visitas foram gravadas antes de o site registrar a origem.
+                        </p>
+                        <p v-else class="text-sm text-slate-500 dark:text-slate-400">
+                            Só navegação interna nesse período (a entrada no site foi antes do período escolhido).
+                        </p>
+                    </section>
+                    <table v-if="detalhe.dados && !detalhe.carregando && !detalhe.erro" class="w-full text-left text-sm">
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>
                                 <th scope="col" class="px-4 py-3">Horário</th>
@@ -318,8 +399,11 @@ const confirmarApagar = () => {
                                     </template>
                                     <span v-else class="text-slate-400">—</span>
                                 </td>
-                                <td class="px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
-                                    <span class="block max-w-[14rem] truncate" :title="v.origem ?? 'Acesso direto'">{{ v.origem ?? 'Direto' }}</span>
+                                <td class="whitespace-nowrap px-4 py-2 text-xs">
+                                    <span v-if="v.origem.chave === 'interno'" class="text-slate-400" title="Clicou de outra página da loja">Interno</span>
+                                    <span v-else class="inline-block max-w-[14rem] truncate rounded-full px-2 py-0.5 font-medium align-middle"
+                                        :class="[corOrigem(v.origem.chave), v.origem.chave === 'sem_dado' ? 'italic' : '']"
+                                        :title="v.origem.referer || v.origem.rotulo">{{ v.origem.rotulo }}</span>
                                 </td>
                                 <td class="whitespace-nowrap px-4 py-2 text-xs text-slate-600 dark:text-slate-300">
                                     <template v-if="v.navegador">{{ v.navegador }}</template>

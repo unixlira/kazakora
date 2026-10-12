@@ -175,6 +175,49 @@
 }
 
 /*
+ * Topo da loja (Lira, 2026-10-12): branco parado no lugar; quando a página
+ * rola e ele passa a flutuar, fica translúcido e fumê com texto claro.
+ * Os menus que abrem do topo (.topo-menu) voltam às cores da loja, guardadas
+ * em --topo-* no .storefront-shell (valem no tema claro e no escuro).
+ */
+.storefront-shell {
+    --topo-fg: var(--color-store-fg);
+    --topo-fg-muted: var(--color-store-fg-muted);
+    --topo-fg-faint: var(--color-store-fg-faint);
+    --topo-bg-raised: var(--color-store-bg-raised);
+    --topo-bg-sunken: var(--color-store-bg-sunken);
+    --topo-border: var(--color-store-border);
+    --topo-border-strong: var(--color-store-border-strong);
+}
+.loja-topo {
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.storefront-shell .loja-topo.loja-topo-fume {
+    --color-store-fg: #f5f5f5;
+    --color-store-fg-muted: rgb(245 245 245 / 0.8);
+    --color-store-fg-faint: rgb(245 245 245 / 0.6);
+    --color-store-bg-raised: rgb(255 255 255 / 0.1);
+    --color-store-bg-sunken: rgb(255 255 255 / 0.12);
+    --color-store-border: rgb(255 255 255 / 0.1);
+    --color-store-border-strong: rgb(255 255 255 / 0.22);
+    background-color: rgb(34 32 33 / 0.62);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    color: #f5f5f5;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+.loja-topo-fume .topo-menu {
+    --color-store-fg: var(--topo-fg);
+    --color-store-fg-muted: var(--topo-fg-muted);
+    --color-store-fg-faint: var(--topo-fg-faint);
+    --color-store-bg-raised: var(--topo-bg-raised);
+    --color-store-bg-sunken: var(--topo-bg-sunken);
+    --color-store-border: var(--topo-border);
+    --color-store-border-strong: var(--topo-border-strong);
+    color: var(--topo-fg);
+}
+
+/*
  * Tema escuro do admin (pedido 2026-10-11: "várias fontes não aparecem").
  * As telas foram feitas no claro com bg-white, cinzas escuros e caixas de
  * aviso em tons -50; no escuro isso virava texto escuro em fundo escuro (ou

@@ -204,9 +204,10 @@ XML;
                     ->component('Admin/Radar/Index', false)
                     ->where('fonte', $fonte)
                     ->where('fonteNome', $nome)
+                    // A recarga adiada traz só as props adiadas: `fonte` já foi
+                    // conferida acima, na resposta da página.
                     ->loadDeferredProps(fn (Assert $reload) => $reload
                         ->has($prop)
-                        ->where('fonte', $fonte)
                         ->etc()));
         }
 

@@ -55,9 +55,10 @@ const tempo = computed(() => {
         </div>
         <slot />
         <AvisoCookies />
-        <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop): formas de
-             pagamento + dados da empresa, selos do Google e do Reclame AQUI à direita e a faixa
-             preta com a marca e os selos de confiança. Sem links pra fora. -->
+        <!-- Rodapé do checkout (pedido 2026-10-10, modelo izeshop; preto com fonte
+             branca desde 2026-10-12): formas de pagamento, dados da empresa com o logo
+             branco em cima, selos do Google e do Reclame AQUI à direita e, embaixo, só
+             os selos de confiança centralizados. Sem links pra fora. -->
         <footer class="mt-auto">
             <div class="bg-black px-4 py-8 text-white">
                 <!-- Formas de pagamento numa linha própria em cima; embaixo, dados à
@@ -85,7 +86,7 @@ const tempo = computed(() => {
                     <!-- Mesmos selos do rodapé da loja (pedido 2026-10-12, no lugar da
                          imagem "Site 100% Seguro"). -->
                     <div class="md:text-right">
-                        <p class="text-sm font-semibold text-slate-700">Segurança:</p>
+                        <p class="text-sm font-semibold text-white">Segurança:</p>
                         <div class="mt-2 flex flex-wrap items-center justify-center gap-2 md:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
                                 class="flex h-[51px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white px-3 transition hover:opacity-90"
@@ -108,15 +109,13 @@ const tempo = computed(() => {
                 </div>
             </div>
 
+            <!-- Só os selos de confiança, centralizados (o logo já está acima dos dados). -->
             <div class="border-t border-white/15 bg-black px-4 py-5 text-white">
-                <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-4 md:flex-row md:justify-between">
-                    <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia" class="h-8 w-auto">
-                    <ul class="flex flex-row flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-medium sm:text-sm md:gap-6">
-                        <li class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]"></i>Compra Segura</li>
-                        <li class="whitespace-nowrap"><i class="fa-solid fa-fingerprint mr-1.5 text-[#0FB930]"></i>Dados Protegidos</li>
-                        <li class="whitespace-nowrap"><i class="fa-solid fa-box-open mr-1.5 text-[#0FB930]"></i>Entrega Garantida</li>
-                    </ul>
-                </div>
+                <ul class="mx-auto flex max-w-[1160px] flex-row flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-medium sm:text-sm md:gap-6">
+                    <li class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1.5 text-[#0FB930]"></i>Compra Segura</li>
+                    <li class="whitespace-nowrap"><i class="fa-solid fa-fingerprint mr-1.5 text-[#0FB930]"></i>Dados Protegidos</li>
+                    <li class="whitespace-nowrap"><i class="fa-solid fa-box-open mr-1.5 text-[#0FB930]"></i>Entrega Garantida</li>
+                </ul>
             </div>
         </footer>
     </div>

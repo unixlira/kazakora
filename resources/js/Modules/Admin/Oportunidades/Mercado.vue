@@ -1,16 +1,18 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 // Oportunidades (correção do Lira 2026-10-12): produtos de TERCEIROS que
 // estão vendendo muito ou em alta no marketplace, para achar produto novo.
 // Não são as vendas da KazaKora. Ver OportunidadesController.
+// `mercado` é prop adiada (2026-10-12): a tela abre na hora com o esqueleto
+// de carregamento e os dados chegam logo depois (fica null até lá).
 const props = defineProps({
     canal: { type: Object, required: true },
     filtros: { type: Object, required: true },
     categorias: { type: Array, default: () => [] },
-    mercado: { type: Object, required: true },
+    mercado: { type: Object, default: null },
 });
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
@@ -21,6 +23,8 @@ const ehMl = computed(() => props.canal.slug === 'mercado-livre');
 const categoria = ref(props.filtros.categoria ?? '');
 const termo = ref(props.filtros.termo ?? '');
 const carregando = ref(false);
+// Ocupado também enquanto os dados adiados não chegaram.
+const ocupado = computed(() => carregando.value || !props.mercado);
 
 const buscar = (extra = {}) => {
     const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value };
@@ -63,16 +67,47 @@ const faixaPreco = (p) => {
                 <input v-model="termo" type="search" name="termo" maxlength="80" autocomplete="off" placeholder="ex.: organizador, luminária…"
                     class="mt-1 block w-72 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm">
             </label>
-            <button v-if="!ehMl" type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50" :disabled="carregando || !mercado.configurado">
-                {{ carregando ? 'Buscando…' : 'Buscar' }}
+            <button v-if="!ehMl" type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50" :disabled="ocupado || mercado?.configurado === false">
+                {{ ocupado ? 'Buscando…' : 'Buscar' }}
             </button>
             <div class="ml-auto flex items-center gap-3 text-xs text-[var(--texto-suave)]">
-                <span v-if="mercado.atualizado_em">Consultado em {{ formatDateTime(mercado.atualizado_em) }}</span>
-                <button v-if="mercado.configurado" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:opacity-50" :disabled="carregando" @click="buscar({ atualizar: 1 })">
-                    {{ carregando ? 'Consultando…' : 'Consultar de novo' }}
+                <span v-if="mercado?.atualizado_em">Consultado em {{ formatDateTime(mercado.atualizado_em) }}</span>
+                <button v-if="mercado?.configurado !== false" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:opacity-50" :disabled="ocupado" @click="buscar({ atualizar: 1 })">
+                    {{ ocupado ? 'Consultando…' : 'Consultar de novo' }}
                 </button>
             </div>
         </form>
+
+        <Deferred data="mercado">
+        <template #fallback>
+            <!-- Esqueleto enquanto os dados de mercado chegam (2026-10-12).
+            Mesmo desenho da tabela; a coleta do ML pode levar alguns segundos. -->
+            <div class="grid grid-cols-1 gap-6" :class="ehMl ? 'xl:grid-cols-[1fr_300px]' : ''" role="status" aria-live="polite">
+                <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" style="border-top: 3px solid var(--faixa-card)">
+                    <div class="flex items-center gap-2 border-b border-[var(--surface-border)] px-4 py-3">
+                        <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i>
+                        <h2 class="text-base font-semibold">Consultando o {{ canal.nome }}…</h2>
+                    </div>
+                    <p class="px-4 pt-3 text-sm text-[var(--texto-suave)]">Buscando os mais vendidos. Na primeira consulta do dia isso pode levar alguns segundos.</p>
+                    <ul class="animate-pulse divide-y divide-[var(--surface-border)]" aria-hidden="true">
+                        <li v-for="n in 8" :key="n" class="flex items-center gap-3 px-4 py-3">
+                            <span class="h-3 w-6 rounded bg-[var(--surface-muted)]"></span>
+                            <span class="h-12 w-12 shrink-0 rounded-lg bg-[var(--surface-muted)]"></span>
+                            <span class="flex-1 space-y-2">
+                                <span class="block h-3 w-3/4 rounded bg-[var(--surface-muted)]"></span>
+                                <span class="block h-3 w-1/3 rounded bg-[var(--surface-muted)]"></span>
+                            </span>
+                            <span class="h-3 w-20 rounded bg-[var(--surface-muted)]"></span>
+                        </li>
+                    </ul>
+                    <span class="sr-only">Carregando…</span>
+                </section>
+                <section v-if="ehMl" class="h-fit animate-pulse space-y-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-hidden="true">
+                    <span class="block h-4 w-32 rounded bg-[var(--surface-muted)]"></span>
+                    <span v-for="n in 8" :key="n" class="block h-3 rounded bg-[var(--surface-muted)]" :style="{ width: `${90 - n * 6}%` }"></span>
+                </section>
+            </div>
+        </template>
 
         <!-- Shopee sem a API de Afiliados -->
         <section v-if="!mercado.configurado" class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] px-6 py-12 text-center">
@@ -161,5 +196,6 @@ const faixaPreco = (p) => {
                 </section>
             </div>
         </template>
+        </Deferred>
     </AdminLayout>
 </template>

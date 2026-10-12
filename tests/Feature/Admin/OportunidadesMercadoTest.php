@@ -25,6 +25,11 @@ class OportunidadesMercadoTest extends TestCase
     {
         parent::setUp();
 
+        // Os dados de mercado são prop adiada: loadDeferredProps() refaz a
+        // requisição e confere o componente, que fica em Modules/ e não na
+        // pasta padrão do Inertia (mesmo motivo do component(..., false)).
+        config(['inertia.testing.ensure_pages_exist' => false]);
+
         MercadoLivreToken::query()->create([
             'id' => (string) Str::uuid(), 'ml_user_id' => 123456789, 'ml_nickname' => 'LOJA_KAZAKORA',
             'access_token' => 'valid-access-token', 'refresh_token' => 'valid-refresh-token',
@@ -74,6 +79,8 @@ class OportunidadesMercadoTest extends TestCase
                 ->where('canal.nome', 'Mercado Livre')
                 ->where('filtros.categoria', 'MLB263532')
                 ->where('categorias.1.nome', 'Ferramentas')
+                ->missing('mercado')
+                ->loadDeferredProps(fn (Assert $reload) => $reload
                 ->where('mercado.erro', null)
                 ->where('mercado.ocultos', 1)
                 ->has('mercado.produtos', 2)
@@ -86,7 +93,7 @@ class OportunidadesMercadoTest extends TestCase
                 ->where('mercado.produtos.0.voce_vende', false)
                 ->where('mercado.produtos.1.nome', 'Jogo de Brocas')
                 ->where('mercado.produtos.1.voce_vende', true)
-                ->where('mercado.tendencias.0.termo', 'furadeira'));
+                ->where('mercado.tendencias.0.termo', 'furadeira')));
 
         // Nada das vendas da loja: só chamadas de mercado (ranking, catálogo, tendências).
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/orders') || str_contains($r->url(), '/users/'));
@@ -109,9 +116,9 @@ class OportunidadesMercadoTest extends TestCase
 
         $this->actingAs($this->admin())->get('/admin/oportunidades/mercado-livre')
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
+            ->assertInertia(fn (Assert $page) => $page->loadDeferredProps(fn (Assert $reload) => $reload
                 ->where('mercado.produtos', [])
-                ->where('mercado.erro', fn ($erro) => str_contains($erro, 'Mercado Livre')));
+                ->where('mercado.erro', fn ($erro) => str_contains($erro, 'Mercado Livre'))));
     }
 
     public function test_shopee_sem_api_de_afiliados_mostra_o_que_falta(): void
@@ -123,8 +130,9 @@ class OportunidadesMercadoTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/Oportunidades/Mercado', false)
+                ->loadDeferredProps(fn (Assert $reload) => $reload
                 ->where('mercado.configurado', false)
-                ->where('mercado.produtos', []));
+                ->where('mercado.produtos', [])));
 
         Http::assertNothingSent();
     }
@@ -145,13 +153,14 @@ class OportunidadesMercadoTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('filtros.termo', 'organizador')
+                ->loadDeferredProps(fn (Assert $reload) => $reload
                 ->where('mercado.configurado', true)
                 ->where('mercado.produtos.0.nome', 'Organizador de Gaveta')
                 ->where('mercado.produtos.0.vendas', 15230)
                 ->where('mercado.produtos.0.preco_min', 19.9)
                 ->where('mercado.produtos.0.loja', 'Loja X')
                 ->where('mercado.produtos.0.voce_vende', false)
-                ->where('mercado.produtos.1.voce_vende', true));
+                ->where('mercado.produtos.1.voce_vende', true)));
 
         Http::assertSent(function (Request $r) {
             $corpo = $r->body();

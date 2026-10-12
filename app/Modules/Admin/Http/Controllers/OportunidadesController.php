@@ -14,6 +14,12 @@ use Inertia\Response;
  * que estão vendendo muito ou em alta no Mercado Livre e na Shopee, para
  * achar produto novo. Não mostra as vendas da KazaKora (a curva ABC da loja
  * continua no painel inicial). Uma tela por canal.
+ *
+ * Loader (pedido do Lira 2026-10-12): a coleta do Mercado Livre faz ~40
+ * chamadas à API sem cache e travava a navegação sem nenhum aviso. Os dados
+ * de mercado agora são prop adiada (Inertia::defer): a tela abre na hora com
+ * o esqueleto de carregamento e os números chegam numa segunda requisição.
+ * A conta e os números não mudaram.
  */
 class OportunidadesController extends Controller
 {
@@ -41,7 +47,7 @@ class OportunidadesController extends Controller
                 'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
                 'filtros' => ['categoria' => $categoria],
                 'categorias' => $ml->categorias(),
-                'mercado' => $ml->analisar($categoria, $atualizar) + ['configurado' => true],
+                'mercado' => Inertia::defer(fn () => $ml->analisar($categoria, $atualizar) + ['configurado' => true]),
             ]);
         }
 
@@ -51,7 +57,7 @@ class OportunidadesController extends Controller
             'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
             'filtros' => ['termo' => $termo],
             'categorias' => [],
-            'mercado' => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0],
+            'mercado' => Inertia::defer(fn () => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0]),
         ]);
     }
 }

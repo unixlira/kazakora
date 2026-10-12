@@ -44,7 +44,7 @@ class TrackSiteVisit
      * Robôs e programas que não são navegador (pedido 2026-10-12: curl,
      * scanners e monitores entravam como visita "Direto").
      */
-    private const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|headless|scan|censys|zgrab|lighthouse|uptime/i';
+    public const BOT_PATTERN = '/bot|crawl|spider|slurp|bingpreview|facebookexternalhit|whatsapp|curl|wget|python|go-http|java\/|okhttp|axios|node-fetch|libwww|httpclient|headless|scan|censys|zgrab|lighthouse|uptime/i';
 
     public function handle(Request $request, Closure $next): Response
     {

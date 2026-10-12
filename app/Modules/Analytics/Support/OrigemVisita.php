@@ -43,6 +43,7 @@ class OrigemVisita
         'pinterest' => 'Pinterest',
         'linkedin' => 'LinkedIn',
         'kwai' => 'Kwai',
+        'telegram' => 'Telegram',
         'email' => 'E-mail',
         'campanha' => 'Campanha',
         'outro' => 'Outro site',
@@ -67,6 +68,7 @@ class OrigemVisita
         'pinterest' => 'pinterest',
         'linkedin' => 'linkedin',
         'kwai' => 'kwai',
+        'telegram' => 'telegram',
         'email' => 'email', 'e-mail' => 'email', 'newsletter' => 'email', 'gmail' => 'email',
     ];
 
@@ -95,6 +97,7 @@ class OrigemVisita
         'pin.it' => 'pinterest',
         'linkedin.com' => 'linkedin', 'lnkd.in' => 'linkedin',
         'kwai.com' => 'kwai',
+        't.me' => 'telegram', 'telegram.org' => 'telegram', 'telegram.me' => 'telegram',
         'outlook.live.com' => 'email', 'outlook.office.com' => 'email', 'mail.yahoo.com' => 'email',
     ];
 
@@ -226,9 +229,11 @@ class OrigemVisita
             return 'outro';
         }
 
-        $host = self::host($url);
-        if ($host === null) {
-            return null;
+        // Referer sem "https://" (gravado assim antes de out/2026) ou lixo de
+        // robô: veio algo, então não é Direto.
+        $host = self::host($url) ?? self::host('https://'.ltrim(trim($url), '/'));
+        if ($host === null || ! preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/', $host)) {
+            return 'outro';
         }
 
         foreach (self::dominiosProprios() as $proprio) {

@@ -23,9 +23,8 @@ use Inertia\Response;
  *
  * Tela dividida (pedido do Lira 2026-10-12): no Mercado Livre, em cima os
  * mais vendidos da categoria e embaixo o bloco do Radar (prop adiada
- * `mercadoLivre`, grupo próprio). A mesma tela abre em
- * /admin/radar/mercado-livre (menu Oportunidades › Mercado Livre › Radar);
- * `base` guarda a URL aberta para o filtro não trocar de item no menu.
+ * `mercadoLivre`, grupo próprio). Só abre por Oportunidades › Mercado
+ * Livre: /admin/radar/mercado-livre redireciona para cá (Lira 2026-10-12).
  */
 class OportunidadesController extends Controller
 {

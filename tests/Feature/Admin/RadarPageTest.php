@@ -196,7 +196,7 @@ XML;
 
         $this->assertSame(url('/admin/radar/tiktok'), route('admin.radar.fonte', 'tiktok'));
 
-        // Mercado Livre › Radar abre a tela de Oportunidades (OportunidadesMercadoTest).
+        // O bloco do ML fica só em Oportunidades › Mercado Livre (OportunidadesMercadoTest).
         foreach (['tiktok' => ['tiktok', 'TikTok'], 'google' => ['google', 'Google']] as $fonte => [$prop, $nome]) {
             $this->actingAs($admin)->get("/admin/radar/{$fonte}")
                 ->assertOk()

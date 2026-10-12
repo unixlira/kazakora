@@ -54,6 +54,10 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Único host que o Google pode indexar; os outros (homolog) respondem
+    // com X-Robots-Tag noindex (BloquearIndexacaoForaDoDominio).
+    'dominio_indexavel' => env('DOMINIO_INDEXAVEL', 'kazakora.com'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

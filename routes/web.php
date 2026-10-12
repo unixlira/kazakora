@@ -84,7 +84,15 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
 // Mapa do site para o Google Search Console (pedido 2026-10-12).
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
-Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])->name('produtos.ver');
+Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
+    ->name('produtos.ver')
+    // Link antigo da Nuvemshop (/produtos/<slug>-<id>/): 301 para o produto atual, se houver par.
+    ->missing(function (\Illuminate\Http\Request $request) {
+        $produto = \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar((string) $request->route('product'));
+        abort_unless($produto, 404);
+
+        return redirect()->route('produtos.ver', $produto->slug, 301);
+    });
 Route::get('/produtos/{product:slug}/envio', [CatalogController::class, 'shipping'])->name('produtos.envio.detalhes');
 
 // Páginas institucionais/legais — públicas de propósito, precisam ser

@@ -14,16 +14,20 @@ use Inertia\Response;
  * Caixa de e-mails do site (pedido 2026-10-10): as mensagens do "Fale
  * conosco" da loja, no mesmo jeito das conversas do WhatsApp — contador no
  * menu e aviso no topo quando chega uma nova (ver WhatsAppToasts.vue).
+ *
+ * Excluir (pedido 2026-10-12) é só no sistema e vai para a lixeira (soft
+ * delete), com restaurar. A cópia que chegou no e-mail da loja não é tocada.
  */
 class MensagensSiteController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filtro = $request->query('filtro') === 'nao-lidas' ? 'nao-lidas' : 'todas';
+        $filtro = in_array($request->query('filtro'), ['nao-lidas', 'lixeira'], true) ? $request->query('filtro') : 'todas';
         $busca = trim((string) $request->query('busca', ''));
 
         $mensagens = MensagemContato::query()
             ->when($filtro === 'nao-lidas', fn ($query) => $query->naoLidas())
+            ->when($filtro === 'lixeira', fn ($query) => $query->onlyTrashed())
             ->when($busca !== '', fn ($query) => $query->where(fn ($q) => $q
                 ->where('nome', 'like', "%{$busca}%")
                 ->orWhere('email', 'like', "%{$busca}%")
@@ -39,7 +43,53 @@ class MensagensSiteController extends Controller
             'filtro' => $filtro,
             'busca' => $busca,
             'naoLidas' => MensagemContato::query()->naoLidas()->count(),
+            'lidas' => MensagemContato::query()->lidas()->count(),
+            'naLixeira' => MensagemContato::onlyTrashed()->count(),
         ]);
+    }
+
+    public function excluir(MensagemContato $mensagem): RedirectResponse
+    {
+        $mensagem->delete();
+
+        return back()->with('success', 'Mensagem enviada para a lixeira.');
+    }
+
+    public function excluirSelecionadas(Request $request): RedirectResponse
+    {
+        $total = MensagemContato::query()->whereIn('id', $this->ids($request))->delete();
+
+        return back()->with('success', $this->plural($total, 'mensagem enviada', 'mensagens enviadas').' para a lixeira.');
+    }
+
+    public function excluirLidas(): RedirectResponse
+    {
+        $total = MensagemContato::query()->lidas()->delete();
+
+        return back()->with('success', $this->plural($total, 'mensagem lida enviada', 'mensagens lidas enviadas').' para a lixeira.');
+    }
+
+    public function restaurar(Request $request): RedirectResponse
+    {
+        $total = MensagemContato::onlyTrashed()->whereIn('id', $this->ids($request))->restore();
+
+        return back()->with('success', $this->plural($total, 'mensagem restaurada', 'mensagens restauradas').'.');
+    }
+
+    /** @return list<int> */
+    private function ids(Request $request): array
+    {
+        $dados = $request->validate([
+            'ids' => ['required', 'array', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+
+        return array_values(array_unique(array_map('intval', $dados['ids'])));
+    }
+
+    private function plural(int $total, string $um, string $varios): string
+    {
+        return $total === 1 ? "1 {$um}" : "{$total} {$varios}";
     }
 
     public function marcarLida(MensagemContato $mensagem): RedirectResponse

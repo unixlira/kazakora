@@ -16,6 +16,21 @@ para gastar o mínimo.
 | `KALODATA_TETO_DIARIO` | `20` | Máximo de chamadas reais por dia (fuso de São Paulo). `0` bloqueia tudo. |
 | `KALODATA_TIMEOUT` | `30` | Timeout da requisição em segundos. |
 | `KALODATA_TENTATIVAS` | `3` | Tentativas quando o Kalodata responde code 2000. |
+| `KALODATA_RADAR_PAGINAS` | `10` | Páginas de 100 produtos que o Radar de Oportunidades busca por dia (1 chamada cada). |
+
+## Paginação do `/rank`
+
+Conferido em 2026-10-12 (BR, `last7Day`, produtos): `page_size` vai até
+100 e a API devolveu 100 itens nas páginas 1, 2, 5 e 6. A resposta é uma
+lista pura, sem total. Para "pegar tudo" é preciso ir página a página até
+uma vir incompleta; o freio real é o teto diário de chamadas e o crédito.
+O Radar (`MaisVendidosTikTok`) faz isso até `KALODATA_RADAR_PAGINAS`.
+
+O ranking do Radar fica no banco, tabela `kalodata_rankings` (uma linha por coleta;
+vale 24 h, ou 1 h se veio incompleto), não no cache: o deploy do homolog roda
+`optimize:clear`, que apaga o cache e fazia cada deploy gastar chamadas de
+novo. Se a consulta do dia falhar, a tela mostra o último ranking guardado.
+Para forçar nova consulta, marque a coleta como vencida (`coletado_em` antigo).
 
 Lidas em `config/services.php`, chave `kalodata`.
 
@@ -30,7 +45,7 @@ Lidas em `config/services.php`, chave `kalodata`.
   - `auth`: HTTP 401/403 ou code `501` ("The key is not allowed");
   - `limite`: code `2016` por plano, quota ou crédito;
   - `parametro`: code `2016` com mensagem de parâmetro, ou validação local
-    (região, módulo, período, página 1 a 5, itens por página 5 a 100);
+    (região, módulo, período, página 1 ou mais, itens por página 5 a 100);
   - `teto`: teto diário atingido; `config`: falta a chave; `rede`: sem
     resposta ou code `2000` em todas as tentativas; `api`: o resto.
 - **Repetição só no code `2000`** (timeout do lado deles). Nenhum outro erro

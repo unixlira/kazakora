@@ -96,7 +96,7 @@
        campos, etiquetas e hover não sumirem no preto. */
     --fundo: #000000;
     --surface: #000000;
-    --surface-muted: #141414;
+    --surface-muted: #000000;
     --surface-foreground: #f1eced;
     --surface-border: #2a2a2a;
     --sidebar-foreground: #d9d2d4;
@@ -123,20 +123,121 @@
 }
 
 /*
- * Radar de Oportunidades no escuro (Lira, 2026-10-12): SÓ o fundo do corpo
- * da página fica cinza claro. Topo, menu lateral e cards continuam pretos
- * como no resto do admin (o grafite dos cards foi desfeito a pedido dele).
- * Só a área do conteúdo usa --fundo; menu, topo, rodapé e cards pintam com
- * --surface. O título fica fora dos cards, então volta ao texto escuro do
- * tema claro.
+ * Radar de Oportunidades no escuro: tinha fundo cinza #3D3D3D (pedido de
+ * 2026-10-12). Mesmo dia, o Lira pediu preto absoluto em todo o tema escuro
+ * do admin, então o Radar também ficou #000. Para voltar ao cinza, troque os
+ * dois #000000 abaixo por #3d3d3d.
  */
 .dark .admin-shell:has(.radar-grafite) {
-    --fundo: #e9e7e8;
+    --fundo: #000000;
 }
-.dark .admin-shell .radar-grafite .radar-topo {
-    --texto-suave: #5b5054;
-    --destaque: #c2410c;
-    color: #1f1a1c;
+.dark .admin-shell:has(.radar-grafite) :is(#menu-admin, .admin-topo, .admin-rodape) {
+    background-color: #000000;
+}
+
+/*
+ * Topo flutuante (Lira, 2026-10-12): no alto da página o topo é a faixa
+ * branca padrão (preta no tema escuro, pedido de 2026-10-11). Com a página
+ * rolada ele descola das bordas (flutua, com cantos arredondados) e vira um
+ * vidro fumê grafite translúcido, nos dois temas e também no Radar (o :is dá
+ * a especificidade para passar por cima da regra acima). Texto e ícones
+ * ficam claros no vidro; os menus que abrem do topo (.topo-menu) voltam às
+ * cores normais. O prefixo .admin-shell nas regras de texto é para ganhar
+ * das cores fixas do tema escuro (.dark .admin-shell .text-slate-500).
+ */
+:is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo {
+    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease,
+        box-shadow 0.25s ease, top 0.25s ease, margin 0.25s ease, border-radius 0.25s ease;
+}
+:is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
+    --icone-menu: #e4dee0;
+    --surface-muted: rgb(255 255 255 / 0.12);
+    --surface-border: rgb(255 255 255 / 0.1);
+    top: 0.75rem;
+    margin-inline: 0.75rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: 1rem;
+    background-color: rgb(30 30 32 / 0.72);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    color: #f1eced;
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
+}
+@media (min-width: 768px) {
+    :is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
+        margin-inline: 1.5rem;
+    }
+}
+/* No escuro o grafite clareia um pouco para o vidro não sumir no preto. */
+.dark :is(.admin-shell, .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
+    background-color: rgb(0 0 0 / 0.85);
+    border-color: rgb(255 255 255 / 0.14);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.6);
+}
+.admin-shell .admin-topo-fume :is(.text-slate-300, .text-slate-400, .text-slate-500):not(.topo-menu *) {
+    color: rgb(241 236 237 / 0.8);
+}
+.admin-shell .admin-topo-fume .hover\:text-primary:hover:not(.topo-menu *) {
+    color: #ffffff;
+}
+.admin-shell .admin-topo-fume .bg-lightprimary:not(.topo-menu *) {
+    background-color: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+}
+.admin-shell .admin-topo-fume input:not(.topo-menu *)::placeholder {
+    color: rgb(241 236 237 / 0.6);
+}
+.admin-topo-fume .topo-menu {
+    --surface-muted: #f5f3f4;
+    --surface-border: #e6e2e3;
+    color: var(--surface-foreground);
+}
+.dark .admin-topo-fume .topo-menu {
+    --surface-muted: #000000;
+    --surface-border: #2a2a2a;
+}
+
+/*
+ * Topo da loja (Lira, 2026-10-12): branco parado no lugar; quando a página
+ * rola e ele passa a flutuar, fica translúcido e fumê com texto claro.
+ * Os menus que abrem do topo (.topo-menu) voltam às cores da loja, guardadas
+ * em --topo-* no .storefront-shell (valem no tema claro e no escuro).
+ */
+.storefront-shell {
+    --topo-fg: var(--color-store-fg);
+    --topo-fg-muted: var(--color-store-fg-muted);
+    --topo-fg-faint: var(--color-store-fg-faint);
+    --topo-bg-raised: var(--color-store-bg-raised);
+    --topo-bg-sunken: var(--color-store-bg-sunken);
+    --topo-border: var(--color-store-border);
+    --topo-border-strong: var(--color-store-border-strong);
+}
+.loja-topo {
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.storefront-shell .loja-topo.loja-topo-fume {
+    --color-store-fg: #f5f5f5;
+    --color-store-fg-muted: rgb(245 245 245 / 0.8);
+    --color-store-fg-faint: rgb(245 245 245 / 0.6);
+    --color-store-bg-raised: rgb(255 255 255 / 0.1);
+    --color-store-bg-sunken: rgb(255 255 255 / 0.12);
+    --color-store-border: rgb(255 255 255 / 0.1);
+    --color-store-border-strong: rgb(255 255 255 / 0.22);
+    background-color: rgb(34 32 33 / 0.62);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    color: #f5f5f5;
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+}
+.loja-topo-fume .topo-menu {
+    --color-store-fg: var(--topo-fg);
+    --color-store-fg-muted: var(--topo-fg-muted);
+    --color-store-fg-faint: var(--topo-fg-faint);
+    --color-store-bg-raised: var(--topo-bg-raised);
+    --color-store-bg-sunken: var(--topo-bg-sunken);
+    --color-store-border: var(--topo-border);
+    --color-store-border-strong: var(--topo-border-strong);
+    color: var(--topo-fg);
 }
 
 /*
@@ -164,7 +265,7 @@
 .dark .admin-shell .dark\:bg-slate-900\/30 { background-color: color-mix(in oklab, var(--surface-muted) 60%, transparent); }
 .dark .admin-shell .dark\:bg-slate-900\/60 { background-color: rgb(0 0 0 / 0.6); }
 /* Hover que usava o muted continua visível em cima do muted. */
-.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #1f1f1f; }
+.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #000000; }
 .dark .admin-shell .bg-red-50, .dark .admin-shell .bg-red-100 { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 .dark .admin-shell .border-red-100, .dark .admin-shell .border-red-200, .dark .admin-shell .border-red-300 { border-color: color-mix(in oklab, #ef4444 40%, transparent); }
 .dark .admin-shell .text-red-600, .dark .admin-shell .text-red-700, .dark .admin-shell .text-red-800, .dark .admin-shell .text-red-900 { color: #fca5a5; }
@@ -257,7 +358,7 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
  */
 .dark select,
 .dark select option {
-    background-color: var(--surface-muted, #141414);
+    background-color: var(--surface-muted, #000000);
     color: var(--surface-foreground, #f1eced);
 }
 

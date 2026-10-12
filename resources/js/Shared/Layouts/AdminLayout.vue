@@ -91,18 +91,20 @@ const toggleSidebar = () => {
 // ficavam selecionados porque um href é prefixo do outro.
 const urlPath = computed(() => page.url.split(/[?#]/)[0]);
 const matchesPath = (href) => urlPath.value === href || urlPath.value.startsWith(`${href}/`);
+// Item com submenu (ex.: Radar): os filhos entram na disputa do mais específico.
+const comFilhos = (item) => [item, ...(item.children ?? [])];
 const activeHref = computed(() => {
     if (urlPath.value === '/admin') return '/admin';
     return sidebarSections
-        .flatMap((section) => section.items.map((item) => item.href))
-        .filter((href) => href !== '/admin' && matchesPath(href))
+        .flatMap((section) => section.items.flatMap(comFilhos).map((item) => item.href))
+        .filter((href) => href && href !== '/admin' && matchesPath(href))
         .sort((a, b) => b.length - a.length)[0] ?? null;
 });
-const isActive = (href) => href === activeHref.value;
+const isActive = (href) => !!href && href === activeHref.value;
 
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
-        const match = section.items.find((item) => isActive(item.href));
+        const match = section.items.flatMap(comFilhos).find((item) => isActive(item.href));
         if (match) return match;
     }
     return null;
@@ -117,7 +119,7 @@ const lerAbertas = () => {
     try { return JSON.parse(localStorage.getItem(SECOES_ABERTAS) ?? '[]'); } catch { return []; }
 };
 const secoesAbertas = ref(new Set(lerAbertas()));
-const secaoAtiva = computed(() => visibleSections.value.find((s) => s.items.some((i) => isActive(i.href)))?.heading ?? null);
+const secaoAtiva = computed(() => visibleSections.value.find((s) => s.items.flatMap(comFilhos).some((i) => isActive(i.href)))?.heading ?? null);
 const secaoAberta = (heading) => heading === secaoAtiva.value || secoesAbertas.value.has(heading);
 // Alterna pelo que está na tela (secaoExpandida), não por secaoAberta: a
 // seção da tela atual é sempre "aberta", então depois de recolhida ela
@@ -135,6 +137,22 @@ const alternarSecao = (heading) => {
     try { localStorage.setItem(SECOES_ABERTAS, JSON.stringify([...abertas])); } catch { /* sem storage: só não lembra */ }
 };
 const secaoExpandida = (heading) => !secoesAbertas.value.has(`!${heading}`) && secaoAberta(heading);
+// Submenu recolhível (Radar, pedido do Lira 2026-10-12): abre e fecha pela
+// setinha. Sem escolha guardada, fica aberto só se um filho for a tela atual.
+// Pai sem href (Mercado Livre, correção do Lira 2026-10-12) não é link: o
+// clique no nome abre e fecha o submenu.
+const SUBMENUS = 'admin_menu_submenus';
+const chaveItem = (item) => item.href ?? item.label;
+const lerSubmenus = () => {
+    try { return JSON.parse(localStorage.getItem(SUBMENUS) ?? '{}') ?? {}; } catch { return {}; }
+};
+const submenusEscolhidos = ref(lerSubmenus());
+const submenuAberto = (item) => submenusEscolhidos.value[chaveItem(item)]
+    ?? item.children.some((filho) => isActive(filho.href));
+const alternarSubmenu = (item) => {
+    submenusEscolhidos.value = { ...submenusEscolhidos.value, [chaveItem(item)]: !submenuAberto(item) };
+    try { localStorage.setItem(SUBMENUS, JSON.stringify(submenusEscolhidos.value)); } catch { /* sem storage: só não lembra */ }
+};
 const badgeDaSecao = (section) => section.items.reduce((total, item) => total + sidebarBadge(item), 0);
 
 const logout = () => router.post('/sair');
@@ -174,6 +192,17 @@ onBeforeUnmount(() => {
     removerOuvintes.forEach((remover) => remover());
     pararLoader();
 });
+
+// Pedido do Lira 2026-10-12: com a página rolada, o topo fixo fica
+// translúcido e fumê (o conteúdo aparece borrado por baixo). No alto da
+// página volta ao normal. Estilo em .admin-topo-fume (app.css).
+const topoFlutuando = ref(false);
+const medirRolagem = () => { topoFlutuando.value = window.scrollY > 8; };
+onMounted(() => {
+    medirRolagem();
+    window.addEventListener('scroll', medirRolagem, { passive: true });
+});
+onBeforeUnmount(() => window.removeEventListener('scroll', medirRolagem));
 
 // Pedido explícito 2026-08-15: botão de voltar visível em toda tela do
 // admin, sem atrapalhar o layout de nenhuma página — colocado só uma vez
@@ -239,24 +268,48 @@ watch(
                         </button>
 
                         <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
-                            <li v-for="item in section.items" :key="item.href">
+                            <li v-for="item in section.items" :key="chaveItem(item)">
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja
                                 no escuro) e barra de 3px à esquerda. Ícones numa cor só. -->
-                                <Link :href="item.href" :title="item.label"
-                                    class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
-                                    :class="isActive(item.href)
-                                        ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
-                                        : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
-                                    :aria-current="isActive(item.href) ? 'page' : undefined">
-                                    <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
-                                    <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
-                                    <span v-if="sidebarBadge(item) > 0"
-                                        class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
-                                        :title="`${sidebarBadge(item)} pendência(s)`">
-                                        {{ sidebarBadge(item) }}
-                                    </span>
-                                </Link>
+                                <div class="flex items-center">
+                                    <component :is="item.href ? Link : 'button'" v-bind="item.href ? { href: item.href } : { type: 'button', 'aria-expanded': submenuAberto(item) }" :title="item.label"
+                                        v-on="item.href ? {} : { click: () => alternarSubmenu(item) }"
+                                        class="flex min-w-0 flex-1 items-center gap-2 text-left rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
+                                        :class="isActive(item.href)
+                                            ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
+                                            : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                        :aria-current="isActive(item.href) ? 'page' : undefined">
+                                        <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                        <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
+                                        <span v-if="sidebarBadge(item) > 0"
+                                            class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
+                                            :title="`${sidebarBadge(item)} pendência(s)`">
+                                            {{ sidebarBadge(item) }}
+                                        </span>
+                                    </component>
+                                    <button v-if="item.children && !sidebarCollapsed" type="button"
+                                        class="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30"
+                                        :title="submenuAberto(item) ? 'Recolher' : 'Expandir'" :aria-label="`${submenuAberto(item) ? 'Recolher' : 'Expandir'} ${item.label}`"
+                                        :aria-expanded="submenuAberto(item)" @click="alternarSubmenu(item)">
+                                        <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': submenuAberto(item) }"></i>
+                                    </button>
+                                </div>
+                                <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
+                                recuado embaixo do pai; com o menu recolhido fica só o ícone. -->
+                                <ul v-if="item.children" v-show="sidebarCollapsed || submenuAberto(item)" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
+                                    <li v-for="filho in item.children" :key="filho.href">
+                                        <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
+                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"
+                                            :class="isActive(filho.href)
+                                                ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
+                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                            :aria-current="isActive(filho.href) ? 'page' : undefined">
+                                            <i class="w-8 text-center text-xs" :class="[filho.icon, isActive(filho.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                            <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>
+                                        </Link>
+                                    </li>
+                                </ul>
                             </li>
                         </ul>
                     </div>
@@ -302,7 +355,8 @@ watch(
 
         <div class="relative flex flex-1 flex-col transition-all" :class="sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'">
             <!-- Topbar -->
-            <nav class="sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start">
+            <nav class="admin-topo sticky top-0 z-10 flex items-center border-b border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm md:flex-row md:flex-nowrap md:justify-start"
+                :class="{ 'admin-topo-fume': topoFlutuando }">
                 <div class="mx-auto flex w-full flex-nowrap items-center justify-between gap-2 sm:gap-4 md:px-4">
                     <div class="flex min-w-0 items-center gap-1 sm:gap-2">
                         <!-- Celular: hambúrguer e logo nesta mesma faixa. -->
@@ -357,7 +411,7 @@ watch(
                                 <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-error px-1 text-[0.6rem] font-semibold leading-tight text-white">{{ unreadNotifications }}</span>
                             </button>
 
-                            <div v-if="notifMenuOpen" class="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
+                            <div v-if="notifMenuOpen" class="topo-menu absolute right-0 z-50 mt-2 w-80 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
                                 <!-- Marcando todas como lidas: desfoque branco + loader até a requisição terminar (2026-10-11). -->
                                 <div v-if="marcandoTodas" class="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-white/60 backdrop-blur-sm dark:bg-slate-900/60">
                                     <i class="fas fa-circle-notch animate-spin text-2xl text-primary"></i>
@@ -412,7 +466,7 @@ watch(
                                 <span class="hidden md:inline">{{ user?.name }}</span>
                                 <i class="fas fa-chevron-down ml-2 hidden text-xs text-slate-400 sm:inline-block"></i>
                             </button>
-                            <div v-if="userMenuOpen" class="absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
+                            <div v-if="userMenuOpen" class="topo-menu absolute right-0 z-50 mt-2 min-w-48 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] py-2 text-left shadow-md">
                                 <Link href="/perfil" class="block whitespace-nowrap px-4 py-2 text-sm hover:bg-[var(--surface-muted)]">
                                     <i class="fas fa-user mr-2 text-slate-400"></i> Meu Perfil
                                 </Link>
@@ -450,7 +504,7 @@ watch(
             usuário 2026-08-05. Em tela curta (Radar de Oportunidades,
             2026-10-12) ele ficava solto no meio da tela: o conteúdo cresce
             (flex-1) e empurra o rodapé para o fim da janela. -->
-            <footer class="border-t border-[var(--surface-border)] bg-[var(--surface)]">
+            <footer class="admin-rodape border-t border-[var(--surface-border)] bg-[var(--surface)]">
                 <div class="px-4 py-3 text-center text-sm text-slate-500 md:px-10">
                     © 2026 KazaKora · CNPJ: 65.604.590/0001-07
                 </div>

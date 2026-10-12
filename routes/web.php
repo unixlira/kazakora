@@ -651,9 +651,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logs', [SystemLogController::class, 'index'])->name('logs.listar');
 
         // Visitas ao site (2026-10-12): páginas abertas na loja e o IP de
-        // quem abriu, lidas de site_visits. Só leitura, admin-only como Logs
-        // (IP é dado pessoal).
+        // quem abriu, lidas de site_visits. Admin-only como Logs (IP é dado
+        // pessoal).
         Route::get('visitas-site', [SiteVisitLogController::class, 'index'])->name('visitas-site.listar');
+        // Olho (histórico do visitante no período) e lixeira (apaga as
+        // visitas daquele IP no período), pedido 2026-10-12.
+        Route::get('visitas-site/visitante', [SiteVisitLogController::class, 'visitante'])->name('visitas-site.visitante');
+        Route::delete('visitas-site/visitante', [SiteVisitLogController::class, 'apagar'])->name('visitas-site.apagar');
 
         Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
         Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');

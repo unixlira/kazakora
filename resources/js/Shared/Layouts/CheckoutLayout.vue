@@ -59,11 +59,11 @@ const tempo = computed(() => {
              pagamento + dados da empresa, selos do Google e do Reclame AQUI à direita e a faixa
              preta com a marca e os selos de confiança. Sem links pra fora. -->
         <footer class="mt-auto">
-            <div class="border-t border-slate-200 bg-white px-4 py-8">
+            <div class="bg-black px-4 py-8 text-white">
                 <!-- Formas de pagamento numa linha própria em cima; embaixo, dados à
                      esquerda e selos à direita. -->
-                <div class="mx-auto max-w-[1160px] border-b border-slate-100 pb-10 text-center">
-                    <p class="text-sm font-semibold text-slate-700">Formas de pagamento:</p>
+                <div class="mx-auto max-w-[1160px] border-b border-white/15 pb-10 text-center">
+                    <p class="text-sm font-semibold text-white">Formas de pagamento:</p>
                     <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
                             class="h-[51px] w-auto">
@@ -71,9 +71,10 @@ const tempo = computed(() => {
                 </div>
                 <div class="mx-auto mt-8 flex max-w-[1160px] flex-col items-center gap-6 text-center md:flex-row md:justify-between md:text-left">
                     <div class="flex flex-col items-center md:items-start">
-                        <!-- Logo colorido (fundo branco) acima dos dados da empresa. -->
-                        <img :src="$page.props.marca?.logoNav ?? '/images/marca/logo-nav.png'" :alt="COMPANY.nomeFantasia" class="mb-3 h-8 w-auto">
-                        <p class="text-xs leading-relaxed text-slate-500">
+                        <!-- Logo da faixa preta acima dos dados da empresa (rodapé preto
+                             com fonte branca, pedido 2026-10-12). -->
+                        <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia" class="mb-3 h-8 w-auto">
+                        <p class="text-xs leading-relaxed text-white">
                             © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                             CNPJ: {{ COMPANY.cnpj }}<br>
                             WhatsApp: {{ COMPANY.whatsappDisplay }}<br>
@@ -104,7 +105,7 @@ const tempo = computed(() => {
                 </div>
             </div>
 
-            <div class="bg-black px-4 py-5 text-white">
+            <div class="border-t border-white/15 bg-black px-4 py-5 text-white">
                 <div class="mx-auto flex max-w-[1160px] flex-col items-center gap-4 md:flex-row md:justify-between">
                     <img :src="$page.props.marca?.logoRodape ?? '/images/marca/logo-rodape.png'" :alt="COMPANY.nomeFantasia" class="h-8 w-auto">
                     <ul class="flex flex-row flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-medium sm:text-sm md:gap-6">

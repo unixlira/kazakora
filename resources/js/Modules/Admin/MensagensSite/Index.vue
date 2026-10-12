@@ -6,6 +6,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onMounted, ref, watch } from 'vue';
+import { confirmDelete } from '@/Shared/notify';
 
 const props = defineProps({
     mensagens: { type: Object, required: true },
@@ -81,27 +82,30 @@ const opcoes = (aoTerminar) => ({
     onSuccess: aoTerminar,
 });
 
-const excluir = (mensagem) => {
-    if (!window.confirm(`Excluir a mensagem de ${mensagem.nome} ("${mensagem.assunto}")? Ela vai para a Lixeira e dá para restaurar.`)) return;
+// Confirmação no modal do SweetAlert (pedido 2026-10-12), no lugar do confirm do navegador.
+const confirmarExclusao = (title, text) => confirmDelete({ title, text, confirmButtonText: 'Excluir', focusCancel: true });
+
+const excluir = async (mensagem) => {
+    if (!(await confirmarExclusao('Excluir e-mail?', `A mensagem de ${mensagem.nome} ("${mensagem.assunto}") vai para a Lixeira e dá para restaurar.`))) return;
     router.delete(`/admin/mensagens-site/${mensagem.id}`, opcoes(() => {
         if (selecionadaId.value === mensagem.id) fecharMensagem();
     }));
 };
 
-const excluirSelecionadas = () => {
+const excluirSelecionadas = async () => {
     const ids = [...marcadas.value];
     if (!ids.length) return;
-    if (!window.confirm(`Excluir ${plural(ids.length, 'mensagem selecionada', 'mensagens selecionadas')}? ${vaiParaLixeira(ids.length)}`)) return;
+    if (!(await confirmarExclusao(`Excluir ${plural(ids.length, 'e-mail selecionado', 'e-mails selecionados')}?`, vaiParaLixeira(ids.length)))) return;
     router.delete('/admin/mensagens-site', { ...opcoes(() => {
         if (ids.includes(selecionadaId.value)) fecharMensagem();
         marcadas.value = [];
     }), data: { ids } });
 };
 
-const excluirLidas = () => {
+const excluirLidas = async () => {
     if (!props.lidas) return;
-    const quantas = props.lidas === 1 ? 'a 1 mensagem lida' : `todas as ${props.lidas} mensagens lidas`;
-    if (!window.confirm(`Excluir ${quantas}? ${vaiParaLixeira(props.lidas)}`)) return;
+    const quantas = props.lidas === 1 ? 'o e-mail lido' : `os ${props.lidas} e-mails lidos`;
+    if (!(await confirmarExclusao(`Excluir ${quantas}?`, vaiParaLixeira(props.lidas)))) return;
     router.delete('/admin/mensagens-site/lidas', opcoes(() => {
         if (selecionada.value?.lida) fecharMensagem();
         marcadas.value = [];

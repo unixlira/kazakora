@@ -692,6 +692,7 @@ class CheckoutController extends Controller
                     'shipping_neighborhood' => $address->neighborhood,
                     'shipping_city' => $address->city,
                     'shipping_state' => $address->state,
+                    ...$this->localizacaoDoVisitante($request),
                     'subtotal' => $subtotal,
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
@@ -1449,6 +1450,25 @@ class CheckoutController extends Controller
             'guest.email' => $emailEmUso ? self::MSG_EMAIL_EM_USO : null,
             'guest.cpf' => $cpfEmUso ? self::MSG_CPF_EM_USO : null,
         ]);
+    }
+
+    /**
+     * Latitude/longitude do IP de quem compra, dos cabeçalhos "visitor
+     * location" da Cloudflare (pedido do Lira, 2026-10-12). Sem Cloudflare
+     * ou com valor fora da faixa, grava nulo.
+     *
+     * @return array{visitante_latitude: ?float, visitante_longitude: ?float}
+     */
+    private function localizacaoDoVisitante(Request $request): array
+    {
+        $lat = $request->header('CF-IPLatitude');
+        $lng = $request->header('CF-IPLongitude');
+
+        if (! is_numeric($lat) || ! is_numeric($lng) || abs((float) $lat) > 90 || abs((float) $lng) > 180) {
+            return ['visitante_latitude' => null, 'visitante_longitude' => null];
+        }
+
+        return ['visitante_latitude' => (float) $lat, 'visitante_longitude' => (float) $lng];
     }
 
     private function createGuestAccount(array $guest): User

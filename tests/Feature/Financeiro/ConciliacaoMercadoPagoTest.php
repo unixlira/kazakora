@@ -102,4 +102,17 @@ class ConciliacaoMercadoPagoTest extends TestCase
         $venda->forceFill(['origin' => Order::ORIGIN_MANUAL_INVOICE])->save();
         $this->assertSame(0, Order::query()->vendaEfetiva()->count(), 'nota avulsa é reemissão, não venda nova');
     }
+
+    public function test_receita_do_site_desconta_cupom_pix_e_desconto_da_plataforma(): void
+    {
+        // Site: R$ 360 de produtos com R$ 40 de desconto da plataforma, R$ 16 de Pix e R$ 10 de cupom.
+        $this->pedido(['origin' => Order::ORIGIN_STORE, 'subtotal' => 360, 'total' => 294, 'discount_amount' => 66, 'pix_discount_amount' => 16, 'desconto_plataforma_amount' => 40]);
+        // Marketplace: o desconto não é da loja, a receita segue o subtotal.
+        $this->pedido(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 100, 'total' => 100, 'discount_amount' => 15]);
+
+        $canais = app(ContributionMargin::class)->porCanal(Carbon::parse('2026-09-01'), Carbon::parse('2026-10-01'));
+
+        $this->assertEquals(294.0, $canais['loja']['receita']);
+        $this->assertEquals(100.0, $canais['shopee']['receita']);
+    }
 }

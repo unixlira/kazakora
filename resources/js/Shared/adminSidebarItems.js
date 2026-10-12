@@ -30,10 +30,17 @@ export const sidebarSections = [
             { label: 'Categorias', href: '/admin/categorias', icon: 'fas fa-folder-tree', permission: 'cadastros.view' },
             { label: 'Calculadora de preço', href: '/admin/precificacao', icon: 'fas fa-calculator', permission: 'cadastros.view' },
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', permission: 'cadastros.view' },
-            // Nome visível em radarNome.js (o Lira ainda vai escolher).
-            { label: RADAR_NOME, href: '/admin/radar', icon: 'fas fa-satellite-dish', permission: 'relatorios.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', permission: 'cadastros.view' },
+        ],
+    },
+    {
+        // Radar (pedido do Lira em 2026-10-12): saiu de Vender e virou grupo
+        // próprio, uma tela por canal. Nome do grupo em radarNome.js.
+        heading: RADAR_NOME,
+        items: [
+            { label: 'Shopee', href: '/admin/radar/shopee', icon: 'fas fa-bag-shopping', permission: 'relatorios.view' },
+            { label: 'Mercado Livre', href: '/admin/radar/mercado-livre', icon: 'fas fa-handshake', permission: 'relatorios.view' },
         ],
     },
     {

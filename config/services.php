@@ -436,6 +436,16 @@ return [
     // POST /api/beautykora/visita (lista separada por vírgula, sem www).
     'beautykora' => [
         'origens' => env('BEAUTYKORA_ORIGENS', 'beautykora.devlira.com.br'),
+        // Pagamento confirmado (2026-10-12): o checkout do site é o da
+        // Hostinger, que não avisa quando o pagamento entra. O comando
+        // beautykora:conciliar-pagamentos lê os pedidos pagos pela API da
+        // Hostinger (token do hPanel) e marca o pedido daqui como pago.
+        // store_id vazio = usa a primeira loja da conta.
+        'hostinger' => [
+            'token' => env('BEAUTYKORA_HOSTINGER_TOKEN'),
+            'store_id' => env('BEAUTYKORA_HOSTINGER_STORE_ID'),
+            'url' => env('BEAUTYKORA_HOSTINGER_URL', 'https://developers.hostinger.com'),
+        ],
     ],
 
     // Kalodata (dados do TikTok Shop: ranking e detalhe de categoria, loja,

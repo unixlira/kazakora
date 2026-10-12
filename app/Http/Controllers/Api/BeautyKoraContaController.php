@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -128,8 +129,12 @@ class BeautyKoraContaController extends Controller
     {
         $dados = $request->validate([
             'address_id' => ['nullable', 'integer'],
+            // E-mail digitado no checkout da Hostinger: é por ele que o
+            // pagamento é achado depois (beautykora:conciliar-pagamentos).
+            'email' => ['nullable', 'email', 'max:191'],
             'items' => ['required', 'array', 'min:1', 'max:50'],
             'items.*.product_id' => ['required', 'string', 'max:64'],
+            'items.*.variant_id' => ['nullable', 'string', 'max:64'],
             'items.*.product_name' => ['required', 'string', 'max:191'],
             'items.*.product_image' => ['nullable', 'string', 'max:500'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:99'],
@@ -141,10 +146,16 @@ class BeautyKoraContaController extends Controller
             ? $cliente->enderecos()->whereKey($dados['address_id'])->first()
             : null;
 
+        $lote = (string) Str::uuid();
+        $email = mb_strtolower($dados['email'] ?? $cliente->email);
+
         $pedidos = DB::transaction(fn () => collect($dados['items'])->map(fn (array $item) => BeautyKoraPedido::query()->create([
             'cliente_id' => $cliente->id,
             'endereco_id' => $endereco?->id,
             'produto_id' => $item['product_id'],
+            'variante_id' => $item['variant_id'] ?? null,
+            'lote' => $lote,
+            'email_checkout' => $email,
             'produto_nome' => $item['product_name'],
             'produto_imagem' => $item['product_image'] ?? null,
             'quantidade' => $item['quantity'],

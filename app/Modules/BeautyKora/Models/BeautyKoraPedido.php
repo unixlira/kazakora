@@ -17,13 +17,14 @@ class BeautyKoraPedido extends Model
     protected $table = 'beautykora_pedidos';
 
     protected $fillable = [
-        'cliente_id', 'endereco_id', 'produto_id', 'produto_nome', 'produto_imagem',
+        'cliente_id', 'endereco_id', 'produto_id', 'variante_id', 'produto_nome', 'produto_imagem',
         'quantidade', 'valor_pago_centavos', 'status', 'endereco',
+        'lote', 'email_checkout', 'hostinger_pedido_id', 'hostinger_numero', 'pago_em',
     ];
 
     protected function casts(): array
     {
-        return ['endereco' => 'array'];
+        return ['endereco' => 'array', 'pago_em' => 'datetime'];
     }
 
     public function cliente(): BelongsTo
@@ -46,6 +47,7 @@ class BeautyKoraPedido extends Model
             'valor_pago' => $this->valor_pago_centavos,
             'status' => $this->status,
             'data_compra' => $this->created_at?->toIso8601String(),
+            'pago_em' => $this->pago_em?->toIso8601String(),
         ];
     }
 }

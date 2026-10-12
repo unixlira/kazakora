@@ -55,6 +55,8 @@ class BeautyKoraPedidoController extends Controller
                 'quantidade' => $p->quantidade,
                 'valor' => $p->valor_pago_centavos / 100,
                 'status' => $p->status,
+                'hostinger' => $p->hostinger_numero,
+                'pago_em' => $p->pago_em?->format('d/m/Y H:i'),
                 'cidade' => $p->endereco ? trim(($p->endereco['cidade'] ?? '').'/'.($p->endereco['estado'] ?? ''), '/') : null,
             ]);
 

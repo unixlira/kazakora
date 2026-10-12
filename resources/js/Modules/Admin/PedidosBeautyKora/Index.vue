@@ -49,7 +49,8 @@ const reais = (valor) => Number(valor ?? 0).toLocaleString('pt-BR', { style: 'cu
             <h1 class="mb-1 text-2xl font-bold">Pedidos Beauty Kora</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 Compras feitas no site Beauty Kora, um produto por linha. Ficam fora dos pedidos e da margem da KazaKora.
-                O pedido nasce "Aguardando pagamento" quando o cliente vai para o pagamento. Horário de Brasília.
+                O pedido nasce "Aguardando pagamento" quando o cliente vai para o pagamento e vira "Pago" sozinho
+                quando o pagamento é confirmado no checkout da Hostinger (conferido a cada 5 minutos). Horário de Brasília.
             </p>
         </div>
 
@@ -113,6 +114,9 @@ const reais = (valor) => Number(valor ?? 0).toLocaleString('pt-BR', { style: 'cu
                                     @change="mudarStatus(pedido, $event.target.value)">
                                     <option v-for="s in props.statusOpcoes" :key="s" :value="s">{{ NOMES[s] ?? s }}</option>
                                 </select>
+                                <div v-if="pedido.hostinger" class="mt-1 text-xs text-slate-500" :title="pedido.pago_em ? `Pago em ${pedido.pago_em}` : ''">
+                                    Hostinger #{{ pedido.hostinger }}
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="props.pedidos.data.length === 0">

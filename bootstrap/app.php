@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AuthenticateKoraFlex;
+use App\Http\Middleware\BloquearIndexacaoForaDoDominio;
 use App\Http\Middleware\AuthenticatePrintAgent;
 use App\Http\Middleware\EnsureApiPartnerIsActive;
 use App\Http\Middleware\EnsureHasPermission;
@@ -54,6 +55,7 @@ return Application::configure(basePath: dirname(__DIR__))
             PreventBrowserCaching::class,
             ExpireStaleSession::class,
             GuardarCupomDaUrl::class,
+            BloquearIndexacaoForaDoDominio::class,
         ]);
 
         $middleware->alias([

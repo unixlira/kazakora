@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
+use App\Http\Controllers\Api\BeautyKoraContaController;
+use App\Http\Middleware\AuthenticateBeautyKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
@@ -198,3 +200,22 @@ Route::post('/{site}/visita', [OutroSiteVisitaController::class, 'registrar'])
     ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
     ->middleware('throttle:120,1')
     ->name('api.outro-site.visita');
+
+// Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase
+// do Horizons. Token do Sanctum só de BeautyKoraCliente.
+Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
+    Route::post('cadastro', [BeautyKoraContaController::class, 'cadastro'])->middleware('throttle:10,1')->name('cadastro');
+    Route::post('login', [BeautyKoraContaController::class, 'login'])->middleware('throttle:10,1')->name('login');
+
+    Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1'])->group(function () {
+        Route::get('eu', [BeautyKoraContaController::class, 'eu'])->name('eu');
+        Route::patch('eu', [BeautyKoraContaController::class, 'atualizar'])->name('atualizar');
+        Route::post('sair', [BeautyKoraContaController::class, 'sair'])->name('sair');
+        Route::get('endereco', [BeautyKoraContaController::class, 'endereco'])->name('endereco');
+        Route::put('endereco', [BeautyKoraContaController::class, 'salvarEndereco'])->name('endereco.salvar');
+        Route::delete('endereco/{id}', [BeautyKoraContaController::class, 'apagarEndereco'])->whereNumber('id')->name('endereco.apagar');
+        Route::get('pedidos', [BeautyKoraContaController::class, 'pedidos'])->name('pedidos');
+        Route::post('pedidos', [BeautyKoraContaController::class, 'criarPedidos'])->name('pedidos.criar');
+        Route::get('pedidos/{id}', [BeautyKoraContaController::class, 'pedido'])->whereNumber('id')->name('pedido');
+    });
+});

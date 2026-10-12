@@ -35,6 +35,7 @@ export async function confirmDelete(options = {}) {
         confirmButtonColor: '#dc2626',
         cancelButtonColor: '#94a3b8',
         reverseButtons: true,
+        focusCancel: options.focusCancel ?? false,
     });
 
     return result.isConfirmed;

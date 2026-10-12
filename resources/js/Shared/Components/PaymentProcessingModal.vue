@@ -53,7 +53,8 @@ const copyPixCode = async () => {
     <!-- Não fechável: sem botão de X, sem clique fora, sem ESC — de propósito. -->
     <Teleport to="body">
         <div v-if="open" class="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4" role="alertdialog" aria-modal="true">
-            <div class="absolute inset-0 bg-store-fg/60 backdrop-blur-sm"></div>
+            <!-- Pix (pedido 2026-10-12): fundo cinza claro em vez do preto. -->
+            <div class="absolute inset-0 backdrop-blur-sm" :class="state === 'awaiting_pix' ? 'bg-neutral-300/80' : 'bg-store-fg/60'"></div>
 
             <!-- Pix (pedido 2026-10-12): sem padding no cartão, cada faixa cuida do seu,
                  e tudo dimensionado pela altura da tela para caber sem rolagem. -->

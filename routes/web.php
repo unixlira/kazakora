@@ -506,6 +506,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('anuncios/recargas', [AdsRechargeController::class, 'index'])->name('anuncios.recargas.listar');
         // Menu Publicidade (2026-10-12): resumo de gasto de ADS por canal.
         Route::get('publicidade', [\App\Modules\Admin\Http\Controllers\PublicidadeController::class, 'index'])->name('publicidade.ver');
+        // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
+        Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
+        Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
     });
     Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
     Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');

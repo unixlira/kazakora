@@ -64,7 +64,7 @@ class TikTokReportsImportTest extends TestCase
             ->assertStatus(422);
 
         \Illuminate\Support\Facades\Notification::assertSentTo(\App\Models\User::first(), \App\Notifications\TikTokRelatorioNotification::class,
-            fn ($n, $canais, $quem) => $n->toArray($quem)['nivel'] === 'erro' && $n->toArray($quem)['message'] === 'Erro importação arquivo financeiro TikTok');
+            fn ($n, $canais, $quem) => $n->toArray($quem)['nivel'] === 'erro' && $n->toArray($quem)['message'] === 'Erro: 1/1 importação arquivo financeiro TikTok');
     }
 
     public function test_importou_avisa_em_verde(): void
@@ -102,5 +102,27 @@ class TikTokReportsImportTest extends TestCase
 
         \Illuminate\Support\Facades\Notification::assertSentTo($admin, \App\Notifications\TikTokRelatorioNotification::class,
             fn ($n, $c, $quem) => $n->toArray($quem)['nivel'] === 'erro');
+    }
+
+    public function test_erro_mostra_falhas_sobre_envios_do_dia(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+        $relatorios = app(\App\Modules\Marketplace\Support\RelatoriosTikTok::class);
+
+        $relatorios->avisar(true, 'ok');
+        $relatorios->avisar(false, 'Sessão do TikTok caiu');
+        $relatorios->avisar(true, 'ok de novo');
+
+        \Illuminate\Support\Facades\Notification::assertSentTo($admin, \App\Notifications\TikTokRelatorioNotification::class,
+            fn ($n, $c, $quem) => $n->toArray($quem)['message'] === 'Erro: 1/2 importação arquivo financeiro TikTok');
+        \Illuminate\Support\Facades\Notification::assertSentTo($admin, \App\Notifications\TikTokRelatorioNotification::class,
+            fn ($n, $c, $quem) => $n->toArray($quem)['message'] === 'Arquivo financeiro do TikTok importado (erros hoje: 1/3)');
+
+        $this->travel(1)->days();
+        $relatorios->avisar(false, 'outro dia');
+
+        \Illuminate\Support\Facades\Notification::assertSentTo($admin, \App\Notifications\TikTokRelatorioNotification::class,
+            fn ($n, $c, $quem) => $n->toArray($quem)['message'] === 'Erro: 1/1 importação arquivo financeiro TikTok');
     }
 }

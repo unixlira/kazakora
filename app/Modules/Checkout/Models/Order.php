@@ -192,6 +192,7 @@ class Order extends Model
         'coupon_code',
         'discount_amount',
         'pix_discount_amount',
+        'desconto_plataforma_amount',
         'total',
     ];
 
@@ -202,6 +203,7 @@ class Order extends Model
             'shipping_cost' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'pix_discount_amount' => 'decimal:2',
+            'desconto_plataforma_amount' => 'decimal:2',
             'total' => 'decimal:2',
             'fiscal_finality' => 'integer',
             'disputed_at' => 'datetime',

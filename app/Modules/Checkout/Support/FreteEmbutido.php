@@ -148,17 +148,9 @@ class FreteEmbutido
         $tabela = $this->tabela($this->destino()['cep']);
         $peso = $this->pesoTarifavel($product);
 
-        $faixa = null;
-        if ($tabela) {
-            foreach ($tabela as $limite => $linha) {
-                if ($peso <= $limite) {
-                    $faixa = $linha;
-                    break;
-                }
-            }
-        }
+        $faixa = $this->faixa($tabela, $peso);
 
-        if (! $faixa || $faixa['pac'] === null || $faixa['sedex'] === null) {
+        if (! $faixa) {
             $pac = (float) config('frete_embutido.fallback_pac', 30);
             $sedex = (float) config('frete_embutido.fallback_sedex', 60);
 
@@ -181,41 +173,83 @@ class FreteEmbutido
     }
 
     /**
-     * Entrega do carrinho para o destino atual: prazo da entrega grátis e a
-     * opção TURBO (SEDEX) com o valor a mais, quando ela chega antes.
+     * Entrega do carrinho para o destino atual.
+     *
+     * - prazo da entrega grátis;
+     * - desconto_plataforma: com mais de uma unidade, os itens vão numa caixa
+     *   só e o frete real (peso somado) sai menor que o frete embutido item a
+     *   item; a diferença volta como desconto (pedido 2026-10-12);
+     * - turbo: SEDEX da caixa inteira pela diferença, quando chega antes.
      *
      * @param  Collection<int, array{product: Product, quantity: int}>  $itens
-     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool}
+     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float}
      */
     public function entregaDoCarrinho(Collection $itens): array
     {
-        $extra = 0.0;
-        $prazo = null;
-        $prazoSedex = null;
+        $embutido = 0.0;
+        $extraItemAItem = 0.0;
+        $peso = 0;
+        $unidades = 0;
         $estimado = false;
-        $todosPac = true;
 
         foreach ($itens as $item) {
+            $qtd = (int) $item['quantity'];
             $f = $this->paraProduto($item['product']);
             $estimado = $estimado || $f['estimado'];
-            $todosPac = $todosPac && $f['servico'] === 'pac';
-            $extra += max(0, $f['sedex'] - $f['embutido']) * (int) $item['quantity'];
-            $prazo = max($prazo ?? 0, (int) $f['prazo']) ?: null;
-            $prazoSedex = max($prazoSedex ?? 0, (int) $f['prazo_sedex']) ?: null;
+            $embutido += $f['embutido'] * $qtd;
+            $extraItemAItem += max(0, $f['sedex'] - $f['embutido']) * $qtd;
+            $peso += $this->pesoTarifavel($item['product']) * $qtd;
+            $unidades += $qtd;
         }
 
-        // TURBO só quando é PAC embutido e o SEDEX chega antes (ou, sem
-        // cotação, com o valor de segurança: SEDEX − PAC).
-        $turbo = null;
-        if ($itens->isNotEmpty() && $todosPac && $extra > 0 && ($estimado || ($prazo && $prazoSedex && $prazoSedex < $prazo))) {
-            $turbo = [
-                'preco' => round($extra, 2),
-                'prazo' => $prazoSedex,
-                'dias_a_menos' => $prazo && $prazoSedex ? $prazo - $prazoSedex : null,
+        if ($itens->isEmpty()) {
+            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0];
+        }
+
+        // A caixa inteira (peso somado) na tabela do destino.
+        $caixa = $estimado ? null : $this->faixa($this->tabela($this->destino()['cep']), $peso);
+
+        if (! $caixa) {
+            // Sem cotação (ou acima de 30 kg): fica o frete item a item, sem desconto.
+            return [
+                'prazo' => null,
+                'turbo' => $extraItemAItem > 0 ? ['preco' => round($extraItemAItem, 2), 'prazo' => null, 'dias_a_menos' => null] : null,
+                'estimado' => true,
+                'desconto_plataforma' => 0.0,
             ];
         }
 
-        return ['prazo' => $prazo, 'turbo' => $turbo, 'estimado' => $estimado];
+        $sedexMaisBarato = $caixa['sedex'] <= $caixa['pac'];
+        $real = $sedexMaisBarato ? $caixa['sedex'] : $caixa['pac'];
+        $prazo = $sedexMaisBarato ? $caixa['prazo_sedex'] : $caixa['prazo_pac'];
+
+        $turbo = null;
+        if (! $sedexMaisBarato && $caixa['prazo_pac'] && $caixa['prazo_sedex'] && $caixa['prazo_sedex'] < $caixa['prazo_pac']) {
+            $turbo = [
+                'preco' => round($caixa['sedex'] - $caixa['pac'], 2),
+                'prazo' => $caixa['prazo_sedex'],
+                'dias_a_menos' => $caixa['prazo_pac'] - $caixa['prazo_sedex'],
+            ];
+        }
+
+        return [
+            'prazo' => $prazo,
+            'turbo' => $turbo,
+            'estimado' => false,
+            'desconto_plataforma' => $unidades > 1 ? round(max(0, $embutido - $real), 2) : 0.0,
+        ];
+    }
+
+    /** Linha da tabela que comporta o peso (null = sem tabela ou acima da última faixa). */
+    private function faixa(?array $tabela, int $peso): ?array
+    {
+        foreach ($tabela ?? [] as $limite => $linha) {
+            if ($peso <= $limite) {
+                return $linha['pac'] !== null && $linha['sedex'] !== null ? $linha : null;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -112,7 +112,7 @@ class FreteEmbutidoTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page->where('product.final_price', 120));
     }
 
-    public function test_checkout_fora_de_sp_tem_frete_gratis_e_turbo_pela_diferenca(): void
+    public function test_checkout_fora_de_sp_tem_frete_gratis_turbo_e_desconto_da_caixa_unica(): void
     {
         $this->comCorreios();
         $produto = $this->produto(100);
@@ -123,9 +123,11 @@ class FreteEmbutidoTest extends TestCase
             ->assertJsonPath('subtotal', 240)
             ->assertJsonPath('prazo', 8)
             ->assertJsonPath('entrega_expressa', null)
-            ->assertJsonPath('turbo.preco', 20)
+            // Caixa única: PAC R$ 20 (não 2 x 20), SEDEX R$ 30 → TURBO pela diferença da caixa.
+            ->assertJsonPath('turbo.preco', 10)
             ->assertJsonPath('turbo.prazo', 3)
-            ->assertJsonPath('turbo.dias_a_menos', 5);
+            ->assertJsonPath('turbo.dias_a_menos', 5)
+            ->assertJsonPath('desconto_plataforma', 20);
     }
 
     public function test_na_area_full_nao_tem_turbo_e_embute_o_sedex_quando_e_mais_barato(): void
@@ -184,5 +186,32 @@ class FreteEmbutidoTest extends TestCase
         $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
 
         $this->assertEquals(0.0, (float) Order::firstOrFail()->shipping_cost);
+    }
+
+    public function test_pedido_com_varios_itens_desconta_a_caixa_unica(): void
+    {
+        Mail::fake();
+        $this->comCorreios();
+        $produto = $this->produto(100);
+        $this->post('/carrinho', ['product_id' => $produto->id, 'quantity' => 3]);
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()->andReturn([
+                'id' => 79, 'status' => 'pending',
+                'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix', 'qr_code_base64' => 'abc']],
+            ]);
+        });
+
+        $this->postJson('/finalizacao/entrega', $this->entrega(self::CEP_CE))->assertOk();
+        $this->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'split' => false, 'terms_accepted' => true])->assertOk();
+
+        // 3 x (100 + 20) = 360; caixa única custa 20, então 40 de desconto da plataforma.
+        $order = Order::firstOrFail();
+        $this->assertEquals(360.0, (float) $order->subtotal);
+        $this->assertEquals(40.0, (float) $order->desconto_plataforma_amount);
+        $pix = round((360 - 40) * \App\Support\DescontoPix::percentual() / 100, 2);
+        $this->assertEquals(round(320 - $pix, 2), (float) $order->total);
+        $this->assertEquals(round(40 + $pix, 2), (float) $order->discount_amount);
     }
 }

@@ -60,7 +60,7 @@ const tempo = computed(() => {
              completos da empresa | formas de pagamento (bandeiras 3x2) | selos
              de segurança. As colunas se alinham pela base, para a linha do CNPJ
              ficar na altura da parte de baixo dos selos; embaixo, uma linha
-             divisória e os três itens de confiança centralizados numa linha só.
+             divisória e os quatro itens de confiança centralizados numa linha só.
              No celular, uma coluna embaixo da outra, centralizadas. -->
         <footer class="mt-auto bg-black px-4 py-10 text-white">
             <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8 md:text-left">
@@ -112,6 +112,7 @@ const tempo = computed(() => {
             <hr class="mx-auto mt-8 max-w-[1160px] border-white/15">
             <ul class="mx-auto mt-6 flex max-w-[1160px] flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm font-medium">
                 <li class="font-bold"><i class="fa-solid fa-shield-halved mr-2 text-[#0FB930]"></i>Conexão criptografada</li>
+                <li><i class="fa-solid fa-bag-shopping mr-2 text-[#0FB930]"></i>Compra segura</li>
                 <li><i class="fa-solid fa-fingerprint mr-2 text-[#0FB930]"></i>Dados protegidos</li>
                 <li><i class="fa-solid fa-box-open mr-2 text-[#0FB930]"></i>Entrega gratuita</li>
             </ul>

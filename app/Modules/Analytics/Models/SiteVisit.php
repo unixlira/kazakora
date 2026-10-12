@@ -28,11 +28,12 @@ class SiteVisit extends Model
         'utm_campaign',
         'dispositivo',
         'consentiu',
+        'cookies',
     ];
 
     protected function casts(): array
     {
-        return ['consentiu' => 'boolean'];
+        return ['consentiu' => 'boolean', 'cookies' => 'array'];
     }
 
     /**

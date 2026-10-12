@@ -101,7 +101,15 @@ const abrirDetalhe = async (linha) => {
     }
 };
 
+// Cookies do visitante: valor longo fica cortado, com opção de ver inteiro.
+const LIMITE_COOKIE = 40;
+const cookiesAbertos = reactive({});
+const cookieChave = (c) => `${c.nome}=${c.valor}`;
+const cookieLongo = (c) => c.valor.length > LIMITE_COOKIE;
+const cookieValor = (c) => (cookieLongo(c) && !cookiesAbertos[cookieChave(c)] ? `${c.valor.slice(0, LIMITE_COOKIE)}…` : c.valor);
+
 const fecharDetalhe = () => {
+    Object.keys(cookiesAbertos).forEach((k) => delete cookiesAbertos[k]);
     detalhe.aberto = false;
     detalhe.linha = null;
     document.body.style.overflow = '';
@@ -293,7 +301,36 @@ const confirmarApagar = () => {
                         <i class="fas fa-spinner fa-spin mr-1.5" aria-hidden="true"></i> Carregando…
                     </p>
                     <p v-else-if="detalhe.erro" class="px-4 py-10 text-center text-red-600">{{ detalhe.erro }}</p>
-                    <table v-else-if="detalhe.dados" class="w-full text-left text-sm">
+                    <section v-if="detalhe.dados" class="mx-2 mb-3 mt-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3"
+                        aria-labelledby="cookies-titulo">
+                        <h3 id="cookies-titulo" class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">
+                            <i class="fas fa-cookie-bite mr-1" aria-hidden="true"></i> Cookies do visitante
+                        </h3>
+                        <ul v-if="(detalhe.dados.cookies ?? []).length" class="mt-2 divide-y divide-[var(--surface-border)] text-sm">
+                            <li v-for="c in detalhe.dados.cookies" :key="cookieChave(c)"
+                                class="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-1.5">
+                                <span class="font-mono text-xs font-semibold">{{ c.nome }}</span>
+                                <span class="min-w-0 break-all font-mono text-xs text-slate-600 dark:text-slate-300">{{ cookieValor(c) }}</span>
+                                <button v-if="cookieLongo(c)" type="button"
+                                    class="text-xs text-primary hover:underline"
+                                    :aria-expanded="Boolean(cookiesAbertos[cookieChave(c)])"
+                                    @click="cookiesAbertos[cookieChave(c)] = !cookiesAbertos[cookieChave(c)]">
+                                    {{ cookiesAbertos[cookieChave(c)] ? 'ver menos' : 'ver inteiro' }}
+                                </button>
+                                <span class="ml-auto whitespace-nowrap text-xs text-slate-400"
+                                    :title="`Visto pela última vez em ${c.ultimo}`">{{ numero(c.visitas) }} {{ c.visitas === 1 ? 'visita' : 'visitas' }}</span>
+                            </li>
+                        </ul>
+                        <p v-else class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                            Nenhum cookie registrado para este visitante no período. Os cookies só são gravados
+                            a partir de 12/10/2026 e somente de quem deu OK no aviso de cookies; as visitas anteriores
+                            não têm cookies.
+                        </p>
+                        <p class="mt-2 text-xs text-slate-400">
+                            Só aparecem cookies de identificação e marketing. Sessão, login e token de segurança nunca são gravados.
+                        </p>
+                    </section>
+                    <table v-if="!detalhe.carregando && !detalhe.erro && detalhe.dados" class="w-full text-left text-sm">
                         <thead class="sticky top-0 border-b border-[var(--surface-border)] bg-[var(--surface)] text-xs uppercase text-slate-500 dark:text-slate-400">
                             <tr>
                                 <th scope="col" class="px-4 py-3">Horário</th>

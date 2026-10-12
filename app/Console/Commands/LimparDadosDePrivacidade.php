@@ -17,14 +17,14 @@ class LimparDadosDePrivacidade extends Command
 {
     protected $signature = 'privacidade:limpar';
 
-    protected $description = 'Apaga IP/navegador de visitas com mais de 6 meses e OKs de cookies com mais de 5 anos';
+    protected $description = 'Apaga IP/navegador/cookies de visitas com mais de 6 meses e OKs de cookies com mais de 5 anos';
 
     public function handle(): int
     {
         $visitas = SiteVisit::query()
             ->where('created_at', '<', now()->subMonths(6)->subDay())
-            ->where(fn ($query) => $query->whereNotNull('ip')->orWhereNotNull('user_agent')->orWhereNotNull('user_id')->orWhere('visitor_id', '!=', 'anonimo'))
-            ->update(['ip' => null, 'user_agent' => null, 'user_id' => null, 'visitor_id' => 'anonimo']);
+            ->where(fn ($query) => $query->whereNotNull('ip')->orWhereNotNull('user_agent')->orWhereNotNull('user_id')->orWhereNotNull('cookies')->orWhere('visitor_id', '!=', 'anonimo'))
+            ->update(['ip' => null, 'user_agent' => null, 'user_id' => null, 'cookies' => null, 'visitor_id' => 'anonimo']);
 
         $consentimentos = ConsentimentoCookie::query()->where('aceito_em', '<', now()->subYears(5))->delete();
 

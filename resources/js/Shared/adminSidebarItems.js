@@ -36,8 +36,8 @@ export const sidebarSections = [
         // Oportunidades (pedido do Lira 2026-10-12): Google e TikTok (antes
         // submenu do Radar) e os mais vendidos de TERCEIROS em cada
         // marketplace (correção do Lira 2026-10-12: não são as vendas da
-        // loja). O Radar do Mercado Livre virou submenu do Mercado Livre e
-        // abre a mesma tela dividida (mais vendidos em cima, Radar embaixo).
+        // loja). Mercado Livre abre a tela dividida (mais vendidos em cima,
+        // Radar embaixo) e o item interno Radar abre só o Radar do ML.
         heading: 'Oportunidades',
         items: [
             { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google', permission: 'relatorios.view' },

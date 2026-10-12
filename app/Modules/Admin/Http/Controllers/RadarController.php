@@ -32,16 +32,17 @@ use Inertia\Response;
  * mesma tela só com o bloco daquela fonte, e só a consulta dela roda.
  *
  * Menu de 2026-10-12 (pedido do Lira): TikTok e Google viraram itens de
- * Oportunidades e o Mercado Livre virou Oportunidades › Mercado Livre ›
- * Radar, que abre a tela do OportunidadesController (mais vendidos em cima,
- * este bloco do ML embaixo). Por isso 'mercado-livre' saiu de FONTES; o
- * bloco continua no Radar geral (/admin/radar).
+ * Oportunidades e o Mercado Livre tem o item interno Radar, que abre esta
+ * tela só com o bloco do ML (/admin/radar/mercado-livre). A tela
+ * Oportunidades › Mercado Livre mostra os mais vendidos em cima e este
+ * mesmo bloco embaixo.
  */
 class RadarController extends Controller
 {
     /** Fonte da URL => nome visível (o mesmo do submenu). */
     public const FONTES = [
         'tiktok' => 'TikTok',
+        'mercado-livre' => 'Mercado Livre',
         'google' => 'Google',
     ];
 

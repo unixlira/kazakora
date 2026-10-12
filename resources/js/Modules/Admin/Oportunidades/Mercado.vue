@@ -12,10 +12,8 @@ import { computed, ref } from 'vue';
 // de carregamento e os dados chegam logo depois (fica null até lá).
 // Tela dividida no Mercado Livre (pedido do Lira 2026-10-12): em cima os
 // mais vendidos, embaixo o bloco do Radar (`mercadoLivre`, adiado à parte).
-// Abre também em /admin/radar/mercado-livre (`base`).
 const props = defineProps({
     canal: { type: Object, required: true },
-    base: { type: String, default: null },
     filtros: { type: Object, required: true },
     categorias: { type: Array, default: () => [] },
     mercado: { type: Object, default: null },
@@ -27,8 +25,6 @@ const formatNumber = (value) => (value ?? 0).toLocaleString('pt-BR');
 const formatDateTime = (iso) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso));
 
 const ehMl = computed(() => props.canal.slug === 'mercado-livre');
-const ehRadar = computed(() => props.base?.startsWith('/admin/radar') ?? false);
-const titulo = computed(() => (ehRadar.value ? `${RADAR_NOME} · ${props.canal.nome}` : `Oportunidades · ${props.canal.nome}`));
 const categoria = ref(props.filtros.categoria ?? '');
 const termo = ref(props.filtros.termo ?? '');
 const carregando = ref(false);
@@ -37,7 +33,7 @@ const ocupado = computed(() => carregando.value || !props.mercado);
 
 const buscar = (extra = {}) => {
     const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value };
-    router.get(props.base ?? `/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
+    router.get(`/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
@@ -53,12 +49,12 @@ const faixaPreco = (p) => {
 </script>
 
 <template>
-    <Head :title="titulo" />
+    <Head :title="`Oportunidades · ${canal.nome}`" />
 
     <AdminLayout>
         <div class="mb-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">{{ ehRadar ? canal.nome : 'Oportunidades' }}</p>
-            <h1 class="text-2xl font-bold">{{ ehRadar ? titulo : `Mais vendidos e em alta · ${canal.nome}` }}</h1>
+            <p class="text-xs font-semibold uppercase tracking-wide text-[var(--texto-suave)]">Oportunidades</p>
+            <h1 class="text-2xl font-bold">Mais vendidos e em alta · {{ canal.nome }}</h1>
             <p class="mt-1 text-sm text-[var(--texto-suave)]">
                 Produtos de outros vendedores com muita venda no {{ canal.nome }}. Servem para achar produto novo: não são as vendas da KazaKora.
             </p>

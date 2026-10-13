@@ -9,9 +9,15 @@ class ConsentimentoCookie extends Model
 {
     public $timestamps = false;
 
+    public const ORIGEM_KAZAKORA = 'kazakora';
+
+    public const ORIGEM_BEAUTYKORA = 'beautykora';
+
+    public const ORIGENS = [self::ORIGEM_KAZAKORA, self::ORIGEM_BEAUTYKORA];
+
     protected $table = 'consentimentos_cookies';
 
-    protected $fillable = ['visitante_id', 'user_id', 'versao', 'ip', 'user_agent', 'aceito_em'];
+    protected $fillable = ['visitante_id', 'user_id', 'origem', 'versao', 'ip', 'user_agent', 'aceito_em'];
 
     protected function casts(): array
     {

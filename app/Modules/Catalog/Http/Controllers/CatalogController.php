@@ -78,12 +78,25 @@ class CatalogController extends Controller
                 [$search.'%', '%'.$search.'%'],
             ));
 
-        $products = fn () => (clone $baseQuery)
-            ->latest()
-            // 8 por vez; o "Carregar mais" da home busca a próxima página só
-            // com essa prop (pedido 2026-10-10).
-            ->paginate(8)
-            ->withQueryString();
+        // Primeira leva com 8 e depois de 12 em 12 (pedido 2026-10-13): a
+        // rolagem infinita da home busca a próxima página só com essa prop.
+        $products = function () use ($baseQuery, $request) {
+            $pagina = max(1, (int) $request->query('page', 1));
+            $total = (clone $baseQuery)->toBase()->getCountForPagination();
+
+            // Mesmo formato do paginate() nos campos que a tela usa; o
+            // paginate() não serve porque supõe páginas do mesmo tamanho.
+            return [
+                'data' => (clone $baseQuery)
+                    ->latest()
+                    ->skip($pagina === 1 ? 0 : 8 + ($pagina - 2) * 12)
+                    ->take($pagina === 1 ? 8 : 12)
+                    ->get(),
+                'current_page' => $pagina,
+                'last_page' => $total <= 8 ? 1 : 1 + (int) ceil(($total - 8) / 12),
+                'total' => $total,
+            ];
+        };
 
         // Sem busca/filtro a home é a vitrine (seções); com filtro, a lista com "Carregar mais".
         $modoLista = $search->isNotEmpty() || $tipo || $categoria !== '' || $request->boolean('todos');

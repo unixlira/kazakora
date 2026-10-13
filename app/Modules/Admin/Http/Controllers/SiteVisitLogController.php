@@ -48,8 +48,11 @@ class SiteVisitLogController extends Controller
     /** Período máximo de uma consulta: a regra de equipe/robô agrupa o período inteiro. */
     private const MAX_DIAS = 92;
 
-    /** Linhas no histórico de um visitante (robô passa de mil páginas num dia). */
-    private const MAX_HISTORICO = 500;
+    /** Linhas por página no histórico de um visitante (robô passa de mil páginas num dia). */
+    private const POR_PAGINA_HISTORICO = 100;
+
+    /** Visitas de fora (não internas) lidas para o "De onde veio" do olho. */
+    private const MAX_ENTRADAS = 500;
 
     /** Agrupa visitas sem IP (anonimizadas) pelo cookie; com IP, o IP basta. */
     private const CHAVE_ANONIMO = 'CASE WHEN ip IS NULL THEN visitor_id END';
@@ -162,10 +165,16 @@ class SiteVisitLogController extends Controller
      * de horário. Segue o "esconder equipe e robôs" da lista, para o
      * primeiro acesso bater com a linha clicada. O filtro de página não
      * entra: aqui é o caminho inteiro da pessoa.
+     *
+     * Paginado (POR_PAGINA_HISTORICO, parâmetro page); "De onde veio",
+     * "sem dado" e cookies olham o período inteiro, não só a página.
      */
     public function visitante(Request $request): JsonResponse
     {
-        $validated = $this->validarVisitante($request, ['todos' => ['nullable', 'boolean']]);
+        $validated = $this->validarVisitante($request, [
+            'todos' => ['nullable', 'boolean'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
         [$de, $ate, $fim] = $this->periodo($validated);
 
         $periodo = fn (): Builder => SiteVisit::query()->daLoja()
@@ -178,15 +187,17 @@ class SiteVisitLogController extends Controller
         }
 
         $total = (clone $query)->count();
+        $paginas = max(1, (int) ceil($total / self::POR_PAGINA_HISTORICO));
+        $paginaAtual = min((int) ($validated['page'] ?? 1), $paginas);
         $cookies = $this->cookiesDoVisitante($query);
         $equipe = $this->equipe();
         $site = rtrim((string) config('app.url'), '/');
 
-        $visitas = $query
+        $visitas = (clone $query)
             ->with('user:id,name')
             ->orderBy('created_at')
             ->orderBy('id')
-            ->limit(self::MAX_HISTORICO)
+            ->forPage($paginaAtual, self::POR_PAGINA_HISTORICO)
             ->get()
             ->map(fn (SiteVisit $v) => [
                 'id' => $v->id,
@@ -201,9 +212,20 @@ class SiteVisitLogController extends Controller
                 'consentiu' => (bool) $v->consentiu,
             ]);
 
-        // Por onde entrou: cada visita que não é navegação interna, sem
-        // repetir a mesma origem seguida (recarregar a página repete o Referer).
-        $entradas = $visitas
+        // Por onde entrou, no período inteiro: cada visita que não é navegação
+        // interna, sem repetir a mesma origem seguida (recarregar a página
+        // repete o Referer).
+        $entradas = (clone $query)
+            ->where(fn (Builder $q) => $q->whereNull('origem')->orWhere('origem', '!=', 'interno'))
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit(self::MAX_ENTRADAS)
+            ->get()
+            ->map(fn (SiteVisit $v) => [
+                'quando' => $v->created_at?->format('d/m/Y H:i:s'),
+                'path' => $v->path,
+                'origem' => $this->origemDaVisita($v),
+            ])
             ->filter(fn ($v) => ! in_array($v['origem']['chave'], ['interno', OrigemVisita::SEM_DADO], true))
             ->reduce(function (Collection $lista, array $v) {
                 $assinatura = json_encode(array_diff_key($v['origem'], ['rotulo' => 1]));
@@ -218,14 +240,17 @@ class SiteVisitLogController extends Controller
 
         return response()->json([
             'entradas' => $entradas,
-            'sem_dado' => $visitas->contains(fn ($v) => $v['origem']['chave'] === OrigemVisita::SEM_DADO),
+            // Mesma regra de chave(): sem origem gravada, sem Referer e sem UTM.
+            'sem_dado' => (clone $query)->whereNull('origem')->whereNull('referer')->whereNull('utm_source')->exists(),
             'cookies' => $cookies,
             'ip' => $validated['ip'] ?? null,
             'visitor_id' => isset($validated['ip']) ? null : $validated['visitor_id'],
             'de' => $de->format('d/m/Y'),
             'ate' => $ate->format('d/m/Y'),
             'total' => $total,
-            'limite' => self::MAX_HISTORICO,
+            'pagina' => $paginaAtual,
+            'paginas' => $paginas,
+            'por_pagina' => self::POR_PAGINA_HISTORICO,
             'visitas' => $visitas,
         ]);
     }

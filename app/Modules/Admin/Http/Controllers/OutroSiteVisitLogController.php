@@ -38,7 +38,8 @@ class OutroSiteVisitLogController extends Controller
 
     private const MAX_DIAS = 92;
 
-    private const MAX_HISTORICO = 500;
+    /** Linhas por página no histórico do olho. */
+    private const POR_PAGINA_HISTORICO = 100;
 
     public function index(Request $request): Response
     {
@@ -112,10 +113,11 @@ class OutroSiteVisitLogController extends Controller
         ]);
     }
 
-    /** O olho: os horários das páginas que o IP abriu no período. */
+    /** O olho: os horários das páginas que o IP abriu no período, paginados. */
     public function visitante(Request $request): JsonResponse
     {
         $validated = $this->validarVisitante($request);
+        $request->validate(['page' => ['nullable', 'integer', 'min:1']]);
         [$de, $ate, $fim] = $this->periodo($validated);
 
         $query = $this->doSite($this->site($request))
@@ -124,6 +126,8 @@ class OutroSiteVisitLogController extends Controller
             ->where('ip', $validated['ip']);
 
         $total = (clone $query)->count();
+        $paginas = max(1, (int) ceil($total / self::POR_PAGINA_HISTORICO));
+        $paginaAtual = min((int) $request->input('page', 1), $paginas);
         $cliente = $this->clientesPorIp(collect([$validated['ip']]))[$validated['ip']] ?? null;
 
         return response()->json([
@@ -131,9 +135,11 @@ class OutroSiteVisitLogController extends Controller
             'de' => $de->format('d/m/Y'),
             'ate' => $ate->format('d/m/Y'),
             'total' => $total,
-            'limite' => self::MAX_HISTORICO,
+            'pagina' => $paginaAtual,
+            'paginas' => $paginas,
+            'por_pagina' => self::POR_PAGINA_HISTORICO,
             'cliente' => $cliente,
-            'visitas' => $query->orderBy('created_at')->orderBy('id')->limit(self::MAX_HISTORICO)->get()
+            'visitas' => $query->orderBy('created_at')->orderBy('id')->forPage($paginaAtual, self::POR_PAGINA_HISTORICO)->get()
                 ->map(fn (SiteVisit $v) => ['id' => $v->id, 'quando' => $v->created_at?->format('d/m/Y H:i:s')]),
         ]);
     }

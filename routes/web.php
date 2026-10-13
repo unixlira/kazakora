@@ -529,6 +529,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Oportunidades (correção do Lira 2026-10-12): mais vendidos e buscas
         // em alta de TERCEIROS no Mercado Livre e na Shopee (dado de mercado,
         // não as vendas da loja).
+        // Inteligência (Lira 2026-10-13): JSON do modal do Mercado Livre.
+        // Vem antes de oportunidades/{canal}.
+        Route::get('oportunidades/mercado-livre/inteligencia', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'inteligencia'])
+            ->middleware('throttle:30,1')
+            ->name('oportunidades.inteligencia');
         Route::get('oportunidades/{canal}', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
             ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\OportunidadesController::CANAIS))
             ->middleware('throttle:30,1')

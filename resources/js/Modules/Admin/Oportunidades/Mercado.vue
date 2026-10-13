@@ -4,7 +4,7 @@ import MercadoLivreBloco from '@/Modules/Admin/Radar/MercadoLivreBloco.vue';
 import ShopeeRadarBloco from './ShopeeRadarBloco.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
 import { Deferred, Head, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onUnmounted, reactive, ref } from 'vue';
 
 // Oportunidades (correção do Lira 2026-10-12): produtos de TERCEIROS que
 // estão vendendo muito ou em alta no marketplace, para achar produto novo.
@@ -52,6 +52,75 @@ const faixaPreco = (p) => {
     if (p.preco_max !== null && p.preco_max > p.preco_min) return `${formatPrice(p.preco_min)} a ${formatPrice(p.preco_max)}`;
     return formatPrice(p.preco_min);
 };
+
+// Inteligência (pedido do Lira 2026-10-13): passa os mais vendidos da
+// categoria pelo filtro "demanda, concorrência e margem" e mostra num modal.
+// Mesmo padrão do modal do olho em Visitas do site (sem Teleport: as cores
+// do admin só valem dentro do .admin-shell).
+const intel = reactive({ aberto: false, carregando: false, erro: '', dados: null });
+const botaoIntel = ref(null);
+const caixaIntel = ref(null);
+const fecharIntel = ref(null);
+const SECOES_INTEL = [
+    { chave: 'oportunidade', titulo: 'Oportunidades', icone: 'fa-lightbulb', descricao: 'Até 5 vendedores, menor preço entre R$ 20 e R$ 200 e sem marca forte.' },
+    { chave: 'ja_vendemos', titulo: 'Já vendemos', icone: 'fa-store', descricao: 'Parecidos com produtos ativos da KazaKora: nosso custo contra o preço do ML.' },
+    { chave: 'evitar', titulo: 'Evitar (guerra de preço)', icone: 'fa-triangle-exclamation', descricao: '20 vendedores ou mais, ou marca forte segurando o preço.' },
+];
+
+const onKeydownIntel = (event) => {
+    if (!intel.aberto) return;
+    if (event.key === 'Escape') {
+        fecharModalIntel();
+        return;
+    }
+    // Foco preso no modal enquanto ele está aberto.
+    if (event.key === 'Tab' && caixaIntel.value) {
+        const focaveis = [...caixaIntel.value.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+        if (!focaveis.length) return;
+        const [primeiro, ultimo] = [focaveis[0], focaveis[focaveis.length - 1]];
+        if (event.shiftKey && document.activeElement === primeiro) {
+            event.preventDefault();
+            ultimo.focus();
+        } else if (!event.shiftKey && document.activeElement === ultimo) {
+            event.preventDefault();
+            primeiro.focus();
+        }
+    }
+};
+
+const fecharModalIntel = () => {
+    intel.aberto = false;
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onKeydownIntel);
+    botaoIntel.value?.focus();
+};
+
+const abrirIntel = async () => {
+    Object.assign(intel, { carregando: true, erro: '', dados: null });
+    try {
+        const query = new URLSearchParams({ categoria: props.filtros.categoria ?? '' });
+        const r = await fetch(`/admin/oportunidades/mercado-livre/inteligencia?${query}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const dados = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(dados.message || 'Não foi possível processar a categoria agora.');
+        intel.dados = dados;
+    } catch (e) {
+        intel.erro = e.message || 'Não foi possível processar a categoria agora.';
+    } finally {
+        intel.carregando = false;
+    }
+    intel.aberto = true;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeydownIntel);
+    await nextTick();
+    fecharIntel.value?.focus();
+};
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', onKeydownIntel);
+    document.body.style.overflow = '';
+});
 </script>
 
 <template>
@@ -88,6 +157,12 @@ const faixaPreco = (p) => {
             </button>
             <div class="ml-auto flex items-center gap-3 text-xs text-[var(--texto-suave)]">
                 <span v-if="mercado?.atualizado_em">Consultado em {{ formatDateTime(mercado.atualizado_em) }}</span>
+                <button v-if="ehMl" ref="botaoIntel" type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="ocupado || intel.carregando" :aria-busy="intel.carregando" title="Filtra os mais vendidos por demanda, concorrência e margem"
+                    @click="abrirIntel">
+                    <i class="fas" :class="intel.carregando ? 'fa-circle-notch animate-spin' : 'fa-lightbulb'" aria-hidden="true"></i>
+                    {{ intel.carregando ? 'Processando…' : 'Inteligência' }}
+                </button>
                 <button v-if="mercado?.configurado !== false" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:opacity-50" :disabled="ocupado" @click="buscar({ atualizar: 1 })">
                     {{ ocupado ? 'Consultando…' : 'Consultar de novo' }}
                 </button>
@@ -219,5 +294,97 @@ const faixaPreco = (p) => {
             <h2 id="radar-titulo" class="mb-3 text-lg font-bold">{{ RADAR_NOME }}</h2>
             <MercadoLivreBloco :mercado-livre="mercadoLivre" :link-outras-categorias="false" />
         </section>
+
+        <!-- Modal da Inteligência (Lira 2026-10-13) -->
+        <div v-if="intel.aberto" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" @click="fecharModalIntel"></div>
+            <div ref="caixaIntel" role="dialog" aria-modal="true" aria-labelledby="intel-titulo" aria-describedby="intel-resumo"
+                class="relative flex w-full max-w-6xl flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl"
+                style="max-height: 90vh;">
+                <div class="flex items-start justify-between gap-3 border-b border-[var(--surface-border)] px-6 py-4">
+                    <div class="min-w-0">
+                        <h2 id="intel-titulo" class="flex items-center gap-2 text-lg font-semibold">
+                            <i class="fas fa-lightbulb text-primary" aria-hidden="true"></i>
+                            Inteligência · {{ nomeCategoria }}
+                        </h2>
+                        <p id="intel-resumo" class="text-sm text-[var(--texto-suave)]">
+                            <template v-if="intel.dados">
+                                {{ intel.dados.resumo.texto }} De {{ intel.dados.resumo.total }} produtos analisados<template v-if="intel.dados.atualizado_em">, consulta de {{ formatDateTime(intel.dados.atualizado_em) }}</template>.
+                            </template>
+                            <template v-else>Filtro de demanda, concorrência e margem.</template>
+                        </p>
+                    </div>
+                    <button ref="fecharIntel" type="button"
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--texto-suave)] hover:bg-[var(--surface-muted)]"
+                        aria-label="Fechar" @click="fecharModalIntel">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="overflow-auto px-6 py-4">
+                    <p v-if="intel.erro" class="rounded-xl border border-[var(--color-error)] px-4 py-3 text-sm text-error" role="alert">{{ intel.erro }}</p>
+                    <template v-else-if="intel.dados">
+                        <p v-if="intel.dados.erro" class="mb-4 rounded-xl border border-[var(--color-error)] px-4 py-3 text-sm text-error" role="alert">{{ intel.dados.erro }}</p>
+
+                        <!-- Contagens -->
+                        <dl class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            <div v-for="c in [...SECOES_INTEL, { chave: 'outros', titulo: 'Outros' }]" :key="c.chave" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/40 px-4 py-3">
+                                <dt class="text-xs text-[var(--texto-suave)]">{{ c.titulo }}</dt>
+                                <dd class="text-2xl font-bold tabular-nums">{{ intel.dados.resumo[c.chave] }}</dd>
+                            </div>
+                        </dl>
+
+                        <section v-for="sec in SECOES_INTEL" :key="sec.chave" class="mb-6" :aria-labelledby="`intel-${sec.chave}`">
+                            <h3 :id="`intel-${sec.chave}`" class="flex items-center gap-2 text-base font-semibold">
+                                <i class="fas" :class="sec.icone" aria-hidden="true"></i>
+                                {{ sec.titulo }} ({{ intel.dados.grupos[sec.chave].length }})
+                            </h3>
+                            <p class="mb-2 text-xs text-[var(--texto-suave)]">{{ sec.descricao }}</p>
+                            <p v-if="!intel.dados.grupos[sec.chave].length" class="rounded-lg border border-dashed border-[var(--surface-border)] px-4 py-3 text-sm text-[var(--texto-suave)]">Nenhum produto nesta categoria.</p>
+                            <ul v-else class="divide-y divide-[var(--surface-border)] rounded-xl border border-[var(--surface-border)]">
+                                <li v-for="p in intel.dados.grupos[sec.chave]" :key="p.id" class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start">
+                                    <div class="flex min-w-0 flex-1 items-start gap-3">
+                                        <span class="w-8 shrink-0 pt-1 text-right text-sm tabular-nums text-[var(--texto-suave)]">{{ p.posicao }}º</span>
+                                        <img v-if="p.imagem" :src="p.imagem" alt="" width="56" height="56" loading="lazy" class="h-14 w-14 shrink-0 rounded-lg border border-[var(--surface-border)] bg-white object-contain">
+                                        <span v-else class="h-14 w-14 shrink-0 rounded-lg bg-[var(--surface-muted)]" aria-hidden="true"></span>
+                                        <div class="min-w-0 text-sm">
+                                            <a :href="p.link" target="_blank" rel="noopener noreferrer" class="line-clamp-2 font-medium hover:text-[var(--destaque)] hover:underline">{{ p.nome }}</a>
+                                            <p class="mt-0.5 text-xs text-[var(--texto-suave)]">
+                                                {{ p.vendedores === null ? 'vendedores ?' : `${formatNumber(p.vendedores)} ${p.vendedores === 1 ? 'vendedor' : 'vendedores'}` }}
+                                                · {{ faixaPreco(p) }}
+                                                <template v-if="p.custo_max_15 !== null"> · custo máx. p/ 15%: <strong class="font-semibold">{{ formatPrice(p.custo_max_15) }}</strong></template>
+                                            </p>
+                                            <p v-if="p.motivo_guerra" class="mt-1 text-xs"><i class="fas fa-triangle-exclamation mr-1 text-amber-500" aria-hidden="true"></i>Guerra de preço: {{ p.motivo_guerra }}</p>
+                                            <div v-if="p.nosso" class="mt-1.5 rounded-lg bg-[var(--surface-muted)]/60 px-2.5 py-1.5 text-xs">
+                                                <span class="font-medium">Nosso #{{ p.nosso.id }}</span> {{ p.nosso.nome }}
+                                                <span v-if="!p.nosso.confirmado" class="ml-1 rounded-full border border-[var(--surface-border)] px-1.5 text-[10px] uppercase tracking-wide text-[var(--texto-suave)]" title="Achado pelo nome, não confirmado">parecido</span>
+                                                <span class="block text-[var(--texto-suave)]">
+                                                    preço {{ formatPrice(p.nosso.preco) }} · custo {{ p.nosso.custo === null ? 'sem cadastro' : formatPrice(p.nosso.custo) }}<template v-if="p.nosso.piso_15 !== null"> · piso 15%: {{ formatPrice(p.nosso.piso_15) }}</template>
+                                                </span>
+                                            </div>
+                                            <p v-if="p.veredito" class="mt-1 text-xs font-medium">{{ p.veredito }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex shrink-0 gap-2 sm:flex-col">
+                                        <a :href="p.videos.tiktok" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-2.5 py-1 text-xs hover:bg-[var(--surface-muted)]">
+                                            <i class="fab fa-tiktok" aria-hidden="true"></i> Vídeos TikTok
+                                        </a>
+                                        <a :href="p.videos.youtube" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-2.5 py-1 text-xs hover:bg-[var(--surface-muted)]">
+                                            <i class="fab fa-youtube" aria-hidden="true"></i> Vídeos YouTube
+                                        </a>
+                                    </div>
+                                </li>
+                            </ul>
+                        </section>
+                    </template>
+                </div>
+
+                <p class="border-t border-[var(--surface-border)] px-6 py-3 text-xs text-[var(--texto-suave)]">
+                    Limitações: a API do Mercado Livre não informa unidades vendidas, então a posição no ranking é o sinal de demanda.
+                    "Vendedores" conta só quem anuncia no catálogo do produto. O fator 0,56 (custo ≈ 56% do preço para sobrar ~15%) é uma aproximação:
+                    a decisão final passa pela margem de contribuição (ContributionMargin). Produto "parecido" foi achado pelo nome e precisa ser conferido.
+                </p>
+            </div>
+        </div>
     </AdminLayout>
 </template>

@@ -406,7 +406,7 @@ return [
         'retry_delay_ms' => (int) env('GEMINI_RETRY_DELAY_MS', 1500),
         // Voz da Manuela (síntese de fala), usada só na resposta em áudio.
         'tts_model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
-        'tts_voice' => env('GEMINI_TTS_VOICE', 'Kore'),
+        'tts_voice' => env('GEMINI_TTS_VOICE', 'Algenib'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 30),
     ],
 

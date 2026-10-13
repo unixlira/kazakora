@@ -98,4 +98,44 @@ class VideoEmbalagemTest extends TestCase
         $this->assertDatabaseCount('order_packing_videos', 0);
         Storage::disk('local')->assertMissing('embalagem/1/velho.mp4');
     }
+
+    /**
+     * Lira não conseguia ver os vídeos (2026-10-13): saíam MP4 de 1000
+     * quadros/s. A conversão fixa 30/s e o reconverter troca o MP4 antigo
+     * só quando a conversão nova dá certo.
+     */
+    public function test_converte_em_30_quadros_e_reconverte_mp4_pronto(): void
+    {
+        $args = tempnam(sys_get_temp_dir(), 'ffargs');
+        $ffmpeg = tempnam(sys_get_temp_dir(), 'ffmpeg');
+        // ffmpeg falso: guarda os argumentos e grava "NOVO" no arquivo de saída (último argumento).
+        file_put_contents($ffmpeg, "#!/bin/sh\necho \"\$@\" > {$args}\nfor a in \"\$@\"; do s=\"\$a\"; done\nprintf NOVO > \"\$s\"\n");
+        chmod($ffmpeg, 0755);
+        config(['video-downloads.ffmpeg_binary' => $ffmpeg]);
+
+        Storage::disk('local')->put('embalagem/1/v.mp4', 'ANTIGO');
+        $video = OrderPackingVideo::create(['order_id' => $this->order->id, 'path' => 'embalagem/1/v.mp4', 'status' => 'pronto', 'tamanho' => 6, 'expira_em' => now()->addDays(90)]);
+
+        // Sem --executar não mexe em nada.
+        Bus::fake([ConverterVideoEmbalagem::class]);
+        $this->artisan('embalagem:reconverter')->assertSuccessful();
+        Bus::assertNotDispatched(ConverterVideoEmbalagem::class);
+        $this->artisan('embalagem:reconverter', ['ids' => [$video->id], '--executar' => true])->assertSuccessful();
+        Bus::assertDispatched(ConverterVideoEmbalagem::class, fn ($job) => $job->videoId === $video->id && $job->refazer);
+
+        // Pronto sem refazer: ignora.
+        app()->call([new ConverterVideoEmbalagem($video->id), 'handle']);
+        Storage::disk('local')->assertExists('embalagem/1/v.mp4');
+        $this->assertSame('ANTIGO', Storage::disk('local')->get('embalagem/1/v.mp4'));
+
+        app()->call([new ConverterVideoEmbalagem($video->id, true), 'handle']);
+        $this->assertStringContainsString('-r 30', file_get_contents($args));
+        $this->assertSame('NOVO', Storage::disk('local')->get('embalagem/1/v.mp4'));
+        Storage::disk('local')->assertMissing('embalagem/1/v.mp4.novo.mp4');
+        $this->assertSame('pronto', $video->fresh()->status);
+        $this->assertSame(4, $video->fresh()->tamanho);
+
+        @unlink($args);
+        @unlink($ffmpeg);
+    }
 }

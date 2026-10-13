@@ -155,6 +155,28 @@ class OportunidadesMercadoTest extends TestCase
                     ->etc()));
     }
 
+    /** Filtro de concorrência (Lira 2026-10-13): só o nível escolhido, nas duas listas da tela. */
+    public function test_filtro_de_concorrencia_mostra_so_o_nivel_escolhido(): void
+    {
+        $this->fakeMercadoLivre();
+
+        $this->actingAs($this->admin())->get('/admin/oportunidades/mercado-livre?categoria=MLB263532&concorrencia=alta')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filtros.concorrencia', 'alta')
+                ->where('categoriaPadrao', 'MLB1574')
+                ->loadDeferredProps('default', fn (Assert $reload) => $reload
+                    ->has('mercado.produtos', 1)
+                    ->where('mercado.produtos.0.nome', 'Parafusadeira 12V')
+                    ->where('mercado.produtos.0.concorrencia', 'alta')
+                    ->where('mercado.ocultos', 1)
+                    ->etc()));
+
+        $this->actingAs($this->admin())->get('/admin/oportunidades/mercado-livre?concorrencia=qualquer')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('filtros.concorrencia', null));
+    }
+
     public function test_categoria_invalida_volta_para_a_padrao_e_canal_desconhecido_da_404(): void
     {
         Http::fake(['*' => Http::response([])]);

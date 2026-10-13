@@ -20,6 +20,7 @@ const props = defineProps({
     canal: { type: Object, required: true },
     base: { type: String, default: null },
     filtros: { type: Object, required: true },
+    categoriaPadrao: { type: String, default: null },
     categorias: { type: Array, default: () => [] },
     mercado: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
@@ -34,17 +35,31 @@ const ehMl = computed(() => props.canal.slug === 'mercado-livre');
 const titulo = computed(() => `Oportunidades · ${props.canal.nome}`);
 const categoria = ref(props.filtros.categoria ?? '');
 const termo = ref(props.filtros.termo ?? '');
+// Filtro de concorrência (Lira 2026-10-13): o servidor devolve só o nível
+// escolhido, dos produtos com menos vendedores para os com mais.
+const concorrencia = ref(props.filtros.concorrencia ?? '');
+const NIVEIS = { baixa: 'baixa', media: 'média', alta: 'alta' };
 const carregando = ref(false);
 // Ocupado também enquanto os dados adiados não chegaram.
 const ocupado = computed(() => carregando.value || !props.mercado);
 
 const buscar = (extra = {}) => {
-    const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value };
+    const filtros = ehMl.value
+        ? { categoria: categoria.value, ...(concorrencia.value ? { concorrencia: concorrencia.value } : {}) }
+        : { termo: termo.value };
     router.get(props.base ?? `/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },
     });
+};
+
+// "Limpar" volta a tela ao estado inicial: categoria padrão, sem filtro.
+const temFiltro = computed(() => Boolean(props.filtros.concorrencia) || (props.categoriaPadrao && props.filtros.categoria !== props.categoriaPadrao));
+const limpar = () => {
+    categoria.value = props.categoriaPadrao ?? categoria.value;
+    concorrencia.value = '';
+    buscar();
 };
 
 // "Só nichos pouco disputados" (Lira 2026-10-13): no ML a lista já vem com
@@ -155,6 +170,17 @@ onUnmounted(() => {
                     <option v-if="!categorias.some((c) => c.id === categoria)" :value="categoria">{{ categoria }}</option>
                 </select>
             </label>
+            <label v-if="ehMl" class="text-xs text-[var(--texto-suave)]">Concorrência
+                <select v-model="concorrencia" name="concorrencia" class="mt-1 block min-w-40 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm" @change="buscar()">
+                    <option value="">Todas</option>
+                    <option value="baixa">Baixa (até 3 vendedores)</option>
+                    <option value="media">Média (4 a 10)</option>
+                    <option value="alta">Alta (mais de 10)</option>
+                </select>
+            </label>
+            <button v-if="ehMl" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50" :disabled="ocupado || !temFiltro" @click="limpar()">
+                <i class="fas fa-eraser mr-1" aria-hidden="true"></i> Limpar
+            </button>
             <label v-else class="text-xs text-[var(--texto-suave)]">Palavra-chave (vazio = mais vendidos em geral)
                 <input v-model="termo" type="search" name="termo" maxlength="80" autocomplete="off" placeholder="ex.: organizador, luminária…"
                     class="mt-1 block w-72 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm">
@@ -239,7 +265,8 @@ onUnmounted(() => {
                     </p>
 
                     <p v-if="mercado.produtos.length === 0 && !mercado.erro" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
-                        Nenhum produto encontrado.
+                        <template v-if="ehMl && filtros.concorrencia">Nenhum produto com concorrência {{ NIVEIS[filtros.concorrencia] }} nesta categoria agora.</template>
+                        <template v-else>Nenhum produto encontrado.</template>
                     </p>
 
                     <div v-else-if="mercado.produtos.length && produtosVisiveis.length" class="overflow-x-auto">
@@ -283,7 +310,8 @@ onUnmounted(() => {
                     <p class="border-t border-[var(--surface-border)] px-4 py-3 text-xs text-[var(--texto-suave)]">
                         <template v-if="ehMl">
                             Ranking "Mais vendidos" do próprio Mercado Livre na categoria. Preço = menor e maior entre os vendedores do catálogo.
-                            Nichos pouco disputados (até 3 vendedores, sem guerra de preço) vêm primeiro; "pagar até" = mediana × 0,56, o máximo de custo para sobrar 15% vendendo pela mediana.
+                            <template v-if="filtros.concorrencia">Só concorrência {{ NIVEIS[filtros.concorrencia] }}, do produto com menos vendedores para o com mais;</template>
+                            <template v-else>Nichos pouco disputados (até 3 vendedores, sem guerra de preço) vêm primeiro;</template> "pagar até" = mediana × 0,56, o máximo de custo para sobrar 15% vendendo pela mediana.
                             <template v-if="mercado.ocultos"> {{ mercado.ocultos }} anúncio(s) do ranking não são de catálogo e o ML não libera os dados deles.</template>
                         </template>
                         <template v-else>Ordenado pelas vendas informadas pela API de Afiliados da Shopee.</template>
@@ -309,7 +337,7 @@ onUnmounted(() => {
         <!-- Embaixo, a tabela do Radar (pedido do Lira 2026-10-12) -->
         <section v-if="ehMl" class="mt-8" aria-labelledby="radar-titulo">
             <h2 id="radar-titulo" class="mb-3 text-lg font-bold">{{ RADAR_NOME }}</h2>
-            <MercadoLivreBloco :mercado-livre="mercadoLivre" :link-outras-categorias="false" />
+            <MercadoLivreBloco :mercado-livre="mercadoLivre" :link-outras-categorias="false" :concorrencia="filtros.concorrencia ? NIVEIS[filtros.concorrencia] : null" />
         </section>
 
         <!-- Modal da Inteligência (Lira 2026-10-13) -->

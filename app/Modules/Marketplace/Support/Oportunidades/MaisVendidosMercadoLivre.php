@@ -268,6 +268,26 @@ class MaisVendidosMercadoLivre
         return $produtos;
     }
 
+    public const NIVEIS_CONCORRENCIA = ['baixa', 'media', 'alta'];
+
+    /**
+     * Filtro de concorrência da tela (pedido do Lira 2026-10-13): só os
+     * produtos do nível escolhido, do menos para o mais disputado (menos
+     * vendedores primeiro); empate pela posição do ranking. Nível vazio ou
+     * desconhecido devolve a lista como veio.
+     */
+    public static function filtrarConcorrencia(array $produtos, ?string $nivel): array
+    {
+        if (! in_array($nivel, self::NIVEIS_CONCORRENCIA, true)) {
+            return $produtos;
+        }
+
+        $produtos = array_values(array_filter($produtos, fn (array $p) => ($p['concorrencia'] ?? null) === $nivel));
+        usort($produtos, fn (array $a, array $b) => [$a['vendedores'] ?? PHP_INT_MAX, $a['posicao'] ?? PHP_INT_MAX] <=> [$b['vendedores'] ?? PHP_INT_MAX, $b['posicao'] ?? PHP_INT_MAX]);
+
+        return $produtos;
+    }
+
     /** @param list<float> $precos */
     private static function mediana(array $precos): ?float
     {

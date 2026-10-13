@@ -1,12 +1,13 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
+import CarregandoProdutos from '@/Shared/Components/CarregandoProdutos.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
 import MaisBuscadosSlider from '@/Shared/Components/MaisBuscadosSlider.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import SecaoProdutos from '@/Shared/Components/SecaoProdutos.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({
     banners: {
@@ -14,7 +15,7 @@ const props = defineProps({
         default: () => [],
     },
     // Home sem filtro (pedido 2026-10-10): seções da vitrine. Com busca ou
-    // filtro vem null e a tela mostra a lista com "Carregar mais".
+    // filtro vem null e a tela mostra a lista com rolagem infinita.
     vitrine: {
         type: Object,
         default: null,
@@ -84,9 +85,10 @@ const BENEFICIOS = [
     { icone: 'fa-face-smile', titulo: 'Satisfação Garantida', texto: 'Você 100% feliz ou seu reembolso garantido' },
 ];
 
-// Catálogo 8 por vez (pedido 2026-10-10): "Carregar mais" busca só a próxima
-// página dos produtos (sem recarregar a tela nem mudar o endereço) e junta
-// embaixo. Trocar de aba/busca recomeça a lista.
+// Catálogo 8 por vez (pedido 2026-10-10): busca só a próxima página dos
+// produtos (sem recarregar a tela nem mudar o endereço) e junta embaixo.
+// Trocar de aba/busca recomeça a lista. Desde 2026-10-13 sem botão: carrega
+// sozinho quando o fim da lista chega perto da tela (rolagem infinita).
 const listaProdutos = ref([...(props.products?.data ?? [])]);
 const carregandoMais = ref(false);
 let somarNaLista = false;
@@ -121,9 +123,30 @@ const carregarMais = () => {
         preserveUrl: true,
         preserveScroll: true,
         onError: () => { somarNaLista = false; },
-        onFinish: () => { carregandoMais.value = false; },
+        onFinish: () => {
+            carregandoMais.value = false;
+            // Se a lista nova ainda não encheu a tela (monitor grande), o
+            // marcador continua visível e o observador não avisa de novo:
+            // observar outra vez faz ele conferir na hora.
+            nextTick(observarFim);
+        },
     });
 };
+
+// Marcador invisível no fim da lista: ao chegar a ~600px da tela, carrega a
+// próxima página.
+const fimDaLista = ref(null);
+let observador = null;
+const observarFim = () => {
+    observador?.disconnect();
+    if (!fimDaLista.value) return;
+    observador ??= new IntersectionObserver((entradas) => {
+        if (entradas.some((entrada) => entrada.isIntersecting)) carregarMais();
+    }, { rootMargin: '0px 0px 600px 0px' });
+    observador.observe(fimDaLista.value);
+};
+watch(fimDaLista, observarFim);
+onBeforeUnmount(() => observador?.disconnect());
 </script>
 
 <template>
@@ -183,7 +206,7 @@ const carregarMais = () => {
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
         </template>
 
-        <!-- Lista (busca, aba ou departamento) com "Carregar mais" -->
+        <!-- Lista (busca, aba ou departamento) com rolagem infinita -->
         <section v-else id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 pt-8 md:px-6">
             <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
                 <div>
@@ -239,13 +262,10 @@ const carregarMais = () => {
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
             </div>
 
-            <div v-if="temMais" class="mt-10 flex flex-col items-center gap-2">
-                <button type="button" :disabled="carregandoMais"
-                    class="inline-flex items-center gap-2 rounded-lg bg-store-accent px-8 py-3 text-sm font-semibold text-store-accent-contrast transition-opacity hover:opacity-90 disabled:opacity-60"
-                    @click="carregarMais">
-                    <i class="fa-solid" :class="carregandoMais ? 'fa-spinner animate-spin' : 'fa-plus'"></i>
-                    {{ carregandoMais ? 'Carregando...' : 'Carregar mais produtos' }}
-                </button>
+            <!-- Enquanto a próxima leva chega: cards fantasma na mesma grade (2026-10-13) -->
+            <CarregandoProdutos v-if="carregandoMais" />
+
+            <div v-if="temMais" ref="fimDaLista" class="mt-10 flex flex-col items-center gap-2">
                 <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products?.total }}</span>
             </div>
         </section>

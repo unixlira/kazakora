@@ -2,8 +2,8 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { reactive, ref } from 'vue';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { computed, reactive, ref } from 'vue';
 
 // Vídeos de embalagem (2026-10-13): tudo o que o KoraSync gravou, com
 // filtro por período, canal, situação e pedido/cliente, e o vídeo tocando na própria tela.
@@ -13,6 +13,9 @@ const props = defineProps({
     filtros: { type: Object, default: () => ({}) },
     canais: { type: Array, default: () => [] },
     diasGuardado: { type: Number, default: 90 },
+    regra: { type: Object, default: () => ({ modo: 'nenhum', categorias: [], produtos: [] }) },
+    categorias: { type: Array, default: () => [] },
+    produtos: { type: Array, default: () => [] },
 });
 
 const NOMES = { processando: 'Convertendo', pronto: 'Pronto', erro: 'Erro' };
@@ -47,6 +50,38 @@ const alternar = (video) => {
     aberto.value = aberto.value === video.id ? null : video.id;
 };
 
+// O que gravar (2026-10-13): o KoraSync só liga a câmera para a caixa que entra na regra.
+const MODOS = [
+    { valor: 'nenhum', nome: 'Não gravar', ajuda: 'A câmera do KoraSync fica desligada.' },
+    { valor: 'todos', nome: 'Gravar todos', ajuda: 'Toda caixa embalada é gravada.' },
+    { valor: 'selecionados', nome: 'Só os escolhidos', ajuda: 'Grava a caixa que tiver pelo menos um item das categorias ou produtos marcados.' },
+];
+const regraForm = useForm({
+    modo: props.regra.modo ?? 'nenhum',
+    categorias: [...(props.regra.categorias ?? [])],
+    produtos: [...(props.regra.produtos ?? [])],
+});
+const regraAberta = ref(false);
+const buscaProduto = ref('');
+const nomeCategoria = computed(() => Object.fromEntries(props.categorias.map((c) => [c.id, c.name])));
+const produtosVisiveis = computed(() => {
+    const termo = buscaProduto.value.trim().toLowerCase();
+    const lista = termo
+        ? props.produtos.filter((p) => `${p.nome} ${p.sku ?? ''}`.toLowerCase().includes(termo))
+        : props.produtos;
+    return lista.slice(0, 200);
+});
+const resumoRegra = computed(() => {
+    if (props.regra.modo === 'todos') return 'Gravando todas as caixas.';
+    if (props.regra.modo === 'selecionados') {
+        return `Gravando só ${props.regra.categorias.length} categoria(s) e ${props.regra.produtos.length} produto(s) escolhidos.`;
+    }
+    return 'Gravação desligada.';
+});
+const salvarRegra = () => {
+    regraForm.put('/admin/videos-embalagem/regra', { preserveScroll: true, onSuccess: () => { regraAberta.value = false; } });
+};
+
 const numero = (valor) => Number(valor ?? 0).toLocaleString('pt-BR');
 const dataHora = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
 const dia = (valor) => (valor ? new Date(valor).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—');
@@ -70,6 +105,67 @@ const duracao = (s) => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
             <CardStats stat-subtitle="PEDIDOS" :stat-title="numero(props.totais.pedidos)" stat-icon-name="fas fa-box" variant="info" compact />
             <CardStats stat-subtitle="ESPAÇO" :stat-title="`${numero(props.totais.tamanho_mb)} MB`" stat-icon-name="fas fa-hard-drive" variant="info" compact />
         </div>
+
+        <section class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-base font-semibold">O que gravar</h2>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{{ resumoRegra }}</p>
+                </div>
+                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm font-medium text-primary" :aria-expanded="regraAberta" @click="regraAberta = !regraAberta">
+                    <i :class="['fas mr-1', regraAberta ? 'fa-xmark' : 'fa-sliders']" aria-hidden="true"></i>{{ regraAberta ? 'Fechar' : 'Escolher' }}
+                </button>
+            </div>
+
+            <form v-if="regraAberta" class="mt-4 space-y-4" @submit.prevent="salvarRegra">
+                <fieldset class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <legend class="sr-only">Modo de gravação</legend>
+                    <label v-for="m in MODOS" :key="m.valor"
+                        :class="['cursor-pointer rounded-lg border p-3 text-sm', regraForm.modo === m.valor ? 'border-primary bg-primary/5' : 'border-[var(--surface-border)]']">
+                        <input v-model="regraForm.modo" type="radio" name="modo" :value="m.valor" class="mr-2">
+                        <span class="font-medium">{{ m.nome }}</span>
+                        <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">{{ m.ajuda }}</span>
+                    </label>
+                </fieldset>
+
+                <template v-if="regraForm.modo === 'selecionados'">
+                    <div>
+                        <h3 class="mb-2 text-sm font-semibold">Categorias <span class="font-normal text-slate-500">({{ regraForm.categorias.length }} marcada(s))</span></h3>
+                        <div class="flex flex-wrap gap-2">
+                            <label v-for="c in props.categorias" :key="c.id"
+                                :class="['cursor-pointer rounded-full border px-3 py-1 text-sm', regraForm.categorias.includes(c.id) ? 'border-primary bg-primary/10 text-primary' : 'border-[var(--surface-border)]']">
+                                <input v-model="regraForm.categorias" type="checkbox" :value="c.id" class="sr-only">{{ c.name }}
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="mb-2 text-sm font-semibold">Produtos <span class="font-normal text-slate-500">({{ regraForm.produtos.length }} marcado(s); a variação de cor entra junto)</span></h3>
+                        <label for="ve-busca-produto" class="sr-only">Buscar produto</label>
+                        <input id="ve-busca-produto" v-model="buscaProduto" type="search" autocomplete="off" placeholder="Buscar por nome ou SKU"
+                            class="mb-2 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-2 text-sm sm:max-w-md">
+                        <div class="max-h-72 overflow-y-auto rounded-lg border border-[var(--surface-border)]">
+                            <label v-for="p in produtosVisiveis" :key="p.id" class="flex cursor-pointer items-center gap-3 border-b border-[var(--surface-border)] px-3 py-2 text-sm last:border-0 hover:bg-[var(--surface-muted)]/50">
+                                <input v-model="regraForm.produtos" type="checkbox" :value="p.id">
+                                <span class="flex-1">
+                                    {{ p.nome }}
+                                    <span v-if="!p.ativo" class="ml-1 text-xs text-slate-400">(inativo)</span>
+                                    <span class="block text-xs text-slate-500">{{ p.sku ?? 'sem SKU' }}<span v-if="p.categoria"> · {{ nomeCategoria[p.categoria] }}</span></span>
+                                </span>
+                            </label>
+                            <p v-if="produtosVisiveis.length === 0" class="px-3 py-4 text-center text-sm text-slate-500">Nenhum produto com esse nome.</p>
+                        </div>
+                    </div>
+                </template>
+
+                <div class="flex items-center gap-3">
+                    <button type="submit" :disabled="regraForm.processing" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-60">
+                        Salvar escolha
+                    </button>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">O KoraSync passa a seguir em até 1 minuto.</span>
+                </div>
+            </form>
+        </section>
 
         <form class="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm sm:grid-cols-3 lg:grid-cols-6" @submit.prevent="buscar">
             <div>

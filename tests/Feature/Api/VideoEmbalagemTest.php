@@ -3,9 +3,13 @@
 namespace Tests\Feature\Api;
 
 use App\Models\User;
+use App\Modules\Catalog\Models\Category;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Jobs\ConverterVideoEmbalagem;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\OrderPackingVideo;
+use App\Modules\Checkout\Support\RegraVideoEmbalagem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
@@ -97,6 +101,57 @@ class VideoEmbalagemTest extends TestCase
 
         $this->assertDatabaseCount('order_packing_videos', 0);
         Storage::disk('local')->assertMissing('embalagem/1/velho.mp4');
+    }
+
+    public function test_limpeza_com_todos_apaga_tambem_os_que_nao_venceram(): void
+    {
+        Storage::disk('local')->put('embalagem/1/novo.mp4', 'x');
+        OrderPackingVideo::create(['order_id' => $this->order->id, 'path' => 'embalagem/1/novo.mp4', 'status' => 'pronto', 'expira_em' => now()->addDays(80)]);
+
+        $this->artisan('videos:limpar-embalagem')->assertSuccessful();
+        $this->assertDatabaseCount('order_packing_videos', 1);
+
+        $this->artisan('videos:limpar-embalagem', ['--todos' => true])->assertSuccessful();
+        $this->assertDatabaseCount('order_packing_videos', 0);
+        Storage::disk('local')->assertMissing('embalagem/1/novo.mp4');
+    }
+
+    /** Lira escolhe na tela o que o KoraSync grava (2026-10-13). */
+    public function test_regra_de_gravacao_por_produto_e_categoria_vai_para_a_fila(): void
+    {
+        $categoria = Category::create(['name' => 'Ferramentas', 'slug' => 'ferramentas']);
+        $pai = Product::factory()->create(['category_id' => null]);
+        $cor = Product::factory()->create(['parent_product_id' => $pai->id, 'category_id' => null]);
+        $daCategoria = Product::factory()->create(['category_id' => $categoria->id]);
+        $outro = Product::factory()->create(['category_id' => null]);
+        $item = fn (Product $p) => (new OrderItem(['product_id' => $p->id]))->setRelation('product', $p);
+        $regra = app(RegraVideoEmbalagem::class);
+
+        // Padrão: não grava nada.
+        $this->assertFalse($regra->deveGravar(collect([$item($outro)])));
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->put('/admin/videos-embalagem/regra', [
+            'modo' => 'selecionados', 'categorias' => [$categoria->id], 'produtos' => [$pai->id],
+        ])->assertRedirect();
+
+        $this->assertTrue($regra->deveGravar(collect([$item($cor)])));
+        $this->assertTrue($regra->deveGravar(collect([$item($outro), $item($daCategoria)])));
+        $this->assertFalse($regra->deveGravar(collect([$item($outro)])));
+
+        $this->actingAs($admin)->get('/admin/videos-embalagem')->assertOk()
+            ->assertInertia(fn ($page) => $page->where('regra.modo', 'selecionados')
+                ->where('regra.produtos', [$pai->id])
+                ->has('produtos', 3));
+
+        $this->actingAs($admin)->put('/admin/videos-embalagem/regra', ['modo' => 'todos'])->assertRedirect();
+        $this->assertTrue($regra->deveGravar(collect([$item($outro)])));
+
+        // A fila do KoraSync leva a decisão no pedido.
+        $this->order->items()->create(['product_id' => $outro->id, 'product_name' => 'X', 'quantity' => 1, 'product_price' => 10, 'subtotal' => 10]);
+        $fila = $this->withHeader('Authorization', 'Bearer agente')->getJson('/api/print-agent/dashboard/queue')->assertOk()->json();
+        $pedido = collect([...$fila['queue'], ...$fila['out_of_stock']])->firstWhere('id', $this->order->id);
+        $this->assertTrue($pedido['gravar_video']);
     }
 
     /**

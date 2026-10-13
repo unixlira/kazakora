@@ -409,6 +409,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('videos-embalagem', [VideosEmbalagemController::class, 'index'])
         ->name('videos-embalagem.listar')
         ->middleware('permission:pedidos.view');
+    // O que o KoraSync grava: todos, nenhum ou só produtos/categorias escolhidos (2026-10-13).
+    Route::put('videos-embalagem/regra', [VideosEmbalagemController::class, 'salvarRegra'])
+        ->name('videos-embalagem.regra')
+        ->middleware('permission:pedidos.edit');
     Route::get('pedidos/{order}/videos/{packingVideo}', [AdminOrderController::class, 'packingVideo'])->name('pedidos.video');
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')

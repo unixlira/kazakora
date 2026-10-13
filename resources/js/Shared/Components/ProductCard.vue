@@ -60,6 +60,12 @@ const isHovering = ref(false);
 const hasHovered = ref(false);
 const secondImageLoaded = ref(false);
 
+// Esqueleto da foto (pedido 2026-10-13): até a foto principal baixar, o
+// quadrado mostra um bloco com brilho (o mesmo "osso" de CarregandoProdutos)
+// em vez de ficar em branco; a foto entra com fade. Erro também tira o osso.
+const fotoEl = ref(null);
+const fotoCarregada = ref(false);
+
 const showSecondImage = computed(() => supportsHover && hasHovered.value && !!secondImage.value);
 
 // Só esconde a imagem principal quando a segunda já carregou — senão o
@@ -149,6 +155,8 @@ const ajustarTitulo = () => {
 
 let observador = null;
 onMounted(() => {
+    // Foto que já estava no cache do navegador pode terminar antes do @load.
+    if (fotoEl.value?.complete) fotoCarregada.value = true;
     nextTick(ajustarTitulo);
     if (window.ResizeObserver && tituloEl.value) {
         let largura = 0;
@@ -180,9 +188,11 @@ const precoPartes = computed(() => {
         <div class="relative aspect-square cursor-pointer bg-white"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">
-                <img :src="primaryImage(product)" :alt="product.name" loading="lazy" decoding="async"
+                <div v-if="!fotoCarregada" class="osso-foto absolute inset-0" aria-hidden="true"></div>
+                <img ref="fotoEl" :src="primaryImage(product)" :alt="product.name" loading="lazy" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
-                    :class="secondImageVisible ? 'opacity-0' : 'opacity-100'">
+                    :class="secondImageVisible || !fotoCarregada ? 'opacity-0' : 'opacity-100'"
+                    @load="fotoCarregada = true" @error="fotoCarregada = true">
                 <img v-if="showSecondImage" :src="secondImage" :alt="product.name" decoding="async"
                     class="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
                     :class="secondImageVisible ? 'opacity-100' : 'opacity-0'"

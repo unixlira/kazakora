@@ -414,6 +414,37 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
     to { transform: translateX(-50%); }
 }
 
+/* Esqueleto da foto do card (pedido 2026-10-13): bloco cinza com brilho que
+   atravessa até a foto baixar. Mesmo visual dos "ossos" de CarregandoProdutos. */
+.osso-foto {
+    overflow: hidden;
+    background-color: var(--color-store-accent-soft);
+}
+
+.osso-foto::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        color-mix(in oklab, var(--color-store-bg-raised) 70%, transparent) 50%,
+        transparent 100%
+    );
+    animation: osso-foto-brilho 1.6s ease-in-out infinite;
+}
+
+@keyframes osso-foto-brilho {
+    100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .osso-foto::after {
+        display: none;
+    }
+}
+
 /* Selo promocional do card (pedido 2026-10-10): bloco azul com "%" e faixa
    vermelha com corte inclinado, sobre a foto, no canto inferior esquerdo.
    Só HTML/CSS, sem imagem. */

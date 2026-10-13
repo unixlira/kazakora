@@ -20,7 +20,7 @@ class CompletarFotosProdutos extends Command
         {--sku=* : só estes SKUs}
         {--fonte=arquivo,bling : fontes, na ordem: arquivo, bling, ml-catalogo}
         {--arquivo= : JSON [{sku, fotos: [urls]}] usado pela fonte "arquivo"}
-        {--similaridade=0.7 : semelhança mínima de nome para a fonte ml-catalogo (0 a 1)}
+        {--similaridade=0.8 : semelhança mínima de nome para a fonte ml-catalogo (0 a 1)}
         {--limite=0 : máximo de produtos preenchidos (0 = todos)}
         {--relatorio= : grava o resultado de cada produto neste arquivo JSON}
         {--dry-run : só mostra o que faria, não grava nada}';

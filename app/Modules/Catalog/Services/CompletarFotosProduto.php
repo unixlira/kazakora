@@ -73,7 +73,7 @@ class CompletarFotosProduto
      * @param  array<int, string>  $fontes
      * @return array{fonte: ?string, fotos: array<int, string>, detalhe: ?string}
      */
-    public function procurar(Product $produto, array $fontes, float $similaridadeMinima = 0.7): array
+    public function procurar(Product $produto, array $fontes, float $similaridadeMinima = 0.8): array
     {
         if (in_array('arquivo', $fontes, true) && isset($this->arquivo[$produto->sku])) {
             return ['fonte' => 'arquivo', 'fotos' => array_slice($this->arquivo[$produto->sku], 0, self::MAX_FOTOS), 'detalhe' => null];
@@ -205,7 +205,11 @@ class CompletarFotosProduto
         ] : null;
     }
 
-    /** Fração das palavras (3+ letras, sem acento) do nome menor que aparecem no outro. */
+    /**
+     * Fração das palavras (3+ letras, sem acento) do nome menor que aparecem
+     * no outro. O divisor é no mínimo 5: nome curto do catálogo ("Furadeira
+     * elétrica sem fio") não pode casar com qualquer coisa só por ser curto.
+     */
     public static function semelhanca(string $a, string $b): float
     {
         $palavras = fn (string $s) => collect(preg_split('/\s+/', preg_replace('/[^a-z0-9 ]/', ' ', Str::lower(Str::ascii($s)))))
@@ -213,8 +217,8 @@ class CompletarFotosProduto
 
         $pa = $palavras($a);
         $pb = $palavras($b);
-        $menor = min($pa->count(), $pb->count());
+        $divisor = max(5, min($pa->count(), $pb->count()));
 
-        return $menor === 0 ? 0.0 : round($pa->intersect($pb)->count() / $menor, 2);
+        return round($pa->intersect($pb)->count() / $divisor, 2);
     }
 }

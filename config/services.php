@@ -386,6 +386,9 @@ return [
         // Resposta em áudio da Manuela (pedido 2026-10-13): SÓ para estes
         // números (lista separada por vírgula, formato 55DDDNÚMERO), quando
         // eles mandam áudio. Cliente comum segue recebendo texto.
+        // Segundos que a Manuela espera antes de responder, para uma rajada de
+        // mensagens (várias fotos/textos seguidos) virar UMA resposta só.
+        'reply_debounce_seconds' => (int) env('WHATSAPP_REPLY_DEBOUNCE_SECONDS', 4),
         'audio_reply_numbers' => array_filter(array_map('trim', explode(',', (string) env('WHATSAPP_AUDIO_REPLY_NUMBERS', '5511990253050')))),
     ],
 

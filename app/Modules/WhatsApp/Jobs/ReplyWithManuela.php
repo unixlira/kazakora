@@ -14,7 +14,10 @@ use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -26,6 +29,9 @@ class ReplyWithManuela
 {
     use Dispatchable;
 
+    /** Maior arquivo mandado inline ao Gemini (vídeo/PDF), em bytes. */
+    private const LIMITE_ARQUIVO = 15 * 1024 * 1024;
+
     public function __construct(public int $conversationId, public int $inboundMessageId, public bool $isRetry = false)
     {
     }
@@ -33,6 +39,26 @@ class ReplyWithManuela
     public function handle(ManuelaAutoReplyService $manuela, WhatsAppOutbox $outbox, ManuelaAgentClient $agent, GeminiClient $gemini, WhatsAppMediaDownloader $media): void
     {
         @set_time_limit(150);
+
+        // Achado real 2026-10-13: 16 mensagens do Lira em 5s geraram 14
+        // respostas, porque cada uma checava "tem mensagem depois?" antes das
+        // outras serem gravadas. Espera a rajada acabar e roda UM job por
+        // conversa por vez; quem entra depois reconfere já com tudo gravado.
+        if (! app()->runningUnitTests()) {
+            sleep(max(0, (int) config('services.whatsapp.reply_debounce_seconds', 4)));
+        }
+
+        try {
+            Cache::lock('manuela:reply:'.$this->conversationId, 150)->block(140, function () use ($manuela, $outbox, $agent, $gemini, $media) {
+                $this->processar($manuela, $outbox, $agent, $gemini, $media);
+            });
+        } catch (LockTimeoutException) {
+            Log::info('whatsapp.manuela_conversa_ocupada', ['conversation_id' => $this->conversationId, 'message_id' => $this->inboundMessageId]);
+        }
+    }
+
+    private function processar(ManuelaAutoReplyService $manuela, WhatsAppOutbox $outbox, ManuelaAgentClient $agent, GeminiClient $gemini, WhatsAppMediaDownloader $media): void
+    {
 
         $conversation = WhatsAppConversation::query()->find($this->conversationId);
         $inbound = WhatsAppMessage::query()->find($this->inboundMessageId);
@@ -64,6 +90,10 @@ class ReplyWithManuela
 
         if ($inbound->type === 'image' && $gemini->isConfigured()) {
             $this->enxergar($inbound, $conversation, $media);
+        }
+
+        if (in_array($inbound->type, ['video', 'document'], true) && $gemini->isConfigured()) {
+            $this->entenderArquivo($inbound, $gemini, $media);
         }
 
         $text = $inbound->type === 'text' ? (string) $inbound->body : (string) ($inbound->payload['transcription'] ?? '');
@@ -178,6 +208,39 @@ class ReplyWithManuela
         }
 
         $conversation->update(['metadata' => $metadata]);
+    }
+
+    /**
+     * Vídeo e PDF do cliente (2026-10-13): o Gemini descreve o que aparece e
+     * o que é falado; a descrição entra na conversa como o texto da mensagem
+     * (junto da legenda, se houver). Arquivo grande ou de outro formato fica
+     * só com a legenda.
+     */
+    private function entenderArquivo(WhatsAppMessage $inbound, GeminiClient $gemini, WhatsAppMediaDownloader $media): void
+    {
+        if (filled($inbound->payload['transcription'] ?? null)) {
+            return;
+        }
+
+        try {
+            $file = $media->download($inbound);
+            $mime = Str::before((string) ($file['mime_type'] ?? ''), ';');
+            $aceito = $inbound->type === 'video'
+                ? str_starts_with($mime, 'video/')
+                : ($mime === 'application/pdf' || str_starts_with($mime, 'text/'));
+
+            if (! $file || ! $aceito || strlen($file['body']) > self::LIMITE_ARQUIVO) {
+                return;
+            }
+
+            $descricao = $gemini->describe($file['body'], $mime, $inbound->type === 'video' ? 'vídeo' : 'documento');
+            $legenda = trim((string) $inbound->body);
+            $texto = ($inbound->type === 'video' ? '[Vídeo enviado: ' : '[Documento enviado: ').$descricao.']'.($legenda !== '' ? ' Legenda: '.$legenda : '');
+
+            $inbound->update(['payload' => array_merge($inbound->payload ?? [], ['transcription' => $texto])]);
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp.arquivo_nao_entendido', ['message_id' => $inbound->id, 'type' => $inbound->type, 'error' => $exception->getMessage()]);
+        }
     }
 
     /** Áudio do cliente vira texto (Gemini) e fica salvo na mensagem. */

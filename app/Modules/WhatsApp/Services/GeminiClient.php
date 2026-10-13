@@ -101,6 +101,18 @@ class GeminiClient
         ]], null, 1024, GeminiUsageLog::PURPOSE_TRANSCRIPTION);
     }
 
+    /** Vídeo ou documento do cliente vira uma descrição curta (inclui fala e texto visível). */
+    public function describe(string $file, string $mimeType, string $kind): string
+    {
+        return $this->generate((string) config('services.gemini.audio_model'), [[
+            'role' => 'user',
+            'parts' => [
+                ['inline_data' => ['mime_type' => $mimeType, 'data' => base64_encode($file)]],
+                ['text' => "Um cliente mandou este {$kind} pelo WhatsApp para uma loja de ferramentas e utilidades. Descreva em português do Brasil, em até 5 frases, o que aparece e o que é dito ou escrito, incluindo marcas, medidas e códigos legíveis. Responda só com a descrição."],
+            ],
+        ]], null, 1024, GeminiUsageLog::PURPOSE_TRANSCRIPTION);
+    }
+
     /**
      * Texto vira fala. Devolve PCM cru (16 bits, mono, 24 kHz) como o Gemini
      * entrega; quem chama converte para o formato do WhatsApp.

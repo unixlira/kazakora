@@ -108,6 +108,8 @@ class CompletarFotosProdutosTest extends TestCase
         Http::fake(['bloqueio.exemplo/*' => Http::response('<html>'.str_repeat('x', 2000).'</html>')]);
 
         $this->assertNull(CompletarFotosProduto::baixar('https://bloqueio.exemplo/a.jpg'));
-        $this->assertSame(1.0, CompletarFotosProduto::semelhanca('Câmera de Ré 180 Graus', 'Camera Re Olho de Peixe 180 Graus Universal'));
+        $this->assertSame(1.0, CompletarFotosProduto::semelhanca('Câmera de Ré Olho de Peixe 180 Graus', 'Camera Re Olho de Peixe 180 Graus Universal'));
+        // nome curto do catálogo não casa com tudo
+        $this->assertLessThan(0.8, CompletarFotosProduto::semelhanca('Docking Station para HD e SSD SATA com Leitor', 'C2g Docking Station Usb C'));
     }
 }

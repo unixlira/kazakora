@@ -430,6 +430,9 @@ return [
     // POST /api/ferrakora/visita (lista separada por vírgula, sem www).
     'ferrakora' => [
         'origens' => env('FERRAKORA_ORIGENS', 'ferrakora.devlira.com.br'),
+        // Catálogo vindo do KazaKora (2026-10-13): token de quem envia o JSON
+        // dos produtos em POST /api/ferrakora/produtos.
+        'catalogo_token' => env('FERRAKORA_CATALOGO_TOKEN'),
     ],
 
     // Site Beauty Kora (2026-10-12): domínios que podem avisar visita em

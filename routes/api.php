@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraCatalogoController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
+use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -202,6 +203,16 @@ Route::post('/{site}/visita', [OutroSiteVisitaController::class, 'registrar'])
     ->whereIn('site', array_keys(SiteVisit::OUTROS_SITES))
     ->middleware('throttle:120,1')
     ->name('api.outro-site.visita');
+
+// Catálogo do site FerraKora vindo do KazaKora (2026-10-13), igual ao do
+// Beauty Kora, com categoria e link do produto na loja. Fica depois da rota
+// POST /{site}/visita, que não colide (caminho diferente).
+Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
+    Route::get('produtos', [FerraKoraCatalogoController::class, 'index'])->middleware('throttle:120,1')->name('produtos');
+    Route::get('produtos/{id}', [FerraKoraCatalogoController::class, 'show'])
+        ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
+    Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+});
 
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase
 // do Horizons. Token do Sanctum só de BeautyKoraCliente.

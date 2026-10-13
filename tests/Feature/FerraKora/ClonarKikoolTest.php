@@ -97,4 +97,20 @@ class ClonarKikoolTest extends TestCase
         $this->assertSame(1, Product::query()->count());
         $this->assertSame(0, FerraKoraProduto::query()->count());
     }
+
+    public function test_item_sem_foto_nao_vira_produto_e_nem_chama_o_gemini(): void
+    {
+        Http::fake([
+            'down-br.img.susercontent.com/*' => Http::response('<html>bloqueado</html>'.str_repeat(' ', 2000)),
+            'generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini()),
+        ]);
+
+        $this->artisan('kikool:clonar', ['arquivo' => $this->arquivo([
+            ['sku' => 'KIC-S079', 'nome' => 'Mini Ar Condicionado Portatil', 'custo' => 46.99, 'fotos' => []],
+            ['sku' => 'KIC-S080', 'nome' => 'Kit 3 Garrafa Squeeze', 'custo' => 24.99, 'fotos' => ['https://down-br.img.susercontent.com/file/x']],
+        ])])->assertSuccessful()->expectsOutputToContain('sem_foto: 2');
+
+        $this->assertSame(0, Product::query()->count());
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'generativelanguage'));
+    }
 }

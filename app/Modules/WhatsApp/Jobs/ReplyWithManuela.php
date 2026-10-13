@@ -9,6 +9,8 @@ use App\Modules\WhatsApp\Services\ManuelaAgentClient;
 use App\Modules\WhatsApp\Services\ManuelaAutoReplyService;
 use App\Modules\WhatsApp\Services\ManuelaProductSearch;
 use App\Modules\WhatsApp\Services\ManuelaVisao;
+use App\Modules\WhatsApp\Services\ManuelaVoz;
+use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use App\Modules\WhatsApp\Services\WhatsAppMediaDownloader;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -107,8 +109,40 @@ class ReplyWithManuela
             return;
         }
 
-        $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
+        if (! ($inbound->type === 'audio' && $this->audioReplyAllowed($conversation) && $this->sendVoice($conversation, $outbox, $reply))) {
+            $outbox->sendText($conversation->fresh(), $reply['reply'], 'manuela', null, ['manuela' => $reply]);
+        }
+
         $conversation->update(['last_auto_reply_at' => now()]);
+    }
+
+    /** Resposta falada só para os números liberados (hoje: o do Lira). */
+    private function audioReplyAllowed(WhatsAppConversation $conversation): bool
+    {
+        $numbers = array_filter(array_map([WhatsAppPhone::class, 'normalize'], (array) config('services.whatsapp.audio_reply_numbers', [])));
+        $phone = WhatsAppPhone::normalize($conversation->wa_id);
+
+        return $phone !== null && in_array($phone, $numbers, true);
+    }
+
+    /** @param  array<string, mixed>  $reply */
+    private function sendVoice(WhatsAppConversation $conversation, WhatsAppOutbox $outbox, array $reply): bool
+    {
+        $path = null;
+
+        try {
+            $path = app(ManuelaVoz::class)->gerar((string) $reply['reply']);
+
+            return $outbox->sendVoice($conversation->fresh(), (string) $reply['reply'], $path, 'manuela', ['manuela' => $reply]) !== null;
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp.resposta_em_audio_falhou', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
+
+            return false;
+        } finally {
+            if ($path) {
+                @unlink($path);
+            }
+        }
     }
 
     /**

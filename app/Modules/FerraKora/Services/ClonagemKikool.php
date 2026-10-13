@@ -5,13 +5,13 @@ namespace App\Modules\FerraKora\Services;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
+use App\Modules\Catalog\Services\CompletarFotosProduto;
 use App\Modules\Catalog\Support\ProductImageOptimizer;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -63,6 +63,18 @@ class ClonagemKikool
 
         $fotos = collect($item['fotos'] ?? [])->filter()->take(self::MAX_FOTOS)
             ->map(fn (string $url) => $this->baixar($url))->filter()->values();
+
+        // 2026-10-13: 57 itens do levantamento vieram sem foto (a Shopee não
+        // achou o anúncio) e entraram na loja, ativos, sem imagem nenhuma.
+        // Sem foto não clona: corrija o levantamento e rode de novo (o que já
+        // existe é pulado), ou use produtos:completar-fotos.
+        if ($fotos->isEmpty()) {
+            $links = count($item['fotos'] ?? []);
+
+            return ['situacao' => 'sem_foto', 'erro' => $links === 0
+                ? 'Item sem foto no levantamento.'
+                : "Nenhuma das {$links} foto(s) baixou."];
+        }
 
         try {
             $dados = $this->completarComGemini($nomeOriginal, (string) ($item['descricao'] ?? ''), $fotos->first()['bytes'] ?? null);
@@ -129,27 +141,15 @@ class ClonagemKikool
         return ['situacao' => 'clonado', 'product_id' => $produto->id, 'nome' => $produto->name, 'preco' => $preco, 'fotos' => $fotos->count()];
     }
 
-    /** @return array{bytes: string, extensao: string}|null */
+    /**
+     * Mesma regra do CompletarFotosProduto: só aceita PNG/JPEG/WEBP de verdade
+     * (página de erro ou bloqueio com status 200 não vira foto).
+     *
+     * @return array{bytes: string, extensao: string}|null
+     */
     private function baixar(string $url): ?array
     {
-        try {
-            $resposta = Http::timeout(30)->retry(2, 500, throw: false)->get($url);
-        } catch (Throwable) {
-            return null;
-        }
-
-        if (! $resposta->successful() || strlen($resposta->body()) < 1000) {
-            return null;
-        }
-
-        $bytes = $resposta->body();
-        $extensao = match (true) {
-            str_starts_with($bytes, "\x89PNG") => 'png',
-            str_starts_with($bytes, 'RIFF') && substr($bytes, 8, 4) === 'WEBP' => 'webp',
-            default => 'jpg',
-        };
-
-        return ['bytes' => $bytes, 'extensao' => $extensao];
+        return CompletarFotosProduto::baixar($url);
     }
 
     /** @return array<string, mixed> */

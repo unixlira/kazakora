@@ -82,7 +82,7 @@ class OutroSiteVisitLogControllerTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('Admin/VisitasOutroSite/Index', false)
                 ->where('site', 'beautykora')
-                ->where('nome', 'Beauty Kora')
+                ->where('nome', 'BeautyKora')
                 ->has('visitas.data', 1)
                 ->where('visitas.data.0.ip', '7.7.7.7'));
     }

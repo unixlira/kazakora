@@ -71,7 +71,13 @@ class OportunidadesController extends Controller
             'filtros' => ['termo' => $termo],
             'categorias' => [],
             'mercado' => Inertia::defer(fn () => $shopee->analisar($termo, $atualizar) + ['tendencias' => [], 'ocultos' => 0]),
-            'radarShopee' => Inertia::defer(fn () => $radarShopee->analisar(), 'radar'),
+            // Filtros do Radar da Shopee vão ao servidor (paginação no banco).
+            'radarShopee' => Inertia::defer(fn () => $radarShopee->analisar(array_filter([
+                'l1' => $request->query('rs_l1'),
+                'categoria' => $request->query('rs_cat'),
+                'busca' => $request->query('rs_busca'),
+                'pagina' => $request->query('rs_pagina'),
+            ], fn ($v) => $v !== null)), 'radar'),
         ]);
     }
 }

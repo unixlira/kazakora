@@ -66,6 +66,7 @@ use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
 use App\Modules\Admin\Http\Controllers\OutroSiteVisitLogController;
 use App\Modules\Analytics\Models\SiteVisit;
+use App\Modules\Admin\Http\Controllers\BeautyKoraPedidoController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
@@ -384,6 +385,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('produtos/{product}/variacoes/desvincular', [ProductController::class, 'detachVariation'])->name('produtos.variacoes.desvincular');
 
     Route::get('pedidos', [AdminOrderController::class, 'index'])->name('pedidos.listar');
+    // Pedidos do site Beauty Kora (2026-10-12): tabela própria, fora de orders.
+    Route::get('pedidos-beautykora', [BeautyKoraPedidoController::class, 'index'])
+        ->name('pedidos-beautykora.listar')
+        ->middleware('permission:pedidos.view');
+    Route::patch('pedidos-beautykora/{pedido}/status', [BeautyKoraPedidoController::class, 'status'])
+        ->name('pedidos-beautykora.status')
+        ->middleware('permission:pedidos.edit');
     Route::post('pedidos/corrigir-etiquetas-hoje', [AdminOrderController::class, 'fixTodaysLabels'])
         ->name('pedidos.corrigir-etiquetas-hoje')
         ->middleware('permission:pedidos.edit');

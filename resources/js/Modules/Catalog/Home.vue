@@ -1,6 +1,7 @@
 <script setup>
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
+import CarregandoProdutos from '@/Shared/Components/CarregandoProdutos.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
 import MaisBuscadosSlider from '@/Shared/Components/MaisBuscadosSlider.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
@@ -261,10 +262,10 @@ onBeforeUnmount(() => observador?.disconnect());
                     :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
             </div>
 
-            <div v-if="temMais" ref="fimDaLista" class="mt-10 flex flex-col items-center gap-2" aria-live="polite">
-                <span v-if="carregandoMais" class="inline-flex items-center gap-2 text-sm font-semibold text-store-fg-muted">
-                    <i class="fa-solid fa-spinner animate-spin"></i> Carregando mais produtos...
-                </span>
+            <!-- Enquanto a próxima leva chega: cards fantasma na mesma grade (2026-10-13) -->
+            <CarregandoProdutos v-if="carregandoMais" />
+
+            <div v-if="temMais" ref="fimDaLista" class="mt-10 flex flex-col items-center gap-2">
                 <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products?.total }}</span>
             </div>
         </section>

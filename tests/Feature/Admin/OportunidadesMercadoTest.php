@@ -4,7 +4,9 @@ namespace Tests\Feature\Admin;
 
 use App\Models\MercadoLivreToken;
 use App\Models\User;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\ProductChannelListing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -60,7 +62,7 @@ class OportunidadesMercadoTest extends TestCase
                 ['seller_id' => 999, 'price' => 89.9], ['seller_id' => 888, 'price' => 79.5],
             ]]),
             $api.'products/MLB222/items*' => Http::response(['paging' => ['total' => 3], 'results' => [
-                ['seller_id' => 123456789, 'price' => 49.9],
+                ['seller_id' => 123456789, 'price' => 49.9, 'item_id' => 'MLB5550001'],
             ]]),
             $api.'products/MLB111*' => Http::response(['name' => 'Parafusadeira 12V', 'permalink' => '', 'pictures' => [['url' => 'https://http2.mlstatic.com/a.jpg']]]),
             $api.'products/MLB222*' => Http::response(['name' => 'Jogo de Brocas', 'permalink' => 'https://www.mercadolivre.com.br/jogo/p/MLB222', 'pictures' => []]),
@@ -71,6 +73,11 @@ class OportunidadesMercadoTest extends TestCase
     public function test_mercado_livre_mostra_mais_vendidos_de_terceiros_e_buscas_em_alta(): void
     {
         $this->fakeMercadoLivre();
+        $produto = Product::factory()->create(['cost_price' => 20]);
+        ProductChannelListing::query()->create([
+            'product_id' => $produto->id, 'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'external_id' => 'MLB5550001', 'status' => ProductChannelListing::STATUS_PUBLISHED,
+        ]);
 
         $this->actingAs($this->admin())->get('/admin/oportunidades/mercado-livre?categoria=MLB263532')
             ->assertOk()
@@ -85,15 +92,29 @@ class OportunidadesMercadoTest extends TestCase
                 ->where('mercado.erro', null)
                 ->where('mercado.ocultos', 1)
                 ->has('mercado.produtos', 2)
-                ->where('mercado.produtos.0.nome', 'Parafusadeira 12V')
-                ->where('mercado.produtos.0.posicao', 1)
-                ->where('mercado.produtos.0.link', 'https://www.mercadolivre.com.br/p/MLB111')
-                ->where('mercado.produtos.0.preco_min', 79.5)
-                ->where('mercado.produtos.0.preco_max', 89.9)
-                ->where('mercado.produtos.0.vendedores', 12)
-                ->where('mercado.produtos.0.voce_vende', false)
-                ->where('mercado.produtos.1.nome', 'Jogo de Brocas')
-                ->where('mercado.produtos.1.voce_vende', true)
+                // Concorrência (Lira 2026-10-13): 3 vendedores e sem guerra =
+                // nicho, sobe para o topo mesmo sendo o 3º do ranking.
+                ->where('mercado.produtos.0.nome', 'Jogo de Brocas')
+                ->where('mercado.produtos.0.posicao', 3)
+                ->where('mercado.produtos.0.voce_vende', true)
+                ->where('mercado.produtos.0.concorrencia', 'baixa')
+                ->where('mercado.produtos.0.oportunidade_nicho', true)
+                ->where('mercado.produtos.0.preco_mediana', 49.9)
+                ->where('mercado.produtos.0.custo_maximo', 27.94)
+                // Custo pelo vínculo exato do anúncio (item_id) com o produto nosso.
+                ->where('mercado.produtos.0.custo', 20)
+                ->where('mercado.produtos.0.margem_estimada', fn ($m) => abs($m - ((49.9 * 0.56 - 20) / 49.9 + 0.15)) < 0.0001)
+                ->where('mercado.produtos.1.nome', 'Parafusadeira 12V')
+                ->where('mercado.produtos.1.posicao', 1)
+                ->where('mercado.produtos.1.link', 'https://www.mercadolivre.com.br/p/MLB111')
+                ->where('mercado.produtos.1.preco_min', 79.5)
+                ->where('mercado.produtos.1.preco_max', 89.9)
+                ->where('mercado.produtos.1.vendedores', 12)
+                ->where('mercado.produtos.1.voce_vende', false)
+                ->where('mercado.produtos.1.concorrencia', 'alta')
+                ->where('mercado.produtos.1.oportunidade_nicho', false)
+                ->where('mercado.produtos.1.custo', null)
+                ->where('mercado.produtos.1.margem_estimada', null)
                 ->where('mercado.tendencias.0.termo', 'furadeira')));
 
         // Nada das vendas da loja: só chamadas de mercado (ranking, catálogo, tendências).

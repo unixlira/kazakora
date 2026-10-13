@@ -2,9 +2,10 @@
 import MarcaLogo from './MarcaLogo.vue';
 import BuscaTabela from './BuscaTabela.vue';
 import Paginacao from './Paginacao.vue';
+import ConcorrenciaMl from './ConcorrenciaMl.vue';
 import { useBuscaPaginada } from './useBuscaPaginada';
 import { Deferred } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 // Bloco do Mercado Livre do Radar (buscas em alta do site e mais vendidos de
 // Casa). Aparece no Radar geral e embaixo dos mais vendidos em
@@ -30,7 +31,11 @@ const faixaPreco = (p) => {
     return formatPrice(p.preco_min);
 };
 
-const ml = useBuscaPaginada(computed(() => props.mercadoLivre?.produtos ?? []), (p) => p.nome, 20);
+// "Só nichos pouco disputados" (Lira 2026-10-13): concorrência baixa e sem
+// guerra de preço. A lista já chega com os nichos no topo.
+const soNichos = ref(false);
+const nichos = computed(() => (props.mercadoLivre?.produtos ?? []).filter((p) => p.oportunidade_nicho).length);
+const ml = useBuscaPaginada(computed(() => (props.mercadoLivre?.produtos ?? []).filter((p) => !soNichos.value || p.oportunidade_nicho)), (p) => p.nome, 20);
 </script>
 
 <template>
@@ -59,10 +64,18 @@ const ml = useBuscaPaginada(computed(() => props.mercadoLivre?.produtos ?? []), 
                 </div>
             </div>
             <div v-if="mercadoLivre.produtos.length" class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--surface-border)] px-4 py-3">
-                <BuscaTabela v-model="ml.busca.value" rotulo="Buscar produto entre os mais vendidos do Mercado Livre" placeholder="Buscar produto (ex.: organizador)" />
+                <div class="flex flex-wrap items-center gap-2">
+                    <BuscaTabela v-model="ml.busca.value" rotulo="Buscar produto entre os mais vendidos do Mercado Livre" placeholder="Buscar produto (ex.: organizador)" />
+                    <button type="button" class="filtro-nicho" :aria-pressed="soNichos" @click="soNichos = !soNichos">
+                        <i class="fas fa-seedling" aria-hidden="true"></i> Só nichos pouco disputados ({{ nichos }})
+                    </button>
+                </div>
                 <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ ml.faixa.value }} produtos</span>
             </div>
-            <p v-if="mercadoLivre.produtos.length && ml.filtrados.value.length === 0" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com “{{ ml.busca.value }}” entre os mais vendidos.</p>
+            <p v-if="mercadoLivre.produtos.length && ml.filtrados.value.length === 0" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">
+                <template v-if="ml.busca.value">Nenhum produto com “{{ ml.busca.value }}”{{ soNichos ? ' entre os nichos pouco disputados' : ' entre os mais vendidos' }}.</template>
+                <template v-else>Nenhum nicho pouco disputado entre os mais vendidos agora.</template>
+            </p>
             <table v-else-if="mercadoLivre.produtos.length" class="tabela border-t border-[var(--surface-border)]">
                 <thead>
                     <tr>
@@ -80,6 +93,7 @@ const ml = useBuscaPaginada(computed(() => props.mercadoLivre?.produtos ?? []), 
                                 <a :href="p.link" target="_blank" rel="noopener" class="min-w-0 truncate font-medium hover:underline" :title="p.nome">{{ p.nome }}</a>
                                 <span v-if="p.voce_vende" class="etiqueta shrink-0 bg-lightsuccess text-success">você vende</span>
                             </div>
+                            <ConcorrenciaMl :produto="p" class="mt-1" />
                         </td>
                         <td class="whitespace-nowrap text-right">{{ p.vendedores === null ? '' : formatK(p.vendedores) }}</td>
                         <td class="whitespace-nowrap pr-4 text-right font-bold">{{ faixaPreco(p) }}</td>
@@ -92,3 +106,17 @@ const ml = useBuscaPaginada(computed(() => props.mercadoLivre?.produtos ?? []), 
 </template>
 
 <style scoped src="./radar.css"></style>
+<style scoped>
+.filtro-nicho {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.filtro-nicho:hover { background: var(--surface-muted); }
+.filtro-nicho[aria-pressed='true'] { border-color: var(--color-success); background: var(--color-lightsuccess); color: var(--color-success); }
+</style>

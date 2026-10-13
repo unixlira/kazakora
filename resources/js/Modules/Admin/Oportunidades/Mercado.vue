@@ -2,9 +2,10 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import MercadoLivreBloco from '@/Modules/Admin/Radar/MercadoLivreBloco.vue';
 import ShopeeRadarBloco from './ShopeeRadarBloco.vue';
+import ConcorrenciaMl from '@/Modules/Admin/Radar/ConcorrenciaMl.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
 import { Deferred, Head, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, nextTick, onUnmounted, reactive, ref } from 'vue';
 
 // Oportunidades (correção do Lira 2026-10-12): produtos de TERCEIROS que
 // estão vendendo muito ou em alta no marketplace, para achar produto novo.
@@ -19,6 +20,7 @@ const props = defineProps({
     canal: { type: Object, required: true },
     base: { type: String, default: null },
     filtros: { type: Object, required: true },
+    categoriaPadrao: { type: String, default: null },
     categorias: { type: Array, default: () => [] },
     mercado: { type: Object, default: null },
     mercadoLivre: { type: Object, default: null },
@@ -33,12 +35,18 @@ const ehMl = computed(() => props.canal.slug === 'mercado-livre');
 const titulo = computed(() => `Oportunidades · ${props.canal.nome}`);
 const categoria = ref(props.filtros.categoria ?? '');
 const termo = ref(props.filtros.termo ?? '');
+// Filtro de concorrência (Lira 2026-10-13): o servidor devolve só o nível
+// escolhido, dos produtos com menos vendedores para os com mais.
+const concorrencia = ref(props.filtros.concorrencia ?? '');
+const NIVEIS = { baixa: 'baixa', media: 'média', alta: 'alta' };
 const carregando = ref(false);
 // Ocupado também enquanto os dados adiados não chegaram.
 const ocupado = computed(() => carregando.value || !props.mercado);
 
 const buscar = (extra = {}) => {
-    const filtros = ehMl.value ? { categoria: categoria.value } : { termo: termo.value };
+    const filtros = ehMl.value
+        ? { categoria: categoria.value, ...(concorrencia.value ? { concorrencia: concorrencia.value } : {}) }
+        : { termo: termo.value };
     router.get(props.base ?? `/admin/oportunidades/${props.canal.slug}`, { ...filtros, ...extra }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
@@ -46,12 +54,95 @@ const buscar = (extra = {}) => {
     });
 };
 
+// "Limpar" volta a tela ao estado inicial: categoria padrão, sem filtro.
+const temFiltro = computed(() => Boolean(props.filtros.concorrencia) || (props.categoriaPadrao && props.filtros.categoria !== props.categoriaPadrao));
+const limpar = () => {
+    categoria.value = props.categoriaPadrao ?? categoria.value;
+    concorrencia.value = '';
+    buscar();
+};
+
+// "Só nichos pouco disputados" (Lira 2026-10-13): no ML a lista já vem com
+// os nichos (concorrência baixa, sem guerra de preço) no topo.
+const soNichos = ref(false);
+const nichos = computed(() => (props.mercado?.produtos ?? []).filter((p) => p.oportunidade_nicho).length);
+const produtosVisiveis = computed(() => (props.mercado?.produtos ?? []).filter((p) => !soNichos.value || p.oportunidade_nicho));
+
 const nomeCategoria = computed(() => props.categorias.find((c) => c.id === props.filtros.categoria)?.nome ?? props.filtros.categoria);
 const faixaPreco = (p) => {
     if (p.preco_min === null) return '—';
     if (p.preco_max !== null && p.preco_max > p.preco_min) return `${formatPrice(p.preco_min)} a ${formatPrice(p.preco_max)}`;
     return formatPrice(p.preco_min);
 };
+
+// Inteligência (pedido do Lira 2026-10-13): passa os mais vendidos da
+// categoria pelo filtro "demanda, concorrência e margem" e mostra num modal.
+// Mesmo padrão do modal do olho em Visitas do site (sem Teleport: as cores
+// do admin só valem dentro do .admin-shell).
+const intel = reactive({ aberto: false, carregando: false, erro: '', dados: null });
+const botaoIntel = ref(null);
+const caixaIntel = ref(null);
+const fecharIntel = ref(null);
+const SECOES_INTEL = [
+    { chave: 'oportunidade', titulo: 'Oportunidades', icone: 'fa-lightbulb', descricao: 'Até 5 vendedores, menor preço entre R$ 20 e R$ 200 e sem marca forte.' },
+    { chave: 'ja_vendemos', titulo: 'Já vendemos', icone: 'fa-store', descricao: 'Parecidos com produtos ativos da KazaKora: nosso custo contra o preço do ML.' },
+    { chave: 'evitar', titulo: 'Evitar (guerra de preço)', icone: 'fa-triangle-exclamation', descricao: '20 vendedores ou mais, ou marca forte segurando o preço.' },
+];
+
+const onKeydownIntel = (event) => {
+    if (!intel.aberto) return;
+    if (event.key === 'Escape') {
+        fecharModalIntel();
+        return;
+    }
+    // Foco preso no modal enquanto ele está aberto.
+    if (event.key === 'Tab' && caixaIntel.value) {
+        const focaveis = [...caixaIntel.value.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+        if (!focaveis.length) return;
+        const [primeiro, ultimo] = [focaveis[0], focaveis[focaveis.length - 1]];
+        if (event.shiftKey && document.activeElement === primeiro) {
+            event.preventDefault();
+            ultimo.focus();
+        } else if (!event.shiftKey && document.activeElement === ultimo) {
+            event.preventDefault();
+            primeiro.focus();
+        }
+    }
+};
+
+const fecharModalIntel = () => {
+    intel.aberto = false;
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onKeydownIntel);
+    botaoIntel.value?.focus();
+};
+
+const abrirIntel = async () => {
+    Object.assign(intel, { carregando: true, erro: '', dados: null });
+    try {
+        const query = new URLSearchParams({ categoria: props.filtros.categoria ?? '' });
+        const r = await fetch(`/admin/oportunidades/mercado-livre/inteligencia?${query}`, {
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const dados = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(dados.message || 'Não foi possível processar a categoria agora.');
+        intel.dados = dados;
+    } catch (e) {
+        intel.erro = e.message || 'Não foi possível processar a categoria agora.';
+    } finally {
+        intel.carregando = false;
+    }
+    intel.aberto = true;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKeydownIntel);
+    await nextTick();
+    fecharIntel.value?.focus();
+};
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', onKeydownIntel);
+    document.body.style.overflow = '';
+});
 </script>
 
 <template>
@@ -79,6 +170,17 @@ const faixaPreco = (p) => {
                     <option v-if="!categorias.some((c) => c.id === categoria)" :value="categoria">{{ categoria }}</option>
                 </select>
             </label>
+            <label v-if="ehMl" class="text-xs text-[var(--texto-suave)]">Concorrência
+                <select v-model="concorrencia" name="concorrencia" class="mt-1 block min-w-40 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm" @change="buscar()">
+                    <option value="">Todas</option>
+                    <option value="baixa">Baixa (até 3 vendedores)</option>
+                    <option value="media">Média (4 a 10)</option>
+                    <option value="alta">Alta (mais de 10)</option>
+                </select>
+            </label>
+            <button v-if="ehMl" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50" :disabled="ocupado || !temFiltro" @click="limpar()">
+                <i class="fas fa-eraser mr-1" aria-hidden="true"></i> Limpar
+            </button>
             <label v-else class="text-xs text-[var(--texto-suave)]">Palavra-chave (vazio = mais vendidos em geral)
                 <input v-model="termo" type="search" name="termo" maxlength="80" autocomplete="off" placeholder="ex.: organizador, luminária…"
                     class="mt-1 block w-72 rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm">
@@ -88,6 +190,12 @@ const faixaPreco = (p) => {
             </button>
             <div class="ml-auto flex items-center gap-3 text-xs text-[var(--texto-suave)]">
                 <span v-if="mercado?.atualizado_em">Consultado em {{ formatDateTime(mercado.atualizado_em) }}</span>
+                <button v-if="ehMl" ref="botaoIntel" type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="ocupado || intel.carregando" :aria-busy="intel.carregando" title="Filtra os mais vendidos por demanda, concorrência e margem"
+                    @click="abrirIntel">
+                    <i class="fas" :class="intel.carregando ? 'fa-circle-notch animate-spin' : 'fa-lightbulb'" aria-hidden="true"></i>
+                    {{ intel.carregando ? 'Processando…' : 'Inteligência' }}
+                </button>
                 <button v-if="mercado?.configurado !== false" type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm hover:bg-[var(--surface-muted)] disabled:opacity-50" :disabled="ocupado" @click="buscar({ atualizar: 1 })">
                     {{ ocupado ? 'Consultando…' : 'Consultar de novo' }}
                 </button>
@@ -142,17 +250,26 @@ const faixaPreco = (p) => {
             <div class="grid grid-cols-1 gap-6" :class="ehMl ? 'xl:grid-cols-[1fr_300px]' : ''">
                 <!-- Mais vendidos -->
                 <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" style="border-top: 3px solid var(--faixa-card)">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-border)] px-4 py-3">
                         <h2 class="text-base font-semibold">
                             Mais vendidos{{ ehMl ? ` · ${nomeCategoria}` : (filtros.termo ? ` · “${filtros.termo}”` : '') }} ({{ mercado.produtos.length }})
                         </h2>
+                        <button v-if="ehMl && mercado.produtos.length" type="button" :aria-pressed="soNichos" @click="soNichos = !soNichos"
+                            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
+                            :class="soNichos ? 'border-success bg-lightsuccess text-success' : 'border-[var(--surface-border)] hover:bg-[var(--surface-muted)]'">
+                            <i class="fas fa-seedling" aria-hidden="true"></i> Só nichos pouco disputados ({{ nichos }})
+                        </button>
                     </div>
-
-                    <p v-if="mercado.produtos.length === 0 && !mercado.erro" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
-                        Nenhum produto encontrado.
+                    <p v-if="ehMl && soNichos && nichos === 0" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
+                        Nenhum nicho pouco disputado nesta categoria agora.
                     </p>
 
-                    <div v-else-if="mercado.produtos.length" class="overflow-x-auto">
+                    <p v-if="mercado.produtos.length === 0 && !mercado.erro" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
+                        <template v-if="ehMl && filtros.concorrencia">Nenhum produto com concorrência {{ NIVEIS[filtros.concorrencia] }} nesta categoria agora.</template>
+                        <template v-else>Nenhum produto encontrado.</template>
+                    </p>
+
+                    <div v-else-if="mercado.produtos.length && produtosVisiveis.length" class="overflow-x-auto">
                         <table class="w-full min-w-[720px] text-left text-sm">
                             <thead class="border-b border-[var(--surface-border)] text-xs uppercase text-[var(--texto-suave)]">
                                 <tr>
@@ -167,7 +284,7 @@ const faixaPreco = (p) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="p in mercado.produtos" :key="p.id" class="border-b border-[var(--surface-border)] last:border-0 hover:bg-[var(--surface-muted)]">
+                                <tr v-for="p in produtosVisiveis" :key="p.id" class="border-b border-[var(--surface-border)] last:border-0 hover:bg-[var(--surface-muted)]">
                                     <td class="px-4 py-2 tabular-nums text-[var(--texto-suave)]">{{ p.posicao }}º</td>
                                     <td class="py-2 pr-3">
                                         <div class="flex items-center gap-3">
@@ -176,6 +293,7 @@ const faixaPreco = (p) => {
                                                 <a :href="p.link" target="_blank" rel="noopener noreferrer" class="line-clamp-2 hover:text-[var(--destaque)] hover:underline">{{ p.nome }}</a>
                                                 <span v-if="p.loja" class="block truncate text-xs text-[var(--texto-suave)]">{{ p.loja }}</span>
                                                 <span v-if="p.voce_vende" class="mt-0.5 inline-block rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-xs">A KazaKora já vende</span>
+                                                <ConcorrenciaMl v-if="ehMl" :produto="p" class="mt-1" />
                                             </div>
                                         </div>
                                     </td>
@@ -192,6 +310,8 @@ const faixaPreco = (p) => {
                     <p class="border-t border-[var(--surface-border)] px-4 py-3 text-xs text-[var(--texto-suave)]">
                         <template v-if="ehMl">
                             Ranking "Mais vendidos" do próprio Mercado Livre na categoria. Preço = menor e maior entre os vendedores do catálogo.
+                            <template v-if="filtros.concorrencia">Só concorrência {{ NIVEIS[filtros.concorrencia] }}, do produto com menos vendedores para o com mais;</template>
+                            <template v-else>Nichos pouco disputados (até 3 vendedores, sem guerra de preço) vêm primeiro;</template> "pagar até" = mediana × 0,56, o máximo de custo para sobrar 15% vendendo pela mediana.
                             <template v-if="mercado.ocultos"> {{ mercado.ocultos }} anúncio(s) do ranking não são de catálogo e o ML não libera os dados deles.</template>
                         </template>
                         <template v-else>Ordenado pelas vendas informadas pela API de Afiliados da Shopee.</template>
@@ -217,7 +337,99 @@ const faixaPreco = (p) => {
         <!-- Embaixo, a tabela do Radar (pedido do Lira 2026-10-12) -->
         <section v-if="ehMl" class="mt-8" aria-labelledby="radar-titulo">
             <h2 id="radar-titulo" class="mb-3 text-lg font-bold">{{ RADAR_NOME }}</h2>
-            <MercadoLivreBloco :mercado-livre="mercadoLivre" :link-outras-categorias="false" />
+            <MercadoLivreBloco :mercado-livre="mercadoLivre" :link-outras-categorias="false" :concorrencia="filtros.concorrencia ? NIVEIS[filtros.concorrencia] : null" />
         </section>
+
+        <!-- Modal da Inteligência (Lira 2026-10-13) -->
+        <div v-if="intel.aberto" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" @click="fecharModalIntel"></div>
+            <div ref="caixaIntel" role="dialog" aria-modal="true" aria-labelledby="intel-titulo" aria-describedby="intel-resumo"
+                class="relative flex w-full max-w-6xl flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-xl"
+                style="max-height: 90vh;">
+                <div class="flex items-start justify-between gap-3 border-b border-[var(--surface-border)] px-6 py-4">
+                    <div class="min-w-0">
+                        <h2 id="intel-titulo" class="flex items-center gap-2 text-lg font-semibold">
+                            <i class="fas fa-lightbulb text-primary" aria-hidden="true"></i>
+                            Inteligência · {{ nomeCategoria }}
+                        </h2>
+                        <p id="intel-resumo" class="text-sm text-[var(--texto-suave)]">
+                            <template v-if="intel.dados">
+                                {{ intel.dados.resumo.texto }} De {{ intel.dados.resumo.total }} produtos analisados<template v-if="intel.dados.atualizado_em">, consulta de {{ formatDateTime(intel.dados.atualizado_em) }}</template>.
+                            </template>
+                            <template v-else>Filtro de demanda, concorrência e margem.</template>
+                        </p>
+                    </div>
+                    <button ref="fecharIntel" type="button"
+                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--texto-suave)] hover:bg-[var(--surface-muted)]"
+                        aria-label="Fechar" @click="fecharModalIntel">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <div class="overflow-auto px-6 py-4">
+                    <p v-if="intel.erro" class="rounded-xl border border-[var(--color-error)] px-4 py-3 text-sm text-error" role="alert">{{ intel.erro }}</p>
+                    <template v-else-if="intel.dados">
+                        <p v-if="intel.dados.erro" class="mb-4 rounded-xl border border-[var(--color-error)] px-4 py-3 text-sm text-error" role="alert">{{ intel.dados.erro }}</p>
+
+                        <!-- Contagens -->
+                        <dl class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            <div v-for="c in [...SECOES_INTEL, { chave: 'outros', titulo: 'Outros' }]" :key="c.chave" class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/40 px-4 py-3">
+                                <dt class="text-xs text-[var(--texto-suave)]">{{ c.titulo }}</dt>
+                                <dd class="text-2xl font-bold tabular-nums">{{ intel.dados.resumo[c.chave] }}</dd>
+                            </div>
+                        </dl>
+
+                        <section v-for="sec in SECOES_INTEL" :key="sec.chave" class="mb-6" :aria-labelledby="`intel-${sec.chave}`">
+                            <h3 :id="`intel-${sec.chave}`" class="flex items-center gap-2 text-base font-semibold">
+                                <i class="fas" :class="sec.icone" aria-hidden="true"></i>
+                                {{ sec.titulo }} ({{ intel.dados.grupos[sec.chave].length }})
+                            </h3>
+                            <p class="mb-2 text-xs text-[var(--texto-suave)]">{{ sec.descricao }}</p>
+                            <p v-if="!intel.dados.grupos[sec.chave].length" class="rounded-lg border border-dashed border-[var(--surface-border)] px-4 py-3 text-sm text-[var(--texto-suave)]">Nenhum produto nesta categoria.</p>
+                            <ul v-else class="divide-y divide-[var(--surface-border)] rounded-xl border border-[var(--surface-border)]">
+                                <li v-for="p in intel.dados.grupos[sec.chave]" :key="p.id" class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start">
+                                    <div class="flex min-w-0 flex-1 items-start gap-3">
+                                        <span class="w-8 shrink-0 pt-1 text-right text-sm tabular-nums text-[var(--texto-suave)]">{{ p.posicao }}º</span>
+                                        <img v-if="p.imagem" :src="p.imagem" alt="" width="56" height="56" loading="lazy" class="h-14 w-14 shrink-0 rounded-lg border border-[var(--surface-border)] bg-white object-contain">
+                                        <span v-else class="h-14 w-14 shrink-0 rounded-lg bg-[var(--surface-muted)]" aria-hidden="true"></span>
+                                        <div class="min-w-0 text-sm">
+                                            <a :href="p.link" target="_blank" rel="noopener noreferrer" class="line-clamp-2 font-medium hover:text-[var(--destaque)] hover:underline">{{ p.nome }}</a>
+                                            <p class="mt-0.5 text-xs text-[var(--texto-suave)]">
+                                                {{ p.vendedores === null ? 'vendedores ?' : `${formatNumber(p.vendedores)} ${p.vendedores === 1 ? 'vendedor' : 'vendedores'}` }}
+                                                · {{ faixaPreco(p) }}
+                                                <template v-if="p.custo_max_15 !== null"> · custo máx. p/ 15%: <strong class="font-semibold">{{ formatPrice(p.custo_max_15) }}</strong></template>
+                                            </p>
+                                            <p v-if="p.motivo_guerra" class="mt-1 text-xs"><i class="fas fa-triangle-exclamation mr-1 text-amber-500" aria-hidden="true"></i>Guerra de preço: {{ p.motivo_guerra }}</p>
+                                            <div v-if="p.nosso" class="mt-1.5 rounded-lg bg-[var(--surface-muted)]/60 px-2.5 py-1.5 text-xs">
+                                                <span class="font-medium">Nosso #{{ p.nosso.id }}</span> {{ p.nosso.nome }}
+                                                <span v-if="!p.nosso.confirmado" class="ml-1 rounded-full border border-[var(--surface-border)] px-1.5 text-[10px] uppercase tracking-wide text-[var(--texto-suave)]" title="Achado pelo nome, não confirmado">parecido</span>
+                                                <span class="block text-[var(--texto-suave)]">
+                                                    preço {{ formatPrice(p.nosso.preco) }} · custo {{ p.nosso.custo === null ? 'sem cadastro' : formatPrice(p.nosso.custo) }}<template v-if="p.nosso.piso_15 !== null"> · piso 15%: {{ formatPrice(p.nosso.piso_15) }}</template>
+                                                </span>
+                                            </div>
+                                            <p v-if="p.veredito" class="mt-1 text-xs font-medium">{{ p.veredito }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex shrink-0 gap-2 sm:flex-col">
+                                        <a :href="p.videos.tiktok" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-2.5 py-1 text-xs hover:bg-[var(--surface-muted)]">
+                                            <i class="fab fa-tiktok" aria-hidden="true"></i> Vídeos TikTok
+                                        </a>
+                                        <a :href="p.videos.youtube" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-2.5 py-1 text-xs hover:bg-[var(--surface-muted)]">
+                                            <i class="fab fa-youtube" aria-hidden="true"></i> Vídeos YouTube
+                                        </a>
+                                    </div>
+                                </li>
+                            </ul>
+                        </section>
+                    </template>
+                </div>
+
+                <p class="border-t border-[var(--surface-border)] px-6 py-3 text-xs text-[var(--texto-suave)]">
+                    Limitações: a API do Mercado Livre não informa unidades vendidas, então a posição no ranking é o sinal de demanda.
+                    "Vendedores" conta só quem anuncia no catálogo do produto. O fator 0,56 (custo ≈ 56% do preço para sobrar ~15%) é uma aproximação:
+                    a decisão final passa pela margem de contribuição (ContributionMargin). Produto "parecido" foi achado pelo nome e precisa ser conferido.
+                </p>
+            </div>
+        </div>
     </AdminLayout>
 </template>

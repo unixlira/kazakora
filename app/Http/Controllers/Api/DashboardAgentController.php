@@ -12,6 +12,7 @@ use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
+use App\Modules\Checkout\Support\RegraVideoEmbalagem;
 use App\Modules\Content\Models\DailyText;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
@@ -635,7 +636,9 @@ class DashboardAgentController extends Controller
         // stock a mais que a versão anterior buscava — é o dado que
         // partitionByStock() usa pra decidir a aba. SKU continua vindo
         // junto, pro payload de shortage.
-        'items.product:id,sku,stock,color',
+        // category_id e parent_product_id: regra de quais caixas gravam vídeo
+        // (RegraVideoEmbalagem, 2026-10-13).
+        'items.product:id,sku,stock,color,category_id,parent_product_id',
         // external_shipment_id a mais: é a prova de que 2 pedidos do
         // Mercado Livre vão na MESMA caixa (carrinho — ver
         // groupOrdersShippedTogether()). Sem ele no select, a coluna
@@ -1147,6 +1150,9 @@ class DashboardAgentController extends Controller
     /**
      * @param  array<int, string>  $impressas  order_id => "d/m/Y H:i" da impressão
      */
+    /** Regra do vídeo lida uma vez por requisição (ver mapQueueOrder). */
+    private ?array $regraVideo = null;
+
     private function mapQueueOrder(\Illuminate\Support\Collection $group, array $shortages, array $impressas = []): array
     {
         $order = $group->first();
@@ -1253,6 +1259,9 @@ class DashboardAgentController extends Controller
             // nunca saiu). O KoraSync mostra no card e pergunta antes de
             // mandar outra — ver reprintLabel().
             'label_printed_at' => $group->map(fn (Order $item) => $impressas[$item->id] ?? null)->filter()->first(),
+            // Liga a câmera do KoraSync para esta caixa? Escolha do Lira na
+            // tela Vídeos de embalagem (2026-10-13). Ausente = não grava.
+            'gravar_video' => app(RegraVideoEmbalagem::class)->deveGravar($itensDaCaixa, $this->regraVideo ??= app(RegraVideoEmbalagem::class)->atual()),
         ];
     }
 

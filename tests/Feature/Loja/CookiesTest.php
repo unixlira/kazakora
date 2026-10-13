@@ -44,6 +44,17 @@ class CookiesTest extends TestCase
         $prova = ConsentimentoCookie::sole();
         $this->assertSame(Cookies::VERSAO, $prova->versao);
         $this->assertNotNull($prova->ip);
+        $this->assertSame('kazakora', $prova->origem);
+    }
+
+    public function test_ok_grava_a_origem_enviada_e_ignora_valor_desconhecido(): void
+    {
+        $this->post('/cookies/aceitar', ['origem' => 'beautykora']);
+        $this->assertSame('beautykora', ConsentimentoCookie::sole()->origem);
+
+        ConsentimentoCookie::query()->delete();
+        $this->post('/cookies/aceitar', ['origem' => 'outro-site']);
+        $this->assertSame('kazakora', ConsentimentoCookie::sole()->origem);
     }
 
     public function test_ok_conta_a_pagina_onde_o_cliente_aceitou(): void

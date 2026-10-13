@@ -441,12 +441,18 @@ return [
     // POST /api/ferrakora/visita (lista separada por vírgula, sem www).
     'ferrakora' => [
         'origens' => env('FERRAKORA_ORIGENS', 'ferrakora.devlira.com.br'),
+        // Catálogo vindo do KazaKora (2026-10-13): token de quem envia o JSON
+        // dos produtos em POST /api/ferrakora/produtos.
+        'catalogo_token' => env('FERRAKORA_CATALOGO_TOKEN'),
     ],
 
     // Site Beauty Kora (2026-10-12): domínios que podem avisar visita em
     // POST /api/beautykora/visita (lista separada por vírgula, sem www).
     'beautykora' => [
         'origens' => env('BEAUTYKORA_ORIGENS', 'beautykora.devlira.com.br'),
+        // Catálogo vindo do KazaKora (2026-10-12): token de quem envia o JSON
+        // dos produtos em POST /api/beautykora/produtos.
+        'catalogo_token' => env('BEAUTYKORA_CATALOGO_TOKEN'),
         // Pagamento confirmado (2026-10-12): o checkout do site é o da
         // Hostinger, que não avisa quando o pagamento entra. O comando
         // beautykora:conciliar-pagamentos lê os pedidos pagos pela API da

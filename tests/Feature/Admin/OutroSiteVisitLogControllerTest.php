@@ -165,4 +165,24 @@ class OutroSiteVisitLogControllerTest extends TestCase
 
         $this->actingAs($gerente)->get('/admin/visitas-ferrakora')->assertForbidden();
     }
+
+    public function test_olho_pagina_o_historico_de_100_em_100(): void
+    {
+        $this->travelTo('2026-10-12 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        for ($i = 0; $i < 150; $i++) {
+            $this->visita('1.1.1.1', '2026-10-12 10:00:00', '/p'.$i);
+        }
+
+        $url = '/admin/visitas-ferrakora/visitante?de=2026-10-12&ate=2026-10-12&ip=1.1.1.1';
+        $this->actingAs($admin)->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('total', 150)
+            ->assertJsonPath('paginas', 2)
+            ->assertJsonCount(100, 'visitas');
+        $this->actingAs($admin)->getJson($url.'&page=2')
+            ->assertOk()
+            ->assertJsonPath('pagina', 2)
+            ->assertJsonCount(50, 'visitas');
+    }
 }

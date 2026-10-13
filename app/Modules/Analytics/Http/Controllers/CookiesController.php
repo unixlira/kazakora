@@ -22,6 +22,7 @@ class CookiesController extends Controller
             ConsentimentoCookie::create([
                 'visitante_id' => $visitante,
                 'user_id' => $request->user()?->id,
+                'origem' => $this->origem($request),
                 'versao' => Cookies::VERSAO,
                 'ip' => $request->ip(),
                 'user_agent' => Str::limit((string) $request->userAgent(), 250, ''),
@@ -35,5 +36,15 @@ class CookiesController extends Controller
         Cookie::queue(Cookies::COOKIE_VISITANTE, $visitante, Cookies::DURACAO_MINUTOS);
 
         return back(303);
+    }
+
+    /** Site de onde veio o OK; qualquer valor fora da lista vale KazaKora. */
+    private function origem(Request $request): string
+    {
+        $origem = strtolower((string) $request->input('origem'));
+
+        return in_array($origem, ConsentimentoCookie::ORIGENS, true)
+            ? $origem
+            : ConsentimentoCookie::ORIGEM_KAZAKORA;
     }
 }

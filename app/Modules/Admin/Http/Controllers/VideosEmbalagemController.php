@@ -3,9 +3,13 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Catalog\Models\Category;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderPackingVideo;
+use App\Modules\Checkout\Support\RegraVideoEmbalagem;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -15,6 +19,8 @@ use Inertia\Response;
  * Pedidos › Vídeos da embalagem (pedido do Lira 2026-10-13): todos os vídeos
  * gravados no KoraSync num lugar só, para achar e assistir sem abrir pedido
  * por pedido. Tocar e baixar usam a mesma rota do pedido (pedidos.video).
+ * Na mesma tela, o Lira escolhe quais produtos ou categorias o KoraSync grava
+ * (RegraVideoEmbalagem, 2026-10-13).
  */
 class VideosEmbalagemController extends Controller
 {
@@ -30,7 +36,7 @@ class VideosEmbalagemController extends Controller
         Order::ORIGIN_AMAZON,
     ];
 
-    public function index(Request $request): Response
+    public function index(Request $request, RegraVideoEmbalagem $regra): Response
     {
         $filtros = $request->validate([
             'busca' => ['nullable', 'string', 'max:100'],
@@ -91,6 +97,27 @@ class VideosEmbalagemController extends Controller
             ],
             'canais' => self::CANAIS,
             'diasGuardado' => OrderPackingVideo::DIAS_GUARDADO,
+            'regra' => $regra->atual(),
+            'categorias' => Category::query()->orderBy('name')->get(['id', 'name']),
+            // Só o produto principal: a variação grava pelo pai.
+            'produtos' => Product::query()->whereNull('parent_product_id')->orderBy('name')
+                ->get(['id', 'name', 'sku', 'category_id', 'is_active'])
+                ->map(fn (Product $p) => ['id' => $p->id, 'nome' => $p->name, 'sku' => $p->sku, 'categoria' => $p->category_id, 'ativo' => (bool) $p->is_active]),
         ]);
+    }
+
+    public function salvarRegra(Request $request, RegraVideoEmbalagem $regra): RedirectResponse
+    {
+        $dados = $request->validate([
+            'modo' => ['required', Rule::in(RegraVideoEmbalagem::MODOS)],
+            'categorias' => ['array'],
+            'categorias.*' => ['integer', 'exists:categories,id'],
+            'produtos' => ['array'],
+            'produtos.*' => ['integer', 'exists:products,id'],
+        ]);
+
+        $regra->salvar($dados['modo'], $dados['categorias'] ?? [], $dados['produtos'] ?? []);
+
+        return back()->with('success', 'Escolha de gravação salva. O KoraSync passa a seguir em até 1 minuto.');
     }
 }

@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
+use App\Http\Controllers\Api\BeautyKoraCatalogoController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
+use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -202,6 +204,16 @@ Route::post('/{site}/visita', [OutroSiteVisitaController::class, 'registrar'])
     ->middleware('throttle:120,1')
     ->name('api.outro-site.visita');
 
+// Catálogo do site FerraKora vindo do KazaKora (2026-10-13), igual ao do
+// Beauty Kora, com categoria e link do produto na loja. Fica depois da rota
+// POST /{site}/visita, que não colide (caminho diferente).
+Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
+    Route::get('produtos', [FerraKoraCatalogoController::class, 'index'])->middleware('throttle:120,1')->name('produtos');
+    Route::get('produtos/{id}', [FerraKoraCatalogoController::class, 'show'])
+        ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
+    Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+});
+
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase
 // do Horizons. Token do Sanctum só de BeautyKoraCliente.
 Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
@@ -209,7 +221,12 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
     Route::post('login', [BeautyKoraContaController::class, 'login'])->middleware('throttle:10,1')->name('login');
     // Página de produto (2026-10-12): conteúdo gerado pelo Gemini, igual ao da KazaKora.
     Route::get('produtos/{id}/conteudo', [BeautyKoraProdutoController::class, 'conteudo'])
-        ->where('id', 'prod_[A-Za-z0-9]{10,40}')->middleware('throttle:30,1')->name('produto.conteudo');
+        ->where('id', '(prod_[A-Za-z0-9]{10,40}|kz-[0-9]{1,10})')->middleware('throttle:30,1')->name('produto.conteudo');
+    // Catálogo vindo do KazaKora (2026-10-12): o site lê daqui, quem cadastra envia o JSON.
+    Route::get('produtos', [BeautyKoraCatalogoController::class, 'index'])->middleware('throttle:120,1')->name('produtos');
+    Route::get('produtos/{id}', [BeautyKoraCatalogoController::class, 'show'])
+        ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
+    Route::post('produtos', [BeautyKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
 
     Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1'])->group(function () {
         Route::get('eu', [BeautyKoraContaController::class, 'eu'])->name('eu');

@@ -68,22 +68,33 @@ const tituloCliente = (linha) => (linha.cliente
 
 // Olho: horários das páginas abertas pelo IP no período.
 const detalhe = reactive({ aberto: false, carregando: false, erro: '', linha: null, dados: null });
+const corpoDetalhe = ref(null);
 
-const abrirDetalhe = async (linha) => {
-    Object.assign(detalhe, { aberto: true, carregando: true, erro: '', linha, dados: null });
-    document.body.style.overflow = 'hidden';
+// Busca uma página do histórico; trocar de página mantém o que já está na tela.
+const carregarDetalhe = async (linha, pagina = 1) => {
+    Object.assign(detalhe, { carregando: true, erro: '' });
     try {
-        const r = await fetch(`/admin/visitas-${props.site}/visitante?${new URLSearchParams(alvo(linha))}`, {
+        const query = new URLSearchParams({ ...alvo(linha), ...(pagina > 1 ? { page: pagina } : {}) });
+        const r = await fetch(`/admin/visitas-${props.site}/visitante?${query}`, {
             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         });
         const dados = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(dados.message || 'Não foi possível carregar o histórico.');
-        if (detalhe.linha === linha) detalhe.dados = dados;
+        if (detalhe.linha === linha) {
+            detalhe.dados = dados;
+            if (corpoDetalhe.value) corpoDetalhe.value.scrollTop = 0;
+        }
     } catch (e) {
         if (detalhe.linha === linha) detalhe.erro = e.message;
     } finally {
         if (detalhe.linha === linha) detalhe.carregando = false;
     }
+};
+
+const abrirDetalhe = (linha) => {
+    Object.assign(detalhe, { aberto: true, linha, dados: null });
+    document.body.style.overflow = 'hidden';
+    carregarDetalhe(linha);
 };
 
 const fecharDetalhe = () => {
@@ -260,7 +271,7 @@ const confirmarApagar = () => {
                     </button>
                 </div>
 
-                <div class="overflow-auto px-2 pb-2">
+                <div ref="corpoDetalhe" class="overflow-auto px-2 pb-2">
                     <p v-if="detalhe.carregando" class="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
                         <i class="fas fa-spinner fa-spin mr-1.5" aria-hidden="true"></i> Carregando…
                     </p>
@@ -286,11 +297,28 @@ const confirmarApagar = () => {
                             </tr>
                         </tbody>
                     </table>
-                    <p v-if="detalhe.dados && detalhe.dados.total > detalhe.dados.visitas.length"
-                        class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
-                        Mostrando as primeiras {{ numero(detalhe.dados.visitas.length) }} de {{ numero(detalhe.dados.total) }} visitas.
-                    </p>
                 </div>
+                <nav v-if="detalhe.dados && detalhe.dados.paginas > 1"
+                    class="flex items-center justify-between gap-3 border-t border-[var(--surface-border)] px-6 py-3 text-sm"
+                    aria-label="Páginas do histórico">
+                    <p class="text-slate-500 dark:text-slate-400">
+                        Página <span class="font-semibold text-[var(--foreground)]">{{ detalhe.dados.pagina }}</span>
+                        de <span class="font-semibold text-[var(--foreground)]">{{ detalhe.dados.paginas }}</span>
+                        <span class="hidden sm:inline">({{ numero(detalhe.dados.por_pagina) }} por página)</span>
+                    </p>
+                    <div class="flex gap-1">
+                        <button type="button" :disabled="detalhe.carregando || detalhe.dados.pagina <= 1"
+                            class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-slate-600 hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300"
+                            @click="carregarDetalhe(detalhe.linha, detalhe.dados.pagina - 1)">
+                            <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i> Anterior
+                        </button>
+                        <button type="button" :disabled="detalhe.carregando || detalhe.dados.pagina >= detalhe.dados.paginas"
+                            class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-slate-600 hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300"
+                            @click="carregarDetalhe(detalhe.linha, detalhe.dados.pagina + 1)">
+                            Próxima <i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </nav>
             </div>
         </div>
 

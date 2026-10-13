@@ -64,6 +64,7 @@ use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
+use App\Modules\Admin\Http\Controllers\FerraKoraProdutoController;
 use App\Modules\Admin\Http\Controllers\OutroSiteVisitLogController;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Admin\Http\Controllers\BeautyKoraPedidoController;
@@ -408,6 +409,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('videos-embalagem', [VideosEmbalagemController::class, 'index'])
         ->name('videos-embalagem.listar')
         ->middleware('permission:pedidos.view');
+    // O que o KoraSync grava: todos, nenhum ou só produtos/categorias escolhidos (2026-10-13).
+    Route::put('videos-embalagem/regra', [VideosEmbalagemController::class, 'salvarRegra'])
+        ->name('videos-embalagem.regra')
+        ->middleware('permission:pedidos.edit');
     Route::get('pedidos/{order}/videos/{packingVideo}', [AdminOrderController::class, 'packingVideo'])->name('pedidos.video');
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')
@@ -528,6 +533,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Oportunidades (correção do Lira 2026-10-12): mais vendidos e buscas
         // em alta de TERCEIROS no Mercado Livre e na Shopee (dado de mercado,
         // não as vendas da loja).
+        // Inteligência (Lira 2026-10-13): JSON do modal do Mercado Livre.
+        // Vem antes de oportunidades/{canal}.
+        Route::get('oportunidades/mercado-livre/inteligencia', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'inteligencia'])
+            ->middleware('throttle:30,1')
+            ->name('oportunidades.inteligencia');
         Route::get('oportunidades/{canal}', [\App\Modules\Admin\Http\Controllers\OportunidadesController::class, 'show'])
             ->whereIn('canal', array_keys(\App\Modules\Admin\Http\Controllers\OportunidadesController::CANAIS))
             ->middleware('throttle:30,1')
@@ -754,6 +764,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             Route::get("visitas-{$outroSite}/visitante", [OutroSiteVisitLogController::class, 'visitante'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.visitante");
             Route::delete("visitas-{$outroSite}/visitante", [OutroSiteVisitLogController::class, 'apagar'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.apagar");
         }
+
+        // Produtos FerraKora (2026-10-13): tabela paginada do catálogo do site,
+        // com categoria e ativo editáveis na linha.
+        Route::get('produtos-ferrakora', [FerraKoraProdutoController::class, 'index'])->name('produtos-ferrakora.listar');
+        Route::patch('produtos-ferrakora/{registro}', [FerraKoraProdutoController::class, 'update'])->name('produtos-ferrakora.atualizar');
 
         Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
         Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,18 +21,41 @@ class FerraKoraCatalogoController extends Controller
 
     public function index(): JsonResponse
     {
+        $this->ligarFreteEmbutido();
         $produtos = $this->catalogo->produtos();
 
-        return response()->json(['count' => count($produtos), 'offset' => 0, 'limit' => count($produtos), 'products' => $produtos]);
+        return $this->semCache(response()->json(['count' => count($produtos), 'offset' => 0, 'limit' => count($produtos), 'products' => $produtos]));
     }
 
     public function show(string $id): JsonResponse
     {
+        $this->ligarFreteEmbutido();
         $produto = $this->catalogo->produto($id);
 
         return $produto === null
             ? response()->json(['message' => 'Produto não encontrado.'], 404)
-            : response()->json(['product' => $produto]);
+            : $this->semCache(response()->json(['product' => $produto]));
+    }
+
+    /**
+     * Preço com o frete embutido da região do visitante, igual à página do
+     * produto no KazaKora (2026-10-13). O middleware AtivarFreteEmbutido pula
+     * api/*: aqui liga só nas leituras do catálogo do FerraKora. A região sai
+     * do CF-IPCountry/CF-Region-Code (a chamada vem do navegador do visitante)
+     * ou, fora do kazakora.com, de ?simular_uf=XX.
+     */
+    private function ligarFreteEmbutido(): void
+    {
+        app(FreteEmbutido::class)->ligar();
+    }
+
+    /** O preço muda com a região do visitante: nenhum cache guarda a resposta. */
+    private function semCache(JsonResponse $resposta): JsonResponse
+    {
+        $resposta->headers->set('Cache-Control', 'private, no-store');
+        $resposta->setVary(['CF-Region-Code', 'CF-IPCountry'], false);
+
+        return $resposta;
     }
 
     public function sincronizar(Request $request): JsonResponse

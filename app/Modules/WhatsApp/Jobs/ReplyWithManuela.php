@@ -32,6 +32,9 @@ class ReplyWithManuela
     /** Maior arquivo mandado inline ao Gemini (vídeo/PDF), em bytes. */
     private const LIMITE_ARQUIVO = 15 * 1024 * 1024;
 
+    /** @var array<int, true> Conversas cuja trava este processo já segura. */
+    private static array $emAndamento = [];
+
     public function __construct(public int $conversationId, public int $inboundMessageId, public bool $isRetry = false)
     {
     }
@@ -44,13 +47,27 @@ class ReplyWithManuela
         // respostas, porque cada uma checava "tem mensagem depois?" antes das
         // outras serem gravadas. Espera a rajada acabar e roda UM job por
         // conversa por vez; quem entra depois reconfere já com tudo gravado.
+        // Nova tentativa que roda dentro do próprio job (fila síncrona) já
+        // está sob a trava da conversa: não pode esperar por si mesma.
+        if (isset(self::$emAndamento[$this->conversationId])) {
+            $this->processar($manuela, $outbox, $agent, $gemini, $media);
+
+            return;
+        }
+
         if (! app()->runningUnitTests()) {
             sleep(max(0, (int) config('services.whatsapp.reply_debounce_seconds', 4)));
         }
 
         try {
             Cache::lock('manuela:reply:'.$this->conversationId, 150)->block(140, function () use ($manuela, $outbox, $agent, $gemini, $media) {
-                $this->processar($manuela, $outbox, $agent, $gemini, $media);
+                self::$emAndamento[$this->conversationId] = true;
+
+                try {
+                    $this->processar($manuela, $outbox, $agent, $gemini, $media);
+                } finally {
+                    unset(self::$emAndamento[$this->conversationId]);
+                }
             });
         } catch (LockTimeoutException) {
             Log::info('whatsapp.manuela_conversa_ocupada', ['conversation_id' => $this->conversationId, 'message_id' => $this->inboundMessageId]);

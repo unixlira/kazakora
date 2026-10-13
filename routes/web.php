@@ -64,6 +64,7 @@ use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
+use App\Modules\Admin\Http\Controllers\FerraKoraProdutoController;
 use App\Modules\Admin\Http\Controllers\OutroSiteVisitLogController;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Admin\Http\Controllers\BeautyKoraPedidoController;
@@ -749,6 +750,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
             Route::get("visitas-{$outroSite}/visitante", [OutroSiteVisitLogController::class, 'visitante'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.visitante");
             Route::delete("visitas-{$outroSite}/visitante", [OutroSiteVisitLogController::class, 'apagar'])->defaults('site', $outroSite)->name("visitas-{$outroSite}.apagar");
         }
+
+        // Produtos FerraKora (2026-10-13): tabela paginada do catálogo do site,
+        // com categoria e ativo editáveis na linha.
+        Route::get('produtos-ferrakora', [FerraKoraProdutoController::class, 'index'])->name('produtos-ferrakora.listar');
+        Route::patch('produtos-ferrakora/{registro}', [FerraKoraProdutoController::class, 'update'])->name('produtos-ferrakora.atualizar');
 
         Route::get('api-parceiros', [ApiPartnerController::class, 'index'])->name('api-parceiros.listar');
         Route::post('api-parceiros', [ApiPartnerController::class, 'store'])->name('api-parceiros.armazenar');

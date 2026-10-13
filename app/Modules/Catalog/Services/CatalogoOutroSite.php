@@ -16,7 +16,9 @@ use Illuminate\Support\Str;
  * GET /api/{site}/produtos no MESMO formato da vitrine da Hostinger, para o
  * front usar os mesmos extratores. Ids: "kz-<pai>" no produto e
  * "kzv-<variação>" na variação. Preço é o de cadastro (sem o frete embutido
- * da loja KazaKora).
+ * da loja KazaKora), a não ser no site que liga comFreteEmbutido() (FerraKora,
+ * 2026-10-13): aí vale o mesmo final_price da página do KazaKora para a região
+ * do visitante.
  *
  * Cada site tem a sua tabela (qual produto aparece, título, ordem, ativo) e
  * pode acrescentar campos próprios no item recebido e no produto devolvido.
@@ -43,6 +45,16 @@ abstract class CatalogoOutroSite
     protected function camposDoItem(array $item): array
     {
         return [];
+    }
+
+    /**
+     * true = preço igual ao da loja KazaKora (final_price com o frete embutido
+     * da região do visitante e a oferta do dia). Quem liga também tem que
+     * ligar o FreteEmbutido na requisição (FerraKoraCatalogoController).
+     */
+    protected function comFreteEmbutido(): bool
+    {
+        return false;
     }
 
     /** Campos próprios do site acrescentados no fim do produto devolvido. */
@@ -144,8 +156,7 @@ abstract class CatalogoOutroSite
         $opcaoId = 'kzo-'.$pai->id;
 
         $variantes = $grupo->map(function (Product $produto) use ($pai, $temOpcao, $opcaoId) {
-            $preco = (int) round((float) $produto->price * 100);
-            $final = (int) round($produto->precoSemOferta() * 100);
+            [$preco, $final] = $this->precos($produto);
             $id = self::PREFIXO_VARIACAO.$produto->id;
 
             return [
@@ -211,6 +222,28 @@ abstract class CatalogoOutroSite
             'updated_at' => $grupo->max('updated_at')?->toIso8601String(),
             ...$this->camposExtras($registro, $pai),
         ];
+    }
+
+    /**
+     * Preço cheio e preço de venda em centavos.
+     *
+     * Sem frete embutido: cadastro e preço sem a oferta do dia (Beauty Kora).
+     * Com frete embutido: os mesmos números do card da loja KazaKora, o
+     * final_price (frete da região + oferta do dia) e, riscado, o preço sem a
+     * oferta ou o preço "de" do desconto, ambos com o mesmo frete.
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function precos(Product $produto): array
+    {
+        if (! $this->comFreteEmbutido()) {
+            return [(int) round((float) $produto->price * 100), (int) round($produto->precoSemOferta() * 100)];
+        }
+
+        $final = (float) $produto->final_price;
+        $cheio = $produto->preco_sem_oferta ?? $produto->preco_de ?? $final;
+
+        return [(int) round(max($cheio, $final) * 100), (int) round($final * 100)];
     }
 
     /** "Tom 01", "Cor 340"; sem variação cadastrada, o nome do produto. */

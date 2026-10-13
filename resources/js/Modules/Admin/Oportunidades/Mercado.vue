@@ -2,6 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import MercadoLivreBloco from '@/Modules/Admin/Radar/MercadoLivreBloco.vue';
 import ShopeeRadarBloco from './ShopeeRadarBloco.vue';
+import ConcorrenciaMl from '@/Modules/Admin/Radar/ConcorrenciaMl.vue';
 import { RADAR_NOME } from '@/Shared/radarNome';
 import { Deferred, Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -45,6 +46,12 @@ const buscar = (extra = {}) => {
         onFinish: () => { carregando.value = false; },
     });
 };
+
+// "Só nichos pouco disputados" (Lira 2026-10-13): no ML a lista já vem com
+// os nichos (concorrência baixa, sem guerra de preço) no topo.
+const soNichos = ref(false);
+const nichos = computed(() => (props.mercado?.produtos ?? []).filter((p) => p.oportunidade_nicho).length);
+const produtosVisiveis = computed(() => (props.mercado?.produtos ?? []).filter((p) => !soNichos.value || p.oportunidade_nicho));
 
 const nomeCategoria = computed(() => props.categorias.find((c) => c.id === props.filtros.categoria)?.nome ?? props.filtros.categoria);
 const faixaPreco = (p) => {
@@ -142,17 +149,25 @@ const faixaPreco = (p) => {
             <div class="grid grid-cols-1 gap-6" :class="ehMl ? 'xl:grid-cols-[1fr_300px]' : ''">
                 <!-- Mais vendidos -->
                 <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm" style="border-top: 3px solid var(--faixa-card)">
-                    <div class="border-b border-[var(--surface-border)] px-4 py-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-border)] px-4 py-3">
                         <h2 class="text-base font-semibold">
                             Mais vendidos{{ ehMl ? ` · ${nomeCategoria}` : (filtros.termo ? ` · “${filtros.termo}”` : '') }} ({{ mercado.produtos.length }})
                         </h2>
+                        <button v-if="ehMl && mercado.produtos.length" type="button" :aria-pressed="soNichos" @click="soNichos = !soNichos"
+                            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
+                            :class="soNichos ? 'border-success bg-lightsuccess text-success' : 'border-[var(--surface-border)] hover:bg-[var(--surface-muted)]'">
+                            <i class="fas fa-seedling" aria-hidden="true"></i> Só nichos pouco disputados ({{ nichos }})
+                        </button>
                     </div>
+                    <p v-if="ehMl && soNichos && nichos === 0" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
+                        Nenhum nicho pouco disputado nesta categoria agora.
+                    </p>
 
                     <p v-if="mercado.produtos.length === 0 && !mercado.erro" class="px-4 py-8 text-center text-sm text-[var(--texto-suave)]">
                         Nenhum produto encontrado.
                     </p>
 
-                    <div v-else-if="mercado.produtos.length" class="overflow-x-auto">
+                    <div v-else-if="mercado.produtos.length && produtosVisiveis.length" class="overflow-x-auto">
                         <table class="w-full min-w-[720px] text-left text-sm">
                             <thead class="border-b border-[var(--surface-border)] text-xs uppercase text-[var(--texto-suave)]">
                                 <tr>
@@ -167,7 +182,7 @@ const faixaPreco = (p) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="p in mercado.produtos" :key="p.id" class="border-b border-[var(--surface-border)] last:border-0 hover:bg-[var(--surface-muted)]">
+                                <tr v-for="p in produtosVisiveis" :key="p.id" class="border-b border-[var(--surface-border)] last:border-0 hover:bg-[var(--surface-muted)]">
                                     <td class="px-4 py-2 tabular-nums text-[var(--texto-suave)]">{{ p.posicao }}º</td>
                                     <td class="py-2 pr-3">
                                         <div class="flex items-center gap-3">
@@ -176,6 +191,7 @@ const faixaPreco = (p) => {
                                                 <a :href="p.link" target="_blank" rel="noopener noreferrer" class="line-clamp-2 hover:text-[var(--destaque)] hover:underline">{{ p.nome }}</a>
                                                 <span v-if="p.loja" class="block truncate text-xs text-[var(--texto-suave)]">{{ p.loja }}</span>
                                                 <span v-if="p.voce_vende" class="mt-0.5 inline-block rounded-full bg-[var(--surface-muted)] px-2 py-0.5 text-xs">A KazaKora já vende</span>
+                                                <ConcorrenciaMl v-if="ehMl" :produto="p" class="mt-1" />
                                             </div>
                                         </div>
                                     </td>
@@ -192,6 +208,7 @@ const faixaPreco = (p) => {
                     <p class="border-t border-[var(--surface-border)] px-4 py-3 text-xs text-[var(--texto-suave)]">
                         <template v-if="ehMl">
                             Ranking "Mais vendidos" do próprio Mercado Livre na categoria. Preço = menor e maior entre os vendedores do catálogo.
+                            Nichos pouco disputados (até 3 vendedores, sem guerra de preço) vêm primeiro; "pagar até" = mediana × 0,56, o máximo de custo para sobrar 15% vendendo pela mediana.
                             <template v-if="mercado.ocultos"> {{ mercado.ocultos }} anúncio(s) do ranking não são de catálogo e o ML não libera os dados deles.</template>
                         </template>
                         <template v-else>Ordenado pelas vendas informadas pela API de Afiliados da Shopee.</template>

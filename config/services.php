@@ -382,6 +382,11 @@ return [
         'manuela_token' => env('MANUELA_AGENT_TOKEN'),
         'manuela_model' => env('MANUELA_AGENT_MODEL', 'hermes-agent'),
         'manuela_timeout' => (int) env('MANUELA_AGENT_TIMEOUT', 60),
+
+        // Resposta em áudio da Manuela (pedido 2026-10-13): SÓ para estes
+        // números (lista separada por vírgula, formato 55DDDNÚMERO), quando
+        // eles mandam áudio. Cliente comum segue recebendo texto.
+        'audio_reply_numbers' => array_filter(array_map('trim', explode(',', (string) env('WHATSAPP_AUDIO_REPLY_NUMBERS', '5511990253050')))),
     ],
 
     // Gemini da conta do dono: responde como Manuela quando o Hermes não está
@@ -396,6 +401,9 @@ return [
         // Reservas, em ordem, quando os de cima estão sobrecarregados (503).
         'fallback_models' => array_filter(array_map('trim', explode(',', (string) env('GEMINI_FALLBACK_MODELS', 'gemini-flash-latest,gemini-flash-lite-latest')))),
         'retry_delay_ms' => (int) env('GEMINI_RETRY_DELAY_MS', 1500),
+        // Voz da Manuela (síntese de fala), usada só na resposta em áudio.
+        'tts_model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
+        'tts_voice' => env('GEMINI_TTS_VOICE', 'Kore'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 30),
     ],
 

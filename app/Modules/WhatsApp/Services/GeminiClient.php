@@ -102,6 +102,40 @@ class GeminiClient
     }
 
     /**
+     * Texto vira fala. Devolve PCM cru (16 bits, mono, 24 kHz) como o Gemini
+     * entrega; quem chama converte para o formato do WhatsApp.
+     */
+    public function speak(string $text): string
+    {
+        $model = (string) config('services.gemini.tts_model');
+
+        $response = Http::withHeaders(['x-goog-api-key' => (string) config('services.gemini.api_key')])
+            ->acceptJson()
+            ->timeout(max(10, (int) config('services.gemini.timeout', 30)) * 2)
+            ->post(self::BASE_URL.$model.':generateContent', [
+                'contents' => [['parts' => [['text' => $text]]]],
+                'generationConfig' => [
+                    'responseModalities' => ['AUDIO'],
+                    'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => (string) config('services.gemini.tts_voice')]]],
+                ],
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Gemini TTS ({$model}) respondeu HTTP {$response->status()}: ".Str::limit($response->body(), 300));
+        }
+
+        $this->recordUsage($model, GeminiUsageLog::PURPOSE_REPLY, $response->json('usageMetadata') ?? []);
+
+        $data = $response->json('candidates.0.content.parts.0.inlineData.data');
+
+        if (! filled($data)) {
+            throw new RuntimeException("Gemini TTS ({$model}) não devolveu áudio.");
+        }
+
+        return base64_decode((string) $data, true) ?: throw new RuntimeException('Gemini TTS devolveu áudio inválido.');
+    }
+
+    /**
      * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
      * @param  array<int, array<string, mixed>>  $functionDeclarations
      * @return array<int, array<string, mixed>>

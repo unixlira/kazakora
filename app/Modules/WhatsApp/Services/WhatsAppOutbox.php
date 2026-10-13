@@ -68,4 +68,47 @@ class WhatsAppOutbox
 
         return $message;
     }
+
+    /**
+     * Resposta em nota de voz. Só grava a mensagem se o envio deu certo; se
+     * não deu (ou o WhatsApp não está pronto), devolve null e quem chamou
+     * manda o texto, para o cliente nunca ficar sem resposta.
+     * O texto falado fica em `body` (a tela mostra "🎤 Áudio: texto").
+     */
+    public function sendVoice(
+        WhatsAppConversation $conversation,
+        string $body,
+        string $absolutePath,
+        string $sentBy,
+        array $extraPayload = [],
+    ): ?WhatsAppMessage {
+        if (! $this->settings->isReadyToSend()) {
+            return null;
+        }
+
+        try {
+            $mediaId = $this->client->uploadMedia($absolutePath, 'audio/ogg');
+            $response = $this->client->sendMedia($conversation->wa_id, 'audio', $mediaId);
+        } catch (Throwable $exception) {
+            Log::warning('whatsapp_voice_send_failed', ['conversation_id' => $conversation->id, 'error' => $exception->getMessage()]);
+
+            return null;
+        }
+
+        $message = WhatsAppMessage::query()->create([
+            'conversation_id' => $conversation->id,
+            'wa_message_id' => $response['messages'][0]['id'] ?? null,
+            'direction' => 'outbound',
+            'type' => 'audio',
+            'body' => $body,
+            'status' => 'sent',
+            'sent_by' => $sentBy,
+            'payload' => array_merge($extraPayload, ['audio' => ['id' => $mediaId], 'meta_response' => $response]),
+            'sent_at' => now(),
+        ]);
+
+        $conversation->registerMessage($message);
+
+        return $message;
+    }
 }

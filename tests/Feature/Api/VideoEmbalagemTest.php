@@ -67,7 +67,7 @@ class VideoEmbalagemTest extends TestCase
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
         $this->actingAs($admin)->get('/admin/videos-embalagem')->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Admin/VideosEmbalagem/Index')
+            ->assertInertia(fn ($page) => $page->component('Admin/VideosEmbalagem/Index', false)
                 ->has('videos.data', 2)
                 ->where('totais.videos', 2)
                 ->where('totais.tamanho_mb', 2));

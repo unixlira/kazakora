@@ -125,12 +125,13 @@ class WhatsAppCloudApiClient
 
     public function sendMedia(string $to, string $mediaType, string $mediaId, ?string $caption = null): array
     {
-        if (! in_array($mediaType, ['image', 'video'], true)) {
+        if (! in_array($mediaType, ['image', 'video', 'audio'], true)) {
             throw new RuntimeException('Tipo de mídia inválido para WhatsApp.');
         }
 
         $media = ['id' => $mediaId];
-        if (filled($caption)) {
+        // Áudio não aceita legenda na API.
+        if (filled($caption) && $mediaType !== 'audio') {
             $media['caption'] = $caption;
         }
 

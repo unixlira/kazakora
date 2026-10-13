@@ -36,6 +36,13 @@ class ConteudoProdutoBeautyKora
      */
     public function produto(string $id): ?array
     {
+        // Produto do catálogo vindo do KazaKora (2026-10-12): mesmo formato da vitrine.
+        if (Str::startsWith($id, CatalogoBeautyKora::PREFIXO_PRODUTO)) {
+            $produto = app(CatalogoBeautyKora::class)->produto($id);
+
+            return $produto === null ? null : $this->normalizar($produto);
+        }
+
         return Cache::remember("beautykora:produto:{$id}", now()->addMinutes(10), function () use ($id) {
             $resposta = Http::timeout(15)->acceptJson()->get($this->urlLoja()."/products/{$id}");
 
@@ -53,6 +60,7 @@ class ConteudoProdutoBeautyKora
     public function idsDaLoja(): array
     {
         return collect(Http::timeout(20)->acceptJson()->get($this->urlLoja().'/products', ['limit' => 200])->throw()->json('products') ?? [])
+            ->merge(app(CatalogoBeautyKora::class)->produtos())
             ->pluck('id')
             ->filter()
             ->values()

@@ -78,4 +78,23 @@ class ConcorrenciaMercadoLivreTest extends TestCase
 
         $this->assertSame([4, 6, 3, 1, 2, 5], array_column(Ml::ordenar($produtos), 'posicao'));
     }
+
+    public function test_filtro_de_concorrencia_so_o_nivel_do_menos_para_o_mais_disputado(): void
+    {
+        $produtos = Ml::ordenar([
+            Ml::classificar($this->linha(1, 9), [100]),  // média
+            Ml::classificar($this->linha(2, 50), [100]), // alta
+            Ml::classificar($this->linha(3, 4), [100]),  // média
+            Ml::classificar($this->linha(4, 2), [100]),  // baixa
+            Ml::classificar($this->linha(5, 9), [100]),  // média, empata com a 1ª
+        ]);
+
+        // Menos vendedores primeiro; empate pela posição do ranking.
+        $this->assertSame([3, 1, 5], array_column(Ml::filtrarConcorrencia($produtos, 'media'), 'posicao'));
+        $this->assertSame([4], array_column(Ml::filtrarConcorrencia($produtos, 'baixa'), 'posicao'));
+        $this->assertSame([2], array_column(Ml::filtrarConcorrencia($produtos, 'alta'), 'posicao'));
+        // Sem filtro (ou valor estranho) a lista fica como veio.
+        $this->assertSame($produtos, Ml::filtrarConcorrencia($produtos, null));
+        $this->assertSame($produtos, Ml::filtrarConcorrencia($produtos, 'lixo'));
+    }
 }

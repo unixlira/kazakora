@@ -70,14 +70,20 @@ class OportunidadesController extends Controller
 
         if ($canal === 'mercado-livre') {
             $categoria = self::categoria($request);
+            // Filtro de concorrência (Lira 2026-10-13): vale para as duas
+            // listas da tela; a coleta e o cache continuam os mesmos.
+            $concorrencia = in_array($request->query('concorrencia'), MaisVendidosMercadoLivre::NIVEIS_CONCORRENCIA, true)
+                ? (string) $request->query('concorrencia') : null;
+            $filtrar = fn (array $dados) => ['produtos' => MaisVendidosMercadoLivre::filtrarConcorrencia($dados['produtos'] ?? [], $concorrencia)] + $dados;
 
             return Inertia::render('Admin/Oportunidades/Mercado', [
                 'canal' => ['slug' => $canal, 'nome' => self::CANAIS[$canal]['nome']],
                 'base' => '/'.$request->path(),
-                'filtros' => ['categoria' => $categoria],
+                'filtros' => ['categoria' => $categoria, 'concorrencia' => $concorrencia],
+                'categoriaPadrao' => self::CATEGORIA_PADRAO,
                 'categorias' => $ml->categorias(),
-                'mercado' => Inertia::defer(fn () => $ml->analisar($categoria, $atualizar) + ['configurado' => true]),
-                'mercadoLivre' => Inertia::defer(fn () => RadarController::mercadoLivre($ml, $atualizar), 'radar'),
+                'mercado' => Inertia::defer(fn () => $filtrar($ml->analisar($categoria, $atualizar)) + ['configurado' => true]),
+                'mercadoLivre' => Inertia::defer(fn () => $filtrar(RadarController::mercadoLivre($ml, $atualizar)), 'radar'),
             ]);
         }
 

@@ -15,6 +15,8 @@ const props = defineProps({
     mercadoLivre: { type: Object, default: null },
     // No Radar geral aponta para as outras categorias; na tela do ML elas já estão em cima.
     linkOutrasCategorias: { type: Boolean, default: true },
+    // Nível do filtro de concorrência da tela (Lira 2026-10-13), só para o aviso de lista vazia.
+    concorrencia: { type: String, default: null },
 });
 
 const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value ?? 0);
@@ -72,7 +74,8 @@ const ml = useBuscaPaginada(computed(() => (props.mercadoLivre?.produtos ?? []).
                 </div>
                 <span class="text-xs text-[var(--texto-suave)]" role="status" aria-live="polite">{{ ml.faixa.value }} produtos</span>
             </div>
-            <p v-if="mercadoLivre.produtos.length && ml.filtrados.value.length === 0" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">
+            <p v-if="!mercadoLivre.produtos.length && concorrencia" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">Nenhum produto com concorrência {{ concorrencia }} entre os mais vendidos agora.</p>
+            <p v-else-if="mercadoLivre.produtos.length && ml.filtrados.value.length === 0" class="border-t border-[var(--surface-border)] px-4 py-6 text-sm text-[var(--texto-suave)]">
                 <template v-if="ml.busca.value">Nenhum produto com “{{ ml.busca.value }}”{{ soNichos ? ' entre os nichos pouco disputados' : ' entre os mais vendidos' }}.</template>
                 <template v-else>Nenhum nicho pouco disputado entre os mais vendidos agora.</template>
             </p>

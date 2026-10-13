@@ -68,6 +68,7 @@ use App\Modules\Admin\Http\Controllers\FerraKoraProdutoController;
 use App\Modules\Admin\Http\Controllers\OutroSiteVisitLogController;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Admin\Http\Controllers\BeautyKoraPedidoController;
+use App\Modules\Admin\Http\Controllers\VideosEmbalagemController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
@@ -404,6 +405,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middleware('permission:pedidos.edit');
     Route::get('pedidos/{order}', [AdminOrderController::class, 'show'])->name('pedidos.exibir');
     // Vídeo da embalagem gravado no KoraSync (2026-10-11): assistir/baixar.
+    // Todos os vídeos da embalagem numa página só (2026-10-13).
+    Route::get('videos-embalagem', [VideosEmbalagemController::class, 'index'])
+        ->name('videos-embalagem.listar')
+        ->middleware('permission:pedidos.view');
     Route::get('pedidos/{order}/videos/{packingVideo}', [AdminOrderController::class, 'packingVideo'])->name('pedidos.video');
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')

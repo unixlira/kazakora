@@ -64,6 +64,8 @@ export const sidebarSections = [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', permission: 'pedidos.view' },
             // Pedidos do site Beauty Kora (2026-10-12), fora dos pedidos da loja.
             { label: 'Pedidos Beauty Kora', href: '/admin/pedidos-beautykora', icon: 'fas fa-spa', permission: 'pedidos.view' },
+            // Vídeos da embalagem gravados no KoraSync (2026-10-13).
+            { label: 'Vídeos da embalagem', href: '/admin/videos-embalagem', icon: 'fas fa-video', permission: 'pedidos.view' },
             { label: 'Importar pedido', href: '/admin/importar-pedido', icon: 'fas fa-file-import', permission: 'configuracoes.integracoes' },
             // Devoluções e reclamações de todas as plataformas (2026-10-06).
             { label: 'Devoluções', href: '/admin/devolucoes', icon: 'fas fa-rotate-left', permission: 'operacional.view', badgeKey: 'devolucoes' },

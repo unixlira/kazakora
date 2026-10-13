@@ -58,6 +58,29 @@ class VideoEmbalagemTest extends TestCase
         $this->actingAs($admin)->get("/admin/pedidos/{$this->order->id}/videos/{$video->id}?baixar=1")->assertDownload("embalagem-pedido-{$this->order->id}.webm");
     }
 
+    public function test_pagina_lista_todos_os_videos_com_filtro(): void
+    {
+        $outro = $this->order->replicate()->fill(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML9', 'shipping_name' => 'Maria']);
+        $outro->save();
+        OrderPackingVideo::create(['order_id' => $this->order->id, 'path' => 'embalagem/a.mp4', 'status' => 'pronto', 'tamanho' => 1048576, 'expira_em' => now()->addDays(90)]);
+        OrderPackingVideo::create(['order_id' => $outro->id, 'path' => 'embalagem/b.mp4', 'status' => 'pronto', 'tamanho' => 1048576, 'expira_em' => now()->addDays(90)]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/admin/videos-embalagem')->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Admin/VideosEmbalagem/Index')
+                ->has('videos.data', 2)
+                ->where('totais.videos', 2)
+                ->where('totais.tamanho_mb', 2));
+
+        $this->actingAs($admin)->get('/admin/videos-embalagem?busca=Maria')->assertOk()
+            ->assertInertia(fn ($page) => $page->has('videos.data', 1)
+                ->where('videos.data.0.pedido.numero', 'ML9')
+                ->where('videos.data.0.url', "/admin/pedidos/{$outro->id}/videos/".OrderPackingVideo::where('order_id', $outro->id)->value('id')));
+
+        $this->actingAs($admin)->get('/admin/videos-embalagem?canal=shopee')->assertOk()
+            ->assertInertia(fn ($page) => $page->has('videos.data', 1)->where('videos.data.0.pedido.numero', 'SP1'));
+    }
+
     public function test_sem_token_nao_envia(): void
     {
         $this->post("/api/print-agent/dashboard/queue/{$this->order->id}/video", [

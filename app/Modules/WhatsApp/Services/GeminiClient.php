@@ -101,6 +101,52 @@ class GeminiClient
         ]], null, 1024, GeminiUsageLog::PURPOSE_TRANSCRIPTION);
     }
 
+    /** Vídeo ou documento do cliente vira uma descrição curta (inclui fala e texto visível). */
+    public function describe(string $file, string $mimeType, string $kind): string
+    {
+        return $this->generate((string) config('services.gemini.audio_model'), [[
+            'role' => 'user',
+            'parts' => [
+                ['inline_data' => ['mime_type' => $mimeType, 'data' => base64_encode($file)]],
+                ['text' => "Um cliente mandou este {$kind} pelo WhatsApp para uma loja de ferramentas e utilidades. Descreva em português do Brasil, em até 5 frases, o que aparece e o que é dito ou escrito, incluindo marcas, medidas e códigos legíveis. Responda só com a descrição."],
+            ],
+        ]], null, 1024, GeminiUsageLog::PURPOSE_TRANSCRIPTION);
+    }
+
+    /**
+     * Texto vira fala. Devolve PCM cru (16 bits, mono, 24 kHz) como o Gemini
+     * entrega; quem chama converte para o formato do WhatsApp.
+     */
+    public function speak(string $text): string
+    {
+        $model = (string) config('services.gemini.tts_model');
+
+        $response = Http::withHeaders(['x-goog-api-key' => (string) config('services.gemini.api_key')])
+            ->acceptJson()
+            ->timeout(max(10, (int) config('services.gemini.timeout', 30)) * 2)
+            ->post(self::BASE_URL.$model.':generateContent', [
+                'contents' => [['parts' => [['text' => $text]]]],
+                'generationConfig' => [
+                    'responseModalities' => ['AUDIO'],
+                    'speechConfig' => ['voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => (string) config('services.gemini.tts_voice')]]],
+                ],
+            ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException("Gemini TTS ({$model}) respondeu HTTP {$response->status()}: ".Str::limit($response->body(), 300));
+        }
+
+        $this->recordUsage($model, GeminiUsageLog::PURPOSE_REPLY, $response->json('usageMetadata') ?? []);
+
+        $data = $response->json('candidates.0.content.parts.0.inlineData.data');
+
+        if (! filled($data)) {
+            throw new RuntimeException("Gemini TTS ({$model}) não devolveu áudio.");
+        }
+
+        return base64_decode((string) $data, true) ?: throw new RuntimeException('Gemini TTS devolveu áudio inválido.');
+    }
+
     /**
      * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
      * @param  array<int, array<string, mixed>>  $functionDeclarations

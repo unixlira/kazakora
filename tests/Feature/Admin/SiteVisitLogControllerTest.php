@@ -349,4 +349,38 @@ class SiteVisitLogControllerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('cookies', []);
     }
+
+    public function test_olho_pagina_o_historico_de_100_em_100_e_a_origem_olha_o_periodo_inteiro(): void
+    {
+        $this->travelTo('2026-10-12 15:00:00');
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->visita('robo', '2026-10-12 08:00:00', '1.1.1.1', '/', null, 230);
+        // Última visita (cai na página 3) veio do Google.
+        $this->visita('robo', '2026-10-12 09:00:00', '1.1.1.1', '/busca');
+        DB::table('site_visits')->where('path', '/busca')->update(['referer' => 'https://www.google.com/']);
+
+        $url = '/admin/visitas-site/visitante?de=2026-10-12&ate=2026-10-12&ip=1.1.1.1&todos=1';
+
+        $this->actingAs($admin)->getJson($url)
+            ->assertOk()
+            ->assertJsonPath('total', 231)
+            ->assertJsonPath('pagina', 1)
+            ->assertJsonPath('paginas', 3)
+            ->assertJsonPath('por_pagina', 100)
+            ->assertJsonCount(100, 'visitas')
+            ->assertJsonCount(1, 'entradas')
+            ->assertJsonPath('entradas.0.rotulo', 'Google')
+            ->assertJsonPath('sem_dado', true);
+
+        $this->actingAs($admin)->getJson($url.'&page=3')
+            ->assertOk()
+            ->assertJsonPath('pagina', 3)
+            ->assertJsonCount(31, 'visitas')
+            ->assertJsonPath('visitas.30.path', '/busca');
+
+        // Página além da última volta a última.
+        $this->actingAs($admin)->getJson($url.'&page=9')->assertJsonPath('pagina', 3);
+        $this->actingAs($admin)->getJson($url.'&page=0')->assertStatus(422);
+    }
 }

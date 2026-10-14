@@ -421,6 +421,7 @@ class PainelDeAlertas
             ->where('created_at', '>=', now()->subDays(20))
             ->selectRaw('origin, COUNT(*) as total')->groupBy('origin')->pluck('total', 'origin');
         foreach ($atrasados as $canal => $total) {
+            $total = (int) $total;
             $nivel = $total >= 5 ? self::CRITICO : self::ATENCAO;
             $alertas[] = $this->alerta($nivel, 'operacao', $canal, 'Envio atrasado', self::CANAIS[$canal].": {$total} pedido(s) pago(s) há mais de ".self::HORAS_ENVIO.'h sem sair para envio.', 'Atraso de envio derruba a reputação e o alcance dos anúncios: confira a fila de etiquetas.', $total * 20, '/admin/pedidos');
         }
@@ -517,7 +518,10 @@ class PainelDeAlertas
 
     private function pct(int|float|null $v): string
     {
-        return number_format((float) $v, 1, ',', '.').'%';
+        // Uma casa; duas só quando a referência tem (1,65%).
+        $casas = round((float) $v, 1) == round((float) $v, 2) ? 1 : 2;
+
+        return number_format((float) $v, $casas, ',', '.').'%';
     }
 
     private function um(int|float|null $v): string

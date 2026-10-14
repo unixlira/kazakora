@@ -154,12 +154,12 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
 
         <template v-else>
             <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
+                <CardStats compact stat-subtitle="SALDO DE ADS" :stat-title="dinheiro(saldo)" :stat-note="`${k.ativas} campanhas ativas`" stat-icon-name="fas fa-wallet" variant="info" />
                 <CardStats compact stat-subtitle="GASTO" :stat-title="dinheiro(k.gasto)" stat-icon-name="fas fa-bullhorn" variant="warning" />
                 <CardStats compact stat-subtitle="VENDA ATRIBUÍDA" :stat-title="dinheiro(k.venda)" stat-icon-name="fas fa-cart-shopping" variant="primary" />
                 <CardStats compact stat-subtitle="ROAS" :stat-title="um(k.roas)" :stat-note="`meta da loja ${um(k.roas_meta_loja)}`" stat-icon-name="fas fa-arrow-trend-up" :variant="(k.roas ?? 0) >= (k.roas_meta_loja ?? 0) ? 'success' : 'error'" />
                 <CardStats compact vivid stat-subtitle="PREJUÍZO DO ADS" :stat-title="dinheiro(k.prejuizo)" :stat-note="`${k.em_prejuizo} de ${k.com_gasto} campanhas com gasto`" stat-icon-name="fas fa-triangle-exclamation" variant="error" />
                 <CardStats compact stat-subtitle="GASTO SEM VENDA" :stat-title="dinheiro(k.gasto_sem_venda)" stat-icon-name="fas fa-fire" variant="error" />
-                <CardStats compact stat-subtitle="SALDO DE ADS" :stat-title="dinheiro(saldo)" :stat-note="`${k.ativas} campanhas ativas`" stat-icon-name="fas fa-wallet" variant="info" />
             </div>
 
             <section v-if="estrategia.decidir.length" class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-labelledby="decidir-titulo">

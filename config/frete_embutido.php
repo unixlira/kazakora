@@ -27,6 +27,14 @@ return [
     // TURBO acima disto não aparece no checkout (pedido do Lira em 2026-10-12).
     'turbo_max' => 60.0,
 
+    // Checkout dos outros sites (Beauty Kora, pedido do Lira em 2026-10-14):
+    // além dos Correios do contrato, as opções destas transportadoras no
+    // Melhor Envio, cobrando só o que passar do frete já embutido no preço.
+    'transportadoras_melhor_envio' => ['Loggi'],
+
+    // Caixa cotada no Melhor Envio (C x L x A, cm); o peso é o tarifável somado.
+    'caixa_cm' => [16, 11, 5],
+
     // Produto sem peso no cadastro fiscal.
     'peso_padrao_g' => 1000,
 

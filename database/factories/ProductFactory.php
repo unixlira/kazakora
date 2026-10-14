@@ -22,7 +22,7 @@ class ProductFactory extends Factory
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1, 99999),
             'description' => fake()->paragraph(),
             'price' => fake()->randomFloat(2, 19.9, 1999.9),
-            'stock' => fake()->numberBetween(0, 200),
+            'stock' => fake()->numberBetween(1, 200),
             'is_active' => fake()->boolean(90),
         ];
     }

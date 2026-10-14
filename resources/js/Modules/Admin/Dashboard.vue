@@ -320,10 +320,9 @@ const categoryChartOptions = computed(() => ({
 
 // ---- 5. Acessos ao site (pedido 2026-10-11) ---------------------------
 // Ver DashboardController::visitantes(): sem equipe e sem robô.
-// Card de acessos em verde (pedido 2026-10-11): tudo em branco por cima;
-// hoje em amarelo (o "agora"), páginas vistas em laranja-claro (era azul-claro
-// do tema anterior).
-const visitColors = computed(() => ({ bar: 'rgba(255,255,255,0.88)', today: '#ffc107', line: '#fed7aa' }));
+// Card de acessos com fundo branco (pedido 2026-10-14): barras em verde-claro,
+// hoje em verde forte (era amarelo), páginas vistas em laranja.
+const visitColors = computed(() => ({ bar: '#a3d9b8', today: '#198754', line: '#f97316' }));
 const mesVisitas = ref(props.visitantes?.mes ?? '');
 const carregandoVisitas = ref(false);
 const trocarMesVisitas = () => {
@@ -397,9 +396,9 @@ const visitChartOptions = computed(() => ({
     ...baseOptions.value,
     interaction: { mode: 'index', intersect: false },
     scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', maxTicksLimit: 16 } },
-        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.15)', drawTicks: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', padding: 6, precision: 0 }, title: { display: true, text: 'Visitantes', color: 'rgba(255,255,255,0.85)' } },
-        y1: { beginAtZero: true, position: 'right', grid: { display: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', padding: 6, precision: 0 }, title: { display: true, text: 'Páginas', color: 'rgba(255,255,255,0.85)' } },
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#6b7280', maxTicksLimit: 16 } },
+        y: { beginAtZero: true, grid: { color: '#e5e7eb', drawTicks: false }, border: { display: false }, ticks: { color: '#6b7280', padding: 6, precision: 0 }, title: { display: true, text: 'Visitantes', color: '#6b7280' } },
+        y1: { beginAtZero: true, position: 'right', grid: { display: false }, border: { display: false }, ticks: { color: '#6b7280', padding: 6, precision: 0 }, title: { display: true, text: 'Páginas', color: '#6b7280' } },
     },
     plugins: {
         ...baseOptions.value.plugins,
@@ -775,7 +774,7 @@ const quandoGerado = (iso) => {
         </div>
 
         <!-- Fundos em degradê (pedido 2026-10-11, mesmas cores dos cards
-             "Adapta"): vinho/rosa aqui, verde nos acessos. Texto branco.
+             "Adapta"): vinho/rosa aqui. Texto branco.
              Cards de canal sem faixa lateral (pedido 2026-10-11). -->
         <section class="card-degrade card-degrade--vinho mt-8 p-4 text-white">
             <div class="flex items-center gap-2">
@@ -876,39 +875,39 @@ const quandoGerado = (iso) => {
         </div>
         <!-- Acessos ao site (pedido 2026-10-11), no fim da tela desde
              2026-10-14: o filtro de mês vale só para este bloco. -->
-        <section class="card-degrade card-degrade--verde mt-8 overflow-hidden text-white">
+        <section class="card-degrade card-acessos mt-8 overflow-hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
                 <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white ring-1 ring-white/30"><i class="fas fa-globe"></i></span>
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#198754] text-white"><i class="fas fa-globe"></i></span>
                     <h3 class="text-lg font-semibold">Acessos ao site kazakora.com</h3>
                 </div>
                 <label class="flex items-center gap-2 text-sm">
                     <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin"></i>
-                    <span class="text-white/85">Mês <span class="text-white/70">(só dos acessos)</span></span>
+                    <span class="text-[#6b7280]">Mês <span class="text-[#9ca3af]">(só dos acessos)</span></span>
                     <select v-model="mesVisitas" @change="trocarMesVisitas"
-                        class="visitas-mes rounded-lg border-0 py-1.5 pl-3 pr-8 text-sm font-medium shadow-sm focus:ring-2 focus:ring-white/60">
+                        class="visitas-mes rounded-lg border-0 py-1.5 pl-3 pr-8 text-sm font-medium shadow-sm ring-1 ring-[#d1d5db] focus:ring-2 focus:ring-[#198754]/50">
                         <option v-for="m in visitantes.meses" :key="m" :value="m">{{ formatMonthLong(m) }}</option>
                     </select>
                 </label>
             </div>
             <div class="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4" :class="{ 'opacity-60': carregandoVisitas }">
-                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg bg-white/12 p-3 ring-1 ring-white/20 backdrop-blur-sm">
+                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg bg-[#f8faf9] p-3 ring-1 ring-[#e5e7eb]">
                     <div class="flex items-center justify-between gap-2">
-                        <p class="truncate text-xs font-semibold text-white/85">{{ tile.label }}</p>
+                        <p class="truncate text-xs font-semibold text-[#6b7280]">{{ tile.label }}</p>
                         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm shadow-sm" :style="{ color: tile.color }"><i :class="tile.icon"></i></span>
                     </div>
                     <p class="mt-1 truncate text-3xl font-bold">{{ tile.value }}</p>
-                    <p class="truncate text-xs text-white/80">{{ tile.hint }}</p>
+                    <p class="truncate text-xs text-[#6b7280]">{{ tile.hint }}</p>
                 </div>
             </div>
             <div class="px-4 pb-4" :class="{ 'opacity-60': carregandoVisitas }">
-                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/85">
+                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#6b7280]">
                     <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.bar }"></span> Visitantes</span>
                     <span v-if="visitantes.mesAtual" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.today }"></span> Hoje</span>
                     <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: visitColors.line }"></span> Páginas vistas</span>
                 </div>
                 <ChartCanvas v-if="visitantes.visitantesMes > 0" class="mt-2" type="bar" :data="visitChartData" :options="visitChartOptions" />
-                <p v-else class="mt-4 text-sm text-white/85">Nenhum acesso de cliente neste mês.</p>
+                <p v-else class="mt-4 text-sm text-[#6b7280]">Nenhum acesso de cliente neste mês.</p>
             </div>
         </section>
 
@@ -921,14 +920,17 @@ const quandoGerado = (iso) => {
     border-radius: 16px;
     box-shadow: inset 0 8px 12px 0 rgba(255, 255, 255, 0.1), 0 4px 14px rgba(15, 23, 42, 0.12);
     }
-.card-degrade--verde {
-    background: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
+.card-acessos {
+    /* Fundo branco nos dois temas (pedido 2026-10-14). */
+    background: #ffffff;
+    color: #1f1a1c;
+    border: 1px solid #e5e7eb;
 }
 .card-degrade--vinho {
     background: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
 }
 
-/* Select do mês no card verde: fundo branco e texto escuro nos dois temas. */
+/* Select do mês no card de acessos: fundo branco e texto escuro nos dois temas. */
 .visitas-mes,
 .visitas-mes option {
     background-color: #ffffff;

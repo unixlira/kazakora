@@ -87,8 +87,9 @@ const tempo = computed(() => {
                 <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Formas de pagamento</p>
                     <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
-                         juntas com a coluna em vez de quebrar. -->
-                    <div ref="bandeiras" class="mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5">
+                         juntas com a coluna em vez de quebrar. 44px a menos de largura =
+                         bandeiras (265x180) 5px mais baixas (pedido 2026-10-14). -->
+                    <div ref="bandeiras" class="mt-3 flex w-[calc(100%-44px)] max-w-[316px] flex-nowrap items-center gap-1.5">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
                             width="265" height="180" class="h-auto w-full min-w-0 flex-1">
                     </div>

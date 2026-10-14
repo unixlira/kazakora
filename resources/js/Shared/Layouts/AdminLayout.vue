@@ -388,7 +388,7 @@ watch(
                     <p class="truncate text-xs font-bold text-slate-400">Versão 1.12.0</p>
                     <p class="truncate text-xs text-slate-400">Desenvolvido por KoraTech</p>
                     <!-- Selo oficial RA Verificada (2026-10-14), discreto. -->
-                    <SeloReclameAqui class="mt-2 rounded-md opacity-80 transition hover:opacity-100" :altura="36" />
+                    <SeloReclameAqui class="mt-2 rounded-md opacity-80 transition hover:opacity-100" :altura="31" />
                 </div>
             </div>
         </nav>

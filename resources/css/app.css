@@ -161,12 +161,12 @@
 
 /*
  * Card de destaque em degradê (ex.: card Total das Avaliações), Lira
- * 2026-10-14: azul no tema claro, verde no escuro. O azul é provisório
- * (azul primary do Bootstrap, #0d6efd), até o Lira passar o código; para
- * trocar, mude só o degradê do .card-destaque abaixo.
+ * 2026-10-14: azul no tema claro, verde no escuro. O azul é o #6a77ee,
+ * tirado da imagem que o Lira mandou (halo #a0a4fe); para trocar, mude
+ * só o degradê do .card-destaque abaixo.
  */
 .card-destaque {
-    background-image: linear-gradient(264deg, #9ec5fe 0%, #3d8bfd 9.84%, #0d6efd 25.08%, #0a58ca 85.05%, #084298 98.44%);
+    background-image: linear-gradient(264deg, #a0a4fe 0%, #8590f5 9.84%, #6a77ee 25.08%, #4f5bd6 85.05%, #3c46b8 98.44%);
     box-shadow: inset 0 8px 12px 0 rgba(255, 255, 255, 0.1), 0 4px 14px rgba(15, 23, 42, 0.12);
 }
 .dark .card-destaque {

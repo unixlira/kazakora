@@ -187,6 +187,9 @@ Schedule::command('marketplace:relink-unmapped-items')->everyThirtyMinutes();
 // 3 dias (padrão do comando) corrige sozinha o número parcial do dia
 // anterior, que a Shopee ainda ajusta por umas horas depois da virada.
 Schedule::command('ads:sync-spend')->dailyAt('06:00');
+// Estratégia Shopee (2026-10-14): campanhas de ADS por dia, só leitura.
+// De hora em hora porque o dia corrente muda; 3 dias corrige o anterior.
+Schedule::command('shopee:ads-campanhas')->hourlyAt(35)->withoutOverlapping(30);
 
 // Saldo disponível pra saque do Mercado Pago — pedido explícito
 // 2026-08-09/10. Roda de hora em hora (não diário como o de cima): o

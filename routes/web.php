@@ -584,6 +584,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
         Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
         Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
+        // Estratégia Shopee (2026-10-14): campanhas de ADS com prejuízo, só leitura.
+        Route::get('publicidade/shopee', [\App\Modules\Admin\Http\Controllers\PublicidadeShopeeController::class, 'index'])->name('publicidade.shopee');
     });
     // Meta ADS, campanhas de vídeo (2026-10-13): Lira sobe os vídeos e a
     // campanha vai para a Meta com o orçamento dividido entre eles. Ver é

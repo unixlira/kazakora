@@ -43,7 +43,8 @@ class CheckoutBeautyKoraTest extends TestCase
             'sku' => 'BEL-BLU-01', 'name' => 'Blush Líquido 10ml', 'price' => 100.00, 'stock' => 5, 'is_active' => true,
             'discount_percentage' => null, 'discount_amount' => null,
         ]);
-        BeautyKoraProduto::create(['product_id' => $this->produto->id, 'ordem' => 1, 'ativo' => true]);
+        // Não clonado: aqui conta a entrega; o +5% do clonado está em PrecoRegiaoBeautyKoraTest.
+        BeautyKoraProduto::create(['product_id' => $this->produto->id, 'ordem' => 1, 'ativo' => true, 'clonado' => false]);
     }
 
     private function itens(int $quantidade = 2): array

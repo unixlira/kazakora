@@ -381,6 +381,6 @@ class SiteVisitLogControllerTest extends TestCase
 
         // Página além da última volta a última.
         $this->actingAs($admin)->getJson($url.'&page=9')->assertJsonPath('pagina', 3);
-        $this->actingAs($admin)->getJson($url.'&page=0')->assertStatus(422);
+        $this->actingAs($admin)->get($url.'&page=0')->assertSessionHasErrors('page');
     }
 }

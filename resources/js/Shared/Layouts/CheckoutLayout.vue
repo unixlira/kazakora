@@ -88,10 +88,10 @@ const tempo = computed(() => {
                 <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Formas de pagamento</p>
                     <!-- As bandeiras numa linha só (pedido 2026-10-12): encolhem
-                         juntas com a coluna em vez de quebrar. 44px a menos de largura =
-                         bandeiras (265x180) 5px mais baixas (pedido 2026-10-14). Com sete
-                         bandeiras a largura máxima cresce para cada uma manter o tamanho. -->
-                    <div ref="bandeiras" class="mt-3 flex w-[calc(100%-44px)] max-w-[370px] flex-nowrap items-center gap-1.5">
+                         juntas com a coluna em vez de quebrar. Tamanho original
+                         (grande) de volta, pedido do Lira 2026-10-14; com sete bandeiras a
+                         largura máxima é a das seis (360px) escalada para sete. -->
+                    <div ref="bandeiras" class="mt-3 flex w-full max-w-[421px] flex-nowrap items-center gap-1.5">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/novas/${bandeira}.png`" :alt="bandeira"
                             width="249" height="167" class="h-auto w-full min-w-0 flex-1 rounded-[8px]">
                     </div>

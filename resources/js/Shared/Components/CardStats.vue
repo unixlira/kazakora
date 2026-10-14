@@ -37,8 +37,9 @@ const style = computed(() => VARIANTS[props.variant] ?? VARIANTS.primary);
 
 const vividStyle = computed(() => (props.vivid
     ? {
+        // Fundo sólido (branco no claro, grafite no escuro) sobre o fundo em
+        // degradê da página (Lira, 2026-10-14). A cor fica no ícone.
         borderTop: '3px solid var(--faixa-card)',
-        background: `linear-gradient(135deg, color-mix(in oklab, ${style.value.color} 10%, var(--surface)) 0%, var(--surface) 70%)`,
     }
     : {}));
 </script>

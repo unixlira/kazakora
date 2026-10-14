@@ -157,11 +157,11 @@ const REDES = [
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
             :class="{ 'loja-topo-fume': topoFlutuando }">
             <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
-                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro e no topo fumê usa a clara do rodapé. -->
+                <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
                 <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
                     <picture>
-                        <source v-if="!topoFlutuando" media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
-                        <img :src="topoFlutuando ? marca.logoRodape : marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
+                        <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
+                        <img :src="marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
                     </picture>
                 </Link>
 

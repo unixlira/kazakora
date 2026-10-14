@@ -9,7 +9,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 // Faixa vermelha de escassez: 15 minutos regressivos. Ao acabar fica em
 // 00:00; atualizar a página recomeça dos 15 (pedido do Lira, sem guardar).
-const BANDEIRAS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+// Bandeiras novas enviadas pelo Lira (2026-10-14), no formato dos cartões antigos (249x167).
+const BANDEIRAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 
 const restante = ref(15 * 60);
 let relogio = null;
@@ -86,11 +87,12 @@ const tempo = computed(() => {
 
                 <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Formas de pagamento</p>
-                    <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
+                    <!-- As bandeiras numa linha só (pedido 2026-10-12): encolhem
                          juntas com a coluna em vez de quebrar. 44px a menos de largura =
-                         bandeiras (265x180) 5px mais baixas (pedido 2026-10-14). -->
-                    <div ref="bandeiras" class="mt-3 flex w-[calc(100%-44px)] max-w-[316px] flex-nowrap items-center gap-1.5">
-                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/retas/${bandeira}.png`" :alt="bandeira"
+                         bandeiras (265x180) 5px mais baixas (pedido 2026-10-14). Com sete
+                         bandeiras a largura máxima cresce para cada uma manter o tamanho. -->
+                    <div ref="bandeiras" class="mt-3 flex w-[calc(100%-44px)] max-w-[370px] flex-nowrap items-center gap-1.5">
+                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/novas/${bandeira}.png`" :alt="bandeira"
                             width="249" height="167" class="h-auto w-full min-w-0 flex-1 rounded-[2px]">
                     </div>
                 </div>

@@ -85,7 +85,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
         </div>
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-3">
-                <h1 class="text-2xl font-bold">{{ c.nome }}</h1>
+                <h1 class="flex items-center gap-3 text-2xl font-bold">
+                    <i class="fab fa-meta text-[#0866FF]" aria-hidden="true"></i>
+                    {{ c.nome }}
+                </h1>
                 <span class="rounded-full px-2.5 py-1 text-xs font-bold" :class="STATUS_ESTILOS[c.status]">{{ c.status_rotulo }}</span>
             </div>
             <div class="flex flex-wrap gap-2">

@@ -127,11 +127,12 @@ export const sidebarSections = [
         heading: 'Publicidade',
         items: [
             { label: 'Visão geral de ADS', href: '/admin/publicidade', icon: 'fas fa-rectangle-ad', permission: 'financeiro.view' },
-            // Meta ADS e Google ADS (2026-10-12): integração ainda não
-            // conectada, a tela mostra o estado vazio (PlataformaDeAnuncio).
-            { label: 'Meta ADS', href: '/admin/publicidade/meta-ads', icon: 'fab fa-meta', permission: 'financeiro.view' },
-            // Campanhas de vídeo na Meta (2026-10-13): sobe vídeos e divide o orçamento.
-            { label: 'Campanhas Meta', href: '/admin/publicidade/meta-ads/campanhas', icon: 'fas fa-film', permission: 'financeiro.view' },
+            // Meta (pedido do Lira 2026-10-13): um subitem só, com o símbolo
+            // da Meta, abrindo o gerenciamento de campanhas. O resumo de gasto
+            // (/admin/publicidade/meta-ads) fica no botão "Gasto e resultados".
+            { label: 'Meta', href: '/admin/publicidade/meta-ads/campanhas', icon: 'fab fa-meta', permission: 'financeiro.view' },
+            // Google ADS (2026-10-12): integração ainda não conectada, a tela
+            // mostra o estado vazio (PlataformaDeAnuncio).
             { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', permission: 'financeiro.view' },
             { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },

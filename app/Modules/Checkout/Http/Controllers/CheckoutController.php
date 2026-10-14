@@ -14,6 +14,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
+use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -728,27 +729,7 @@ class CheckoutController extends Controller
                 // clássica como o Pix. O Mercado Pago exige o endereço do
                 // pagador; vai o de entrega deste pedido.
                 if ($useMercadoPago && $primaryMethod === Payment::METHOD_BOLETO) {
-                    $mpPayment = $this->mercadoPago->createBoletoPayment(
-                        $primaryAmount,
-                        [...$this->mercadoPagoPayer($user, pix: $order), 'address' => $this->enderecoDoPagador($order)],
-                        "order-{$order->id}-payment-1",
-                        "order:{$order->id}:payment:1",
-                    );
-                    $boleto = MercadoPagoPaymentService::dadosDoBoleto($mpPayment);
-
-                    Payment::create([
-                        'order_id' => $order->id,
-                        'provider' => Payment::PROVIDER_MERCADOPAGO,
-                        'mercadopago_payment_id' => (string) $mpPayment['id'],
-                        'method_type' => $primaryMethod,
-                        'amount' => $primaryAmount,
-                        'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
-                        'boleto_linha_digitavel' => $boleto['linhaDigitavel'],
-                        'boleto_url' => $boleto['pdfUrl'],
-                        'expira_em' => $boleto['vencimento'] ? \Illuminate\Support\Carbon::parse($boleto['vencimento']) : null,
-                    ]);
-
-                    DB::afterCommit(fn () => $this->enviarEmailDoBoleto($user, $order, $boleto, $primaryAmount));
+                    $mpPayment = app(BoletoMercadoPago::class)->gerar($order, $user, $this->mercadoPagoPayer($user, pix: $order), $primaryAmount);
 
                     return [$order, $mpPayment];
                 }
@@ -1242,22 +1223,6 @@ class CheckoutController extends Controller
         )), null, false);
     }
 
-    /** "Seu boleto está pronto" (pedido 2026-10-14), mesmo esquema do Pix. Falha de e-mail não trava o pedido. */
-    private function enviarEmailDoBoleto(User $user, Order $order, array $boleto, float $valor): void
-    {
-        if (empty($boleto['linhaDigitavel']) && empty($boleto['pdfUrl'])) {
-            return;
-        }
-
-        rescue(fn () => Mail::to($user->email)->send(new \App\Modules\Checkout\Mail\BoletoAguardandoPagamento(
-            $order,
-            $valor,
-            $boleto['linhaDigitavel'],
-            $boleto['pdfUrl'],
-            $boleto['vencimento'],
-        )), null, false);
-    }
-
     private function renderBoletoGerado(array $draft, Order $order, array $mpPayment): Response
     {
         return Inertia::render($this->paymentComponent(), [
@@ -1266,24 +1231,6 @@ class CheckoutController extends Controller
             'methodType' => Payment::METHOD_BOLETO,
             'mercadoPagoBoleto' => MercadoPagoPaymentService::dadosDoBoleto($mpPayment),
         ]);
-    }
-
-    /**
-     * Endereço do pagador para o boleto (o Mercado Pago recusa sem ele):
-     * o de entrega gravado no pedido.
-     *
-     * @return array<string, string>
-     */
-    private function enderecoDoPagador(Order $order): array
-    {
-        return [
-            'zip_code' => preg_replace('/\D/', '', (string) $order->shipping_zip),
-            'street_name' => (string) $order->shipping_street,
-            'street_number' => (string) ($order->shipping_number ?: 'S/N'),
-            'neighborhood' => (string) $order->shipping_neighborhood,
-            'city' => (string) $order->shipping_city,
-            'federal_unit' => strtoupper((string) $order->shipping_state),
-        ];
     }
 
     private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpPayment): Response

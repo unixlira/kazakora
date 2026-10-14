@@ -44,9 +44,9 @@ const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const METHOD_LABELS = {
-    card: 'Cartão de crédito',
+    card: 'Cartão de Crédito',
     pix: 'Pix',
-    boleto: 'Boleto',
+    boleto: 'Boleto Bancário',
 };
 
 
@@ -60,7 +60,8 @@ const chooseForm = useForm({
 });
 
 // Boleto (2026-10-14): só pelo Mercado Pago e só como forma única.
-const primaryMethods = computed(() => (props.paymentGateway === 'mercadopago' && ! chooseForm.split ? ['pix', 'card', 'boleto'] : ['pix', 'card']));
+// Ordem igual nos 3 sites (KazaKora, FerraKora, Beauty Kora): Cartão de Crédito, Pix, Boleto Bancário.
+const primaryMethods = computed(() => (props.paymentGateway === 'mercadopago' && ! chooseForm.split ? ['card', 'pix', 'boleto'] : ['card', 'pix']));
 watch(() => chooseForm.split, (split) => {
     if (split && chooseForm.payment_method === 'boleto') chooseForm.payment_method = 'card';
 });

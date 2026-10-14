@@ -585,6 +585,26 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
         Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
     });
+    // Meta ADS, campanhas de vídeo (2026-10-13): Lira sobe os vídeos e a
+    // campanha vai para a Meta com o orçamento dividido entre eles. Ver é
+    // financeiro.view; criar, enviar, ativar e pausar (gastam dinheiro)
+    // exigem financeiro.create.
+    Route::prefix('publicidade/meta-ads/campanhas')->name('publicidade.meta-ads.campanhas.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'index'])->name('listar')->middleware('permission:financeiro.view');
+        Route::get('nova', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'create'])->name('criar')->middleware('permission:financeiro.create');
+        Route::post('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'store'])->name('armazenar')->middleware('permission:financeiro.create');
+        Route::get('localizacoes', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'localizacoes'])->name('localizacoes')->middleware(['permission:financeiro.create', 'throttle:30,1']);
+        Route::get('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'show'])->whereNumber('campanha')->name('ver')->middleware('permission:financeiro.view');
+        Route::get('{campanha}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'edit'])->whereNumber('campanha')->name('editar')->middleware('permission:financeiro.create');
+        Route::put('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'update'])->whereNumber('campanha')->name('atualizar')->middleware('permission:financeiro.create');
+        Route::delete('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'destroy'])->whereNumber('campanha')->name('excluir')->middleware('permission:financeiro.create');
+        Route::post('{campanha}/videos', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoStore'])->whereNumber('campanha')->name('videos.armazenar')->middleware('permission:financeiro.create');
+        Route::delete('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDestroy'])->whereNumber(['campanha', 'video'])->name('videos.excluir')->middleware('permission:financeiro.create');
+        Route::get('{campanha}/videos/{video}/arquivo', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoArquivo'])->whereNumber(['campanha', 'video'])->name('videos.arquivo')->middleware('permission:financeiro.view');
+        Route::post('{campanha}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'enviar'])->whereNumber('campanha')->name('enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
+        Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
+        Route::post('{campanha}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'pausar'])->whereNumber('campanha')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
+    });
     Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
     Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');
     Route::put('fluxo-de-caixa/vendas/{order}/comissao', [CashFlowController::class, 'updateSaleFee'])->name('fluxo-de-caixa.vendas.comissao')->middleware('permission:financeiro.edit');

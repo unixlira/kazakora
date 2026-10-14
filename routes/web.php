@@ -702,6 +702,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:operacional.edit')->group(function () {
         Route::post('envios-flex/{envio}/resolver', [EnviosFlexController::class, 'resolver'])->name('envios-flex.resolver');
         Route::delete('envios-flex/{envio}/resolver', [EnviosFlexController::class, 'desfazerResolucao'])->name('envios-flex.desfazer-resolucao');
+        Route::post('envios-flex/{envio}/justificar', [EnviosFlexController::class, 'justificar'])->name('envios-flex.justificar');
+        Route::delete('envios-flex/{envio}/justificar', [EnviosFlexController::class, 'desfazerJustificativa'])->name('envios-flex.desfazer-justificativa');
         Route::post('envios-flex/{envio}/sincronizar', [EnviosFlexController::class, 'sincronizar'])->name('envios-flex.sincronizar');
         Route::post('envios-flex/recibos/{recibo}/reter', [EnviosFlexController::class, 'reter'])->name('envios-flex.reter');
         Route::delete('envios-flex/recibos/{recibo}/reter', [EnviosFlexController::class, 'liberar'])->name('envios-flex.liberar');

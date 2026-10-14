@@ -57,6 +57,19 @@ class FlexControlService
         ChannelShipment::RETURN_CHECKED => 'Conferido, sem problema',
     ];
 
+    /**
+     * Por que um envio que o Mercado Livre deu como entregue nunca foi
+     * bipado no KoraFlex (pedido explícito 2026-10-13). "outro" exige
+     * a explicação escrita.
+     */
+    public const JUSTIFICATIVAS = [
+        'esqueceu' => 'Esquecemos de bipar',
+        'app_fora' => 'KoraFlex fora do ar ou sem internet',
+        'entregador_levou' => 'Entregador levou sem passar pelo KoraFlex',
+        'outro_caminho' => 'Saiu por outro caminho (troca, reenvio, retirada)',
+        'outro' => 'Outro motivo',
+    ];
+
     private const TIPOS_RECLAMACAO = [
         'mediations' => 'Mediação',
         'returns' => 'Devolução',
@@ -247,6 +260,18 @@ class FlexControlService
             );
         }
 
+        // --- Entregue no ML sem passar pelo KoraFlex ----------------------
+        if ($this->precisaJustificar($envio)) {
+            $add(
+                'entregue_sem_bipar',
+                self::NIVEL_AVISO,
+                'Entregue no Mercado Livre sem bipar no KoraFlex',
+                'O Mercado Livre registrou a entrega ao comprador em '.$this->hora($envio->channel_delivered_at)
+                .($envio->channel_shipped_at ? ' (rota iniciada em '.$this->hora($envio->channel_shipped_at).')' : '')
+                .', mas a caixa nunca foi bipada no KoraFlex. Registre o motivo.',
+            );
+        }
+
         // --- Retirada sem prova -------------------------------------------
         if ($pedido->collected_at && ! $pedido->pickupReceipt?->photo_path) {
             $add(
@@ -358,6 +383,70 @@ class FlexControlService
         $this->reavaliar($envio, notificar: false);
     }
 
+    /** A caixa passou pelo KoraFlex: bipada como pronta ou entregue ao entregador por ele. */
+    public function bipada(?Order $pedido): bool
+    {
+        return $pedido?->ready_for_pickup_at !== null || $pedido?->collected_at !== null;
+    }
+
+    /**
+     * Entregue ao comprador segundo o ML, saiu depois que o KoraFlex passou
+     * a valer, nunca foi bipada e ninguém justificou ainda.
+     */
+    public function precisaJustificar(ChannelShipment $envio): bool
+    {
+        if (! $envio->channel_delivered_at || $envio->koraflex_justification || $this->bipada($envio->order)) {
+            return false;
+        }
+
+        $saiu = $envio->channel_shipped_at ?? $envio->channel_delivered_at;
+
+        return $saiu->gte(\Illuminate\Support\Carbon::parse((string) config('services.koraflex.inicio', '2026-09-11'))->startOfDay());
+    }
+
+    /** Saiu daqui (KoraFlex ou rota no ML) e ainda não chegou ao comprador nem voltou. */
+    public function naFila(ChannelShipment $envio): bool
+    {
+        return $envio->order?->status !== Order::STATUS_CANCELLED
+            && ($envio->order?->collected_at || $envio->channel_shipped_at)
+            && ! $envio->channel_delivered_at
+            && ! $envio->channel_returned_at;
+    }
+
+    /** Entregue ao comprador e a venda continua de pé. */
+    public function entregue(ChannelShipment $envio): bool
+    {
+        return $envio->channel_delivered_at !== null
+            && ! $envio->channel_returned_at
+            && $envio->order?->status !== Order::STATUS_CANCELLED;
+    }
+
+    /** Registra o motivo de um envio entregue sem bipar. Grava quem e quando. */
+    public function justificar(ChannelShipment $envio, string $motivo, ?string $nota, User $usuario): void
+    {
+        $envio->forceFill([
+            'koraflex_justification' => $motivo,
+            'koraflex_justification_note' => $nota ? trim($nota) : null,
+            'koraflex_justified_at' => now(),
+            'koraflex_justified_by' => $usuario->id,
+        ])->save();
+
+        $this->reavaliar($envio, notificar: false);
+    }
+
+    public function desfazerJustificativa(ChannelShipment $envio): void
+    {
+        $envio->forceFill([
+            'koraflex_justification' => null,
+            'koraflex_justification_note' => null,
+            'koraflex_justified_at' => null,
+            'koraflex_justified_by' => null,
+        ])->save();
+
+        // Sem notificar: o alerta que volta já tinha sido avisado.
+        $this->reavaliar($envio, notificar: false);
+    }
+
     public function desfazerResolucao(ChannelShipment $envio): void
     {
         $envio->forceFill([
@@ -457,6 +546,17 @@ class FlexControlService
                 'por' => $usuarios[$envio->return_resolved_by] ?? null,
                 'nota' => $envio->return_note,
             ] : null,
+            'koraflex' => [
+                'bipada' => $this->bipada($pedido),
+                'precisaJustificar' => $this->precisaJustificar($envio),
+                'justificativa' => $envio->koraflex_justification ? [
+                    'motivo' => $envio->koraflex_justification,
+                    'rotulo' => self::JUSTIFICATIVAS[$envio->koraflex_justification] ?? $envio->koraflex_justification,
+                    'nota' => $envio->koraflex_justification_note,
+                    'em' => $envio->koraflex_justified_at?->toIso8601String(),
+                    'por' => $usuarios[$envio->koraflex_justified_by] ?? null,
+                ] : null,
+            ],
             'reclamacoes' => $pedido?->marketplaceClaims->map(fn (MarketplaceClaim $r) => [
                 'id' => $r->external_claim_id,
                 'tipo' => self::TIPOS_RECLAMACAO[$r->type] ?? ($r->type ?? 'Reclamação'),

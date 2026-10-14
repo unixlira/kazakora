@@ -25,8 +25,9 @@ use Throwable;
  * Envios Flex — o controle do que saiu com o entregador do Flex (pedido
  * explícito 2026-09-11).
  *
- * Duas abas: "Alertas" (tudo que pede ação, de qualquer mês) e "Todos"
- * (o mês escolhido). Cada linha já traz o detalhe inteiro — linha do tempo
+ * Abas: "Alertas" (tudo que pede ação, de qualquer mês, mais as vendas
+ * canceladas dos últimos 30 dias), "Na fila" (saiu daqui e ainda não chegou
+ * ao comprador), "Entregues" e "Todos" (o mês escolhido). Cada linha já traz o detalhe inteiro — linha do tempo
  * aqui x Mercado Livre, comprovante de retirada, reclamações — então abrir
  * o detalhe não faz requisição.
  *
@@ -39,6 +40,9 @@ class EnviosFlexController extends Controller
 {
     /** Janela da aba Alertas: pendência mais velha que isso já foi tratada ou virou arquivo morto. */
     private const DIAS_DE_ALERTA = 120;
+
+    /** Canceladas que aparecem na aba Alertas mesmo já conferidas. */
+    private const DIAS_DE_CANCELADAS = 30;
 
     public function __construct(private readonly FlexControlService $controle) {}
 
@@ -66,14 +70,31 @@ class EnviosFlexController extends Controller
             ->whereHas('order', fn ($q) => $q->whereBetween('created_at', [$mes, $mes->copy()->endOfMonth()]))
             ->get();
 
-        $aba = in_array($request->string('aba')->toString(), ['alertas', 'todos'], true)
+        // Canceladas aparecem junto dos alertas (pedido 2026-10-13), mesmo
+        // as já conferidas: a venda caiu e alguém precisa enxergar.
+        $canceladas = $candidatos
+            ->filter(fn (ChannelShipment $envio) => $envio->order?->status === Order::STATUS_CANCELLED
+                && $envio->order->created_at?->gte(now()->subDays(self::DIAS_DE_CANCELADAS)))
+            ->values();
+
+        // A fila não respeita o mês: o que saiu e não chegou é pendência de agora.
+        $naFila = $candidatos->filter(fn (ChannelShipment $envio) => $this->controle->naFila($envio))->values();
+        $entregues = $doMes->filter(fn (ChannelShipment $envio) => $this->controle->entregue($envio))->values();
+
+        $abas = ['alertas', 'fila', 'entregues', 'todos'];
+        $aba = in_array($request->string('aba')->toString(), $abas, true)
             ? $request->string('aba')->toString()
             : ($comAlerta->isNotEmpty() ? 'alertas' : 'todos');
 
-        $lista = $aba === 'alertas' ? $comAlerta : $doMes;
+        $lista = match ($aba) {
+            'alertas' => $comAlerta->concat($canceladas)->unique('id')->values(),
+            'fila' => $naFila,
+            'entregues' => $entregues,
+            default => $doMes,
+        };
 
         if ($busca) {
-            // Busca vale nas duas abas e ignora o mês: quem digita um número
+            // Busca vale em todas as abas e ignora o mês: quem digita um número
             // de pedido quer achar o pedido, não saber em que mês ele caiu.
             $lista = $this->controle->query()->get()->filter(fn (ChannelShipment $envio) => $this->casaBusca($envio, $busca))->values();
         }
@@ -84,8 +105,10 @@ class EnviosFlexController extends Controller
         $linhas = $lista
             ->map(fn (ChannelShipment $envio) => $this->controle->linha($envio, $impressas, $usuarios))
             ->sort(function (array $a, array $b) {
-                // Pendência primeiro; dentro dela e fora dela, venda mais recente no topo.
-                return [$b['alertasAbertos'] > 0, $b['linhaDoTempo']['vendidaEm']] <=> [$a['alertasAbertos'] > 0, $a['linhaDoTempo']['vendidaEm']];
+                // Pendência primeiro (na fila: o que não foi bipado); dentro
+                // dela e fora dela, venda mais recente no topo.
+                return [$b['alertasAbertos'] > 0, ! $b['koraflex']['bipada'], $b['linhaDoTempo']['vendidaEm']]
+                    <=> [$a['alertasAbertos'] > 0, ! $a['koraflex']['bipada'], $a['linhaDoTempo']['vendidaEm']];
             })
             ->values()
             ->all();
@@ -102,13 +125,20 @@ class EnviosFlexController extends Controller
                 'canceladas' => $situacoes->filter(fn ($s) => $s === 'cancelada')->count(),
                 'comComprovante' => $doMes->filter(fn (ChannelShipment $e) => $e->order?->pickupReceipt?->photo_path)->count(),
                 'alertas' => $comAlerta->count(),
+                'canceladasRecentes' => $canceladas->count(),
+                'naFila' => $naFila->count(),
+                'naFilaSemBipar' => $naFila->filter(fn (ChannelShipment $e) => ! $this->controle->bipada($e->order))->count(),
+                'entreguesSemBipar' => $entregues->filter(fn (ChannelShipment $e) => $this->controle->precisaJustificar($e))->count(),
             ],
+            'produtosEntregues' => $aba === 'entregues' && ! $busca ? $this->produtosEntregues($entregues) : [],
+            'diasCanceladas' => self::DIAS_DE_CANCELADAS,
             'filtros' => [
                 'mes' => $mes->format('Y-m'),
                 'aba' => $aba,
                 'busca' => $busca,
             ],
             'resolucoes' => collect(FlexControlService::RESOLUCOES)->map(fn ($rotulo, $tipo) => ['tipo' => $tipo, 'rotulo' => $rotulo])->values(),
+            'justificativas' => collect(FlexControlService::JUSTIFICATIVAS)->map(fn ($rotulo, $motivo) => ['motivo' => $motivo, 'rotulo' => $rotulo])->values(),
             'retencaoDias' => (int) config('services.koraflex.receipt_retention_days', 180),
             'horasAlertaRota' => (int) config('services.koraflex.route_alert_hours', 2),
         ]);
@@ -140,6 +170,34 @@ class EnviosFlexController extends Controller
         $this->auditar($request, 'flex_desfazer_resolucao', $envio, $antes);
 
         return back()->with('success', 'Resolução desfeita — os alertas do pedido #'.$envio->order_id.' voltaram.');
+    }
+
+    /** Por que o envio entregue no ML não foi bipado no KoraFlex (pedido 2026-10-13). */
+    public function justificar(Request $request, ChannelShipment $envio): RedirectResponse
+    {
+        $this->garantirFlex($envio);
+
+        $dados = $request->validate([
+            'motivo' => ['required', Rule::in(array_keys(FlexControlService::JUSTIFICATIVAS))],
+            'nota' => ['nullable', 'string', 'max:1000', 'required_if:motivo,outro'],
+        ], ['nota.required_if' => 'Escreva o motivo.']);
+
+        $this->controle->justificar($envio, $dados['motivo'], $dados['nota'] ?? null, $request->user());
+
+        $this->auditar($request, 'flex_justificar_sem_bipar', $envio, ['motivo' => $dados['motivo'], 'nota' => $dados['nota'] ?? null]);
+
+        return back()->with('success', 'Pedido #'.$envio->order_id.': justificativa registrada.');
+    }
+
+    public function desfazerJustificativa(Request $request, ChannelShipment $envio): RedirectResponse
+    {
+        $this->garantirFlex($envio);
+
+        $antes = ['motivo' => $envio->koraflex_justification, 'nota' => $envio->koraflex_justification_note];
+        $this->controle->desfazerJustificativa($envio);
+        $this->auditar($request, 'flex_desfazer_justificativa', $envio, $antes);
+
+        return back()->with('success', 'Justificativa desfeita — o pedido #'.$envio->order_id.' voltou a pedir o motivo.');
     }
 
     /** Consulta o envio no Mercado Livre agora (só leitura), sem esperar a rotina. */
@@ -264,10 +322,38 @@ class EnviosFlexController extends Controller
             || str_contains(mb_strtolower((string) $pedido?->pickupReceipt?->carrier_name), $texto);
     }
 
+    /**
+     * Os produtos entregues no mês somados por item: quantas unidades de
+     * cada um chegaram ao comprador.
+     *
+     * @return list<array{nome: string, sku: ?string, qtd: int, pedidos: int}>
+     */
+    private function produtosEntregues(Collection $envios): array
+    {
+        return $envios
+            ->flatMap(fn (ChannelShipment $envio) => $envio->order?->items->map(fn ($item) => [
+                'chave' => $item->product_id ? 'p'.$item->product_id : 'n'.$item->product_name,
+                'nome' => $item->product_name,
+                'sku' => $item->product?->sku,
+                'qtd' => (int) $item->quantity,
+                'pedido' => $envio->order_id,
+            ]) ?? [])
+            ->groupBy('chave')
+            ->map(fn (Collection $itens) => [
+                'nome' => $itens->first()['nome'],
+                'sku' => $itens->first()['sku'],
+                'qtd' => $itens->sum('qtd'),
+                'pedidos' => $itens->pluck('pedido')->unique()->count(),
+            ])
+            ->sortByDesc('qtd')
+            ->values()
+            ->all();
+    }
+
     /** @return array<int, string> */
     private function nomesDeUsuarios(Collection $envios): array
     {
-        $ids = $envios->pluck('return_resolved_by')->filter()->unique();
+        $ids = $envios->pluck('return_resolved_by')->concat($envios->pluck('koraflex_justified_by'))->filter()->unique();
 
         return $ids->isEmpty() ? [] : User::query()->whereIn('id', $ids)->pluck('name', 'id')->all();
     }

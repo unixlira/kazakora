@@ -114,6 +114,11 @@ return [
         // tela Envios Flex (2026-09-11: "tem entregador que não está
         // colocando que iniciou a rota").
         'route_alert_hours' => (int) env('KORAFLEX_ROUTE_ALERT_HOURS', 2),
+
+        // Dia em que o KoraFlex passou a valer no galpão (primeira entrega
+        // ao entregador registrada: 2026-09-11). Envio que saiu antes disso
+        // não tinha como ser bipado, então não pede justificativa.
+        'inicio' => env('KORAFLEX_INICIO', '2026-09-11'),
     ],
 
     /**

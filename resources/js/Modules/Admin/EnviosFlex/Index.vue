@@ -8,7 +8,9 @@ import { computed, ref, watch } from 'vue';
 
 /**
  * Envios Flex (pedido explícito 2026-09-11) — o que saiu com o entregador,
- * o que voltou e o que ficou no meio do caminho. A regra de cada alerta
+ * o que voltou e o que ficou no meio do caminho. Em 2026-10-13 ganhou as
+ * canceladas junto dos alertas, as abas "Na fila" e "Entregues" e a
+ * justificativa de envio entregue no ML sem bipar no KoraFlex. A regra de cada alerta
  * mora em FlexControlService (backend); esta tela só mostra e registra a
  * conferência de quem foi olhar a prateleira.
  */
@@ -19,6 +21,9 @@ const props = defineProps({
     resolucoes: { type: Array, default: () => [] },
     retencaoDias: { type: Number, default: 180 },
     horasAlertaRota: { type: Number, default: 2 },
+    justificativas: { type: Array, default: () => [] },
+    produtosEntregues: { type: Array, default: () => [] },
+    diasCanceladas: { type: Number, default: 30 },
 });
 
 const { can } = usePermissions();
@@ -57,6 +62,8 @@ const mostrarImagens = ref(false);
 const resolucaoTipo = ref('');
 const resolucaoNota = ref('');
 const motivoRetencao = ref('');
+const justificativaMotivo = ref('');
+const justificativaNota = ref('');
 const enviando = ref(false);
 
 const abrir = (linha) => {
@@ -66,6 +73,8 @@ const abrir = (linha) => {
     resolucaoTipo.value = '';
     resolucaoNota.value = '';
     motivoRetencao.value = '';
+    justificativaMotivo.value = '';
+    justificativaNota.value = '';
 };
 const fechar = () => { selecionadoId.value = null; snapshot.value = null; };
 
@@ -92,6 +101,24 @@ const desfazerResolucao = () => {
     if (!window.confirm('Desfazer a conferência? Os alertas deste pedido voltam a ficar abertos.')) return;
     acao('delete', `/admin/envios-flex/${selecionado.value.id}/resolver`);
 };
+const justificar = () => {
+    if (!justificativaMotivo.value) return;
+    acao('post', `/admin/envios-flex/${selecionado.value.id}/justificar`, { motivo: justificativaMotivo.value, nota: justificativaNota.value || null });
+};
+const desfazerJustificativa = () => {
+    if (!window.confirm('Desfazer a justificativa? O pedido volta a pedir o motivo.')) return;
+    acao('delete', `/admin/envios-flex/${selecionado.value.id}/justificar`);
+};
+const podeJustificar = computed(() => justificativaMotivo.value && (justificativaMotivo.value !== 'outro' || justificativaNota.value.trim()));
+
+const abas = computed(() => [
+    { chave: 'alertas', rotulo: `Alertas (${props.resumo.alertas})`, icone: 'fa-triangle-exclamation', ativa: 'bg-error text-white', hover: 'hover:bg-lighterror' },
+    { chave: 'fila', rotulo: `Na fila de entrega (${props.resumo.naFila})`, icone: 'fa-route', ativa: 'bg-warning text-white', hover: 'hover:bg-lightwarning' },
+    { chave: 'entregues', rotulo: 'Entregues do mês', icone: 'fa-circle-check', ativa: 'bg-success text-white', hover: 'hover:bg-lightsuccess' },
+    { chave: 'todos', rotulo: 'Todos do mês', icone: 'fa-list', ativa: 'bg-primary text-white', hover: 'hover:bg-lightprimary' },
+]);
+const mostraMes = computed(() => ['entregues', 'todos'].includes(props.filtros.aba));
+
 const sincronizar = () => acao('post', `/admin/envios-flex/${selecionado.value.id}/sincronizar`);
 const reter = () => {
     if (!motivoRetencao.value.trim()) return;
@@ -140,28 +167,29 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
         <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
             <CardStats stat-subtitle="VENDAS FLEX NO MÊS" :stat-title="String(resumo.vendas)" stat-icon-name="fas fa-bag-shopping" variant="primary" />
             <CardStats stat-subtitle="SAÍRAM DAQUI" :stat-title="String(resumo.sairam)" stat-icon-name="fas fa-motorcycle" variant="info" />
-            <CardStats stat-subtitle="EM ROTA / COM ENTREGADOR" :stat-title="String(resumo.emRota)" stat-icon-name="fas fa-route" variant="warning" />
-            <CardStats stat-subtitle="ENTREGUES" :stat-title="String(resumo.entregues)" stat-icon-name="fas fa-circle-check" variant="success" />
+            <CardStats stat-subtitle="NA FILA DE ENTREGA" :stat-title="String(resumo.naFila)" stat-icon-name="fas fa-route" variant="warning"
+                :stat-note="resumo.naFilaSemBipar ? `${resumo.naFilaSemBipar} sem bipar no KoraFlex` : ''" />
+            <CardStats stat-subtitle="ENTREGUES" :stat-title="String(resumo.entregues)" stat-icon-name="fas fa-circle-check" variant="success"
+                :stat-note="resumo.entreguesSemBipar ? `${resumo.entreguesSemBipar} sem bipar no KoraFlex` : ''" />
             <CardStats stat-subtitle="RETIRADAS COM FOTO" :stat-title="String(resumo.comComprovante)" stat-icon-name="fas fa-camera" variant="secondary" />
-            <CardStats stat-subtitle="ALERTAS ABERTOS" :stat-title="String(resumo.alertas)" stat-icon-name="fas fa-triangle-exclamation" :variant="resumo.alertas ? 'error' : 'success'" />
+            <button type="button" class="block w-full text-left" title="Ver alertas e canceladas" @click="trocarAba('alertas')">
+                <CardStats stat-subtitle="ALERTAS ABERTOS" :stat-title="String(resumo.alertas)" stat-icon-name="fas fa-triangle-exclamation"
+                    :variant="resumo.alertas || resumo.canceladasRecentes ? 'error' : 'success'"
+                    :stat-note="resumo.canceladasRecentes ? `${resumo.canceladasRecentes} cancelada(s) em ${diasCanceladas} dias` : 'Nenhuma cancelada'" />
+            </button>
         </div>
 
         <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <div class="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--surface-border)] px-4 py-4">
-                <div class="flex gap-2">
-                    <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium"
-                        :class="filtros.aba === 'alertas' ? 'bg-error text-white' : 'text-slate-500 hover:bg-lighterror'"
-                        @click="trocarAba('alertas')">
-                        <i class="fas fa-triangle-exclamation mr-1"></i> Alertas ({{ resumo.alertas }})
-                    </button>
-                    <button type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium"
-                        :class="filtros.aba === 'todos' ? 'bg-primary text-white' : 'text-slate-500 hover:bg-lightprimary'"
-                        @click="trocarAba('todos')">
-                        Todos do mês
+                <div class="flex flex-wrap gap-2">
+                    <button v-for="opcao in abas" :key="opcao.chave" type="button" class="rounded-lg px-3 py-1.5 text-sm font-medium"
+                        :class="filtros.aba === opcao.chave ? opcao.ativa : `text-slate-500 ${opcao.hover}`"
+                        @click="trocarAba(opcao.chave)">
+                        <i class="fas mr-1" :class="opcao.icone"></i> {{ opcao.rotulo }}
                     </button>
                 </div>
                 <div class="flex flex-wrap items-end gap-2">
-                    <div v-if="filtros.aba === 'todos'">
+                    <div v-if="mostraMes">
                         <label class="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Mês</label>
                         <input v-model="mes" type="month" class="rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-1.5 text-sm" @change="filtrar()" />
                     </div>
@@ -175,6 +203,35 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                 </div>
             </div>
 
+            <p v-if="filtros.aba === 'alertas' && !filtros.busca" class="border-b border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+                Pendências abertas de qualquer mês e todas as vendas Flex canceladas nos últimos {{ diasCanceladas }} dias, mesmo as já conferidas.
+            </p>
+            <p v-else-if="filtros.aba === 'fila' && !filtros.busca" class="border-b border-[var(--surface-border)] px-4 py-2 text-xs text-slate-500 dark:text-slate-400">
+                Saiu daqui (entregue ao entregador ou rota iniciada no Mercado Livre) e ainda não chegou ao comprador. As que não foram bipadas no KoraFlex vêm primeiro.
+            </p>
+
+            <div v-if="filtros.aba === 'entregues' && produtosEntregues.length" class="border-b border-[var(--surface-border)] px-4 py-4">
+                <h4 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Produtos entregues no mês</h4>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-xs uppercase tracking-wide text-slate-400">
+                            <th class="py-1 pr-4 font-medium">Produto</th>
+                            <th class="py-1 pr-4 font-medium">SKU</th>
+                            <th class="py-1 pr-4 text-right font-medium">Unidades</th>
+                            <th class="py-1 text-right font-medium">Pedidos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="produto in produtosEntregues" :key="`${produto.sku}-${produto.nome}`" class="border-t border-[var(--surface-border)]">
+                            <td class="py-1.5 pr-4">{{ produto.nome }}</td>
+                            <td class="py-1.5 pr-4 text-xs text-slate-400">{{ produto.sku ?? '—' }}</td>
+                            <td class="py-1.5 pr-4 text-right font-semibold">{{ produto.qtd }}</td>
+                            <td class="py-1.5 text-right">{{ produto.pedidos }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
             <div v-if="linhas.length" class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -184,6 +241,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                             <th class="px-4 py-3 font-medium">Cliente</th>
                             <th class="px-4 py-3 font-medium">Produtos</th>
                             <th class="px-4 py-3 font-medium">Saiu daqui</th>
+                            <th class="px-4 py-3 font-medium">KoraFlex</th>
                             <th class="px-4 py-3 font-medium">Retirada</th>
                             <th class="px-4 py-3 font-medium">Alertas</th>
                         </tr>
@@ -209,6 +267,14 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                                 {{ quando(linha.linhaDoTempo.entregueAoEntregadorEm) ?? '—' }}
                                 <span v-if="linha.linhaDoTempo.rotaIniciadaEm" class="block text-slate-400">rota {{ quando(linha.linhaDoTempo.rotaIniciadaEm) }}</span>
                             </td>
+                            <td class="whitespace-nowrap px-4 py-3 text-xs">
+                                <span v-if="linha.koraflex.bipada" class="text-success"><i class="fas fa-qrcode mr-1"></i>Bipada</span>
+                                <span v-else-if="linha.koraflex.justificativa" class="text-slate-500" :title="linha.koraflex.justificativa.nota ?? ''">
+                                    <i class="fas fa-clipboard-check mr-1"></i>{{ linha.koraflex.justificativa.rotulo }}
+                                </span>
+                                <span v-else-if="linha.koraflex.precisaJustificar" class="rounded bg-lightwarning px-2 py-0.5 font-medium text-warning">Sem bipar · justificar</span>
+                                <span v-else class="text-error">Não bipada</span>
+                            </td>
                             <td class="px-4 py-3 text-xs">
                                 <template v-if="linha.recibo">
                                     <i class="fas fa-camera mr-1" :class="linha.recibo.foto ? 'text-success' : 'text-slate-300'" :title="linha.recibo.foto ? 'Com foto' : 'Sem foto'"></i>
@@ -233,7 +299,9 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
             </div>
             <p v-else class="p-6 text-sm text-slate-400">
                 <template v-if="filtros.busca">Nenhum envio Flex encontrado pra "{{ filtros.busca }}".</template>
-                <template v-else-if="filtros.aba === 'alertas'">Nenhum alerta aberto. Tudo que saiu está conferido.</template>
+                <template v-else-if="filtros.aba === 'alertas'">Nenhum alerta aberto e nenhuma venda cancelada nos últimos {{ diasCanceladas }} dias.</template>
+                <template v-else-if="filtros.aba === 'fila'">Nada na fila: tudo que saiu já chegou ao comprador.</template>
+                <template v-else-if="filtros.aba === 'entregues'">Nenhuma entrega Flex nesse mês.</template>
                 <template v-else>Nenhuma venda Flex nesse mês.</template>
             </p>
         </div>
@@ -282,6 +350,40 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                         </p>
                         <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{{ alerta.detalhe }}</p>
                     </div>
+                </div>
+
+                <!-- Entregue no ML sem bipar no KoraFlex -->
+                <div v-if="selecionado.koraflex.precisaJustificar || selecionado.koraflex.justificativa" class="mb-5 rounded-lg border p-4"
+                    :class="selecionado.koraflex.justificativa ? 'border-[var(--surface-border)]' : 'border-warning'">
+                    <template v-if="selecionado.koraflex.justificativa">
+                        <p class="text-sm">
+                            <i class="fas fa-qrcode mr-1 text-slate-400"></i>
+                            Sem bipar no KoraFlex: <strong>{{ selecionado.koraflex.justificativa.rotulo }}</strong>
+                            <span class="text-slate-400"> — {{ selecionado.koraflex.justificativa.por ?? 'alguém' }} em {{ quando(selecionado.koraflex.justificativa.em) }}</span>
+                        </p>
+                        <p v-if="selecionado.koraflex.justificativa.nota" class="mt-1 whitespace-pre-line text-sm text-slate-600 dark:text-slate-300">{{ selecionado.koraflex.justificativa.nota }}</p>
+                        <button v-if="podeEditar" type="button" class="mt-2 text-xs text-slate-400 hover:text-error" :disabled="enviando" @click="desfazerJustificativa">Desfazer justificativa</button>
+                    </template>
+                    <template v-else-if="podeEditar">
+                        <p class="mb-1 text-sm font-semibold text-warning"><i class="fas fa-qrcode mr-1"></i> Entregue no Mercado Livre sem bipar no KoraFlex</p>
+                        <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">Por que a caixa não passou pelo KoraFlex?</p>
+                        <div class="mb-2 flex flex-wrap gap-2">
+                            <label v-for="opcao in justificativas" :key="opcao.motivo"
+                                class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+                                :class="justificativaMotivo === opcao.motivo ? 'border-primary bg-lightprimary' : 'border-[var(--surface-border)]'">
+                                <input v-model="justificativaMotivo" type="radio" :value="opcao.motivo" class="accent-primary" />
+                                {{ opcao.rotulo }}
+                            </label>
+                        </div>
+                        <textarea v-model="justificativaNota" rows="2" maxlength="1000"
+                            :placeholder="justificativaMotivo === 'outro' ? 'Explique o motivo (obrigatório)' : 'Detalhe, se quiser. Ex.: celular do galpão sem bateria na manhã de 21/09.'"
+                            class="w-full rounded-lg border border-[var(--surface-border)] bg-transparent px-3 py-2 text-sm"></textarea>
+                        <button type="button" :disabled="!podeJustificar || enviando"
+                            class="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50" @click="justificar">
+                            Registrar justificativa
+                        </button>
+                    </template>
+                    <p v-else class="text-sm text-warning">Entregue no Mercado Livre sem bipar no KoraFlex. Falta a justificativa.</p>
                 </div>
 
                 <!-- Conferência -->

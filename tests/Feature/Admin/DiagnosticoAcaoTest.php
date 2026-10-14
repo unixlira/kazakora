@@ -31,6 +31,23 @@ class DiagnosticoAcaoTest extends TestCase
         $this->assertSame(7.1, $dados['feitas']['58216933582']['meta_roas']['valor']);
     }
 
+    public function test_com_escrita_desligada_so_simula(): void
+    {
+        config(['services.shopee.ads_escrita' => false]);
+        DB::table('diagnosticos_canal')->insert(['canal' => 'shopee', 'dados' => json_encode(['alertas' => []]), 'gerado_em' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->app->instance(\App\Services\Shopee\ShopeeClient::class, Mockery::mock(\App\Services\Shopee\ShopeeClient::class)->shouldNotReceive('get', 'post')->getMock());
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->from('/admin')
+            ->post('/admin/diagnostico/shopee/acao', ['item_id' => '58216933582', 'acao' => 'preco', 'valor' => 49.9])
+            ->assertRedirect('/admin')
+            ->assertSessionHas('warning');
+
+        $dados = json_decode(DB::table('diagnosticos_canal')->value('dados'), true);
+        $this->assertArrayNotHasKey('feitas', $dados);
+        $this->assertTrue(DB::table('audit_logs')->where('action', 'shopee.preco')->exists());
+    }
+
     public function test_acao_desconhecida_e_recusada(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

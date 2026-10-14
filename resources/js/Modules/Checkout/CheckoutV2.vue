@@ -729,14 +729,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         </header>
 
                         <div class="grid grid-cols-3 gap-2 sm:gap-3">
-                            <!-- Ordem igual nos 3 sites: Cartão de Crédito, Pix, Boleto Bancário. -->
-                            <button type="button" class="flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
-                                :class="metodo === 'card' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
-                                @click="metodo = 'card'">
-                                <i class="fa-solid fa-credit-card text-2xl text-slate-700"></i>
-                                <span class="text-sm font-semibold text-slate-900">Cartão de Crédito</span>
-                                <span class="text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
-                            </button>
+                            <!-- Ordem e nomes iguais nos 3 sites (pedido do Lira 2026-10-14): Pix, Cartão de Crédito, Boleto Bancário. -->
                             <button type="button" class="relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
                                 :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
                                 @click="metodo = 'pix'">
@@ -744,6 +737,13 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <i class="fa-brands fa-pix text-2xl text-[#32BCAD]"></i>
                                 <span class="text-sm font-semibold text-slate-900">Pix</span>
                                 <span class="text-xs text-slate-500">Aprovação na hora</span>
+                            </button>
+                            <button type="button" class="flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
+                                :class="metodo === 'card' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                @click="metodo = 'card'">
+                                <i class="fa-solid fa-credit-card text-2xl text-slate-700"></i>
+                                <span class="text-sm font-semibold text-slate-900">Cartão de Crédito</span>
+                                <span class="text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
                             </button>
                             <button type="button" class="flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
                                 :class="metodo === 'boleto' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"

@@ -611,6 +611,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'pausar'])->whereNumber('campanha')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
     });
+    // Estratégia Shopee, botão Ação (tarefa 569, 2026-10-14): o Cauê pausa,
+    // retoma ou muda a meta de ROAS da campanha do produto, só pelo clique
+    // do Lira. Escrita real só com SHOPEE_ADS_ESCRITA=true; sem ela, simula.
+    Route::prefix('publicidade/shopee/acoes')->name('publicidade.shopee.acoes.')->group(function () {
+        Route::get('item/{item}', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'preparar'])->where('item', '[0-9]+')->name('preparar')->middleware(['permission:financeiro.view', 'throttle:30,1']);
+        Route::post('/', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'aplicar'])->name('aplicar')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::post('{acao}/conferir', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'conferir'])->whereNumber('acao')->name('conferir')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::post('{acao}/desfazer', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'desfazer'])->whereNumber('acao')->name('desfazer')->middleware(['permission:financeiro.create', 'throttle:10,1']);
+    });
     Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
     Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');
     Route::put('fluxo-de-caixa/vendas/{order}/comissao', [CashFlowController::class, 'updateSaleFee'])->name('fluxo-de-caixa.vendas.comissao')->middleware('permission:financeiro.edit');

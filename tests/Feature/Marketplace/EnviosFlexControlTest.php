@@ -275,4 +275,100 @@ class EnviosFlexControlTest extends TestCase
         $this->assertNotNull($retido->refresh()->photo_path);
         $this->assertNotNull($emDisputa->refresh()->photo_path);
     }
+
+    /**
+     * Entregue no ML sem bipar no KoraFlex (2026-10-13): vira alerta e só
+     * sai com uma justificativa; "outro" exige o texto. Envio de antes do
+     * KoraFlex existir não pede nada.
+     */
+    public function test_a_delivery_never_scanned_in_koraflex_asks_for_a_justification(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-13 10:00:00'));
+
+        $envio = $this->envioFlex('9001', ['status' => Order::STATUS_COMPLETED, 'created_at' => Carbon::parse('2026-10-10 09:00:00')]);
+        $envio->forceFill([
+            'channel_status' => 'delivered',
+            'channel_shipped_at' => Carbon::parse('2026-10-10 13:00:00'),
+            'channel_delivered_at' => Carbon::parse('2026-10-10 16:00:00'),
+        ])->save();
+
+        $antigo = $this->envioFlex('9002', ['status' => Order::STATUS_COMPLETED, 'created_at' => Carbon::parse('2026-09-09 09:00:00')]);
+        $antigo->forceFill(['channel_status' => 'delivered', 'channel_delivered_at' => Carbon::parse('2026-09-09 16:00:00')])->save();
+
+        $bipado = $this->envioFlex('9003', ['status' => Order::STATUS_COMPLETED, 'ready_for_pickup_at' => Carbon::parse('2026-10-10 10:00:00')]);
+        $bipado->forceFill(['channel_status' => 'delivered', 'channel_delivered_at' => Carbon::parse('2026-10-10 16:00:00')])->save();
+
+        $controle = app(FlexControlService::class);
+        $controle->reavaliar($envio);
+        $controle->reavaliar($antigo);
+        $controle->reavaliar($bipado);
+
+        $this->assertSame(['entregue_sem_bipar'], $envio->refresh()->flex_alerts);
+        $this->assertNull($antigo->refresh()->flex_alerts, 'saiu antes do KoraFlex existir');
+        $this->assertNull($bipado->refresh()->flex_alerts);
+
+        $this->actingAs($this->admin)
+            ->post("/admin/envios-flex/{$envio->id}/justificar", ['motivo' => 'outro'])
+            ->assertSessionHasErrors('nota');
+
+        $this->actingAs($this->admin)
+            ->post("/admin/envios-flex/{$envio->id}/justificar", ['motivo' => 'app_fora', 'nota' => 'Celular sem bateria.'])
+            ->assertRedirect();
+
+        $envio->refresh();
+        $this->assertNull($envio->flex_alerts);
+        $this->assertSame('app_fora', $envio->koraflex_justification);
+        $this->assertSame($this->admin->id, $envio->koraflex_justified_by);
+        $this->assertTrue(AuditLog::query()->where('action', 'flex_justificar_sem_bipar')->exists());
+
+        $this->actingAs($this->admin)->delete("/admin/envios-flex/{$envio->id}/justificar")->assertRedirect();
+        $this->assertSame(['entregue_sem_bipar'], $envio->refresh()->flex_alerts);
+    }
+
+    /** As abas novas: canceladas junto dos alertas, a fila sem bipar e os produtos entregues. */
+    public function test_the_tabs_list_cancelled_queue_and_delivered_products(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-13 18:00:00'));
+
+        // Cancelada antes de qualquer separação: não tem alerta, mas aparece.
+        $cancelada = $this->envioFlex('9101', ['status' => Order::STATUS_CANCELLED, 'created_at' => Carbon::parse('2026-10-12 09:00:00')]);
+
+        // Em rota no ML, nunca bipada no KoraFlex.
+        $naFila = $this->envioFlex('9102', ['status' => Order::STATUS_SHIPPED, 'created_at' => Carbon::parse('2026-10-13 08:00:00')]);
+        $naFila->forceFill(['channel_status' => 'shipped', 'channel_shipped_at' => Carbon::parse('2026-10-13 13:00:00')])->save();
+
+        $entregue = $this->envioFlex('9103', [
+            'status' => Order::STATUS_COMPLETED,
+            'created_at' => Carbon::parse('2026-10-12 08:00:00'),
+            'ready_for_pickup_at' => Carbon::parse('2026-10-12 10:00:00'),
+            'collected_at' => Carbon::parse('2026-10-12 10:05:00'),
+        ]);
+        $entregue->forceFill(['channel_status' => 'delivered', 'channel_shipped_at' => Carbon::parse('2026-10-12 12:00:00'), 'channel_delivered_at' => Carbon::parse('2026-10-12 15:00:00')])->save();
+
+        $this->actingAs($this->admin)
+            ->get('/admin/envios-flex?aba=alertas')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('resumo.canceladasRecentes', 1)
+                ->where('linhas.0.pedido', $cancelada->order_id)
+                ->where('linhas.0.situacao.codigo', 'cancelada'));
+
+        $this->actingAs($this->admin)
+            ->get('/admin/envios-flex?aba=fila')
+            ->assertInertia(fn ($page) => $page
+                ->where('resumo.naFila', 1)
+                ->where('resumo.naFilaSemBipar', 1)
+                ->has('linhas', 1)
+                ->where('linhas.0.pedido', $naFila->order_id)
+                ->where('linhas.0.koraflex.bipada', false));
+
+        $this->actingAs($this->admin)
+            ->get('/admin/envios-flex?aba=entregues&mes=2026-10')
+            ->assertInertia(fn ($page) => $page
+                ->has('linhas', 1)
+                ->where('linhas.0.pedido', $entregue->order_id)
+                ->where('linhas.0.koraflex.bipada', true)
+                ->where('produtosEntregues.0.nome', 'Bicicleta Ergométrica')
+                ->where('produtosEntregues.0.qtd', 1));
+    }
 }

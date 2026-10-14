@@ -73,6 +73,10 @@ class ChannelShipment extends Model
         'flex_alerts',
         'flex_alerts_notified',
         'flex_alerts_resolved',
+        'koraflex_justification',
+        'koraflex_justification_note',
+        'koraflex_justified_at',
+        'koraflex_justified_by',
     ];
 
     protected function casts(): array
@@ -90,6 +94,7 @@ class ChannelShipment extends Model
             'channel_cancelled_at' => 'datetime',
             'channel_status_checked_at' => 'datetime',
             'return_resolved_at' => 'datetime',
+            'koraflex_justified_at' => 'datetime',
             'flex_alerts' => 'array',
             'flex_alerts_notified' => 'array',
             'flex_alerts_resolved' => 'array',

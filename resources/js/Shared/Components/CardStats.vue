@@ -14,6 +14,8 @@ const props = defineProps({
     // Celular em 2 colunas (2026-10-11): abaixo de sm o ícone vai para cima
     // do valor e tudo encolhe um pouco, para caber em ~170px de largura.
     compact: { type: Boolean, default: false },
+    // Linha extra opcional abaixo do subtítulo (ex.: "2 canceladas").
+    statNote: { type: String, default: '' },
 });
 
 const VARIANTS = {
@@ -48,6 +50,7 @@ const vividStyle = computed(() => (props.vivid
             <div class="min-w-0 max-w-full">
                 <p class="truncate font-bold" :class="compact ? 'text-lg sm:text-2xl' : 'text-2xl'">{{ statTitle }}</p>
                 <p class="text-slate-500 dark:text-slate-400" :class="[vivid ? 'line-clamp-2 leading-tight' : 'truncate', compact ? 'text-xs sm:text-sm' : 'text-sm']">{{ statSubtitle }}</p>
+                <p v-if="statNote" class="truncate text-xs font-medium" :class="style.text">{{ statNote }}</p>
             </div>
         </div>
     </div>

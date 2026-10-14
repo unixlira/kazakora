@@ -7,6 +7,7 @@ import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
+import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
@@ -435,8 +436,7 @@ const REDES = [
                     </div>
 
                     <!-- Selos (2026-10-11): mesma altura das bandeiras de pagamento, simétrico
-                         a elas. Reclame AQUI aponta para a busca até sair a página oficial;
-                         trocar pelo RA1000 só quando a loja tiver o selo de verdade. -->
+                         a elas. Reclame AQUI: selo oficial RA Verificada (2026-10-14). -->
                     <div class="lg:text-right">
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
@@ -446,18 +446,8 @@ const REDES = [
                                 <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45"
                                     class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
                             </a>
-                            <a :href="page.props.reclameAqui?.url ?? 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
-                                class="flex h-[30px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl bg-white leading-none transition hover:opacity-90 sm:h-[44px] lg:h-[51px]"
-                                :class="page.props.reclameAqui?.verificada ? 'px-2' : 'px-3 sm:px-4'"
-                                title="Ver a KazaKora no Reclame AQUI">
-                                <!-- Selo de verificada só com a chave LOJA_SELO_RA_VERIFICADA (só depois da aprovação). -->
-                                <img v-if="page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
-                                    class="h-[24px] w-auto rounded-md sm:h-[36px] lg:h-[42px]">
-                                <template v-else>
-                                    <span class="text-[7px] font-semibold uppercase tracking-wider text-slate-500 sm:text-[9px]">Estamos no</span>
-                                    <span class="mt-0.5 text-[13px] font-black tracking-tight text-[#1a1a1a] sm:text-[18px] lg:text-[20px]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
-                                </template>
-                            </a>
+                            <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). -->
+                            <SeloReclameAqui class="rounded-xl [--ra-altura:30] sm:[--ra-altura:44] lg:[--ra-altura:51]" />
                         </div>
                     </div>
                 </div>

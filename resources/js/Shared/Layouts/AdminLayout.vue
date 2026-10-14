@@ -8,6 +8,7 @@ import { usePermissions } from '@/Shared/usePermissions';
 import { sidebarSections } from '@/Shared/adminSidebarItems';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
+import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
@@ -386,6 +387,8 @@ watch(
                 <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full flex-col items-center gap-0.5 border-t border-[var(--surface-border)] py-4 text-center md:flex">
                     <p class="truncate text-xs font-bold text-slate-400">Versão 1.12.0</p>
                     <p class="truncate text-xs text-slate-400">Desenvolvido por KoraTech</p>
+                    <!-- Selo oficial RA Verificada (2026-10-14), discreto. -->
+                    <SeloReclameAqui class="mt-2 rounded-md opacity-80 transition hover:opacity-100" :altura="36" />
                 </div>
             </div>
         </nav>

@@ -14,7 +14,28 @@ const user = computed(() => page.props.auth?.user);
 const notifications = computed(() => page.props.notifications?.items ?? []);
 const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
 // Contador por item do menu (ex.: alertas abertos dos Envios Flex).
-const sidebarBadge = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
+// Clicou no item: o alerta some. Guardamos o número visto no navegador; o
+// badge só volta se a contagem passar desse número (alerta novo).
+const BADGES_VISTOS_KEY = 'admin.sidebarBadgesVistos';
+const badgesVistos = ref({});
+try {
+    badgesVistos.value = JSON.parse(localStorage.getItem(BADGES_VISTOS_KEY) ?? '{}') || {};
+} catch {
+    badgesVistos.value = {};
+}
+const contagemBruta = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
+const sidebarBadge = (item) => {
+    const total = contagemBruta(item);
+    const visto = badgesVistos.value[item.badgeKey] ?? 0;
+    return total > visto ? total : 0;
+};
+const dispensarBadge = (item) => {
+    if (!item.badgeKey) return;
+    badgesVistos.value = { ...badgesVistos.value, [item.badgeKey]: contagemBruta(item) };
+    try {
+        localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(badgesVistos.value));
+    } catch { /* storage indisponível: vale só nesta sessão */ }
+};
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
 // Menu fechado mostra o favicon da marca (o customizado de produção, se houver).

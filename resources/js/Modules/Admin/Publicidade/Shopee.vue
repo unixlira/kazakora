@@ -1,8 +1,9 @@
 <script setup>
 /**
  * Publicidade › Estratégia Shopee (2026-10-14): campanhas de ADS da Shopee
- * com o resultado em reais e uma situação para decidir de olho. Fase 1, só
- * leitura: os botões só abrem a Shopee, nada muda por aqui. Ver
+ * com o resultado em reais e uma situação para decidir de olho. O botão
+ * Ação do Cauê (AcaoCaue.vue, tarefa 569) pausa, retoma ou muda a meta de
+ * ROAS só com o clique do Lira; sem SHOPEE_ADS_ESCRITA=true ele simula. Ver
  * PublicidadeShopeeController e EstrategiaShopeeAds. Visual preto com fonte
  * branca nos dois temas (.shopee-preto no app.css).
  *
@@ -13,6 +14,7 @@
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
+import AcaoCaue from './AcaoCaue.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -147,6 +149,19 @@ const irIntervalo = () => desde.value && ate.value && router.get('/admin/publici
 
 const corResultado = (v) => (v === null ? 'text-slate-400' : v < 0 ? 'text-error' : 'text-success');
 const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate;
+
+// Decisão do Cauê pela situação: vem marcada no painel do botão Ação.
+const DECISAO = { queimando: 'PAUSAR', sem_margem: 'PAUSAR', margem_fina: 'META' };
+const produtoAcao = (c) => ({
+    item_id: c.item_id,
+    nome: c.nome,
+    gasto: c.gasto,
+    roas_real: c.roas,
+    roas_empate: c.roas_empate,
+    conversao: c.conversao,
+    decisao: c.situacao === 'prejuizo' ? (c.roas_meta && c.roas_meta <= 25 ? 'META' : 'PAUSAR') : (DECISAO[c.situacao] ?? ''),
+});
+const recarregar = () => router.reload({ only: ['estrategia'], preserveScroll: true });
 </script>
 
 <template>
@@ -159,7 +174,6 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                 <i class="fas fa-chess-knight" style="color: #EE4D2D" aria-hidden="true"></i>
                 Estratégia Shopee
             </h1>
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">Só leitura</span>
             <div class="ml-auto flex flex-wrap items-center gap-2" role="group" aria-label="Período">
                 <button
                     v-for="d in periodos"
@@ -225,6 +239,7 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="text-sm font-bold tabular-nums text-error">{{ dinheiro(c.resultado) }}</span>
+                            <AcaoCaue v-if="c.item_id" :produto="produtoAcao(c)" @aplicado="recarregar" />
                             <a
                                 v-if="c.link"
                                 :href="c.link"
@@ -335,6 +350,7 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Pedidos</th>
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Estoque</th>
                                 <th scope="col" class="px-3 py-2 text-center font-semibold">7 dias</th>
+                                <th scope="col" class="px-3 py-2 text-center font-semibold">Ação</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -385,9 +401,13 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                                     <span v-if="c.tendencia" class="sr-only">{{ TENDENCIA[c.tendencia].texto }}</span>
                                     <span v-else class="text-slate-400">—</span>
                                 </td>
+                                <td class="px-3 py-2 text-center">
+                                    <AcaoCaue v-if="c.item_id" :produto="produtoAcao(c)" @aplicado="recarregar" />
+                                    <span v-else class="text-slate-400" title="Campanha da loja inteira, sem produto">—</span>
+                                </td>
                             </tr>
                             <tr v-if="!filtradas.length">
-                                <td colspan="15" class="px-3 py-6 text-center text-slate-500">Nenhuma campanha com esses filtros.</td>
+                                <td colspan="16" class="px-3 py-6 text-center text-slate-500">Nenhuma campanha com esses filtros.</td>
                             </tr>
                         </tbody>
                     </table>

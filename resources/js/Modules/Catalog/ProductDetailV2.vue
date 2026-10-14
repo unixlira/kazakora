@@ -46,8 +46,8 @@ const FAQ = [
     ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
     ['Quais são as formas de pagamento?', DESCONTO_PIX > 0
-        ? `Pix, com aprovação imediata e ${DESCONTO_PIX}% de desconto, ou cartão de crédito em até ${PARCELAS}x sem juros.`
-        : `Pix, com aprovação imediata, ou cartão de crédito em até ${PARCELAS}x sem juros.`],
+        ? `Pix, com aprovação imediata e ${DESCONTO_PIX}% de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
+        : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`],
 ];
 
 const ratingAvg = computed(() => Number(props.product.reviews_avg_rating ?? 0));

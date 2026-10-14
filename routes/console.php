@@ -10,6 +10,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+// Boleto do Mercado Pago (2026-10-14): pago dias depois → pedido pago; vencido → cancela.
+Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->withoutOverlapping(25);
 // Ofertas do dia da loja (pedido 2026-10-10).
 Schedule::command('loja:ofertas-do-dia')->dailyAt('00:05');
 // Carrinho abandonado (pedido 2026-10-10): 1º lembrete aos 50 min, depois

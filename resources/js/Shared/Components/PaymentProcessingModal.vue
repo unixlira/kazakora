@@ -7,7 +7,7 @@ const props = defineProps({
     state: {
         type: String,
         default: 'processing',
-        validator: (value) => ['processing', 'awaiting_pix', 'success', 'timeout', 'failed'].includes(value),
+        validator: (value) => ['processing', 'awaiting_pix', 'boleto', 'success', 'timeout', 'failed'].includes(value),
     },
     orderTotal: { type: Number, default: null },
     // Número do pedido no formato da Shopee (pedido 2026-10-11).
@@ -16,8 +16,10 @@ const props = defineProps({
     pixQrCode: { type: String, default: null },
     pixSecondsLeft: { type: Number, default: null },
     failureMessage: { type: String, default: null },
-    // Para onde vai o botão "Ver minha compra" no sucesso.
+    // Para onde vai o botão "Ver minha compra" no sucesso (e no boleto gerado).
     successUrl: { type: String, default: null },
+    // Boleto gerado (2026-10-14): { linhaDigitavel, pdfUrl, vencimento }.
+    boleto: { type: Object, default: null },
 });
 
 const emit = defineEmits(['retry']);
@@ -40,6 +42,19 @@ const copiarCodigoDoPedido = async () => {
     codigoCopiado.value = true;
     setTimeout(() => { codigoCopiado.value = false; }, 2000);
 };
+
+const linhaCopiada = ref(false);
+const copiarLinha = async () => {
+    if (! props.boleto?.linhaDigitavel) return;
+    await navigator.clipboard.writeText(props.boleto.linhaDigitavel);
+    linhaCopiada.value = true;
+    setTimeout(() => { linhaCopiada.value = false; }, 2000);
+};
+const vencimentoBoleto = computed(() => {
+    if (! props.boleto?.vencimento) return null;
+    return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' })
+        .format(new Date(props.boleto.vencimento));
+});
 
 const copyPixCode = async () => {
     if (! props.pixQrCode) return;
@@ -130,6 +145,56 @@ const copyPixCode = async () => {
                         <span class="opacity-40">|</span>
                         <span class="whitespace-nowrap"><i class="fa-solid fa-lock mr-1 text-[#0FB930]"></i>Compra 100% segura</span>
                     </div>
+                </template>
+
+                <template v-else-if="state === 'boleto'">
+                    <!-- Boleto gerado (2026-10-14): pedido feito, pagamento chega em dias. -->
+                    <div class="-mx-8 -mt-8 rounded-t-2xl bg-gradient-to-br from-[#1c1c1e] to-[#111] px-5 pb-4 pt-5 text-white">
+                        <div class="flex items-center justify-between gap-3">
+                            <h2 class="flex items-center gap-2 whitespace-nowrap font-display text-lg font-bold">
+                                <i class="fas fa-barcode text-[#F27A2A]"></i> Boleto gerado
+                            </h2>
+                            <p v-if="orderTotal !== null" class="whitespace-nowrap text-lg font-extrabold">{{ formatPrice(orderTotal) }}</p>
+                        </div>
+                        <p v-if="orderCode" class="mt-2 text-sm">
+                            Pedido <span class="font-black uppercase italic text-[#F27A2A]">{{ orderCode }}</span>
+                        </p>
+                    </div>
+
+                    <p v-if="vencimentoBoleto" class="mt-5 text-sm text-store-fg-muted">
+                        Pague até <strong class="text-store-fg">{{ vencimentoBoleto }}</strong>
+                    </p>
+
+                    <div v-if="boleto?.linhaDigitavel" class="mt-3 text-left">
+                        <p class="text-xs font-bold uppercase tracking-wide text-store-fg-muted">Linha digitável</p>
+                        <p class="mt-1 break-all rounded-lg border border-dashed border-store-border-strong bg-store-bg-sunken px-3 py-2 font-mono text-sm text-store-fg" data-testid="linha-digitavel">{{ boleto.linhaDigitavel }}</p>
+                    </div>
+
+                    <button v-if="boleto?.linhaDigitavel" type="button"
+                        class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-white shadow-md transition"
+                        :class="linhaCopiada ? 'bg-slate-900' : 'bg-[#F27A2A] hover:brightness-95'"
+                        @click="copiarLinha">
+                        <i class="fas" :class="linhaCopiada ? 'fa-check' : 'fa-copy'"></i>
+                        {{ linhaCopiada ? 'Linha copiada! Cole no app do banco' : 'Copiar linha digitável' }}
+                    </button>
+                    <a v-if="boleto?.pdfUrl" :href="boleto.pdfUrl" target="_blank" rel="noopener"
+                        class="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-store-border px-4 py-3 text-sm font-semibold text-store-fg no-underline hover:border-[#F27A2A]">
+                        <i class="fas fa-file-pdf text-[#F27A2A]"></i> Abrir o boleto (PDF)
+                    </a>
+
+                    <ul class="mx-auto mt-4 flex flex-col gap-1.5 text-left text-xs text-store-fg-muted">
+                        <li><i class="fas fa-envelope mr-2 w-4 text-center text-[#F27A2A]"></i>Também mandamos o boleto para o seu e-mail.</li>
+                        <li><i class="fas fa-clock mr-2 w-4 text-center text-[#F27A2A]"></i>O banco leva até 3 dias úteis para confirmar o pagamento.</li>
+                        <li><i class="fas fa-box mr-2 w-4 text-center text-[#F27A2A]"></i>O pedido segue para separação assim que o pagamento for confirmado. Se o boleto vencer sem pagamento, o pedido é cancelado.</li>
+                    </ul>
+
+                    <Link v-if="successUrl" :href="successUrl"
+                        class="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#0FB930] px-4 py-3 text-sm font-bold text-white no-underline shadow-md hover:brightness-95">
+                        <i class="fas fa-receipt"></i> Ver meu pedido
+                    </Link>
+                    <Link href="/" class="mt-2 block w-full rounded-xl border border-store-border px-4 py-3 text-sm font-semibold text-store-fg no-underline hover:border-[#F27A2A]">
+                        Continuar comprando
+                    </Link>
                 </template>
 
                 <template v-else-if="state === 'success'">

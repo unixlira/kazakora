@@ -202,7 +202,12 @@ class OrderPaymentFinalizer
             };
 
             try {
-                if ($payment->status === Payment::STATUS_CAPTURED) {
+                if ($payment->boletoPendente()) {
+                    // Boleto ainda não pago: cancela no Mercado Pago para o
+                    // cliente não pagar um pedido cancelado (2026-10-14).
+                    $this->mercadoPago->cancelPayment($reference);
+                    $payment->update(['status' => Payment::STATUS_CANCELED]);
+                } elseif ($payment->status === Payment::STATUS_CAPTURED) {
                     match (true) {
                         $isMercadoPagoOrder => $this->mercadoPago->refundOrder($reference),
                         $isMercadoPago => $this->mercadoPago->refundPayment($reference),

@@ -382,8 +382,9 @@ watch(
                 </div>
 
                 <!-- Sidebar footer: versão do sistema -->
-                <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full items-center border-t border-[var(--surface-border)] py-4 md:flex">
-                    <p class="truncate text-xs text-slate-400">Versão 1.12.0</p>
+                <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full flex-col items-center gap-0.5 border-t border-[var(--surface-border)] py-4 text-center md:flex">
+                    <p class="truncate text-xs font-bold text-slate-400">Versão 1.12.0</p>
+                    <p class="truncate text-xs text-slate-400">Desenvolvido por KoraTech</p>
                 </div>
             </div>
         </nav>

@@ -216,11 +216,13 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
     Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
 
     // Checkout próprio do FerraKora (2026-10-14): pedido e Mercado Pago pelo KazaKora.
+    // Limite com prefixo próprio: sem ele o contador é um só por IP para todas
+    // as rotas com throttle e a vitrine + resumo esgotavam o do pedido (429).
     Route::prefix('checkout')->name('checkout.')->group(function () {
-        Route::post('resumo', [FerraKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1')->name('resumo');
-        Route::post('pedido', [FerraKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1')->name('pedido');
-        Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1')->name('status');
-        Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1')->name('cep');
+        Route::post('resumo', [FerraKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1,fk-checkout-resumo')->name('resumo');
+        Route::post('pedido', [FerraKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1,fk-checkout-pedido')->name('pedido');
+        Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1,fk-checkout-status')->name('status');
+        Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
     });
 });
 

@@ -115,6 +115,17 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
     }
 
+    public function test_vitrine_e_resumo_nao_gastam_o_limite_do_pedido(): void
+    {
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 10, 'status' => 'pending']));
+
+        for ($i = 0; $i < 12; $i++) {
+            $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $this->itens()])->assertOk();
+        }
+
+        $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
+    }
+
     public function test_total_diferente_da_tela_nao_grava_nada(): void
     {
         $this->mercadoPago(fn ($mock) => $mock->shouldNotReceive('createPixPayment'));

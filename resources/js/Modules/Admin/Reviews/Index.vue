@@ -123,14 +123,15 @@ const columns = [
         </p>
 
         <div class="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
-            <button type="button" class="rounded-xl border p-3 text-left transition"
-                :class="notaFiltro === null ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900' : 'border-[var(--surface-border)] bg-[var(--surface)] hover:border-slate-400'"
+            <!-- Card Total branco nos dois temas (Lira, 2026-10-14). -->
+            <button type="button" class="card-branco rounded-xl border p-3 text-left transition"
+                :class="notaFiltro === null ? 'ring-2 ring-slate-900 ring-offset-1 dark:ring-white' : 'hover:border-slate-400'"
                 @click="notaFiltro = null">
                 <span class="block text-xs font-semibold uppercase tracking-wide opacity-70">Total</span>
                 <span class="block text-2xl font-bold">{{ props.reviews.length }}</span>
                 <span class="block text-xs opacity-70">média {{ media }} <i class="fas fa-star text-amber-400"></i></span>
             </button>
-            <button v-for="nota in [5, 4, 3, 2, 1]" :key="nota" type="button" class="rounded-xl border p-3 text-left transition"
+            <button v-for="nota in [5, 4, 3, 2, 1]" :key="nota" type="button" class="rounded-xl border bg-[var(--surface)] p-3 text-left transition"
                 :class="notaFiltro === nota ? 'ring-2 ring-offset-1' : 'hover:border-slate-400'"
                 :style="{ borderColor: notaFiltro === nota ? corNota[nota] : 'var(--surface-border)', background: 'var(--surface)', '--tw-ring-color': corNota[nota] }"
                 @click="filtrarNota(nota)">

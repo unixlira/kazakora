@@ -3,16 +3,21 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\Indicadores\PainelDeAlertas;
+use App\Modules\Admin\Support\Indicadores\SerieDiaria;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Marketplace\Support\ContributionMargin;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class KpiController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem): Response
     {
         $startOfMonth = Carbon::today()->startOfMonth();
 
@@ -57,7 +62,31 @@ class KpiController extends Controller
         $productsCount = Product::query()->count();
         $lowStockCount = Product::query()->where('stock', '<=', 5)->count();
 
+        // Indicadores com alerta por canal (2026-10-14): últimos N dias
+        // completos contra os N anteriores, ver PainelDeAlertas.
+        // Tela só de cards e gráficos (2026-10-14): os 3 períodos, a
+        // composição da receita (conta oficial) e a série diária vão juntos,
+        // e o filtro de período/canal troca na tela sem voltar ao servidor.
+        // Dias completos: 10 min de cache não muda nada além dos alertas de
+        // operação.
+        $dias = (int) $request->integer('dias', 7);
+        $dias = in_array($dias, [7, 14, 30], true) ? $dias : 7;
+        $dados = Cache::remember('indicadores:graficos:'.Carbon::today()->toDateString(), now()->addMinutes(10), function () use ($painel, $serie, $margem) {
+            $paineis = [];
+            $composicao = [];
+            foreach ([7, 14, 30] as $d) {
+                $paineis[$d] = $painel->gerar($d);
+                $composicao[$d] = $margem->porCanal(Carbon::today()->subDays($d), Carbon::today());
+            }
+
+            return ['paineis' => $paineis, 'composicao' => $composicao, 'serie' => $serie->gerar()];
+        });
+
         return Inertia::render('Admin/Indicadores/Index', [
+            'painel' => $dados['paineis'][$dias],
+            'paineis' => $dados['paineis'],
+            'composicao' => $dados['composicao'],
+            'serie' => $dados['serie'],
             'kpis' => [
                 'averageTicket' => $averageTicket,
                 'conversionRate' => round($conversionRate, 2),

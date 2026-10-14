@@ -91,14 +91,15 @@
 }
 
 .dark .admin-shell {
-    /* Preto chapado (pedido do Lira 2026-10-11): fundo, menu, topo e cards
-       em #000, separados só pela borda. O muted fica um tom acima para
-       campos, etiquetas e hover não sumirem no preto. */
+    /* Cards, tabelas, menu e topo em grafite quase preto puxado para o vinho
+       (Lira, 2026-10-14), para descolar do fundo em degradê vinho
+       (.admin-fundo). O muted fica um tom acima para campos, etiquetas e
+       hover não sumirem no card. */
     --fundo: #000000;
-    --surface: #000000;
-    --surface-muted: #000000;
+    --surface: #161113;
+    --surface-muted: #221b1e;
     --surface-foreground: #f1eced;
-    --surface-border: #2a2a2a;
+    --surface-border: #3a2e33;
     --sidebar-foreground: #d9d2d4;
     --texto-suave: #b3a9ac;
     --icone-menu: #a99da1;
@@ -123,83 +124,101 @@
 }
 
 /*
+ * Fundo da página do admin em degradê (Lira, 2026-10-14): verde no tema
+ * claro e vinho no escuro, os mesmos degradês dos cards "Acessos ao site" e
+ * "Faturamento por canal" do Dashboard. Cards, tabelas e métricas continuam
+ * sólidos (--surface: branco no claro, grafite no escuro). O degradê fica
+ * parado na janela para não esticar em página comprida.
+ */
+.admin-shell.admin-fundo {
+    background-image: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
+    background-attachment: fixed;
+}
+.dark .admin-shell.admin-fundo {
+    background-image: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
+}
+
+/*
+ * Card branco nos dois temas (Lira, 2026-10-14: card Total das Avaliações).
+ * Não usa .bg-white porque no escuro ela vira o grafite do --surface.
+ */
+.admin-shell .card-branco {
+    background-color: #ffffff;
+    color: #1f1a1c;
+    border-color: #e6e2e3;
+}
+
+/*
+ * Texto solto direto no degradê (títulos e legendas das telas) fica branco,
+ * como os textos dos cards em degradê. Dentro de card, tabela ou caixa
+ * sólida volta à cor normal do tema.
+ */
+.admin-conteudo {
+    color: #ffffff;
+}
+.admin-conteudo :is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table) {
+    color: var(--surface-foreground);
+}
+.admin-shell .admin-conteudo :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-gray-400, .text-gray-500, .text-gray-600, .text-\[var\(--texto-suave\)\]):not(:is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table) *) {
+    color: rgb(255 255 255 / 0.8);
+}
+.admin-shell .admin-conteudo :is(.text-slate-700, .text-slate-800, .text-slate-900, .text-gray-700, .text-gray-800, .text-gray-900, .text-black, .text-primary, .text-\[var\(--surface-foreground\)\], .text-\[var\(--destaque\)\]):not(:is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table, .bg-primary) *):not(.bg-primary) {
+    color: #ffffff;
+}
+
+/*
  * Radar de Oportunidades no escuro: tinha fundo cinza #3D3D3D (pedido de
  * 2026-10-12). Mesmo dia, o Lira pediu preto absoluto em todo o tema escuro
- * do admin, então o Radar também ficou #000. Para voltar ao cinza, troque os
- * dois #000000 abaixo por #3d3d3d.
+ * do admin, então o Radar também ficou #000. Desde 2026-10-14 o Radar segue
+ * o resto do admin (fundo em degradê vinho, menu e topo em --surface).
  */
 .dark .admin-shell:has(.radar-grafite) {
     --fundo: #000000;
 }
-.dark .admin-shell:has(.radar-grafite) :is(#menu-admin, .admin-topo, .admin-rodape) {
-    background-color: #000000;
-}
 
 /*
- * Topo flutuante (Lira, 2026-10-12): no alto da página o topo é a faixa
- * branca padrão (preta no tema escuro, pedido de 2026-10-11). Com a página
- * rolada ele descola das bordas (flutua, com cantos arredondados) e vira um
- * vidro fumê grafite translúcido, nos dois temas e também no Radar (o :is dá
- * a especificidade para passar por cima da regra acima). Texto e ícones
- * ficam claros no vidro; os menus que abrem do topo (.topo-menu) voltam às
+ * Topo do admin (Lira, 2026-10-14): fixo no alto, sem mudar de forma nem de
+ * posição em nenhum tema. No tema claro fica sempre o padrão (branco). Só no
+ * tema escuro, com a página rolada, vira vidro fumê translúcido (mesma
+ * caixa, só a cor muda). Os menus que abrem do topo (.topo-menu) mantêm as
  * cores normais. O prefixo .admin-shell nas regras de texto é para ganhar
  * das cores fixas do tema escuro (.dark .admin-shell .text-slate-500).
  */
-:is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo {
-    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease,
-        box-shadow 0.25s ease, top 0.25s ease, margin 0.25s ease, border-radius 0.25s ease;
+.admin-shell .admin-topo {
+    transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
-:is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
+.dark .admin-shell .admin-topo.admin-topo-fume {
     --icone-menu: #e4dee0;
     --surface-muted: rgb(255 255 255 / 0.12);
-    --surface-border: rgb(255 255 255 / 0.1);
-    top: 0.75rem;
-    margin-inline: 0.75rem;
-    border: 1px solid rgb(255 255 255 / 0.1);
-    border-radius: 1rem;
-    background-color: rgb(30 30 32 / 0.72);
+    --surface-border: rgb(255 255 255 / 0.14);
+    background-color: rgb(0 0 0 / 0.72);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
     backdrop-filter: blur(16px) saturate(140%);
     color: #f1eced;
-    box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
-@media (min-width: 768px) {
-    :is(.admin-shell, .dark .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
-        margin-inline: 1.5rem;
-    }
-}
-/* No escuro o grafite clareia um pouco para o vidro não sumir no preto. */
-.dark :is(.admin-shell, .admin-shell:has(.radar-grafite)) .admin-topo.admin-topo-fume {
-    background-color: rgb(0 0 0 / 0.85);
-    border-color: rgb(255 255 255 / 0.14);
-    box-shadow: 0 10px 30px rgb(0 0 0 / 0.6);
-}
-.admin-shell .admin-topo-fume :is(.text-slate-300, .text-slate-400, .text-slate-500):not(.topo-menu *) {
+.dark .admin-shell .admin-topo-fume :is(.text-slate-300, .text-slate-400, .text-slate-500):not(.topo-menu *) {
     color: rgb(241 236 237 / 0.8);
 }
-.admin-shell .admin-topo-fume .hover\:text-primary:hover:not(.topo-menu *) {
+.dark .admin-shell .admin-topo-fume .hover\:text-primary:hover:not(.topo-menu *) {
     color: #ffffff;
 }
-.admin-shell .admin-topo-fume .bg-lightprimary:not(.topo-menu *) {
+.dark .admin-shell .admin-topo-fume .bg-lightprimary:not(.topo-menu *) {
     background-color: rgb(255 255 255 / 0.16);
     color: #ffffff;
 }
-.admin-shell .admin-topo-fume input:not(.topo-menu *)::placeholder {
+.dark .admin-shell .admin-topo-fume input:not(.topo-menu *)::placeholder {
     color: rgb(241 236 237 / 0.6);
 }
-.admin-topo-fume .topo-menu {
-    --surface-muted: #f5f3f4;
-    --surface-border: #e6e2e3;
-    color: var(--surface-foreground);
-}
 .dark .admin-topo-fume .topo-menu {
-    --surface-muted: #000000;
-    --surface-border: #2a2a2a;
+    --surface-muted: #221b1e;
+    --surface-border: #3a2e33;
+    color: var(--surface-foreground);
 }
 
 /*
  * Topo da loja (Lira, 2026-10-12): branco parado no lugar; quando a página
- * rola e ele passa a flutuar, fica translúcido e fumê com texto claro.
+ * rola ele fica translúcido e fumê com texto claro, só no tema escuro (prefers-color-scheme, como o resto
+ * da loja). No claro é sempre o branco padrão.
  * Os menus que abrem do topo (.topo-menu) voltam às cores da loja, guardadas
  * em --topo-* no .storefront-shell (valem no tema claro e no escuro).
  */
@@ -215,29 +234,31 @@
 .loja-topo {
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.storefront-shell .loja-topo.loja-topo-fume {
-    --color-store-fg: #f5f5f5;
-    --color-store-fg-muted: rgb(245 245 245 / 0.8);
-    --color-store-fg-faint: rgb(245 245 245 / 0.6);
-    --color-store-bg-raised: rgb(255 255 255 / 0.1);
-    --color-store-bg-sunken: rgb(255 255 255 / 0.12);
-    --color-store-border: rgb(255 255 255 / 0.1);
-    --color-store-border-strong: rgb(255 255 255 / 0.22);
-    background-color: rgb(34 32 33 / 0.62);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-    backdrop-filter: blur(14px) saturate(140%);
-    color: #f5f5f5;
-    box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
-}
-.loja-topo-fume .topo-menu {
-    --color-store-fg: var(--topo-fg);
-    --color-store-fg-muted: var(--topo-fg-muted);
-    --color-store-fg-faint: var(--topo-fg-faint);
-    --color-store-bg-raised: var(--topo-bg-raised);
-    --color-store-bg-sunken: var(--topo-bg-sunken);
-    --color-store-border: var(--topo-border);
-    --color-store-border-strong: var(--topo-border-strong);
-    color: var(--topo-fg);
+@media (prefers-color-scheme: dark) {
+    .storefront-shell .loja-topo.loja-topo-fume {
+        --color-store-fg: #f5f5f5;
+        --color-store-fg-muted: rgb(245 245 245 / 0.8);
+        --color-store-fg-faint: rgb(245 245 245 / 0.6);
+        --color-store-bg-raised: rgb(255 255 255 / 0.1);
+        --color-store-bg-sunken: rgb(255 255 255 / 0.12);
+        --color-store-border: rgb(255 255 255 / 0.1);
+        --color-store-border-strong: rgb(255 255 255 / 0.22);
+        background-color: rgb(34 32 33 / 0.62);
+        -webkit-backdrop-filter: blur(14px) saturate(140%);
+        backdrop-filter: blur(14px) saturate(140%);
+        color: #f5f5f5;
+        box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+    }
+    .loja-topo-fume .topo-menu {
+        --color-store-fg: var(--topo-fg);
+        --color-store-fg-muted: var(--topo-fg-muted);
+        --color-store-fg-faint: var(--topo-fg-faint);
+        --color-store-bg-raised: var(--topo-bg-raised);
+        --color-store-bg-sunken: var(--topo-bg-sunken);
+        --color-store-border: var(--topo-border);
+        --color-store-border-strong: var(--topo-border-strong);
+        color: var(--topo-fg);
+    }
 }
 
 /*
@@ -592,16 +613,17 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
 
 /*
  * Estratégia Shopee (pedido do Lira 2026-10-14): corpo e cards pretos #000 e
- * fonte branca #FFF, nos dois temas. Só o conteúdo da tela muda; menu, topo e
+ * fonte branca #FFF, só no tema escuro; no claro a tela segue o padrão das
+ * outras (pedido do Lira, mesmo dia). Só o conteúdo da tela muda; menu, topo e
  * rodapé seguem o tema. Textos de apoio (cinzas) também ficam brancos; as
  * cores de situação (vermelho, verde, amarelo) continuam para dar o sinal.
  * Cards, tabelas e caixas em grafite #1f1f1f (pedido do Lira 2026-10-14, junto
  * com a análise do Jonathan, tarefa 580): no mesmo preto do corpo eles sumiam.
  */
-.admin-shell:has(.shopee-preto) {
+.dark .admin-shell:has(.shopee-preto) {
     --fundo: #000000;
 }
-.admin-shell .shopee-preto {
+.dark .admin-shell .shopee-preto {
     --surface: #1f1f1f;
     --surface-muted: #000000;
     --surface-foreground: #ffffff;
@@ -617,17 +639,17 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
     color: #ffffff;
     color-scheme: dark;
 }
-.admin-shell .shopee-preto :is(.text-slate-400, .text-slate-500, .text-slate-600, .dark\:text-slate-300, .dark\:text-slate-400) { color: #ffffff; }
-.admin-shell .shopee-preto :is(.bg-slate-100, .dark\:bg-slate-800) { background-color: #333333; }
-.admin-shell .shopee-preto .bg-primary { color: #000000; }
-.admin-shell .shopee-preto select option { background-color: #000000; color: #ffffff; }
+.dark .admin-shell .shopee-preto :is(.text-slate-400, .text-slate-500, .text-slate-600, .dark\:text-slate-300, .dark\:text-slate-400) { color: #ffffff; }
+.dark .admin-shell .shopee-preto :is(.bg-slate-100, .dark\:bg-slate-800) { background-color: #333333; }
+.dark .admin-shell .shopee-preto .bg-primary { color: #000000; }
+.dark .admin-shell .shopee-preto select option { background-color: #000000; color: #ffffff; }
 /*
  * Vermelho de erro legível no preto (2026-10-14, proposta do Jonathan): o
  * #dc2626 dá cerca de 4:1 sobre #000; o #f87171 passa de 7:1. Vale no tema escuro do
- * admin e na Estratégia Shopee, que é preta nos dois temas. Borda e anel
+ * admin (inclui a Estratégia Shopee, preta só nele). Borda e anel
  * seguem o mesmo tom para a faixa e o selo "Margem não aguenta ADS".
  */
-.dark .admin-shell .text-error, .admin-shell .shopee-preto .text-error { color: #f87171; }
-.dark .admin-shell .border-error, .admin-shell .shopee-preto .border-error { border-color: #f87171; }
-.dark .admin-shell .border-l-error, .admin-shell .shopee-preto .border-l-error { border-left-color: #f87171; }
-.admin-shell .shopee-preto .ring-error\/50 { --tw-ring-color: color-mix(in oklab, #f87171 50%, transparent); }
+.dark .admin-shell .text-error { color: #f87171; }
+.dark .admin-shell .border-error { border-color: #f87171; }
+.dark .admin-shell .border-l-error { border-left-color: #f87171; }
+.dark .admin-shell .shopee-preto .ring-error\/50 { --tw-ring-color: color-mix(in oklab, #f87171 50%, transparent); }

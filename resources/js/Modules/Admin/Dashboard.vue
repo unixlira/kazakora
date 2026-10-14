@@ -3,6 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { usePermissions } from '@/Shared/usePermissions';
 import Swal from 'sweetalert2';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
@@ -110,28 +111,12 @@ const kpiTiles = computed(() => [
         color: 'var(--primary-solido)',
     },
     {
-        label: 'Crescimento do mês',
-        value: kpis.value.crescimento === null || kpis.value.crescimento === undefined ? '—' : `${kpis.value.crescimento > 0 ? '+' : ''}${formatPercent(kpis.value.crescimento)}`,
-        delta: null,
-        hint: `${formatPrice(kpis.value.receitaPeriodoAnterior)} nos mesmos dias do mês passado`,
-        icon: 'fas fa-arrow-trend-up',
-        color: (kpis.value.crescimento ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)',
-    },
-    {
         label: 'Projeção do mês',
         value: formatPrice(kpis.value.projecaoMes),
         delta: delta(kpis.value.projecaoMes, kpis.value.receitaMesAnterior),
         hint: 'no ritmo atual, vs mês passado fechado',
         icon: 'fas fa-bullseye',
         color: 'var(--color-info)',
-    },
-    {
-        label: 'Margem de contribuição',
-        value: kpis.value.margemPercentual === null || kpis.value.margemPercentual === undefined ? '—' : formatPercent(kpis.value.margemPercentual),
-        delta: null,
-        hint: 'do faturamento do mês, depois de custo, taxas, frete e ADS',
-        icon: 'fas fa-percent',
-        color: (kpis.value.margemPercentual ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-error)',
     },
     {
         label: 'Itens por pedido',
@@ -142,6 +127,13 @@ const kpiTiles = computed(() => [
         color: 'var(--color-secondary)',
     },
 ]);
+
+// Nota do card "Faturamento do mês": mesma conta do selo do Ritmo do mês.
+const crescimentoNota = computed(() => {
+    const c = kpis.value.crescimento;
+    if (c === null || c === undefined) return 'sem base no mês passado';
+    return `${c > 0 ? '+' : ''}${formatPercent(c)} vs mesmos dias do mês passado`;
+});
 
 const tileStyle = (color) => ({
     borderTop: '3px solid var(--faixa-card)',
@@ -170,16 +162,7 @@ const axisStyle = computed(() => ({
     ticks: { color: chrome.value.text, padding: 6 },
 }));
 
-// ---- 1. Participação por canal (rosca) --------------------------------
-const channelShare = computed(() => {
-    const rows = sortChannels(props.revenueByChannel.map((row) => row.origin))
-        .map((origin) => props.revenueByChannel.find((row) => row.origin === origin))
-        .filter((row) => row && row.total > 0);
-    const total = rows.reduce((sum, row) => sum + row.total, 0);
-
-    return { rows, total };
-});
-
+// ---- Faturamento por canal ------------------------------------------
 // Faixa do topo (pedido 2026-10-11): todos os canais aparecem, inclusive a
 // KazaKora sem venda — canal zerado também é informação.
 const channelStrip = computed(() => {
@@ -192,31 +175,6 @@ const channelStrip = computed(() => {
         return { origin, total: valor, share: total > 0 ? (valor / total) * 100 : 0 };
     });
 });
-
-const shareChartData = computed(() => ({
-    labels: channelShare.value.rows.map((row) => channelName(row.origin)),
-    datasets: [{
-        data: channelShare.value.rows.map((row) => row.total),
-        backgroundColor: channelShare.value.rows.map((row) => channelColor(row.origin)),
-        borderColor: chrome.value.surface,
-        borderWidth: 2,
-        hoverOffset: 6,
-    }],
-}));
-
-const shareChartOptions = computed(() => ({
-    ...baseOptions.value,
-    cutout: '68%',
-    plugins: {
-        ...baseOptions.value.plugins,
-        tooltip: {
-            ...baseOptions.value.plugins.tooltip,
-            callbacks: {
-                label: (ctx) => ` ${ctx.label}: ${formatPrice(ctx.parsed)} (${formatPercent((ctx.parsed / channelShare.value.total) * 100)})`,
-            },
-        },
-    },
-}));
 
 // ---- 2. Faturamento mensal por canal (colunas empilhadas) -------------
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -362,10 +320,9 @@ const categoryChartOptions = computed(() => ({
 
 // ---- 5. Acessos ao site (pedido 2026-10-11) ---------------------------
 // Ver DashboardController::visitantes(): sem equipe e sem robô.
-// Card de acessos em verde (pedido 2026-10-11): tudo em branco por cima;
-// hoje em amarelo (o "agora"), páginas vistas em laranja-claro (era azul-claro
-// do tema anterior).
-const visitColors = computed(() => ({ bar: 'rgba(255,255,255,0.88)', today: '#ffc107', line: '#fed7aa' }));
+// Card de acessos com fundo branco (pedido 2026-10-14): barras em verde-claro,
+// hoje em verde forte (era amarelo), páginas vistas em laranja.
+const visitColors = computed(() => ({ bar: '#a3d9b8', today: '#198754', line: '#f97316' }));
 const mesVisitas = ref(props.visitantes?.mes ?? '');
 const carregandoVisitas = ref(false);
 const trocarMesVisitas = () => {
@@ -439,9 +396,9 @@ const visitChartOptions = computed(() => ({
     ...baseOptions.value,
     interaction: { mode: 'index', intersect: false },
     scales: {
-        x: { grid: { display: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', maxTicksLimit: 16 } },
-        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.15)', drawTicks: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', padding: 6, precision: 0 }, title: { display: true, text: 'Visitantes', color: 'rgba(255,255,255,0.85)' } },
-        y1: { beginAtZero: true, position: 'right', grid: { display: false }, border: { display: false }, ticks: { color: 'rgba(255,255,255,0.85)', padding: 6, precision: 0 }, title: { display: true, text: 'Páginas', color: 'rgba(255,255,255,0.85)' } },
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: '#6b7280', maxTicksLimit: 16 } },
+        y: { beginAtZero: true, grid: { color: '#e5e7eb', drawTicks: false }, border: { display: false }, ticks: { color: '#6b7280', padding: 6, precision: 0 }, title: { display: true, text: 'Visitantes', color: '#6b7280' } },
+        y1: { beginAtZero: true, position: 'right', grid: { display: false }, border: { display: false }, ticks: { color: '#6b7280', padding: 6, precision: 0 }, title: { display: true, text: 'Páginas', color: '#6b7280' } },
     },
     plugins: {
         ...baseOptions.value.plugins,
@@ -471,12 +428,14 @@ const ESPECIALISTAS = [
     { canal: 'shopee', nome: 'Cauê', canalNome: 'Shopee', fundo: 'linear-gradient(120deg, #c2410c 0%, #c2410c 50%, #ee4d2d 100%)', texto: '#ffffff', icone: 'fas fa-bag-shopping' },
     { canal: 'mercado_livre', nome: 'Diego', canalNome: 'Mercado Livre', fundo: 'linear-gradient(120deg, #ffe600 0%, #ffd000 100%)', texto: '#2d3277', icone: 'fas fa-handshake' },
 ];
-const filtroDiag = ref({ shopee: 'P0', mercado_livre: 'P0' });
+// Filtro abre na primeira prioridade que tem alerta (Gerenciador,
+// 2026-10-14): abrir em "Urgente" vazio parecia que não havia nada a fazer.
+const filtroDiag = ref({ shopee: null, mercado_livre: null });
 const mostrarTodosDiag = ref({ shopee: false, mercado_livre: false });
 
-function diagnostico(canal) {
+const gruposDiag = computed(() => Object.fromEntries(ESPECIALISTAS.map(({ canal }) => {
     const d = props.diagnosticos?.[canal];
-    if (!d) return null;
+    if (!d) return [canal, null];
     const contagem = { P0: 0, P1: 0, P2: 0, OK: 0 };
     const porProduto = new Map();
     for (const a of d.alertas ?? []) {
@@ -485,13 +444,26 @@ function diagnostico(canal) {
         if (!porProduto.has(id)) porProduto.set(id, { produto: a.produto, alertas: [] });
         porProduto.get(id).alertas.push(a);
     }
-    const filtro = filtroDiag.value[canal];
-    const produtos = [...porProduto.values()].filter((g) => g.alertas.some((a) => a.prioridade === filtro));
-    return { ...d, contagem, produtos, filtro };
-}
+    return [canal, { ...d, contagem, grupos: [...porProduto.values()] }];
+})));
+
+const diagPorCanal = computed(() => Object.fromEntries(ESPECIALISTAS.map(({ canal }) => {
+    const d = gruposDiag.value[canal];
+    if (!d) return [canal, null];
+    const filtro = filtroDiag.value[canal] ?? Object.keys(PRIORIDADES).find((p) => d.contagem[p] > 0) ?? 'P0';
+    const produtos = d.grupos.filter((g) => g.alertas.some((a) => a.prioridade === filtro));
+    const outra = Object.keys(PRIORIDADES).find((p) => p !== filtro && d.contagem[p] > 0) ?? null;
+    return [canal, { ...d, produtos, filtro, outra }];
+})));
+const diagnostico = (canal) => diagPorCanal.value[canal];
+
+// Diagnóstico roda a cada 3 h; passou de 6 h sem atualizar, algo parou.
+const HORAS_DIAG_PARADO = 6;
+const horasDesde = (iso) => (iso ? (Date.now() - new Date(iso).getTime()) / 3600000 : 0);
 
 // Botão de ação do Cauê (pedido 2026-10-14): manda a correção para a Shopee
 // pela API e confere lendo de volta. Só admin; sempre confirma antes.
+const { can } = usePermissions();
 const ehAdmin = computed(() => usePage().props.auth?.user?.role === 'admin');
 const ICONE_ACAO = { pausar_ads: 'fas fa-pause', meta_roas: 'fas fa-bullseye', preco: 'fas fa-tag' };
 const aplicando = ref(null);
@@ -554,6 +526,8 @@ async function aplicarAcao(produto, a) {
     aplicando.value = `${produto.item_id}:${a.acao}`;
     router.post('/admin/diagnostico/shopee/acao', { item_id: produto.item_id, acao: a.acao, valor, model_id: modelId }, {
         preserveScroll: true,
+        // Só o diagnóstico (e o aviso) voltam; o resto da tela não muda.
+        only: ['diagnosticos', 'flash'],
         onFinish: () => { aplicando.value = null; },
     });
 }
@@ -567,210 +541,75 @@ const quandoGerado = (iso) => {
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head title="Gerenciador" />
 
     <AdminLayout>
+        <!-- Gerenciador (era "Início", Lira 2026-10-14). Ordem pela
+             revisão do Jonathan: números do dia e do mês, o que pede ação
+             (Cauê e Diego), desempenho, gráficos, produtos e, por último,
+             os acessos ao site. -->
+        <header class="mb-4">
+            <h1 class="text-xl font-bold">Gerenciador</h1>
+            <p class="text-sm text-[var(--texto-suave)]">Como a loja está hoje e o que precisa de você. Valores do mês até agora, comparados com os mesmos dias do mês passado.</p>
+        </header>
+
         <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <CardStats stat-subtitle="FATURAMENTO TOTAL" :stat-title="formatPrice(stats.revenueTotal)"
-                stat-icon-name="fas fa-sack-dollar" variant="success" vivid compact />
-            <CardStats stat-subtitle="FATURAMENTO DO MÊS" :stat-title="formatPrice(stats.revenue)"
-                stat-icon-name="fas fa-calendar-days" variant="primary" vivid compact />
-            <CardStats stat-subtitle="FATURAMENTO HOJE" :stat-title="formatPrice(stats.revenueToday)"
-                stat-icon-name="fas fa-money-bill-wave" variant="info" vivid compact />
-            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO DO MÊS" :stat-title="formatPrice(stats.contributionMarginMonth)"
-                stat-icon-name="fas fa-wallet" :variant="stats.contributionMarginMonth >= 0 ? 'success' : 'error'" vivid compact />
+            <component :is="can('pedidos.view') ? Link : 'div'" v-bind="can('pedidos.view') ? { href: '/admin/pedidos' } : {}" class="block">
+                <CardStats stat-subtitle="Faturamento hoje" :stat-title="formatPrice(stats.revenueToday)"
+                    :stat-note="`${stats.ordersToday} ${stats.ordersToday === 1 ? 'pedido' : 'pedidos'}`"
+                    stat-icon-name="fas fa-money-bill-wave" variant="info" vivid compact />
+            </component>
+            <component :is="can('pedidos.view') ? Link : 'div'" v-bind="can('pedidos.view') ? { href: '/admin/pedidos' } : {}" class="block">
+                <CardStats stat-subtitle="Faturamento do mês" :stat-title="formatPrice(stats.revenue)"
+                    :stat-note="crescimentoNota"
+                    stat-icon-name="fas fa-calendar-days" variant="primary" vivid compact />
+            </component>
+            <component :is="can('financeiro.view') ? Link : 'div'" v-bind="can('financeiro.view') ? { href: '/admin/dashboard-financeiro' } : {}" class="block">
+                <CardStats stat-subtitle="Margem de contribuição do mês" :stat-title="formatPrice(stats.contributionMarginMonth)"
+                    :stat-note="kpis.margemPercentual === null || kpis.margemPercentual === undefined ? '' : `${formatPercent(kpis.margemPercentual)} do faturamento`"
+                    stat-icon-name="fas fa-wallet" :variant="stats.contributionMarginMonth >= 0 ? 'success' : 'error'" vivid compact />
+            </component>
+            <CardStats stat-subtitle="Faturamento desde a abertura" :stat-title="formatPrice(stats.revenueTotal)"
+                stat-icon-name="fas fa-sack-dollar" variant="neutral" vivid compact />
         </div>
 
         <div class="mt-3 grid grid-cols-2 gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-4">
-            <CardStats stat-subtitle="PEDIDOS" :stat-title="String(stats.ordersCount)"
-                stat-icon-name="fas fa-receipt" variant="primary" vivid compact />
-            <CardStats stat-subtitle="PEDIDOS NO MÊS" :stat-title="String(stats.ordersMonth)"
-                stat-icon-name="fas fa-calendar-check" variant="secondary" vivid compact />
-            <CardStats stat-subtitle="PEDIDOS HOJE" :stat-title="String(stats.ordersToday)"
+            <CardStats stat-subtitle="Pedidos hoje" :stat-title="String(stats.ordersToday)"
                 stat-icon-name="fas fa-cart-shopping" variant="primary" vivid compact />
-            <CardStats stat-subtitle="DEVOLUÇÕES NO MÊS" :stat-title="String(stats.returnsMonth)"
-                stat-icon-name="fas fa-rotate-left" :variant="stats.returnsMonth > 0 ? 'error' : 'success'" vivid compact />
+            <CardStats stat-subtitle="Pedidos no mês" :stat-title="String(stats.ordersMonth)"
+                stat-icon-name="fas fa-calendar-check" variant="secondary" vivid compact />
+            <CardStats stat-subtitle="Produtos devolvidos no mês" :stat-title="String(stats.returnsMonth)"
+                stat-icon-name="fas fa-rotate-left" :variant="stats.returnsMonth > 0 ? 'warning' : 'neutral'" vivid compact />
+            <CardStats stat-subtitle="Pedidos desde a abertura" :stat-title="formatInt(stats.ordersCount)"
+                stat-icon-name="fas fa-receipt" variant="neutral" vivid compact />
         </div>
 
-        <!-- Fundos em degradê (pedido 2026-10-11, mesmas cores dos cards
-             "Adapta"): vinho/rosa aqui, verde nos acessos. Texto branco.
-             Cards de canal sem faixa lateral (pedido 2026-10-11). -->
-        <section class="card-degrade card-degrade--vinho mt-4 p-4 text-white">
-            <div class="flex items-center gap-2">
-                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm ring-1 ring-white/30"><i class="fas fa-store"></i></span>
-                <h3 class="text-base font-semibold">Faturamento por canal</h3>
-                <span class="text-xs text-white/80">· mês até hoje</span>
-            </div>
-            <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                <div v-for="row in channelStrip" :key="row.origin"
-                    class="min-w-0 rounded-lg bg-white/12 px-3 py-2.5 ring-1 ring-white/20">
-                    <p class="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90">
-                        <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
-                        {{ channelName(row.origin) }}
-                    </p>
-                    <p class="truncate text-lg font-bold" :class="row.total > 0 ? 'text-white' : 'text-white/70'">{{ formatPrice(row.total) }}</p>
-                    <div class="mt-1 h-1 rounded-full bg-white/20">
-                        <div class="h-1 rounded-full bg-white" :style="{ width: `${row.share}%` }"></div>
-                    </div>
-                    <p class="mt-1 text-[11px] text-white/80">{{ row.total > 0 ? `${formatPercent(row.share)} do mês` : 'sem vendas no mês' }}</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Acessos ao site (pedido 2026-10-11): entre o faturamento e o
-             desempenho do mês, com filtro de mês. -->
-        <section class="card-degrade card-degrade--verde mt-4 overflow-hidden text-white">
-            <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
-                <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white ring-1 ring-white/30"><i class="fas fa-globe"></i></span>
-                    <h3 class="text-lg font-semibold">Acessos ao site KazaKora</h3>
-                </div>
-                <label class="flex items-center gap-2 text-sm">
-                    <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin"></i>
-                    <span class="text-white/85">Mês</span>
-                    <select v-model="mesVisitas" @change="trocarMesVisitas"
-                        class="visitas-mes rounded-lg border-0 py-1.5 pl-3 pr-8 text-sm font-medium shadow-sm focus:ring-2 focus:ring-white/60">
-                        <option v-for="m in visitantes.meses" :key="m" :value="m">{{ formatMonthLong(m) }}</option>
-                    </select>
-                </label>
-            </div>
-            <div class="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4" :class="{ 'opacity-60': carregandoVisitas }">
-                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg bg-white/12 p-3 ring-1 ring-white/20 backdrop-blur-sm">
-                    <div class="flex items-center justify-between gap-2">
-                        <p class="truncate text-xs font-semibold uppercase tracking-wide text-white/85">{{ tile.label }}</p>
-                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm shadow-sm" :style="{ color: tile.color }"><i :class="tile.icon"></i></span>
-                    </div>
-                    <p class="mt-1 truncate text-3xl font-bold">{{ tile.value }}</p>
-                    <p class="truncate text-xs text-white/80">{{ tile.hint }}</p>
-                </div>
-            </div>
-            <div class="px-4 pb-4" :class="{ 'opacity-60': carregandoVisitas }">
-                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/85">
-                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.bar }"></span> Visitantes</span>
-                    <span v-if="visitantes.mesAtual" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.today }"></span> Hoje</span>
-                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: visitColors.line }"></span> Páginas vistas</span>
-                </div>
-                <ChartCanvas v-if="visitantes.dias.length" class="mt-2" type="bar" :data="visitChartData" :options="visitChartOptions" />
-            </div>
-        </section>
-
-        <!-- Indicadores do mês (pedido do usuário 2026-10-06): o mês até
-             hoje sempre contra os MESMOS dias do mês passado. -->
         <h2 class="mt-8 mb-3 flex items-center gap-2 text-lg font-bold">
-            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm text-white"><i class="fas fa-gauge-high"></i></span>
-            Desempenho do mês
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm text-white"><i class="fas fa-list-check"></i></span>
+            O que ajustar agora
         </h2>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <div v-for="tile in kpiTiles" :key="tile.label"
-                class="flex min-w-0 flex-col rounded-xl border border-[var(--surface-border)] p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                :style="tileStyle(tile.color)">
-                <div class="flex items-center justify-between gap-2">
-                    <p class="truncate text-sm text-[var(--texto-suave)]">{{ tile.label }}</p>
-                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm text-white" :style="{ background: tile.color }">
-                        <i :class="tile.icon"></i>
-                    </span>
-                </div>
-                <p class="mt-1 truncate text-2xl font-bold">{{ tile.value }}</p>
-                <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[var(--texto-suave)]">
-                    <span v-if="tile.delta !== null" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold"
-                        :class="tile.delta >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
-                        <i :class="tile.delta >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'" class="text-[10px]"></i>
-                        {{ tile.delta > 0 ? '+' : '' }}{{ formatPercent(tile.delta) }}
-                    </span>
-                    <span>{{ tile.hint }}</span>
-                </p>
-            </div>
-        </div>
-
-        <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
-            <!-- 1. Participação por canal -->
-            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-2">
-                <h3 class="text-base font-semibold">Participação por canal</h3>
-                <p class="text-xs text-[var(--texto-suave)]">Faturamento do mês até hoje</p>
-                <div v-if="channelShare.total > 0" class="mt-3 grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-                    <div class="relative">
-                        <ChartCanvas type="doughnut" :data="shareChartData" :options="shareChartOptions" />
-                        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                            <span class="text-xs text-[var(--texto-suave)]">Total</span>
-                            <span class="text-lg font-bold">{{ formatCompact(channelShare.total) }}</span>
-                        </div>
-                    </div>
-                    <ul class="space-y-2 text-sm">
-                        <li v-for="row in channelShare.rows" :key="row.origin" class="flex items-center justify-between gap-3">
-                            <span class="flex min-w-0 items-center gap-2">
-                                <span class="h-3 w-3 shrink-0 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
-                                <span class="truncate">{{ channelName(row.origin) }}</span>
-                            </span>
-                            <span class="shrink-0 text-right">
-                                <span class="block font-semibold">{{ formatPrice(row.total) }}</span>
-                                <span class="block text-xs text-[var(--texto-suave)]">{{ formatPercent((row.total / channelShare.total) * 100) }}</span>
-                            </span>
-                        </li>
-                    </ul>
-                </div>
-                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Nenhuma venda no mês ainda.</p>
-            </section>
-
-            <!-- 2. Crescimento: faturamento mensal por canal -->
-            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-3">
-                <h3 class="text-base font-semibold">Faturamento mensal por canal</h3>
-                <p class="text-xs text-[var(--texto-suave)]">Crescimento da loja mês a mês · passe o mouse para ver cada canal</p>
-                <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                    <span v-for="channel in monthlyChannels" :key="channel" class="inline-flex items-center gap-1.5">
-                        <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: channelColor(channel) }"></span>
-                        {{ channelName(channel) }}
-                    </span>
-                </div>
-                <ChartCanvas v-if="monthlyTotals.length" class="mt-2" type="bar" :data="monthlyChartData" :options="monthlyChartOptions" />
-                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 12 meses.</p>
-            </section>
-
-            <!-- 3. Ritmo do mês -->
-            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-3">
-                <div class="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                        <h3 class="text-base font-semibold">Ritmo do mês</h3>
-                        <p class="text-xs text-[var(--texto-suave)]">Faturamento acumulado dia a dia</p>
-                    </div>
-                    <span v-if="paceComparison.delta !== null" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
-                        :class="paceComparison.delta >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
-                        <i :class="paceComparison.delta >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'" class="text-[10px]"></i>
-                        {{ paceComparison.delta > 0 ? '+' : '' }}{{ formatPercent(paceComparison.delta) }} vs mês passado no dia {{ ritmo.dia }}
-                    </span>
-                </div>
-                <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: chrome.accent }"></span> Este mês · {{ formatPrice(paceComparison.hoje) }}</span>
-                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: chrome.context }"></span> Mês passado · {{ formatPrice(paceComparison.antes) }} no mesmo dia</span>
-                </div>
-                <ChartCanvas class="mt-2" type="line" :data="paceChartData" :options="paceChartOptions" />
-            </section>
-
-            <!-- 4. Mix de produtos por categoria -->
-            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-2">
-                <h3 class="text-base font-semibold">Faturamento por categoria</h3>
-                <p class="text-xs text-[var(--texto-suave)]">Mix de produtos · últimos 90 dias</p>
-                <ChartCanvas v-if="categories.length" class="mt-3" type="bar" :data="categoryChartData" :options="categoryChartOptions" />
-                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 90 dias.</p>
-            </section>
-        </div>
-
         <!-- Cauê (Shopee) e Diego (Mercado Livre): o que ajustar para vender
              mais, anúncio por anúncio (pedido 2026-10-11). -->
-        <section v-for="esp in ESPECIALISTAS" :key="esp.canal" class="mt-8 overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
+        <section v-for="esp in ESPECIALISTAS" :key="esp.canal" class="mt-4 overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3" :style="{ background: esp.fundo, color: esp.texto }">
                 <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-lg ring-1 ring-white/40"><i :class="esp.icone"></i></span>
                     <div>
                         <h2 class="text-lg font-bold leading-tight">{{ esp.nome }} · {{ esp.canalNome }}</h2>
-                        <p class="text-xs font-semibold">O que ajustar para vender mais · últimos 30 dias<template v-if="diagnosticos?.[esp.canal]"> · atualizado {{ quandoGerado(diagnosticos[esp.canal].gerado_em) }}</template></p>
+                        <p class="text-xs font-semibold">Anúncios que pedem ação · últimos 30 dias<template v-if="diagnosticos?.[esp.canal]"> · atualizado {{ quandoGerado(diagnosticos[esp.canal].gerado_em) }}</template></p>
                     </div>
                 </div>
             </div>
 
             <div v-if="!diagnostico(esp.canal)" class="p-6 text-sm text-[var(--texto-suave)]">
-                O primeiro diagnóstico ainda está sendo gerado (roda a cada 3 horas).
+                O primeiro diagnóstico sai em até 3 horas.
             </div>
             <template v-else>
+                <p v-if="horasDesde(diagnostico(esp.canal).gerado_em) > HORAS_DIAG_PARADO"
+                    class="mx-4 mt-4 flex items-center gap-2 rounded-lg bg-lightwarning px-3 py-2 text-sm font-semibold text-warning">
+                    <i class="fas fa-clock"></i>
+                    Diagnóstico sem atualizar há {{ Math.round(horasDesde(diagnostico(esp.canal).gerado_em)) }} h. Os números abaixo podem estar velhos.
+                </p>
                 <div class="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-6">
                     <div class="rounded-lg border border-[var(--surface-border)] p-3">
                         <p class="text-xs text-[var(--texto-suave)]">Pedidos</p>
@@ -788,8 +627,8 @@ const quandoGerado = (iso) => {
                         <p class="text-xs text-[var(--texto-suave)]">ROAS do ADS</p>
                         <p class="text-xl font-bold">{{ formatNum(diagnostico(esp.canal).kpis.ads_roas) }}</p>
                     </div>
-                    <div class="rounded-lg border border-[var(--surface-border)] p-3" title="ROAS mínimo para sobrar 15% de lucro, na média do que a loja vende">
-                        <p class="text-xs text-[var(--texto-suave)]">Meta de ROAS (15% de lucro)</p>
+                    <div class="rounded-lg border border-[var(--surface-border)] p-3" title="ROAS mínimo para sobrar 15% de margem, na média do que a loja vende">
+                        <p class="text-xs text-[var(--texto-suave)]">ROAS mínimo para 15% de margem</p>
                         <p class="text-xl font-bold" :class="(diagnostico(esp.canal).kpis.ads_roas ?? 0) >= (diagnostico(esp.canal).kpis.roas_meta_loja ?? 0) ? 'text-success' : 'text-error'">{{ formatNum(diagnostico(esp.canal).kpis.roas_meta_loja) }}</p>
                     </div>
                     <div class="rounded-lg border border-[var(--surface-border)] p-3">
@@ -804,7 +643,7 @@ const quandoGerado = (iso) => {
                 <div class="flex flex-wrap gap-2 px-4">
                     <button v-for="(cfg, chave) in PRIORIDADES" :key="chave" type="button"
                         class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition"
-                        :style="filtroDiag[esp.canal] === chave ? { background: cfg.cor, borderColor: cfg.cor, color: '#fff' } : { borderColor: cfg.cor, color: cfg.cor }"
+                        :style="diagnostico(esp.canal).filtro === chave ? { background: cfg.cor, borderColor: cfg.cor, color: '#fff' } : { borderColor: cfg.cor, color: cfg.cor }"
                         @click="filtroDiag[esp.canal] = chave; mostrarTodosDiag[esp.canal] = false">
                         <i :class="cfg.icone" class="text-xs"></i> {{ cfg.rotulo }}
                         <span class="rounded-full bg-black/10 px-2 text-xs">{{ diagnostico(esp.canal).contagem[chave] }}</span>
@@ -812,7 +651,13 @@ const quandoGerado = (iso) => {
                 </div>
 
                 <div class="p-4">
-                    <p v-if="!diagnostico(esp.canal).produtos.length" class="text-sm text-[var(--texto-suave)]">Nada nesta categoria. 👍</p>
+                    <p v-if="!diagnostico(esp.canal).produtos.length" class="text-sm text-[var(--texto-suave)]">
+                        Nenhum anúncio em {{ PRIORIDADES[diagnostico(esp.canal).filtro]?.rotulo }} agora.
+                        <button v-if="diagnostico(esp.canal).outra" type="button" class="font-semibold text-primary hover:underline"
+                            @click="filtroDiag[esp.canal] = diagnostico(esp.canal).outra">
+                            Ver {{ PRIORIDADES[diagnostico(esp.canal).outra].rotulo }} ({{ diagnostico(esp.canal).contagem[diagnostico(esp.canal).outra] }})
+                        </button>
+                    </p>
                     <ul v-else class="divide-y divide-[var(--surface-border)]">
                         <li v-for="g in (mostrarTodosDiag[esp.canal] ? diagnostico(esp.canal).produtos : diagnostico(esp.canal).produtos.slice(0, 6))" :key="g.produto.item_id" class="flex gap-3 py-3">
                             <img v-if="g.produto.imagem" :src="g.produto.imagem" alt="" class="h-14 w-14 shrink-0 rounded-lg border border-[var(--surface-border)] object-cover" loading="lazy">
@@ -823,13 +668,13 @@ const quandoGerado = (iso) => {
                                     <span>{{ formatPrice(g.produto.preco) }}</span>
                                     <span>{{ g.produto.vendas_30d }} {{ g.produto.vendas_30d === 1 ? 'vendido' : 'vendidos' }}</span>
                                     <span>margem {{ formatNum(g.produto.margem) }}%</span>
-                                    <span v-if="g.produto.roas_empate">ROAS empate {{ formatNum(g.produto.roas_empate) }}</span>
+                                    <span v-if="g.produto.roas_empate">ROAS para empatar {{ formatNum(g.produto.roas_empate) }}</span>
                                     <span v-if="g.produto.roas_meta && g.produto.roas_meta <= 25">meta {{ formatNum(g.produto.roas_meta) }}</span>
                                     <span v-if="g.produto.qualidade">qualidade: {{ g.produto.qualidade }}</span>
                                 </p>
                                 <ul class="mt-1.5 space-y-1">
                                     <li v-for="(a, i) in g.alertas" :key="i" class="flex items-start gap-2 text-sm">
-                                        <span class="mt-0.5 shrink-0 rounded px-1.5 text-[10px] font-bold uppercase text-white" :style="{ background: PRIORIDADES[a.prioridade]?.cor }">{{ PRIORIDADES[a.prioridade]?.rotulo }}</span>
+                                        <span class="mt-0.5 shrink-0 rounded px-1.5 text-[10px] font-bold text-white" :style="{ background: PRIORIDADES[a.prioridade]?.cor }">{{ PRIORIDADES[a.prioridade]?.rotulo }}</span>
                                         <span>{{ a.texto }}</span>
                                     </li>
                                 </ul>
@@ -856,6 +701,103 @@ const quandoGerado = (iso) => {
             </template>
         </section>
 
+
+        <!-- Indicadores do mês (pedido do usuário 2026-10-06): o mês até
+             hoje sempre contra os MESMOS dias do mês passado. -->
+        <h2 class="mt-8 mb-3 flex items-center gap-2 text-lg font-bold">
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm text-white"><i class="fas fa-gauge-high"></i></span>
+            Desempenho do mês
+        </h2>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div v-for="tile in kpiTiles" :key="tile.label"
+                class="flex min-w-0 flex-col rounded-xl border border-[var(--surface-border)] p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                :style="tileStyle(tile.color)">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="truncate text-sm text-[var(--texto-suave)]">{{ tile.label }}</p>
+                    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm text-white" :style="{ background: tile.color }">
+                        <i :class="tile.icon"></i>
+                    </span>
+                </div>
+                <p class="mt-1 truncate text-2xl font-bold">{{ tile.value }}</p>
+                <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[var(--texto-suave)]">
+                    <span v-if="tile.delta !== null" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold"
+                        :class="tile.delta >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
+                        <i :class="tile.delta >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'" class="text-[10px]"></i>
+                        {{ tile.delta > 0 ? '+' : '' }}{{ formatPercent(tile.delta) }}
+                    </span>
+                    <span>{{ tile.hint }}</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-5">
+            <!-- Ritmo do mês -->
+            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-3">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h3 class="text-base font-semibold">Ritmo do mês</h3>
+                        <p class="text-xs text-[var(--texto-suave)]">Faturamento acumulado dia a dia</p>
+                    </div>
+                    <span v-if="paceComparison.delta !== null" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
+                        :class="paceComparison.delta >= 0 ? 'bg-lightsuccess text-success' : 'bg-lighterror text-error'">
+                        <i :class="paceComparison.delta >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'" class="text-[10px]"></i>
+                        {{ paceComparison.delta > 0 ? '+' : '' }}{{ formatPercent(paceComparison.delta) }} vs mês passado no dia {{ ritmo.dia }}
+                    </span>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: chrome.accent }"></span> Este mês · {{ formatPrice(paceComparison.hoje) }}</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: chrome.context }"></span> Mês passado · {{ formatPrice(paceComparison.antes) }} no mesmo dia</span>
+                </div>
+                <ChartCanvas v-if="paceComparison.hoje > 0 || ritmo.anterior.some((v) => v > 0)" class="mt-2" type="line" :data="paceChartData" :options="paceChartOptions" />
+                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Ainda sem vendas este mês.</p>
+            </section>
+            <!-- Faturamento por categoria -->
+            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-2">
+                <h3 class="text-base font-semibold">Faturamento por categoria</h3>
+                <p class="text-xs text-[var(--texto-suave)]">Últimos 90 dias</p>
+                <ChartCanvas v-if="categories.length" class="mt-3" type="bar" :data="categoryChartData" :options="categoryChartOptions" />
+                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 90 dias.</p>
+            </section>
+            <!-- Faturamento mês a mês por canal -->
+            <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm xl:col-span-5">
+                <h3 class="text-base font-semibold">Faturamento mês a mês por canal</h3>
+                <p class="text-xs text-[var(--texto-suave)]">Últimos 12 meses · passe o mouse para ver cada canal</p>
+                <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span v-for="channel in monthlyChannels" :key="channel" class="inline-flex items-center gap-1.5">
+                        <span class="h-2.5 w-2.5 rounded-sm" :style="{ background: channelColor(channel) }"></span>
+                        {{ channelName(channel) }}
+                    </span>
+                </div>
+                <ChartCanvas v-if="monthlyTotals.length" class="mt-2" type="bar" :data="monthlyChartData" :options="monthlyChartOptions" />
+                <p v-else class="mt-6 text-sm text-[var(--texto-suave)]">Sem vendas nos últimos 12 meses.</p>
+            </section>
+        </div>
+
+        <!-- Fundos em degradê (pedido 2026-10-11, mesmas cores dos cards
+             "Adapta"): vinho/rosa aqui. Texto branco.
+             Cards de canal sem faixa lateral (pedido 2026-10-11). -->
+        <section class="card-degrade card-degrade--vinho mt-8 p-4 text-white">
+            <div class="flex items-center gap-2">
+                <span class="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm ring-1 ring-white/30"><i class="fas fa-store"></i></span>
+                <h3 class="text-base font-semibold">Faturamento por canal</h3>
+                <span class="text-xs text-white/80">· mês até hoje</span>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+                <div v-for="row in channelStrip" :key="row.origin"
+                    class="min-w-0 rounded-lg bg-white/12 px-3 py-2.5 ring-1 ring-white/20">
+                    <p class="flex items-center gap-1.5 truncate text-xs font-semibold text-white/90">
+                        <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: channelColor(row.origin) }"></span>
+                        {{ channelName(row.origin) }}
+                    </p>
+                    <p class="truncate text-lg font-bold" :class="row.total > 0 ? 'text-white' : 'text-white/70'">{{ formatPrice(row.total) }}</p>
+                    <div class="mt-1 h-1 rounded-full bg-white/20">
+                        <div class="h-1 rounded-full bg-white" :style="{ width: `${row.share}%` }"></div>
+                    </div>
+                    <p class="mt-1 text-[11px] text-white/80">{{ row.total > 0 ? `${formatPercent(row.share)} do mês` : 'sem vendas no mês' }}</p>
+                </div>
+            </div>
+        </section>
+
         <!-- Produtos: cada card com a sua cor, ranking e a barra de peso. -->
         <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <section class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm transition duration-200 hover:shadow-md"
@@ -880,7 +822,7 @@ const quandoGerado = (iso) => {
                                     <span class="min-w-0 truncate">
                                         <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
                                         <span v-else>{{ product.name }}</span>
-                                        <span v-if="product.color" class="block text-xs font-semibold uppercase text-[var(--texto-suave)]">{{ product.color }}</span>
+                                        <span v-if="product.color" class="block text-xs font-semibold text-[var(--texto-suave)]">{{ product.color }}</span>
                                     </span>
                                 </span>
                                 <span class="shrink-0 text-right">
@@ -915,7 +857,7 @@ const quandoGerado = (iso) => {
                                 <span class="min-w-0 truncate">
                                     <Link v-if="product.id" :href="`/admin/produtos/${product.id}/editar`" class="hover:text-primary hover:underline">{{ product.name }}</Link>
                                     <span v-else>{{ product.name }}</span>
-                                    <span v-if="product.color" class="block text-xs font-semibold uppercase text-[var(--texto-suave)]">{{ product.color }}</span>
+                                    <span v-if="product.color" class="block text-xs font-semibold text-[var(--texto-suave)]">{{ product.color }}</span>
                                 </span>
                                 <span class="shrink-0 text-right">
                                     <span class="block font-semibold">{{ formatPrice(product.revenue) }}</span>
@@ -931,6 +873,44 @@ const quandoGerado = (iso) => {
                 </div>
             </section>
         </div>
+        <!-- Acessos ao site (pedido 2026-10-11), no fim da tela desde
+             2026-10-14: o filtro de mês vale só para este bloco. -->
+        <section class="card-degrade card-acessos mt-8 overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">
+                <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#198754] text-white"><i class="fas fa-globe"></i></span>
+                    <h3 class="text-lg font-semibold">Acessos ao site kazakora.com</h3>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <i v-if="carregandoVisitas" class="fas fa-circle-notch fa-spin"></i>
+                    <span class="text-[#6b7280]">Mês <span class="text-[#9ca3af]">(só dos acessos)</span></span>
+                    <select v-model="mesVisitas" @change="trocarMesVisitas"
+                        class="visitas-mes rounded-lg border-0 py-1.5 pl-3 pr-8 text-sm font-medium shadow-sm ring-1 ring-[#d1d5db] focus:ring-2 focus:ring-[#198754]/50">
+                        <option v-for="m in visitantes.meses" :key="m" :value="m">{{ formatMonthLong(m) }}</option>
+                    </select>
+                </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4" :class="{ 'opacity-60': carregandoVisitas }">
+                <div v-for="tile in visitTiles" :key="tile.label" class="min-w-0 rounded-lg bg-[#f8faf9] p-3 ring-1 ring-[#e5e7eb]">
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="truncate text-xs font-semibold text-[#6b7280]">{{ tile.label }}</p>
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm shadow-sm" :style="{ color: tile.color }"><i :class="tile.icon"></i></span>
+                    </div>
+                    <p class="mt-1 truncate text-3xl font-bold">{{ tile.value }}</p>
+                    <p class="truncate text-xs text-[#6b7280]">{{ tile.hint }}</p>
+                </div>
+            </div>
+            <div class="px-4 pb-4" :class="{ 'opacity-60': carregandoVisitas }">
+                <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#6b7280]">
+                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.bar }"></span> Visitantes</span>
+                    <span v-if="visitantes.mesAtual" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" :style="{ background: visitColors.today }"></span> Hoje</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="h-0.5 w-4 rounded" :style="{ background: visitColors.line }"></span> Páginas vistas</span>
+                </div>
+                <ChartCanvas v-if="visitantes.visitantesMes > 0" class="mt-2" type="bar" :data="visitChartData" :options="visitChartOptions" />
+                <p v-else class="mt-4 text-sm text-[#6b7280]">Nenhum acesso de cliente neste mês.</p>
+            </div>
+        </section>
+
     </AdminLayout>
 </template>
 
@@ -939,22 +919,18 @@ const quandoGerado = (iso) => {
 .card-degrade {
     border-radius: 16px;
     box-shadow: inset 0 8px 12px 0 rgba(255, 255, 255, 0.1), 0 4px 14px rgba(15, 23, 42, 0.12);
-    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.card-degrade:hover {
-    transform: translateY(-4px);
-}
-.card-degrade--verde {
-    background: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
+    }
+.card-acessos {
+    /* Fundo branco nos dois temas (pedido 2026-10-14). */
+    background: #ffffff;
+    color: #1f1a1c;
+    border: 1px solid #e5e7eb;
 }
 .card-degrade--vinho {
     background: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
 }
-@media (prefers-reduced-motion: reduce) {
-    .card-degrade:hover { transform: none; }
-}
 
-/* Select do mês no card verde: fundo branco e texto escuro nos dois temas. */
+/* Select do mês no card de acessos: fundo branco e texto escuro nos dois temas. */
 .visitas-mes,
 .visitas-mes option {
     background-color: #ffffff;

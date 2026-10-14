@@ -4,8 +4,9 @@
  * com o resultado em reais e uma situação para decidir de olho. O botão
  * Ação do Cauê (AcaoCaue.vue, tarefa 569) pausa, retoma ou muda a meta de
  * ROAS só com o clique do Lira; sem SHOPEE_ADS_ESCRITA=true ele simula. Ver
- * PublicidadeShopeeController e EstrategiaShopeeAds. Visual preto com fonte
- * branca nos dois temas, cards e tabelas em grafite (.shopee-preto no app.css).
+ * PublicidadeShopeeController e EstrategiaShopeeAds. No tema escuro, visual
+ * preto com fonte branca, cards e tabelas em grafite (.shopee-preto no
+ * app.css); no claro, o padrão das outras telas.
  *
  * UX do Jonathan (2026-10-14): a tela abre com os 4 cards (pedido do Lira,
  * acima da conclusão em uma frase), depois a conclusão e "Decida hoje". A

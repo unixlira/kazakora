@@ -8,13 +8,51 @@ import { usePermissions } from '@/Shared/usePermissions';
 import { sidebarSections } from '@/Shared/adminSidebarItems';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
+import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const notifications = computed(() => page.props.notifications?.items ?? []);
 const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
 // Contador por item do menu (ex.: alertas abertos dos Envios Flex).
-const sidebarBadge = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
+// Clicou no item: o alerta some. Guardamos o número visto no navegador; o
+// badge só volta se a contagem passar desse número (alerta novo).
+const BADGES_VISTOS_KEY = 'admin.sidebarBadgesVistos';
+const badgesVistos = ref({});
+try {
+    badgesVistos.value = JSON.parse(localStorage.getItem(BADGES_VISTOS_KEY) ?? '{}') || {};
+} catch {
+    badgesVistos.value = {};
+}
+const contagemBruta = (item) => (item.badgeKey ? page.props.sidebarBadges?.[item.badgeKey] ?? 0 : 0);
+const sidebarBadge = (item) => {
+    const total = contagemBruta(item);
+    const visto = badgesVistos.value[item.badgeKey] ?? 0;
+    return total > visto ? total : 0;
+};
+const dispensarBadge = (item) => {
+    if (!item.badgeKey) return;
+    badgesVistos.value = { ...badgesVistos.value, [item.badgeKey]: contagemBruta(item) };
+    try {
+        localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(badgesVistos.value));
+    } catch { /* storage indisponível: vale só nesta sessão */ }
+};
+// Contagem caiu abaixo do visto (pendência resolvida): o visto acompanha, para
+// que o próximo alerta novo volte a aparecer.
+watch(() => page.props.sidebarBadges, (badges) => {
+    if (!badges) return;
+    const ajustado = { ...badgesVistos.value };
+    let mudou = false;
+    for (const [chave, visto] of Object.entries(ajustado)) {
+        const total = badges?.[chave] ?? 0;
+        if (total < visto) { ajustado[chave] = total; mudou = true; }
+    }
+    if (!mudou) return;
+    badgesVistos.value = ajustado;
+    try {
+        localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(ajustado));
+    } catch { /* idem */ }
+}, { immediate: true });
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
 // Menu fechado mostra o favicon da marca (o customizado de produção, se houver).
@@ -101,6 +139,15 @@ const activeHref = computed(() => {
         .sort((a, b) => b.length - a.length)[0] ?? null;
 });
 const isActive = (href) => href === activeHref.value;
+
+// Todo ícone do menu tem cor, ativo ou não (Lira, 2026-10-14): item de marca
+// na cor da marca (app.css, .icone-marca), o resto na cor do assunto
+// (app.css, .icone-cor). A setinha da seção usa a cor do primeiro item.
+const classeIcone = (item) => {
+    if (item.marca) return `icone-marca icone-${item.marca}`;
+    return `icone-cor icone-cor-${item.cor ?? 'azul'}`;
+};
+const classeSeta = (section) => classeIcone(section.items[0] ?? {});
 
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
@@ -223,7 +270,7 @@ watch(
 </script>
 
 <template>
-    <div class="admin-shell flex min-h-screen flex-col bg-[var(--fundo)] text-[var(--surface-foreground)]">
+    <div class="admin-shell admin-fundo flex min-h-screen flex-col bg-[var(--fundo)] text-[var(--surface-foreground)]">
         <!-- Sidebar -->
         <!-- Celular (2026-10-11): o cabeçalho é uma faixa só (a do topo, com
         hambúrguer e logo). Este menu vira uma gaveta aberta por cima da
@@ -237,7 +284,7 @@ watch(
                         <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                         <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
                     </Link>
-                    <button type="button" class="text-[var(--icone-menu)] hover:text-[var(--destaque)]" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
+                    <button type="button" class="icone-cor icone-cor-azul hover:opacity-80" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
                         <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
                     </button>
                 </div>
@@ -252,7 +299,7 @@ watch(
                 <div class="h-auto w-full basis-full items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:w-auto md:flex-1 md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
                     :class="collapseShow">
                     <div v-for="section in visibleSections" :key="section.heading" class="mb-1">
-                        <button v-if="!sidebarCollapsed" type="button"
+                        <button v-if="!sidebarCollapsed && !section.direto" type="button"
                             class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold uppercase tracking-wide transition-colors"
                             :class="secaoExpandida(section.heading)
                                 ? 'text-[var(--surface-foreground)]'
@@ -261,22 +308,23 @@ watch(
                             <span class="flex-1 truncate">{{ section.heading }}</span>
                             <span v-if="!secaoExpandida(section.heading) && badgeDaSecao(section) > 0"
                                 class="min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-[10px] font-bold leading-5 text-white">{{ badgeDaSecao(section) }}</span>
-                            <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': secaoExpandida(section.heading) }"></i>
+                            <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeSeta(section), { 'rotate-180': secaoExpandida(section.heading) }]"></i>
                         </button>
 
-                        <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
+                        <ul v-show="sidebarCollapsed || section.direto || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
                             <li v-for="item in section.items" :key="item.href">
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja
-                                no escuro) e barra de 3px à esquerda. Ícones numa cor só. -->
+                                no escuro) e barra de 3px à esquerda. Ícones sempre coloridos
+                                (2026-10-14), ativos ou não: cor da marca ou do assunto. -->
                                 <div class="flex items-center">
                                     <Link :href="item.href" :title="item.label"
                                         class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
                                         :class="isActive(item.href)
                                             ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
-                                        :aria-current="isActive(item.href) ? 'page' : undefined">
-                                        <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                        :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
+                                        <i class="w-8 text-center text-sm" :class="[item.icon, classeIcone(item)]"></i>
                                         <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                         <span v-if="sidebarBadge(item) > 0"
                                             class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
@@ -288,7 +336,7 @@ watch(
                                         class="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30"
                                         :title="submenuAberto(item) ? 'Recolher' : 'Expandir'" :aria-label="`${submenuAberto(item) ? 'Recolher' : 'Expandir'} ${item.label}`"
                                         :aria-expanded="submenuAberto(item)" @click="alternarSubmenu(item)">
-                                        <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': submenuAberto(item) }"></i>
+                                        <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeIcone(item), { 'rotate-180': submenuAberto(item) }]"></i>
                                     </button>
                                 </div>
                                 <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
@@ -301,7 +349,7 @@ watch(
                                                 ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
                                                 : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
-                                            <i class="w-8 text-center text-xs" :class="[filho.icon, isActive(filho.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                            <i class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
                                             <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>
                                         </Link>
                                     </li>
@@ -316,35 +364,31 @@ watch(
                         <li v-if="user?.role === 'admin'">
                             <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
                                 :class="urlPath === '/admin/filas' ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
-                                <i class="fas fa-layer-group w-8 text-center text-sm" :class="urlPath === '/admin/filas' ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]'"></i>
+                                <i class="fas fa-layer-group icone-cor icone-cor-violeta w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Horizon</span>
                             </Link>
                         </li>
                         <li>
                             <Link href="/" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
-                                <i class="fas fa-store w-8 text-center text-sm text-[var(--icone-menu)]"></i>
+                                <i class="fas fa-store icone-marca icone-kazakora w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
                             </Link>
                         </li>
                         <li>
                             <button type="button" class="flex w-full items-center gap-2 border-l-[3px] border-transparent py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
-                                <i class="fas fa-sign-out-alt w-8 text-center text-sm text-[var(--icone-menu)]"></i>
+                                <i class="fas fa-sign-out-alt icone-cor icone-cor-vermelho w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Sair</span>
                             </button>
                         </li>
                     </ul>
                 </div>
 
-                <!-- Sidebar footer: user profile -->
-                <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full items-center gap-3 border-t border-[var(--surface-border)] py-4 md:flex">
-                    <img v-if="user?.avatar_url" :src="user.avatar_url" class="h-9 w-9 rounded-full object-cover" alt="">
-                    <span v-else class="flex h-9 w-9 items-center justify-center rounded-full bg-lightprimary text-sm font-semibold text-primary">
-                        {{ user?.initials }}
-                    </span>
-                    <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold">{{ user?.name }}</p>
-                        <p class="truncate text-xs capitalize text-slate-400">{{ user?.role }}</p>
-                    </div>
+                <!-- Sidebar footer: versão do sistema -->
+                <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full flex-col items-center gap-0.5 border-t border-[var(--surface-border)] py-4 text-center md:flex">
+                    <p class="truncate text-xs font-bold text-slate-400">Versão 1.12.0</p>
+                    <p class="truncate text-xs text-slate-400">Desenvolvido por KoraTech</p>
+                    <!-- Selo oficial RA Verificada (2026-10-14), discreto. -->
+                    <SeloReclameAqui class="mt-2 rounded-md opacity-80 transition hover:opacity-100" :altura="36" />
                 </div>
             </div>
         </nav>
@@ -479,7 +523,7 @@ watch(
                 </div>
             </nav>
 
-            <div class="relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
+            <div class="admin-conteudo relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
                 <slot />
 
                 <!-- Loader de troca de tela: só a área de conteúdo, menu e topo

@@ -136,6 +136,35 @@
 }
 
 /*
+ * Fundo do admin em degradê (Lira, 2026-10-14): verde no claro, vinho no
+ * escuro, parado na tela enquanto a página rola. Texto solto sobre o degradê
+ * (títulos, legendas) fica branco; dentro dos cards (bg-white ou
+ * bg-[var(--surface)]) volta à cor normal do tema. Para voltar ao fundo
+ * liso, apague este bloco.
+ */
+.admin-fundo {
+    min-height: 100vh;
+    background-image: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
+    background-attachment: fixed;
+    background-size: cover;
+}
+.dark .admin-fundo {
+    background-image: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
+}
+.admin-fundo .admin-corpo {
+    color: #ffffff;
+}
+.admin-fundo .admin-corpo :is(.bg-white, .bg-\[var\(--surface\)\]) {
+    color: var(--surface-foreground);
+}
+.admin-fundo .admin-corpo :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-gray-400, .text-gray-500, .text-gray-600):not(:is(.bg-white, .bg-\[var\(--surface\)\]) *) {
+    color: rgb(255 255 255 / 0.85);
+}
+.admin-fundo .admin-corpo :is(.text-slate-700, .text-slate-800, .text-slate-900, .text-gray-700, .text-gray-800, .text-gray-900, .text-black):not(:is(.bg-white, .bg-\[var\(--surface\)\]) *) {
+    color: #ffffff;
+}
+
+/*
  * Topo do admin (Lira, 2026-10-14): fixo no alto, sem mudar de forma nem de
  * posição em nenhum tema. No tema claro fica sempre o padrão (branco). Só no
  * tema escuro, com a página rolada, vira vidro fumê translúcido (mesma

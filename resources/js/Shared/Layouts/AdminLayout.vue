@@ -260,7 +260,7 @@ watch(
 </script>
 
 <template>
-    <div class="admin-shell flex min-h-screen flex-col bg-[var(--fundo)] text-[var(--surface-foreground)]">
+    <div class="admin-shell admin-fundo flex min-h-screen flex-col bg-[var(--fundo)] text-[var(--surface-foreground)]">
         <!-- Sidebar -->
         <!-- Celular (2026-10-11): o cabeçalho é uma faixa só (a do topo, com
         hambúrguer e logo). Este menu vira uma gaveta aberta por cima da
@@ -516,7 +516,7 @@ watch(
                 </div>
             </nav>
 
-            <div class="relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
+            <div class="admin-corpo relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
                 <slot />
 
                 <!-- Loader de troca de tela: só a área de conteúdo, menu e topo

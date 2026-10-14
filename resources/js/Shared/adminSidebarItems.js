@@ -134,6 +134,8 @@ export const sidebarSections = [
             // Google ADS (2026-10-12): integração ainda não conectada, a tela
             // mostra o estado vazio (PlataformaDeAnuncio).
             { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', permission: 'financeiro.view' },
+            // Shopee › Estratégia (tarefas 568/569, 2026-10-14): ADS com prejuízo.
+            { label: 'Estratégia Shopee', href: '/admin/publicidade/shopee/estrategia', icon: 'fas fa-chess', permission: 'financeiro.view' },
             { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
             { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },

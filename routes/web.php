@@ -584,6 +584,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
         Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
         Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
+        // Shopee › Estratégia (tarefas 568/569, 2026-10-14): ADS com prejuízo e a
+        // decisão do Cauê. Só leitura; "Atualizar agora" só limpa o cache.
+        Route::get('publicidade/shopee/estrategia', [\App\Modules\Admin\Http\Controllers\ShopeeEstrategiaController::class, 'index'])->name('publicidade.shopee.estrategia');
+        Route::post('publicidade/shopee/estrategia/atualizar', [\App\Modules\Admin\Http\Controllers\ShopeeEstrategiaController::class, 'atualizar'])->middleware('throttle:6,1')->name('publicidade.shopee.estrategia.atualizar');
     });
     // Meta ADS, campanhas de vídeo (2026-10-13): Lira sobe os vídeos e a
     // campanha vai para a Meta com o orçamento dividido entre eles. Ver é

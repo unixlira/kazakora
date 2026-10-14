@@ -183,8 +183,12 @@ class DiagnosticoShopee
         return $r;
     }
 
-    /** Gasto, GMV e meta de ROAS de cada item com campanha de ADS por produto, nos últimos 30 dias. */
-    private function adsPorItem(Carbon $desde): array
+    /**
+     * Gasto, GMV e meta de ROAS de cada item com campanha de ADS por produto,
+     * desde a data pedida. Público: a tela Publicidade › Shopee › Estratégia
+     * (EstrategiaShopee) usa os mesmos números.
+     */
+    public function adsPorItem(Carbon $desde): array
     {
         try {
             $campanhas = [];
@@ -209,10 +213,12 @@ class DiagnosticoShopee
                     }
                     $itemDaCampanha[(string) $c['campaign_id']] = $item;
                     $ativo = in_array($c['common_info']['campaign_status'] ?? '', ['ongoing', 'scheduled'], true);
-                    $porItem[$item] ??= ['ativo' => false, 'meta' => 0.0, 'gasto' => 0.0, 'gmv' => 0.0, 'pedidos' => 0, 'cliques' => 0, 'impressoes' => 0];
+                    $porItem[$item] ??= ['ativo' => false, 'meta' => 0.0, 'gasto' => 0.0, 'gmv' => 0.0, 'pedidos' => 0, 'cliques' => 0, 'impressoes' => 0, 'campanha_id' => (string) $c['campaign_id'], 'status' => (string) ($c['common_info']['campaign_status'] ?? '')];
                     $porItem[$item]['ativo'] = $porItem[$item]['ativo'] || $ativo;
                     if ($ativo) {
                         $porItem[$item]['meta'] = (float) ($c['auto_bidding_info']['roas_target'] ?? 0);
+                        $porItem[$item]['campanha_id'] = (string) $c['campaign_id'];
+                        $porItem[$item]['status'] = (string) ($c['common_info']['campaign_status'] ?? '');
                     }
                 }
                 $desempenho = $this->shopee->get('/api/v2/ads/get_product_campaign_daily_performance', [
@@ -238,6 +244,8 @@ class DiagnosticoShopee
             foreach ($porItem as &$a) {
                 $a['roas'] = $a['gasto'] > 0 ? round($a['gmv'] / $a['gasto'], 1) : 0.0;
                 $a['ctr'] = $a['impressoes'] > 0 ? round($a['cliques'] / $a['impressoes'] * 100, 1) : 0.0;
+                // Conversão do anúncio (a do Seller Bump): pedidos ÷ cliques.
+                $a['conversao'] = $a['cliques'] > 0 ? round($a['pedidos'] / $a['cliques'] * 100, 2) : null;
             }
 
             return $porItem;

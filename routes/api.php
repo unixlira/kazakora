@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BeautyKoraCatalogoController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
+use App\Http\Controllers\Api\FerraKoraCheckoutController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -212,6 +213,14 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
     Route::get('produtos/{id}', [FerraKoraCatalogoController::class, 'show'])
         ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
     Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+
+    // Checkout próprio do FerraKora (2026-10-14): pedido e Mercado Pago pelo KazaKora.
+    Route::prefix('checkout')->name('checkout.')->group(function () {
+        Route::post('resumo', [FerraKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1')->name('resumo');
+        Route::post('pedido', [FerraKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1')->name('pedido');
+        Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1')->name('status');
+        Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1')->name('cep');
+    });
 });
 
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase

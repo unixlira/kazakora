@@ -290,7 +290,7 @@ class PainelDeAlertas
             $this->metrica('ctr', 'CTR', $ctr($a), $ctr($p), 'pct', 'alto', isset(self::CTR_MINIMO[$canal]) ? 'mín. '.$this->pct(self::CTR_MINIMO[$canal]) : null),
             $this->metrica('cpc', 'CPC', $cpc($a), $cpc($p), 'moeda', 'baixo'),
             $this->metrica('cpa', 'CPA (custo por pedido)', $cpa($a), $cpa($p), 'moeda', 'baixo', $lucroPorPedido > 0 ? 'lucro/pedido R$ '.$this->moeda($lucroPorPedido) : null),
-            $this->metrica('conversao_ads', 'Conversão do ADS', $conv($a), $conv($p), 'pct', 'alto', isset(self::CONVERSAO_ADS_MINIMA[$canal]) ? 'mín. '.$this->pct(self::CONVERSAO_ADS_MINIMA[$canal]) : null),
+            $this->metrica('conversao_ads', 'Conversão do ADS', $conv($a), $conv($p), 'pct', 'alto', isset(self::CONVERSAO_ADS_MINIMA[$canal]) ? 'mín. '.$this->pct(self::CONVERSAO_ADS_MINIMA[$canal], 2) : null),
         ], null, 'chave');
 
         if (! $a || $a['gasto'] < self::ADS_GASTO_MINIMO) {
@@ -341,7 +341,7 @@ class PainelDeAlertas
 
         $cv = $conv($a);
         if ($cv !== null && $a['cliques'] >= 100 && isset(self::CONVERSAO_ADS_MINIMA[$canal]) && $cv < self::CONVERSAO_ADS_MINIMA[$canal]) {
-            $alertas[] = $this->alerta(self::ATENCAO, 'ads', $canal, 'Conversão do ADS', "{$nome} ADS: só {$this->pct($cv)} dos cliques viram pedido (mín. {$this->pct(self::CONVERSAO_ADS_MINIMA[$canal])}).", 'Muito clique e pouca venda: o problema está depois do clique (preço, fotos, descrição, frete, avaliações).', 0, $link);
+            $alertas[] = $this->alerta(self::ATENCAO, 'ads', $canal, 'Conversão do ADS', "{$nome} ADS: só {$this->pct($cv)} dos cliques viram pedido (mín. {$this->pct(self::CONVERSAO_ADS_MINIMA[$canal], 2)}).", 'Muito clique e pouca venda: o problema está depois do clique (preço, fotos, descrição, frete, avaliações).', 0, $link);
             $m['conversao_ads']['nivel'] = self::ATENCAO;
         }
 
@@ -516,11 +516,9 @@ class PainelDeAlertas
         return number_format((float) $v, 2, ',', '.');
     }
 
-    private function pct(int|float|null $v): string
+    /** Uma casa; a referência de conversão do ADS (1,65%) pede duas. */
+    private function pct(int|float|null $v, int $casas = 1): string
     {
-        // Uma casa; duas só quando a referência tem (1,65%).
-        $casas = round((float) $v, 1) == round((float) $v, 2) ? 1 : 2;
-
         return number_format((float) $v, $casas, ',', '.').'%';
     }
 

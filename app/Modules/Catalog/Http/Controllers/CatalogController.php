@@ -43,6 +43,7 @@ class CatalogController extends Controller
         $baseQuery = Product::query()
             ->forCard()
             ->where('is_active', true)
+            ->comEstoque()
             // Variações continuam com página própria e compra própria, mas
             // não podem aparecer como cards soltos na vitrine: o cliente
             // precisa ver um anúncio/produto e escolher a variação dentro
@@ -167,6 +168,7 @@ class CatalogController extends Controller
         $relatedProducts = Product::query()
             ->forCard()
             ->where('is_active', true)
+            ->comEstoque()
             ->whereNull('parent_product_id')
             ->where('id', '!=', $product->id)
             ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
@@ -181,6 +183,7 @@ class CatalogController extends Controller
                 Product::query()
                     ->forCard()
                     ->where('is_active', true)
+                    ->comEstoque()
                     ->whereNull('parent_product_id')
                     ->whereNotIn('id', $excludeIds)
                     ->latest()

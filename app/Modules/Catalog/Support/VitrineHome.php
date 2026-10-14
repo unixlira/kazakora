@@ -92,13 +92,13 @@ class VitrineHome
     {
         return Category::query()
             ->where(fn ($query) => collect(self::PALAVRAS_CASA)->each(fn ($palavra) => $query->orWhere('name', 'like', "%{$palavra}%")))
-            ->withCount(['products' => fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id')])
+            ->withCount(['products' => fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id')->comEstoque()])
             ->orderByDesc('products_count')
             ->get(['id', 'slug', 'name']);
     }
 
     private function ativos()
     {
-        return Product::query()->where('is_active', true)->whereNull('parent_product_id')->where('stock', '>', 0);
+        return Product::query()->where('is_active', true)->whereNull('parent_product_id')->comEstoque();
     }
 }

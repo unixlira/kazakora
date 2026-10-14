@@ -196,6 +196,22 @@ class Product extends Model
      * (relatedReviewableIds em CatalogController::show) — sem ele uma
      * variação viraria silenciosamente um produto solto.
      */
+    /**
+     * Produto esgotado não aparece na loja (pedido 2026-10-13): vitrine,
+     * busca, departamentos e relacionados. Pai de variações conta como
+     * disponível se alguma variação ativa tiver estoque. A página do produto
+     * continua abrindo pelo link direto (mostra "esgotado").
+     */
+    public function scopeComEstoque(Builder $query): Builder
+    {
+        return $query->where(fn ($q) => $q->where('products.stock', '>', 0)
+            ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('products as variacoes_estoque')
+                ->whereColumn('variacoes_estoque.parent_product_id', 'products.id')
+                ->where('variacoes_estoque.is_active', true)
+                ->whereNull('variacoes_estoque.deleted_at')
+                ->where('variacoes_estoque.stock', '>', 0)));
+    }
+
     public function scopeForCard(Builder $query): Builder
     {
         return $query

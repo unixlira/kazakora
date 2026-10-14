@@ -81,10 +81,12 @@ class EnviosFlexController extends Controller
         $naFila = $candidatos->filter(fn (ChannelShipment $envio) => $this->controle->naFila($envio))->values();
         $entregues = $doMes->filter(fn (ChannelShipment $envio) => $this->controle->entregue($envio))->values();
 
-        $abas = ['alertas', 'fila', 'entregues', 'todos'];
+        // Abre em "Entregues do mês" (pedido do Lira em 14/10); alertas
+        // continuam a um clique, no card e na terceira aba.
+        $abas = ['entregues', 'fila', 'alertas', 'todos'];
         $aba = in_array($request->string('aba')->toString(), $abas, true)
             ? $request->string('aba')->toString()
-            : ($comAlerta->isNotEmpty() ? 'alertas' : 'todos');
+            : 'entregues';
 
         $lista = match ($aba) {
             'alertas' => $comAlerta->concat($canceladas)->unique('id')->values(),

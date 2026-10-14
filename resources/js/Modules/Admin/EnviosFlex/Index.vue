@@ -112,9 +112,9 @@ const desfazerJustificativa = () => {
 const podeJustificar = computed(() => justificativaMotivo.value && (justificativaMotivo.value !== 'outro' || justificativaNota.value.trim()));
 
 const abas = computed(() => [
-    { chave: 'alertas', rotulo: `Alertas (${props.resumo.alertas})`, icone: 'fa-triangle-exclamation', ativa: 'bg-error text-white', hover: 'hover:bg-lighterror' },
-    { chave: 'fila', rotulo: `Na fila de entrega (${props.resumo.naFila})`, icone: 'fa-route', ativa: 'bg-warning text-white', hover: 'hover:bg-lightwarning' },
     { chave: 'entregues', rotulo: 'Entregues do mês', icone: 'fa-circle-check', ativa: 'bg-success text-white', hover: 'hover:bg-lightsuccess' },
+    { chave: 'fila', rotulo: `Na fila de entrega (${props.resumo.naFila})`, icone: 'fa-route', ativa: 'bg-warning text-white', hover: 'hover:bg-lightwarning' },
+    { chave: 'alertas', rotulo: `Alertas (${props.resumo.alertas})`, icone: 'fa-triangle-exclamation', ativa: 'bg-error text-white', hover: 'hover:bg-lighterror' },
     { chave: 'todos', rotulo: 'Todos do mês', icone: 'fa-list', ativa: 'bg-primary text-white', hover: 'hover:bg-lightprimary' },
 ]);
 const mostraMes = computed(() => ['entregues', 'todos'].includes(props.filtros.aba));

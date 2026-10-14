@@ -142,4 +142,60 @@ class AutoImportMatchesExistingProductBySkuTest extends TestCase
             'external_id' => 'MLB4923941751',
         ]);
     }
+
+    /**
+     * BUG REAL 2026-10-14: o produto já tinha uma linha de rascunho pro ML
+     * com external_id NULL; o importador tentava inserir uma segunda linha,
+     * estourava a constraint (product_id, channel) e a venda não entrava.
+     */
+    public function test_mercado_livre_fills_a_draft_listing_without_external_id(): void
+    {
+        MercadoLivreToken::query()->create([
+            'id' => (string) Str::uuid(),
+            'ml_user_id' => 654321,
+            'ml_nickname' => 'LOJA_KAZAKORA',
+            'access_token' => 'fake-access-token',
+            'refresh_token' => 'fake-refresh-token',
+            'token_expires_at' => now()->addHours(6),
+            'scopes' => ['offline_access', 'read', 'write'],
+        ]);
+
+        MarketplaceAccount::create([
+            'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'status' => MarketplaceAccount::STATUS_CONNECTED,
+            'seller_id' => '654321',
+            'access_token' => 'fake-access-token',
+            'refresh_token' => 'fake-refresh-token',
+            'token_expires_at' => now()->addHours(4),
+            'connected_at' => now(),
+        ]);
+
+        $existing = Product::factory()->create(['sku' => 'CAI-SEM-85-PRE-0001']);
+
+        $draft = ProductChannelListing::query()->create([
+            'product_id' => $existing->id,
+            'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+            'external_id' => null,
+            'is_enabled' => false,
+            'status' => 'draft',
+        ]);
+
+        Http::fake(['*/items/MLB7665453798*' => Http::response([
+            'id' => 'MLB7665453798',
+            'title' => 'Caixa Sanfonada de Ferramentas 85 Peças',
+            'price' => 199.90,
+            'available_quantity' => 5,
+            'attributes' => [
+                ['id' => 'SELLER_SKU', 'name' => 'SKU', 'value_name' => 'CAI-SEM-85-PRE-0001'],
+            ],
+        ])]);
+
+        $product = app(MercadoLivreDriver::class)->autoImportProduct('MLB7665453798', 1);
+
+        $this->assertSame($existing->id, $product->id);
+        $this->assertSame(1, ProductChannelListing::query()->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)->count());
+        $this->assertSame('MLB7665453798', $draft->fresh()->external_id);
+        $this->assertSame(ProductChannelListing::STATUS_PUBLISHED, $draft->fresh()->status);
+        $this->assertTrue((bool) $draft->fresh()->is_enabled);
+    }
 }

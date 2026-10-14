@@ -1,0 +1,73 @@
+<script setup>
+import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import { DataTable } from '@/Shared/Components/DataTable';
+import { usePermissions } from '@/Shared/usePermissions';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { h } from 'vue';
+import { formatarData, formatarReais, STATUS_ESTILOS } from './metaAds';
+
+const props = defineProps({
+    campanhas: { type: Array, default: () => [] },
+    config: { type: Object, required: true },
+});
+
+const { can } = usePermissions();
+
+const periodo = (c) => (c.fim ? `${formatarData(c.inicio)} a ${formatarData(c.fim)}` : `A partir de ${formatarData(c.inicio)}`);
+
+const columns = [
+    {
+        accessorKey: 'nome',
+        header: 'Campanha',
+        cell: ({ row }) => h('div', [
+            h(Link, { href: `/admin/publicidade/meta-ads/campanhas/${row.original.id}`, class: 'font-semibold text-primary hover:underline' }, () => row.original.nome),
+            h('div', { class: 'text-xs text-slate-500' }, row.original.objetivo_rotulo),
+        ]),
+    },
+    {
+        id: 'status',
+        header: 'Status',
+        accessorFn: (row) => row.status_rotulo,
+        cell: ({ row }) => h('span', {
+            class: `inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_ESTILOS[row.original.status] ?? ''}`,
+            title: row.original.ultimo_erro ?? undefined,
+        }, row.original.status_rotulo),
+    },
+    { accessorKey: 'orcamento_diario', header: 'Orçamento/dia', cell: ({ row }) => formatarReais(row.original.orcamento_diario) },
+    { id: 'periodo', header: 'Período', accessorFn: (row) => periodo(row) },
+    { accessorKey: 'videos', header: 'Vídeos' },
+    { id: 'criada_por', header: 'Criada por', accessorFn: (row) => row.criada_por ?? '-' },
+];
+</script>
+
+<template>
+    <Head title="Campanhas Meta" />
+
+    <AdminLayout>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-2xl font-bold">Campanhas Meta</h1>
+            <Link v-if="can('financeiro.create')" href="/admin/publicidade/meta-ads/campanhas/nova"
+                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                <i class="fas fa-plus text-xs" aria-hidden="true"></i> Nova campanha
+            </Link>
+        </div>
+
+        <div v-if="!props.config.configurado" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            <strong>Meta não configurada.</strong>
+            Dá para montar rascunhos e subir os vídeos, mas o envio fica desligado até preencher no servidor:
+            {{ props.config.faltando.join(', ') }}.
+        </div>
+
+        <p class="mb-4 text-sm text-slate-500">
+            Suba os vídeos e a campanha vai para o Facebook e o Instagram com o orçamento dividido igual entre eles
+            (um anúncio por vídeo). Tudo vai para a Meta <strong>pausado</strong>; só começa a gastar quando você clicar em Ativar.
+        </p>
+
+        <DataTable
+            :columns="columns"
+            :data="props.campanhas"
+            search-placeholder="Buscar campanha..."
+            empty-message="Nenhuma campanha ainda."
+        />
+    </AdminLayout>
+</template>

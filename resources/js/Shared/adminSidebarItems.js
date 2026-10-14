@@ -130,6 +130,8 @@ export const sidebarSections = [
             // Meta ADS e Google ADS (2026-10-12): integração ainda não
             // conectada, a tela mostra o estado vazio (PlataformaDeAnuncio).
             { label: 'Meta ADS', href: '/admin/publicidade/meta-ads', icon: 'fab fa-meta', permission: 'financeiro.view' },
+            // Campanhas de vídeo na Meta (2026-10-13): sobe vídeos e divide o orçamento.
+            { label: 'Campanhas Meta', href: '/admin/publicidade/meta-ads/campanhas', icon: 'fas fa-film', permission: 'financeiro.view' },
             { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', permission: 'financeiro.view' },
             { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },

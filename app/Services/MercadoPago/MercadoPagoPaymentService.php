@@ -96,6 +96,96 @@ class MercadoPagoPaymentService
         ], $idempotencyKey);
     }
 
+    /**
+     * Boleto (pedido 2026-10-14) também pela API de Payments clássica, como
+     * o Pix. O id ativo na conta é "bolbradesco" (conferido em 2026-10-14 em
+     * GET /v1/payment_methods: único meio "ticket", de R$ 4 a R$ 100.000).
+     * O Mercado Pago exige do pagador nome, sobrenome, CPF e endereço
+     * completo. Vence às 23:59:59 (São Paulo) de hoje + N dias corridos
+     * (config loja.boleto_dias_vencimento).
+     *
+     * @param  array<string, mixed>  $payer  email, first_name, last_name, identification, address
+     */
+    public function createBoletoPayment(float $amount, array $payer, string $externalReference, string $idempotencyKey): array
+    {
+        return $this->request('POST', 'v1/payments', [
+            'transaction_amount' => $amount,
+            'payment_method_id' => 'bolbradesco',
+            'description' => "Pedido {$externalReference} - KazaKora",
+            'external_reference' => $externalReference,
+            'payer' => $payer,
+            'date_of_expiration' => self::vencimentoDoBoleto()->format('Y-m-d\TH:i:s.vP'),
+        ], $idempotencyKey);
+    }
+
+    public static function vencimentoDoBoleto(): \Illuminate\Support\Carbon
+    {
+        return now('America/Sao_Paulo')
+            ->addDays(max(1, (int) config('loja.boleto_dias_vencimento', 3)))
+            ->setTime(23, 59, 59);
+    }
+
+    /**
+     * Linha digitável, código de barras, PDF e vencimento de um boleto na
+     * resposta do Mercado Pago. A linha digitável vem em
+     * transaction_details.digitable_line nas respostas novas; quando só vier
+     * o código de barras (44 dígitos), ela é montada a partir dele (regra
+     * FEBRABAN, mesmo resultado que o banco imprime).
+     *
+     * @return array{linhaDigitavel: ?string, codigoBarras: ?string, pdfUrl: ?string, vencimento: ?string}
+     */
+    public static function dadosDoBoleto(array $mpPayment): array
+    {
+        $detalhes = $mpPayment['transaction_details'] ?? [];
+        $codigoBarras = $detalhes['barcode']['content'] ?? $mpPayment['barcode']['content'] ?? null;
+        $linha = $detalhes['digitable_line'] ?? null;
+
+        if (! $linha && $codigoBarras && strlen(preg_replace('/\D/', '', $codigoBarras)) === 44) {
+            $linha = self::linhaDigitavelDoCodigoDeBarras(preg_replace('/\D/', '', $codigoBarras));
+        }
+
+        return [
+            'linhaDigitavel' => $linha ? (string) $linha : null,
+            'codigoBarras' => $codigoBarras ? (string) $codigoBarras : null,
+            'pdfUrl' => $detalhes['external_resource_url'] ?? null,
+            'vencimento' => $mpPayment['date_of_expiration'] ?? null,
+        ];
+    }
+
+    /** Código de barras de boleto bancário (44 dígitos) → linha digitável (47 dígitos, formatada). */
+    public static function linhaDigitavelDoCodigoDeBarras(string $codigo): string
+    {
+        $livre = substr($codigo, 19, 25);
+        $campo1 = substr($codigo, 0, 4).substr($livre, 0, 5);
+        $campo2 = substr($livre, 5, 10);
+        $campo3 = substr($livre, 15, 10);
+        $campo1 .= self::modulo10($campo1);
+        $campo2 .= self::modulo10($campo2);
+        $campo3 .= self::modulo10($campo3);
+
+        return sprintf(
+            '%s.%s %s.%s %s.%s %s %s',
+            substr($campo1, 0, 5), substr($campo1, 5),
+            substr($campo2, 0, 5), substr($campo2, 5),
+            substr($campo3, 0, 5), substr($campo3, 5),
+            $codigo[4],
+            substr($codigo, 5, 14),
+        );
+    }
+
+    private static function modulo10(string $numero): int
+    {
+        $soma = 0;
+        $peso = 2;
+        for ($i = strlen($numero) - 1; $i >= 0; $i--) {
+            $produto = (int) $numero[$i] * $peso;
+            $soma += intdiv($produto, 10) + $produto % 10;
+            $peso = $peso === 2 ? 1 : 2;
+        }
+
+        return (10 - $soma % 10) % 10;
+    }
+
     public function retrievePayment(string $paymentId): array
     {
         return $this->request('GET', "v1/payments/{$paymentId}");

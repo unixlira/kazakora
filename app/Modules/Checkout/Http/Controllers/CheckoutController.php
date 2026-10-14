@@ -569,7 +569,9 @@ class CheckoutController extends Controller
         }
 
         $paymentValidator = Validator::make($request->all(), [
-            'payment_method' => ['required', 'in:card,pix'],
+            // Boleto (pedido 2026-10-14): só pelo Mercado Pago e só como
+            // forma única — nunca dividido com cartão (ver abaixo).
+            'payment_method' => ['required', 'in:card,pix,boleto'],
             'split' => ['boolean'],
             // "different:payment_method" só faz sentido quando split está
             // ativo — sem isso, o valor padrão do front (payment_method_secondary
@@ -590,6 +592,15 @@ class CheckoutController extends Controller
         }
 
         $data = $paymentValidator->validated();
+        $isBoleto = $data['payment_method'] === Payment::METHOD_BOLETO;
+
+        if ($isBoleto && ($data['split'] ?? false)) {
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'O boleto não pode ser dividido com outra forma de pagamento.'])->withInput();
+        }
+
+        if ($isBoleto && PaymentGateway::active() !== PaymentGateway::MERCADOPAGO) {
+            return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Boleto indisponível no momento. Escolha Pix ou cartão.'])->withInput();
+        }
 
         // Frete embutido: o pedido sai com o frete do CEP de entrega.
         app(FreteEmbutido::class)->usarCep($this->cepDoRascunho($request, $draft));
@@ -712,6 +723,35 @@ class CheckoutController extends Controller
                 $primaryAmount = $isSplit
                     ? round($total * ($data['split_percentage'] / 100), 2)
                     : $total;
+
+                // Boleto (pedido 2026-10-14): parcela única, API de Payments
+                // clássica como o Pix. O Mercado Pago exige o endereço do
+                // pagador; vai o de entrega deste pedido.
+                if ($useMercadoPago && $primaryMethod === Payment::METHOD_BOLETO) {
+                    $mpPayment = $this->mercadoPago->createBoletoPayment(
+                        $primaryAmount,
+                        [...$this->mercadoPagoPayer($user, pix: $order), 'address' => $this->enderecoDoPagador($order)],
+                        "order-{$order->id}-payment-1",
+                        "order:{$order->id}:payment:1",
+                    );
+                    $boleto = MercadoPagoPaymentService::dadosDoBoleto($mpPayment);
+
+                    Payment::create([
+                        'order_id' => $order->id,
+                        'provider' => Payment::PROVIDER_MERCADOPAGO,
+                        'mercadopago_payment_id' => (string) $mpPayment['id'],
+                        'method_type' => $primaryMethod,
+                        'amount' => $primaryAmount,
+                        'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
+                        'boleto_linha_digitavel' => $boleto['linhaDigitavel'],
+                        'boleto_url' => $boleto['pdfUrl'],
+                        'expira_em' => $boleto['vencimento'] ? \Illuminate\Support\Carbon::parse($boleto['vencimento']) : null,
+                    ]);
+
+                    DB::afterCommit(fn () => $this->enviarEmailDoBoleto($user, $order, $boleto, $primaryAmount));
+
+                    return [$order, $mpPayment];
+                }
 
                 // Pix (sempre a única parcela — split sempre tem cartão como
                 // parte 1, ver sortMethodsSafely) vai pela API de Payments
@@ -836,6 +876,15 @@ class CheckoutController extends Controller
         }
 
         if ($useMercadoPago) {
+            if ($methods[0] === Payment::METHOD_BOLETO) {
+                // O pedido está feito; o pagamento chega em dias. Carrinho e
+                // rascunho saem agora (no Pix só saem quando o QR é pago).
+                $this->cart->clear();
+                $request->session()->forget(self::SESSION_KEY);
+
+                return $this->renderBoletoGerado($draft, $order, $paymentResult);
+            }
+
             if ($methods[0] === Payment::METHOD_PIX) {
                 return $this->renderConfirmingMercadoPagoPix($draft, $order, $paymentResult);
             }
@@ -1015,7 +1064,11 @@ class CheckoutController extends Controller
     {
         $orders = $request->user()->orders()
             // Pix gerado e nunca pago não é compra (só polui a lista).
-            ->where('status', '!=', Order::STATUS_AWAITING_PAYMENT)
+            // Boleto dentro do prazo aparece (2026-10-14): é compra, só falta pagar.
+            ->where(fn ($q) => $q->where('status', '!=', Order::STATUS_AWAITING_PAYMENT)
+                ->orWhereHas('payments', fn ($p) => $p
+                    ->where('method_type', Payment::METHOD_BOLETO)
+                    ->where('status', Payment::STATUS_REQUIRES_CONFIRMATION)))
             ->with(['items.product.images' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('position')])
             ->latest()->paginate(10)
             ->through(fn (Order $order) => [
@@ -1075,6 +1128,11 @@ class CheckoutController extends Controller
                     'provedor' => $pagamento->provider,
                     'transacao' => $pagamento->mercadopago_payment_id ?? $pagamento->mercadopago_order_id ?? $pagamento->stripe_payment_intent_id,
                     'pago_em' => $pagamento->updated_at?->toIso8601String(),
+                    'boleto' => $pagamento->boletoPendente() ? [
+                        'linha_digitavel' => $pagamento->boleto_linha_digitavel,
+                        'url' => $pagamento->boleto_url,
+                        'vencimento' => $pagamento->expira_em?->toIso8601String(),
+                    ] : null,
                 ] : null,
                 'nota' => $nota ? [
                     'numero' => $nota->numero,
@@ -1182,6 +1240,50 @@ class CheckoutController extends Controller
             $qr['qr_code_base64'] ?? null,
             $mpPayment['date_of_expiration'] ?? null,
         )), null, false);
+    }
+
+    /** "Seu boleto está pronto" (pedido 2026-10-14), mesmo esquema do Pix. Falha de e-mail não trava o pedido. */
+    private function enviarEmailDoBoleto(User $user, Order $order, array $boleto, float $valor): void
+    {
+        if (empty($boleto['linhaDigitavel']) && empty($boleto['pdfUrl'])) {
+            return;
+        }
+
+        rescue(fn () => Mail::to($user->email)->send(new \App\Modules\Checkout\Mail\BoletoAguardandoPagamento(
+            $order,
+            $valor,
+            $boleto['linhaDigitavel'],
+            $boleto['pdfUrl'],
+            $boleto['vencimento'],
+        )), null, false);
+    }
+
+    private function renderBoletoGerado(array $draft, Order $order, array $mpPayment): Response
+    {
+        return Inertia::render($this->paymentComponent(), [
+            ...$this->paymentPropsFor($draft),
+            'order' => $order->only('id', 'total', 'external_order_id'),
+            'methodType' => Payment::METHOD_BOLETO,
+            'mercadoPagoBoleto' => MercadoPagoPaymentService::dadosDoBoleto($mpPayment),
+        ]);
+    }
+
+    /**
+     * Endereço do pagador para o boleto (o Mercado Pago recusa sem ele):
+     * o de entrega gravado no pedido.
+     *
+     * @return array<string, string>
+     */
+    private function enderecoDoPagador(Order $order): array
+    {
+        return [
+            'zip_code' => preg_replace('/\D/', '', (string) $order->shipping_zip),
+            'street_name' => (string) $order->shipping_street,
+            'street_number' => (string) ($order->shipping_number ?: 'S/N'),
+            'neighborhood' => (string) $order->shipping_neighborhood,
+            'city' => (string) $order->shipping_city,
+            'federal_unit' => strtoupper((string) $order->shipping_state),
+        ];
     }
 
     private function renderConfirmingMercadoPagoPix(array $draft, Order $order, array $mpPayment): Response
@@ -1340,6 +1442,7 @@ class CheckoutController extends Controller
             'originalTotal' => round($subtotal + $shippingCost, 2),
             // Pagando 100% no Pix (pedido 2026-10-09).
             'pixDiscountPercentage' => DescontoPix::percentual(),
+            'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             'pixDiscountAmount' => DescontoPix::desconto(max(0, $subtotal - $discount)),
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
@@ -1596,6 +1699,7 @@ class CheckoutController extends Controller
             'couponCode' => $coupon?->code,
             'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
             'pixDiscountPercentage' => DescontoPix::percentual(),
+            'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             'addresses' => $user ? $user->addresses : [],
             'shippingMethods' => [ShippingMethod::freteGratis()->only(['id', 'name', 'estimated_days', 'price'])],
             'customer' => $user ? $user->only('name', 'email', 'cpf', 'phone') : null,

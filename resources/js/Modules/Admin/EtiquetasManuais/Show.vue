@@ -90,7 +90,7 @@ const destroy = async () => {
                             class="rounded-full px-3 py-1.5 text-xs font-medium"
                             :class="inputMode === 'file' ? 'bg-primary text-white' : 'bg-[var(--surface-muted)] text-slate-500'"
                             @click="setInputMode('file')">
-                            Enviar arquivo .txt
+                            Enviar arquivo .txt ou .pdf
                         </button>
                         <button type="button"
                             class="rounded-full px-3 py-1.5 text-xs font-medium"
@@ -100,7 +100,7 @@ const destroy = async () => {
                         </button>
                     </div>
 
-                    <input v-if="inputMode === 'file'" ref="fileInput" type="file" accept=".txt"
+                    <input v-if="inputMode === 'file'" ref="fileInput" type="file" accept=".txt,.pdf,application/pdf"
                         class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
                         @change="onFileSelect">
                     <textarea v-else v-model="form.content" rows="8"

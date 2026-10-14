@@ -11,12 +11,17 @@
  * Cada item tem ícone próprio, sem repetir, para dar para achar pelo ícone
  * com o menu recolhido.
  *
+ * `direto: true` = seção sem cabeçalho de dropdown: os itens ficam sempre
+ * à vista, como links normais.
  * `permission: null` = qualquer pessoa da equipe vê.
  * `badgeKey` = contador de pendências (page.props.sidebarBadges).
  */
 export const sidebarSections = [
     {
+        // Link direto, sem dropdown (Lira, 2026-10-14): o Gerenciador volta a
+        // ser item normal do menu, como era antes do menu em grupos.
         heading: 'Gerenciador',
+        direto: true,
         items: [
             { label: 'Gerenciador', href: '/admin', icon: 'fas fa-gauge-high', cor: 'azul', permission: null },
             { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-square-poll-vertical', cor: 'indigo', permission: 'relatorios.view' },

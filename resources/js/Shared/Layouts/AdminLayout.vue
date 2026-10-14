@@ -298,7 +298,7 @@ watch(
                 <div class="h-auto w-full basis-full items-center overflow-x-hidden overflow-y-auto rounded md:relative md:mt-4 md:flex md:w-auto md:flex-1 md:flex-col md:items-stretch md:opacity-100 md:shadow-none"
                     :class="collapseShow">
                     <div v-for="section in visibleSections" :key="section.heading" class="mb-1">
-                        <button v-if="!sidebarCollapsed" type="button"
+                        <button v-if="!sidebarCollapsed && !section.direto" type="button"
                             class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-bold uppercase tracking-wide transition-colors"
                             :class="secaoExpandida(section.heading)
                                 ? 'text-[var(--surface-foreground)]'
@@ -310,7 +310,7 @@ watch(
                             <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeSeta(section), { 'rotate-180': secaoExpandida(section.heading) }]"></i>
                         </button>
 
-                        <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
+                        <ul v-show="sidebarCollapsed || section.direto || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
                             <li v-for="item in section.items" :key="item.href">
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja

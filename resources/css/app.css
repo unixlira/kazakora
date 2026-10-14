@@ -124,6 +124,27 @@
 }
 
 /*
+ * Ícones de marca no menu do admin (Lira, 2026-10-14): cada item que
+ * representa uma marca usa a cor principal dela (KazaKora igual ao KoraSync,
+ * channelBrand.js; BeautyKora e Ferrakora dos sites deles). Amarelo
+ * (Mercado Livre, Correios) some no menu branco: no tema claro ganha um
+ * contorno fino no azul da própria marca. TikTok é o logo de verdade: glifo
+ * na cor do texto com a sombra ciano e rosa.
+ */
+.admin-shell .icone-marca { color: var(--cor-marca); }
+.admin-shell .icone-kazakora { --cor-marca: #04d7b6; }
+.admin-shell .icone-beautykora { --cor-marca: #df6b8e; }
+.admin-shell .icone-ferrakora { --cor-marca: #e81f27; }
+.admin-shell .icone-shopee { --cor-marca: #ee4d2d; }
+.admin-shell .icone-google { --cor-marca: #4285f4; }
+.admin-shell .icone-meta { --cor-marca: #0866ff; }
+.admin-shell .icone-whatsapp { --cor-marca: #25d366; }
+.admin-shell .icone-mercado-livre { --cor-marca: #ffe600; filter: drop-shadow(0 0 0.5px #2d3277) drop-shadow(0 0 0.5px #2d3277); }
+.admin-shell .icone-correios { --cor-marca: #ffd400; filter: drop-shadow(0 0 0.5px #00416b) drop-shadow(0 0 0.5px #00416b); }
+.dark .admin-shell :is(.icone-mercado-livre, .icone-correios) { filter: none; }
+.admin-shell .icone-tiktok { --cor-marca: var(--surface-foreground); text-shadow: 1px 1px 0 #fe2c55, -1px -1px 0 #25f4ee; }
+
+/*
  * Fundo da página do admin em degradê (Lira, 2026-10-14): verde no tema
  * claro e vinho no escuro, os mesmos degradês dos cards "Acessos ao site" e
  * "Faturamento por canal" do Dashboard. Cards, tabelas e métricas continuam

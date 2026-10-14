@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
     <div class="selo-ra relative shrink-0 overflow-hidden" :style="estiloCaixa">
         <!-- Fallback: imagem local do selo, até o oficial carregar. -->
         <a v-if="!carregado" :href="link" target="_blank" rel="noopener"
-            class="absolute inset-0 flex items-center justify-center rounded-md bg-white transition hover:opacity-90"
+            class="absolute inset-0 flex items-center justify-center rounded-[2px] bg-white transition hover:opacity-90"
             title="Verificada por Reclame AQUI">
             <img src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI" width="294" height="88"
                 class="h-[90%] w-auto">

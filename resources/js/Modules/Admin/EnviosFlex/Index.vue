@@ -10,7 +10,8 @@ import { computed, ref, watch } from 'vue';
  * Envios Flex (pedido explícito 2026-09-11) — o que saiu com o entregador,
  * o que voltou e o que ficou no meio do caminho. Em 2026-10-13 ganhou as
  * canceladas junto dos alertas, as abas "Na fila" e "Entregues" e a
- * justificativa de envio entregue no ML sem bipar no KoraFlex. A regra de cada alerta
+ * justificativa de envio entregue no ML sem bipar no KoraFlex; abre em
+ * "Entregues do mês", sempre por pedido. A regra de cada alerta
  * mora em FlexControlService (backend); esta tela só mostra e registra a
  * conferência de quem foi olhar a prateleira.
  */
@@ -22,7 +23,6 @@ const props = defineProps({
     retencaoDias: { type: Number, default: 180 },
     horasAlertaRota: { type: Number, default: 2 },
     justificativas: { type: Array, default: () => [] },
-    produtosEntregues: { type: Array, default: () => [] },
     diasCanceladas: { type: Number, default: 30 },
 });
 
@@ -146,7 +146,6 @@ const passosCanal = (linha) => [
     ['Estoque devolvido no sistema', linha.linhaDoTempo.estoqueDevolvidoEm],
 ];
 
-const resumoItens = (linha) => linha.itens.map((i) => `${i.qtd}x ${i.sku ?? i.nome}`).join(' · ');
 const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info' && !a.resolvido);
 </script>
 
@@ -210,28 +209,6 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                 Saiu daqui (entregue ao entregador ou rota iniciada no Mercado Livre) e ainda não chegou ao comprador. As que não foram bipadas no KoraFlex vêm primeiro.
             </p>
 
-            <div v-if="filtros.aba === 'entregues' && produtosEntregues.length" class="border-b border-[var(--surface-border)] px-4 py-4">
-                <h4 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Produtos entregues no mês</h4>
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="text-left text-xs uppercase tracking-wide text-slate-400">
-                            <th class="py-1 pr-4 font-medium">Produto</th>
-                            <th class="py-1 pr-4 font-medium">SKU</th>
-                            <th class="py-1 pr-4 text-right font-medium">Unidades</th>
-                            <th class="py-1 text-right font-medium">Pedidos</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="produto in produtosEntregues" :key="`${produto.sku}-${produto.nome}`" class="border-t border-[var(--surface-border)]">
-                            <td class="py-1.5 pr-4">{{ produto.nome }}</td>
-                            <td class="py-1.5 pr-4 text-xs text-slate-400">{{ produto.sku ?? '—' }}</td>
-                            <td class="py-1.5 pr-4 text-right font-semibold">{{ produto.qtd }}</td>
-                            <td class="py-1.5 text-right">{{ produto.pedidos }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
             <div v-if="linhas.length" class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -262,7 +239,11 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                                 {{ linha.cliente ?? '—' }}
                                 <span class="block text-xs text-slate-400">{{ linha.cidade }}</span>
                             </td>
-                            <td class="max-w-[16rem] truncate px-4 py-3 text-xs" :title="resumoItens(linha)">{{ resumoItens(linha) }}</td>
+                            <td class="max-w-[18rem] px-4 py-3 text-xs">
+                                <span v-for="(item, i) in linha.itens" :key="i" class="block truncate" :title="item.nome">
+                                    {{ item.qtd }}x {{ item.nome }}<span v-if="item.sku" class="text-slate-400"> · {{ item.sku }}</span>
+                                </span>
+                            </td>
                             <td class="whitespace-nowrap px-4 py-3 text-xs">
                                 {{ quando(linha.linhaDoTempo.entregueAoEntregadorEm) ?? '—' }}
                                 <span v-if="linha.linhaDoTempo.rotaIniciadaEm" class="block text-slate-400">rota {{ quando(linha.linhaDoTempo.rotaIniciadaEm) }}</span>

@@ -91,14 +91,15 @@
 }
 
 .dark .admin-shell {
-    /* Preto chapado (pedido do Lira 2026-10-11): fundo, menu, topo e cards
-       em #000, separados só pela borda. O muted fica um tom acima para
-       campos, etiquetas e hover não sumirem no preto. */
+    /* Cards, tabelas, menu e topo em grafite quase preto puxado para o vinho
+       (Lira, 2026-10-14), para descolar do fundo em degradê vinho
+       (.admin-fundo). O muted fica um tom acima para campos, etiquetas e
+       hover não sumirem no card. */
     --fundo: #000000;
-    --surface: #000000;
-    --surface-muted: #000000;
+    --surface: #161113;
+    --surface-muted: #221b1e;
     --surface-foreground: #f1eced;
-    --surface-border: #2a2a2a;
+    --surface-border: #3a2e33;
     --sidebar-foreground: #d9d2d4;
     --texto-suave: #b3a9ac;
     --icone-menu: #a99da1;
@@ -123,16 +124,46 @@
 }
 
 /*
+ * Fundo da página do admin em degradê (Lira, 2026-10-14): verde no tema
+ * claro e vinho no escuro, os mesmos degradês dos cards "Acessos ao site" e
+ * "Faturamento por canal" do Dashboard. Cards, tabelas e métricas continuam
+ * sólidos (--surface: branco no claro, grafite no escuro). O degradê fica
+ * parado na janela para não esticar em página comprida.
+ */
+.admin-shell.admin-fundo {
+    background-image: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
+    background-attachment: fixed;
+}
+.dark .admin-shell.admin-fundo {
+    background-image: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
+}
+
+/*
+ * Texto solto direto no degradê (títulos e legendas das telas) fica branco,
+ * como os textos dos cards em degradê. Dentro de card, tabela ou caixa
+ * sólida volta à cor normal do tema.
+ */
+.admin-conteudo {
+    color: #ffffff;
+}
+.admin-conteudo :is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table) {
+    color: var(--surface-foreground);
+}
+.admin-shell .admin-conteudo :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-gray-400, .text-gray-500, .text-gray-600, .text-\[var\(--texto-suave\)\]):not(:is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table) *) {
+    color: rgb(255 255 255 / 0.8);
+}
+.admin-shell .admin-conteudo :is(.text-slate-700, .text-slate-800, .text-slate-900, .text-gray-700, .text-gray-800, .text-gray-900, .text-black, .text-primary, .text-\[var\(--surface-foreground\)\], .text-\[var\(--destaque\)\]):not(:is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table, .bg-primary) *):not(.bg-primary) {
+    color: #ffffff;
+}
+
+/*
  * Radar de Oportunidades no escuro: tinha fundo cinza #3D3D3D (pedido de
  * 2026-10-12). Mesmo dia, o Lira pediu preto absoluto em todo o tema escuro
- * do admin, então o Radar também ficou #000. Para voltar ao cinza, troque os
- * dois #000000 abaixo por #3d3d3d.
+ * do admin, então o Radar também ficou #000. Desde 2026-10-14 o Radar segue
+ * o resto do admin (fundo em degradê vinho, menu e topo em --surface).
  */
 .dark .admin-shell:has(.radar-grafite) {
     --fundo: #000000;
-}
-.dark .admin-shell:has(.radar-grafite) :is(#menu-admin, .admin-topo, .admin-rodape) {
-    background-color: #000000;
 }
 
 /*
@@ -169,8 +200,8 @@
     color: rgb(241 236 237 / 0.6);
 }
 .dark .admin-topo-fume .topo-menu {
-    --surface-muted: #000000;
-    --surface-border: #2a2a2a;
+    --surface-muted: #221b1e;
+    --surface-border: #3a2e33;
     color: var(--surface-foreground);
 }
 

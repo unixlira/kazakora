@@ -12,6 +12,7 @@ use App\Modules\Admin\Http\Controllers\CompetitorAnalysisController;
 use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
+use App\Modules\Admin\Http\Controllers\DiagnosticoAcaoController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
@@ -240,6 +241,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
     Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
+    // Botões de ação do diagnóstico do Cauê (pedido 2026-10-14): mexem na Shopee, só admin.
+    Route::post('diagnostico/shopee/acao', [DiagnosticoAcaoController::class, 'shopee'])->middleware('admin')->name('diagnostico.shopee.acao');
+    Route::get('diagnostico/shopee/{itemId}/modelos', [DiagnosticoAcaoController::class, 'modelos'])->middleware('admin')->name('diagnostico.shopee.modelos');
 
     Route::resource('produtos', ProductController::class)->except('show')
         ->parameters(['produtos' => 'product'])

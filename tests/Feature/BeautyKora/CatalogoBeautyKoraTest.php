@@ -21,7 +21,8 @@ class CatalogoBeautyKoraTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['services.beautykora.catalogo_token' => self::TOKEN]);
+        // Sem frete embutido: aqui conta o formato; a região está em PrecoRegiaoBeautyKoraTest.
+        config(['services.beautykora.catalogo_token' => self::TOKEN, 'frete_embutido.ativo' => false]);
     }
 
     private function grupo(): array
@@ -69,7 +70,8 @@ class CatalogoBeautyKoraTest extends TestCase
         $this->assertSame('Tom', $produto['options'][0]['title']);
         $this->assertSame(['Tom 01', 'Tom 02'], array_column($produto['options'][0]['values'], 'value'));
         $this->assertSame('kzv-'.$filho->id, $produto['variants'][1]['id']);
-        $this->assertSame(2885, $produto['variants'][0]['prices'][0]['amount']);
+        // Clonado por padrão: 28,85 + 5% = 30,29.
+        $this->assertSame(3029, $produto['variants'][0]['prices'][0]['amount']);
         $this->assertNull($produto['variants'][0]['prices'][0]['sale_amount']);
         $this->assertSame(0, $produto['variants'][1]['inventory_quantity']);
 

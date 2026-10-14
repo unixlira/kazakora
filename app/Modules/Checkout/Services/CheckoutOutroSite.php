@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Services;
 use App\Models\User;
 use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
@@ -62,11 +63,23 @@ abstract class CheckoutOutroSite
     abstract protected function nomeDoSite(): string;
 
     /**
-     * Itens com o preço do CEP de entrega (ou da região do visitante, sem CEP).
-     * Só variações de produto publicado no site.
+     * Acréscimo do site sobre o preço do anúncio, por produto pai (0.05 = 5%),
+     * o mesmo que o catálogo do site soma (CatalogoOutroSite::acrescimo()).
+     *
+     * @param  array<int, int>  $paiIds
+     * @return array<int, float>
+     */
+    protected function acrescimos(array $paiIds): array
+    {
+        return [];
+    }
+
+    /**
+     * Itens com o preço do CEP de entrega (ou da região do visitante, sem CEP)
+     * e o acréscimo do site. Só variações de produto publicado no site.
      *
      * @param  array<int, array{variante: string, quantidade: int}>  $pedidos
-     * @return Collection<int, array{product: Product, quantity: int, subtotal: float}>
+     * @return Collection<int, array{product: Product, quantity: int, preco_unitario: float, subtotal: float}>
      */
     public function itens(array $pedidos, ?string $cep, bool $travar = false): Collection
     {
@@ -96,6 +109,7 @@ abstract class CheckoutOutroSite
             ->whereIn('product_id', $produtos->map(fn (Product $p) => $p->parent_product_id ?? $p->id))
             ->pluck('product_id')
             ->all();
+        $acrescimos = $this->acrescimos($publicados);
 
         $semEstoque = [];
         $itens = collect();
@@ -113,10 +127,17 @@ abstract class CheckoutOutroSite
                 continue;
             }
 
+            $unitario = CatalogoOutroSite::comAcrescimo(
+                $produto,
+                $produto->unitPriceForQuantity($quantidade),
+                $acrescimos[$produto->parent_product_id ?? $produto->id] ?? 0.0,
+            );
+
             $itens->push([
                 'product' => $produto,
                 'quantity' => $quantidade,
-                'subtotal' => round($produto->unitPriceForQuantity($quantidade) * $quantidade, 2),
+                'preco_unitario' => $unitario,
+                'subtotal' => round($unitario * $quantidade, 2),
             ]);
         }
 
@@ -322,7 +343,7 @@ abstract class CheckoutOutroSite
                 $order->items()->create([
                     'product_id' => $item['product']->id,
                     'product_name' => $item['product']->name,
-                    'product_price' => $item['product']->unitPriceForQuantity($item['quantity']),
+                    'product_price' => $item['preco_unitario'],
                     'quantity' => $item['quantity'],
                     'subtotal' => $item['subtotal'],
                 ]);

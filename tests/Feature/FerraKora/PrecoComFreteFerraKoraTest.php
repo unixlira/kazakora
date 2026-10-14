@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\FerraKora;
 
-use App\Modules\BeautyKora\Models\BeautyKoraProduto;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Fiscal\Models\Company;
@@ -14,7 +13,7 @@ use Tests\TestCase;
 /**
  * Preço do FerraKora com o frete embutido da região do visitante (pedido
  * 2026-10-13): o mesmo final_price da página do produto no KazaKora. O
- * Beauty Kora continua com o preço de cadastro.
+ * Beauty Kora (2026-10-15) está em PrecoRegiaoBeautyKoraTest.
  */
 class PrecoComFreteFerraKoraTest extends TestCase
 {
@@ -109,16 +108,6 @@ class PrecoComFreteFerraKoraTest extends TestCase
 
         $this->assertSame(8500, $preco['amount']);
         $this->assertSame(7850, $preco['sale_amount']);
-    }
-
-    public function test_beauty_kora_continua_com_o_preco_de_cadastro(): void
-    {
-        BeautyKoraProduto::create(['product_id' => $this->produto->id, 'ordem' => 1, 'ativo' => true]);
-
-        $produto = $this->getJson('/api/beautykora/produtos?simular_uf=AM')->assertOk()->json('products.0');
-
-        $this->assertSame(6500, $this->preco($produto)['amount']);
-        $this->assertArrayNotHasKey('frete_gratis', $produto);
     }
 
     public function test_desligado_no_config_fica_o_preco_de_cadastro(): void

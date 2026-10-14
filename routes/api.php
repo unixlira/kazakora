@@ -239,6 +239,9 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
     Route::get('produtos/{id}', [BeautyKoraCatalogoController::class, 'show'])
         ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
     Route::post('produtos', [BeautyKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+    // Região do visitante (2026-10-15): o site pergunta ao abrir e mostra no card
+    // o frete grátis e o raio da entrega FULL (Grande SP), pelo IP ou pelo CEP.
+    Route::get('regiao', [BeautyKoraCatalogoController::class, 'regiao'])->middleware('throttle:120,1')->name('regiao');
 
     // Checkout pelo Mercado Pago da KazaKora (2026-10-14, só homolog): sai a Hostinger.
     Route::prefix('checkout')->name('checkout.')->group(function () {

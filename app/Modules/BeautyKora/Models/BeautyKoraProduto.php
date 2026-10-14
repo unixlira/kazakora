@@ -11,6 +11,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class BeautyKoraProduto extends Model
 {
+    /** Clonado (anúncio importado do KazaKora): +5% sobre o preço original (2026-10-15). */
+    public const ACRESCIMO_CLONADO = 0.05;
+
     protected $table = 'beautykora_produtos';
 
     protected $fillable = [
@@ -18,6 +21,11 @@ class BeautyKoraProduto extends Model
         'titulo',
         'ordem',
         'ativo',
+        'clonado',
+    ];
+
+    protected $attributes = [
+        'clonado' => true,
     ];
 
     protected function casts(): array
@@ -26,7 +34,13 @@ class BeautyKoraProduto extends Model
             'product_id' => 'integer',
             'ordem' => 'integer',
             'ativo' => 'boolean',
+            'clonado' => 'boolean',
         ];
+    }
+
+    public function acrescimo(): float
+    {
+        return $this->clonado ? self::ACRESCIMO_CLONADO : 0.0;
     }
 
     public function product(): BelongsTo

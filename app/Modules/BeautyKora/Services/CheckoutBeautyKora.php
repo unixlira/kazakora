@@ -28,4 +28,14 @@ class CheckoutBeautyKora extends CheckoutOutroSite
     {
         return 'Beauty Kora';
     }
+
+    /** Clonado: +5% sobre o anúncio, igual ao card (CatalogoBeautyKora). */
+    protected function acrescimos(array $paiIds): array
+    {
+        return BeautyKoraProduto::query()
+            ->whereIn('product_id', $paiIds)
+            ->get()
+            ->mapWithKeys(fn (BeautyKoraProduto $registro) => [$registro->product_id => $registro->acrescimo()])
+            ->all();
+    }
 }

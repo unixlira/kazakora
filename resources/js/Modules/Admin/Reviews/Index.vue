@@ -123,9 +123,9 @@ const columns = [
         </p>
 
         <div class="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
-            <!-- Card Total em degradê: azul no claro, verde no escuro (Lira, 2026-10-14). -->
-            <button type="button" class="card-destaque rounded-xl border border-white/20 p-3 text-left text-white transition"
-                :class="notaFiltro === null ? 'ring-2 ring-white/70 ring-offset-1' : 'hover:border-white/50'"
+            <!-- Card Total branco nos dois temas (Lira, 2026-10-14). -->
+            <button type="button" class="card-branco rounded-xl border p-3 text-left transition"
+                :class="notaFiltro === null ? 'ring-2 ring-slate-900 ring-offset-1 dark:ring-white' : 'hover:border-slate-400'"
                 @click="notaFiltro = null">
                 <span class="block text-xs font-semibold uppercase tracking-wide opacity-70">Total</span>
                 <span class="block text-2xl font-bold">{{ props.reviews.length }}</span>

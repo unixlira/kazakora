@@ -36,6 +36,22 @@ const dispensarBadge = (item) => {
         localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(badgesVistos.value));
     } catch { /* storage indisponível: vale só nesta sessão */ }
 };
+// Contagem caiu abaixo do visto (pendência resolvida): o visto acompanha, para
+// que o próximo alerta novo volte a aparecer.
+watch(() => page.props.sidebarBadges, (badges) => {
+    if (!badges) return;
+    const ajustado = { ...badgesVistos.value };
+    let mudou = false;
+    for (const [chave, visto] of Object.entries(ajustado)) {
+        const total = badges?.[chave] ?? 0;
+        if (total < visto) { ajustado[chave] = total; mudou = true; }
+    }
+    if (!mudou) return;
+    badgesVistos.value = ajustado;
+    try {
+        localStorage.setItem(BADGES_VISTOS_KEY, JSON.stringify(ajustado));
+    } catch { /* idem */ }
+}, { immediate: true });
 
 const { isDark, toggle: toggleDarkMode } = useDarkMode();
 // Menu fechado mostra o favicon da marca (o customizado de produção, se houver).
@@ -296,7 +312,7 @@ watch(
                                         :class="isActive(item.href)
                                             ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
-                                        :aria-current="isActive(item.href) ? 'page' : undefined">
+                                        :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
                                         <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
                                         <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                         <span v-if="sidebarBadge(item) > 0"

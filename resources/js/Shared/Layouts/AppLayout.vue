@@ -120,7 +120,8 @@ onUnmounted(() => {
     window.removeEventListener('resize', medirRolagem);
 });
 
-const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+// Bandeiras novas enviadas pelo Lira (2026-10-14), no formato dos cartões antigos (249x167).
+const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 
 // Ao passar o mouse, cada ícone fica na cor oficial da rede (pedido 2026-10-10).
 const REDES = [
@@ -432,7 +433,7 @@ const REDES = [
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
                             <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
                                  retos no arquivo; o arredondamento leve vem do CSS (pedido 2026-10-14). -->
-                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/retas/${brand}.png`" :alt="brand"
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand"
                                 class="h-[25px] w-auto shrink-0 rounded-[2px] sm:h-[39px] lg:h-[46px]">
                         </div>
                     </div>

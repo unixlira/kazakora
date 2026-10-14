@@ -29,10 +29,18 @@ class DashboardController extends Controller
     {
         $today = Carbon::today();
         $startOfMonth = Carbon::today()->startOfMonth();
-        $margemMes = app(ContributionMargin::class)->periodo($startOfMonth, $today->copy()->addDay())['margem'];
+        // Gerenciador (Lira 2026-10-14, "funcionamento ruim"): cada prop é
+        // uma closure, então trocar o mês dos acessos ou aplicar uma ação do
+        // Cauê (recarga parcial com `only`) calcula só o bloco pedido, e não
+        // a tela inteira de novo. A margem do mês é usada por dois blocos e
+        // calculada uma vez só.
+        $margemMes = null;
+        $margem = function () use (&$margemMes, $startOfMonth, $today): float {
+            return $margemMes ??= (float) app(ContributionMargin::class)->periodo($startOfMonth, $today->copy()->addDay())['margem'];
+        };
 
         return Inertia::render('Admin/Dashboard', [
-            'stats' => [
+            'stats' => fn () => [
                 // Pedidos = vendas confirmadas (auditoria 2026-10-11: antes
                 // contava cancelado e aguardando pagamento junto).
                 'ordersCount' => Order::query()->vendaEfetiva()->whereIn('status', self::PAID_STATUSES)->count(),
@@ -71,7 +79,7 @@ class DashboardController extends Controller
                 'revenueTotal' => (float) Order::query()->vendaEfetiva()
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum(DB::raw(ContributionMargin::receitaSql())),
-                'contributionMarginMonth' => $margemMes,
+                'contributionMarginMonth' => $margem(),
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
                     ->where('created_at', '>=', $startOfMonth)
@@ -80,16 +88,16 @@ class DashboardController extends Controller
             ],
             // Pedidos recentes e Estoque baixo saíram (pedido do usuário
             // 2026-10-06) — no lugar, mais vendidos e curva ABC.
-            'topProducts' => $this->vendasPorProduto(Carbon::today()->subDays(29))
+            'topProducts' => fn () => $this->vendasPorProduto(Carbon::today()->subDays(29))
                 ->sortByDesc('quantity')
                 ->take(10)
                 ->values()
                 ->all(),
-            'abcCurve' => $this->curvaAbc(Carbon::today()->subDays(89)),
-            'revenueByChannel' => $this->revenueByChannel($startOfMonth),
-            'analytics' => $this->analytics($today, $margemMes),
-            'visitantes' => $this->visitantes((string) $request->query('mes', '')),
-            'diagnosticos' => $this->diagnosticos(),
+            'abcCurve' => fn () => $this->curvaAbc(Carbon::today()->subDays(89)),
+            'revenueByChannel' => fn () => $this->revenueByChannel($startOfMonth),
+            'analytics' => fn () => $this->analytics($today, $margem()),
+            'visitantes' => fn () => $this->visitantes((string) $request->query('mes', '')),
+            'diagnosticos' => fn () => $this->diagnosticos(),
         ]);
     }
 

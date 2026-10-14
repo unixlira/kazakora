@@ -3,16 +3,18 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\Indicadores\PainelDeAlertas;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class KpiController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request, PainelDeAlertas $painel): Response
     {
         $startOfMonth = Carbon::today()->startOfMonth();
 
@@ -57,7 +59,12 @@ class KpiController extends Controller
         $productsCount = Product::query()->count();
         $lowStockCount = Product::query()->where('stock', '<=', 5)->count();
 
+        // Indicadores com alerta por canal (2026-10-14): últimos N dias
+        // completos contra os N anteriores, ver PainelDeAlertas.
+        $dias = (int) $request->integer('dias', 7);
+
         return Inertia::render('Admin/Indicadores/Index', [
+            'painel' => $painel->gerar($dias),
             'kpis' => [
                 'averageTicket' => $averageTicket,
                 'conversionRate' => round($conversionRate, 2),

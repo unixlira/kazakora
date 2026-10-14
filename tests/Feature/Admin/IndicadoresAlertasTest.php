@@ -168,6 +168,31 @@ class IndicadoresAlertasTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('painel.dias', 7));
     }
 
+    public function test_tela_manda_os_tres_periodos_e_a_serie_diaria_para_filtrar_na_hora(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->pedido('shopee', '2026-10-13 10:00', 100);
+        $this->pedido('shopee', '2026-10-13 18:00', 50);
+        $this->pedido('shopee', '2026-10-12 10:00', 80, Order::STATUS_CANCELLED);
+        $this->pedido('shopee', '2026-10-14 09:00', 999); // hoje fica de fora
+        $this->ads('shopee', '2026-10-13', 1000, 30, 2, 150, 25);
+
+        $this->actingAs($admin)->get('/admin/indicadores')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('paineis.7.dias', 7)
+                ->where('paineis.14.dias', 14)
+                ->where('paineis.30.dias', 30)
+                ->has('composicao.7.shopee')
+                ->has('serie.dias', 60)
+                ->where('serie.dias.59', '2026-10-13')
+                ->where('serie.canais.shopee.receita.59', 150)
+                ->where('serie.canais.shopee.pedidos.59', 2)
+                ->where('serie.canais.shopee.cancelados.58', 1)
+                ->where('serie.canais.shopee.ads_gasto.59', 25)
+                ->has('serie.visitantes', 60));
+    }
+
     public function test_comando_lista_os_alertas(): void
     {
         $this->artisan('indicadores:alertas')->assertSuccessful();

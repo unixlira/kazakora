@@ -16,7 +16,7 @@ export const sidebarSections = [
         heading: 'Início',
         items: [
             { label: 'Início', href: '/admin', icon: 'fas fa-gauge-high', permission: null },
-            { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-gauge', permission: 'relatorios.view' },
+            { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-square-poll-vertical', permission: 'relatorios.view' },
         ],
     },
     {

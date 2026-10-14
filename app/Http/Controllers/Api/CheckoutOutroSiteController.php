@@ -27,7 +27,8 @@ use Illuminate\Support\Facades\Log;
  * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, turbo?}
  * POST pedido  {itens, turbo?, total_esperado (centavos), cliente{name,email,cpf,phone},
  *               endereco{zip,street,number,complement,neighborhood,city,state},
- *               pagamento{metodo: pix|card, mp_card_token, mp_card_installments, mp_payment_method_id}}
+ *               pagamento{metodo: pix|card|boleto, mp_card_token, mp_card_installments, mp_payment_method_id}}
+ *              → pedido, token, pix{copia_e_cola,...} ou boleto{linha_digitavel, codigo_barras, url, vencimento}
  * GET  pedido/{id}?token=  situação do pagamento (o site consulta até pagar)
  * GET  cep/{cep}           rua, bairro, cidade e UF
  */
@@ -82,7 +83,7 @@ abstract class CheckoutOutroSiteController extends Controller
             'endereco.neighborhood' => ['required', 'string', 'max:255'],
             'endereco.city' => ['required', 'string', 'max:255'],
             'endereco.state' => ['required', 'string', 'size:2'],
-            'pagamento.metodo' => ['required', 'in:pix,card'],
+            'pagamento.metodo' => ['required', 'in:pix,card,boleto'],
             'pagamento.mp_card_token' => [$cartao ? 'required' : 'nullable', 'string'],
             'pagamento.mp_card_installments' => [$cartao ? 'required' : 'nullable', 'integer', 'min:1', 'max:12'],
             'pagamento.mp_payment_method_id' => [$cartao ? 'required' : 'nullable', 'string', 'max:50'],
@@ -126,9 +127,11 @@ abstract class CheckoutOutroSiteController extends Controller
                 return response()->json(['message' => 'O Mercado Pago recusou o CPF informado. Confira o CPF e tente de novo.', 'errors' => ['cliente.cpf' => ['Confira o CPF.']]], 422);
             }
 
-            return response()->json(['message' => $cartao
-                ? 'O pagamento no cartão não foi aprovado. Confira os dados, tente outro cartão ou pague no Pix.'
-                : 'Não foi possível gerar o Pix agora. Tente de novo em instantes.'], 422);
+            return response()->json(['message' => match ($dados['pagamento']['metodo']) {
+                Payment::METHOD_CARD => 'O pagamento no cartão não foi aprovado. Confira os dados, tente outro cartão ou pague no Pix.',
+                Payment::METHOD_BOLETO => 'Não foi possível gerar o boleto agora. Tente de novo em instantes ou pague no Pix.',
+                default => 'Não foi possível gerar o Pix agora. Tente de novo em instantes.',
+            }], 422);
         }
 
         $order->refresh();
@@ -143,6 +146,7 @@ abstract class CheckoutOutroSiteController extends Controller
                 'qr_code_base64' => $qr['qr_code_base64'] ?? null,
                 'expira_em' => $mp['date_of_expiration'] ?? null,
             ] : null,
+            'boleto' => $dados['pagamento']['metodo'] === Payment::METHOD_BOLETO ? $this->boleto($mp) : null,
         ], 201);
     }
 
@@ -171,6 +175,19 @@ abstract class CheckoutOutroSiteController extends Controller
         return blank($endereco['city'] ?? null)
             ? response()->json(['message' => 'CEP não encontrado.'], 404)
             : response()->json(collect($endereco)->only(['zip', 'street', 'neighborhood', 'city', 'state']));
+    }
+
+    /** Boleto gerado: linha digitável, código de barras, PDF e vencimento. */
+    private function boleto(array $mp): array
+    {
+        $boleto = MercadoPagoPaymentService::dadosDoBoleto($mp);
+
+        return [
+            'linha_digitavel' => $boleto['linhaDigitavel'],
+            'codigo_barras' => $boleto['codigoBarras'],
+            'url' => $boleto['pdfUrl'],
+            'vencimento' => $boleto['vencimento'],
+        ];
     }
 
     private function regrasDosItens(): array

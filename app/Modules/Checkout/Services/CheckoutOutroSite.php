@@ -8,6 +8,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -180,6 +181,7 @@ abstract class CheckoutOutroSite
             'desconto_plataforma' => self::centavos($valores['desconto_plataforma']),
             'desconto_pix' => self::centavos($valores['desconto_pix']),
             'desconto_pix_percentual' => DescontoPix::percentual(),
+            'boleto_dias_vencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             'frete' => self::centavos($valores['frete']),
             'prazo_dias' => $valores['prazo'],
             // FULL (Grande SP): {tipo, mensagem "Receba hoje até as 21h", local}.
@@ -280,6 +282,15 @@ abstract class CheckoutOutroSite
                 ]);
 
                 DB::afterCommit(fn () => $this->enviarEmailDoPix($user, $order, $mp, $total));
+
+                return ['order' => $order, 'mp' => $mp];
+            }
+
+            // Boleto (padronização dos 3 sites, 2026-10-14): igual ao da
+            // KazaKora, sem desconto do Pix; quem confirma é a varredura
+            // mercadopago:conferir-boletos.
+            if ($metodo === Payment::METHOD_BOLETO) {
+                $mp = app(BoletoMercadoPago::class)->gerar($order, $user, $this->pagador($user, $order), $total);
 
                 return ['order' => $order, 'mp' => $mp];
             }
@@ -426,7 +437,7 @@ abstract class CheckoutOutroSite
         return $user;
     }
 
-    /** Igual ao checkout da loja: no Pix vai o e-mail nosso, para o Mercado Pago não escrever ao cliente. */
+    /** Igual ao checkout da loja: no Pix e no boleto vai o e-mail nosso, para o Mercado Pago não escrever ao cliente. */
     private function pagador(User $user, ?Order $pix = null): array
     {
         $partes = preg_split('/\s+/', trim($user->name), 2);

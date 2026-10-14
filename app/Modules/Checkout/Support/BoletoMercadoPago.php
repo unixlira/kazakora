@@ -2,10 +2,15 @@
 
 namespace App\Modules\Checkout\Support;
 
+use App\Models\User;
+use App\Modules\Checkout\Mail\BoletoAguardandoPagamento;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Confirmação do boleto do Mercado Pago (pedido 2026-10-14). O boleto é pago
@@ -33,6 +38,76 @@ class BoletoMercadoPago
         private readonly MercadoPagoPaymentService $mercadoPago,
         private readonly OrderPaymentFinalizer $finalizer,
     ) {
+    }
+
+    /**
+     * Gera o boleto do pedido no Mercado Pago, grava o Payment aguardando e,
+     * depois do commit, manda "Seu boleto está pronto". Usado pelo checkout
+     * da KazaKora e pelo dos outros sites (CheckoutOutroSite). O Mercado
+     * Pago exige o endereço do pagador; vai o de entrega do pedido.
+     *
+     * @param  array<string, mixed>  $pagador  email, first_name, last_name, identification
+     * @return array<string, mixed> resposta do Mercado Pago (ver MercadoPagoPaymentService::dadosDoBoleto)
+     */
+    public function gerar(Order $order, User $user, array $pagador, float $valor): array
+    {
+        $mp = $this->mercadoPago->createBoletoPayment(
+            $valor,
+            [...$pagador, 'address' => self::enderecoDoPagador($order)],
+            "order-{$order->id}-payment-1",
+            "order:{$order->id}:payment:1",
+        );
+        $boleto = MercadoPagoPaymentService::dadosDoBoleto($mp);
+
+        Payment::create([
+            'order_id' => $order->id,
+            'provider' => Payment::PROVIDER_MERCADOPAGO,
+            'mercadopago_payment_id' => (string) $mp['id'],
+            'method_type' => Payment::METHOD_BOLETO,
+            'amount' => $valor,
+            'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
+            'boleto_linha_digitavel' => $boleto['linhaDigitavel'],
+            'boleto_url' => $boleto['pdfUrl'],
+            'expira_em' => $boleto['vencimento'] ? Carbon::parse($boleto['vencimento']) : null,
+        ]);
+
+        DB::afterCommit(fn () => self::enviarEmail($user, $order, $boleto, $valor));
+
+        return $mp;
+    }
+
+    /**
+     * Endereço do pagador para o boleto (o Mercado Pago recusa sem ele):
+     * o de entrega gravado no pedido.
+     *
+     * @return array<string, string>
+     */
+    public static function enderecoDoPagador(Order $order): array
+    {
+        return [
+            'zip_code' => preg_replace('/\D/', '', (string) $order->shipping_zip),
+            'street_name' => (string) $order->shipping_street,
+            'street_number' => (string) ($order->shipping_number ?: 'S/N'),
+            'neighborhood' => (string) $order->shipping_neighborhood,
+            'city' => (string) $order->shipping_city,
+            'federal_unit' => strtoupper((string) $order->shipping_state),
+        ];
+    }
+
+    /** "Seu boleto está pronto", mesmo esquema do Pix. Falha de e-mail não trava o pedido. */
+    private static function enviarEmail(User $user, Order $order, array $boleto, float $valor): void
+    {
+        if (empty($boleto['linhaDigitavel']) && empty($boleto['pdfUrl'])) {
+            return;
+        }
+
+        rescue(fn () => Mail::to($user->email)->send(new BoletoAguardandoPagamento(
+            $order,
+            $valor,
+            $boleto['linhaDigitavel'],
+            $boleto['pdfUrl'],
+            $boleto['vencimento'],
+        )), null, false);
     }
 
     public function sincronizar(Payment $payment): string

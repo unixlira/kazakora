@@ -186,4 +186,42 @@ class CheckoutFerraKoraTest extends TestCase
             'pagamento' => ['metodo' => 'card', 'mp_card_token' => 'tok', 'mp_card_installments' => 3, 'mp_payment_method_id' => 'master'],
         ]))->assertCreated()->assertJsonPath('pedido.pago', true)->assertJsonPath('pix', null);
     }
+
+    public function test_boleto_cria_pedido_sem_desconto_do_pix_e_devolve_linha_e_pdf(): void
+    {
+        $this->mercadoPago(function ($mock) {
+            $mock->shouldReceive('createBoletoPayment')->once()
+                ->withArgs(fn ($valor, $pagador) => $valor === 200.0
+                    && $pagador['identification']['number'] === '12345678909'
+                    && $pagador['address']['zip_code'] === '01310100'
+                    && $pagador['address']['federal_unit'] === 'SP')
+                ->andReturn([
+                    'id' => 777, 'status' => 'pending', 'date_of_expiration' => '2026-10-17T23:59:59.000-03:00',
+                    'transaction_details' => ['digitable_line' => '23790.12345 60000.000000 00000.000000 1 00000000020000', 'external_resource_url' => 'https://www.mercadopago.com.br/payments/777/ticket'],
+                ]);
+            $mock->shouldReceive('retrievePayment')->with('777')->andReturn(['status' => 'pending']);
+        });
+
+        $this->postJson('/api/ferrakora/checkout/resumo', ['itens' => $this->itens(2)])->assertJsonPath('boleto_dias_vencimento', 3);
+
+        $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido(['total_esperado' => 20000, 'pagamento' => ['metodo' => 'boleto']]))
+            ->assertCreated()
+            ->assertJsonPath('pix', null)
+            ->assertJsonPath('boleto.linha_digitavel', '23790.12345 60000.000000 00000.000000 1 00000000020000')
+            ->assertJsonPath('boleto.url', 'https://www.mercadopago.com.br/payments/777/ticket')
+            ->assertJsonPath('boleto.vencimento', '2026-10-17T23:59:59.000-03:00')
+            ->assertJsonPath('pedido.total', 20000)
+            ->assertJsonPath('pedido.pago', false);
+
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+        $this->assertSame(Order::SITE_FERRAKORA, $order->site_origem);
+        $this->assertSame('0.00', $order->pix_discount_amount);
+        $this->assertTrue($order->payments()->firstOrFail()->boletoPendente());
+        Mail::assertSent(\App\Modules\Checkout\Mail\BoletoAguardandoPagamento::class, fn ($mail) => $mail->hasTo('maria@exemplo.com'));
+
+        $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=".$resposta->json('token'))
+            ->assertOk()
+            ->assertJsonPath('pedido.pago', false)
+            ->assertJsonPath('pedido.cancelado', false);
+    }
 }

@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
     <div class="selo-ra relative shrink-0 overflow-hidden" :style="estiloCaixa">
         <!-- Fallback: imagem local do selo, até o oficial carregar. -->
         <a v-if="!carregado" :href="link" target="_blank" rel="noopener"
-            class="absolute inset-0 flex items-center justify-center rounded-md bg-white transition hover:opacity-90"
+            class="absolute inset-0 flex items-center justify-center rounded-[8px] bg-white transition hover:opacity-90"
             title="Verificada por Reclame AQUI">
             <img src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI" width="294" height="88"
                 class="h-[90%] w-auto">
@@ -117,5 +117,12 @@ onBeforeUnmount(() => {
    O Lira não quis a borda (2026-10-14). */
 .selo-ra :deep(.ra-widget-verified-content) {
     border: 0 !important;
+}
+
+/* Cantos do selo vêm da caixa de fora (rounded-[8px]), não dos 8px do widget
+   (pedido 2026-10-14: rodapé com 8px em todas as imagens). */
+.selo-ra :deep(.ra-widget-verified-content),
+.selo-ra :deep(.ra-widget-verified-wrapper) {
+    border-radius: 0 !important;
 }
 </style>

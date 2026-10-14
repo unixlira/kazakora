@@ -36,7 +36,8 @@ const isAuthenticated = computed(() => !!page.props.auth?.user);
 const PARCELAS = 12;
 // Desconto no Pix (pedido 2026-10-09) — % compartilhado pelo backend.
 const DESCONTO_PIX = Number(page.props.descontoPix ?? 0);
-const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+// Mesmas bandeiras e imagens do rodapé, com o boleto (pedido 2026-10-14).
+const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 
 // Perguntas sobre a loja, com as regras reais (política de trocas e checkout).
 const FAQ = [
@@ -254,16 +255,7 @@ const consultarPrazo = async () => {
     }
 };
 
-const addingToCart = ref(false);
 const buyingNow = ref(false);
-
-const addToCart = () => {
-    addingToCart.value = true;
-    router.post('/carrinho', { product_id: props.product.id, quantity: quantity.value }, {
-        preserveScroll: true,
-        onFinish: () => { addingToCart.value = false; },
-    });
-};
 
 // "Comprar": finalização só com este produto, sem colocar no carrinho
 // (pedido 2026-10-11). O carrinho continua com o que já tinha.
@@ -460,14 +452,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <button type="button" class="btn" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
                                 <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
-                                <button type="button" class="btn-sec" :disabled="addingToCart" @click="addToCart">
-                                    <i class="fas fa-cart-shopping"></i> Adicionar ao carrinho
-                                </button>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
 
                             <div class="bandeiras">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao-hd/${brand}.png`" :alt="brand" loading="lazy">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
                             </div>
 
                             <form class="prazo-cep" @submit.prevent="consultarPrazo">
@@ -590,7 +579,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section class="card">
                             <h2>Pagamento Seguro</h2>
                             <div class="bandeiras esquerda">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao-hd/${brand}.png`" :alt="brand" loading="lazy">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
                             </div>
                             <p v-if="DESCONTO_PIX > 0">No Pix você tem {{ DESCONTO_PIX }}% de desconto, com aprovação imediata.</p>
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
@@ -847,7 +836,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .esgotado { margin: 10px 0; color: #dc2626; font-weight: 600; }
 .pd2 .bandeiras { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 18px 0; }
 .pd2 .bandeiras.esquerda { justify-content: flex-start; margin-top: 0; }
-.pd2 .bandeiras img { height: 45px; width: auto; }
+/* Bandeiras sem a sombra embutida (era a linha à direita): borda fina nos 4 lados e cantos de 4px, como no rodapé (pedido 2026-10-14). */
+/* As 7 bandeiras sempre numa linha: cada uma ocupa 1/7 da largura, no máximo 67px (45px de altura). */
+.pd2 .bandeiras img { width: calc((100% - 6 * 8px) / 7); max-width: 67px; height: auto; box-sizing: border-box; border: 1px solid rgba(0, 0, 0, .12); border-radius: 4px; }
 
 .pd2 .fretefundo { list-style: none; margin: 0; padding: 5px 15px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); }
 .pd2 .fretefundo li { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: center; padding: 10px 0; font-size: 15px; line-height: 22px; color: #545454; }
@@ -996,9 +987,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     /* Faixa amarela do topo numa linha só no celular (pedido 2026-10-10). */
     .pd2 .faixa { flex-wrap: nowrap; gap: 6px; padding: 8px 10px; font-size: 11px; letter-spacing: 0; white-space: nowrap; }
     .pd2 .faixa i { margin-right: 3px; }
-    /* Bandeiras menores no celular: as 6 cabem numa linha (pedido 2026-10-10). */
+    /* Bandeiras menores no celular: as 7 cabem numa linha (pedido 2026-10-10). */
     .pd2 .bandeiras { flex-wrap: nowrap; gap: 5px; }
-    .pd2 .bandeiras img { height: 30px; }
+    .pd2 .bandeiras img { width: calc((100% - 6 * 5px) / 7); }
     .pd2 .wrap { padding: 0 10px; }
     .pd2 .migalhas { display: none; }
     .pd2 .col-principal { padding-top: 10px; }

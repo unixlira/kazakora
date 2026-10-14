@@ -9,7 +9,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 // Faixa vermelha de escassez: 15 minutos regressivos. Ao acabar fica em
 // 00:00; atualizar a página recomeça dos 15 (pedido do Lira, sem guardar).
-const BANDEIRAS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+// Bandeiras novas enviadas pelo Lira (2026-10-14), no formato dos cartões antigos (249x167).
+const BANDEIRAS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 
 const restante = ref(15 * 60);
 let relogio = null;
@@ -77,7 +78,7 @@ const tempo = computed(() => {
         <footer class="mt-auto bg-black px-4 py-10 text-white">
             <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8">
                 <div class="flex flex-col items-center justify-center md:col-span-4">
-                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto">
+                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto rounded-[8px]">
                     <p class="mt-4 text-xs leading-relaxed text-white/80 md:-mb-1">
                         © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                         CNPJ: {{ COMPANY.cnpj }}
@@ -86,11 +87,13 @@ const tempo = computed(() => {
 
                 <div class="flex flex-col items-center justify-center md:col-span-4">
                     <p class="text-sm font-semibold text-white">Formas de pagamento</p>
-                    <!-- As seis bandeiras numa linha só (pedido 2026-10-12): encolhem
-                         juntas com a coluna em vez de quebrar. -->
-                    <div ref="bandeiras" class="mt-3 flex w-full max-w-[360px] flex-nowrap items-center gap-1.5">
-                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
-                            width="265" height="180" class="h-auto w-full min-w-0 flex-1">
+                    <!-- As bandeiras numa linha só (pedido 2026-10-12): encolhem
+                         juntas com a coluna em vez de quebrar. Tamanho original
+                         (grande) de volta, pedido do Lira 2026-10-14; com sete bandeiras a
+                         largura máxima é a das seis (360px) escalada para sete. -->
+                    <div ref="bandeiras" class="mt-3 flex w-full max-w-[421px] flex-nowrap items-center gap-1.5">
+                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/novas/${bandeira}.png`" :alt="bandeira"
+                            width="249" height="167" class="h-auto w-full min-w-0 flex-1 rounded-[8px]">
                     </div>
                 </div>
 
@@ -100,13 +103,17 @@ const tempo = computed(() => {
                     <p class="text-sm font-semibold text-white">Segurança</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                            class="box-border flex items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white px-2 transition hover:opacity-90"
+                            class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2 transition hover:opacity-90"
                             :style="{ height: `${alturaSelo}px` }"
                             title="Ver a verificação do Google Safe Browsing">
                             <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
                         </a>
-                        <!-- Selo oficial RA Verificada (2026-10-14). -->
-                        <SeloReclameAqui class="rounded-md" :altura="alturaSelo" />
+                        <!-- Selo oficial RA Verificada (2026-10-14). Mesma escala do Google: caixa
+                             branca da mesma altura, selo com 80% dela como o logo (pedido 2026-10-14). -->
+                        <div class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2"
+                            :style="{ height: `${alturaSelo}px` }">
+                            <SeloReclameAqui :altura="Math.round(alturaSelo * 0.8)" />
+                        </div>
                     </div>
                 </div>
             </div>

@@ -120,7 +120,8 @@ onUnmounted(() => {
     window.removeEventListener('resize', medirRolagem);
 });
 
-const PAYMENT_BRANDS = ['pix', 'visa', 'mastercard', 'elo', 'amex', 'diners'];
+// Bandeiras novas enviadas pelo Lira (2026-10-14), no formato dos cartões antigos (249x167).
+const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 
 // Ao passar o mouse, cada ícone fica na cor oficial da rede (pedido 2026-10-10).
 const REDES = [
@@ -368,7 +369,7 @@ const REDES = [
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
                     <div class="lg:max-w-xs lg:shrink-0">
-                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto lg:mx-0" loading="lazy">
+                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto rounded-[8px] lg:mx-0" loading="lazy">
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
@@ -430,24 +431,31 @@ const REDES = [
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Pagamentos</h5>
                         <!-- Celular: bandeiras menores, todas numa linha só (sem arrastar). -->
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-start">
-                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/cartao-hd/${brand}.png`" :alt="brand"
-                                class="h-[30px] w-auto shrink-0 sm:h-[44px] lg:h-[51px]">
+                            <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
+                                 retos no arquivo; o arredondamento leve vem do CSS (pedido 2026-10-14). -->
+                            <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand"
+                                class="h-[30px] w-auto shrink-0 rounded-[8px] sm:h-[44px] lg:h-[51px]">
                         </div>
                     </div>
 
                     <!-- Selos (2026-10-11): mesma altura das bandeiras de pagamento, simétrico
-                         a elas. Reclame AQUI: selo oficial RA Verificada (2026-10-14). -->
+                         a elas. Reclame AQUI: selo oficial RA Verificada (2026-10-14).
+                         Tamanho original (grande), sem a redução de 5px (pedido 2026-10-14). -->
                     <div class="lg:text-right">
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                                class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-xl bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
+                                class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
                                 title="Ver a verificação do Google Safe Browsing">
                                 <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45"
                                     class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
                             </a>
-                            <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). -->
-                            <SeloReclameAqui class="rounded-xl [--ra-altura:30] sm:[--ra-altura:44] lg:[--ra-altura:51]" />
+                            <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). Na mesma
+                                 escala do Google: caixa branca da mesma altura e o selo com a altura
+                                 do logo do Google dentro dela (pedido 2026-10-14). -->
+                            <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]">
+                                <SeloReclameAqui class="[--ra-altura:22] sm:[--ra-altura:34] lg:[--ra-altura:40]" />
+                            </div>
                         </div>
                     </div>
                 </div>

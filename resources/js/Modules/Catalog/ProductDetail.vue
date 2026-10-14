@@ -262,16 +262,7 @@ const isFreeShipping = computed(() => Boolean(cheapestShipping.value));
 const showAllShipping = ref(false);
 
 const quantity = ref(1);
-const addingToCart = ref(false);
 const buyingNow = ref(false);
-
-const addToCart = () => {
-    addingToCart.value = true;
-    router.post('/carrinho', { product_id: props.product.id, quantity: quantity.value }, {
-        preserveScroll: true,
-        onFinish: () => { addingToCart.value = false; },
-    });
-};
 
 // "Comprar": finalização só com este produto, sem colocar no carrinho (pedido 2026-10-11).
 const buyNow = () => {
@@ -508,9 +499,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
                             <p v-if="product.stock > 0 && quantityDiscounts.length" class="mt-2 text-sm font-semibold text-store-fg">Total: {{ formatPrice(currentTotal) }}</p>
 
-                            <div class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+                            <div class="mt-4 grid gap-2">
                                 <button type="button" :disabled="product.stock < 1 || buyingNow" class="flex items-center justify-center gap-2 rounded-full bg-store-accent px-6 py-3 text-sm font-bold text-store-accent-contrast shadow-lg shadow-store-accent/20 transition hover:-translate-y-0.5 hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40" @click="buyNow">Comprar agora</button>
-                                <button type="button" :disabled="product.stock < 1 || addingToCart" class="flex items-center justify-center gap-2 rounded-full border border-store-border-strong bg-store-bg px-5 py-3 text-sm font-bold text-store-fg transition hover:bg-store-bg-sunken disabled:cursor-not-allowed disabled:opacity-40" @click="addToCart"><i class="fas fa-cart-shopping text-sm"></i><span class="sm:hidden lg:inline">Adicionar</span></button>
                             </div>
                         </div>
 
@@ -614,7 +604,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
         <!-- Barra fixa no rodapé (mobile): preço + ações -->
         <div class="fixed inset-x-0 bottom-0 z-40 flex items-center gap-2 border-t border-store-border bg-store-bg-raised p-3 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] lg:hidden">
             <span class="font-display text-lg font-bold text-store-fg">{{ formatPrice(product.final_price) }}</span>
-            <button type="button" :disabled="product.stock < 1 || addingToCart" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-store-border-strong text-store-fg disabled:cursor-not-allowed disabled:opacity-40" aria-label="Adicionar ao carrinho" @click="addToCart"><i class="fas fa-cart-shopping text-sm"></i></button>
             <button type="button" :disabled="product.stock < 1 || buyingNow" class="flex-1 rounded-lg bg-store-accent px-4 py-2.5 text-sm font-semibold text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40" @click="buyNow">Comprar agora</button>
         </div>
 

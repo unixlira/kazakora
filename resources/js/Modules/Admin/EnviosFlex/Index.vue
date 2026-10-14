@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import { usePermissions } from '@/Shared/usePermissions';
@@ -222,6 +223,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                             <th class="px-4 py-3 font-medium">KoraFlex</th>
                             <th class="px-4 py-3 font-medium">Retirada</th>
                             <th class="px-4 py-3 font-medium">Alertas</th>
+                            <th class="px-4 py-3 font-medium"><span class="sr-only">Detalhes</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -271,12 +273,16 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                                     :class="alerta.nivel === 'erro' ? 'bg-lighterror text-error' : 'bg-lightwarning text-warning'">
                                     {{ alerta.titulo }}
                                 </span>
-                                <span v-if="!alertasVisiveis(linha).length && linha.resolucao" class="text-xs text-success">
-                                    <i class="fas fa-check"></i> {{ linha.resolucao.rotulo }}
-                                </span>
-                                <span v-else-if="!alertasVisiveis(linha).length" class="inline-block rounded bg-lightsuccess px-2 py-0.5 text-xs font-medium text-success">
-                                    Sem alertas
-                                </span>
+                                <template v-if="!alertasVisiveis(linha).length">
+                                    <span v-if="linha.resolucao" class="text-xs text-success">
+                                        <i class="fas fa-check"></i> {{ linha.resolucao.rotulo }}
+                                    </span>
+                                    <span v-else class="whitespace-nowrap rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">Sem Alertas</span>
+                                </template>
+                            </td>
+                            <!-- Olho (2026-10-14): mesmo detalhe do clique na linha, mas visível pra quem não sabe que a linha abre. -->
+                            <td class="px-4 py-3 text-right" @click.stop>
+                                <ActionIcon icon="fa-eye" label="Ver detalhes do pedido" color="slate" @click="abrir(linha)" />
                             </td>
                         </tr>
                     </tbody>

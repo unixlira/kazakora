@@ -13,6 +13,9 @@ use RuntimeException;
  * lendo de volta. Só três ações, todas reversíveis pelo próprio Seller
  * Center: pausar o ADS do produto, mudar a meta de ROAS e mudar o preço.
  * Nunca usa "stop"/"delete" de campanha.
+ *
+ * Com SHOPEE_ADS_ESCRITA desligada (Lira, 2026-10-14: "só simulando por
+ * enquanto") nada vai para a Shopee: o pedido fica no AuditLog como simulado.
  */
 class AcoesShopee
 {
@@ -25,7 +28,7 @@ class AcoesShopee
      */
     public function executar(string $acao, string $itemId, ?float $valor, ?string $modelId, ?int $usuarioId): array
     {
-        $resultado = match ($acao) {
+        $resultado = ! config('services.shopee.ads_escrita') ? $this->simular($acao, $valor) : match ($acao) {
             'pausar_ads' => $this->pausarAds($itemId),
             'meta_roas' => $this->metaRoas($itemId, $this->exigirValor($valor, 1, 100)),
             'preco' => $this->preco($itemId, $this->exigirValor($valor, 1, 99999), $modelId),
@@ -43,6 +46,19 @@ class AcoesShopee
         ]);
 
         return $resultado;
+    }
+
+    /** Escrita desligada: valida o valor, não chama a Shopee e não conta como feita. */
+    private function simular(string $acao, ?float $valor): array
+    {
+        match ($acao) {
+            'pausar_ads' => null,
+            'meta_roas' => $this->exigirValor($valor, 1, 100),
+            'preco' => $this->exigirValor($valor, 1, 99999),
+            default => throw new RuntimeException('Ação desconhecida.'),
+        };
+
+        return ['ok' => false, 'mensagem' => 'Simulação: nada foi mandado para a Shopee (escrita desligada).', 'antes' => [], 'depois' => ['simulacao' => true]];
     }
 
     /** Pausa todas as campanhas de produto em andamento deste item. */

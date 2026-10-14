@@ -254,16 +254,7 @@ const consultarPrazo = async () => {
     }
 };
 
-const addingToCart = ref(false);
 const buyingNow = ref(false);
-
-const addToCart = () => {
-    addingToCart.value = true;
-    router.post('/carrinho', { product_id: props.product.id, quantity: quantity.value }, {
-        preserveScroll: true,
-        onFinish: () => { addingToCart.value = false; },
-    });
-};
 
 // "Comprar": finalização só com este produto, sem colocar no carrinho
 // (pedido 2026-10-11). O carrinho continua com o que já tinha.
@@ -460,9 +451,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <button type="button" class="btn" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
                                 <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
-                                <button type="button" class="btn-sec" :disabled="addingToCart" @click="addToCart">
-                                    <i class="fas fa-cart-shopping"></i> Adicionar ao carrinho
-                                </button>
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
 

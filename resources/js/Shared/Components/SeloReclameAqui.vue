@@ -118,4 +118,11 @@ onBeforeUnmount(() => {
 .selo-ra :deep(.ra-widget-verified-content) {
     border: 0 !important;
 }
+
+/* Cantos do selo vêm da caixa de fora (rounded-[4px]), não dos 8px do widget
+   (pedido 2026-10-14: pontas menos arredondadas). */
+.selo-ra :deep(.ra-widget-verified-content),
+.selo-ra :deep(.ra-widget-verified-wrapper) {
+    border-radius: 0 !important;
+}
 </style>

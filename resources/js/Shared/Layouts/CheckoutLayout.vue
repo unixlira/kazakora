@@ -90,8 +90,8 @@ const tempo = computed(() => {
                          juntas com a coluna em vez de quebrar. 44px a menos de largura =
                          bandeiras (265x180) 5px mais baixas (pedido 2026-10-14). -->
                     <div ref="bandeiras" class="mt-3 flex w-[calc(100%-44px)] max-w-[316px] flex-nowrap items-center gap-1.5">
-                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/cartao-hd/${bandeira}.png`" :alt="bandeira"
-                            width="265" height="180" class="h-auto w-full min-w-0 flex-1">
+                        <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/retas/${bandeira}.png`" :alt="bandeira"
+                            width="249" height="167" class="h-auto w-full min-w-0 flex-1 rounded-[4px]">
                     </div>
                 </div>
 
@@ -101,13 +101,17 @@ const tempo = computed(() => {
                     <p class="text-sm font-semibold text-white">Segurança</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                            class="box-border flex items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white px-2 transition hover:opacity-90"
+                            class="box-border flex items-center justify-center overflow-hidden rounded-[4px] border border-slate-200 bg-white px-2 transition hover:opacity-90"
                             :style="{ height: `${alturaSelo}px` }"
                             title="Ver a verificação do Google Safe Browsing">
                             <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
                         </a>
-                        <!-- Selo oficial RA Verificada (2026-10-14). -->
-                        <SeloReclameAqui class="rounded-md" :altura="alturaSelo" />
+                        <!-- Selo oficial RA Verificada (2026-10-14). Mesma escala do Google: caixa
+                             branca da mesma altura, selo com 80% dela como o logo (pedido 2026-10-14). -->
+                        <div class="box-border flex items-center justify-center overflow-hidden rounded-[4px] border border-slate-200 bg-white px-2"
+                            :style="{ height: `${alturaSelo}px` }">
+                            <SeloReclameAqui :altura="Math.round(alturaSelo * 0.8)" />
+                        </div>
                     </div>
                 </div>
             </div>

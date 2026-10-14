@@ -163,7 +163,8 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
             <Link href="/admin/integracoes/mercado-livre/flex" class="text-sm text-primary hover:underline">Custo do Flex →</Link>
         </div>
 
-        <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <!-- 6 por linha só em tela larga: em notebook (1366px com o menu) os títulos saíam cortados ("VENDAS ...", 2026-10-14). -->
+        <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
             <CardStats stat-subtitle="VENDAS FLEX NO MÊS" :stat-title="String(resumo.vendas)" stat-icon-name="fas fa-bag-shopping" variant="primary" />
             <CardStats stat-subtitle="SAÍRAM DAQUI" :stat-title="String(resumo.sairam)" stat-icon-name="fas fa-motorcycle" variant="info" />
             <CardStats stat-subtitle="NA FILA DE ENTREGA" :stat-title="String(resumo.naFila)" stat-icon-name="fas fa-route" variant="warning"

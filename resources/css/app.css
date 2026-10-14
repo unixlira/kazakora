@@ -589,3 +589,33 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
 .no-scrollbar::-webkit-scrollbar {
     display: none;
 }
+
+/*
+ * Estratégia Shopee (pedido do Lira 2026-10-14): corpo e cards pretos #000 e
+ * fonte branca #FFF, nos dois temas. Só o conteúdo da tela muda; menu, topo e
+ * rodapé seguem o tema. Textos de apoio (cinzas) também ficam brancos; as
+ * cores de situação (vermelho, verde, amarelo) continuam para dar o sinal.
+ */
+.admin-shell:has(.shopee-preto) {
+    --fundo: #000000;
+}
+.admin-shell .shopee-preto {
+    --surface: #000000;
+    --surface-muted: #000000;
+    --surface-foreground: #ffffff;
+    --surface-border: #2a2a2a;
+    --texto-suave: #ffffff;
+    --color-primary: #ff8c4d;
+    --primary-solido: #c2410c;
+    --color-lightprimary: color-mix(in oklab, #ff8c4d 16%, transparent);
+    --color-lightsuccess: color-mix(in oklab, var(--color-success) 20%, transparent);
+    --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
+    --color-lighterror: color-mix(in oklab, var(--color-error) 20%, transparent);
+    --color-lightinfo: color-mix(in oklab, var(--color-info) 20%, transparent);
+    color: #ffffff;
+    color-scheme: dark;
+}
+.admin-shell .shopee-preto :is(.text-slate-400, .text-slate-500, .text-slate-600, .dark\:text-slate-300, .dark\:text-slate-400) { color: #ffffff; }
+.admin-shell .shopee-preto :is(.bg-slate-100, .dark\:bg-slate-800) { background-color: #262626; }
+.admin-shell .shopee-preto .bg-primary { color: #000000; }
+.admin-shell .shopee-preto select option { background-color: #000000; color: #ffffff; }

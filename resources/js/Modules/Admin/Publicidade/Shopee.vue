@@ -3,7 +3,8 @@
  * Publicidade › Estratégia Shopee (2026-10-14): campanhas de ADS da Shopee
  * com o resultado em reais e uma situação para decidir de olho. Fase 1, só
  * leitura: os botões só abrem a Shopee, nada muda por aqui. Ver
- * PublicidadeShopeeController e EstrategiaShopeeAds.
+ * PublicidadeShopeeController e EstrategiaShopeeAds. Visual preto com fonte
+ * branca nos dois temas (.shopee-preto no app.css).
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
@@ -109,6 +110,7 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
     <Head title="Estratégia Shopee" />
 
     <AdminLayout>
+        <div class="shopee-preto">
         <div class="mb-2 flex flex-wrap items-center gap-3">
             <h1 class="flex items-center gap-3 text-2xl font-bold">
                 <i class="fas fa-chess-knight" style="color: #EE4D2D" aria-hidden="true"></i>
@@ -314,5 +316,6 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                 </div>
             </section>
         </template>
+        </div>
     </AdminLayout>
 </template>

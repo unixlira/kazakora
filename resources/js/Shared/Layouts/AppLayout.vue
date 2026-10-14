@@ -434,27 +434,27 @@ const REDES = [
                             <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
                                  retos no arquivo; o arredondamento leve vem do CSS (pedido 2026-10-14). -->
                             <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand"
-                                class="h-[25px] w-auto shrink-0 rounded-[8px] sm:h-[39px] lg:h-[46px]">
+                                class="h-[30px] w-auto shrink-0 rounded-[8px] sm:h-[44px] lg:h-[51px]">
                         </div>
                     </div>
 
                     <!-- Selos (2026-10-11): mesma altura das bandeiras de pagamento, simétrico
                          a elas. Reclame AQUI: selo oficial RA Verificada (2026-10-14).
-                         Bandeiras e selos 5px menores (pedido 2026-10-14). -->
+                         Tamanho original (grande), sem a redução de 5px (pedido 2026-10-14). -->
                     <div class="lg:text-right">
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                                class="flex h-[25px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[39px] sm:px-3 lg:h-[46px]"
+                                class="flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[44px] sm:px-3 lg:h-[51px]"
                                 title="Ver a verificação do Google Safe Browsing">
                                 <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45"
-                                    class="h-[17px] w-auto sm:h-[29px] lg:h-[35px]">
+                                    class="h-[22px] w-auto sm:h-[34px] lg:h-[40px]">
                             </a>
                             <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). Na mesma
                                  escala do Google: caixa branca da mesma altura e o selo com a altura
                                  do logo do Google dentro dela (pedido 2026-10-14). -->
-                            <div class="flex h-[25px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[39px] sm:px-3 lg:h-[46px]">
-                                <SeloReclameAqui class="[--ra-altura:17] sm:[--ra-altura:29] lg:[--ra-altura:35]" />
+                            <div class="flex h-[30px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[44px] sm:px-3 lg:h-[51px]">
+                                <SeloReclameAqui class="[--ra-altura:22] sm:[--ra-altura:34] lg:[--ra-altura:40]" />
                             </div>
                         </div>
                     </div>

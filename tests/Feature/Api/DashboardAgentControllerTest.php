@@ -1176,4 +1176,24 @@ class DashboardAgentControllerTest extends TestCase
         $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/pedidos/buscar?q=an')
             ->assertOk()->assertJsonCount(0, 'orders');
     }
+
+    public function test_queue_reports_the_promised_delivery_day_of_the_shipment(): void
+    {
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_MERCADO_LIVRE, 'external_order_id' => 'ML-PRAZO']);
+        $order->items()->create(['product_name' => 'Produto Flex', 'product_price' => 50, 'quantity' => 1, 'subtotal' => 50]);
+        ChannelShipment::create([
+            'order_id' => $order->id,
+            'channel' => 'mercado_livre',
+            'external_shipment_id' => '46000000002',
+            'shipping_method' => ChannelShipment::METHOD_FLEX,
+            'status' => ChannelShipment::STATUS_LABEL_DOWNLOADED,
+            'promised_delivery_on' => '2026-10-15',
+        ]);
+
+        $queue = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/queue')->assertOk()->json('queue');
+
+        $card = collect($queue)->firstWhere('id', $order->id);
+        $this->assertSame('2026-10-15', $card['promised_delivery_on']);
+        $this->assertSame('flex', $card['shipping_type']);
+    }
 }

@@ -379,4 +379,38 @@ class EnviosFlexControlTest extends TestCase
                 ->where('linhas.0.itens.0.qtd', 1)
                 ->missing('produtosEntregues'));
     }
+
+    /** Pedido 2026-10-14: o dia prometido ao comprador vai pro card do Flex no KoraSync. */
+    public function test_consulta_do_envio_grava_o_dia_prometido_e_nao_apaga_quando_o_campo_some(): void
+    {
+        $envio = $this->envioFlex('46000000001');
+
+        $this->respostasMl['46000000001'] = [
+            'id' => 46000000001,
+            'status' => 'ready_to_ship',
+            'substatus' => 'printed',
+            'shipping_option' => [
+                'estimated_delivery_limit' => ['date' => '2026-10-15T00:00:00.000-03:00'],
+                'estimated_delivery_time' => ['date' => '2026-10-15T00:00:00.000-03:00'],
+            ],
+        ];
+
+        app(ShipmentService::class)->syncOrderStatusFromShipment($envio);
+
+        $this->assertSame('2026-10-15', $envio->refresh()->promised_delivery_on?->toDateString());
+
+        $this->respostasMl['46000000001'] = ['id' => 46000000001, 'status' => 'ready_to_ship', 'substatus' => 'printed'];
+
+        app(ShipmentService::class)->syncOrderStatusFromShipment($envio);
+
+        $this->assertSame('2026-10-15', $envio->refresh()->promised_delivery_on?->toDateString());
+    }
+
+    public function test_dia_prometido_usa_o_dia_de_sao_paulo(): void
+    {
+        $this->assertSame('2026-10-15', ShipmentService::dataPrometida(['shipping_option' => ['estimated_delivery_limit' => ['date' => '2026-10-15T00:00:00.000-03:00']]]));
+        $this->assertSame('2026-10-16', ShipmentService::dataPrometida(['shipping_option' => ['estimated_delivery_time' => ['date' => '2026-10-16T00:00:00.000-03:00']]]));
+        $this->assertNull(ShipmentService::dataPrometida(['shipping_option' => ['estimated_delivery_limit' => ['date' => null]]]));
+        $this->assertNull(ShipmentService::dataPrometida([]));
+    }
 }

@@ -62,6 +62,9 @@ class ChannelShippingService
             'status' => ChannelShipment::STATUS_CONFIRMED,
             'confirmed_at' => now(),
             'scheduled_for' => $scheduledFor,
+            // Só o Mercado Livre devolve a promessa de entrega; nos outros
+            // canais o campo não vem e o que já estava fica.
+            'promised_delivery_on' => $result['promised_delivery_on'] ?? $shipment->promised_delivery_on,
             // Achado real 2026-08-08 (pedido #189): uma tentativa anterior
             // que falhou grava error_message; sem limpar aqui, uma
             // tentativa seguinte que dá certo deixava esse texto de erro

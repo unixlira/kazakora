@@ -145,6 +145,40 @@
 .admin-shell .icone-tiktok { --cor-marca: var(--surface-foreground); text-shadow: 1px 1px 0 #fe2c55, -1px -1px 0 #25f4ee; }
 
 /*
+ * Ícones de assunto no menu do admin (Lira, 2026-10-14: todos os ícones
+ * coloridos, sem exceção). O item que não é de marca leva `cor` em
+ * adminSidebarItems.js: verde dinheiro, laranja pedido e envio, vermelho
+ * devolução e alerta, violeta marketing, âmbar estrela/cupom/chave, azul
+ * cadastro e painel, índigo relatório e acesso, ciano comunicação e
+ * importação, rosa foto e cupom, terra estoque, cinza-azulado máquina
+ * (impressora, logs). Tom 600 no claro (contraste >= 3 no branco) e 400 no
+ * escuro.
+ */
+.admin-shell .icone-cor { color: var(--cor-icone); }
+.admin-shell .icone-cor-azul { --cor-icone: #2563eb; }
+.admin-shell .icone-cor-indigo { --cor-icone: #4f46e5; }
+.admin-shell .icone-cor-violeta { --cor-icone: #7c3aed; }
+.admin-shell .icone-cor-rosa { --cor-icone: #db2777; }
+.admin-shell .icone-cor-vermelho { --cor-icone: #dc2626; }
+.admin-shell .icone-cor-laranja { --cor-icone: #ea580c; }
+.admin-shell .icone-cor-ambar { --cor-icone: #d97706; }
+.admin-shell .icone-cor-terra { --cor-icone: #a16207; }
+.admin-shell .icone-cor-verde { --cor-icone: #059669; }
+.admin-shell .icone-cor-ciano { --cor-icone: #0891b2; }
+.admin-shell .icone-cor-cinza-azul { --cor-icone: #475569; }
+.dark .admin-shell .icone-cor-azul { --cor-icone: #60a5fa; }
+.dark .admin-shell .icone-cor-indigo { --cor-icone: #818cf8; }
+.dark .admin-shell .icone-cor-violeta { --cor-icone: #a78bfa; }
+.dark .admin-shell .icone-cor-rosa { --cor-icone: #f472b6; }
+.dark .admin-shell .icone-cor-vermelho { --cor-icone: #f87171; }
+.dark .admin-shell .icone-cor-laranja { --cor-icone: #fb923c; }
+.dark .admin-shell .icone-cor-ambar { --cor-icone: #fbbf24; }
+.dark .admin-shell .icone-cor-terra { --cor-icone: #eab308; }
+.dark .admin-shell .icone-cor-verde { --cor-icone: #34d399; }
+.dark .admin-shell .icone-cor-ciano { --cor-icone: #22d3ee; }
+.dark .admin-shell .icone-cor-cinza-azul { --cor-icone: #94a3b8; }
+
+/*
  * Fundo da página do admin em degradê (Lira, 2026-10-14): verde no tema
  * claro e vinho no escuro, os mesmos degradês dos cards "Acessos ao site" e
  * "Faturamento por canal" do Dashboard. Cards, tabelas e métricas continuam

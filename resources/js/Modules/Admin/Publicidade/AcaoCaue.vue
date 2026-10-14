@@ -25,6 +25,7 @@ const dados = ref(null);
 const passos = ref([]);
 const resultados = ref([]);
 const forcar = ref(false);
+const aplicou = ref(false);
 
 const decisoes = computed(() => {
     const d = props.produto.decisao;
@@ -117,7 +118,7 @@ async function aplicar() {
         }
     }
     enviando.value = false;
-    emit('aplicado', props.produto.item_id);
+    aplicou.value = true;
     // Relê as campanhas para o painel mostrar o estado novo.
     try {
         const q = props.produto.roas_empate ? `?empate=${props.produto.roas_empate}` : '';
@@ -131,11 +132,22 @@ async function aplicar() {
     }
 }
 
+// A lista só é relida ao fechar: produto decidido sai da lista e, se
+// relesse antes, o painel sumiria junto com o resultado na tela.
+function fechar() {
+    aberto.value = false;
+    if (aplicou.value) {
+        aplicou.value = false;
+        emit('aplicado', props.produto.item_id);
+    }
+}
+
 async function acaoHistorico(linha, tipo) {
     if (tipo === 'desfazer' && !window.confirm(`Desfazer "${linha.descricao}" na Shopee?`)) return;
     try {
         const r = await chamar(`${BASE}/${linha.id}/${tipo}`, {});
         dados.value.historico = r.historico;
+        aplicou.value = true;
         resultados.value.push({ texto: r.acao.descricao, status: r.acao.status, erro: r.acao.erro });
     } catch (e) {
         resultados.value.push({ texto: linha.descricao, status: 'erro', erro: e.message });
@@ -158,7 +170,7 @@ const SELO = {
     </button>
 
     <ConfirmModal :open="aberto" :title="`Cauê: ${produto.nome}`" confirm-label="Aplicar" cancel-label="Fechar"
-        :loading="enviando" :confirm-disabled="carregando || !podeAplicar" @close="aberto = false" @confirm="aplicar">
+        :loading="enviando" :confirm-disabled="carregando || !podeAplicar" @close="fechar" @confirm="aplicar">
         <div class="space-y-4 text-sm">
             <div class="flex items-center gap-3">
                 <img v-if="produto.imagem" :src="produto.imagem" alt="" class="h-14 w-14 rounded-lg object-cover">

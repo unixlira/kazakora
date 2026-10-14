@@ -11,6 +11,7 @@ use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Models\ShopeeAdCampanha;
 use App\Modules\Marketplace\Models\ShopeeAdCampanhaDia;
+use App\Modules\Marketplace\Models\ShopeeAdsAcao;
 use App\Services\Shopee\ShopeeAdsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +111,40 @@ class PublicidadeShopeeTest extends TestCase
                 ->where('saldo', null)
                 ->where('estrategia.campanhas.0.situacao', 'sem_custo')
                 ->where('estrategia.campanhas.0.resultado', null));
+    }
+
+    public function test_campanha_decidida_pelo_botao_acao_sai_da_lista(): void
+    {
+        $item = 500;
+        foreach (['pausada' => 'pausar', 'meta' => 'meta_roas', 'meta_velha' => 'meta_roas', 'desfeita' => 'pausar', 'erro' => 'pausar', 'retomada' => 'pausar'] as $nome => $acao) {
+            $item++;
+            $p = Product::factory()->create(['name' => $nome, 'cost_price' => 20, 'stock' => 10]);
+            ProductChannelListing::create(['product_id' => $p->id, 'channel' => 'shopee', 'status' => 'published', 'external_id' => (string) $item, 'price' => 50]);
+            $this->campanha($item, (string) $item, ['gasto' => 40, 'venda' => 0, 'impressoes' => 900, 'cliques' => 40, 'pedidos' => 0]);
+            $a = ShopeeAdsAcao::create(['item_id' => (string) $item, 'campaign_id' => (string) $item, 'acao' => $acao,
+                'antes' => ['status' => 'ongoing', 'meta' => 4], 'depois' => $acao === 'pausar' ? ['status' => 'paused'] : ['meta' => 6],
+                'status' => $nome === 'erro' ? 'erro' : 'conferida', 'simulacao' => false,
+                'desfeita_em' => $nome === 'desfeita' ? now() : null]);
+            if ($nome === 'meta_velha') {
+                $a->forceFill(['created_at' => now()->subDays(15)])->save();
+            }
+            if ($nome === 'retomada') {
+                ShopeeAdsAcao::create(['item_id' => (string) $item, 'campaign_id' => (string) $item, 'acao' => 'retomar',
+                    'antes' => ['status' => 'paused'], 'depois' => ['status' => 'ongoing'], 'status' => 'conferida', 'simulacao' => false]);
+            }
+        }
+        $this->mock(ShopeeAdsService::class, fn ($m) => $m->shouldReceive('currentBalance')->andReturn(10));
+
+        $this->actingAs($this->admin())->get('/admin/publicidade/shopee')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('estrategia.campanhas', 4)
+                ->has('estrategia.decidir', 4)
+                ->has('estrategia.decididas', 2)
+                ->where('estrategia.decididas', fn ($d) => collect($d)->pluck('nome')->sort()->values()->all() === ['meta', 'pausada'])
+                ->where('estrategia.decididas.0.decisao.simulada', false)
+                // Os cards seguem contando o gasto das decididas.
+                ->where('estrategia.kpis.com_gasto', 6));
     }
 
     public function test_periodo_invalido_e_recusado(): void

@@ -7,6 +7,7 @@ use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Models\ShopeeAdCampanha;
 use App\Modules\Marketplace\Models\ShopeeAdCampanhaDia;
+use App\Modules\Marketplace\Models\ShopeeAdsAcao;
 use Illuminate\Support\Carbon;
 
 /**
@@ -29,6 +30,9 @@ class EstrategiaShopeeAds
     public const GASTO_MINIMO = 10.0;
 
     public const CLIQUES_MINIMOS = 30;
+
+    /** Troca de meta some da lista pelo aprendizado da Shopee (cerca de 14 dias). */
+    public const DIAS_DECISAO_META = 14;
 
     /** Situações na ordem em que aparecem nos filtros. */
     public const SITUACOES = [
@@ -75,17 +79,72 @@ class EstrategiaShopeeAds
         // Maior prejuízo em reais primeiro: a primeira linha é a decisão mais cara.
         usort($linhas, fn ($a, $b) => [$a['resultado'] ?? 0, -$a['gasto']] <=> [$b['resultado'] ?? 0, -$b['gasto']]);
 
+        // Campanha já pausada ou com meta trocada pelo botão Ação sai da lista
+        // e do "Decida hoje" (pedido do Lira, 2026-10-14); os cards seguem
+        // contando o dinheiro dela, que já foi gasto.
+        $decisoes = $this->decisoes($campanhas);
+        $abertas = [];
+        $decididas = [];
+        foreach ($linhas as $l) {
+            if (isset($decisoes[$l['campaign_id']])) {
+                $decididas[] = $l + ['decisao' => $decisoes[$l['campaign_id']]];
+            } else {
+                $abertas[] = $l;
+            }
+        }
+
         return [
             'desde' => $desde->toDateString(),
             'ate' => $ate->toDateString(),
             'dias' => $dias,
             'kpis' => $this->kpis($linhas),
-            'decidir' => array_values(array_slice(array_filter($linhas, fn ($l) => ($l['resultado'] ?? 0) < 0 && in_array($l['situacao'], ['queimando', 'prejuizo', 'sem_margem'], true)), 0, 5)),
-            'campanhas' => $linhas,
+            'decidir' => array_values(array_slice(array_filter($abertas, fn ($l) => ($l['resultado'] ?? 0) < 0 && in_array($l['situacao'], ['queimando', 'prejuizo', 'sem_margem'], true)), 0, 5)),
+            'campanhas' => $abertas,
+            'decididas' => $decididas,
             'conferencia' => $this->conferencia($desde, $ate, array_sum(array_column($linhas, 'gasto'))),
             'sincronizado_em' => ShopeeAdCampanha::query()->max('sincronizado_em'),
             'situacoes' => self::SITUACOES,
         ];
+    }
+
+    /**
+     * Decisão em vigor por campanha, pela última ação do botão Ação que não
+     * deu erro nem foi desfeita: pausa vale até a campanha voltar a rodar
+     * (retomada aqui ou, depois da pausa, sincronizada ativa); troca de meta
+     * vale pelo aprendizado da Shopee (DIAS_DECISAO_META).
+     *
+     * @return array<string, array{acao: string, descricao: string, quando: ?string, quem: ?string, simulada: bool}>
+     */
+    private function decisoes($campanhas): array
+    {
+        $porId = $campanhas->keyBy(fn ($c) => (string) $c->campaign_id);
+        $ultimas = ShopeeAdsAcao::query()->with('user:id,name')
+            ->whereIn('campaign_id', $porId->keys()->all())
+            ->where('status', '!=', ShopeeAdsAcao::STATUS_ERRO)
+            ->whereNull('desfeita_em')
+            ->orderBy('id')->get()
+            ->keyBy(fn ($a) => (string) $a->campaign_id);
+
+        $decisoes = [];
+        foreach ($ultimas as $id => $a) {
+            $c = $porId[$id];
+            $vale = $a->desfaz_id === null && match ($a->acao) {
+                ShopeeAdsAcao::ACAO_PAUSAR => ! (in_array($c->status, ShopeeAdCampanha::ATIVAS, true) && $c->sincronizado_em?->gt($a->created_at)),
+                ShopeeAdsAcao::ACAO_META => $a->created_at->gt(now()->subDays(self::DIAS_DECISAO_META)),
+                default => false,
+            };
+            if ($vale) {
+                $decisoes[$id] = [
+                    'acao' => $a->acao,
+                    'descricao' => $a->descricao(),
+                    'quando' => $a->created_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+                    'quem' => $a->user?->name,
+                    'simulada' => $a->status === ShopeeAdsAcao::STATUS_SIMULADA,
+                ];
+            }
+        }
+
+        return $decisoes;
     }
 
     private function linha(ShopeeAdCampanha $c, array $s, ?array $eco, ?array $produto, int $dias, ?array $u7, ?array $a7, ?array $vendido): array

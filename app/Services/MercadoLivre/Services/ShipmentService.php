@@ -35,6 +35,29 @@ class ShipmentService
         return $this->client->get("shipments/{$shipmentId}/lead_time");
     }
 
+    /**
+     * Dia que o Mercado Livre prometeu a entrega ao comprador (pedido
+     * 2026-10-14, card do Flex no KoraSync). Conferido em produção nos
+     * envios Flex #3104 e #3130: `estimated_delivery_limit.date` vem como
+     * meia-noite de São Paulo ("2026-10-15T00:00:00.000-03:00"), igual a
+     * `estimated_delivery_time.date`, que fica de reserva.
+     */
+    public static function dataPrometida(array $raw): ?string
+    {
+        $opcao = is_array($raw['shipping_option'] ?? null) ? $raw['shipping_option'] : [];
+        $valor = $opcao['estimated_delivery_limit']['date'] ?? $opcao['estimated_delivery_time']['date'] ?? null;
+
+        if (! is_string($valor) || $valor === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($valor)->setTimezone(config('app.timezone'))->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     public function getTrackingInfo(string $shipmentId): array
     {
         return $this->client->get("shipments/{$shipmentId}/history");
@@ -223,6 +246,9 @@ class ShipmentService
                 'channel_returned_at' => $data('date_returned'),
                 'channel_cancelled_at' => $data('date_cancelled'),
                 'channel_status_checked_at' => now(),
+                // Nunca apaga a promessa já lida: resposta sem o campo não
+                // quer dizer que a promessa sumiu.
+                'promised_delivery_on' => self::dataPrometida($raw) ?? $shipment->promised_delivery_on,
             ])->save();
         } catch (\Throwable $exception) {
             Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.shipment.status_canal_nao_gravado', [

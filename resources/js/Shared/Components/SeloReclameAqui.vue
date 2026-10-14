@@ -112,4 +112,10 @@ onBeforeUnmount(() => {
     transform: scale(var(--ra-escala));
     transform-origin: top left;
 }
+
+/* O bundle.js do Reclame AQUI desenha uma borda azul de 1px no selo.
+   O Lira não quis a borda (2026-10-14). */
+.selo-ra :deep(.ra-widget-verified-content) {
+    border: 0 !important;
+}
 </style>

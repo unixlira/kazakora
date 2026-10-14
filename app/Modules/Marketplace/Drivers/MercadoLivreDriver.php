@@ -831,6 +831,7 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             'shipping_method' => $logisticType,
             'status' => $shipment['status'] ?? 'unknown',
             'scheduled_for' => $this->extractScheduledFor($shipment),
+            'promised_delivery_on' => ShipmentService::dataPrometida($shipment),
         ];
     }
 

@@ -648,7 +648,9 @@ class DashboardAgentController extends Controller
         // TikTok. Fora do select a coluna vem null e todo pedido apareceria
         // como "Envio não informado", que é exatamente o bug que o
         // external_shipment_id já causou aqui antes.
-        'channelShipment:id,order_id,status,scheduled_for,external_shipment_id,shipping_method,error_message,tracking_code',
+        // promised_delivery_on (2026-10-14): dia prometido ao comprador,
+        // mostrado no card do Flex.
+        'channelShipment:id,order_id,status,scheduled_for,promised_delivery_on,external_shipment_id,shipping_method,error_message,tracking_code',
     ];
 
     public function queue(): JsonResponse
@@ -1242,6 +1244,10 @@ class DashboardAgentController extends Controller
             // KoraSync trata como "venda agendada" — 3º estado do botão
             // (ver OrderQueueCardViewModel.IsAwaitingLabel).
             'scheduled_for' => $order->channelShipment?->scheduled_for,
+            // Dia que o canal prometeu a entrega ao comprador (Y-m-d, dia de
+            // São Paulo). Hoje só o Mercado Livre manda; o KoraSync mostra
+            // no card do Flex ("entregar hoje", "entregar amanhã"...).
+            'promised_delivery_on' => $order->channelShipment?->promised_delivery_on?->toDateString(),
             // Só relevante quando scheduled_for não é null: true quando o
             // canal já liberou a etiqueta de verdade (mesmos 2 status
             // "prontos" usados em scheduledShipments()), false enquanto o

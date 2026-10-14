@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Cache;
 class MenuDaLoja
 {
     /**
-     * Departamentos com produto ativo, do que tem mais produto pro que tem
+     * Departamentos com produto ativo e com estoque, do que tem mais produto pro que tem
      * menos. Sem foto cadastrada na categoria, usa a foto de um produto dela.
      *
      * @return list<array{id: int, name: string, slug: string, image_url: ?string, total: int}>
@@ -24,7 +24,7 @@ class MenuDaLoja
     public static function departamentos(): array
     {
         return Cache::remember('loja:departamentos', now()->addMinutes(10), function () {
-            $ativos = fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id');
+            $ativos = fn ($query) => $query->where('is_active', true)->whereNull('parent_product_id')->comEstoque();
 
             return Category::query()
                 ->whereHas('products', $ativos)
@@ -52,7 +52,7 @@ class MenuDaLoja
     public static function maiorDesconto(): int
     {
         return Cache::remember('loja:maior-desconto', now()->addMinutes(10), function () {
-            $ativos = Product::query()->where('is_active', true)->whereNull('parent_product_id')->where('price', '>', 0);
+            $ativos = Product::query()->where('is_active', true)->whereNull('parent_product_id')->comEstoque()->where('price', '>', 0);
 
             $maior = (float) (clone $ativos)->max('discount_percentage');
 

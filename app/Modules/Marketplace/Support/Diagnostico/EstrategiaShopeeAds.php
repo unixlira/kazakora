@@ -112,6 +112,9 @@ class EstrategiaShopeeAds
             'nome' => $produto['nome'] ?? $c->nome ?? "Campanha {$c->campaign_id}",
             'item_id' => $c->item_id,
             'sku' => $produto['sku'] ?? null,
+            // Página do produto. A da campanha na Shopee Ads (portal/marketing/
+            // pas/product/manual/{campaign_id}) só foi vista na extensão do
+            // Seller Bump e não foi conferida para campanha automática.
             'link' => $c->item_id ? "https://seller.shopee.com.br/portal/product/{$c->item_id}" : null,
             'status' => $c->status,
             'ativa' => in_array($c->status, ShopeeAdCampanha::ATIVAS, true),
@@ -258,7 +261,11 @@ class EstrategiaShopeeAds
         ];
     }
 
-    /** Soma das campanhas × gasto da loja inteira (channel_ad_spends). */
+    /**
+     * Soma das campanhas × gasto da loja inteira (channel_ad_spends).
+     * diferenca > 0: a Shopee Ads gastou mais do que aparece nas campanhas
+     * (campanha da loja inteira ou sincronização atrasada).
+     */
     private function conferencia(Carbon $desde, Carbon $ate, float $gastoCampanhas): array
     {
         $loja = (float) ChannelAdSpend::query()->where('channel', 'shopee')
@@ -268,6 +275,7 @@ class EstrategiaShopeeAds
         return [
             'gasto_loja' => round($loja, 2),
             'gasto_campanhas' => round($gastoCampanhas, 2),
+            'diferenca' => $loja > 0 ? round($loja - $gastoCampanhas, 2) : null,
             'diferenca_pct' => $diferenca !== null ? round($diferenca, 1) : null,
             'confere' => $diferenca === null || $diferenca <= 2,
         ];

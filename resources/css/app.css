@@ -619,3 +619,13 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
 .admin-shell .shopee-preto :is(.bg-slate-100, .dark\:bg-slate-800) { background-color: #262626; }
 .admin-shell .shopee-preto .bg-primary { color: #000000; }
 .admin-shell .shopee-preto select option { background-color: #000000; color: #ffffff; }
+/*
+ * Vermelho de erro legível no preto (2026-10-14, proposta do Jonathan): o
+ * #dc2626 dá cerca de 4:1 sobre #000; o #f87171 passa de 7:1. Vale no tema escuro do
+ * admin e na Estratégia Shopee, que é preta nos dois temas. Borda e anel
+ * seguem o mesmo tom para a faixa e o selo "Margem não aguenta ADS".
+ */
+.dark .admin-shell .text-error, .admin-shell .shopee-preto .text-error { color: #f87171; }
+.dark .admin-shell .border-error, .admin-shell .shopee-preto .border-error { border-color: #f87171; }
+.dark .admin-shell .border-l-error, .admin-shell .shopee-preto .border-l-error { border-left-color: #f87171; }
+.admin-shell .shopee-preto .ring-error\/50 { --tw-ring-color: color-mix(in oklab, #f87171 50%, transparent); }

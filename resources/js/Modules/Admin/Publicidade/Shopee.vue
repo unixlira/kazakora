@@ -1,13 +1,20 @@
 <script setup>
 /**
  * Publicidade › Estratégia Shopee (2026-10-14): campanhas de ADS da Shopee
- * com o resultado em reais e uma situação para decidir de olho. Fase 1, só
- * leitura: os botões só abrem a Shopee, nada muda por aqui. Ver
+ * com o resultado em reais e uma situação para decidir de olho. O botão
+ * Ação do Cauê (AcaoCaue.vue, tarefa 569) pausa, retoma ou muda a meta de
+ * ROAS só com o clique do Lira; sem SHOPEE_ADS_ESCRITA=true ele simula. Ver
  * PublicidadeShopeeController e EstrategiaShopeeAds. Visual preto com fonte
  * branca nos dois temas (.shopee-preto no app.css).
+ *
+ * UX do Jonathan (2026-10-14): a tela abre com a conclusão em uma frase,
+ * depois "Decida hoje" e só então os 4 cards. A conta fica num <details>.
+ * "Abrir na Shopee" ainda leva à página do produto: a URL da campanha na
+ * Shopee Ads não está confirmada (ver EstrategiaShopeeAds::linha).
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
+import AcaoCaue from './AcaoCaue.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -23,12 +30,13 @@ const numero = (v) => new Intl.NumberFormat('pt-BR').format(v ?? 0);
 const um = (v) => (v === null || v === undefined ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }));
 const pct = (v) => (v === null || v === undefined ? '—' : `${um(v)}%`);
 const data = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('pt-BR');
-const dataHora = (d) => (d ? new Date(d.replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'nunca');
+const dataHora = (d) => (d ? new Date(d.replace(' ', 'T')).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : null);
+const comSinal = (v) => (v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${dinheiro(v)}`);
 
 const SITUACAO = {
     queimando: { cor: 'bg-lighterror text-error', ponto: 'bg-error' },
     prejuizo: { cor: 'bg-lighterror text-error', ponto: 'bg-error' },
-    sem_margem: { cor: 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900', ponto: 'bg-slate-800 dark:bg-slate-200' },
+    sem_margem: { cor: 'bg-lighterror text-error ring-1 ring-error/50', ponto: 'bg-error', icone: 'fas fa-ban' },
     margem_fina: { cor: 'bg-lightwarning text-warning', ponto: 'bg-warning' },
     saudavel: { cor: 'bg-lightsuccess text-success', ponto: 'bg-success' },
     escalar: { cor: 'bg-lightinfo text-info', ponto: 'bg-info' },
@@ -45,6 +53,43 @@ const TENDENCIA = {
 
 const k = computed(() => props.estrategia.kpis);
 const campanhas = computed(() => props.estrategia.campanhas);
+const conf = computed(() => props.estrategia.conferencia);
+
+// Frase de conclusão do topo (proposta do Jonathan, 2026-10-14).
+const lucrou = computed(() => (k.value.resultado ?? 0) >= 0);
+const conclusao = computed(() => {
+    const base = `Em ${props.estrategia.dias} dias o ADS da Shopee deu ${dinheiro(Math.abs(k.value.resultado ?? 0))} de ${lucrou.value ? 'lucro' : 'prejuízo'}.`;
+    if (!k.value.em_prejuizo) return base;
+    return `${base} ${k.value.em_prejuizo} de ${k.value.com_gasto} campanhas com gasto perdem dinheiro: juntas, ${dinheiro(Math.abs(k.value.prejuizo))}. Comece pela lista abaixo.`;
+});
+
+// Cards.
+const gastoDia = computed(() => (props.estrategia.dias ? k.value.gasto / props.estrategia.dias : 0));
+const notaSaldo = computed(() => {
+    if (props.saldo === null) return 'sem conexão com a Shopee Ads agora';
+    if (gastoDia.value <= 0) return `${k.value.ativas} campanhas ativas, sem gasto no período`;
+    return `dura cerca de ${Math.floor(props.saldo / gastoDia.value)} dias no ritmo atual`;
+});
+const notaLucro = computed(() => (k.value.em_prejuizo
+    ? `${k.value.em_prejuizo} de ${k.value.com_gasto} campanhas perdendo ${dinheiro(Math.abs(k.value.prejuizo))}`
+    : 'nenhuma campanha perdendo dinheiro'));
+const divergente = computed(() => !conf.value.confere && conf.value.gasto_loja > 0);
+const metaRoas = computed(() => k.value.roas_meta_loja);
+const notaRoas = computed(() => {
+    const gastoVenda = `${dinheiro(k.value.gasto)} de gasto, ${dinheiro(k.value.venda)} de venda`;
+    const loja = divergente.value ? ` · Shopee Ads: ${dinheiro(conf.value.gasto_loja)} de gasto` : '';
+    return `${metaRoas.value === null ? 'sem meta calculada' : `meta ${um(metaRoas.value)}`} · ${gastoVenda}${loja}`;
+});
+const varianteRoas = computed(() => {
+    if (metaRoas.value === null || k.value.roas === null) return 'secondary';
+    return k.value.roas >= metaRoas.value ? 'success' : 'error';
+});
+const queimando = computed(() => campanhas.value.filter((c) => c.situacao === 'queimando').length);
+
+// Linha de ROAS do "Decida hoje".
+const linhaRoas = (c) => (c.roas_empate
+    ? `ROAS ${um(c.roas ?? 0)}, precisa de ${um(c.roas_empate)} para empatar`
+    : `ROAS ${um(c.roas ?? 0)}, a margem não cobre ADS em nenhum ROAS`);
 
 // Filtros (na tela; o período vai para o servidor).
 const situacoes = ref([]);
@@ -104,6 +149,19 @@ const irIntervalo = () => desde.value && ate.value && router.get('/admin/publici
 
 const corResultado = (v) => (v === null ? 'text-slate-400' : v < 0 ? 'text-error' : 'text-success');
 const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate;
+
+// Decisão do Cauê pela situação: vem marcada no painel do botão Ação.
+const DECISAO = { queimando: 'PAUSAR', sem_margem: 'PAUSAR', margem_fina: 'META' };
+const produtoAcao = (c) => ({
+    item_id: c.item_id,
+    nome: c.nome,
+    gasto: c.gasto,
+    roas_real: c.roas,
+    roas_empate: c.roas_empate,
+    conversao: c.conversao,
+    decisao: c.situacao === 'prejuizo' ? (c.roas_meta && c.roas_meta <= 25 ? 'META' : 'PAUSAR') : (DECISAO[c.situacao] ?? ''),
+});
+const recarregar = () => router.reload({ only: ['estrategia'], preserveScroll: true });
 </script>
 
 <template>
@@ -116,7 +174,6 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                 <i class="fas fa-chess-knight" style="color: #EE4D2D" aria-hidden="true"></i>
                 Estratégia Shopee
             </h1>
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">Só leitura</span>
             <div class="ml-auto flex flex-wrap items-center gap-2" role="group" aria-label="Período">
                 <button
                     v-for="d in periodos"
@@ -128,56 +185,90 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                     @click="irPeriodo(d)"
                 >{{ d }} dias</button>
                 <label class="sr-only" for="shp-desde">De</label>
-                <input id="shp-desde" v-model="desde" type="date" class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1 text-sm" />
+                <input id="shp-desde" v-model="desde" type="date" class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-primary" />
                 <label class="sr-only" for="shp-ate">Até</label>
-                <input id="shp-ate" v-model="ate" type="date" class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1 text-sm" />
-                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:border-primary hover:text-primary" @click="irIntervalo">Ver</button>
+                <input id="shp-ate" v-model="ate" type="date" class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1 text-sm focus-visible:outline-2 focus-visible:outline-primary" />
+                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-primary" @click="irIntervalo">Aplicar período</button>
             </div>
         </div>
         <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
-            {{ data(estrategia.desde) }} a {{ data(estrategia.ate) }}. Atualizado em {{ dataHora(estrategia.sincronizado_em) }}.
-            Resultado do ADS = venda atribuída × margem antes do ADS − gasto. ROAS de empate e meta (15% de lucro) pela
-            mesma conta do <Link href="/admin/dashboard-financeiro" class="font-medium text-primary hover:underline">Resultado e margem</Link>.
+            {{ data(estrategia.desde) }} a {{ data(estrategia.ate) }} · {{ dataHora(estrategia.sincronizado_em) ? `atualizado ${dataHora(estrategia.sincronizado_em)}` : 'ainda não atualizado' }}
         </p>
 
-        <div
-            v-if="!estrategia.conferencia.confere"
-            class="mb-4 rounded-lg border border-warning/40 bg-lightwarning px-4 py-2 text-sm text-warning"
-            role="status"
-        >
-            A soma das campanhas ({{ dinheiro(estrategia.conferencia.gasto_campanhas) }}) difere
-            {{ um(estrategia.conferencia.diferenca_pct) }}% do gasto total da Shopee Ads no período
-            ({{ dinheiro(estrategia.conferencia.gasto_loja) }}). Pode haver campanha de loja fora desta lista ou sincronização atrasada.
-        </div>
-
         <div v-if="!campanhas.length" class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-6 text-sm text-slate-500 dark:text-slate-400">
-            Nenhuma campanha sincronizada ainda. O comando <code>shopee:ads-campanhas</code> roda de hora em hora.
+            Ainda não chegaram campanhas da Shopee. A busca roda a cada hora. Se continuar vazio, avise o Homer.
         </div>
 
         <template v-else>
-            <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
-                <CardStats compact stat-subtitle="SALDO DE ADS" :stat-title="dinheiro(saldo)" :stat-note="`${k.ativas} campanhas ativas`" stat-icon-name="fas fa-wallet" variant="info" />
-                <CardStats compact stat-subtitle="GASTO" :stat-title="dinheiro(k.gasto)" stat-icon-name="fas fa-bullhorn" variant="warning" />
-                <CardStats compact stat-subtitle="VENDA ATRIBUÍDA" :stat-title="dinheiro(k.venda)" stat-icon-name="fas fa-cart-shopping" variant="primary" />
-                <CardStats compact stat-subtitle="ROAS" :stat-title="um(k.roas)" :stat-note="`meta da loja ${um(k.roas_meta_loja)}`" stat-icon-name="fas fa-arrow-trend-up" :variant="(k.roas ?? 0) >= (k.roas_meta_loja ?? 0) ? 'success' : 'error'" />
-                <CardStats compact vivid stat-subtitle="PREJUÍZO DO ADS" :stat-title="dinheiro(k.prejuizo)" :stat-note="`${k.em_prejuizo} de ${k.com_gasto} campanhas com gasto`" stat-icon-name="fas fa-triangle-exclamation" variant="error" />
-                <CardStats compact stat-subtitle="GASTO SEM VENDA" :stat-title="dinheiro(k.gasto_sem_venda)" stat-icon-name="fas fa-fire" variant="error" />
+            <p
+                class="mb-4 rounded-xl border-l-4 px-4 py-3 text-base font-semibold"
+                :class="lucrou ? 'border-success bg-lightsuccess text-success' : 'border-error bg-lighterror text-error'"
+                role="status"
+            >{{ conclusao }}</p>
+
+            <div
+                v-if="divergente"
+                class="mb-4 rounded-lg border-l-4 border-warning bg-lightwarning px-4 py-2 text-sm text-warning"
+                role="status"
+            >
+                <template v-if="conf.diferenca > 0">
+                    {{ dinheiro(conf.diferenca) }} de gasto ({{ um(conf.diferenca_pct) }}%) não aparecem em nenhuma campanha da lista.
+                    Pode ser campanha da loja inteira ou sincronização atrasada. Confira na Shopee Ads antes de pausar.
+                </template>
+                <template v-else>
+                    A soma das campanhas passa {{ dinheiro(Math.abs(conf.diferenca)) }} ({{ um(conf.diferenca_pct) }}%) do gasto total da Shopee Ads.
+                    Pode ser sincronização atrasada. Confira na Shopee Ads antes de pausar.
+                </template>
+                <span class="block text-xs">Campanhas: {{ dinheiro(conf.gasto_campanhas) }} · Shopee Ads: {{ dinheiro(conf.gasto_loja) }}.</span>
             </div>
 
-            <section v-if="estrategia.decidir.length" class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-labelledby="decidir-titulo">
-                <h2 id="decidir-titulo" class="mb-3 text-base font-semibold">Decida hoje: as que mais tiram dinheiro</h2>
-                <ol class="space-y-2">
-                    <li v-for="c in estrategia.decidir" :key="c.campaign_id" class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-[var(--surface-border)] px-3 py-2">
-                        <span class="inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs font-bold" :class="SITUACAO[c.situacao].cor">
-                            <span class="h-2 w-2 rounded-full" :class="SITUACAO[c.situacao].ponto" aria-hidden="true"></span>{{ estrategia.situacoes[c.situacao] }}
-                        </span>
-                        <span class="min-w-0 flex-1 truncate font-semibold" :title="c.nome">{{ c.nome }}</span>
-                        <span class="text-sm tabular-nums">ROAS {{ um(c.roas) }} <span class="text-slate-500">/ empate {{ um(c.roas_empate) }}</span></span>
-                        <span class="text-sm font-bold tabular-nums text-error">{{ dinheiro(c.resultado) }}</span>
-                        <span class="basis-full text-sm text-slate-600 dark:text-slate-300">{{ c.sugestao }}</span>
+            <section class="mb-6 rounded-xl border border-l-4 border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" :class="estrategia.decidir.length ? 'border-l-error' : 'border-l-success'" aria-labelledby="decidir-titulo">
+                <h2 id="decidir-titulo" class="mb-2 text-base font-semibold">Decida hoje: as que mais tiram dinheiro</h2>
+                <ol v-if="estrategia.decidir.length" class="divide-y divide-[var(--surface-border)]">
+                    <li v-for="c in estrategia.decidir" :key="c.campaign_id" class="flex flex-wrap items-start gap-x-4 gap-y-2 py-3 first:pt-1 last:pb-0">
+                        <div class="min-w-0 flex-1 basis-64">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs font-bold" :class="SITUACAO[c.situacao].cor">
+                                    <i v-if="SITUACAO[c.situacao].icone" :class="SITUACAO[c.situacao].icone" aria-hidden="true"></i>
+                                    <span v-else class="h-2 w-2 rounded-full" :class="SITUACAO[c.situacao].ponto" aria-hidden="true"></span>{{ estrategia.situacoes[c.situacao] }}
+                                </span>
+                                <span class="min-w-0 truncate font-semibold" :title="c.nome">{{ c.nome }}</span>
+                            </div>
+                            <p class="mt-1 text-sm font-semibold">{{ c.sugestao }}</p>
+                            <p class="mt-0.5 text-sm tabular-nums text-slate-500 dark:text-slate-400">{{ linhaRoas(c) }}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm font-bold tabular-nums text-error">{{ dinheiro(c.resultado) }}</span>
+                            <AcaoCaue v-if="c.item_id" :produto="produtoAcao(c)" @aplicado="recarregar" />
+                            <a
+                                v-if="c.link"
+                                :href="c.link"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="whitespace-nowrap rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+                            >Abrir na Shopee<span class="sr-only"> (abre em outra aba)</span></a>
+                        </div>
                     </li>
                 </ol>
+                <p v-else class="text-sm font-semibold text-success">Nenhuma campanha tirando dinheiro neste período.</p>
             </section>
+
+            <div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <CardStats compact note-wrap stat-subtitle="SALDO DE ADS" :stat-title="saldo === null ? 'Indisponível' : dinheiro(saldo)" :stat-note="notaSaldo" stat-icon-name="fas fa-wallet" variant="neutral" />
+                <CardStats compact note-wrap stat-subtitle="LUCRO DO ADS" :stat-title="comSinal(k.resultado)" :title-class="lucrou ? 'text-success' : 'text-error'" :stat-note="notaLucro" :stat-icon-name="lucrou ? 'fas fa-arrow-trend-up' : 'fas fa-triangle-exclamation'" :variant="lucrou ? 'success' : 'error'" />
+                <CardStats compact note-wrap stat-subtitle="ROAS" :stat-title="um(k.roas)" :stat-note="notaRoas" stat-icon-name="fas fa-bullseye" :variant="varianteRoas" />
+                <CardStats compact note-wrap stat-subtitle="GASTO SEM VENDA" :stat-title="dinheiro(k.gasto_sem_venda)" :stat-note="queimando ? `${queimando} ${queimando === 1 ? 'campanha gastou' : 'campanhas gastaram'} sem vender` : 'nenhuma campanha queimando'" stat-icon-name="fas fa-fire" :variant="k.gasto_sem_venda > 0 ? 'error' : 'neutral'" />
+            </div>
+
+            <details class="mb-6 text-sm text-slate-500 dark:text-slate-400">
+                <summary class="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-primary">Como a conta é feita</summary>
+                <p class="mt-2">
+                    Lucro do ADS = venda que veio do anúncio × margem do produto − gasto com anúncio.
+                    Empate é o ROAS mínimo para não perder dinheiro.
+                    Meta é o ROAS que deixa 15% de lucro, pela mesma conta do
+                    <Link href="/admin/dashboard-financeiro" class="font-medium text-primary hover:underline">Resultado e margem</Link>.
+                </p>
+            </details>
 
             <section class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" aria-label="Filtros">
                 <div class="mb-3 flex flex-wrap gap-2" role="group" aria-label="Situação">
@@ -190,41 +281,42 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                         :aria-pressed="situacoes.includes(s)"
                         @click="alternar(s)"
                     >
-                        <span class="h-2 w-2 rounded-full" :class="SITUACAO[s].ponto" aria-hidden="true"></span>
+                        <i v-if="SITUACAO[s].icone" :class="[SITUACAO[s].icone, 'text-error']" aria-hidden="true"></i>
+                        <span v-else class="h-2 w-2 rounded-full" :class="SITUACAO[s].ponto" aria-hidden="true"></span>
                         {{ rotulo }} <span class="tabular-nums text-slate-500">{{ contagem[s] }}</span>
                     </button>
                 </div>
                 <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
                     <label class="text-xs font-semibold text-slate-500 xl:col-span-2">Buscar
-                        <input v-model="busca" type="search" placeholder="Nome, SKU ou item" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal" />
+                        <input v-model="busca" type="search" placeholder="Nome, SKU ou item" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal focus-visible:outline-2 focus-visible:outline-primary" />
                     </label>
                     <label class="text-xs font-semibold text-slate-500">Status
-                        <select v-model="status" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal">
+                        <select v-model="status" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal focus-visible:outline-2 focus-visible:outline-primary">
                             <option value="ativas">Ativas</option>
                             <option value="paradas">Pausadas/encerradas</option>
                             <option value="todas">Todas</option>
                         </select>
                     </label>
                     <label class="text-xs font-semibold text-slate-500">Tipo
-                        <select v-model="tipo" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal">
+                        <select v-model="tipo" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal focus-visible:outline-2 focus-visible:outline-primary">
                             <option value="">Todos</option>
                             <option v-for="(r, t) in TIPO" :key="t" :value="t">{{ r }}</option>
                         </select>
                     </label>
                     <label class="text-xs font-semibold text-slate-500">Causa
-                        <select v-model="causa" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal">
+                        <select v-model="causa" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal focus-visible:outline-2 focus-visible:outline-primary">
                             <option value="">Todas</option>
                             <option v-for="(r, t) in CAUSA" :key="t" :value="t">{{ r }}</option>
                         </select>
                     </label>
                     <label class="text-xs font-semibold text-slate-500">Gasto mínimo (R$)
-                        <input v-model="gastoMinimo" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal" />
+                        <input v-model="gastoMinimo" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal focus-visible:outline-2 focus-visible:outline-primary" />
                     </label>
                     <label class="text-xs font-semibold text-slate-500">Ordenar por
-                        <select v-model="ordem" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal">
+                        <select v-model="ordem" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-1.5 text-sm font-normal focus-visible:outline-2 focus-visible:outline-primary">
                             <option value="resultado">Maior prejuízo</option>
                             <option value="gasto">Maior gasto</option>
-                            <option value="roas">ROAS ÷ empate</option>
+                            <option value="roas">Mais longe do empate</option>
                             <option value="conversao">Menor conversão</option>
                         </select>
                     </label>
@@ -249,15 +341,16 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Gasto</th>
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Venda</th>
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">ROAS</th>
-                                <th scope="col" class="px-3 py-2 text-right font-semibold">Empate</th>
-                                <th scope="col" class="px-3 py-2 text-right font-semibold">Meta 15%</th>
-                                <th scope="col" class="px-3 py-2 text-right font-semibold">Meta na Shopee</th>
-                                <th scope="col" class="px-3 py-2 text-right font-semibold">CTR</th>
+                                <th scope="col" class="px-3 py-2 text-right font-semibold">ROAS de empate</th>
+                                <th scope="col" class="px-3 py-2 text-right font-semibold">ROAS p/ 15% de lucro</th>
+                                <th scope="col" class="px-3 py-2 text-right font-semibold">Meta configurada</th>
+                                <th scope="col" class="px-3 py-2 text-right font-semibold">Taxa de clique</th>
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Conversão</th>
-                                <th scope="col" class="px-3 py-2 text-right font-semibold">CPC</th>
+                                <th scope="col" class="px-3 py-2 text-right font-semibold">Custo por clique</th>
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Pedidos</th>
                                 <th scope="col" class="px-3 py-2 text-right font-semibold">Estoque</th>
                                 <th scope="col" class="px-3 py-2 text-center font-semibold">7 dias</th>
+                                <th scope="col" class="px-3 py-2 text-center font-semibold">Ação</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -274,7 +367,8 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                                 </td>
                                 <td class="px-3 py-2">
                                     <span class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-bold" :class="SITUACAO[c.situacao].cor">
-                                        <span class="h-2 w-2 rounded-full" :class="SITUACAO[c.situacao].ponto" aria-hidden="true"></span>{{ estrategia.situacoes[c.situacao] }}
+                                        <i v-if="SITUACAO[c.situacao].icone" :class="SITUACAO[c.situacao].icone" aria-hidden="true"></i>
+                                        <span v-else class="h-2 w-2 rounded-full" :class="SITUACAO[c.situacao].ponto" aria-hidden="true"></span>{{ estrategia.situacoes[c.situacao] }}
                                     </span>
                                     <span v-if="c.causa" class="mt-1 block text-xs text-slate-500">{{ CAUSA[c.causa] }}</span>
                                 </td>
@@ -307,9 +401,13 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
                                     <span v-if="c.tendencia" class="sr-only">{{ TENDENCIA[c.tendencia].texto }}</span>
                                     <span v-else class="text-slate-400">—</span>
                                 </td>
+                                <td class="px-3 py-2 text-center">
+                                    <AcaoCaue v-if="c.item_id" :produto="produtoAcao(c)" @aplicado="recarregar" />
+                                    <span v-else class="text-slate-400" title="Campanha da loja inteira, sem produto">—</span>
+                                </td>
                             </tr>
                             <tr v-if="!filtradas.length">
-                                <td colspan="15" class="px-3 py-6 text-center text-slate-500">Nenhuma campanha com esses filtros.</td>
+                                <td colspan="16" class="px-3 py-6 text-center text-slate-500">Nenhuma campanha com esses filtros.</td>
                             </tr>
                         </tbody>
                     </table>

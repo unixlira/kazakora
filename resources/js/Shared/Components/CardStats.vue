@@ -5,7 +5,8 @@ const props = defineProps({
     statSubtitle: { type: String, default: '' },
     statTitle: { type: String, default: '' },
     statIconName: { type: String, default: 'fas fa-chart-bar' },
-    // primary | secondary | success | warning | error | info
+    // primary | secondary | success | warning | error | info | neutral
+    // (neutral: ícone cinza, para número que não é sinal de nada)
     variant: { type: String, default: 'primary' },
     // Versão com cor (faixa no topo, fundo levemente tingido, ícone cheio e
     // leve elevação no hover) — pedido do usuário 2026-10-06 pra dashboard
@@ -16,6 +17,10 @@ const props = defineProps({
     compact: { type: Boolean, default: false },
     // Linha extra opcional abaixo do subtítulo (ex.: "2 canceladas").
     statNote: { type: String, default: '' },
+    // Nota em até 3 linhas em vez de cortada em uma (frases de contexto).
+    noteWrap: { type: Boolean, default: false },
+    // Cor própria do valor (ex.: lucro verde, prejuízo vermelho).
+    titleClass: { type: [String, Array, Object], default: '' },
 });
 
 const VARIANTS = {
@@ -25,6 +30,7 @@ const VARIANTS = {
     warning: { bg: 'bg-lightwarning', text: 'text-warning', color: 'var(--color-warning)' },
     error: { bg: 'bg-lighterror', text: 'text-error', color: 'var(--color-error)' },
     info: { bg: 'bg-lightinfo', text: 'text-info', color: 'var(--color-info)' },
+    neutral: { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-500 dark:text-slate-400', color: 'var(--faixa-card)' },
 };
 
 const style = computed(() => VARIANTS[props.variant] ?? VARIANTS.primary);
@@ -48,9 +54,9 @@ const vividStyle = computed(() => (props.vivid
                 <i :class="[statIconName, compact ? 'text-base sm:text-xl' : 'text-xl']"></i>
             </div>
             <div class="min-w-0 max-w-full">
-                <p class="truncate font-bold" :class="compact ? 'text-lg sm:text-2xl' : 'text-2xl'">{{ statTitle }}</p>
+                <p class="truncate font-bold" :class="[titleClass, compact ? 'text-lg sm:text-2xl' : 'text-2xl']">{{ statTitle }}</p>
                 <p class="text-slate-500 dark:text-slate-400" :class="[vivid ? 'line-clamp-2 leading-tight' : 'truncate', compact ? 'text-xs sm:text-sm' : 'text-sm']">{{ statSubtitle }}</p>
-                <p v-if="statNote" class="truncate text-xs font-medium" :class="style.text">{{ statNote }}</p>
+                <p v-if="statNote" class="text-xs font-medium" :class="[style.text, noteWrap ? 'line-clamp-3' : 'truncate']">{{ statNote }}</p>
             </div>
         </div>
     </div>

@@ -139,12 +139,14 @@ const activeHref = computed(() => {
 });
 const isActive = (href) => href === activeHref.value;
 
-// Ícone de item de marca (Shopee, Mercado Livre...) fica na cor da marca
-// (app.css, .icone-marca); os demais seguem cor neutra / destaque no ativo.
+// Todo ícone do menu tem cor, ativo ou não (Lira, 2026-10-14): item de marca
+// na cor da marca (app.css, .icone-marca), o resto na cor do assunto
+// (app.css, .icone-cor). A setinha da seção usa a cor do primeiro item.
 const classeIcone = (item) => {
     if (item.marca) return `icone-marca icone-${item.marca}`;
-    return isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]';
+    return `icone-cor icone-cor-${item.cor ?? 'azul'}`;
 };
+const classeSeta = (section) => classeIcone(section.items[0] ?? {});
 
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
@@ -281,7 +283,7 @@ watch(
                         <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                         <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
                     </Link>
-                    <button type="button" class="text-[var(--icone-menu)] hover:text-[var(--destaque)]" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
+                    <button type="button" class="icone-cor icone-cor-azul hover:opacity-80" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
                         <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
                     </button>
                 </div>
@@ -305,16 +307,15 @@ watch(
                             <span class="flex-1 truncate">{{ section.heading }}</span>
                             <span v-if="!secaoExpandida(section.heading) && badgeDaSecao(section) > 0"
                                 class="min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-[10px] font-bold leading-5 text-white">{{ badgeDaSecao(section) }}</span>
-                            <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': secaoExpandida(section.heading) }"></i>
+                            <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeSeta(section), { 'rotate-180': secaoExpandida(section.heading) }]"></i>
                         </button>
 
                         <ul v-show="sidebarCollapsed || secaoExpandida(section.heading)" class="mt-1 flex list-none flex-col md:min-w-full md:flex-col">
                             <li v-for="item in section.items" :key="item.href">
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja
-                                no escuro) e barra de 3px à esquerda. Ícones numa cor só,
-                                menos os de marca (2026-10-14), que ficam sempre na cor da
-                                marca, ativos ou não. -->
+                                no escuro) e barra de 3px à esquerda. Ícones sempre coloridos
+                                (2026-10-14), ativos ou não: cor da marca ou do assunto. -->
                                 <div class="flex items-center">
                                     <Link :href="item.href" :title="item.label"
                                         class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
@@ -334,7 +335,7 @@ watch(
                                         class="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--icone-menu)] hover:bg-[var(--surface-border)]/30"
                                         :title="submenuAberto(item) ? 'Recolher' : 'Expandir'" :aria-label="`${submenuAberto(item) ? 'Recolher' : 'Expandir'} ${item.label}`"
                                         :aria-expanded="submenuAberto(item)" @click="alternarSubmenu(item)">
-                                        <i class="fas fa-chevron-down text-[10px] transition-transform" :class="{ 'rotate-180': submenuAberto(item) }"></i>
+                                        <i class="fas fa-chevron-down text-[10px] transition-transform" :class="[classeIcone(item), { 'rotate-180': submenuAberto(item) }]"></i>
                                     </button>
                                 </div>
                                 <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
@@ -362,7 +363,7 @@ watch(
                         <li v-if="user?.role === 'admin'">
                             <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
                                 :class="urlPath === '/admin/filas' ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
-                                <i class="fas fa-layer-group w-8 text-center text-sm" :class="urlPath === '/admin/filas' ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]'"></i>
+                                <i class="fas fa-layer-group icone-cor icone-cor-violeta w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Horizon</span>
                             </Link>
                         </li>
@@ -374,7 +375,7 @@ watch(
                         </li>
                         <li>
                             <button type="button" class="flex w-full items-center gap-2 border-l-[3px] border-transparent py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
-                                <i class="fas fa-sign-out-alt w-8 text-center text-sm text-[var(--icone-menu)]"></i>
+                                <i class="fas fa-sign-out-alt icone-cor icone-cor-vermelho w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Sair</span>
                             </button>
                         </li>

@@ -10,13 +10,14 @@ return [
     'desconto_pix' => (float) env('LOJA_DESCONTO_PIX', 5),
 
     /*
-    | Selo "Verificada por Reclame AQUI" no rodapé (2026-10-11). SÓ ligar
-    | depois que o Reclame Aqui aprovar a verificação da KazaKora: mostrar o
-    | selo sem ser verificada é uso indevido e eles fiscalizam. Desligado,
-    | o rodapé mostra "Estamos no Reclame AQUI".
+    | Selo "Verificada por Reclame AQUI" (2026-10-11). Verificação aprovada:
+    | desde 2026-10-14 o selo OFICIAL (componente SeloReclameAqui.vue) aparece
+    | sempre no rodapé da loja, no checkout e no menu do admin, sem depender
+    | da chave LOJA_SELO_RA_VERIFICADA (mantida só por compatibilidade).
+    | reclame_aqui_url é o link do selo (página RA Verificada da loja).
     */
     'selo_ra_verificada' => (bool) env('LOJA_SELO_RA_VERIFICADA', false),
-    'reclame_aqui_url' => env('LOJA_RECLAME_AQUI_URL', 'https://www.reclameaqui.com.br/busca/?q=kazakora'),
+    'reclame_aqui_url' => env('LOJA_RECLAME_AQUI_URL', 'https://www.reclameaqui.com.br/rav/F68R'),
 
     /*
     | Dados da empresa nos e-mails (rodapé) — os mesmos de

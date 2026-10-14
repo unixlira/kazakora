@@ -4,6 +4,7 @@
 // sem distração. Sempre claro (as cores do checkout são fixas).
 import { COMPANY } from '@/Shared/company.js';
 import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
+import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 // Faixa vermelha de escassez: 15 minutos regressivos. Ao acabar fica em
@@ -104,18 +105,8 @@ const tempo = computed(() => {
                             title="Ver a verificação do Google Safe Browsing">
                             <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
                         </a>
-                        <a :href="$page.props.reclameAqui?.url || 'https://www.reclameaqui.com.br/busca/?q=kazakora'" target="_blank" rel="noopener"
-                            class="box-border flex flex-col items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-white leading-none transition hover:opacity-90"
-                            :class="$page.props.reclameAqui?.verificada ? 'px-1' : 'px-2'"
-                            :style="{ height: `${alturaSelo}px` }"
-                            title="Ver a KazaKora no Reclame AQUI">
-                            <img v-if="$page.props.reclameAqui?.verificada" src="/images/selos/reclame-aqui-verificada-qrcode.png" alt="Verificada por Reclame AQUI, com QR Code de verificação" width="294" height="88"
-                                class="h-[86%] w-auto rounded-sm">
-                            <template v-else>
-                                <span class="text-[7px] font-semibold uppercase tracking-wider text-slate-500">Estamos no</span>
-                                <span class="text-[14px] font-black tracking-tight text-[#1a1a1a]">Reclame <span class="text-[#4caf3c]">AQUI</span></span>
-                            </template>
-                        </a>
+                        <!-- Selo oficial RA Verificada (2026-10-14). -->
+                        <SeloReclameAqui class="rounded-md" :altura="alturaSelo" />
                     </div>
                 </div>
             </div>

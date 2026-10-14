@@ -93,6 +93,7 @@ class PublicidadeShopeeTest extends TestCase
                 ->where('estrategia.kpis.em_prejuizo', 2)
                 ->where('estrategia.kpis.gasto_sem_venda', 31.71)
                 ->where('estrategia.conferencia.confere', true)
+                ->where('estrategia.conferencia.diferenca', 0)
                 ->has('estrategia.decidir', 2));
     }
 

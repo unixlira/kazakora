@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraCatalogoController;
+use App\Http\Controllers\Api\BeautyKoraCheckoutController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
@@ -236,6 +237,14 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
     Route::get('produtos/{id}', [BeautyKoraCatalogoController::class, 'show'])
         ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
     Route::post('produtos', [BeautyKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+
+    // Checkout pelo Mercado Pago da KazaKora (2026-10-14, só homolog): sai a Hostinger.
+    Route::prefix('checkout')->name('checkout.')->group(function () {
+        Route::post('resumo', [BeautyKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1')->name('resumo');
+        Route::post('pedido', [BeautyKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1')->name('pedido');
+        Route::get('pedido/{order}', [BeautyKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1')->name('status');
+        Route::get('cep/{cep}', [BeautyKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1')->name('cep');
+    });
 
     Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1'])->group(function () {
         Route::get('eu', [BeautyKoraContaController::class, 'eu'])->name('eu');

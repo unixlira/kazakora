@@ -108,7 +108,7 @@ class BeautyKoraContaController extends Controller
 
     public function pedidos(Request $request): JsonResponse
     {
-        $pedidos = $request->user()->pedidos()->latest('created_at')->latest('id')->limit(200)->get();
+        $pedidos = $request->user()->pedidos()->with('order')->latest('created_at')->latest('id')->limit(200)->get();
 
         return response()->json(['orders' => $pedidos->map->paraSite()->values()]);
     }

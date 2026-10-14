@@ -218,6 +218,11 @@ class EnviosFlexControlTest extends TestCase
         $this->actingAs($this->admin)
             ->get('/admin/envios-flex')
             ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('filtros.aba', 'entregues'));
+
+        $this->actingAs($this->admin)
+            ->get('/admin/envios-flex?aba=alertas')
+            ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Admin/EnviosFlex/Index', false)
                 ->where('filtros.aba', 'alertas')

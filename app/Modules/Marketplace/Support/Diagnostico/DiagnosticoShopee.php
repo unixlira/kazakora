@@ -74,7 +74,9 @@ class DiagnosticoShopee
                 'roas_empate' => $eco['roas_empate'],
                 'roas_meta' => $eco['roas_meta'],
                 'margem' => $eco['margem'],
+                'ads' => $ad ? ['ativo' => $ad['ativo'], 'meta' => $ad['meta'], 'roas' => $ad['roas'], 'gasto' => round($ad['gasto'], 2), 'conversao' => $ad['conversao']] : null,
             ];
+            $produto['acoes'] = self::acoesSugeridas($eco, $ad, $preco);
             if (($eco['receita'] ?? 0) > 0 && $eco['roas_meta'] && $eco['roas_meta'] <= 25) {
                 $metasPonderadas[] = [$eco['roas_meta'], $eco['receita']];
             }
@@ -150,6 +152,9 @@ class DiagnosticoShopee
             } elseif ($ad['ativo'] && $metaPraticavel && $ad['meta'] > 0 && $ad['meta'] < $metaPraticavel) {
                 $r[] = Prioridade::alerta('P1', 'ads', "Meta de ROAS configurada ({$um($ad['meta'])}) abaixo do mínimo para 15% de lucro ({$um($metaPraticavel)}). Ajuste a meta.");
             }
+            if ($ad['ativo'] && $ad['meta'] <= 0 && $eco['roas_empate'] && $eco['roas_empate'] + 2 <= 25 && ($ad['lance'] ?? '') === 'auto') {
+                $r[] = Prioridade::alerta('P1', 'ads', "ADS sem meta de ROAS: a Shopee gasta sem olhar o retorno. Empate {$um($eco['roas_empate'])}, meta sugerida {$um($eco['roas_empate'] + 2)}.");
+            }
             if ($ad['impressoes'] >= 500 && $ad['ctr'] < 2) {
                 $r[] = Prioridade::alerta('P1', 'capa', "Capa fraca: só {$um($ad['ctr'])}% de quem vê clica (bom é 2%+). Troque a foto de capa.");
             }
@@ -213,6 +218,7 @@ class DiagnosticoShopee
                     $porItem[$item]['ativo'] = $porItem[$item]['ativo'] || $ativo;
                     if ($ativo) {
                         $porItem[$item]['meta'] = (float) ($c['auto_bidding_info']['roas_target'] ?? 0);
+                        $porItem[$item]['lance'] = (string) ($c['common_info']['bidding_method'] ?? '');
                     }
                 }
                 $desempenho = $this->shopee->get('/api/v2/ads/get_product_campaign_daily_performance', [
@@ -238,6 +244,7 @@ class DiagnosticoShopee
             foreach ($porItem as &$a) {
                 $a['roas'] = $a['gasto'] > 0 ? round($a['gmv'] / $a['gasto'], 1) : 0.0;
                 $a['ctr'] = $a['impressoes'] > 0 ? round($a['cliques'] / $a['impressoes'] * 100, 1) : 0.0;
+                $a['conversao'] = $a['cliques'] > 0 ? round($a['pedidos'] / $a['cliques'] * 100, 2) : null;
             }
 
             return $porItem;
@@ -246,6 +253,50 @@ class DiagnosticoShopee
 
             return [];
         }
+    }
+
+    /**
+     * Correções que o botão do dashboard manda para a Shopee (pedido do Lira
+     * 2026-10-14). Meta de ROAS = empate + 2. Régua do Cauê para o ADS
+     * continuar: conversão 2%+ com empate até 8; 1,65% a 1,99% até 6; 1% a
+     * 1,64% abaixo de 5; abaixo de 1% abaixo de 4. ADS ativo que não passa
+     * na régua e dá prejuízo (ou gasta sem vender) = pausar.
+     *
+     * @return list<array{acao: string, valor: ?float, rotulo: string}>
+     */
+    public static function acoesSugeridas(array $eco, ?array $ad, float $preco): array
+    {
+        $acoes = [];
+        $empate = $eco['roas_empate'] ?? null;
+        $meta = $empate ? round($empate + 2, 1) : null;
+
+        if ($ad && $ad['ativo']) {
+            $conv = $ad['conversao'] ?? null;
+            $passa = $empate && $conv !== null && match (true) {
+                $conv >= 2 => $empate <= 8,
+                $conv >= 1.65 => $empate <= 6,
+                $conv >= 1 => $empate < 5,
+                default => $empate < 4,
+            };
+            $semVenda = $ad['gasto'] >= 20 && $ad['pedidos'] === 0;
+            $prejuizo = $ad['gasto'] >= 10 && (! $empate || $ad['roas'] < $empate);
+            $impraticavel = ! $meta || $meta > 25;
+
+            if ($semVenda || ($prejuizo && (! $passa || $impraticavel))) {
+                $acoes[] = ['acao' => 'pausar_ads', 'valor' => null, 'rotulo' => 'Pausar ADS'];
+            } elseif (! $impraticavel && ($ad['lance'] ?? '') === 'auto' && ($ad['meta'] <= 0 || $ad['meta'] < $meta)) {
+                $acoes[] = ['acao' => 'meta_roas', 'valor' => $meta, 'rotulo' => 'Meta de ROAS '.number_format($meta, 1, ',', '.')];
+            }
+        }
+
+        $minimo = $eco['preco_minimo'] ?? null;
+        if ($minimo && $preco > 0 && $preco < $minimo) {
+            $sugerido = ceil($minimo) - 0.10;
+            $sugerido = $sugerido < $minimo ? $sugerido + 1 : $sugerido;
+            $acoes[] = ['acao' => 'preco', 'valor' => round($sugerido, 2), 'rotulo' => 'Preço R$ '.number_format($sugerido, 2, ',', '.')];
+        }
+
+        return $acoes;
     }
 
     private function emLotes(Collection $ids, int $tamanho, callable $buscar): array

@@ -296,6 +296,10 @@ return [
         // em lugar nenhum que consegui acessar nesta sessão).
         'push_partner_key' => env('SHOPEE_PUSH_PARTNER_KEY'),
         'api_base_url' => env('SHOPEE_API_BASE_URL', 'https://partner.test-stable.shopeemobile.com'),
+        // Estratégia Shopee, botão Ação (2026-10-14): pausar, retomar e mudar
+        // meta de ROAS de verdade. Desligado = o Cauê só simula e grava o que
+        // mandaria. Ligar só com OK do Lira (ADS é dinheiro).
+        'ads_escrita' => (bool) env('SHOPEE_ADS_ESCRITA', false),
         // Host do LINK de autorização (o vendedor clica e é levado pra lá) —
         // achado real 2026-08-06: a Shopee usa um host REGIONAL específico
         // pra esse link em PRODUÇÃO, diferente do api_base_url usado nas

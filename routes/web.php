@@ -12,6 +12,7 @@ use App\Modules\Admin\Http\Controllers\CompetitorAnalysisController;
 use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
+use App\Modules\Admin\Http\Controllers\DiagnosticoAcaoController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
@@ -240,6 +241,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Filas (Horizon) aberto dentro do admin (pedido 2026-10-11).
     Route::inertia('filas', 'Admin/Filas/Index')->middleware('admin')->name('filas');
     Route::get('/', [DashboardController::class, 'index'])->name('painel');
+    // Botões de ação do diagnóstico do Cauê (pedido 2026-10-14): mexem na Shopee, só admin.
+    Route::post('diagnostico/shopee/acao', [DiagnosticoAcaoController::class, 'shopee'])->middleware('admin')->name('diagnostico.shopee.acao');
+    Route::get('diagnostico/shopee/{itemId}/modelos', [DiagnosticoAcaoController::class, 'modelos'])->middleware('admin')->name('diagnostico.shopee.modelos');
 
     Route::resource('produtos', ProductController::class)->except('show')
         ->parameters(['produtos' => 'product'])
@@ -584,6 +588,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Menu Publicidade (2026-10-12): Meta ADS e Google ADS, só leitura.
         Route::get('publicidade/meta-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'metaAds'])->name('publicidade.meta-ads');
         Route::get('publicidade/google-ads', [\App\Modules\Admin\Http\Controllers\PublicidadePlataformaController::class, 'googleAds'])->name('publicidade.google-ads');
+        // Estratégia Shopee (2026-10-14): campanhas de ADS com prejuízo, só leitura.
+        Route::get('publicidade/shopee', [\App\Modules\Admin\Http\Controllers\PublicidadeShopeeController::class, 'index'])->name('publicidade.shopee');
     });
     // Meta ADS, campanhas de vídeo (2026-10-13): Lira sobe os vídeos e a
     // campanha vai para a Meta com o orçamento dividido entre eles. Ver é
@@ -604,6 +610,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'enviar'])->whereNumber('campanha')->name('enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'pausar'])->whereNumber('campanha')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
+    });
+    // Estratégia Shopee, botão Ação (tarefa 569, 2026-10-14): o Cauê pausa,
+    // retoma ou muda a meta de ROAS da campanha do produto, só pelo clique
+    // do Lira. Escrita real só com SHOPEE_ADS_ESCRITA=true; sem ela, simula.
+    Route::prefix('publicidade/shopee/acoes')->name('publicidade.shopee.acoes.')->group(function () {
+        Route::get('item/{item}', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'preparar'])->where('item', '[0-9]+')->name('preparar')->middleware(['permission:financeiro.view', 'throttle:30,1']);
+        Route::post('/', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'aplicar'])->name('aplicar')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::post('{acao}/conferir', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'conferir'])->whereNumber('acao')->name('conferir')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::post('{acao}/desfazer', [\App\Modules\Admin\Http\Controllers\ShopeeAdsAcaoController::class, 'desfazer'])->whereNumber('acao')->name('desfazer')->middleware(['permission:financeiro.create', 'throttle:10,1']);
     });
     Route::post('fluxo-de-caixa', [CashFlowController::class, 'store'])->name('fluxo-de-caixa.armazenar')->middleware('permission:financeiro.create');
     Route::put('fluxo-de-caixa/{cash_flow_entry}', [CashFlowController::class, 'update'])->name('fluxo-de-caixa.atualizar')->middleware('permission:financeiro.edit');

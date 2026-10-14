@@ -381,16 +381,9 @@ watch(
                     </ul>
                 </div>
 
-                <!-- Sidebar footer: user profile -->
-                <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full items-center gap-3 border-t border-[var(--surface-border)] py-4 md:flex">
-                    <img v-if="user?.avatar_url" :src="user.avatar_url" class="h-9 w-9 rounded-full object-cover" alt="">
-                    <span v-else class="flex h-9 w-9 items-center justify-center rounded-full bg-lightprimary text-sm font-semibold text-primary">
-                        {{ user?.initials }}
-                    </span>
-                    <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold">{{ user?.name }}</p>
-                        <p class="truncate text-xs capitalize text-slate-400">{{ user?.role }}</p>
-                    </div>
+                <!-- Sidebar footer: versão do sistema -->
+                <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full items-center border-t border-[var(--surface-border)] py-4 md:flex">
+                    <p class="truncate text-xs text-slate-400">Versão 1.12.0</p>
                 </div>
             </div>
         </nav>

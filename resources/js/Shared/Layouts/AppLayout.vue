@@ -369,7 +369,7 @@ const REDES = [
             <div class="mx-auto max-w-[1320px] px-4 py-14 md:px-6">
                 <div class="flex flex-col items-center gap-10 text-center lg:flex-row lg:items-start lg:justify-between lg:text-left">
                     <div class="lg:max-w-xs lg:shrink-0">
-                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto lg:mx-0" loading="lazy">
+                        <img :src="marca.logoRodape" alt="KazaKora" class="mx-auto h-8 w-auto rounded-[8px] lg:mx-0" loading="lazy">
                         <p class="mt-3 text-sm opacity-80 lg:max-w-[28ch]">
                             Curadoria de eletrônicos, gadgets e utensílios de cozinha, com entrega para todo o Brasil.
                         </p>
@@ -434,7 +434,7 @@ const REDES = [
                             <!-- Bandeiras sem a sombra embutida (era a linha à direita) e cantos
                                  retos no arquivo; o arredondamento leve vem do CSS (pedido 2026-10-14). -->
                             <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand"
-                                class="h-[25px] w-auto shrink-0 rounded-[2px] sm:h-[39px] lg:h-[46px]">
+                                class="h-[25px] w-auto shrink-0 rounded-[8px] sm:h-[39px] lg:h-[46px]">
                         </div>
                     </div>
 
@@ -445,7 +445,7 @@ const REDES = [
                         <h5 class="font-store-mono mb-3 text-xs uppercase tracking-wider opacity-60">Segurança</h5>
                         <div class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 lg:justify-end">
                             <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                                class="flex h-[25px] cursor-pointer items-center justify-center overflow-hidden rounded-[2px] bg-white px-2.5 transition hover:opacity-90 sm:h-[39px] sm:px-3 lg:h-[46px]"
+                                class="flex h-[25px] cursor-pointer items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 transition hover:opacity-90 sm:h-[39px] sm:px-3 lg:h-[46px]"
                                 title="Ver a verificação do Google Safe Browsing">
                                 <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45"
                                     class="h-[17px] w-auto sm:h-[29px] lg:h-[35px]">
@@ -453,7 +453,7 @@ const REDES = [
                             <!-- Selo oficial RA Verificada (2026-10-14, verificação aprovada). Na mesma
                                  escala do Google: caixa branca da mesma altura e o selo com a altura
                                  do logo do Google dentro dela (pedido 2026-10-14). -->
-                            <div class="flex h-[25px] items-center justify-center overflow-hidden rounded-[2px] bg-white px-2.5 sm:h-[39px] sm:px-3 lg:h-[46px]">
+                            <div class="flex h-[25px] items-center justify-center overflow-hidden rounded-[8px] bg-white px-2.5 sm:h-[39px] sm:px-3 lg:h-[46px]">
                                 <SeloReclameAqui class="[--ra-altura:17] sm:[--ra-altura:29] lg:[--ra-altura:35]" />
                             </div>
                         </div>

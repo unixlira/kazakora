@@ -466,6 +466,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </template>
                             <p v-else class="esgotado">Produto esgotado</p>
 
+                            <div class="bandeiras">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/retas/${brand}.png`" :alt="brand" loading="lazy">
+                            </div>
+
                             <form class="prazo-cep" @submit.prevent="consultarPrazo">
                                 <label for="cep-prazo"><i class="fas fa-location-dot"></i> Consultar prazo de entrega</label>
                                 <div class="linha">

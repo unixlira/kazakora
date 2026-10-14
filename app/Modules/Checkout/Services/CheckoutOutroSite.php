@@ -129,43 +129,91 @@ abstract class CheckoutOutroSite
 
     /**
      * Valores da compra, em reais. desconto_pix só vale pagando tudo no Pix,
-     * sobre o total do pedido, frete TURBO incluído (pedido do Lira
+     * sobre o total do pedido, frete pago (TURBO, Loggi) incluído (pedido do Lira
      * 2026-10-14; na KazaKora o Pix não desconta do frete). Entrega como no checkout da KazaKora: FULL na Grande SP
      * (sem TURBO, já é a mais rápida); fora dela grátis ou TURBO (SEDEX),
      * cobrando só a diferença, sempre recalculada aqui.
      *
-     * @return array{subtotal: float, desconto_plataforma: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool}
+     * Opções de entrega (pedido do Lira em 2026-10-14, "Correios ou Loggi"):
+     * o preço dos produtos da KazaKora já paga o frete da caixa pelo Correios
+     * do contrato (PAC ou SEDEX, o mais barato), então os Correios saem
+     * grátis; a Loggi (Melhor Envio) cobra só o que passar desse frete, e sai
+     * grátis quando é mais barata. $frete é o id da opção (full, correios,
+     * turbo ou me:ID); sem ele, ou se ela sumiu, vale a primeira (a grátis).
+     *
+     * @return array{subtotal: float, desconto_plataforma: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
      */
-    public function valores(Collection $itens, ?string $cep = null, bool $turbo = false): array
+    public function valores(Collection $itens, ?string $cep = null, ?string $frete = null): array
     {
         $subtotal = round($itens->sum('subtotal'), 2);
         $entrega = app(FreteEmbutido::class)->entregaDoCarrinho($itens);
         $full = $cep ? app(EntregaExpressa::class)->consultar($cep) : null;
         $opcaoTurbo = $full ? null : $entrega['turbo'];
-        $frete = $turbo && $opcaoTurbo ? round((float) $opcaoTurbo['preco'], 2) : 0.0;
+        $opcoes = $this->opcoesDeEntrega($entrega, $full, $opcaoTurbo, $cep, $subtotal);
+        $escolhida = collect($opcoes)->firstWhere('id', $frete) ?? $opcoes[0];
+        $valorDoFrete = round((float) $escolhida['preco'], 2);
         $plataforma = (float) $entrega['desconto_plataforma'];
-        $total = round($subtotal - $plataforma + $frete, 2);
+        $total = round($subtotal - $plataforma + $valorDoFrete, 2);
         $pix = DescontoPix::desconto(max(0, $total));
 
         return [
             'subtotal' => $subtotal,
             'desconto_plataforma' => $plataforma,
             'desconto_pix' => $pix,
-            'frete' => $frete,
+            'frete' => $valorDoFrete,
             'total' => $total,
             'total_pix' => round($total - $pix, 2),
             'prazo' => $full ? null : $entrega['prazo'],
             'full' => $full,
             'turbo' => $opcaoTurbo,
-            'turbo_escolhido' => $frete > 0,
+            'turbo_escolhido' => $escolhida['id'] === 'turbo',
+            'opcoes' => $opcoes,
+            'escolhida' => $escolhida,
         ];
     }
 
+    /**
+     * FULL (Grande SP), Correios grátis, TURBO e as da Melhor Envio
+     * (frete_embutido.transportadoras_melhor_envio), em reais a mais.
+     *
+     * @return list<array{id: string, transportadora: string, servico: string, preco: float, prazo: ?int, mensagem?: string, dias_a_menos?: ?int}>
+     */
+    private function opcoesDeEntrega(array $entrega, ?array $full, ?array $turbo, ?string $cep, float $subtotal): array
+    {
+        $opcoes = [];
+        if ($full) {
+            $opcoes[] = ['id' => 'full', 'transportadora' => 'Full', 'servico' => 'Entrega expressa', 'preco' => 0.0, 'prazo' => null, 'mensagem' => $full['mensagem'], 'local' => $full['local']];
+        }
+        $opcoes[] = ['id' => 'correios', 'transportadora' => 'Correios', 'servico' => mb_strtoupper($entrega['servico'] ?? 'pac'), 'preco' => 0.0, 'prazo' => $entrega['prazo']];
+        if ($turbo) {
+            $opcoes[] = ['id' => 'turbo', 'transportadora' => 'Correios', 'servico' => 'SEDEX', 'preco' => round((float) $turbo['preco'], 2), 'prazo' => $turbo['prazo'], 'dias_a_menos' => $turbo['dias_a_menos']];
+        }
+
+        $custo = isset($entrega['custo']) ? (float) $entrega['custo'] : null;
+        if ($cep && $custo !== null && ! empty($entrega['peso_g'])) {
+            $teto = (float) config('frete_embutido.turbo_max', 60);
+            foreach (app(TransportadorasMelhorEnvio::class)->cotar($cep, (int) $entrega['peso_g'], $subtotal) as $cotacao) {
+                $aMais = round(max(0, $cotacao['preco'] - $custo), 2);
+                if ($aMais <= $teto) {
+                    $opcoes[] = ['id' => $cotacao['id'], 'transportadora' => $cotacao['transportadora'], 'servico' => $cotacao['servico'], 'preco' => $aMais, 'prazo' => $cotacao['prazo']];
+                }
+            }
+        }
+
+        return $opcoes;
+    }
+
+    /** Opção de entrega pedida pelo site: frete (id) ou o antigo turbo=true. */
+    public static function freteEscolhido(array $dados): ?string
+    {
+        return ($dados['frete'] ?? null) ?: (! empty($dados['turbo']) ? 'turbo' : null);
+    }
+
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */
-    public function resumo(array $pedidos, ?string $cep, bool $turbo = false): array
+    public function resumo(array $pedidos, ?string $cep, ?string $frete = null): array
     {
         $itens = $this->itens($pedidos, $cep);
-        $valores = $this->valores($itens, $cep, $turbo);
+        $valores = $this->valores($itens, $cep, $frete);
 
         return [
             'itens' => $itens->map(fn (array $item) => [
@@ -194,6 +242,9 @@ abstract class CheckoutOutroSite
                     'dias_a_menos' => $valores['turbo']['dias_a_menos'],
                 ] : null,
                 'turbo_escolhido' => $valores['turbo_escolhido'],
+                // Todas as opções (Correios, Loggi...), preço a mais em centavos.
+                'opcoes' => array_map(fn (array $opcao) => ['preco' => self::centavos($opcao['preco'])] + $opcao, $valores['opcoes']),
+                'escolhida' => $valores['escolhida']['id'],
             ],
             'total' => self::centavos($valores['total']),
             'total_pix' => self::centavos($valores['total_pix']),
@@ -215,7 +266,11 @@ abstract class CheckoutOutroSite
 
         return DB::transaction(function () use ($dados, $metodo, $endereco, $localizacao) {
             $itens = $this->itens($dados['itens'], $endereco['zip'], travar: true);
-            $valores = $this->valores($itens, $endereco['zip'], (bool) ($dados['turbo'] ?? false));
+            $valores = $this->valores($itens, $endereco['zip'], self::freteEscolhido($dados));
+            if (! empty($dados['frete']) && $valores['escolhida']['id'] !== $dados['frete']) {
+                // A opção da tela não existe mais (cotação mudou): não troca calado.
+                throw new PrecoMudouException();
+            }
             $pixDiscount = $metodo === Payment::METHOD_PIX ? $valores['desconto_pix'] : 0.0;
             $total = round($valores['total'] - $pixDiscount, 2);
 
@@ -230,7 +285,13 @@ abstract class CheckoutOutroSite
                 'phone' => $dados['cliente']['phone'],
                 'is_default' => $user->addresses()->count() === 0,
             ]);
-            $frete = $valores['turbo_escolhido'] ? null : ShippingMethod::freteGratis();
+            $escolhida = $valores['escolhida'];
+            $frete = in_array($escolhida['id'], ['full', 'correios'], true) ? ShippingMethod::freteGratis() : null;
+            $transportadora = match (true) {
+                $frete !== null => $frete->name,
+                $escolhida['id'] === 'turbo' => FreteEmbutido::TURBO,
+                default => trim("{$escolhida['transportadora']} {$escolhida['servico']}"),
+            };
 
             $order = Order::create([
                 'user_id' => $user->id,
@@ -238,7 +299,7 @@ abstract class CheckoutOutroSite
                 'external_order_id' => Order::gerarNumeroDaLoja(),
                 'status' => Order::STATUS_AWAITING_PAYMENT,
                 'shipping_method_id' => $frete?->id,
-                'shipping_carrier_name' => $frete?->name ?? FreteEmbutido::TURBO,
+                'shipping_carrier_name' => $transportadora,
                 'shipping_name' => $address->recipient_name,
                 'shipping_phone' => $address->phone,
                 'shipping_zip' => $address->zip,

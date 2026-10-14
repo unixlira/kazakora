@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\BeautyKora;
 
+use App\Models\MelhorEnvioToken;
 use App\Modules\BeautyKora\Models\BeautyKoraCliente;
 use App\Modules\BeautyKora\Models\BeautyKoraPedido;
 use App\Modules\BeautyKora\Models\BeautyKoraProduto;
@@ -9,10 +10,12 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Modules\Fiscal\Models\Company;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -76,6 +79,111 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->partialMock(FreteEmbutido::class, fn ($mock) => $mock->shouldReceive('entregaDoCarrinho')->andReturn([
             'prazo' => 8, 'turbo' => ['preco' => 25.0, 'prazo' => 4, 'dias_a_menos' => 4], 'estimado' => false, 'desconto_plataforma' => 0.0,
         ]));
+    }
+
+    /**
+     * Caixa de 600 g cujo preço já paga R$ 20 de PAC (8 dias), com TURBO de
+     * R$ 25, e o Melhor Envio cotando Loggi Express a R$ $loggi (3 dias) e
+     * Jadlog (fora da lista, não aparece).
+     */
+    private function comLoggi(float $loggi): void
+    {
+        $this->partialMock(FreteEmbutido::class, fn ($mock) => $mock->shouldReceive('entregaDoCarrinho')->andReturn([
+            'prazo' => 8, 'turbo' => ['preco' => 25.0, 'prazo' => 4, 'dias_a_menos' => 4], 'estimado' => false, 'desconto_plataforma' => 0.0,
+            'servico' => 'pac', 'custo' => 20.0, 'peso_g' => 600,
+        ]));
+        Company::create([
+            'razao_social' => 'Kazakora Comércio Ltda', 'nome_fantasia' => 'KazaKora', 'cnpj' => '65604590000107',
+            'regime_tributario' => Company::REGIME_SIMPLES_NACIONAL, 'phone' => '(11) 91234-5678', 'email' => 'contato@kazakora.com',
+            'zip' => '03187-040', 'street' => 'Rua da Loja', 'number' => '100', 'neighborhood' => 'Centro', 'city' => 'São Paulo', 'state' => 'SP',
+        ]);
+        MelhorEnvioToken::create([
+            'account_label' => 'KazaKora', 'access_token' => 'token-me', 'refresh_token' => 'refresh-me',
+            'token_expires_at' => now()->addDays(10), 'scopes' => ['shipping-calculate'],
+        ]);
+        config(['services.melhorenvio.api_base_url' => 'https://melhorenvio.test/api/v2']);
+        Http::fake(['melhorenvio.test/*' => Http::response([
+            ['id' => 3, 'name' => '.Package', 'price' => '14.94', 'delivery_time' => 7, 'company' => ['name' => 'Jadlog']],
+            ['id' => 31, 'name' => 'Express', 'price' => (string) $loggi, 'delivery_time' => 3, 'company' => ['name' => 'Loggi']],
+            ['id' => 32, 'name' => 'Coleta', 'error' => 'Transportadora não atende este trecho.', 'company' => ['name' => 'Loggi']],
+        ])]);
+    }
+
+    public function test_fora_da_grande_sp_mostra_correios_turbo_e_loggi_pela_diferenca(): void
+    {
+        $this->comLoggi(27.5);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
+            ->assertOk()
+            ->assertJsonPath('entrega.escolhida', 'correios')
+            ->assertJsonCount(3, 'entrega.opcoes')
+            ->assertJsonPath('entrega.opcoes.0.transportadora', 'Correios')
+            ->assertJsonPath('entrega.opcoes.0.servico', 'PAC')
+            ->assertJsonPath('entrega.opcoes.0.preco', 0)
+            ->assertJsonPath('entrega.opcoes.0.prazo', 8)
+            ->assertJsonPath('entrega.opcoes.1.id', 'turbo')
+            ->assertJsonPath('entrega.opcoes.2.id', 'me:31')
+            ->assertJsonPath('entrega.opcoes.2.transportadora', 'Loggi')
+            ->assertJsonPath('entrega.opcoes.2.servico', 'Express')
+            ->assertJsonPath('entrega.opcoes.2.preco', 750)
+            ->assertJsonPath('entrega.opcoes.2.prazo', 3)
+            ->assertJsonPath('total', 20000);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA, 'frete' => 'me:31'])
+            ->assertOk()
+            ->assertJsonPath('entrega.escolhida', 'me:31')
+            ->assertJsonPath('entrega.turbo_escolhido', false)
+            ->assertJsonPath('frete', 750)
+            ->assertJsonPath('total', 20750)
+            ->assertJsonPath('total_pix', 19712);
+    }
+
+    public function test_loggi_mais_barata_que_o_frete_embutido_sai_gratis_e_vai_no_pedido(): void
+    {
+        $this->comLoggi(12.0);
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->once()
+            ->withArgs(fn ($valor) => $valor === 190.0)
+            ->andReturn(['id' => 79, 'status' => 'pending']));
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FORA])
+            ->assertJsonPath('entrega.opcoes.2.preco', 0);
+
+        $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido([
+            'frete' => 'me:31',
+            'endereco' => ['zip' => self::CEP_FORA, 'city' => 'Belo Horizonte', 'state' => 'MG'],
+        ]))->assertCreated();
+
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+        $this->assertSame('Loggi Express', $order->shipping_carrier_name);
+        $this->assertNull($order->shipping_method_id);
+        $this->assertSame('0.00', $order->shipping_cost);
+    }
+
+    public function test_grande_sp_tem_full_primeiro_e_tambem_correios_e_loggi(): void
+    {
+        $this->comLoggi(27.5);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FULL])
+            ->assertOk()
+            ->assertJsonPath('entrega.escolhida', 'full')
+            ->assertJsonPath('entrega.opcoes.0.id', 'full')
+            ->assertJsonPath('entrega.opcoes.1.id', 'correios')
+            ->assertJsonPath('entrega.opcoes.2.id', 'me:31')
+            ->assertJsonCount(3, 'entrega.opcoes')
+            ->assertJsonPath('frete', 0);
+    }
+
+    public function test_opcao_de_entrega_que_sumiu_nao_vira_outra_calada(): void
+    {
+        $this->comTurbo();
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->never());
+
+        $this->postJson('/api/beautykora/checkout/pedido', $this->pedido([
+            'frete' => 'me:31',
+            'endereco' => ['zip' => self::CEP_FORA, 'city' => 'Belo Horizonte', 'state' => 'MG'],
+        ]))->assertStatus(409)->assertJsonPath('resumo.entrega.escolhida', 'correios');
+
+        $this->assertSame(0, Order::count());
     }
 
     public function test_cep_da_grande_sp_tem_entrega_full_sem_turbo(): void

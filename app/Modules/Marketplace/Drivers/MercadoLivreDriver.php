@@ -481,23 +481,41 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
             // manual (anúncio duplicado é problema de cadastro no ML, não
             // deveria travar o pedido) e segue — o que importa pro pedido é
             // o $product retornado, não a linha de listing em si.
-            $listingExistsForOtherListing = ProductChannelListing::query()
+            //
+            // BUG REAL 2026-10-14 (venda 2000018975763168 travada): a linha
+            // existente era um rascunho de publicação com external_id NULL,
+            // e `external_id != X` nunca casa NULL no SQL — o código achava
+            // que não havia linha e tentava inserir de novo (mesma
+            // constraint). Linha sem anúncio agora é preenchida com este.
+            $listing = ProductChannelListing::query()
                 ->where('product_id', $existing->id)
                 ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
-                ->where('external_id', '!=', $externalId)
-                ->exists();
+                ->first();
 
-            if ($listingExistsForOtherListing) {
+            if (! $listing) {
+                ProductChannelListing::query()->create([
+                    'channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE,
+                    'external_id' => $externalId,
+                    'external_model_id' => $externalModelId,
+                    'product_id' => $existing->id,
+                    'is_enabled' => true,
+                    'status' => ProductChannelListing::STATUS_PUBLISHED,
+                    'last_synced_at' => now(),
+                ]);
+            } elseif ($listing->external_id === null || $listing->external_id === '') {
+                $listing->update([
+                    'external_id' => $externalId,
+                    'external_model_id' => $externalModelId,
+                    'is_enabled' => true,
+                    'status' => ProductChannelListing::STATUS_PUBLISHED,
+                    'last_synced_at' => now(),
+                ]);
+            } elseif ($listing->external_id !== $externalId) {
                 Log::channel(config('mercadolivre.log_channel'))->warning('mercadolivre.order_import.duplicate_listing_for_product', [
                     'product_id' => $existing->id,
                     'sku' => $item['sku'],
                     'new_external_id' => $externalId,
                 ]);
-            } else {
-                ProductChannelListing::query()->firstOrCreate(
-                    ['channel' => MarketplaceAccount::CHANNEL_MERCADO_LIVRE, 'external_id' => $externalId, 'external_model_id' => $externalModelId],
-                    ['product_id' => $existing->id, 'is_enabled' => true, 'status' => ProductChannelListing::STATUS_PUBLISHED, 'last_synced_at' => now()],
-                );
             }
 
             return $existing;

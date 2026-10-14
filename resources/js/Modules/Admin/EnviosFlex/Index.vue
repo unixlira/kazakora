@@ -273,6 +273,9 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                                 <span v-if="!alertasVisiveis(linha).length && linha.resolucao" class="text-xs text-success">
                                     <i class="fas fa-check"></i> {{ linha.resolucao.rotulo }}
                                 </span>
+                                <span v-else-if="!alertasVisiveis(linha).length" class="inline-block rounded bg-lightsuccess px-2 py-0.5 text-xs font-medium text-success">
+                                    Sem alertas
+                                </span>
                             </td>
                         </tr>
                     </tbody>

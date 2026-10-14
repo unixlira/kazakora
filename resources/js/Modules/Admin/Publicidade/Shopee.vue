@@ -12,6 +12,8 @@
  * conta fica num <details>.
  * "Abrir na Shopee" ainda leva à página do produto: a URL da campanha na
  * Shopee Ads não está confirmada (ver EstrategiaShopeeAds::linha).
+ * Campanha já decidida pelo botão Ação sai da lista e vai para "Já
+ * decididas" no fim (EstrategiaShopeeAds::decisoes).
  */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
@@ -54,6 +56,9 @@ const TENDENCIA = {
 
 const k = computed(() => props.estrategia.kpis);
 const campanhas = computed(() => props.estrategia.campanhas);
+// Já pausadas ou com meta trocada pelo botão Ação: saem da lista e do
+// "Decida hoje" (pedido do Lira, 2026-10-14) e ficam no bloco do fim.
+const decididas = computed(() => props.estrategia.decididas ?? []);
 const conf = computed(() => props.estrategia.conferencia);
 
 // Frase de conclusão do topo (proposta do Jonathan, 2026-10-14).
@@ -196,7 +201,7 @@ const recarregar = () => router.reload({ only: ['estrategia'], preserveScroll: t
             {{ data(estrategia.desde) }} a {{ data(estrategia.ate) }} · {{ dataHora(estrategia.sincronizado_em) ? `atualizado ${dataHora(estrategia.sincronizado_em)}` : 'ainda não atualizado' }}
         </p>
 
-        <div v-if="!campanhas.length" class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-6 text-sm text-slate-500 dark:text-slate-400">
+        <div v-if="!campanhas.length && !decididas.length" class="mb-6 rounded-xl border border-dashed border-[var(--surface-border)] bg-[var(--surface)] p-6 text-sm text-slate-500 dark:text-slate-400">
             Ainda não chegaram campanhas da Shopee. A busca roda a cada hora. Se continuar vazio, avise o Homer.
         </div>
 
@@ -414,6 +419,25 @@ const recarregar = () => router.reload({ only: ['estrategia'], preserveScroll: t
                     </table>
                 </div>
             </section>
+
+            <details v-if="decididas.length" class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                <summary class="cursor-pointer text-base font-semibold focus-visible:outline-2 focus-visible:outline-primary">
+                    Já decididas ({{ decididas.length }})
+                    <span class="block text-xs font-normal text-slate-500">Pausadas ou com meta trocada pelo botão Ação. A meta volta para a lista em 14 dias, depois do aprendizado da Shopee.</span>
+                </summary>
+                <ul class="mt-3 divide-y divide-[var(--surface-border)]">
+                    <li v-for="c in decididas" :key="c.campaign_id" class="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-sm">
+                        <div class="min-w-0 flex-1 basis-64">
+                            <span class="block truncate font-semibold" :title="c.nome">{{ c.nome }}</span>
+                            <span class="block text-xs text-slate-500">
+                                {{ c.decisao.descricao }} · {{ c.decisao.quando }}<template v-if="c.decisao.quem"> · {{ c.decisao.quem }}</template><template v-if="c.decisao.simulada"> · simulado</template>
+                            </span>
+                        </div>
+                        <span class="text-sm font-bold tabular-nums" :class="corResultado(c.resultado)">{{ dinheiro(c.resultado) }}</span>
+                        <AcaoCaue v-if="c.item_id" :produto="produtoAcao(c)" @aplicado="recarregar" />
+                    </li>
+                </ul>
+            </details>
         </template>
         </div>
     </AdminLayout>

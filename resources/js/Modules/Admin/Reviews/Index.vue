@@ -123,8 +123,8 @@ const columns = [
         </p>
 
         <div class="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
-            <!-- Card Total em degradê verde nos dois temas (Lira, 2026-10-14). -->
-            <button type="button" class="degrade-verde rounded-xl border border-white/20 p-3 text-left text-white transition"
+            <!-- Card Total em degradê: azul no claro, verde no escuro (Lira, 2026-10-14). -->
+            <button type="button" class="card-destaque rounded-xl border border-white/20 p-3 text-left text-white transition"
                 :class="notaFiltro === null ? 'ring-2 ring-white/70 ring-offset-1' : 'hover:border-white/50'"
                 @click="notaFiltro = null">
                 <span class="block text-xs font-semibold uppercase tracking-wide opacity-70">Total</span>

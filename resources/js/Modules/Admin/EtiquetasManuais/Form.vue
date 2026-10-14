@@ -51,7 +51,7 @@ const submit = () => {
             <div>
                 <h1 class="mb-1 text-2xl font-bold">Gerar Etiqueta Manual</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Envie ou cole o conteúdo ZPL da etiqueta — ela entra na mesma fila que o KoraSync já processa.
+                    Envie o arquivo (.txt ZPL ou PDF) ou cole o conteúdo ZPL da etiqueta — ela entra na mesma fila que o KoraSync já processa.
                 </p>
             </div>
             <Link href="/admin/etiquetas-manuais" class="text-sm text-primary hover:underline">
@@ -78,7 +78,7 @@ const submit = () => {
                             class="rounded-full px-3 py-1.5 text-xs font-medium"
                             :class="inputMode === 'file' ? 'bg-primary text-white' : 'bg-[var(--surface-muted)] text-slate-500'"
                             @click="setInputMode('file')">
-                            Enviar arquivo .txt
+                            Enviar arquivo .txt ou .pdf
                         </button>
                         <button type="button"
                             class="rounded-full px-3 py-1.5 text-xs font-medium"
@@ -88,7 +88,7 @@ const submit = () => {
                         </button>
                     </div>
 
-                    <input v-if="inputMode === 'file'" ref="fileInput" type="file" accept=".txt"
+                    <input v-if="inputMode === 'file'" ref="fileInput" type="file" accept=".txt,.pdf,application/pdf"
                         class="w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
                         @change="onFileSelect">
                     <textarea v-else v-model="form.content" rows="8"

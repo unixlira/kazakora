@@ -73,7 +73,7 @@ class ManualLabelController extends Controller
     {
         $validated = $request->validate([
             'channel' => ['required', Rule::in(array_keys(self::canaisPermitidos()))],
-            'file' => ['required_without:content', 'nullable', 'file', 'mimes:txt', 'max:2048'],
+            'file' => ['required_without:content', 'nullable', 'file', 'mimes:txt,pdf', 'max:2048'],
             'content' => ['required_without:file', 'nullable', 'string'],
             'print_thank_you' => ['nullable', 'boolean'],
             'etiquetas_full' => ['nullable', 'boolean'],
@@ -84,10 +84,18 @@ class ManualLabelController extends Controller
             : $validated['content'];
 
         $full = $request->boolean('etiquetas_full');
+        $ehPdf = self::ehPdf($rawContent);
+
+        if ($ehPdf && $full) {
+            return back()->withInput()->with('error', 'Etiquetas Full precisam de arquivo ZPL (.txt): PDF não vai direto na térmica do rolo pequeno.');
+        }
+
         $base = 'labels/'.($full ? 'full' : 'manual').'-'.now()->timestamp.'-'.uniqid();
 
         try {
-            if ($full) {
+            if ($ehPdf) {
+                $pdfBytes = $processor->encaixarNaFolha($rawContent);
+            } elseif ($full) {
                 // Etiquetas Full: o que vai pra impressora é o TSPL (ver
                 // LabelProcessingService::zplParaTspl). O PDF é só a prévia
                 // do "Ver PDF" — nunca é impresso.
@@ -224,7 +232,7 @@ class ManualLabelController extends Controller
 
         $validated = $request->validate([
             'channel' => ['required', Rule::in(array_keys(self::canaisPermitidos()))],
-            'file' => ['nullable', 'file', 'mimes:txt', 'max:2048'],
+            'file' => ['nullable', 'file', 'mimes:txt,pdf', 'max:2048'],
             'content' => ['nullable', 'string'],
         ]);
 
@@ -238,7 +246,9 @@ class ManualLabelController extends Controller
             }
 
             try {
-                $pdfBytes = $processor->convertZplToPdf($rawContent);
+                $pdfBytes = self::ehPdf($rawContent)
+                    ? $processor->encaixarNaFolha($rawContent)
+                    : $processor->convertZplToPdf($rawContent);
             } catch (Throwable $exception) {
                 report($exception);
 
@@ -270,6 +280,12 @@ class ManualLabelController extends Controller
         $printJob->delete();
 
         return back()->with('success', "Etiqueta #{$printJob->id} removida.");
+    }
+
+    /** Arquivo enviado já é um PDF pronto (confere o cabeçalho, não a extensão). */
+    private static function ehPdf(?string $conteudo): bool
+    {
+        return str_starts_with((string) $conteudo, '%PDF-');
     }
 
     private static function ehEtiquetaFull(PrintJob $printJob): bool

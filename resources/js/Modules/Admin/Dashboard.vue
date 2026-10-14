@@ -2,7 +2,8 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import ChartCanvas from '@/Shared/Components/ChartCanvas.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import Swal from 'sweetalert2';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
@@ -489,6 +490,74 @@ function diagnostico(canal) {
     return { ...d, contagem, produtos, filtro };
 }
 
+// Botão de ação do Cauê (pedido 2026-10-14): manda a correção para a Shopee
+// pela API e confere lendo de volta. Só admin; sempre confirma antes.
+const ehAdmin = computed(() => usePage().props.auth?.user?.role === 'admin');
+const ICONE_ACAO = { pausar_ads: 'fas fa-pause', meta_roas: 'fas fa-bullseye', preco: 'fas fa-tag' };
+const aplicando = ref(null);
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const acaoFeita = (canal, itemId, acao) => props.diagnosticos?.[canal]?.feitas?.[itemId]?.[acao] ?? null;
+
+async function aplicarAcao(produto, a) {
+    let valor = a.valor;
+    let modelId = null;
+    if (a.acao === 'preco') {
+        let modelos = [];
+        try {
+            const r = await fetch(`/admin/diagnostico/shopee/${produto.item_id}/modelos`, { headers: { Accept: 'application/json' } });
+            modelos = (await r.json()).modelos ?? [];
+        } catch { /* sem variações conhecidas: segue pelo item */ }
+        const opcoes = Object.fromEntries(modelos.map((m) => [m.model_id, `${m.nome} (hoje ${formatPrice(m.original)})`]));
+        const passo1 = await Swal.fire({
+            title: 'Novo preço na Shopee',
+            html: `<p class="text-sm">${esc(produto.nome)}</p><p class="mt-2 text-sm">Sugestão do Cauê: <b>${formatPrice(a.valor)}</b> (margem de 15% antes do ADS).</p>`,
+            input: 'number',
+            inputValue: a.valor,
+            inputAttributes: { step: '0.01', min: '1' },
+            showCancelButton: true,
+            confirmButtonText: modelos.length ? 'Escolher variação' : 'Aplicar preço',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true,
+            inputValidator: (v) => (!v || Number(v) <= 0 ? 'Informe o preço.' : null),
+        });
+        if (!passo1.isConfirmed) return;
+        valor = Number(passo1.value);
+        if (modelos.length) {
+            const passo2 = await Swal.fire({
+                title: 'Qual variação?',
+                text: `Preço ${formatPrice(valor)} só na variação escolhida.`,
+                input: 'select',
+                inputOptions: opcoes,
+                showCancelButton: true,
+                confirmButtonText: 'Aplicar preço',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true,
+            });
+            if (!passo2.isConfirmed) return;
+            modelId = passo2.value;
+        }
+    } else {
+        const texto = a.acao === 'pausar_ads'
+            ? 'Pausa todas as campanhas de ADS em andamento deste produto na Shopee. Dá para religar depois no Seller Center.'
+            : `Muda a meta de ROAS das campanhas em andamento deste produto para ${formatNum(a.valor)} (empate + 2).`;
+        const ok = await Swal.fire({
+            icon: 'question',
+            title: a.rotulo,
+            html: `<p class="text-sm">${esc(produto.nome)}</p><p class="mt-2 text-sm">${texto}</p>`,
+            showCancelButton: true,
+            confirmButtonText: 'Aplicar na Shopee',
+            cancelButtonText: 'Cancelar',
+            reverseButtons: true,
+        });
+        if (!ok.isConfirmed) return;
+    }
+    aplicando.value = `${produto.item_id}:${a.acao}`;
+    router.post('/admin/diagnostico/shopee/acao', { item_id: produto.item_id, acao: a.acao, valor, model_id: modelId }, {
+        preserveScroll: true,
+        onFinish: () => { aplicando.value = null; },
+    });
+}
+
 const formatNum = (v, casas = 1) => (v === null || v === undefined ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }));
 const quandoGerado = (iso) => {
     if (!iso) return '';
@@ -764,6 +833,18 @@ const quandoGerado = (iso) => {
                                         <span>{{ a.texto }}</span>
                                     </li>
                                 </ul>
+                                <div v-if="esp.canal === 'shopee' && ehAdmin && g.produto.acoes?.length" class="mt-2 flex flex-wrap gap-2">
+                                    <template v-for="a in g.produto.acoes" :key="a.acao">
+                                        <span v-if="acaoFeita(esp.canal, g.produto.item_id, a.acao)" class="inline-flex items-center gap-1.5 rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
+                                            <i class="fas fa-check"></i> {{ a.rotulo }} aplicado
+                                        </span>
+                                        <button v-else type="button" :disabled="aplicando !== null"
+                                            class="inline-flex items-center gap-1.5 rounded-lg border border-[#ee4d2d] px-2.5 py-1 text-xs font-semibold text-[#ee4d2d] transition hover:bg-[#ee4d2d] hover:text-white disabled:opacity-50"
+                                            @click="aplicarAcao(g.produto, a)">
+                                            <i :class="aplicando === `${g.produto.item_id}:${a.acao}` ? 'fas fa-spinner fa-spin' : ICONE_ACAO[a.acao]"></i> {{ a.rotulo }}
+                                        </button>
+                                    </template>
+                                </div>
                             </div>
                         </li>
                     </ul>

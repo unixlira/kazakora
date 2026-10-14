@@ -145,7 +145,7 @@ class IndicadoresAlertasTest extends TestCase
 
         $this->assertStringContainsString('Pipoqueira', $this->alerta($r, 'Ruptura')['texto']);
         $this->assertStringContainsString('1 produto(s) vendidos', $this->alerta($r, 'Produto sem custo')['texto']);
-        $this->assertNotNull($this->alerta($r, 'Envio atrasado', 'shopee'));
+        $this->assertStringContainsString('Shopee: 1 pedido(s) pago(s)', $this->alerta($r, 'Envio atrasado', 'shopee')['texto']);
         $this->assertNull($this->alerta($r, 'Envio atrasado', 'tiktok_shop'));
         // Críticos primeiro.
         $this->assertSame(PainelDeAlertas::CRITICO, $r['alertas'][0]['nivel']);

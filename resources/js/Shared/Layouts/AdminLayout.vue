@@ -139,6 +139,13 @@ const activeHref = computed(() => {
 });
 const isActive = (href) => href === activeHref.value;
 
+// Ícone de item de marca (Shopee, Mercado Livre...) fica na cor da marca
+// (app.css, .icone-marca); os demais seguem cor neutra / destaque no ativo.
+const classeIcone = (item) => {
+    if (item.marca) return `icone-marca icone-${item.marca}`;
+    return isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]';
+};
+
 const activeItem = computed(() => {
     for (const section of visibleSections.value) {
         const match = section.items.flatMap(comFilhos).find((item) => isActive(item.href));
@@ -305,7 +312,9 @@ watch(
                             <li v-for="item in section.items" :key="item.href">
                                 <!-- Cor só no item ativo (2026-10-11): fundo lightprimary,
                                 texto e ícone na cor de destaque (grafite no claro, laranja
-                                no escuro) e barra de 3px à esquerda. Ícones numa cor só. -->
+                                no escuro) e barra de 3px à esquerda. Ícones numa cor só,
+                                menos os de marca (2026-10-14), que ficam sempre na cor da
+                                marca, ativos ou não. -->
                                 <div class="flex items-center">
                                     <Link :href="item.href" :title="item.label"
                                         class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
@@ -313,7 +322,7 @@ watch(
                                             ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
                                         :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
-                                        <i class="w-8 text-center text-sm" :class="[item.icon, isActive(item.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                        <i class="w-8 text-center text-sm" :class="[item.icon, classeIcone(item)]"></i>
                                         <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                         <span v-if="sidebarBadge(item) > 0"
                                             class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
@@ -338,7 +347,7 @@ watch(
                                                 ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
                                                 : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
-                                            <i class="w-8 text-center text-xs" :class="[filho.icon, isActive(filho.href) ? 'text-[var(--destaque)]' : 'text-[var(--icone-menu)]']"></i>
+                                            <i class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
                                             <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>
                                         </Link>
                                     </li>
@@ -359,7 +368,7 @@ watch(
                         </li>
                         <li>
                             <Link href="/" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
-                                <i class="fas fa-store w-8 text-center text-sm text-[var(--icone-menu)]"></i>
+                                <i class="fas fa-store icone-marca icone-kazakora w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
                             </Link>
                         </li>

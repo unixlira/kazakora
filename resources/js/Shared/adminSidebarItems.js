@@ -4,9 +4,11 @@
  * dia, os mesmos 49 itens, com o mesmo href, permission e badgeKey de antes.
  * Nenhuma rota nova e nenhuma permissão mudou.
  *
- * Sem campo de cor por item: o ícone fica numa cor neutra só e a cor vem
- * do estado ativo (ver AdminLayout.vue). Cada item tem ícone próprio, sem
- * repetir, para dar para achar pelo ícone com o menu recolhido.
+ * O ícone fica numa cor neutra só e a cor vem do estado ativo (ver
+ * AdminLayout.vue), menos nos itens de marca: `marca` pinta o ícone com a
+ * cor principal da marca (Lira, 2026-10-14; cores em app.css, .icone-marca).
+ * Cada item tem ícone próprio, sem repetir, para dar para achar pelo ícone
+ * com o menu recolhido.
  *
  * `permission: null` = qualquer pessoa da equipe vê.
  * `badgeKey` = contador de pendências (page.props.sidebarBadges).
@@ -38,10 +40,10 @@ export const sidebarSections = [
         // ML fica só embaixo dos mais vendidos em Oportunidades › Mercado Livre.
         heading: 'Oportunidades',
         items: [
-            { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google', permission: 'relatorios.view' },
-            { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok', permission: 'relatorios.view' },
-            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', permission: 'relatorios.view' },
-            { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', permission: 'relatorios.view' },
+            { label: 'Google', href: '/admin/radar/google', icon: 'fab fa-google', marca: 'google', permission: 'relatorios.view' },
+            { label: 'TikTok', href: '/admin/radar/tiktok', icon: 'fab fa-tiktok', marca: 'tiktok', permission: 'relatorios.view' },
+            { label: 'Mercado Livre', href: '/admin/oportunidades/mercado-livre', icon: 'fas fa-chart-simple', marca: 'mercado-livre', permission: 'relatorios.view' },
+            { label: 'Shopee', href: '/admin/oportunidades/shopee', icon: 'fas fa-arrow-trend-up', marca: 'shopee', permission: 'relatorios.view' },
         ],
     },
     {
@@ -50,8 +52,8 @@ export const sidebarSections = [
         // isso financeiro.view.
         heading: 'Estatísticas',
         items: [
-            { label: 'Curva ABC Mercado Livre', href: '/admin/estatisticas/curva-abc/mercado-livre', icon: 'fas fa-chart-column', permission: 'financeiro.view' },
-            { label: 'Curva ABC Shopee', href: '/admin/estatisticas/curva-abc/shopee', icon: 'fas fa-chart-bar', permission: 'financeiro.view' },
+            { label: 'Curva ABC Mercado Livre', href: '/admin/estatisticas/curva-abc/mercado-livre', icon: 'fas fa-chart-column', marca: 'mercado-livre', permission: 'financeiro.view' },
+            { label: 'Curva ABC Shopee', href: '/admin/estatisticas/curva-abc/shopee', icon: 'fas fa-chart-bar', marca: 'shopee', permission: 'financeiro.view' },
         ],
     },
     {
@@ -63,7 +65,7 @@ export const sidebarSections = [
         items: [
             { label: 'Pedidos', href: '/admin/pedidos', icon: 'fas fa-receipt', permission: 'pedidos.view' },
             // Pedidos do site Beauty Kora (2026-10-12), fora dos pedidos da loja.
-            { label: 'Pedidos Beauty Kora', href: '/admin/pedidos-beautykora', icon: 'fas fa-spa', permission: 'pedidos.view' },
+            { label: 'Pedidos Beauty Kora', href: '/admin/pedidos-beautykora', icon: 'fas fa-spa', marca: 'beautykora', permission: 'pedidos.view' },
             // Vídeos da embalagem gravados no KoraSync (2026-10-13).
             { label: 'Vídeos da embalagem', href: '/admin/videos-embalagem', icon: 'fas fa-video', permission: 'pedidos.view' },
             { label: 'Importar pedido', href: '/admin/importar-pedido', icon: 'fas fa-file-import', permission: 'configuracoes.integracoes' },
@@ -74,13 +76,13 @@ export const sidebarSections = [
     {
         heading: 'Logística',
         items: [
-            { label: 'Pré-postagem Correios', href: '/admin/correios', icon: 'fas fa-qrcode', permission: 'operacional.view' },
+            { label: 'Pré-postagem Correios', href: '/admin/correios', icon: 'fas fa-qrcode', marca: 'correios', permission: 'operacional.view' },
             { label: 'Etiqueta avulsa', href: '/admin/etiquetas-manuais/nova', icon: 'fas fa-tag', permission: 'configuracoes.integracoes' },
             { label: 'Fila de impressão', href: '/admin/impressoes', icon: 'fas fa-print', permission: 'configuracoes.integracoes' },
             // Envios Flex (2026-09-11): o número é quantos envios têm
             // pendência aberta (devolução, venda cancelada com o produto fora,
             // entregador que não iniciou a rota).
-            { label: 'Envios Flex', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', permission: 'operacional.view', badgeKey: 'flexAlertas' },
+            { label: 'Envios Flex', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', marca: 'mercado-livre', permission: 'operacional.view', badgeKey: 'flexAlertas' },
             // PAC e SEDEX para as 27 capitais, preço do contrato (2026-10-12).
             { label: 'Fretes por estado', href: '/admin/logistica/fretes-por-estado', icon: 'fas fa-map-location-dot', permission: 'operacional.view' },
         ],
@@ -104,8 +106,8 @@ export const sidebarSections = [
             { label: 'Fluxo de caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', permission: 'financeiro.view' },
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', permission: 'pedidos.view' },
-            { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', permission: 'configuracoes.integracoes' },
-            { label: 'Extratos do TikTok', href: '/admin/arquivos-tiktok', icon: 'fab fa-tiktok', permission: 'financeiro.view' },
+            { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', marca: 'mercado-livre', permission: 'configuracoes.integracoes' },
+            { label: 'Extratos do TikTok', href: '/admin/arquivos-tiktok', icon: 'fab fa-tiktok', marca: 'tiktok', permission: 'financeiro.view' },
             { label: 'Centros de custo', href: '/admin/centros-de-custo', icon: 'fas fa-sitemap', permission: 'cadastros.view' },
             { label: 'Relatórios', href: '/admin/relatorios', icon: 'fas fa-chart-pie', permission: 'relatorios.view' },
         ],
@@ -130,12 +132,12 @@ export const sidebarSections = [
             // Meta (pedido do Lira 2026-10-13): um subitem só, com o símbolo
             // da Meta, abrindo o gerenciamento de campanhas. O resumo de gasto
             // (/admin/publicidade/meta-ads) fica no botão "Gasto e resultados".
-            { label: 'Meta', href: '/admin/publicidade/meta-ads/campanhas', icon: 'fab fa-meta', permission: 'financeiro.view' },
+            { label: 'Meta', href: '/admin/publicidade/meta-ads/campanhas', icon: 'fab fa-meta', marca: 'meta', permission: 'financeiro.view' },
             // Google ADS (2026-10-12): integração ainda não conectada, a tela
             // mostra o estado vazio (PlataformaDeAnuncio).
-            { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', permission: 'financeiro.view' },
+            { label: 'Google ADS', href: '/admin/publicidade/google-ads', icon: 'fab fa-google', marca: 'google', permission: 'financeiro.view' },
             // Estratégia Shopee (2026-10-14): campanhas de ADS com prejuízo para decidir.
-            { label: 'Estratégia Shopee', href: '/admin/publicidade/shopee', icon: 'fas fa-chess-knight', permission: 'financeiro.view' },
+            { label: 'Estratégia Shopee', href: '/admin/publicidade/shopee', icon: 'fas fa-chess-knight', marca: 'shopee', permission: 'financeiro.view' },
             { label: 'Recargas de ADS', href: '/admin/anuncios/recargas', icon: 'fas fa-coins', permission: 'financeiro.view' },
             { label: 'Radar de criativos', href: '/admin/mkt-digital', icon: 'fas fa-globe', permission: 'relatorios.view' },
             { label: 'Páginas de conversão', href: '/admin/paginas-de-conversao', icon: 'fas fa-bullseye', permission: 'relatorios.view' },
@@ -144,7 +146,7 @@ export const sidebarSections = [
     {
         heading: 'Atendimento',
         items: [
-            { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
+            { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
             { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos' },
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', permission: 'pedidos.view', badgeKey: 'suporteAbertos' },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', permission: 'pedidos.view' },
@@ -157,7 +159,7 @@ export const sidebarSections = [
             { label: 'Pagamentos do site', href: '/admin/pagamentos', icon: 'fas fa-credit-card', permission: null },
             { label: 'Fretes do site', href: '/admin/logistica', icon: 'fas fa-truck', permission: 'operacional.view' },
             { label: 'Integrações', href: '/admin/integracoes', icon: 'fas fa-plug', permission: 'configuracoes.integracoes' },
-            { label: 'Conexão do WhatsApp', href: '/admin/whatsapp', icon: 'fab fa-whatsapp', permission: 'configuracoes.integracoes' },
+            { label: 'Conexão do WhatsApp', href: '/admin/whatsapp', icon: 'fab fa-whatsapp', marca: 'whatsapp', permission: 'configuracoes.integracoes' },
             { label: 'Usuários e permissões', href: '/admin/usuarios-permissoes', icon: 'fas fa-user-shield', permission: 'configuracoes.usuarios' },
             { label: 'API de parceiros', href: '/admin/api-parceiros', icon: 'fas fa-key', permission: 'configuracoes.usuarios' },
         ],
@@ -170,10 +172,10 @@ export const sidebarSections = [
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', permission: 'configuracoes.auditoria' },
             // Visitas por site (2026-10-12), só admin igual a Logs. Nomes e ordem
             // definidos pelo Lira em 12/10: BeautyKora, Ferrakora, Kazakora.
-            { label: 'Produtos Ferrakora', href: '/admin/produtos-ferrakora', icon: 'fas fa-screwdriver-wrench', permission: 'configuracoes.auditoria' },
-            { label: 'Visitas BeautyKora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
-            { label: 'Visitas Ferrakora', href: '/admin/visitas-ferrakora', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
-            { label: 'Visitas Kazakora', href: '/admin/visitas-site', icon: 'fas fa-shoe-prints', permission: 'configuracoes.auditoria' },
+            { label: 'Produtos Ferrakora', href: '/admin/produtos-ferrakora', icon: 'fas fa-screwdriver-wrench', marca: 'ferrakora', permission: 'configuracoes.auditoria' },
+            { label: 'Visitas BeautyKora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', marca: 'beautykora', permission: 'configuracoes.auditoria' },
+            { label: 'Visitas Ferrakora', href: '/admin/visitas-ferrakora', icon: 'fas fa-shoe-prints', marca: 'ferrakora', permission: 'configuracoes.auditoria' },
+            { label: 'Visitas Kazakora', href: '/admin/visitas-site', icon: 'fas fa-shoe-prints', marca: 'kazakora', permission: 'configuracoes.auditoria' },
         ],
     },
 ];

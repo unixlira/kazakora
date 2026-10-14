@@ -489,4 +489,21 @@ return [
         'radar_paginas' => (int) env('KALODATA_RADAR_PAGINAS', 10),
     ],
 
+    // Meta ADS (2026-10-12): campanhas montadas no admin e enviadas pela
+    // Marketing API (MetaAdsService). access_token = token de usuário do
+    // sistema do Business Manager; ad_account_id no formato act_123. Sem
+    // token ou conta a tela mostra "Meta não configurado".
+    'meta_ads' => [
+        'access_token' => env('META_ADS_ACCESS_TOKEN'),
+        'ad_account_id' => env('META_ADS_AD_ACCOUNT_ID'),
+        'page_id' => env('META_ADS_PAGE_ID'),
+        'instagram_actor_id' => env('META_ADS_INSTAGRAM_ACTOR_ID'),
+        'pixel_id' => env('META_ADS_PIXEL_ID'),
+        'graph_url' => env('META_ADS_GRAPH_URL', 'https://graph.facebook.com/v23.0'),
+        // Endereço público da loja usado nos links e imagens do anúncio.
+        // Fixo (sem env) de propósito: nem o homolog pode gerar anúncio
+        // apontando para devlira ou kazakora.com.br.
+        'site_url' => 'https://kazakora.com',
+    ],
+
 ];

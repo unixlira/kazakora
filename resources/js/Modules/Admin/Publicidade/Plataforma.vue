@@ -43,6 +43,14 @@ const atual = computed(() => props.periodos[0]?.totais ?? { gasto: 0, vendas: 0,
                 <span class="h-2 w-2 rounded-full" :class="conectado ? 'bg-success' : 'bg-slate-400'" aria-hidden="true"></span>
                 {{ conectado ? 'Conectada' : 'Não conectada' }}
             </span>
+            <!-- Campanhas de vídeo (2026-10-13): sobe vídeos e divide o orçamento. -->
+            <Link
+                v-if="plataforma.canal === 'meta_ads'"
+                href="/admin/publicidade/meta-ads/campanhas"
+                class="ml-auto inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"
+            >
+                <i class="fas fa-film text-xs" aria-hidden="true"></i> Campanhas com vídeo
+            </Link>
         </div>
         <p class="mb-6 text-sm text-slate-500 dark:text-slate-400">
             {{ plataforma.subtitulo }}. Gasto, cliques e venda que a própria plataforma atribui ao anúncio.

@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import { usePermissions } from '@/Shared/usePermissions';
@@ -10,7 +11,8 @@ import { computed, ref, watch } from 'vue';
  * Envios Flex (pedido explícito 2026-09-11) — o que saiu com o entregador,
  * o que voltou e o que ficou no meio do caminho. Em 2026-10-13 ganhou as
  * canceladas junto dos alertas, as abas "Na fila" e "Entregues" e a
- * justificativa de envio entregue no ML sem bipar no KoraFlex. A regra de cada alerta
+ * justificativa de envio entregue no ML sem bipar no KoraFlex; abre em
+ * "Entregues do mês", sempre por pedido. A regra de cada alerta
  * mora em FlexControlService (backend); esta tela só mostra e registra a
  * conferência de quem foi olhar a prateleira.
  */
@@ -22,7 +24,6 @@ const props = defineProps({
     retencaoDias: { type: Number, default: 180 },
     horasAlertaRota: { type: Number, default: 2 },
     justificativas: { type: Array, default: () => [] },
-    produtosEntregues: { type: Array, default: () => [] },
     diasCanceladas: { type: Number, default: 30 },
 });
 
@@ -112,9 +113,9 @@ const desfazerJustificativa = () => {
 const podeJustificar = computed(() => justificativaMotivo.value && (justificativaMotivo.value !== 'outro' || justificativaNota.value.trim()));
 
 const abas = computed(() => [
-    { chave: 'alertas', rotulo: `Alertas (${props.resumo.alertas})`, icone: 'fa-triangle-exclamation', ativa: 'bg-error text-white', hover: 'hover:bg-lighterror' },
-    { chave: 'fila', rotulo: `Na fila de entrega (${props.resumo.naFila})`, icone: 'fa-route', ativa: 'bg-warning text-white', hover: 'hover:bg-lightwarning' },
     { chave: 'entregues', rotulo: 'Entregues do mês', icone: 'fa-circle-check', ativa: 'bg-success text-white', hover: 'hover:bg-lightsuccess' },
+    { chave: 'fila', rotulo: `Na fila de entrega (${props.resumo.naFila})`, icone: 'fa-route', ativa: 'bg-warning text-white', hover: 'hover:bg-lightwarning' },
+    { chave: 'alertas', rotulo: `Alertas (${props.resumo.alertas})`, icone: 'fa-triangle-exclamation', ativa: 'bg-error text-white', hover: 'hover:bg-lighterror' },
     { chave: 'todos', rotulo: 'Todos do mês', icone: 'fa-list', ativa: 'bg-primary text-white', hover: 'hover:bg-lightprimary' },
 ]);
 const mostraMes = computed(() => ['entregues', 'todos'].includes(props.filtros.aba));
@@ -146,7 +147,6 @@ const passosCanal = (linha) => [
     ['Estoque devolvido no sistema', linha.linhaDoTempo.estoqueDevolvidoEm],
 ];
 
-const resumoItens = (linha) => linha.itens.map((i) => `${i.qtd}x ${i.sku ?? i.nome}`).join(' · ');
 const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info' && !a.resolvido);
 </script>
 
@@ -164,7 +164,8 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
             <Link href="/admin/integracoes/mercado-livre/flex" class="text-sm text-primary hover:underline">Custo do Flex →</Link>
         </div>
 
-        <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <!-- 6 por linha só em tela larga: em notebook (1366px com o menu) os títulos saíam cortados ("VENDAS ...", 2026-10-14). -->
+        <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
             <CardStats stat-subtitle="VENDAS FLEX NO MÊS" :stat-title="String(resumo.vendas)" stat-icon-name="fas fa-bag-shopping" variant="primary" />
             <CardStats stat-subtitle="SAÍRAM DAQUI" :stat-title="String(resumo.sairam)" stat-icon-name="fas fa-motorcycle" variant="info" />
             <CardStats stat-subtitle="NA FILA DE ENTREGA" :stat-title="String(resumo.naFila)" stat-icon-name="fas fa-route" variant="warning"
@@ -210,28 +211,6 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                 Saiu daqui (entregue ao entregador ou rota iniciada no Mercado Livre) e ainda não chegou ao comprador. As que não foram bipadas no KoraFlex vêm primeiro.
             </p>
 
-            <div v-if="filtros.aba === 'entregues' && produtosEntregues.length" class="border-b border-[var(--surface-border)] px-4 py-4">
-                <h4 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Produtos entregues no mês</h4>
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="text-left text-xs uppercase tracking-wide text-slate-400">
-                            <th class="py-1 pr-4 font-medium">Produto</th>
-                            <th class="py-1 pr-4 font-medium">SKU</th>
-                            <th class="py-1 pr-4 text-right font-medium">Unidades</th>
-                            <th class="py-1 text-right font-medium">Pedidos</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="produto in produtosEntregues" :key="`${produto.sku}-${produto.nome}`" class="border-t border-[var(--surface-border)]">
-                            <td class="py-1.5 pr-4">{{ produto.nome }}</td>
-                            <td class="py-1.5 pr-4 text-xs text-slate-400">{{ produto.sku ?? '—' }}</td>
-                            <td class="py-1.5 pr-4 text-right font-semibold">{{ produto.qtd }}</td>
-                            <td class="py-1.5 text-right">{{ produto.pedidos }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
             <div v-if="linhas.length" class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
@@ -244,6 +223,7 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                             <th class="px-4 py-3 font-medium">KoraFlex</th>
                             <th class="px-4 py-3 font-medium">Retirada</th>
                             <th class="px-4 py-3 font-medium">Alertas</th>
+                            <th class="px-4 py-3 font-medium"><span class="sr-only">Detalhes</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -262,7 +242,11 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                                 {{ linha.cliente ?? '—' }}
                                 <span class="block text-xs text-slate-400">{{ linha.cidade }}</span>
                             </td>
-                            <td class="max-w-[16rem] truncate px-4 py-3 text-xs" :title="resumoItens(linha)">{{ resumoItens(linha) }}</td>
+                            <td class="max-w-[18rem] px-4 py-3 text-xs">
+                                <span v-for="(item, i) in linha.itens" :key="i" class="block truncate" :title="item.nome">
+                                    {{ item.qtd }}x {{ item.nome }}<span v-if="item.sku" class="text-slate-400"> · {{ item.sku }}</span>
+                                </span>
+                            </td>
                             <td class="whitespace-nowrap px-4 py-3 text-xs">
                                 {{ quando(linha.linhaDoTempo.entregueAoEntregadorEm) ?? '—' }}
                                 <span v-if="linha.linhaDoTempo.rotaIniciadaEm" class="block text-slate-400">rota {{ quando(linha.linhaDoTempo.rotaIniciadaEm) }}</span>
@@ -289,9 +273,16 @@ const alertasVisiveis = (linha) => linha.alertas.filter((a) => a.nivel !== 'info
                                     :class="alerta.nivel === 'erro' ? 'bg-lighterror text-error' : 'bg-lightwarning text-warning'">
                                     {{ alerta.titulo }}
                                 </span>
-                                <span v-if="!alertasVisiveis(linha).length && linha.resolucao" class="text-xs text-success">
-                                    <i class="fas fa-check"></i> {{ linha.resolucao.rotulo }}
-                                </span>
+                                <template v-if="!alertasVisiveis(linha).length">
+                                    <span v-if="linha.resolucao" class="text-xs text-success">
+                                        <i class="fas fa-check"></i> {{ linha.resolucao.rotulo }}
+                                    </span>
+                                    <span v-else class="whitespace-nowrap rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">Sem Alertas</span>
+                                </template>
+                            </td>
+                            <!-- Olho (2026-10-14): mesmo detalhe do clique na linha, mas visível pra quem não sabe que a linha abre. -->
+                            <td class="px-4 py-3 text-right" @click.stop>
+                                <ActionIcon icon="fa-eye" label="Ver detalhes do pedido" color="slate" @click="abrir(linha)" />
                             </td>
                         </tr>
                     </tbody>

@@ -218,6 +218,11 @@ class EnviosFlexControlTest extends TestCase
         $this->actingAs($this->admin)
             ->get('/admin/envios-flex')
             ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('filtros.aba', 'entregues'));
+
+        $this->actingAs($this->admin)
+            ->get('/admin/envios-flex?aba=alertas')
+            ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Admin/EnviosFlex/Index', false)
                 ->where('filtros.aba', 'alertas')
@@ -325,8 +330,8 @@ class EnviosFlexControlTest extends TestCase
         $this->assertSame(['entregue_sem_bipar'], $envio->refresh()->flex_alerts);
     }
 
-    /** As abas novas: canceladas junto dos alertas, a fila sem bipar e os produtos entregues. */
-    public function test_the_tabs_list_cancelled_queue_and_delivered_products(): void
+    /** As abas: canceladas junto dos alertas, a fila sem bipar e os entregues por pedido (aba padrão). */
+    public function test_the_tabs_list_cancelled_queue_and_delivered_orders(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-10-13 18:00:00'));
 
@@ -363,12 +368,15 @@ class EnviosFlexControlTest extends TestCase
                 ->where('linhas.0.koraflex.bipada', false));
 
         $this->actingAs($this->admin)
-            ->get('/admin/envios-flex?aba=entregues&mes=2026-10')
+            ->get('/admin/envios-flex')
             ->assertInertia(fn ($page) => $page
+                ->where('filtros.aba', 'entregues')
+                ->where('filtros.mes', '2026-10')
                 ->has('linhas', 1)
                 ->where('linhas.0.pedido', $entregue->order_id)
                 ->where('linhas.0.koraflex.bipada', true)
-                ->where('produtosEntregues.0.nome', 'Bicicleta Ergométrica')
-                ->where('produtosEntregues.0.qtd', 1));
+                ->where('linhas.0.itens.0.nome', 'Bicicleta Ergométrica')
+                ->where('linhas.0.itens.0.qtd', 1)
+                ->missing('produtosEntregues'));
     }
 }

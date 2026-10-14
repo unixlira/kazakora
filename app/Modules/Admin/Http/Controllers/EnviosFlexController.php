@@ -27,7 +27,8 @@ use Throwable;
  *
  * Abas: "Alertas" (tudo que pede ação, de qualquer mês, mais as vendas
  * canceladas dos últimos 30 dias), "Na fila" (saiu daqui e ainda não chegou
- * ao comprador), "Entregues" e "Todos" (o mês escolhido). Cada linha já traz o detalhe inteiro — linha do tempo
+ * ao comprador), "Entregues" e "Todos" (o mês escolhido). A tela abre em
+ * "Entregues do mês" e lista sempre por pedido (pedido 2026-10-13). Cada linha já traz o detalhe inteiro — linha do tempo
  * aqui x Mercado Livre, comprovante de retirada, reclamações — então abrir
  * o detalhe não faz requisição.
  *
@@ -81,10 +82,12 @@ class EnviosFlexController extends Controller
         $naFila = $candidatos->filter(fn (ChannelShipment $envio) => $this->controle->naFila($envio))->values();
         $entregues = $doMes->filter(fn (ChannelShipment $envio) => $this->controle->entregue($envio))->values();
 
-        $abas = ['alertas', 'fila', 'entregues', 'todos'];
+        // Abre em "Entregues do mês" (pedido do Lira em 14/10); alertas
+        // continuam a um clique, no card e na terceira aba.
+        $abas = ['entregues', 'fila', 'alertas', 'todos'];
         $aba = in_array($request->string('aba')->toString(), $abas, true)
             ? $request->string('aba')->toString()
-            : ($comAlerta->isNotEmpty() ? 'alertas' : 'todos');
+            : 'entregues';
 
         $lista = match ($aba) {
             'alertas' => $comAlerta->concat($canceladas)->unique('id')->values(),
@@ -130,7 +133,6 @@ class EnviosFlexController extends Controller
                 'naFilaSemBipar' => $naFila->filter(fn (ChannelShipment $e) => ! $this->controle->bipada($e->order))->count(),
                 'entreguesSemBipar' => $entregues->filter(fn (ChannelShipment $e) => $this->controle->precisaJustificar($e))->count(),
             ],
-            'produtosEntregues' => $aba === 'entregues' && ! $busca ? $this->produtosEntregues($entregues) : [],
             'diasCanceladas' => self::DIAS_DE_CANCELADAS,
             'filtros' => [
                 'mes' => $mes->format('Y-m'),
@@ -320,34 +322,6 @@ class EnviosFlexController extends Controller
             || str_contains((string) $envio->external_shipment_id, $busca)
             || str_contains(mb_strtolower((string) ($pedido?->shipping_recipient_name ?: $pedido?->shipping_name)), $texto)
             || str_contains(mb_strtolower((string) $pedido?->pickupReceipt?->carrier_name), $texto);
-    }
-
-    /**
-     * Os produtos entregues no mês somados por item: quantas unidades de
-     * cada um chegaram ao comprador.
-     *
-     * @return list<array{nome: string, sku: ?string, qtd: int, pedidos: int}>
-     */
-    private function produtosEntregues(Collection $envios): array
-    {
-        return $envios
-            ->flatMap(fn (ChannelShipment $envio) => $envio->order?->items->map(fn ($item) => [
-                'chave' => $item->product_id ? 'p'.$item->product_id : 'n'.$item->product_name,
-                'nome' => $item->product_name,
-                'sku' => $item->product?->sku,
-                'qtd' => (int) $item->quantity,
-                'pedido' => $envio->order_id,
-            ]) ?? [])
-            ->groupBy('chave')
-            ->map(fn (Collection $itens) => [
-                'nome' => $itens->first()['nome'],
-                'sku' => $itens->first()['sku'],
-                'qtd' => $itens->sum('qtd'),
-                'pedidos' => $itens->pluck('pedido')->unique()->count(),
-            ])
-            ->sortByDesc('qtd')
-            ->values()
-            ->all();
     }
 
     /** @return array<int, string> */

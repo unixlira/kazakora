@@ -153,7 +153,7 @@ const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate
         </div>
 
         <template v-else>
-            <div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4 xl:grid-cols-6">
+            <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">
                 <CardStats compact stat-subtitle="GASTO" :stat-title="dinheiro(k.gasto)" stat-icon-name="fas fa-bullhorn" variant="warning" />
                 <CardStats compact stat-subtitle="VENDA ATRIBUÍDA" :stat-title="dinheiro(k.venda)" stat-icon-name="fas fa-cart-shopping" variant="primary" />
                 <CardStats compact stat-subtitle="ROAS" :stat-title="um(k.roas)" :stat-note="`meta da loja ${um(k.roas_meta_loja)}`" stat-icon-name="fas fa-arrow-trend-up" :variant="(k.roas ?? 0) >= (k.roas_meta_loja ?? 0) ? 'success' : 'error'" />

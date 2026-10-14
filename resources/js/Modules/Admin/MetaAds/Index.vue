@@ -45,11 +45,23 @@ const columns = [
 
     <AdminLayout>
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h1 class="text-2xl font-bold">Campanhas Meta</h1>
-            <Link v-if="can('financeiro.create')" href="/admin/publicidade/meta-ads/campanhas/nova"
-                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
-                <i class="fas fa-plus text-xs" aria-hidden="true"></i> Nova campanha
-            </Link>
+            <h1 class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-bold">
+                <span class="flex items-center gap-3">
+                    <i class="fab fa-meta text-[#0866FF]" aria-hidden="true"></i>
+                    Meta
+                </span>
+                <span class="text-base font-normal text-slate-500 dark:text-slate-400">campanhas no Facebook e Instagram</span>
+            </h1>
+            <div class="flex flex-wrap gap-2">
+                <Link href="/admin/publicidade/meta-ads"
+                    class="inline-flex items-center gap-2 rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]">
+                    <i class="fas fa-chart-line text-xs" aria-hidden="true"></i> Gasto e resultados
+                </Link>
+                <Link v-if="can('financeiro.create')" href="/admin/publicidade/meta-ads/campanhas/nova"
+                    class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                    <i class="fas fa-plus text-xs" aria-hidden="true"></i> Nova campanha
+                </Link>
+            </div>
         </div>
 
         <div v-if="!props.config.configurado" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="status">

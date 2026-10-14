@@ -220,7 +220,10 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
 
     <AdminLayout>
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h1 class="text-2xl font-bold">{{ editando ? 'Editar campanha' : 'Nova campanha' }}</h1>
+            <h1 class="flex items-center gap-3 text-2xl font-bold">
+                <i class="fab fa-meta text-[#0866FF]" aria-hidden="true"></i>
+                {{ editando ? 'Editar campanha' : 'Nova campanha' }}
+            </h1>
             <Link href="/admin/publicidade/meta-ads/campanhas" class="text-sm font-medium text-primary hover:underline">Voltar para a lista</Link>
         </div>
 

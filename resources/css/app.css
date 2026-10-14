@@ -595,15 +595,17 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
  * fonte branca #FFF, nos dois temas. Só o conteúdo da tela muda; menu, topo e
  * rodapé seguem o tema. Textos de apoio (cinzas) também ficam brancos; as
  * cores de situação (vermelho, verde, amarelo) continuam para dar o sinal.
+ * Cards, tabelas e caixas em grafite #1f1f1f (pedido do Lira 2026-10-14, junto
+ * com a análise do Jonathan, tarefa 580): no mesmo preto do corpo eles sumiam.
  */
 .admin-shell:has(.shopee-preto) {
     --fundo: #000000;
 }
 .admin-shell .shopee-preto {
-    --surface: #000000;
+    --surface: #1f1f1f;
     --surface-muted: #000000;
     --surface-foreground: #ffffff;
-    --surface-border: #2a2a2a;
+    --surface-border: #3a3a3a;
     --texto-suave: #ffffff;
     --color-primary: #ff8c4d;
     --primary-solido: #c2410c;
@@ -616,7 +618,7 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
     color-scheme: dark;
 }
 .admin-shell .shopee-preto :is(.text-slate-400, .text-slate-500, .text-slate-600, .dark\:text-slate-300, .dark\:text-slate-400) { color: #ffffff; }
-.admin-shell .shopee-preto :is(.bg-slate-100, .dark\:bg-slate-800) { background-color: #262626; }
+.admin-shell .shopee-preto :is(.bg-slate-100, .dark\:bg-slate-800) { background-color: #333333; }
 .admin-shell .shopee-preto .bg-primary { color: #000000; }
 .admin-shell .shopee-preto select option { background-color: #000000; color: #ffffff; }
 /*

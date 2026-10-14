@@ -78,7 +78,7 @@ const tempo = computed(() => {
         <footer class="mt-auto bg-black px-4 py-10 text-white">
             <div class="mx-auto grid max-w-[1160px] grid-cols-1 gap-10 text-center md:grid-cols-12 md:items-end md:gap-8">
                 <div class="flex flex-col items-center justify-center md:col-span-4">
-                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto">
+                    <img :src="$page.props.marca?.logoRodape || '/images/marca/logo-rodape.png'" alt="KazaKora" width="160" height="28" class="h-8 w-auto rounded-[8px]">
                     <p class="mt-4 text-xs leading-relaxed text-white/80 md:-mb-1">
                         © {{ new Date().getFullYear() }} Kazakora | Grupo AlphaKora<br>
                         CNPJ: {{ COMPANY.cnpj }}
@@ -93,7 +93,7 @@ const tempo = computed(() => {
                          bandeiras a largura máxima cresce para cada uma manter o tamanho. -->
                     <div ref="bandeiras" class="mt-3 flex w-[calc(100%-44px)] max-w-[370px] flex-nowrap items-center gap-1.5">
                         <img v-for="bandeira in BANDEIRAS" :key="bandeira" :src="`/images/payments/novas/${bandeira}.png`" :alt="bandeira"
-                            width="249" height="167" class="h-auto w-full min-w-0 flex-1 rounded-[2px]">
+                            width="249" height="167" class="h-auto w-full min-w-0 flex-1 rounded-[8px]">
                     </div>
                 </div>
 
@@ -103,14 +103,14 @@ const tempo = computed(() => {
                     <p class="text-sm font-semibold text-white">Segurança</p>
                     <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                         <a href="https://transparencyreport.google.com/safe-browsing/search?url=kazakora.com" target="_blank" rel="noopener"
-                            class="box-border flex items-center justify-center overflow-hidden rounded-[2px] border border-slate-200 bg-white px-2 transition hover:opacity-90"
+                            class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2 transition hover:opacity-90"
                             :style="{ height: `${alturaSelo}px` }"
                             title="Ver a verificação do Google Safe Browsing">
                             <img src="/images/selos/selo-google-safe.png" alt="Google Safe Browsing" width="139" height="45" class="h-[80%] w-auto">
                         </a>
                         <!-- Selo oficial RA Verificada (2026-10-14). Mesma escala do Google: caixa
                              branca da mesma altura, selo com 80% dela como o logo (pedido 2026-10-14). -->
-                        <div class="box-border flex items-center justify-center overflow-hidden rounded-[2px] border border-slate-200 bg-white px-2"
+                        <div class="box-border flex items-center justify-center overflow-hidden rounded-[8px] border border-slate-200 bg-white px-2"
                             :style="{ height: `${alturaSelo}px` }">
                             <SeloReclameAqui :altura="Math.round(alturaSelo * 0.8)" />
                         </div>

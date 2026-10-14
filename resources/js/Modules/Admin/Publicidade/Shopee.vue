@@ -7,8 +7,9 @@
  * PublicidadeShopeeController e EstrategiaShopeeAds. Visual preto com fonte
  * branca nos dois temas (.shopee-preto no app.css).
  *
- * UX do Jonathan (2026-10-14): a tela abre com a conclusão em uma frase,
- * depois "Decida hoje" e só então os 4 cards. A conta fica num <details>.
+ * UX do Jonathan (2026-10-14): a tela abre com os 4 cards (pedido do Lira,
+ * acima da conclusão em uma frase), depois a conclusão e "Decida hoje". A
+ * conta fica num <details>.
  * "Abrir na Shopee" ainda leva à página do produto: a URL da campanha na
  * Shopee Ads não está confirmada (ver EstrategiaShopeeAds::linha).
  */
@@ -200,6 +201,13 @@ const recarregar = () => router.reload({ only: ['estrategia'], preserveScroll: t
         </div>
 
         <template v-else>
+            <div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <CardStats compact note-wrap stat-subtitle="SALDO DE ADS" :stat-title="saldo === null ? 'Indisponível' : dinheiro(saldo)" :stat-note="notaSaldo" stat-icon-name="fas fa-wallet" variant="neutral" />
+                <CardStats compact note-wrap stat-subtitle="LUCRO DO ADS" :stat-title="comSinal(k.resultado)" :title-class="lucrou ? 'text-success' : 'text-error'" :stat-note="notaLucro" :stat-icon-name="lucrou ? 'fas fa-arrow-trend-up' : 'fas fa-triangle-exclamation'" :variant="lucrou ? 'success' : 'error'" />
+                <CardStats compact note-wrap stat-subtitle="ROAS" :stat-title="um(k.roas)" :stat-note="notaRoas" stat-icon-name="fas fa-bullseye" :variant="varianteRoas" />
+                <CardStats compact note-wrap stat-subtitle="GASTO SEM VENDA" :stat-title="dinheiro(k.gasto_sem_venda)" :stat-note="queimando ? `${queimando} ${queimando === 1 ? 'campanha gastou' : 'campanhas gastaram'} sem vender` : 'nenhuma campanha queimando'" stat-icon-name="fas fa-fire" :variant="k.gasto_sem_venda > 0 ? 'error' : 'neutral'" />
+            </div>
+
             <p
                 class="mb-4 rounded-xl border-l-4 px-4 py-3 text-base font-semibold"
                 :class="lucrou ? 'border-success bg-lightsuccess text-success' : 'border-error bg-lighterror text-error'"
@@ -252,13 +260,6 @@ const recarregar = () => router.reload({ only: ['estrategia'], preserveScroll: t
                 </ol>
                 <p v-else class="text-sm font-semibold text-success">Nenhuma campanha tirando dinheiro neste período.</p>
             </section>
-
-            <div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <CardStats compact note-wrap stat-subtitle="SALDO DE ADS" :stat-title="saldo === null ? 'Indisponível' : dinheiro(saldo)" :stat-note="notaSaldo" stat-icon-name="fas fa-wallet" variant="neutral" />
-                <CardStats compact note-wrap stat-subtitle="LUCRO DO ADS" :stat-title="comSinal(k.resultado)" :title-class="lucrou ? 'text-success' : 'text-error'" :stat-note="notaLucro" :stat-icon-name="lucrou ? 'fas fa-arrow-trend-up' : 'fas fa-triangle-exclamation'" :variant="lucrou ? 'success' : 'error'" />
-                <CardStats compact note-wrap stat-subtitle="ROAS" :stat-title="um(k.roas)" :stat-note="notaRoas" stat-icon-name="fas fa-bullseye" :variant="varianteRoas" />
-                <CardStats compact note-wrap stat-subtitle="GASTO SEM VENDA" :stat-title="dinheiro(k.gasto_sem_venda)" :stat-note="queimando ? `${queimando} ${queimando === 1 ? 'campanha gastou' : 'campanhas gastaram'} sem vender` : 'nenhuma campanha queimando'" stat-icon-name="fas fa-fire" :variant="k.gasto_sem_venda > 0 ? 'error' : 'neutral'" />
-            </div>
 
             <details class="mb-6 text-sm text-slate-500 dark:text-slate-400">
                 <summary class="cursor-pointer font-medium focus-visible:outline-2 focus-visible:outline-primary">Como a conta é feita</summary>

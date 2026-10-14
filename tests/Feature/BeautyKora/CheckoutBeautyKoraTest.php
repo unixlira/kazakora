@@ -91,7 +91,7 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertJsonPath('total_pix', 19000);
     }
 
-    public function test_fora_da_grande_sp_turbo_soma_o_frete_e_o_pix_nao_desconta_dele(): void
+    public function test_fora_da_grande_sp_turbo_soma_o_frete_e_o_pix_desconta_do_total(): void
     {
         $this->comTurbo();
 
@@ -108,19 +108,20 @@ class CheckoutBeautyKoraTest extends TestCase
             ->assertJsonPath('entrega.turbo_escolhido', true)
             ->assertJsonPath('frete', 2500)
             ->assertJsonPath('total', 22500)
-            ->assertJsonPath('total_pix', 21500);
+            ->assertJsonPath('desconto_pix', 1125)
+            ->assertJsonPath('total_pix', 21375);
     }
 
     public function test_pedido_com_turbo_grava_o_sedex_no_frete(): void
     {
         $this->comTurbo();
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->once()
-            ->withArgs(fn ($valor) => $valor === 215.0)
+            ->withArgs(fn ($valor) => $valor === 213.75)
             ->andReturn(['id' => 77, 'status' => 'pending']));
 
         $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido([
             'turbo' => true,
-            'total_esperado' => 21500,
+            'total_esperado' => 21375,
             'endereco' => ['zip' => self::CEP_FORA, 'city' => 'Belo Horizonte', 'state' => 'MG'],
         ]))->assertCreated();
 
@@ -129,7 +130,8 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->assertSame(FreteEmbutido::TURBO, $order->shipping_carrier_name);
         $this->assertNull($order->shipping_method_id);
         $this->assertSame('25.00', $order->shipping_cost);
-        $this->assertSame('215.00', $order->total);
+        $this->assertSame('11.25', $order->pix_discount_amount);
+        $this->assertSame('213.75', $order->total);
     }
 
     public function test_turbo_pedido_na_area_full_e_ignorado(): void

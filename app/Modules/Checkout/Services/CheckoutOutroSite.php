@@ -127,8 +127,9 @@ abstract class CheckoutOutroSite
     }
 
     /**
-     * Valores da compra, em reais. desconto_pix só vale pagando tudo no Pix e
-     * nunca no frete. Entrega como no checkout da KazaKora: FULL na Grande SP
+     * Valores da compra, em reais. desconto_pix só vale pagando tudo no Pix,
+     * sobre o total do pedido, frete TURBO incluído (pedido do Lira
+     * 2026-10-14; na KazaKora o Pix não desconta do frete). Entrega como no checkout da KazaKora: FULL na Grande SP
      * (sem TURBO, já é a mais rápida); fora dela grátis ou TURBO (SEDEX),
      * cobrando só a diferença, sempre recalculada aqui.
      *
@@ -142,8 +143,8 @@ abstract class CheckoutOutroSite
         $opcaoTurbo = $full ? null : $entrega['turbo'];
         $frete = $turbo && $opcaoTurbo ? round((float) $opcaoTurbo['preco'], 2) : 0.0;
         $plataforma = (float) $entrega['desconto_plataforma'];
-        $pix = DescontoPix::desconto(max(0, $subtotal - $plataforma));
         $total = round($subtotal - $plataforma + $frete, 2);
+        $pix = DescontoPix::desconto(max(0, $total));
 
         return [
             'subtotal' => $subtotal,

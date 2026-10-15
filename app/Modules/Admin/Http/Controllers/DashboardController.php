@@ -181,9 +181,10 @@ class DashboardController extends Controller
         // ser receita do vendedor.
         return Order::query()->vendaEfetiva()
             ->where('created_at', '>=', $startOfMonth)
-            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
+            // Canal de métrica (2026-10-14): FerraKora e Beauty Kora saem do "site".
+            ->selectRaw(Order::canalSql().' as origin, SUM('.ContributionMargin::receitaSql().') as total')
             ->whereIn('status', self::PAID_STATUSES)
-            ->groupBy('origin')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->get()
             ->map(fn ($row) => ['origin' => $row->origin, 'total' => (float) $row->total])
             ->all();
@@ -216,11 +217,11 @@ class DashboardController extends Controller
         $pedidos = Order::query()->vendaEfetiva()
             ->whereIn('status', self::PAID_STATUSES)
             ->where('created_at', '>=', $inicio12Meses)
-            ->selectRaw('id, origin, created_at, '.ContributionMargin::receitaSql().' as receita')
+            ->selectRaw('id, origin, created_at, '.Order::canalSql().' as canal, '.ContributionMargin::receitaSql().' as receita')
             ->get()
             ->map(fn ($pedido) => [
                 'id' => $pedido->id,
-                'canal' => $pedido->origin ?: Order::ORIGIN_STORE,
+                'canal' => $pedido->canal ?: Order::ORIGIN_STORE,
                 'data' => Carbon::parse($pedido->created_at),
                 'receita' => (float) $pedido->receita,
             ]);

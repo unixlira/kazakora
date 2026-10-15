@@ -51,6 +51,10 @@ const CHANNEL_LABELS = {
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',
     amazon: 'Amazon',
+    // Projetos com métrica própria (2026-10-14): fora de CHANNEL_ORDER,
+    // aparecem na faixa só quando têm venda.
+    ferrakora: 'FerraKora',
+    beautykora: 'Beauty Kora',
 };
 
 // Cor fixa por canal (nunca pela posição no ranking), na ordem da paleta
@@ -60,8 +64,8 @@ const CHANNEL_LABELS = {
 // de canal leva legenda com o valor escrito ao lado da cor.
 const CHANNEL_ORDER = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja'];
 const CHANNEL_COLORS = {
-    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4' },
-    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181' },
+    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
+    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
 };
 const CHROME = {
     // Tema grafite (2026-10-11): neutros quentes e o laranja como destaque.

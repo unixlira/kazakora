@@ -97,8 +97,8 @@ class ContributionMargin
         }
 
         return $query
-            ->selectRaw('orders.origin as channel, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
-            ->groupBy('orders.origin')
+            ->selectRaw(Order::canalSql().' as channel, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->pluck('total', 'channel')
             ->map(fn ($total, $canal) => round((float) $total - ($turbo[$canal] ?? 0), 2))
             ->all();
@@ -123,8 +123,8 @@ class ContributionMargin
                 ->whereColumn('correios_pre_postagens.order_id', 'orders.id')
                 ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA))
             ->tap(fn ($q) => self::semDevolucao($q))
-            ->selectRaw('orders.origin as canal, COALESCE(SUM(orders.shipping_cost), 0) as total')
-            ->groupBy('orders.origin')
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(orders.shipping_cost), 0) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->pluck('total', 'canal')
             ->map(fn ($total) => (float) $total)
             ->all();
@@ -198,15 +198,15 @@ class ContributionMargin
             ->where('orders.created_at', '<', $ate)
             ->tap(fn ($q) => self::semDevolucao($q));
 
-        $receita = $vendas()->selectRaw('orders.origin as canal, COUNT(*) as pedidos, COALESCE(SUM('.self::receitaSql().'), 0) as receita')
-            ->groupBy('orders.origin')->get()->keyBy('canal');
+        $receita = $vendas()->selectRaw(Order::canalSql().' as canal, COUNT(*) as pedidos, COALESCE(SUM('.self::receitaSql().'), 0) as receita')
+            ->groupBy(DB::raw(Order::canalSql()))->get()->keyBy('canal');
         $custo = $vendas()->join('order_items', 'order_items.order_id', '=', 'orders.id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
-            ->selectRaw('orders.origin as canal, COALESCE(SUM('.self::custoSql().'), 0) as total')
-            ->groupBy('orders.origin')->pluck('total', 'canal');
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM('.self::custoSql().'), 0) as total')
+            ->groupBy(DB::raw(Order::canalSql()))->pluck('total', 'canal');
         $taxas = $vendas()->join('order_channel_fees', 'order_channel_fees.order_id', '=', 'orders.id')
-            ->selectRaw('orders.origin as canal, COALESCE(SUM(order_channel_fees.fee_amount), 0) as total')
-            ->groupBy('orders.origin')->pluck('total', 'canal');
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(order_channel_fees.fee_amount), 0) as total')
+            ->groupBy(DB::raw(Order::canalSql()))->pluck('total', 'canal');
         $correios = self::correios($desde, $ate, porCanal: true);
         $ads = ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())
@@ -269,7 +269,7 @@ class ContributionMargin
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $desde)
             ->where('orders.created_at', '<', $ate)
-            ->when($canal, fn ($q) => $q->where('orders.origin', $canal))
+            ->when($canal, fn ($q) => Order::filtrarCanal($q, $canal))
             ->tap(fn ($q) => self::semDevolucao($q))
             ->selectRaw('orders.id as order_id, order_items.id as item_id, order_items.product_id, order_items.product_name,
                 COALESCE(order_items.quantity, 0) as quantidade, COALESCE(order_items.subtotal, 0) as subtotal,

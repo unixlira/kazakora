@@ -8,6 +8,7 @@ use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Support\DescontoPix;
+use App\Support\SiteAtual;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -31,6 +32,11 @@ use Illuminate\Support\Str;
  */
 class CatalogoFerraKora extends CatalogoOutroSite
 {
+    public function site(): string
+    {
+        return SiteAtual::FERRAKORA;
+    }
+
     protected function modelo(): string
     {
         return FerraKoraProduto::class;

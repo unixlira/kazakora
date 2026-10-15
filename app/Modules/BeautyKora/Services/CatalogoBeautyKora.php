@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Support\DescontoPix;
+use App\Support\SiteAtual;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -24,6 +25,11 @@ use Illuminate\Database\Eloquent\Model;
  */
 class CatalogoBeautyKora extends CatalogoOutroSite
 {
+    public function site(): string
+    {
+        return SiteAtual::BEAUTYKORA;
+    }
+
     protected function modelo(): string
     {
         return BeautyKoraProduto::class;

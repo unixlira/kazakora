@@ -513,12 +513,12 @@ class CheckoutController extends Controller
 
     /**
      * Base do cupom: o carrinho sem os produtos da Oferta do Dia (pedido
-     * 2026-10-10) — a conta de "sem prejuízo" da oferta não tem espaço pra
+     * 2026-10-10) nem da Oferta Relâmpago (2026-10-14) — a conta de "sem prejuízo" da oferta não tem espaço pra
      * mais um desconto em cima.
      */
     private function subtotalParaCupom($cartItems): float
     {
-        return round($cartItems->reject(fn (array $item) => $item['product']->oferta_do_dia)->sum('subtotal'), 2);
+        return round($cartItems->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
     }
 
     /**

@@ -122,6 +122,8 @@ export const sidebarSections = [
         heading: 'Marketing',
         items: [
             { label: 'Cupons', href: '/admin/cupons', icon: 'fas fa-ticket', cor: 'rosa', permission: 'cadastros.view' },
+            // Ofertas Relâmpago por empresa (2026-10-14): KazaKora, FerraKora e Beauty Kora.
+            { label: 'Ofertas Relâmpago', href: '/admin/ofertas-relampago', icon: 'fas fa-bolt', cor: 'ambar', permission: 'cadastros.view' },
             { label: 'Banners do site', href: '/admin/banners', icon: 'fas fa-images', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Notificações promocionais', href: '/admin/notificacoes-promocionais', icon: 'fas fa-bullhorn', cor: 'laranja', permission: 'cadastros.view' },
             { label: 'Disparos de WhatsApp', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', cor: 'ciano', permission: 'configuracoes.integracoes' },

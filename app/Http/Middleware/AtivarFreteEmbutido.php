@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Checkout\Support\FreteEmbutido;
+use App\Support\SiteAtual;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,6 +18,8 @@ class AtivarFreteEmbutido
     {
         if (! $request->is('admin', 'admin/*', 'api/*', 'webhooks/*', 'horizon', 'horizon/*')) {
             app(FreteEmbutido::class)->ligar();
+            // Mesmas telas = loja KazaKora: vale a Oferta Relâmpago dela (2026-10-14).
+            app(SiteAtual::class)->definir(SiteAtual::KAZAKORA);
         }
 
         return $next($request);

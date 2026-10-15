@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Cache;
  * sitemap.xml para o Google Search Console (pedido 2026-10-12): home, páginas
  * institucionais e todos os produtos ativos (sem as variações, que são a mesma
  * página do produto pai). Cache curto para não pesar no banco a cada visita do robô.
+ * 10 minutos (era 1 hora): produto desativado seguia no mapa e o Google via 404.
  */
 class SitemapController
 {
@@ -24,7 +25,7 @@ class SitemapController
 
     public function __invoke(): Response
     {
-        $xml = Cache::remember('sitemap.xml', now()->addHour(), function () {
+        $xml = Cache::remember('sitemap.xml', now()->addMinutes(10), function () {
             $base = rtrim(config('app.url'), '/');
             $esc = fn (string $s) => htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
 

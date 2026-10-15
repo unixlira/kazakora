@@ -12,9 +12,15 @@ use Illuminate\Support\Str;
  * palavras em comum (mínimo 60% das palavras do slug antigo). Sem par
  * confiável devolve null e a página segue 404 (redirecionar tudo para a
  * vitrine vira "soft 404" no Google).
+ *
+ * Conectivos (de, com, para...) não contam (2026-10-15): "luminaria-de-parede-
+ * com-sensor-de-movimento" ia para a mini câmera A9 só por "de", "com",
+ * "sensor" e "movimento".
  */
 class ProdutoDaLojaAntiga
 {
+    private const CONECTIVOS = ['de', 'da', 'do', 'das', 'dos', 'com', 'sem', 'para', 'pra', 'em', 'no', 'na', 'nos', 'nas', 'por', 'ate', 'um', 'uma'];
+
     public static function encontrar(string $slugAntigo): ?Product
     {
         $slug = Str::slug(preg_replace('/-\d+$/', '', trim($slugAntigo, '/')));
@@ -32,7 +38,7 @@ class ProdutoDaLojaAntiga
             return $exato;
         }
 
-        $palavras = array_values(array_unique(array_filter(explode('-', $slug), fn ($p) => mb_strlen($p) > 1)));
+        $palavras = self::palavras($slug);
         if (count($palavras) < 2) {
             return null;
         }
@@ -40,7 +46,7 @@ class ProdutoDaLojaAntiga
         $melhor = null;
         $melhorNota = 0.0;
         foreach ($ativos as $produto) {
-            $comuns = count(array_intersect($palavras, explode('-', $produto->slug)));
+            $comuns = count(array_intersect($palavras, self::palavras($produto->slug)));
             $nota = $comuns / count($palavras);
             if ($nota > $melhorNota) {
                 [$melhor, $melhorNota] = [$produto, $nota];
@@ -48,5 +54,14 @@ class ProdutoDaLojaAntiga
         }
 
         return $melhorNota >= 0.6 ? $melhor : null;
+    }
+
+    /** @return list<string> */
+    private static function palavras(string $slug): array
+    {
+        return array_values(array_unique(array_filter(
+            explode('-', $slug),
+            fn ($p) => mb_strlen($p) > 1 && ! in_array($p, self::CONECTIVOS, true),
+        )));
     }
 }

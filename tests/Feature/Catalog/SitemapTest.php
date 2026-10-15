@@ -75,6 +75,13 @@ class SitemapTest extends TestCase
         $this->get('/produtos/geladeira-frost-free-555/')->assertNotFound();
     }
 
+    public function test_link_antigo_nao_vai_para_produto_diferente_so_por_conectivos(): void
+    {
+        Product::factory()->create(['slug' => 'mini-camera-a9-wi-fi-hd-com-sensor-de-movimento-e-gravacao-em-cartao-de-memoria', 'is_active' => true]);
+
+        $this->get('/produtos/luminaria-de-parede-com-sensor-de-movimento/?variant=1480886036')->assertNotFound();
+    }
+
     public function test_variacao_aponta_canonica_para_o_produto_pai(): void
     {
         $pai = Product::factory()->create(['slug' => 'garrafa-termica', 'is_active' => true]);

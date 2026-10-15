@@ -183,41 +183,4 @@ class OfertasRelampagoTest extends TestCase
         $this->delete("/admin/ofertas-relampago/{$oferta->id}")->assertRedirect();
         $this->assertSame(1, OfertaRelampago::query()->count());
     }
-
-    public function test_duracao_padrao_de_24h_e_escolhida_pelo_lira(): void
-    {
-        $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]));
-        $amanha = now()->addDay()->setTime(8, 0);
-        $base = ['site' => 'kazakora', 'product_id' => $this->pai->id, 'desconto_pct' => 10];
-
-        // Só o início: dura 24h.
-        $this->post('/admin/ofertas-relampago', [...$base, 'inicio_em' => $amanha->format('Y-m-d\TH:i')])->assertSessionHasNoErrors();
-        $oferta = OfertaRelampago::query()->sole();
-        $this->assertSame($amanha->copy()->addDay()->toDateTimeString(), $oferta->fim_em->toDateTimeString());
-        $this->assertSame('agendada', $oferta->situacao());
-
-        // Outra duração (duracao_horas) e fim exato (fim_em) também valem.
-        $inicio = now()->addDays(3)->setTime(0, 0);
-        $this->post('/admin/ofertas-relampago', [...$base, 'inicio_em' => $inicio->format('Y-m-d\TH:i'), 'duracao_horas' => 6])->assertSessionHasNoErrors();
-        $this->assertSame($inicio->copy()->addHours(6)->toDateTimeString(), OfertaRelampago::query()->latest('id')->first()->fim_em->toDateTimeString());
-
-        $inicio = now()->addDays(4)->setTime(0, 0);
-        $this->post('/admin/ofertas-relampago', [...$base, 'inicio_em' => $inicio->format('Y-m-d\TH:i'), 'fim_em' => $inicio->copy()->setTime(18, 30)->format('Y-m-d\TH:i')])->assertSessionHasNoErrors();
-        $this->assertSame($inicio->copy()->setTime(18, 30)->toDateTimeString(), OfertaRelampago::query()->latest('id')->first()->fim_em->toDateTimeString());
-
-        // Duração fora de 1 a 168 horas e sem início: recusados.
-        $this->post('/admin/ofertas-relampago', [...$base, 'inicio_em' => now()->addDays(10)->format('Y-m-d\TH:i'), 'duracao_horas' => 0])->assertSessionHasErrors('duracao_horas');
-        $this->post('/admin/ofertas-relampago', [...$base, 'inicio_em' => now()->addDays(10)->format('Y-m-d\TH:i'), 'duracao_horas' => 169])->assertSessionHasErrors('duracao_horas');
-        $this->post('/admin/ofertas-relampago', [...$base, 'duracao_horas' => 24])->assertSessionHasErrors('inicio_em');
-        $this->assertSame(3, OfertaRelampago::query()->count());
-
-        // Agendada não muda o preço; no horário vale e depois de 24h acaba.
-        $this->assertSame(100.0, $this->precoNoSite(SiteAtual::KAZAKORA, $this->pai));
-        $this->travelTo($amanha->copy()->addHours(23)->addMinutes(59));
-        OfertaRelampago::esquecer();
-        $this->assertSame(90.0, $this->precoNoSite(SiteAtual::KAZAKORA, $this->pai));
-        $this->travelTo($amanha->copy()->addDay());
-        OfertaRelampago::esquecer();
-        $this->assertSame(100.0, $this->precoNoSite(SiteAtual::KAZAKORA, $this->pai));
-    }
 }

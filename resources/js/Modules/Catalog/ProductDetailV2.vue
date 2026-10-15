@@ -12,7 +12,6 @@ import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
 import { formatPrice, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
 import { maskCep } from '@/Shared/useCep';
-import { useContagemRegressiva } from '@/Shared/useContagemRegressiva';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -112,16 +111,10 @@ const variantThumbnail = (item) => {
 };
 
 
-// Oferta Relâmpago no ar (pedido 2026-10-15): faixa com a contagem até o fim.
-const relampago = useContagemRegressiva(computed(() => props.product.oferta_relampago?.fim));
-const relampagoNoAr = computed(() => !!props.product.oferta_relampago && !relampago.acabou.value);
-// Em Oferta do Dia ou Relâmpago o backend não soma desconto por quantidade (Product::emOferta).
-const emOferta = computed(() => !!(props.product.oferta_do_dia || props.product.oferta_relampago));
-
 // Desconto por quantidade: mesma conta do backend (CartManager/CheckoutController).
-const quantityDiscounts = computed(() => (emOferta.value
-    ? []
-    : [...(props.product.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)));
+const quantityDiscounts = computed(() =>
+    [...(props.product.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)
+);
 const unitPriceForQuantity = (qty) => {
     const tier = [...quantityDiscounts.value].reverse().find((row) => row.min_quantity <= qty);
     if (!tier) return Number(props.product.final_price);
@@ -135,8 +128,6 @@ const pixPrice = computed(() => Math.round(Number(props.product.final_price) * (
 // não há promoção e existe desconto no Pix); "por" = valor no Pix.
 const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(props.product.final_price)));
 const precoDe = computed(() => {
-    // Em oferta, o "de" é o preço sem ela (mesmo riscado do card).
-    if (emOferta.value && props.product.preco_sem_oferta) return Number(props.product.preco_sem_oferta);
     if (props.product.has_discount) return Number(props.product.preco_de ?? props.product.price);
     return DESCONTO_PIX > 0 ? Number(props.product.final_price) : null;
 });
@@ -412,11 +403,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço à
                                  vista (Pix) em destaque, 12x no cartão e "R$ X de desconto" — tudo
                                  com os valores reais (preço de cartão = final_price). -->
-                            <div v-if="relampagoNoAr" class="relampago" role="status">
-                                <span class="relampago-titulo"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Oferta Relâmpago</span>
-                                <span class="relampago-fim">termina em <strong class="relampago-tempo">{{ relampago.texto.value }}</strong></span>
-                            </div>
-
                             <div class="preco">
                                 <span class="rot">Preço:</span>
                                 <div class="valores">
@@ -806,10 +792,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .checks li i { color: #00a650; margin-right: 6px; font-size: 1.1em; -webkit-text-stroke: 0.8px #00a650; }
 .pd2 .divisor { border: 0; border-top: 1px solid #777; margin: 16px 0; opacity: .6; }
 
-.pd2 .relampago { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 15px; padding: 10px 14px; border-radius: 10px; background: #FFE600; color: #1a1a1a; font-size: 14px; }
-.pd2 .relampago-titulo { font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
-.pd2 .relampago-titulo i { width: auto; margin-right: 4px; color: inherit; }
-.pd2 .relampago-tempo { font-variant-numeric: tabular-nums; font-size: 17px; }
 .pd2 .preco { display: grid; grid-template-columns: 25% 75%; align-items: center; margin-bottom: 15px; }
 .pd2 .preco .rot { font-size: 18px; color: var(--ink); }
 .pd2 .valores { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -1017,18 +999,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
     .pd2 .compra h1 { font-size: 20px; }
     .pd2 .nota { font-size: 14px; }
-    /* Foto e compra num card só no celular (pedido 2026-10-15): eram dois cards
-       e, com a faixa da Oferta Relâmpago, o preço ia parar longe da foto. O
-       clip-path corta a sombra na emenda para não marcar uma linha. */
-    .pd2 .galeria-card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: var(--shadow); clip-path: inset(-30px -30px 0 -30px); }
-    .pd2 .col-principal > .compra { margin-top: -20px; padding-top: 10px; border-top-left-radius: 0; border-top-right-radius: 0; box-shadow: var(--shadow); clip-path: inset(0 -30px -30px -30px); }
     .pd2 .galeria { flex-direction: column; gap: 10px; }
     .pd2 .foto { flex-basis: auto; width: 100%; }
     .pd2 .miniaturas { flex-direction: row; gap: 8px; max-height: none; overflow-x: auto; }
     .pd2 .miniaturas button { flex: 0 0 calc(25% - 6px); }
-    /* Preço na largura toda do card (o "Preço:" ao lado espremia o 12x). */
-    .pd2 .preco { grid-template-columns: minmax(0, 1fr); }
-    .pd2 .preco .rot { display: none; }
+    .pd2 .preco { grid-template-columns: 20% 80%; }
     .pd2 .btn { font-size: 20px; }
     .pd2 .fretefundo li { font-size: 14px; }
     .pd2 .fretefundo i { color: #7b7b7b; }

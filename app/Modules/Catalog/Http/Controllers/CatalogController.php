@@ -16,6 +16,7 @@ use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Operacional\Models\ShippingMethod;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -53,18 +54,7 @@ class CatalogController extends Controller
             // precisa ver um anúncio/produto e escolher a variação dentro
             // dele, estilo Shopee/Mercado Livre.
             ->whereNull('parent_product_id')
-            // Busca (pedido 2026-10-10): cada palavra precisa aparecer no nome,
-            // marca, modelo, SKU ou departamento — em qualquer ordem.
-            ->when($search->isNotEmpty(), function ($query) use ($search) {
-                foreach (preg_split('/\s+/', (string) $search) as $palavra) {
-                    $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';
-                    $query->where(fn ($q) => $q->where('name', 'like', $termo)
-                        ->orWhere('brand', 'like', $termo)
-                        ->orWhere('model', 'like', $termo)
-                        ->orWhere('sku', 'like', $termo)
-                        ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $termo)));
-                }
-            })
+            ->when($search->isNotEmpty(), fn ($query) => self::filtrarBusca($query, (string) $search))
             ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
             ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true));
 
@@ -154,7 +144,8 @@ class CatalogController extends Controller
             'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'image_path_mobile', 'link_url']),
             'products' => $modoLista ? $products : null,
             'categories' => $this->departamentos(),
-            'departamentosFiltro' => $modoLista ? $departamentosFiltro : [],
+            // Na busca, sem departamentos à mostra (pedido 2026-10-15).
+            'departamentosFiltro' => $modoLista && $search->isEmpty() ? $departamentosFiltro : [],
             'favoriteIds' => $request->user()
                 ? Favorite::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
@@ -164,6 +155,56 @@ class CatalogController extends Controller
                 : [],
             'filters' => $request->only('search', 'tipo', 'categoria', 'todos', 'ordenar', 'preco', 'desconto'),
         ]);
+    }
+
+    /**
+     * Busca instantânea do topo (pedido 2026-10-15, como na Beauty Kora): ao
+     * digitar aparece a lista com foto e nome. Mesma regra e ordem da busca
+     * da lista; só os campos que a lista usa, para responder rápido.
+     */
+    public function sugestoes(Request $request): JsonResponse
+    {
+        $search = trim((string) $request->query('q', ''));
+        if (mb_strlen($search) < 2) {
+            return response()->json(['produtos' => [], 'total' => 0]);
+        }
+
+        $query = Product::query()
+            ->where('is_active', true)
+            ->comEstoque()
+            ->whereNull('parent_product_id');
+        self::filtrarBusca($query, mb_substr($search, 0, 100));
+
+        $total = (clone $query)->count();
+        $produtos = $query
+            ->select(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount'])
+            ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
+                ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(1)])
+            ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END', [$search.'%', '%'.$search.'%'])
+            ->latest()
+            ->take(8)
+            ->get()
+            ->map(fn (Product $produto) => [
+                'nome' => $produto->name,
+                'slug' => $produto->slug,
+                'imagem' => $produto->images->first()?->thumb_url ?? $produto->images->first()?->url,
+                'preco' => $produto->final_price,
+            ]);
+
+        return response()->json(['produtos' => $produtos, 'total' => $total]);
+    }
+
+    /** Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem. */
+    private static function filtrarBusca($query, string $search): void
+    {
+        foreach (preg_split('/\s+/', trim($search)) as $palavra) {
+            $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';
+            $query->where(fn ($q) => $q->where('name', 'like', $termo)
+                ->orWhere('brand', 'like', $termo)
+                ->orWhere('model', 'like', $termo)
+                ->orWhere('sku', 'like', $termo)
+                ->orWhereHas('category', fn ($c) => $c->where('name', 'like', $termo)));
+        }
     }
 
     /** O "X% OFF" do card (ProductCard.vue): preço final contra o riscado. */
@@ -397,7 +438,8 @@ class CatalogController extends Controller
             : self::PRODUCT_PAGE_VERSION;
 
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
-            'product' => $product,
+            // Custo é dado interno: não vai no JSON da página pública.
+            'product' => $product->makeHidden('cost_price'),
             'variations' => $variations,
             'galeria' => $galeria,
             'reviews' => $reviews,

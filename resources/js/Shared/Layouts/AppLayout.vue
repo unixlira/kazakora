@@ -9,6 +9,7 @@ import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
 import TrocarSenhaModal from '@/Shared/Components/TrocarSenhaModal.vue';
 import AvisoCookies from '@/Shared/Components/AvisoCookies.vue';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
+import BuscaInstantanea from '@/Shared/Components/BuscaInstantanea.vue';
 
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
@@ -90,7 +91,8 @@ const pararDeOuvir = router.on('start', () => { menuAberto.value = null; });
 onUnmounted(pararDeOuvir);
 
 // Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
-// a lista de resultados abre logo no topo.
+// a lista de resultados abre logo no topo. Ao digitar, a BuscaInstantanea
+// mostra foto e nome dos produtos (2026-10-15).
 const termoDaUrl = () => new URLSearchParams(window.location.search).get('search') ?? '';
 const search = ref(termoDaUrl());
 const submitSearch = () => {
@@ -103,6 +105,7 @@ const submitSearch = () => {
 // barra e vira "X"; o "X" fecha, limpa o termo e, se havia busca na tela, volta
 // para a vitrine sem filtro. Já abre aberta quando a página veio de uma busca.
 const buscaMobileAberta = ref(termoDaUrl() !== '');
+const buscaMobilePronta = ref(buscaMobileAberta.value);
 const buscaMobileInput = ref(null);
 const alternarBuscaMobile = () => {
     if (!buscaMobileAberta.value) {
@@ -111,6 +114,7 @@ const alternarBuscaMobile = () => {
         return;
     }
     buscaMobileAberta.value = false;
+    buscaMobilePronta.value = false;
     search.value = '';
     if (termoDaUrl() !== '') router.get('/');
 };
@@ -275,13 +279,7 @@ const REDES = [
                     </div>
                 </nav>
 
-                <form class="relative hidden max-w-xs flex-1 lg:block" role="search" @submit.prevent="submitSearch">
-                    <input v-model="search" type="search" placeholder="O que você procura?"
-                        class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-10 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
-                    <button type="submit" class="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-store-fg-muted hover:text-store-accent" aria-label="Buscar">
-                        <i class="fas fa-magnifying-glass text-xs"></i>
-                    </button>
-                </form>
+                <BuscaInstantanea v-model="search" class="hidden max-w-xs flex-1 lg:block" @buscar="submitSearch" />
 
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
                     <Link href="/favoritos" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
@@ -369,17 +367,15 @@ const REDES = [
                 </div>
             </div>
 
-            <!-- Busca do celular: abre e fecha pela lupa do topo (pedido 2026-10-15). -->
+            <!-- Busca do celular: abre e fecha pela lupa do topo (pedido 2026-10-15).
+                 Aberta, deixa a lista da busca instantânea passar para fora. -->
             <div id="busca-mobile" class="grid transition-[grid-template-rows] duration-200 ease-out lg:hidden"
-                :class="buscaMobileAberta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'" :inert="!buscaMobileAberta">
-                <div class="overflow-hidden">
-                    <form class="relative px-3 pb-2.5" role="search" @submit.prevent="submitSearch" @keydown.esc="alternarBuscaMobile">
-                        <input ref="buscaMobileInput" v-model="search" type="search" placeholder="O que você procura?" enterkeyhint="search"
-                            class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-11 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
-                        <button type="submit" class="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-[calc(50%+5px)] items-center justify-center rounded-full text-store-fg-muted" aria-label="Buscar">
-                            <i class="fas fa-magnifying-glass text-sm"></i>
-                        </button>
-                    </form>
+                :class="buscaMobileAberta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'" :inert="!buscaMobileAberta"
+                @transitionend.self="buscaMobilePronta = buscaMobileAberta">
+                <div :class="buscaMobilePronta && buscaMobileAberta ? 'overflow-visible' : 'overflow-hidden'">
+                    <div class="px-3 pb-2.5" @keydown.esc="alternarBuscaMobile">
+                        <BuscaInstantanea ref="buscaMobileInput" v-model="search" celular @buscar="submitSearch" />
+                    </div>
                 </div>
             </div>
 

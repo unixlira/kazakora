@@ -104,6 +104,7 @@ const gruposFiltro = computed(() => [
         chave: 'categoria',
         titulo: 'Departamentos',
         rotulo: 'Departamento',
+        tituloPainel: 'Categoria',
         opcoes: [
             { valor: null, label: 'Todos os departamentos', labelPainel: 'Todos' },
             ...props.departamentosFiltro.map((d) => ({ valor: d.slug, label: d.name, total: d.total })),
@@ -255,7 +256,7 @@ onBeforeUnmount(() => observador?.disconnect());
             </div>
 
             <FiltrosCatalogo :grupos="gruposFiltro" :ordens="ORDENS" :filters="filters" :href="href" :contagem="contagem"
-                :extras="etiquetasExtras" limpar-href="/?todos=1#produtos" />
+                :extras="etiquetasExtras" limpar-href="/?todos=1#produtos" :painel="['categoria', 'preco', 'desconto']" />
 
             <div>
                 <div>

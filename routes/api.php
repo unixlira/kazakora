@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Controllers\Api\FerraKoraCheckoutController;
+use App\Http\Controllers\Api\FerraKoraContaController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
+use App\Http\Middleware\AuthenticateFerraKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
@@ -227,6 +229,15 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
 
     // Meus pedidos do FerraKora (2026-10-14): sem login, pelo e-mail + CPF da compra.
     Route::post('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->middleware('throttle:10,1,fk-meus-pedidos')->name('pedidos');
+
+    // Conta do cliente (2026-10-14): menu de conta do topo do site, como no Beauty Kora.
+    Route::post('cadastro', [FerraKoraContaController::class, 'cadastro'])->middleware('throttle:10,1,fk-conta-cadastro')->name('cadastro');
+    Route::post('login', [FerraKoraContaController::class, 'login'])->middleware('throttle:10,1,fk-conta-login')->name('login');
+    Route::middleware([AuthenticateFerraKoraCliente::class, 'throttle:60,1,fk-conta'])->group(function () {
+        Route::get('eu', [FerraKoraContaController::class, 'eu'])->name('eu');
+        Route::patch('eu', [FerraKoraContaController::class, 'atualizar'])->name('atualizar');
+        Route::post('sair', [FerraKoraContaController::class, 'sair'])->name('sair');
+    });
 });
 
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase

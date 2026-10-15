@@ -8,6 +8,7 @@ use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Support\ProductImageOptimizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductImageController extends Controller
@@ -33,6 +34,33 @@ class ProductImageController extends Controller
         ]);
 
         return back()->with('success', 'Foto adicionada.');
+    }
+
+    /**
+     * Ordem da galeria vinda do arrastar e soltar do admin. A primeira foto
+     * vira a principal (capa), igual às importações de canal, que já marcam
+     * a posição 0 como is_primary.
+     */
+    public function reorder(Request $request, Product $product): RedirectResponse
+    {
+        $ids = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'distinct'],
+        ])['ids'];
+
+        $atuais = $product->images()->pluck('id')->all();
+        abort_if(count($ids) !== count($atuais) || array_diff($ids, $atuais) !== [], 422, 'A lista de fotos mudou. Recarregue a página.');
+
+        DB::transaction(function () use ($product, $ids) {
+            foreach ($ids as $posicao => $id) {
+                $product->images()->whereKey($id)->update([
+                    'position' => $posicao,
+                    'is_primary' => $posicao === 0,
+                ]);
+            }
+        });
+
+        return back()->with('success', 'Ordem das fotos salva.');
     }
 
     public function destroy(Product $product, ProductImage $image): RedirectResponse

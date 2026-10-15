@@ -13,7 +13,7 @@ import { COMPANY } from '@/Shared/company';
 import { formatPrice, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
 import { maskCep } from '@/Shared/useCep';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -66,6 +66,18 @@ const mediaItems = computed(() => {
 const activeIndex = ref(0);
 const activeMedia = computed(() => mediaItems.value[activeIndex.value] ?? null);
 const isLightboxOpen = ref(false);
+
+// Vídeo sem autoplay (pedido 2026-10-15): mostra a primeira foto como capa com
+// um botão de play; o vídeo só começa quando o cliente clica.
+const videoPoster = computed(() => props.product.images?.[0]?.url ?? null);
+const videoEl = ref(null);
+const isVideoStarted = ref(false);
+const startVideo = async () => {
+    isVideoStarted.value = true;
+    await nextTick();
+    videoEl.value?.play().catch(() => {});
+};
+watch(activeIndex, () => { isVideoStarted.value = false; });
 
 const goPrev = () => {
     if (mediaItems.value.length < 2) return;
@@ -347,8 +359,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="galeria" :class="{ 'sem-miniaturas': mediaItems.length < 2 }">
                                 <div class="foto" @click="activeMedia && (isLightboxOpen = true)" @touchstart="onTouchStart" @touchend="onTouchEnd">
                                     <template v-if="activeMedia?.type === 'video'">
-                                        <video :src="activeMedia.src" muted preload="metadata"></video>
-                                        <span class="play grande"><i class="fas fa-play"></i></span>
+                                        <video v-if="isVideoStarted" ref="videoEl" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="auto" @click.stop></video>
+                                        <button v-else type="button" class="capa-video" aria-label="Assistir ao vídeo do produto" @click.stop="startVideo">
+                                            <img v-if="videoPoster" :src="videoPoster" :alt="`${product.name} — vídeo`">
+                                            <video v-else :src="activeMedia.src" muted playsinline preload="metadata"></video>
+                                            <span class="play grande"><i class="fas fa-play"></i></span>
+                                        </button>
                                     </template>
                                     <img v-else-if="activeMedia" :src="activeMedia.src" :alt="`${product.name} — foto ${activeIndex + 1}`">
                                     <div v-else class="vazio"><i class="fas fa-box-open"></i></div>
@@ -702,7 +718,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <button type="button" class="absolute right-3 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 md:right-8" aria-label="Próxima mídia" @click="goNext"><i class="fas fa-chevron-right"></i></button>
                 </template>
                 <div class="relative z-0 flex max-h-[90vh] max-w-[90vw] items-center justify-center" @touchstart="onTouchStart" @touchend="onTouchEnd">
-                    <video v-if="activeMedia?.type === 'video'" :src="activeMedia.src" autoplay controls class="max-h-[90vh] max-w-[90vw] rounded-[2px]"></video>
+                    <video v-if="activeMedia?.type === 'video'" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="metadata" class="max-h-[90vh] max-w-[90vw] rounded-[2px]"></video>
                     <img v-else-if="activeMedia" :src="activeMedia.src" :alt="product.name" class="max-h-[90vh] max-w-[90vw] rounded-[2px] object-contain shadow-2xl">
                 </div>
             </div>
@@ -768,8 +784,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .miniaturas img, .pd2 .miniaturas video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0; background: #000; }
 .pd2 .miniaturas img { background: none; }
 .pd2 .play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .35); color: #fff; font-size: 12px; pointer-events: none; }
-.pd2 .play.grande { background: transparent; }
-.pd2 .play.grande i { width: 64px; height: 64px; border-radius: 50%; background: rgba(0, 0, 0, .55); display: grid; place-items: center; font-size: 22px; }
+.pd2 .play.grande { background: rgba(0, 0, 0, .18); }
+.pd2 .play.grande i { width: 84px; height: 84px; border-radius: 50%; background: rgba(0, 0, 0, .6); border: 3px solid #fff; display: grid; place-items: center; font-size: 30px; padding-left: 6px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); transition: transform .2s, background .2s; }
+.pd2 .capa-video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.pd2 .capa-video:hover .play.grande i, .pd2 .capa-video:focus-visible .play.grande i { transform: scale(1.08); background: rgba(0, 0, 0, .75); }
 .pd2 .seta { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .3); color: #fff; cursor: pointer; }
 .pd2 .seta.esq { left: 10px; }
 .pd2 .seta.dir { right: 10px; }

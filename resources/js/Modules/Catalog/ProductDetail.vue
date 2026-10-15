@@ -638,7 +638,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <div class="relative z-0 flex max-h-[90vh] max-w-[90vw] items-center justify-center" @click.stop @touchstart="onTouchStart" @touchend="onTouchEnd">
                     <div v-if="activeMedia?.type === 'video'" class="relative">
-                        <video ref="lightboxVideoEl" :src="activeMedia.src" autoplay class="max-h-[90vh] max-w-[90vw] rounded-2xl" @play="isVideoPlaying = true" @pause="isVideoPlaying = false"></video>
+                        <video ref="lightboxVideoEl" :src="activeMedia.src" :poster="product.images?.[0]?.url" playsinline class="max-h-[90vh] max-w-[90vw] rounded-2xl" @play="isVideoPlaying = true" @pause="isVideoPlaying = false"></video>
                         <button type="button" class="absolute inset-0 z-0 flex items-center justify-center" @click="toggleVideoPlay"><span v-show="!isVideoPlaying" class="flex h-16 w-16 items-center justify-center rounded-full bg-black/50 text-white"><i class="fas fa-play text-2xl"></i></span></button>
                         <button type="button" class="absolute bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Alternar mudo" @click="toggleVideoMute"><i class="fas text-sm" :class="isVideoMuted ? 'fa-volume-xmark' : 'fa-volume-high'"></i></button>
                     </div>

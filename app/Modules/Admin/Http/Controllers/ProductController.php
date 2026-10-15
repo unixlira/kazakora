@@ -131,7 +131,8 @@ class ProductController extends Controller
         $validated['slug'] = $this->uniqueSlug($validated['name']);
         $validated = $this->comAcrescimoPix($validated);
 
-        $category = $validated['category_id']
+        // Sem categoria no envio (cadastro pela API/teste) vale como nenhuma.
+        $category = ! empty($validated['category_id'])
             ? Category::query()->find($validated['category_id'])
             : null;
 

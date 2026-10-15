@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
@@ -38,8 +39,10 @@ class MercadoPagoWebhookController extends Controller
         // logados por enquanto, sem lógica de negócio ainda.
         // Boleto (2026-10-14): se o tópico "payment" for ligado no painel, o
         // boleto pago confirma na hora em vez de esperar a varredura de 30 min.
+        // Pix (auditoria 2026-10-15): o mesmo tópico confirma o Pix pago com a
+        // aba do checkout já fechada.
         if ($type === 'payment' && $resourceId) {
-            return $this->handleBoleto((string) $resourceId);
+            return $this->handlePaymentTopic((string) $resourceId);
         }
 
         if ($type !== 'order' || ! $resourceId) {
@@ -81,11 +84,11 @@ class MercadoPagoWebhookController extends Controller
         return response()->json(['status' => 'received']);
     }
 
-    private function handleBoleto(string $paymentId): JsonResponse
+    private function handlePaymentTopic(string $paymentId): JsonResponse
     {
         $payment = Payment::query()
             ->where('provider', Payment::PROVIDER_MERCADOPAGO)
-            ->where('method_type', Payment::METHOD_BOLETO)
+            ->whereIn('method_type', [Payment::METHOD_BOLETO, Payment::METHOD_PIX])
             ->where('mercadopago_payment_id', $paymentId)
             ->first();
 
@@ -94,9 +97,11 @@ class MercadoPagoWebhookController extends Controller
         }
 
         try {
-            app(BoletoMercadoPago::class)->sincronizar($payment);
+            $payment->method_type === Payment::METHOD_BOLETO
+                ? app(BoletoMercadoPago::class)->sincronizar($payment)
+                : $this->syncPix($payment);
         } catch (Throwable $exception) {
-            Log::channel('mercadopago')->error('mercadopago.webhook.boleto_failed', [
+            Log::channel('mercadopago')->error('mercadopago.webhook.payment_failed', [
                 'payment_id' => $paymentId,
                 'message' => $exception->getMessage(),
             ]);
@@ -105,6 +110,37 @@ class MercadoPagoWebhookController extends Controller
         }
 
         return response()->json(['status' => 'received']);
+    }
+
+    private function syncPix(Payment $payment): void
+    {
+        if ($payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+            return;
+        }
+
+        $status = $this->mercadoPago->retrievePayment((string) $payment->mercadopago_payment_id)['status'] ?? null;
+
+        if ($status !== 'approved') {
+            return;
+        }
+
+        $payment->update(['status' => Payment::STATUS_CAPTURED]);
+        $order = $payment->order()->with('payments')->first();
+
+        if ($order?->status === Order::STATUS_CANCELLED) {
+            // Mesma regra do boleto: não ressuscita pedido cancelado (o
+            // estoque já voltou). Fica no log para devolver ou refazer à mão.
+            Log::channel('mercadopago')->critical('mercadopago.pix.pago_com_pedido_cancelado', [
+                'order_id' => $order->id,
+                'payment_id' => $payment->mercadopago_payment_id,
+            ]);
+
+            return;
+        }
+
+        if ($order) {
+            $this->finalizer->finalize($order);
+        }
     }
 
     private function handleSuccess(Payment $payment): void

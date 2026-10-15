@@ -138,7 +138,10 @@ onUnmounted(stop);
                     <!-- <picture>: o navegador baixa só a imagem do tamanho de tela certo. -->
                     <picture class="block h-full">
                         <source media="(min-width: 768px)" :srcset="banner.image_url">
-                        <img :src="banner.image_url_mobile || banner.image_url" :alt="banner.title || 'Banner promocional'"
+                        <img :src="banner.image_url_mobile || banner.image_url"
+                            :srcset="banner.image_srcset_mobile || undefined"
+                            :sizes="banner.image_srcset_mobile ? '100vw' : undefined"
+                            :alt="banner.title || 'Banner promocional'"
                             class="img-fluid md:object-cover" decoding="async" draggable="false"
                             loading="eager" :fetchpriority="index === 0 ? 'high' : 'low'">
                     </picture>

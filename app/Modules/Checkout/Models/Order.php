@@ -39,6 +39,31 @@ class Order extends Model
     /** site_origem do pedido feito no checkout do Beauty Kora (2026-10-14). */
     public const SITE_BEAUTYKORA = 'beautykora';
 
+    // orders.projeto_origem (pedido 2026-10-14): número do projeto para as
+    // métricas separadas. Marketplaces e notas avulsas são da KazaKora.
+    public const PROJETO_KAZAKORA = 1;
+
+    public const PROJETO_BEAUTYKORA = 2;
+
+    public const PROJETO_FERRAKORA = 3;
+
+    /** Projeto a partir de site_origem (nulo = kazakora.com e canais). */
+    public static function projetoDoSite(?string $site): int
+    {
+        return match ($site) {
+            self::SITE_BEAUTYKORA => self::PROJETO_BEAUTYKORA,
+            self::SITE_FERRAKORA => self::PROJETO_FERRAKORA,
+            default => self::PROJETO_KAZAKORA,
+        };
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Order $order) {
+            $order->projeto_origem = self::projetoDoSite($order->site_origem);
+        });
+    }
+
     // Mesmo vocabulário de canal que o módulo de Marketplace já usa
     // (product_channel_listings.channel, marketplace_accounts.channel) —
     // não um conjunto paralelo, pra "canal" ser um conceito único no app
@@ -218,6 +243,7 @@ class Order extends Model
             'visitante_latitude' => 'decimal:7',
             'visitante_longitude' => 'decimal:7',
             'fiscal_finality' => 'integer',
+            'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',
             'packed_at' => 'datetime',

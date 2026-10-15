@@ -690,6 +690,9 @@ class CheckoutController extends Controller
 
                 $order = Order::create([
                     'user_id' => $user->id,
+                    // Endereço salvo de onde veio a entrega: trava a exclusão
+                    // dele em "Meu Perfil" (pedido 2026-10-14).
+                    'address_id' => $address->id,
                     // Número do pedido no formato da Shopee (pedido 2026-10-11).
                     'external_order_id' => Order::gerarNumeroDaLoja(),
                     'status' => Order::STATUS_AWAITING_PAYMENT,

@@ -32,8 +32,8 @@ const formatDate = (value) => {
 };
 
 const fields = computed(() => [
-    { label: 'Nome completo', value: props.profileUser.name },
-    { label: 'E-mail', value: props.profileUser.email },
+    { label: 'Nome completo', value: props.profileUser.name, wide: true },
+    { label: 'E-mail', value: props.profileUser.email, wide: true },
     { label: 'Telefone', value: props.profileUser.phone || '—' },
     { label: 'CPF', value: props.profileUser.cpf ? maskCpf(props.profileUser.cpf) : '—' },
     { label: 'Data de nascimento', value: formatDate(props.profileUser.birth_date) },
@@ -61,23 +61,20 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
 </script>
 
 <template>
-    <div class="rounded-2xl border border-store-border bg-store-bg-raised p-6">
-        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-                <h4 class="mb-4 text-lg font-semibold">Dados pessoais</h4>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-x-16">
-                    <div v-for="field in fields" :key="field.label">
-                        <p class="mb-1 text-xs text-store-fg-muted">{{ field.label }}</p>
-                        <p class="text-sm font-medium">{{ field.value }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <button type="button" class="w-full shrink-0 rounded-full border border-store-border-strong px-4 py-2.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken lg:w-auto"
+    <div>
+        <div class="mb-4 flex items-center justify-between gap-4">
+            <h4 class="text-lg font-semibold">Dados pessoais</h4>
+            <button type="button" class="shrink-0 rounded-full border border-store-border-strong px-4 py-2 text-sm font-medium text-store-fg hover:bg-store-bg-sunken"
                 @click="openModal">
                 <i class="fas fa-pen mr-2 text-xs"></i>Editar
             </button>
         </div>
+        <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div v-for="field in fields" :key="field.label" :class="{ 'sm:col-span-2': field.wide }">
+                <dt class="mb-1 text-xs text-store-fg-muted">{{ field.label }}</dt>
+                <dd class="break-words text-sm font-medium">{{ field.value }}</dd>
+            </div>
+        </dl>
     </div>
 
     <Modal :open="isOpen" @close="closeModal">

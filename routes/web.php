@@ -81,6 +81,7 @@ use App\Modules\Checkout\Http\Controllers\TrackingController;
 use App\Modules\Contato\Http\Controllers\ContatoController;
 use App\Modules\Marketplace\Http\Controllers\ProductChannelController;
 use App\Modules\Notifications\Http\Controllers\NotificationController;
+use App\Modules\Profile\Http\Controllers\ProfileAddressController;
 use App\Modules\Profile\Http\Controllers\ProfileAvatarController;
 use App\Modules\Profile\Http\Controllers\ProfileController;
 use App\Modules\Profile\Http\Controllers\ProfilePasswordController;
@@ -227,6 +228,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/perfil/senha', [ProfilePasswordController::class, 'update'])->name('perfil.senha.atualizar');
     Route::post('/perfil/avatar', [ProfileAvatarController::class, 'store'])->name('perfil.avatar.adicionar');
     Route::delete('/perfil/avatar', [ProfileAvatarController::class, 'destroy'])->name('perfil.avatar.remover');
+    Route::post('/perfil/enderecos', [ProfileAddressController::class, 'store'])->name('perfil.enderecos.adicionar');
+    Route::put('/perfil/enderecos/{address}', [ProfileAddressController::class, 'update'])->whereNumber('address')->name('perfil.enderecos.atualizar');
+    Route::delete('/perfil/enderecos/{address}', [ProfileAddressController::class, 'destroy'])->whereNumber('address')->name('perfil.enderecos.remover');
 
     Route::get('/configuracoes', [SettingsController::class, 'edit'])->name('configuracoes.editar');
 

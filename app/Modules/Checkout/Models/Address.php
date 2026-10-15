@@ -5,6 +5,7 @@ namespace App\Modules\Checkout\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Address extends Model
 {
@@ -55,5 +56,11 @@ class Address extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** Pedidos entregues neste endereço: com algum, ele não pode ser excluído. */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 }

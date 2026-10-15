@@ -379,7 +379,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
                                         :aria-current="index === activeIndex" @click="activeIndex = index">
                                         <template v-if="item.type === 'video'">
-                                            <video :src="item.src" muted preload="metadata"></video>
+                                            <img v-if="videoPoster" :src="videoPoster" alt="">
+                                            <video v-else :src="item.src" muted preload="metadata"></video>
                                             <span class="play"><i class="fas fa-play"></i></span>
                                         </template>
                                         <img v-else :src="item.src" alt="" loading="lazy">

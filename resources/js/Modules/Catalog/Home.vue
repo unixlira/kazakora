@@ -182,17 +182,15 @@ onBeforeUnmount(() => observador?.disconnect());
         <template v-if="vitrine">
             <!-- Âncora da faixa promocional do topo. -->
             <span id="ofertas" class="block scroll-mt-28"></span>
-            <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" cinco slider centro
+            <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" cinco slider
                 subtitulo="Desconto extra só hoje, em produtos escolhidos a dedo."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
                 <template #acao>
-                    <!-- Celular: contador no meio, abaixo do título, com o aviso de tempo
-                         limitado embaixo (pedido 2026-10-15). Relógio pulsando. -->
-                    <div class="flex flex-col items-center gap-1.5">
-                        <span class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E02424] px-4 py-2 text-sm font-bold text-white md:py-1.5">
+                    <!-- Celular: largura toda, texto no centro e relógio pulsando (pedido 2026-10-10). -->
+                    <div class="flex w-full flex-col gap-1.5 md:w-auto md:items-end">
+                        <span class="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E02424] px-3 py-2 text-sm font-bold text-white md:inline-flex md:w-auto md:py-1.5">
                             <i class="fa-solid fa-stopwatch animate-pulse"></i> Termina em <span class="font-mono tabular-nums">{{ restanteOfertas }}</span>
                         </span>
-                        <span class="text-xs font-semibold uppercase tracking-wide text-[#E02424] md:hidden">Preço baixo por tempo limitado</span>
                         <!-- Página com todas as ofertas e filtros (pedido 2026-10-15). -->
                         <Link href="/ofertas" class="text-sm font-semibold text-store-accent hover:underline">
                             Ver todas as ofertas <i class="fas fa-arrow-right ml-1 text-xs"></i>

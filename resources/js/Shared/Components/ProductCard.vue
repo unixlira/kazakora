@@ -229,7 +229,7 @@ const precoPartes = computed(() => {
                  nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
             <div class="promo-badge">
                 <span class="promo-badge-icon"><i v-if="relampagoNoAr" class="fa-solid fa-bolt" aria-hidden="true"></i><template v-else>%</template></span>
-                <span v-if="relampagoNoAr" class="promo-badge-text" :aria-label="`Oferta Relâmpago, termina em ${relampago.texto.value}`">Relâmpago {{ relampago.texto.value }}</span>
+                <span v-if="relampagoNoAr" class="promo-badge-text" :aria-label="`Oferta Relâmpago, termina em ${relampago.texto.value}`"><span class="hidden md:inline">Relâmpago&nbsp;</span>{{ relampago.texto.value }}</span>
                 <span v-else class="promo-badge-text">{{ product.oferta_relampago ? 'Oferta Relâmpago' : (product.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
             </div>
 

@@ -42,6 +42,23 @@ class CustomerAggregator
     public const SORTABLE = ['name', 'orders_count', 'total_spent', 'last_purchase_at'];
 
     /**
+     * Dados separados por projeto (2026-10-14): KazaKora = pedidos sem
+     * site_origem (site e marketplaces); FerraKora e Beauty Kora = pedidos
+     * feitos no checkout de cada site. Nulo = todos.
+     */
+    public const PROJETOS = ['kazakora' => 'KazaKora', Order::SITE_FERRAKORA => 'FerraKora', Order::SITE_BEAUTYKORA => 'Beauty Kora'];
+
+    private ?string $projeto = null;
+
+    /** Só os pedidos do projeto (chave de PROJETOS); nulo ou desconhecido = todos. */
+    public function doProjeto(?string $projeto): static
+    {
+        $this->projeto = array_key_exists((string) $projeto, self::PROJETOS) ? $projeto : null;
+
+        return $this;
+    }
+
+    /**
      * @return Collection<int, array<string, mixed>>
      */
     public function list(): Collection
@@ -193,6 +210,8 @@ class CustomerAggregator
             ->leftJoin('users', function ($join) {
                 $join->on('users.id', '=', 'orders.user_id')->whereNull('users.deleted_at');
             })
+            ->when($this->projeto === 'kazakora', fn ($q) => $q->whereNull('orders.site_origem'))
+            ->when($this->projeto && $this->projeto !== 'kazakora', fn ($q) => $q->where('orders.site_origem', $this->projeto))
             ->select([
                 'orders.id', 'orders.origin', 'orders.status', 'orders.total', 'orders.created_at',
                 'orders.buyer_document', 'orders.shipping_name', 'orders.shipping_email', 'orders.shipping_phone',

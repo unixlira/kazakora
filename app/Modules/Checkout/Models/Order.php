@@ -39,6 +39,48 @@ class Order extends Model
     /** site_origem do pedido feito no checkout do Beauty Kora (2026-10-14). */
     public const SITE_BEAUTYKORA = 'beautykora';
 
+    /**
+     * Projetos com métrica própria (pedido do Lira 2026-10-14: cada projeto
+     * com seus números). O pedido do FerraKora/Beauty Kora continua com
+     * origin "loja" na operação (nota, expedição, etiqueta), mas nas
+     * métricas vira canal próprio pela chave de canalSql().
+     */
+    public const SITES = [self::SITE_FERRAKORA, self::SITE_BEAUTYKORA];
+
+    public const ROTULOS_SITE = [
+        self::SITE_FERRAKORA => 'FerraKora',
+        self::SITE_BEAUTYKORA => 'Beauty Kora',
+    ];
+
+    /**
+     * Chave de canal para MÉTRICA: o origin, exceto pedido do site com
+     * site_origem preenchido, que vira o próprio projeto ('ferrakora',
+     * 'beautykora'). 'loja' passa a ser só o kazakora.com.
+     */
+    public static function canalSql(string $orders = 'orders'): string
+    {
+        return "(CASE WHEN {$orders}.origin = '".self::ORIGIN_STORE."' AND {$orders}.site_origem IS NOT NULL"
+            ." THEN {$orders}.site_origem ELSE {$orders}.origin END)";
+    }
+
+    /**
+     * Filtra uma query (Eloquent ou Query Builder) pelo canal de métrica:
+     * 'loja' = site kazakora.com (site_origem nulo); 'ferrakora'/'beautykora'
+     * = loja com aquele site_origem; demais = origin.
+     */
+    public static function filtrarCanal($query, string $canal, string $orders = 'orders')
+    {
+        if ($canal === self::ORIGIN_STORE) {
+            return $query->where("{$orders}.origin", self::ORIGIN_STORE)->whereNull("{$orders}.site_origem");
+        }
+
+        if (in_array($canal, self::SITES, true)) {
+            return $query->where("{$orders}.origin", self::ORIGIN_STORE)->where("{$orders}.site_origem", $canal);
+        }
+
+        return $query->where("{$orders}.origin", $canal);
+    }
+
     // Mesmo vocabulário de canal que o módulo de Marketplace já usa
     // (product_channel_listings.channel, marketplace_accounts.channel) —
     // não um conjunto paralelo, pra "canal" ser um conceito único no app
@@ -350,6 +392,12 @@ class Order extends Model
         return $query->nonPurchaseReturn()
             ->where(fn ($q) => $q->where($this->qualifyColumn('origin'), '!=', self::ORIGIN_MANUAL_INVOICE)->orWhereNull($this->qualifyColumn('origin')))
             ->whereNull($this->qualifyColumn('estornado_em'));
+    }
+
+    /** Canal de métrica (ver canalSql/filtrarCanal). */
+    public function scopeDoCanal($query, string $canal)
+    {
+        return self::filtrarCanal($query, $canal, $this->getTable());
     }
 
     public function scopeNonPurchaseReturn($query)

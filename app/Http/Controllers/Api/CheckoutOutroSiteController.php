@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Services\PrecoMudouException;
 use App\Rules\CpfValido;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
@@ -184,12 +184,12 @@ abstract class CheckoutOutroSiteController extends Controller
      */
     public function meusPedidos(Request $request): JsonResponse
     {
-        $user = $request->user();
-        abort_unless($user instanceof User, 401);
+        // Conta do site (FerraKoraCliente, separada da KazaKora): os pedidos
+        // feitos no checkout do site com o e-mail dela.
+        $cliente = $request->user();
+        abort_unless($cliente instanceof FerraKoraCliente, 401);
 
-        $pedidos = Order::query()
-            ->where('site_origem', $this->checkout->site())
-            ->where('user_id', $user->id)
+        $pedidos = $cliente->pedidos()
             ->with(['items.product.images', 'items.product.parent.images', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
             ->latest('created_at')->latest('id')
             ->limit(50)

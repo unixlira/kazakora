@@ -26,7 +26,12 @@ class CustomerController extends Controller
         $sort = in_array($request->string('sort')->toString(), CustomerAggregator::SORTABLE, true) ? $request->string('sort')->toString() : null;
         $direction = $request->string('direction')->toString() === 'asc' ? 'asc' : 'desc';
 
+        // Dados separados por projeto (2026-10-14): abre na KazaKora.
+        $projeto = $request->string('projeto')->toString() ?: 'kazakora';
+        $projeto = $projeto === 'todos' || ! array_key_exists($projeto, CustomerAggregator::PROJETOS) ? 'todos' : $projeto;
+
         $paginator = $customers
+            ->doProjeto($projeto === 'todos' ? null : $projeto)
             ->paginate(
                 $request->string('search')->toString(),
                 $sort,
@@ -43,7 +48,9 @@ class CustomerController extends Controller
                 'search' => $request->string('search')->toString(),
                 'sort' => $sort,
                 'direction' => $direction,
+                'projeto' => $projeto,
             ],
+            'projetos' => CustomerAggregator::PROJETOS + ['todos' => 'Todos'],
         ]);
     }
 

@@ -4,14 +4,15 @@ namespace Tests\Feature\FerraKora;
 
 use App\Models\User;
 use App\Modules\BeautyKora\Models\BeautyKoraCliente;
+use App\Modules\FerraKora\Mail\NovaSenhaFerraKora;
 use App\Modules\FerraKora\Models\FerraKoraSessao;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
- * Conta do site FerraKora (pedido 2026-10-14): login com a conta da KazaKora
- * (tabela users) pelo menu de conta do topo, /api/ferrakora/*.
+ * Conta do site FerraKora (pedido 2026-10-14): conta própria do site
+ * (ferrakora_clientes), separada da KazaKora, pelo menu de conta do topo.
  */
 class FerraKoraContaTest extends TestCase
 {
@@ -25,16 +26,17 @@ class FerraKoraContaTest extends TestCase
             ->json('token');
     }
 
-    public function test_cadastro_cria_conta_da_kazakora_e_login_eu_e_atualizar(): void
+    public function test_cadastro_cria_conta_do_ferrakora_e_login_eu_e_atualizar(): void
     {
         $this->cadastrar();
 
-        $this->assertDatabaseHas('users', ['email' => 'joao@exemplo.com', 'role' => User::ROLE_CUSTOMER]);
+        $this->assertDatabaseHas('ferrakora_clientes', ['email' => 'joao@exemplo.com']);
+        $this->assertDatabaseMissing('users', ['email' => 'joao@exemplo.com']);
 
         $this->postJson('/api/ferrakora/login', ['email' => 'joao@exemplo.com', 'password' => 'errada00'])
             ->assertStatus(422);
 
-        $token = $this->postJson('/api/ferrakora/login', ['email' => 'joao@exemplo.com', 'password' => 'segredo123'])
+        $token = $this->postJson('/api/ferrakora/login', ['email' => 'JOAO@exemplo.com', 'password' => 'segredo123'])
             ->assertOk()->json('token');
 
         $this->withToken($token)->getJson('/api/ferrakora/eu')
@@ -48,26 +50,27 @@ class FerraKoraContaTest extends TestCase
         $this->assertDatabaseHas('ferrakora_sessoes', ['token_hash' => hash('sha256', $token)]);
     }
 
-    public function test_quem_ja_tem_conta_na_kazakora_entra_com_a_mesma_senha(): void
+    public function test_conta_da_kazakora_nao_entra_e_o_mesmo_email_pode_criar_conta_no_ferrakora(): void
     {
         User::factory()->create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'password' => 'senhaKazaKora1', 'role' => User::ROLE_CUSTOMER]);
 
+        $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaKazaKora1'])
+            ->assertStatus(422);
+
+        $this->postJson('/api/ferrakora/cadastro', ['name' => 'Maria', 'email' => 'maria@exemplo.com', 'password' => 'outrasenha1'])
+            ->assertCreated();
+
+        // A conta da KazaKora continua com a senha dela.
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('senhaKazaKora1', User::query()->where('email', 'maria@exemplo.com')->value('password')));
+
         $this->postJson('/api/ferrakora/cadastro', ['name' => 'Maria', 'email' => 'maria@exemplo.com', 'password' => 'outrasenha1'])
             ->assertStatus(422)->assertJsonValidationErrors('email');
-
-        $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaKazaKora1'])
-            ->assertOk()->assertJsonPath('user.name', 'Maria');
     }
 
-    public function test_senha_curta_e_conta_apagada_sao_recusadas(): void
+    public function test_senha_curta_e_recusada(): void
     {
         $this->postJson('/api/ferrakora/cadastro', ['name' => 'Outro', 'email' => 'outro@exemplo.com', 'password' => '123'])
             ->assertStatus(422)->assertJsonValidationErrors('password');
-
-        $apagada = User::factory()->create(['email' => 'apagada@exemplo.com', 'password' => 'segredo123']);
-        $apagada->delete();
-        $this->postJson('/api/ferrakora/login', ['email' => 'apagada@exemplo.com', 'password' => 'segredo123'])->assertStatus(422);
-        $this->postJson('/api/ferrakora/cadastro', ['name' => 'Nova', 'email' => 'apagada@exemplo.com', 'password' => 'segredo123'])->assertStatus(422);
     }
 
     public function test_sem_token_com_token_errado_ou_do_beauty_kora_nao_entra(): void
@@ -102,14 +105,36 @@ class FerraKoraContaTest extends TestCase
         $this->assertTrue(FerraKoraSessao::query()->firstOrFail()->expira_em->gt(now()->addDays(29)));
     }
 
-    public function test_esqueci_a_senha_manda_o_link_da_kazakora(): void
+    public function test_esqueci_a_senha_manda_o_link_do_ferrakora_e_nova_senha_entra(): void
     {
         Mail::fake();
-        User::factory()->create(['email' => 'maria@exemplo.com']);
+        $antigo = $this->cadastrar();
+        User::factory()->create(['email' => 'so-kazakora@exemplo.com']);
 
-        $this->postJson('/api/ferrakora/esqueci-senha', ['email' => 'maria@exemplo.com'])->assertOk();
+        $this->postJson('/api/ferrakora/esqueci-senha', ['email' => 'joao@exemplo.com'])->assertOk();
+        $this->postJson('/api/ferrakora/esqueci-senha', ['email' => 'so-kazakora@exemplo.com'])->assertOk();
         $this->postJson('/api/ferrakora/esqueci-senha', ['email' => 'ninguem@exemplo.com'])->assertOk();
 
-        Mail::assertSent(\App\Modules\Auth\Mail\PasswordResetMail::class, 1);
+        $link = null;
+        Mail::assertSent(NovaSenhaFerraKora::class, function (NovaSenhaFerraKora $mail) use (&$link) {
+            $link = $mail->link;
+
+            return $mail->hasTo('joao@exemplo.com');
+        });
+        Mail::assertSent(NovaSenhaFerraKora::class, 1);
+        Mail::assertNotSent(\App\Modules\Auth\Mail\PasswordResetMail::class);
+        $this->assertStringStartsWith('https://ferrakora.devlira.com.br/nova-senha?', $link);
+        parse_str(parse_url($link, PHP_URL_QUERY), $query);
+
+        $this->postJson('/api/ferrakora/nova-senha', ['email' => 'joao@exemplo.com', 'token' => 'errado', 'password' => 'novaSenha99'])->assertStatus(422);
+
+        $novo = $this->postJson('/api/ferrakora/nova-senha', ['email' => 'joao@exemplo.com', 'token' => $query['token'], 'password' => 'novaSenha99'])
+            ->assertOk()->json('token');
+        $this->withToken($novo)->getJson('/api/ferrakora/eu')->assertOk();
+        $this->withToken($antigo)->getJson('/api/ferrakora/eu')->assertUnauthorized();
+        $this->postJson('/api/ferrakora/login', ['email' => 'joao@exemplo.com', 'password' => 'novaSenha99'])->assertOk();
+
+        // O link vale uma vez só.
+        $this->postJson('/api/ferrakora/nova-senha', ['email' => 'joao@exemplo.com', 'token' => $query['token'], 'password' => 'outraSenha9'])->assertStatus(422);
     }
 }

@@ -18,12 +18,18 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    // Dados separados por projeto (2026-10-14): KazaKora, FerraKora, Beauty Kora ou todos.
+    projetos: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 const { visit, sortParams } = useServerTable('/admin/clientes', {
     search: props.filters.search ?? null,
     sort: props.filters.sort ?? null,
     direction: props.filters.sort ? props.filters.direction : null,
+    projeto: props.filters.projeto ?? null,
 });
 
 const customerRows = computed(() => props.customers?.data ?? []);
@@ -95,7 +101,19 @@ const columns = [
     <Head title="Clientes" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Clientes</h1>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-2xl font-bold">Clientes</h1>
+            <label class="flex items-center gap-2 text-sm text-slate-500">
+                Projeto
+                <select
+                    :value="filters.projeto ?? 'kazakora'"
+                    class="rounded-lg border-slate-300 text-sm"
+                    @change="visit({ projeto: $event.target.value })"
+                >
+                    <option v-for="(nome, chave) in projetos" :key="chave" :value="chave">{{ nome }}</option>
+                </select>
+            </label>
+        </div>
         <p class="mb-4 text-sm text-slate-500">
             Compradores reais, identificados pelo CPF/CNPJ — a mesma pessoa que compra pelo site e por um canal
             aparece uma vez só. Pedido sem documento identificado não entra aqui.

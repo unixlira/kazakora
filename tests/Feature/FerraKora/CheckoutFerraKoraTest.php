@@ -225,7 +225,7 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('pedido.cancelado', false);
     }
 
-    public function test_meus_pedidos_so_com_login_da_conta_kazakora(): void
+    public function test_meus_pedidos_so_com_login_da_conta_ferrakora(): void
     {
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 556, 'status' => 'pending']));
         $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
@@ -238,9 +238,14 @@ class CheckoutFerraKoraTest extends TestCase
         $this->getJson('/api/ferrakora/pedidos')->assertUnauthorized();
         $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09'])->assertStatus(405);
 
-        // A conta criada no checkout é a da KazaKora: entra com a senha dela.
+        // Dados separados por projeto: o comprador fica marcado como do FerraKora
+        // e a senha da KazaKora não entra no site.
+        $this->assertSame(Order::SITE_FERRAKORA, $order->user->site_origem);
         $order->user->forceFill(['password' => 'senhaDaMaria1'])->save();
-        $token = $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaDaMaria1'])->assertOk()->json('token');
+        $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaDaMaria1'])->assertStatus(422);
+
+        // A conta do FerraKora criada com o mesmo e-mail da compra vê o pedido.
+        $token = $this->postJson('/api/ferrakora/cadastro', ['name' => 'Maria', 'email' => 'maria@exemplo.com', 'password' => 'senhaFerra1'])->assertCreated()->json('token');
 
         $this->withToken($token)->getJson('/api/ferrakora/pedidos')
             ->assertOk()

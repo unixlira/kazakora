@@ -3,20 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Modules\Checkout\Models\Address;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
+use App\Modules\FerraKora\Models\FerraKoraEndereco;
 use App\Modules\Profile\Concerns\ValidaPerfil;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
  * Meu Perfil do site FerraKora (pedido 2026-10-14): o mesmo da KazaKora
- * (foto, dados pessoais, endereços e senha), pela API. A conta é a da
- * KazaKora (users), então o que muda aqui muda lá também.
+ * (foto, dados pessoais, endereços e senha), pela API. Dados separados por
+ * projeto: a conta é a própria do FerraKora (ferrakora_clientes), não muda
+ * nada na KazaKora; a resposta usa os mesmos nomes do Meu Perfil de lá.
  */
 class FerraKoraPerfilController extends Controller
 {
@@ -29,151 +29,142 @@ class FerraKoraPerfilController extends Controller
 
     public function update(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $cliente = $request->user();
 
         $dados = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'name' => ['required', 'string', 'max:120'],
+            'email' => ['required', 'email', 'max:191', Rule::unique('ferrakora_clientes', 'email')->ignore($cliente->id)],
             'phone' => ['nullable', 'string', 'max:20'],
-            'cpf' => ['nullable', 'string', 'max:14', function ($attribute, $value, $fail) use ($user): void {
-                if (User::cpfEmUso($value, $user->id)) {
-                    $fail('Este CPF já está em uso em outra conta.');
-                }
-            }],
+            'cpf' => ['nullable', 'string', 'max:14'],
             'birth_date' => ['nullable', 'date', 'before:today'],
+        ], [
+            'email.unique' => 'Já existe uma conta com este e-mail.',
         ]);
 
-        $user->update($dados);
+        $cliente->update([...$dados, 'email' => mb_strtolower(trim($dados['email']))]);
 
-        return $this->perfil($user->fresh(), ['user' => FerraKoraContaController::paraSite($user)]);
+        return $this->perfil($cliente->fresh(), ['user' => $cliente->fresh()->paraSite()]);
     }
 
     public function avatar(Request $request): JsonResponse
     {
         $this->validarAvatar($request);
-        $user = $request->user();
+        $cliente = $request->user();
 
-        if ($user->avatar_path) {
-            Storage::disk('public')->delete($user->avatar_path);
+        if ($cliente->avatar_path) {
+            Storage::disk('public')->delete($cliente->avatar_path);
         }
 
-        $user->update(['avatar_path' => $request->file('avatar')->store('avatars', 'public')]);
+        $cliente->update(['avatar_path' => $request->file('avatar')->store('ferrakora/avatars', 'public')]);
 
-        return $this->perfil($user);
+        return $this->perfil($cliente, ['user' => $cliente->paraSite()]);
     }
 
     public function removerAvatar(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $cliente = $request->user();
 
-        if ($user->avatar_path) {
-            Storage::disk('public')->delete($user->avatar_path);
-            $user->update(['avatar_path' => null]);
+        if ($cliente->avatar_path) {
+            Storage::disk('public')->delete($cliente->avatar_path);
+            $cliente->update(['avatar_path' => null]);
         }
 
-        return $this->perfil($user);
+        return $this->perfil($cliente, ['user' => $cliente->paraSite()]);
     }
 
     public function senha(Request $request): JsonResponse
     {
         $dados = $this->validarSenha($request);
 
-        $request->user()->forceFill([
-            'password' => Hash::make($dados['password']),
-            'deve_trocar_senha' => false,
-        ])->save();
+        // Cast "hashed" do modelo faz o hash.
+        $request->user()->update(['password' => $dados['password']]);
 
         return response()->json(['message' => 'Senha alterada com sucesso.']);
     }
 
     public function criarEndereco(Request $request): JsonResponse
     {
-        $user = $request->user();
+        $cliente = $request->user();
         $dados = $this->validarEndereco($request);
 
-        DB::transaction(function () use ($user, $dados) {
-            $principal = $dados['is_default'] || ! $user->addresses()->exists();
+        DB::transaction(function () use ($cliente, $dados) {
+            $principal = $dados['is_default'] || ! $cliente->enderecos()->exists();
 
             if ($principal) {
-                $user->addresses()->update(['is_default' => false]);
+                $cliente->enderecos()->update(['principal' => false]);
             }
 
-            $user->addresses()->create([...$dados, 'is_default' => $principal]);
+            $cliente->enderecos()->create([...FerraKoraEndereco::doPerfil($dados), 'principal' => $principal]);
         });
 
-        return response()->json(['enderecos' => $this->enderecos($user)], 201);
+        return response()->json(['enderecos' => $this->enderecos($cliente)], 201);
     }
 
     public function atualizarEndereco(Request $request, int $id): JsonResponse
     {
-        $user = $request->user();
-        $endereco = $this->doCliente($user, $id);
+        $cliente = $request->user();
+        $endereco = $cliente->enderecos()->whereKey($id)->firstOrFail();
         $dados = $this->validarEndereco($request);
 
-        DB::transaction(function () use ($user, $endereco, $dados) {
+        DB::transaction(function () use ($cliente, $endereco, $dados) {
             if ($dados['is_default']) {
-                $user->addresses()->whereKeyNot($endereco->id)->update(['is_default' => false]);
+                $cliente->enderecos()->whereKeyNot($endereco->id)->update(['principal' => false]);
             }
 
             // O principal só deixa de ser principal quando outro é escolhido.
-            $endereco->update([...$dados, 'is_default' => $dados['is_default'] || $endereco->is_default]);
+            $endereco->update([...FerraKoraEndereco::doPerfil($dados), 'principal' => $dados['is_default'] || $endereco->principal]);
         });
 
-        return response()->json(['enderecos' => $this->enderecos($user)]);
+        return response()->json(['enderecos' => $this->enderecos($cliente)]);
     }
 
     public function apagarEndereco(Request $request, int $id): JsonResponse
     {
-        $user = $request->user();
-        $endereco = $this->doCliente($user, $id);
+        $cliente = $request->user();
+        $endereco = $cliente->enderecos()->whereKey($id)->firstOrFail();
 
-        if ($endereco->orders()->exists()) {
+        if ($endereco->pedidos()->exists()) {
             return response()->json(['message' => 'Este endereço já foi usado em um pedido e não pode ser excluído. Você pode editá-lo.'], 422);
         }
 
-        DB::transaction(function () use ($user, $endereco) {
+        DB::transaction(function () use ($cliente, $endereco) {
             $endereco->delete();
 
-            if ($endereco->is_default) {
-                $user->addresses()->first()?->update(['is_default' => true]);
+            if ($endereco->principal) {
+                $cliente->enderecos()->latest('id')->first()?->update(['principal' => true]);
             }
         });
 
-        return response()->json(['enderecos' => $this->enderecos($user)]);
-    }
-
-    private function doCliente(User $user, int $id): Address
-    {
-        return $user->addresses()->whereKey($id)->firstOrFail();
+        return response()->json(['enderecos' => $this->enderecos($cliente)]);
     }
 
     /** @param array<string, mixed> $extra */
-    private function perfil(User $user, array $extra = []): JsonResponse
+    private function perfil(FerraKoraCliente $cliente, array $extra = []): JsonResponse
     {
         return response()->json([
             'perfil' => [
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'cpf' => $user->cpf,
-                'birth_date' => $user->birth_date?->format('Y-m-d'),
-                'avatar_url' => $user->avatar_url,
-                'initials' => $user->initials,
+                'name' => $cliente->name,
+                'email' => $cliente->email,
+                'phone' => $cliente->phone,
+                'cpf' => $cliente->cpf,
+                'birth_date' => $cliente->birth_date?->format('Y-m-d'),
+                'avatar_url' => $cliente->avatarUrl(),
+                'initials' => $cliente->iniciais(),
             ],
-            // Conta da loja que não é cliente (equipe) aparece como Super Cliente no site.
-            'selo' => $user->seloCliente() ?? 'super_cliente',
-            'enderecos' => $this->enderecos($user),
+            'selo' => $cliente->seloCliente(),
+            'enderecos' => $this->enderecos($cliente),
             ...$extra,
         ]);
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function enderecos(User $user): array
+    private function enderecos(FerraKoraCliente $cliente): array
     {
-        return $user->addresses()->withExists(['orders as tem_pedido'])->get()
-            ->map(fn (Address $endereco) => [
-                ...$endereco->only(['id', 'label', 'recipient_name', 'phone', 'zip', 'street', 'number', 'complement', 'neighborhood', 'city', 'state', 'is_default']),
-                'tem_pedido' => (bool) $endereco->tem_pedido,
-            ])->all();
+        return $cliente->enderecos()
+            ->orderByDesc('principal')
+            ->latest('id')
+            ->get()
+            ->map->paraPerfil()
+            ->all();
     }
 }

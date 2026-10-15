@@ -36,10 +36,14 @@ class PainelDeAlertas
         Order::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
         Order::ORIGIN_TIKTOK_SHOP => 'TikTok Shop',
         Order::ORIGIN_AMAZON => 'Amazon',
+        // Projetos com métrica própria (2026-10-14): chave de Order::canalSql().
+        // Sem ADS próprio em channel_ad_spends, então só vendas e visitas.
+        Order::SITE_FERRAKORA => Order::ROTULOS_SITE[Order::SITE_FERRAKORA],
+        Order::SITE_BEAUTYKORA => Order::ROTULOS_SITE[Order::SITE_BEAUTYKORA],
     ];
 
     /** Canais em que o status do pedido acompanha o envio (TikTok e Amazon vêm do Bling e ficam "pago"). */
-    private const CANAIS_COM_ENVIO = [Order::ORIGIN_STORE, Order::ORIGIN_SHOPEE, Order::ORIGIN_MERCADO_LIVRE];
+    private const CANAIS_COM_ENVIO = [Order::ORIGIN_STORE, Order::ORIGIN_SHOPEE, Order::ORIGIN_MERCADO_LIVRE, Order::SITE_FERRAKORA, Order::SITE_BEAUTYKORA];
 
     /** Queda de faturamento: % (atenção, crítico) e mínimo no período anterior para valer. */
     private const QUEDA_FATURAMENTO = [20, 40];
@@ -119,7 +123,9 @@ class PainelDeAlertas
                 $metricas = array_merge($metricas, $this->metricasDeAds($canal, $adsAtual[$canal] ?? null, $adsAnterior[$canal] ?? null, $a, $alertas));
             }
             if ($canal === Order::ORIGIN_STORE) {
-                $metricas = array_merge($metricas, $this->metricasDoSite($desde, $ate, $antes, $a, $p, $alertas));
+                $metricas = array_merge($metricas, $this->metricasDoSite(SiteVisit::SITE_LOJA, $canal, 'Site', '/admin/visitas-site', $desde, $ate, $antes, $a, $p, $alertas));
+            } elseif (isset(SiteVisit::OUTROS_SITES[$canal])) {
+                $metricas = array_merge($metricas, $this->metricasDoSite($canal, $canal, $nome, "/admin/visitas-{$canal}", $desde, $ate, $antes, $a, $p, $alertas));
             }
             if ($a === null && $p === null && ! isset($adsAtual[$canal])) {
                 continue;
@@ -155,10 +161,10 @@ class PainelDeAlertas
         $linhas = $this->margem->porCanal($desde, $ate);
 
         $cancelados = Order::query()->vendaEfetiva()
-            ->whereIn('origin', array_keys(self::CANAIS))
+            ->whereIn(DB::raw(Order::canalSql()), array_keys(self::CANAIS))
             ->where('created_at', '>=', $desde)->where('created_at', '<', $ate)
-            ->selectRaw("origin, COUNT(*) as total, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelados")
-            ->groupBy('origin')->get()->keyBy('origin');
+            ->selectRaw(Order::canalSql()." as canal, COUNT(*) as total, SUM(CASE WHEN orders.status = 'cancelled' THEN 1 ELSE 0 END) as cancelados")
+            ->groupBy(DB::raw(Order::canalSql()))->toBase()->get()->keyBy('canal');
 
         $devolucoes = DB::table('marketplace_returns')
             ->where('opened_at', '>=', $desde)->where('opened_at', '<', $ate)
@@ -348,10 +354,11 @@ class PainelDeAlertas
         return array_values($m);
     }
 
-    private function metricasDoSite(Carbon $desde, Carbon $ate, Carbon $antes, ?array $a, ?array $p, array &$alertas): array
+    /** Visitantes e conversão de um site (kazakora.com, FerraKora, Beauty Kora) contra os pedidos do próprio canal. */
+    private function metricasDoSite(string $site, string $canal, string $nome, string $link, Carbon $desde, Carbon $ate, Carbon $antes, ?array $a, ?array $p, array &$alertas): array
     {
-        $vAtual = $this->visitantes(SiteVisit::SITE_LOJA, $desde, $ate);
-        $vAnterior = $this->visitantes(SiteVisit::SITE_LOJA, $antes, $desde);
+        $vAtual = $this->visitantes($site, $desde, $ate);
+        $vAnterior = $this->visitantes($site, $antes, $desde);
         $conv = fn (int $v, ?array $vendas) => $v > 0 ? ($vendas['pedidos'] ?? 0) / $v * 100 : null;
 
         $m = array_column([
@@ -361,12 +368,12 @@ class PainelDeAlertas
 
         $var = $this->variacao($vAtual, $vAnterior);
         if ($vAnterior >= self::VISITANTES_MINIMOS && $var !== null && $var <= -self::QUEDA_VISITANTES) {
-            $alertas[] = $this->alerta(self::ATENCAO, 'site', Order::ORIGIN_STORE, 'Visitantes', "Site: visitantes únicos caíram {$this->pct(-$var)} ({$vAtual} contra {$vAnterior}).", 'Confira se alguma campanha (Meta, Google, Instagram) parou ou se o site ficou fora do ar.', 0, '/admin/visitas-site');
+            $alertas[] = $this->alerta(self::ATENCAO, 'site', $canal, 'Visitantes', "{$nome}: visitantes únicos caíram {$this->pct(-$var)} ({$vAtual} contra {$vAnterior}).", 'Confira se alguma campanha (Meta, Google, Instagram) parou ou se o site ficou fora do ar.', 0, $link);
             $m['visitantes']['nivel'] = self::ATENCAO;
         }
         $c = $conv($vAtual, $a);
         if ($vAtual >= self::VISITANTES_MINIMOS * 4 && $c !== null && $c < self::CONVERSAO_SITE_MINIMA) {
-            $alertas[] = $this->alerta(self::ATENCAO, 'site', Order::ORIGIN_STORE, 'Conversão do site', "Site: {$vAtual} visitantes e ".($a['pedidos'] ?? 0)." pedidos, conversão de {$this->pct($c)} (mín. {$this->pct(self::CONVERSAO_SITE_MINIMA)}).", 'Teste o caminho de compra no celular (produto, carrinho, frete, pagamento) e o preço contra os marketplaces.');
+            $alertas[] = $this->alerta(self::ATENCAO, 'site', $canal, 'Conversão do site', "{$nome}: {$vAtual} visitantes e ".($a['pedidos'] ?? 0)." pedidos, conversão de {$this->pct($c)} (mín. {$this->pct(self::CONVERSAO_SITE_MINIMA)}).", 'Teste o caminho de compra no celular (produto, carrinho, frete, pagamento) e o preço contra os marketplaces.');
             $m['conversao_site']['nivel'] = self::ATENCAO;
         }
 
@@ -377,6 +384,10 @@ class PainelDeAlertas
     private function outrosSites(Carbon $desde, Carbon $ate, Carbon $antes, array &$alertas, array &$canais): void
     {
         foreach (SiteVisit::OUTROS_SITES as $site => $nome) {
+            // Site com venda já entrou como canal (visitantes e conversão em metricasDoSite).
+            if (in_array($site, array_column($canais, 'canal'), true)) {
+                continue;
+            }
             $atual = $this->visitantes($site, $desde, $ate);
             $anterior = $this->visitantes($site, $antes, $desde);
             if ($atual === 0 && $anterior === 0) {
@@ -415,11 +426,11 @@ class PainelDeAlertas
     private function operacao(array &$alertas): void
     {
         $atrasados = Order::query()->vendaEfetiva()
-            ->whereIn('origin', self::CANAIS_COM_ENVIO)
+            ->whereIn(DB::raw(Order::canalSql()), self::CANAIS_COM_ENVIO)
             ->where('status', Order::STATUS_PAID)
             ->where('created_at', '<', now()->subHours(self::HORAS_ENVIO))
             ->where('created_at', '>=', now()->subDays(20))
-            ->selectRaw('origin, COUNT(*) as total')->groupBy('origin')->pluck('total', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')->groupBy(DB::raw(Order::canalSql()))->toBase()->pluck('total', 'canal');
         foreach ($atrasados as $canal => $total) {
             $total = (int) $total;
             $nivel = $total >= 5 ? self::CRITICO : self::ATENCAO;

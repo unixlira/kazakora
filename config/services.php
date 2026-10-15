@@ -451,6 +451,8 @@ return [
     // POST /api/ferrakora/visita (lista separada por vírgula, sem www).
     'ferrakora' => [
         'origens' => env('FERRAKORA_ORIGENS', 'ferrakora.devlira.com.br'),
+        // Endereço do site, para o link de nova senha da conta FerraKora (2026-10-14).
+        'url' => env('FERRAKORA_URL', 'https://ferrakora.devlira.com.br'),
         // Catálogo vindo do KazaKora (2026-10-13): token de quem envia o JSON
         // dos produtos em POST /api/ferrakora/produtos.
         'catalogo_token' => env('FERRAKORA_CATALOGO_TOKEN'),

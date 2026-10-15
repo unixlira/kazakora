@@ -52,11 +52,11 @@ class SerieDiaria
 
         DB::table('orders')
             ->whereIn('orders.status', ContributionMargin::REVENUE_STATUSES)
-            ->whereIn('orders.origin', $canais)
+            ->whereIn(DB::raw(Order::canalSql()), $canais)
             ->where('orders.created_at', '>=', $desde)->where('orders.created_at', '<', $ate)
             ->tap(fn ($q) => ContributionMargin::semDevolucao($q))
-            ->selectRaw('orders.origin as canal, DATE(orders.created_at) as dia, COUNT(*) as pedidos, COALESCE(SUM('.ContributionMargin::receitaSql().'), 0) as receita')
-            ->groupBy('orders.origin', DB::raw('DATE(orders.created_at)'))
+            ->selectRaw(Order::canalSql().' as canal, DATE(orders.created_at) as dia, COUNT(*) as pedidos, COALESCE(SUM('.ContributionMargin::receitaSql().'), 0) as receita')
+            ->groupBy(DB::raw(Order::canalSql()), DB::raw('DATE(orders.created_at)'))
             ->get()
             ->each(function ($l) use ($por) {
                 $por($l->canal, 'pedidos', (string) $l->dia, (int) $l->pedidos);
@@ -64,14 +64,14 @@ class SerieDiaria
             });
 
         Order::query()->vendaEfetiva()
-            ->whereIn('origin', $canais)
+            ->whereIn(DB::raw(Order::canalSql()), $canais)
             ->where('created_at', '>=', $desde)->where('created_at', '<', $ate)
-            ->selectRaw("origin, DATE(created_at) as dia, COUNT(*) as total, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelados")
-            ->groupBy('origin', DB::raw('DATE(created_at)'))
+            ->selectRaw(Order::canalSql()." as canal, DATE(orders.created_at) as dia, COUNT(*) as total, SUM(CASE WHEN orders.status = 'cancelled' THEN 1 ELSE 0 END) as cancelados")
+            ->groupBy(DB::raw(Order::canalSql()), DB::raw('DATE(orders.created_at)'))
             ->toBase()->get()
             ->each(function ($l) use ($por) {
-                $por($l->origin, 'todos', (string) $l->dia, (int) $l->total);
-                $por($l->origin, 'cancelados', (string) $l->dia, (int) $l->cancelados);
+                $por($l->canal, 'todos', (string) $l->dia, (int) $l->total);
+                $por($l->canal, 'cancelados', (string) $l->dia, (int) $l->cancelados);
             });
 
         ChannelAdSpend::query()

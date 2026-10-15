@@ -9,8 +9,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Cliente logado no site FerraKora (pedido 2026-10-14): Bearer de uma
- * FerraKoraSessao válida, cujo dono é a conta da KazaKora (User). Token do
- * Sanctum (ApiPartner, cliente do Beauty Kora) não entra.
+ * FerraKoraSessao válida, cujo dono é a conta do site (FerraKoraCliente),
+ * separada da KazaKora. Token do Sanctum (ApiPartner, Beauty Kora) não entra.
  */
 class AuthenticateFerraKoraCliente
 {
@@ -24,7 +24,7 @@ class AuthenticateFerraKoraCliente
 
         $sessao->marcarUso();
         $request->attributes->set('ferrakora_sessao', $sessao);
-        $request->setUserResolver(fn () => $sessao->user);
+        $request->setUserResolver(fn () => $sessao->cliente);
 
         return $next($request);
     }

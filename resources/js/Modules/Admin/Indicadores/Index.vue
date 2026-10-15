@@ -20,11 +20,12 @@ const props = defineProps({
 });
 
 // Cor fixa por canal, a mesma paleta validada do Gerenciador.
-const CANAIS = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja'];
-const NOMES = { loja: 'KazaKora', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', amazon: 'Amazon' };
+// FerraKora e Beauty Kora (2026-10-14): canal próprio, só aparecem com dado.
+const CANAIS = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja', 'ferrakora', 'beautykora'];
+const NOMES = { loja: 'KazaKora', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', amazon: 'Amazon', ferrakora: 'FerraKora', beautykora: 'Beauty Kora' };
 const CORES = {
-    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4' },
-    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181' },
+    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
+    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
 };
 const CHROME = {
     light: { grid: '#e6e2e3', text: '#6b5f63', accent: '#2b2326', context: '#b3aaad', surface: '#ffffff' },

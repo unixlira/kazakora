@@ -35,6 +35,9 @@ const CHANNEL_STYLES = {
     mercado_livre: { label: 'Mercado Livre', color: '#2968C8' },
     tiktok_shop: { label: 'TikTok Shop', color: '#321a4a' },
     amazon: { label: 'Amazon', color: '#FF9900' },
+    loja: { label: 'KazaKora (site)', color: '#04D7B6' },
+    ferrakora: { label: 'FerraKora', color: '#F27A2A' },
+    beautykora: { label: 'Beauty Kora', color: '#d63384' },
     nota_fiscal_avulsa: { label: 'NF Avulsa', color: '#64748b' },
 };
 

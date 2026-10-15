@@ -229,11 +229,12 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
     });
 
-    // Conta do cliente (2026-10-14): login com a conta da KazaKora (users) e
-    // Meus pedidos só para quem entrou.
+    // Conta do cliente (2026-10-14): conta própria do FerraKora (ferrakora_clientes),
+    // separada da KazaKora, e Meus pedidos só para quem entrou.
     Route::post('cadastro', [FerraKoraContaController::class, 'cadastro'])->middleware('throttle:10,1,fk-conta-cadastro')->name('cadastro');
     Route::post('login', [FerraKoraContaController::class, 'login'])->middleware('throttle:10,1,fk-conta-login')->name('login');
     Route::post('esqueci-senha', [FerraKoraContaController::class, 'esqueciSenha'])->middleware('throttle:5,1,fk-conta-senha')->name('esqueci-senha');
+    Route::post('nova-senha', [FerraKoraContaController::class, 'novaSenha'])->middleware('throttle:10,1,fk-conta-nova-senha')->name('nova-senha');
     Route::middleware([AuthenticateFerraKoraCliente::class, 'throttle:60,1,fk-conta'])->group(function () {
         Route::get('eu', [FerraKoraContaController::class, 'eu'])->name('eu');
         Route::patch('eu', [FerraKoraContaController::class, 'atualizar'])->name('atualizar');

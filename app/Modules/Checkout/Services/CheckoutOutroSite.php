@@ -3,7 +3,6 @@
 namespace App\Modules\Checkout\Services;
 
 use App\Models\User;
-use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
@@ -536,9 +535,14 @@ abstract class CheckoutOutroSite
     }
 
     /**
-     * Conta do cliente na KazaKora. Mesmo e-mail e mesmo CPF (ou conta sem
-     * CPF) = mesma conta; e-mail ou CPF de outra conta = aviso. Conta nova
-     * recebe a senha temporária no e-mail, como no checkout da loja.
+     * Comprador do pedido (users: nota fiscal, expedição e cupom precisam).
+     * Mesmo e-mail e mesmo CPF (ou cadastro sem CPF) = mesmo comprador;
+     * e-mail ou CPF de outro cadastro = aviso.
+     *
+     * Dados separados por projeto (2026-10-14): cadastro novo leva
+     * site_origem do site e NÃO recebe a senha da KazaKora por e-mail. O
+     * login do site é a conta dele (FerraKora: ferrakora_clientes; Beauty
+     * Kora: beautykora_clientes), criada no próprio site com o mesmo e-mail.
      */
     private function cliente(array $cliente): User
     {
@@ -548,7 +552,7 @@ abstract class CheckoutOutroSite
         if ($conta) {
             $cpfDaConta = preg_replace('/\D/', '', (string) $conta->cpf);
             if ($conta->trashed() || ($cpfDaConta !== '' && $cpfDaConta !== $cpf)) {
-                throw ValidationException::withMessages(['cliente.email' => 'Este e-mail já tem cadastro na KazaKora com outro CPF. Confira o CPF ou use outro e-mail.']);
+                throw ValidationException::withMessages(['cliente.email' => 'Este e-mail já tem cadastro com outro CPF. Confira o CPF ou use outro e-mail.']);
             }
             if ($cpfDaConta === '') {
                 if (User::cpfEmUso($cpf, $conta->id)) {
@@ -567,20 +571,15 @@ abstract class CheckoutOutroSite
             throw ValidationException::withMessages(['cliente.cpf' => 'Este CPF já tem cadastro com outro e-mail. Use o e-mail da sua conta.']);
         }
 
-        $senhaTemporaria = Str::password(10, symbols: false);
         $user = User::create([
             'name' => $cliente['name'],
             'email' => trim($cliente['email']),
             'cpf' => $cpf,
             'phone' => $cliente['phone'],
-            'password' => Hash::make($senhaTemporaria),
+            'password' => Hash::make(Str::random(40)),
             'role' => User::ROLE_CUSTOMER,
         ]);
-        $user->forceFill(['deve_trocar_senha' => true])->save();
-
-        DB::afterCommit(function () use ($user, $senhaTemporaria) {
-            rescue(fn () => Mail::to($user->email)->send(new WelcomeEmail($user, $senhaTemporaria)));
-        });
+        $user->forceFill(['site_origem' => $this->site(), 'deve_trocar_senha' => true])->save();
 
         return $user;
     }

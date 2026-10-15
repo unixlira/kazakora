@@ -282,15 +282,16 @@ const REDES = [
                 <BuscaInstantanea v-model="search" class="hidden max-w-xs flex-1 lg:block" @buscar="submitSearch" />
 
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
-                    <Link href="/favoritos" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
-                        <i class="far fa-heart text-base"></i>
-                        <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
-                    </Link>
+                    <!-- Celular: lupa, coração, carrinho, da esquerda para a direita (pedido 2026-10-15). -->
                     <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden"
                         :aria-label="buscaMobileAberta ? 'Fechar busca' : 'Buscar'" :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile"
                         @click="alternarBuscaMobile">
                         <i class="fas text-base" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
                     </button>
+                    <Link href="/favoritos" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
+                        <i class="far fa-heart text-base"></i>
+                        <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
+                    </Link>
                     <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
                         <i class="fas fa-cart-shopping text-base"></i>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>

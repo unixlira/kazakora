@@ -731,7 +731,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 h2 { font-size: 28px; font-weight: 500; margin-bottom: 16px; }
 .pd2 p { margin: 0 0 14px; }
 .pd2 .sem-margem { margin: 0; }
-.pd2 .wrap { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+/* Mesma largura do cabeçalho e do resto da loja (max-w-[1320px] px-6): com 1400px o produto passava do menu. */
+.pd2 .wrap { max-width: 1320px; margin: 0 auto; padding: 0 24px; }
 .pd2 .card { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 20px; }
 .pd2 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 

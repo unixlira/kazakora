@@ -182,11 +182,11 @@ class DashboardController extends Controller
         return Order::query()->vendaEfetiva()
             ->where('created_at', '>=', $startOfMonth)
             // Canal de métrica (2026-10-14): FerraKora e Beauty Kora saem do "site".
-            ->selectRaw(Order::canalSql().' as origin, SUM('.ContributionMargin::receitaSql().') as total')
+            ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
             ->whereIn('status', self::PAID_STATUSES)
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->get()
-            ->map(fn ($row) => ['origin' => $row->origin, 'total' => (float) $row->total])
+            ->map(fn ($row) => ['origin' => $row->canal, 'total' => (float) $row->total])
             ->all();
     }
 

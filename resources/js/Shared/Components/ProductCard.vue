@@ -273,6 +273,13 @@ const precoPartes = computed(() => {
                     </div>
                     <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
                     <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
+                    <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
+                         computador fica do lado do preço; no celular vira a última linha
+                         do card. Laranja da KazaKora, hover no laranja mais forte. -->
+                    <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
+                        class="ml-auto hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        Detalhes
+                    </Link>
                 </div>
                 <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
                 <p v-if="product.stock <= 0" class="mt-1.5 flex h-5 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
@@ -286,6 +293,11 @@ const precoPartes = computed(() => {
                         <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
                     </span>
                 </p>
+                <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
+                    class="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
+                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    Ver detalhes
+                </Link>
             </div>
         </div>
     </article>

@@ -424,12 +424,24 @@ const REDES = [
                     <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-3 py-2.5 text-left text-red-600" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                 </nav>
 
-                <nav class="mt-4 flex flex-col gap-3 border-t border-store-border pt-4">
-                    <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
-                    <a href="/?todos=1#produtos" class="text-sm font-medium">Produtos</a>
-                    <Link href="/rastreio" class="text-sm font-medium">Rastrear pedido</Link>
-                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium"><i class="fa-brands fa-whatsapp mr-1.5 text-[#25D366]"></i>Fale conosco no WhatsApp</a>
-                    <Link href="/fale-conosco" class="text-sm font-medium"><i class="fa-regular fa-envelope mr-1.5 text-[#f27a2a]"></i>Mandar mensagem</Link>
+                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15, sem o WhatsApp). -->
+                <nav class="menu-mobile-atalhos mt-4 grid grid-cols-4 gap-2 border-t border-store-border pt-4">
+                    <a href="/#categorias" class="menu-mobile-icone">
+                        <i class="fas fa-table-cells-large text-lg"></i>
+                        <span>Departamentos</span>
+                    </a>
+                    <a href="/?todos=1#produtos" class="menu-mobile-icone">
+                        <i class="fas fa-box-open text-lg"></i>
+                        <span>Produtos</span>
+                    </a>
+                    <Link href="/rastreio" class="menu-mobile-icone">
+                        <i class="fas fa-truck-fast text-lg"></i>
+                        <span>Rastrear pedido</span>
+                    </Link>
+                    <Link href="/fale-conosco" class="menu-mobile-icone">
+                        <i class="fa-regular fa-envelope text-lg"></i>
+                        <span>Mandar mensagem</span>
+                    </Link>
                 </nav>
             </div>
         </header>

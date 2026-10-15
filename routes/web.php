@@ -66,6 +66,7 @@ use App\Modules\Admin\Http\Controllers\StockMovementController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
 use App\Modules\Admin\Http\Controllers\FerraKoraProdutoController;
+use App\Modules\Admin\Http\Controllers\OfertaRelampagoController;
 use App\Modules\Admin\Http\Controllers\OutroSiteVisitLogController;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Admin\Http\Controllers\BeautyKoraPedidoController;
@@ -316,6 +317,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('cupons/{coupon}/disparo', [CouponController::class, 'disparo'])->middleware('permission:cadastros.view')->name('cupons.disparo');
     Route::get('cupons/{coupon}/publico', [CouponController::class, 'contarPublico'])->middleware('permission:cadastros.view')->name('cupons.publico');
     Route::post('cupons/{coupon}/disparo', [CouponController::class, 'disparar'])->middleware('permission:cadastros.create')->name('cupons.disparar');
+
+    // Ofertas Relâmpago por empresa (pedido 2026-10-14): mesmas permissões dos cupons.
+    Route::get('ofertas-relampago', [OfertaRelampagoController::class, 'index'])->middleware('permission:cadastros.view')->name('ofertas-relampago.listar');
+    Route::get('ofertas-relampago/produtos', [OfertaRelampagoController::class, 'produtos'])->middleware('permission:cadastros.view')->name('ofertas-relampago.produtos');
+    Route::get('ofertas-relampago/previa', [OfertaRelampagoController::class, 'previa'])->middleware('permission:cadastros.view')->name('ofertas-relampago.previa');
+    Route::post('ofertas-relampago', [OfertaRelampagoController::class, 'store'])->middleware('permission:cadastros.create')->name('ofertas-relampago.armazenar');
+    Route::put('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'update'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.atualizar');
+    Route::patch('ofertas-relampago/{oferta}/ativo', [OfertaRelampagoController::class, 'alternar'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.alternar');
+    Route::delete('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'destroy'])->whereNumber('oferta')->middleware('permission:cadastros.delete')->name('ofertas-relampago.excluir');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

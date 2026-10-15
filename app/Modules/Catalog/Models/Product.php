@@ -44,7 +44,7 @@ class Product extends Model
         'is_new_release',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'preco_sem_oferta', 'preco_de'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de'];
 
     protected function casts(): array
     {
@@ -69,18 +69,19 @@ class Product extends Model
 
     public function getHasDiscountAttribute(): bool
     {
-        return (bool) ($this->discount_percentage || $this->discount_amount) || $this->precoOfertaDeHoje() !== null;
+        return (bool) ($this->discount_percentage || $this->discount_amount) || $this->emOferta();
     }
 
     /**
      * Preço da loja. Com oferta do dia (pedido 2026-10-10) vale o preço da
      * oferta, já conferido sem prejuízo na escolha do dia. Se o preço do
-     * produto baixou depois disso, fica o menor.
+     * produto baixou depois disso, fica o menor. Com Oferta Relâmpago do
+     * site da requisição (pedido 2026-10-14) vale o menor dos dois.
      */
     public function getFinalPriceAttribute(): float
     {
         $base = $this->precoSemOferta();
-        $oferta = $this->precoOfertaDeHoje();
+        $oferta = $this->precoPromocional();
 
         return round(($oferta !== null ? min($base, $oferta) : $base) + $this->freteEmbutido(), 2);
     }
@@ -114,10 +115,45 @@ class Product extends Model
         return $this->precoOfertaDeHoje() !== null;
     }
 
-    /** Preço normal (riscado no card) quando está em oferta hoje; null fora da oferta. */
+    /**
+     * Oferta Relâmpago do pai no site da requisição, no ar agora (pedido
+     * 2026-10-14). Sem site (admin, marketplaces, filas), nenhuma.
+     */
+    public function relampagoNoAr(): ?OfertaRelampago
+    {
+        return $this->id ? (OfertaRelampago::ativasAgora()[$this->parent_product_id ?? $this->id] ?? null) : null;
+    }
+
+    /** Preço do anúncio (sem frete) com a Oferta Relâmpago; null fora dela. */
+    public function precoRelampago(): ?float
+    {
+        return $this->relampagoNoAr()?->precoPara($this);
+    }
+
+    /** {id, inicio, fim, desconto_pct} da Oferta Relâmpago no ar (card da loja); null fora dela. */
+    public function getOfertaRelampagoAttribute(): ?array
+    {
+        return $this->relampagoNoAr()?->paraApi();
+    }
+
+    /** Menor preço entre Oferta do Dia e Oferta Relâmpago (sem frete); null sem nenhuma. */
+    public function precoPromocional(): ?float
+    {
+        $precos = array_filter([$this->precoOfertaDeHoje(), $this->precoRelampago()], fn ($preco) => $preco !== null);
+
+        return $precos === [] ? null : min($precos);
+    }
+
+    /** Em Oferta do Dia ou Relâmpago: não acumula com desconto por quantidade nem com cupom. */
+    public function emOferta(): bool
+    {
+        return $this->precoPromocional() !== null;
+    }
+
+    /** Preço normal (riscado no card) quando está em oferta (do dia ou relâmpago); null fora da oferta. */
     public function getPrecoSemOfertaAttribute(): ?float
     {
-        return $this->precoOfertaDeHoje() !== null ? round($this->precoSemOferta() + $this->freteEmbutido(), 2) : null;
+        return $this->emOferta() ? round($this->precoSemOferta() + $this->freteEmbutido(), 2) : null;
     }
 
     /** Preço sem a oferta do dia — o que vale para os marketplaces. */
@@ -273,9 +309,9 @@ class Product extends Model
             ->filter(fn (ProductQuantityDiscount $discount) => $discount->min_quantity <= $quantity)
             ->last();
 
-        // Oferta do dia não acumula com desconto por quantidade (a conta de
-        // lucro da oferta foi feita sem ele).
-        if (! $tier || $this->precoOfertaDeHoje() !== null) {
+        // Oferta do dia e Oferta Relâmpago não acumulam com desconto por
+        // quantidade (a conta de lucro da oferta foi feita sem ele).
+        if (! $tier || $this->emOferta()) {
             return $this->final_price;
         }
 

@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Services;
 
 use App\Modules\Catalog\Models\Product;
+use App\Support\SiteAtual;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -22,6 +23,11 @@ use Illuminate\Support\Str;
  *
  * Cada site tem a sua tabela (qual produto aparece, título, ordem, ativo) e
  * pode acrescentar campos próprios no item recebido e no produto devolvido.
+ *
+ * Oferta Relâmpago (pedido 2026-10-14): o produto sai montado com o site
+ * dele em SiteAtual, então o final_price já traz a relâmpago só deste site;
+ * "oferta_relampago" no produto diz qual é ({id, inicio, fim, desconto_pct})
+ * ou null, e o preço sem ela vai riscado em prices[0].amount.
  */
 abstract class CatalogoOutroSite
 {
@@ -40,6 +46,9 @@ abstract class CatalogoOutroSite
 
     /** @return class-string<Model> model da tabela do site (product_id, titulo, ordem, ativo) */
     abstract protected function modelo(): string;
+
+    /** Site do catálogo em SiteAtual (ferrakora, beautykora): define a Oferta Relâmpago que vale. */
+    abstract public function site(): string;
 
     /** Colunas próprias do site gravadas a partir do item do JSON (ex.: categoria). */
     protected function camposDoItem(array $item): array
@@ -165,8 +174,13 @@ abstract class CatalogoOutroSite
             ->orderBy('id');
     }
 
-    /** Pai + variações no formato de GET /store/{id}/products da Hostinger. */
+    /** Pai + variações no formato de GET /store/{id}/products da Hostinger, com os preços deste site. */
     private function formatar(Model $registro): ?array
+    {
+        return app(SiteAtual::class)->durante($this->site(), fn () => $this->montar($registro));
+    }
+
+    private function montar(Model $registro): ?array
     {
         /** @var Product|null $pai */
         $pai = $registro->product;
@@ -246,6 +260,7 @@ abstract class CatalogoOutroSite
             'seo_settings' => null,
             'origem' => 'kazakora',
             'updated_at' => $grupo->max('updated_at')?->toIso8601String(),
+            'oferta_relampago' => $pai->relampagoNoAr()?->paraApi(),
             ...$this->camposExtras($registro, $pai),
         ];
     }
@@ -253,10 +268,13 @@ abstract class CatalogoOutroSite
     /**
      * Preço cheio e preço de venda em centavos.
      *
-     * Sem frete embutido: cadastro e preço sem a oferta do dia (Beauty Kora).
+     * Sem frete embutido: cadastro e preço sem a oferta do dia (Beauty Kora),
+     * com a Oferta Relâmpago do site quando houver (2026-10-14).
      * Com frete embutido: os mesmos números do card da loja KazaKora, o
      * final_price (frete da região + oferta do dia) e, riscado, o preço sem a
-     * oferta ou o preço "de" do desconto, ambos com o mesmo frete.
+     * oferta ou o preço "de" do desconto, ambos com o mesmo frete. Oferta
+     * Relâmpago (2026-10-14) entra no final_price e conta como oferta: riscado
+     * fica o preço sem ela.
      * Os dois levam o acréscimo do site (acrescimo()), só sobre o anúncio.
      *
      * @return array{0: int, 1: int}
@@ -265,7 +283,7 @@ abstract class CatalogoOutroSite
     {
         if (! $this->comFreteEmbutido()) {
             $cheio = self::comAcrescimo($produto, (float) $produto->price, $acrescimo);
-            $final = self::comAcrescimo($produto, $produto->precoSemOferta(), $acrescimo);
+            $final = self::comAcrescimo($produto, min($produto->precoSemOferta(), $produto->precoRelampago() ?? INF), $acrescimo);
 
             return [(int) round($cheio * 100), (int) round($final * 100)];
         }

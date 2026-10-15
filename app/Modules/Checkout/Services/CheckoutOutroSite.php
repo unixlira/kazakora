@@ -16,6 +16,7 @@ use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\FerraKora\Services\PrecoMudouException;
+use App\Support\SiteAtual;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
@@ -115,6 +116,8 @@ abstract class CheckoutOutroSite
         $frete = app(FreteEmbutido::class);
         $frete->ligar();
         $frete->usarCep($cep);
+        // Oferta Relâmpago deste site (2026-10-14): o mesmo preço que o card mostrou.
+        app(SiteAtual::class)->definir($this->site());
 
         $quantidades = [];
         foreach ($pedidos as $i => $pedido) {
@@ -293,10 +296,10 @@ abstract class CheckoutOutroSite
         return [$cupom, null];
     }
 
-    /** Base do cupom, como na KazaKora: o carrinho sem os produtos da Oferta do Dia. */
+    /** Base do cupom, como na KazaKora: o carrinho sem os produtos da Oferta do Dia nem da Relâmpago (2026-10-14). */
     private static function subtotalParaCupom(Collection $itens): float
     {
-        return round($itens->reject(fn (array $item) => $item['product']->oferta_do_dia)->sum('subtotal'), 2);
+        return round($itens->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
     }
 
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */

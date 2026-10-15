@@ -40,7 +40,16 @@ class ChannelInvoiceSubmissionService
     ) {
     }
 
-    public function submit(Order $order): ChannelInvoiceSubmission
+    /**
+     * BUG REAL 2026-10-15 (Shopee #3140, #3141, #3142): duas filas enviaram
+     * a mesma nota quase juntas. A 1ª foi aceita (01:10:40) e a Shopee
+     * organizou o envio (01:10:47); a 2ª foi recusada ("Upload is not
+     * accepted after shipment is arranged") e gravou ERRO por cima do
+     * SENT, o que travou a confirmação de envio e a etiqueta. Envio
+     * automático não reenvia o que o canal já recebeu; só o botão
+     * "reenviar" do admin força ($reenviar = true).
+     */
+    public function submit(Order $order, bool $reenviar = false): ChannelInvoiceSubmission
     {
         $order->loadMissing('invoice');
         $invoice = $order->invoice;
@@ -50,7 +59,8 @@ class ChannelInvoiceSubmissionService
             ['status' => ChannelInvoiceSubmission::STATUS_PENDING],
         );
 
-        if ($submission->status === ChannelInvoiceSubmission::STATUS_ACCEPTED) {
+        if ($submission->status === ChannelInvoiceSubmission::STATUS_ACCEPTED
+            || ($submission->status === ChannelInvoiceSubmission::STATUS_SENT && ! $reenviar)) {
             return $submission;
         }
 

@@ -30,7 +30,7 @@
     @endif
 
     @if ($pdfUrl)
-        @include('emails.partials.botao', ['url' => $pdfUrl, 'texto' => 'Abrir o boleto (PDF)', 'cor' => '#F27A2A'])
+        @include('emails.partials.botao', ['url' => $pdfUrl, 'texto' => 'Abrir boleto PDF', 'cor' => '#F27A2A'])
     @endif
 
     @include('emails.partials.botao', ['url' => route('pedidos.meus'), 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])

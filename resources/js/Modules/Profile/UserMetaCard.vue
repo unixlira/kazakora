@@ -37,13 +37,13 @@ const changeRole = (event) => {
 </script>
 
 <template>
-    <div class="rounded-2xl border border-store-border bg-store-bg-raised p-6">
-        <div class="flex flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
+    <div>
+        <div class="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
             <AvatarManager :profile-user="profileUser" :editable="isOwnProfile" />
 
             <div>
                 <h4 class="text-lg font-semibold">{{ profileUser.name }}</h4>
-                <div class="mt-1 flex flex-col items-center gap-1 text-sm text-store-fg-muted sm:flex-row sm:gap-3">
+                <div class="mt-1 flex flex-col items-center gap-1 text-sm text-store-fg-muted sm:flex-row sm:flex-wrap sm:gap-x-3">
                     <select v-if="canManageUsers && !isOwnProfile" :value="profileUser.role"
                         class="rounded-full border border-store-border-strong bg-store-bg px-3 py-1 text-xs font-medium text-store-fg focus:border-store-accent focus:outline-none"
                         @change="changeRole">
@@ -51,7 +51,7 @@ const changeRole = (event) => {
                     </select>
                     <span v-else>{{ roleLabel }}</span>
                     <span class="hidden h-3.5 w-px bg-store-border-strong sm:block"></span>
-                    <span>{{ profileUser.email }}</span>
+                    <span class="break-all">{{ profileUser.email }}</span>
                 </div>
             </div>
         </div>

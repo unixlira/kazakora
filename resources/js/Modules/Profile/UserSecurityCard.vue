@@ -30,7 +30,8 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
     <div class="rounded-2xl border border-store-border bg-store-bg-raised p-6">
         <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
-                <h4 class="mb-4 text-lg font-semibold">Segurança</h4>
+                <h4 class="mb-1 text-lg font-semibold">Segurança</h4>
+                <p class="mb-4 text-sm text-store-fg-muted">Troque a senha sempre que achar que alguém pode ter acesso a ela.</p>
                 <div>
                     <p class="mb-1 text-xs text-store-fg-muted">Senha</p>
                     <p class="font-store-mono text-sm font-medium">••••••••</p>

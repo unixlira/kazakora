@@ -93,10 +93,16 @@ class CatalogController extends Controller
 
         // Ordenar (pedido 2026-10-10). Preço = o que o cliente paga (já com desconto).
         $ordenar = (string) $request->query('ordenar', '');
-        $precoSql = 'CASE WHEN discount_percentage > 0 THEN price * (1 - discount_percentage / 100.0) WHEN discount_amount > 0 THEN price - discount_amount ELSE price END';
+        // Desde 2026-10-15 pelo preço do card (com oferta e frete embutido),
+        // como o filtro de preço: pelo cadastro a ordem saía trocada na tela.
+        if (in_array($ordenar, ['menor_preco', 'maior_preco'], true)) {
+            $porPreco = $produtosQuePassam()->sortBy(fn (Product $produto) => $produto->final_price, SORT_REGULAR, $ordenar === 'maior_preco')->pluck('id')->values();
+            if ($porPreco->isNotEmpty()) {
+                $baseQuery->orderByRaw('CASE id '.$porPreco->map(fn () => 'WHEN ? THEN ?')->implode(' ').' END',
+                    $porPreco->flatMap(fn (int $id, int $posicao) => [$id, $posicao])->all());
+            }
+        }
         $baseQuery
-            ->when($ordenar === 'menor_preco', fn ($query) => $query->orderByRaw($precoSql.' asc'))
-            ->when($ordenar === 'maior_preco', fn ($query) => $query->orderByRaw($precoSql.' desc'))
             ->when($ordenar === 'nome', fn ($query) => $query->orderBy('name'))
             // Na busca, quem começa com o termo vem primeiro.
             ->when($ordenar === '' && $search->isNotEmpty(), fn ($query) => $query->orderByRaw(

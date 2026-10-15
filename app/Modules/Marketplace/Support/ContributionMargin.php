@@ -98,7 +98,7 @@ class ContributionMargin
 
         return $query
             ->selectRaw(Order::canalSql().' as channel, COALESCE(SUM(correios_pre_postagens.postage_price), 0) as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('channel')
             ->pluck('total', 'channel')
             ->map(fn ($total, $canal) => round((float) $total - ($turbo[$canal] ?? 0), 2))
             ->all();
@@ -124,7 +124,7 @@ class ContributionMargin
                 ->where('correios_pre_postagens.status', CorreiosPrePostagem::STATUS_GERADA))
             ->tap(fn ($q) => self::semDevolucao($q))
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(orders.shipping_cost), 0) as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal')
             ->map(fn ($total) => (float) $total)
             ->all();
@@ -199,14 +199,14 @@ class ContributionMargin
             ->tap(fn ($q) => self::semDevolucao($q));
 
         $receita = $vendas()->selectRaw(Order::canalSql().' as canal, COUNT(*) as pedidos, COALESCE(SUM('.self::receitaSql().'), 0) as receita')
-            ->groupBy(DB::raw(Order::canalSql()))->get()->keyBy('canal');
+            ->groupBy('canal')->get()->keyBy('canal');
         $custo = $vendas()->join('order_items', 'order_items.order_id', '=', 'orders.id')
             ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM('.self::custoSql().'), 0) as total')
-            ->groupBy(DB::raw(Order::canalSql()))->pluck('total', 'canal');
+            ->groupBy('canal')->pluck('total', 'canal');
         $taxas = $vendas()->join('order_channel_fees', 'order_channel_fees.order_id', '=', 'orders.id')
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(order_channel_fees.fee_amount), 0) as total')
-            ->groupBy(DB::raw(Order::canalSql()))->pluck('total', 'canal');
+            ->groupBy('canal')->pluck('total', 'canal');
         $correios = self::correios($desde, $ate, porCanal: true);
         $ads = ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())

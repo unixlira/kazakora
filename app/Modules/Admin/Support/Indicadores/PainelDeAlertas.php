@@ -164,7 +164,7 @@ class PainelDeAlertas
             ->whereIn(DB::raw(Order::canalSql()), array_keys(self::CANAIS))
             ->where('created_at', '>=', $desde)->where('created_at', '<', $ate)
             ->selectRaw(Order::canalSql()." as canal, COUNT(*) as total, SUM(CASE WHEN orders.status = 'cancelled' THEN 1 ELSE 0 END) as cancelados")
-            ->groupBy(DB::raw(Order::canalSql()))->toBase()->get()->keyBy('canal');
+            ->groupBy('canal')->toBase()->get()->keyBy('canal');
 
         $devolucoes = DB::table('marketplace_returns')
             ->where('opened_at', '>=', $desde)->where('opened_at', '<', $ate)
@@ -430,7 +430,7 @@ class PainelDeAlertas
             ->where('status', Order::STATUS_PAID)
             ->where('created_at', '<', now()->subHours(self::HORAS_ENVIO))
             ->where('created_at', '>=', now()->subDays(20))
-            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')->groupBy(DB::raw(Order::canalSql()))->toBase()->pluck('total', 'canal');
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')->groupBy('canal')->toBase()->pluck('total', 'canal');
         foreach ($atrasados as $canal => $total) {
             $total = (int) $total;
             $nivel = $total >= 5 ? self::CRITICO : self::ATENCAO;

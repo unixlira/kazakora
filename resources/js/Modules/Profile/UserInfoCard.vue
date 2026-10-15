@@ -26,17 +26,17 @@ const closeModal = () => (isOpen.value = false);
 const toDateInputValue = (value) => (value ? value.slice(0, 10) : '');
 
 const formatDate = (value) => {
-    if (!value) return '—';
+    if (!value) return null;
     const [year, month, day] = toDateInputValue(value).split('-');
     return `${day}/${month}/${year}`;
 };
 
+// Nome e e-mail já aparecem no topo do card; aqui ficam só os demais dados.
+// O e-mail continua editável no modal.
 const fields = computed(() => [
-    { label: 'Nome completo', value: props.profileUser.name },
-    { label: 'E-mail', value: props.profileUser.email },
-    { label: 'Telefone', value: props.profileUser.phone || '—' },
-    { label: 'CPF', value: props.profileUser.cpf ? maskCpf(props.profileUser.cpf) : '—' },
-    { label: 'Data de nascimento', value: formatDate(props.profileUser.birth_date) },
+    { label: 'Telefone', value: props.profileUser.phone || null },
+    { label: 'CPF', value: props.profileUser.cpf ? maskCpf(props.profileUser.cpf) : null },
+    { label: 'Data de nascimento', value: formatDate(props.profileUser.birth_date), wide: true },
 ]);
 
 const form = useForm({
@@ -61,53 +61,51 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
 </script>
 
 <template>
-    <div class="rounded-2xl border border-store-border bg-store-bg-raised p-6">
-        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-                <h4 class="mb-4 text-lg font-semibold">Dados pessoais</h4>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-x-16">
-                    <div v-for="field in fields" :key="field.label">
-                        <p class="mb-1 text-xs text-store-fg-muted">{{ field.label }}</p>
-                        <p class="text-sm font-medium">{{ field.value }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <button type="button" class="w-full shrink-0 rounded-full border border-store-border-strong px-4 py-2.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken lg:w-auto"
+    <div>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <h2 class="text-lg font-semibold">Dados pessoais</h2>
+            <button type="button" class="shrink-0 rounded-full border border-store-border-strong px-4 py-2 text-sm font-medium text-store-fg hover:bg-store-bg-sunken"
                 @click="openModal">
-                <i class="fas fa-pen mr-2 text-xs"></i>Editar
+                <i class="fas fa-pen mr-2 text-xs" aria-hidden="true"></i>Editar
             </button>
         </div>
+        <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div v-for="field in fields" :key="field.label" :class="{ 'sm:col-span-2': field.wide }">
+                <dt class="mb-1 text-xs text-store-fg-muted">{{ field.label }}</dt>
+                <dd v-if="field.value" class="break-words text-sm font-medium">{{ field.value }}</dd>
+                <dd v-else class="text-sm text-store-fg-muted">Não informado</dd>
+            </div>
+        </dl>
     </div>
 
     <Modal :open="isOpen" @close="closeModal">
-        <h4 class="mb-1 text-xl font-semibold">Editar dados pessoais</h4>
+        <h2 class="mb-1 text-xl font-semibold">Editar dados pessoais</h2>
         <p class="mb-6 text-sm text-store-fg-muted">Atualize as informações para manter o perfil em dia.</p>
 
         <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="submit">
             <div class="sm:col-span-2">
-                <label class="text-sm font-medium">Nome completo</label>
-                <input v-model="form.name" type="text" required :class="inputClass">
+                <label for="perfil-nome" class="text-sm font-medium">Nome completo</label>
+                <input id="perfil-nome" v-model="form.name" type="text" required autocomplete="name" :class="inputClass">
                 <p v-if="form.errors.name" class="mt-1 text-xs text-red-600">{{ form.errors.name }}</p>
             </div>
             <div class="sm:col-span-2">
-                <label class="text-sm font-medium">E-mail</label>
-                <input v-model="form.email" type="email" required :class="inputClass">
+                <label for="perfil-email" class="text-sm font-medium">E-mail</label>
+                <input id="perfil-email" v-model="form.email" type="email" required autocomplete="email" :class="inputClass">
                 <p v-if="form.errors.email" class="mt-1 text-xs text-red-600">{{ form.errors.email }}</p>
             </div>
             <div>
-                <label class="text-sm font-medium">Telefone</label>
-                <input v-model="form.phone" type="text" placeholder="(11) 91234-5678" :class="inputClass">
+                <label for="perfil-telefone" class="text-sm font-medium">Telefone</label>
+                <input id="perfil-telefone" v-model="form.phone" type="tel" autocomplete="tel" placeholder="(11) 91234-5678" :class="inputClass">
                 <p v-if="form.errors.phone" class="mt-1 text-xs text-red-600">{{ form.errors.phone }}</p>
             </div>
             <div>
-                <label class="text-sm font-medium">CPF</label>
-                <input :value="form.cpf" type="text" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" :class="inputClass" @input="onCpfInput">
+                <label for="perfil-cpf" class="text-sm font-medium">CPF</label>
+                <input id="perfil-cpf" :value="form.cpf" type="text" inputmode="numeric" maxlength="14" autocomplete="off" placeholder="000.000.000-00" :class="inputClass" @input="onCpfInput">
                 <p v-if="form.errors.cpf" class="mt-1 text-xs text-red-600">{{ form.errors.cpf }}</p>
             </div>
             <div class="sm:col-span-2">
-                <label class="text-sm font-medium">Data de nascimento</label>
-                <input v-model="form.birth_date" type="date" :class="inputClass">
+                <label for="perfil-nascimento" class="text-sm font-medium">Data de nascimento</label>
+                <input id="perfil-nascimento" v-model="form.birth_date" type="date" autocomplete="bday" :class="inputClass">
                 <p v-if="form.errors.birth_date" class="mt-1 text-xs text-red-600">{{ form.errors.birth_date }}</p>
             </div>
 

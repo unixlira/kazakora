@@ -1415,8 +1415,41 @@ class ShopeeDriver extends AbstractMarketplaceDriver
 
             return ['status' => 'sent', 'external_reference' => $order->external_order_id, 'response' => $response];
         } catch (ShopeeException $exception) {
+            if ($this->shopeeJaTemANota($order, $invoice)) {
+                return ['status' => 'sent', 'external_reference' => $order->external_order_id, 'response' => ['ja_estava_no_canal' => true, 'recusa' => $exception->getMessage()]];
+            }
+
             return ['status' => 'error', 'external_reference' => null, 'response' => ['error' => $exception->getMessage(), 'context' => $exception->context]];
         }
+    }
+
+    /**
+     * Recusa do upload nem sempre é falta de nota: depois que o envio é
+     * organizado a Shopee recusa qualquer upload ("Upload is not accepted
+     * after shipment is arranged") mesmo já tendo a NOSSA nota (caso
+     * #3140-#3142, 2026-10-15). Se o pedido lá já traz a mesma chave e ela
+     * não está inválida, a nota está entregue.
+     */
+    private function shopeeJaTemANota(Order $order, Invoice $invoice): bool
+    {
+        if (! $invoice->chave_acesso) {
+            return false;
+        }
+
+        try {
+            $detalhe = $this->client->get('/api/v2/order/get_order_detail', [
+                'order_sn_list' => $order->external_order_id,
+                'response_optional_fields' => 'invoice_data',
+            ]);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $nota = $detalhe['response']['order_list'][0]['invoice_data'] ?? null;
+
+        return is_array($nota)
+            && ($nota['access_key'] ?? null) === $invoice->chave_acesso
+            && strtolower((string) ($nota['status'] ?? '')) !== 'invalid';
     }
 
     /**

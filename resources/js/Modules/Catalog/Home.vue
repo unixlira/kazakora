@@ -76,9 +76,9 @@ const listTitle = computed(() => {
 });
 
 
-// Filtros da lista (pedido 2026-10-15, o mesmo layout de /ofertas): coluna
-// lateral no computador e FILTRAR com tela cinza e Confirmar no celular. A
-// busca continua junto; sem busca, aba nem filtro, ?todos=1 mantém a lista.
+// Filtros da lista (pedido 2026-10-15, o mesmo de /ofertas): barra de
+// filtros única (modelo do FerraKora nas cores da KazaKora). A busca
+// continua junto; sem busca, aba nem filtro, ?todos=1 mantém a lista.
 const href = (filtros) => {
     const params = new URLSearchParams();
     const tudo = { search: props.filters.search, ...filtros };
@@ -87,9 +87,10 @@ const href = (filtros) => {
     return `/?${params.toString()}#produtos`;
 };
 const filtroHref = (mudancas) => href({ ...props.filters, ...mudancas });
-const ordenarPor = (valor) => router.get(filtroHref({ ordenar: valor || null }).split('#')[0], {}, { preserveScroll: true });
 
-const temFiltro = computed(() => ['search', 'tipo', 'categoria', 'desconto', 'preco'].some((chave) => props.filters[chave]));
+const contagem = computed(() => `${props.products?.total ?? 0} produto${(props.products?.total ?? 0) === 1 ? '' : 's'}`);
+// A busca vira etiqueta com X junto dos filtros ligados.
+const etiquetasExtras = computed(() => (props.filters.search ? [{ label: `"${props.filters.search}"`, href: filtroHref({ search: null }) }] : []));
 
 const ORDENS = computed(() => [
     { valor: null, label: props.filters.search ? 'Mais relevantes' : 'Mais recentes' },
@@ -102,13 +103,14 @@ const gruposFiltro = computed(() => [
     {
         chave: 'categoria',
         titulo: 'Departamentos',
+        rotulo: 'Departamento',
         opcoes: [
             { valor: null, label: 'Todos os departamentos', labelPainel: 'Todos' },
             ...props.departamentosFiltro.map((d) => ({ valor: d.slug, label: d.name, total: d.total })),
         ],
     },
     { chave: 'tipo', titulo: 'Mostrar', opcoes: TIPO_TABS.map((tab) => ({ valor: tab.key, label: tab.label })) },
-    { chave: 'desconto', titulo: 'Desconto', opcoes: DESCONTOS },
+    { chave: 'desconto', titulo: 'Desconto', prefixoEtiqueta: 'Desconto de ', opcoes: DESCONTOS },
     { chave: 'preco', titulo: 'Preço', opcoes: PRECOS },
 ]);
 
@@ -252,30 +254,11 @@ onBeforeUnmount(() => observador?.disconnect());
                 <h1 class="text-2xl font-bold md:text-3xl">{{ listTitle }}</h1>
             </div>
 
-            <div class="flex flex-col gap-8 lg:flex-row">
-                <!-- Computador: coluna de filtros (modelo Beauty Kora, igual a /ofertas) -->
-                <FiltrosCatalogo modo="lateral" :grupos="gruposFiltro" :filters="filters" :href="href" />
+            <FiltrosCatalogo :grupos="gruposFiltro" :ordens="ORDENS" :filters="filters" :href="href" :contagem="contagem"
+                :extras="etiquetasExtras" limpar-href="/?todos=1#produtos" />
 
-                <div class="min-w-0 flex-1">
-                    <div class="mb-5 flex items-center justify-between gap-4">
-                        <p class="text-sm text-store-fg-muted">
-                            {{ products?.total ?? 0 }} produto{{ (products?.total ?? 0) === 1 ? '' : 's' }}
-                            <Link v-if="temFiltro" href="/?todos=1#produtos" class="ml-2 font-semibold text-store-accent hover:underline">Limpar filtros</Link>
-                        </p>
-
-                        <!-- Celular: a palavra FILTRAR abre a tela cinza com Confirmar -->
-                        <div class="lg:hidden">
-                            <FiltrosCatalogo modo="botao" :grupos="gruposFiltro" :ordens="ORDENS" :filters="filters" :href="href" />
-                        </div>
-
-                        <label class="hidden items-center gap-2 text-sm text-store-fg-muted lg:flex">
-                            Ordenar por
-                            <select :value="filters.ordenar ?? ''" class="rounded-lg border border-store-border-strong bg-store-bg-raised px-3 py-2 text-sm text-store-fg" @change="ordenarPor($event.target.value)">
-                                <option v-for="op in ORDENS" :key="op.label" :value="op.valor ?? ''">{{ op.label }}</option>
-                            </select>
-                        </label>
-                    </div>
-
+            <div>
+                <div>
                     <div v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
                         <i class="fas fa-magnifying-glass mb-3 text-3xl text-store-fg-faint"></i>
                         <p class="text-base font-semibold text-store-fg">

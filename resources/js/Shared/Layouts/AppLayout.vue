@@ -1,6 +1,6 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { atualizarFavoritos, totalFavoritos } from '@/Shared/favoritos';
 import { useClickOutside } from '@/Shared/useClickOutside';
@@ -99,6 +99,22 @@ const submitSearch = () => {
     router.get('/', termo ? { search: termo } : { todos: 1 });
 };
 
+// Busca do celular recolhida atrás da lupa (pedido 2026-10-15): a lupa abre a
+// barra e vira "X"; o "X" fecha, limpa o termo e, se havia busca na tela, volta
+// para a vitrine sem filtro. Já abre aberta quando a página veio de uma busca.
+const buscaMobileAberta = ref(termoDaUrl() !== '');
+const buscaMobileInput = ref(null);
+const alternarBuscaMobile = () => {
+    if (!buscaMobileAberta.value) {
+        buscaMobileAberta.value = true;
+        nextTick(() => buscaMobileInput.value?.focus());
+        return;
+    }
+    buscaMobileAberta.value = false;
+    search.value = '';
+    if (termoDaUrl() !== '') router.get('/');
+};
+
 const discountModalOpen = ref(false);
 const closeDiscountModal = () => {
     discountModalOpen.value = false;
@@ -168,12 +184,13 @@ const REDES = [
         <div ref="marcaDoTopo" aria-hidden="true"></div>
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
             :class="{ 'loja-topo-fume': topoFlutuando }">
-            <div class="mx-auto flex max-w-[1320px] items-center gap-8 px-4 py-4 md:px-6">
+            <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
+            <div class="mx-auto flex max-w-[1320px] items-center gap-4 px-3 py-2 md:px-6 lg:gap-8 lg:py-4">
                 <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->
                 <Link href="/" class="shrink-0 no-underline" aria-label="KazaKora — início">
                     <picture>
                         <source media="(prefers-color-scheme: dark)" :srcset="marca.logoRodape">
-                        <img :src="marca.logoNav" alt="KazaKora" class="h-7 w-auto md:h-8" width="160" height="28" fetchpriority="high">
+                        <img :src="marca.logoNav" alt="KazaKora" class="h-6 w-auto md:h-8" width="160" height="28" fetchpriority="high">
                     </picture>
                 </Link>
 
@@ -266,18 +283,23 @@ const REDES = [
                     </button>
                 </form>
 
-                <div class="ml-auto flex items-center gap-1 lg:ml-0">
-                    <Link href="/favoritos" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
+                <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
+                    <Link href="/favoritos" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
                         <i class="far fa-heart text-base"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
-                    <Link href="/carrinho" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
+                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden"
+                        :aria-label="buscaMobileAberta ? 'Fechar busca' : 'Buscar'" :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile"
+                        @click="alternarBuscaMobile">
+                        <i class="fas text-base" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
+                    </button>
+                    <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
                         <i class="fas fa-cart-shopping text-base"></i>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>
 
                     <div v-if="user" ref="notifMenuRef" class="relative">
-                        <button type="button" class="relative flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Notificações" @click="notifMenuOpen = !notifMenuOpen">
+                        <button type="button" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Notificações" @click="notifMenuOpen = !notifMenuOpen">
                             <i class="far fa-bell text-base"></i>
                             <span v-if="unreadNotifications > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ unreadNotifications }}</span>
                         </button>
@@ -316,11 +338,11 @@ const REDES = [
                     </div>
 
                     <div ref="userMenuRef" class="relative">
-                        <button v-if="user" type="button" class="flex h-10 w-10 items-center justify-center rounded-full hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
+                        <button v-if="user" type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
                             <img v-if="user.avatar_url" :src="user.avatar_url" class="h-8 w-8 rounded-full object-cover" alt="">
                             <span v-else class="flex h-8 w-8 items-center justify-center rounded-full bg-store-accent-soft text-xs font-semibold text-store-accent-strong">{{ user.initials }}</span>
                         </button>
-                        <Link v-else href="/entrar" class="flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
+                        <Link v-else href="/entrar" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
                             <i class="far fa-user text-base"></i>
                         </Link>
 
@@ -341,20 +363,25 @@ const REDES = [
                         </div>
                     </div>
 
-                    <button type="button" class="flex h-10 w-10 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" @click="mobileMenuOpen = !mobileMenuOpen">
+                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" @click="mobileMenuOpen = !mobileMenuOpen">
                         <i class="fas fa-bars text-base"></i>
                     </button>
                 </div>
             </div>
 
-            <!-- Busca sempre visível no celular -->
-            <form class="relative px-4 pb-3 lg:hidden" role="search" @submit.prevent="submitSearch">
-                <input v-model="search" type="search" placeholder="O que você procura?" enterkeyhint="search"
-                    class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2.5 pl-4 pr-11 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
-                <button type="submit" class="absolute right-5 top-1/2 flex h-8 w-8 -translate-y-[calc(50%+6px)] items-center justify-center rounded-full text-store-fg-muted" aria-label="Buscar">
-                    <i class="fas fa-magnifying-glass text-sm"></i>
-                </button>
-            </form>
+            <!-- Busca do celular: abre e fecha pela lupa do topo (pedido 2026-10-15). -->
+            <div id="busca-mobile" class="grid transition-[grid-template-rows] duration-200 ease-out lg:hidden"
+                :class="buscaMobileAberta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'" :inert="!buscaMobileAberta">
+                <div class="overflow-hidden">
+                    <form class="relative px-3 pb-2.5" role="search" @submit.prevent="submitSearch" @keydown.esc="alternarBuscaMobile">
+                        <input ref="buscaMobileInput" v-model="search" type="search" placeholder="O que você procura?" enterkeyhint="search"
+                            class="w-full rounded-full border border-store-border-strong bg-store-bg-raised py-2 pl-4 pr-11 text-sm text-store-fg placeholder:text-store-fg-faint focus:border-store-accent focus:outline-none">
+                        <button type="submit" class="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-[calc(50%+5px)] items-center justify-center rounded-full text-store-fg-muted" aria-label="Buscar">
+                            <i class="fas fa-magnifying-glass text-sm"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
 
             <div v-if="mobileMenuOpen" class="border-t border-store-border px-4 py-4 lg:hidden">
                 <nav class="flex flex-col gap-3">

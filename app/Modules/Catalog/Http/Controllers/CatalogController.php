@@ -397,7 +397,8 @@ class CatalogController extends Controller
             : self::PRODUCT_PAGE_VERSION;
 
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
-            'product' => $product,
+            // Custo é dado interno: não vai no JSON da página pública.
+            'product' => $product->makeHidden('cost_price'),
             'variations' => $variations,
             'galeria' => $galeria,
             'reviews' => $reviews,

@@ -28,6 +28,11 @@ use Illuminate\Support\Collection;
  */
 class OfertaRelampago extends Model
 {
+    /** Duração quando o Lira só escolhe o início (pedido 2026-10-15). */
+    public const DURACAO_PADRAO_HORAS = 24;
+
+    public const DURACAO_MAXIMA_HORAS = 168;
+
     protected $table = 'ofertas_relampago';
 
     protected $fillable = ['site', 'product_id', 'desconto_pct', 'inicio_em', 'fim_em', 'ativo', 'user_id'];

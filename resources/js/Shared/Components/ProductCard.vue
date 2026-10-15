@@ -186,7 +186,10 @@ const precoPartes = computed(() => {
 </script>
 
 <template>
-    <article class="group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
+    <!-- Fundo preto com letra branca (pedido 2026-10-15); no computador o card
+         fica laranja no hover. O hover só vale de md para cima, então no celular
+         o card é sempre preto. -->
+    <article class="group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-black bg-black text-white shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)] md:hover:border-[#f27a2a] md:hover:bg-[#f27a2a]">
         <div class="relative aspect-square cursor-pointer bg-white"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">
@@ -240,7 +243,7 @@ const precoPartes = computed(() => {
             <!-- Nome: 2 linhas no celular, 3 no computador; se não couber, "… Ver mais"
                  fecha a última linha (ajustarTitulo). Altura fixa = cards alinhados. -->
             <div class="relative">
-                <h4 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h4>
+                <h4 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:underline" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h4>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
             <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
@@ -262,35 +265,35 @@ const precoPartes = computed(() => {
                 <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
                     <template v-if="precoAntes">
                         <span class="rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
-                        <s class="truncate text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>
+                        <s class="truncate text-xs text-white/60 md:group-hover:text-white/80">{{ formatPrice(precoAntes) }}</s>
                     </template>
                 </div>
                 <div class="flex h-[30px] items-end gap-x-1.5 overflow-hidden">
-                    <div class="flex shrink-0 items-start leading-none text-store-fg">
+                    <div class="flex shrink-0 items-start leading-none text-white">
                         <span class="mr-0.5 mt-[3px] text-sm font-medium md:text-base">R$</span>
                         <span class="text-[22px] font-semibold tracking-tight md:text-2xl">{{ precoPartes.inteiro }}</span>
                         <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
                     </div>
                     <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
-                    <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
+                    <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-white/70 md:text-xs md:group-hover:text-white/90">{{ vendidosTexto(product.vendidos) }}</span>
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
                          computador fica do lado do preço; no celular vira a última linha
                          do card. Laranja da KazaKora, hover no laranja mais forte. -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="ml-auto hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        class="ml-auto hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex md:group-hover:bg-black md:group-hover:hover:bg-neutral-800">
                         Detalhes
                     </Link>
                 </div>
                 <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
-                <p v-if="product.stock <= 0" class="mt-1.5 flex h-5 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
+                <p v-if="product.stock <= 0" class="mt-1.5 flex h-5 items-center text-xs font-semibold text-red-500 md:text-sm md:group-hover:text-white">Esgotado</p>
                 <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
-                <p v-else class="mt-1.5 flex h-5 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
+                <p v-else class="mt-1.5 flex h-5 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm md:group-hover:text-white">
                     Frete grátis
                     <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
                     <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
                     <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
                         <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>
-                        <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
+                        <span class="ml-1 font-semibold text-white/70">{{ nota.toFixed(1).replace('.', ',') }}</span>
                     </span>
                 </p>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"

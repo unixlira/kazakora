@@ -1,7 +1,6 @@
 <script setup>
 // Ofertas Relâmpago por empresa (pedido 2026-10-14): desconto % num produto,
-// por 24h a partir do início escolhido (pedido 2026-10-15; dá para escolher
-// outra duração ou um fim exato), só no site escolhido (KazaKora, FerraKora, Beauty
+// de um horário a outro, só no site escolhido (KazaKora, FerraKora, Beauty
 // Kora). A empresa fica na URL (?site=). Prévia com o lucro estimado por
 // unidade (mesma conta da Oferta do Dia); prejuízo avisa, não bloqueia.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
@@ -31,10 +30,7 @@ const pad = (n) => String(n).padStart(2, '0');
 const paraInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const deInput = (v) => (v ? new Date(v) : new Date());
 
-// Duração: 24h é o padrão (pedido 2026-10-15); 'exato' mostra o campo Fim.
-const DURACOES = [2, 6, 12, 24, 48, 72];
-const DURACAO_PADRAO = 24;
-const vazio = () => ({ product_id: null, desconto_pct: 10, inicio_em: '', duracao: DURACAO_PADRAO, fim_em: '' });
+const vazio = () => ({ product_id: null, desconto_pct: 10, inicio_em: '', fim_em: '' });
 const form = useForm(vazio());
 const editandoId = ref(null);
 const produtoEscolhido = ref(null);
@@ -78,28 +74,25 @@ watch(() => [form.product_id, form.desconto_pct], () => {
     }, 250);
 });
 
-// Atalhos de início.
+// Atalhos de horário.
 const inicioAgora = () => { form.inicio_em = paraInput(new Date()); };
-const inicioAmanha = (hora) => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(hora, 0, 0, 0);
-    form.inicio_em = paraInput(d);
+const fimMais = (horas) => {
+    const base = deInput(form.inicio_em || paraInput(new Date()));
+    if (!form.inicio_em) form.inicio_em = paraInput(base);
+    form.fim_em = paraInput(new Date(base.getTime() + horas * 3600 * 1000));
 };
-
-// Fim calculado (o servidor faz a mesma conta): início + duração ou o fim exato.
-const fimPrevisto = computed(() => {
-    if (form.duracao === 'exato') return form.fim_em || '';
-    if (!form.inicio_em) return '';
-    return paraInput(new Date(deInput(form.inicio_em).getTime() + Number(form.duracao) * 3600 * 1000));
-});
+const fimAte2359 = () => {
+    const base = deInput(form.inicio_em || paraInput(new Date()));
+    if (!form.inicio_em) form.inicio_em = paraInput(base);
+    const fim = new Date(base);
+    fim.setHours(23, 59, 0, 0);
+    form.fim_em = paraInput(fim);
+};
 
 const editar = (oferta) => {
     editandoId.value = oferta.id;
     produtoEscolhido.value = oferta.produto;
-    const horas = (deInput(oferta.fim_em) - deInput(oferta.inicio_em)) / 3600000;
-    const duracao = DURACOES.includes(horas) ? horas : 'exato';
-    form.defaults({ product_id: oferta.product_id, desconto_pct: oferta.desconto_pct, inicio_em: oferta.inicio_em, duracao, fim_em: oferta.fim_em });
+    form.defaults({ product_id: oferta.product_id, desconto_pct: oferta.desconto_pct, inicio_em: oferta.inicio_em, fim_em: oferta.fim_em });
     form.reset();
     form.clearErrors();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -116,13 +109,10 @@ const cancelar = () => {
 
 const salvar = () => {
     const opcoes = { preserveScroll: true, onSuccess: cancelar };
-    const corpo = ({ duracao, fim_em, ...data }) => (duracao === 'exato'
-        ? { ...data, fim_em }
-        : { ...data, duracao_horas: Number(duracao) });
     if (editandoId.value) {
-        form.transform(corpo).put(`/admin/ofertas-relampago/${editandoId.value}`, opcoes);
+        form.put(`/admin/ofertas-relampago/${editandoId.value}`, opcoes);
     } else {
-        form.transform((data) => ({ ...corpo(data), site: props.site })).post('/admin/ofertas-relampago', opcoes);
+        form.transform((data) => ({ ...data, site: props.site })).post('/admin/ofertas-relampago', opcoes);
     }
 };
 
@@ -160,7 +150,7 @@ const atalho = 'rounded-md border border-[var(--surface-border)] px-2 py-0.5 tex
             <div class="max-w-2xl">
                 <h1 class="mb-1 text-2xl font-bold">Ofertas Relâmpago</h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400">
-                    Desconto num produto por 24 horas (ou a duração que você escolher), só no site da empresa escolhida. Vale para todas as variações e não soma com cupom nem com desconto por quantidade.
+                    Desconto num produto por algumas horas, só no site da empresa escolhida. Vale para todas as variações e não soma com cupom nem com desconto por quantidade.
                 </p>
             </div>
             <div role="tablist" aria-label="Empresa" class="inline-flex rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] p-1 shadow-sm">
@@ -213,34 +203,23 @@ const atalho = 'rounded-md border border-[var(--surface-border)] px-2 py-0.5 tex
                     <InputError :message="form.errors.desconto_pct" />
                 </div>
 
-                <div class="mb-2">
-                    <label for="or-inicio" class="mb-1 block text-sm font-medium">Começa em *</label>
-                    <input id="or-inicio" v-model="form.inicio_em" type="datetime-local" :class="campo">
-                    <InputError :message="form.errors.inicio_em" />
-                </div>
-                <div class="mb-4 flex flex-wrap gap-1.5">
-                    <button type="button" :class="atalho" @click="inicioAgora">Agora</button>
-                    <button type="button" :class="atalho" @click="inicioAmanha(0)">Amanhã 00:00</button>
-                    <button type="button" :class="atalho" @click="inicioAmanha(8)">Amanhã 08:00</button>
-                </div>
-
-                <div class="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                <div class="mb-2 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                     <div>
-                        <label for="or-duracao" class="mb-1 block text-sm font-medium">Duração *</label>
-                        <select id="or-duracao" v-model="form.duracao" :class="campo">
-                            <option v-for="h in DURACOES" :key="h" :value="h">{{ h }} horas{{ h === DURACAO_PADRAO ? ' (padrão)' : '' }}</option>
-                            <option value="exato">Até um horário exato</option>
-                        </select>
-                        <InputError :message="form.errors.duracao_horas" />
+                        <label for="or-inicio" class="mb-1 block text-sm font-medium">Início *</label>
+                        <input id="or-inicio" v-model="form.inicio_em" type="datetime-local" :class="campo">
+                        <InputError :message="form.errors.inicio_em" />
                     </div>
-                    <div v-if="form.duracao === 'exato'">
-                        <label for="or-fim" class="mb-1 block text-sm font-medium">Termina em *</label>
+                    <div>
+                        <label for="or-fim" class="mb-1 block text-sm font-medium">Fim *</label>
                         <input id="or-fim" v-model="form.fim_em" type="datetime-local" :class="campo">
                         <InputError :message="form.errors.fim_em" />
                     </div>
-                    <div v-else class="self-end pb-2 text-sm text-slate-500" aria-live="polite">
-                        Termina em <strong class="text-slate-700 dark:text-slate-200">{{ fimPrevisto ? dataHora(fimPrevisto) : '—' }}</strong>
-                    </div>
+                </div>
+                <div class="mb-4 flex flex-wrap gap-1.5">
+                    <button type="button" :class="atalho" @click="inicioAgora">Começar agora</button>
+                    <button type="button" :class="atalho" @click="fimMais(2)">+2h</button>
+                    <button type="button" :class="atalho" @click="fimMais(6)">+6h</button>
+                    <button type="button" :class="atalho" @click="fimAte2359">Até 23:59</button>
                 </div>
 
                 <div v-if="previa" class="mb-4 rounded-lg border border-[var(--surface-border)] p-3 text-sm" aria-live="polite">
@@ -257,7 +236,7 @@ const atalho = 'rounded-md border border-[var(--surface-border)] px-2 py-0.5 tex
                 </div>
 
                 <div class="flex gap-2">
-                    <button type="submit" :disabled="form.processing || !form.product_id || !form.inicio_em"
+                    <button type="submit" :disabled="form.processing || !form.product_id"
                         class="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
                         <i class="fas mr-1" :class="form.processing ? 'fa-spinner animate-spin' : 'fa-bolt'" aria-hidden="true"></i>
                         {{ editandoId ? 'Salvar alterações' : 'Criar oferta' }}

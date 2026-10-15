@@ -74,7 +74,8 @@ class BeautyKoraContaController extends Controller
 
     public function endereco(Request $request): JsonResponse
     {
-        $endereco = $request->user()->enderecos()->latest('id')->first();
+        // Com vários endereços (Meu Perfil, 2026-10-14) o checkout usa o principal.
+        $endereco = $request->user()->enderecos()->orderByDesc('principal')->latest('id')->first();
 
         return response()->json(['address' => $endereco?->paraSite()]);
     }
@@ -92,9 +93,22 @@ class BeautyKoraContaController extends Controller
         ]);
         $dados['estado'] = mb_strtoupper($dados['estado']);
 
+        // O checkout salva o endereço da compra: o mesmo CEP e número atualiza
+        // o que já existe; outro vira endereço novo (principal se for o primeiro).
         $cliente = $request->user();
-        $endereco = $cliente->enderecos()->latest('id')->first();
-        $endereco ? $endereco->update($dados) : $endereco = $cliente->enderecos()->create($dados);
+        $endereco = $cliente->enderecos()
+            ->whereIn('cep', [$dados['cep'], preg_replace('/\D/', '', $dados['cep']), substr_replace(preg_replace('/\D/', '', $dados['cep']), '-', 5, 0)])
+            ->where('numero', $dados['numero'])
+            ->latest('id')
+            ->first();
+        $endereco
+            ? $endereco->update($dados)
+            : $endereco = $cliente->enderecos()->create([
+                ...$dados,
+                'destinatario' => $cliente->name,
+                'telefone' => $cliente->phone,
+                'principal' => ! $cliente->enderecos()->exists(),
+            ]);
 
         return response()->json(['address' => $endereco->paraSite()]);
     }

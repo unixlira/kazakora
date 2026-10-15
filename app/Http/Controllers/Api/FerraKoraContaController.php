@@ -102,7 +102,7 @@ class FerraKoraContaController extends Controller
     }
 
     /** Formato que o site espera (sem CPF, telefone nem endereço). */
-    private function paraSite(User $user): array
+    public static function paraSite(User $user): array
     {
         return [
             'id' => (string) $user->id,

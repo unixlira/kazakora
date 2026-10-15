@@ -4,6 +4,7 @@ namespace App\Modules\Profile\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Address;
+use App\Modules\Profile\Concerns\ValidaPerfil;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,10 +18,12 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class ProfileAddressController extends Controller
 {
+    use ValidaPerfil;
+
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
-        $data = $this->validated($request);
+        $data = $this->validarEndereco($request);
 
         DB::transaction(function () use ($user, $data) {
             $principal = $data['is_default'] || ! $user->addresses()->exists();
@@ -38,7 +41,7 @@ class ProfileAddressController extends Controller
     public function update(Request $request, Address $address): RedirectResponse
     {
         $this->authorizeOwner($request, $address);
-        $data = $this->validated($request);
+        $data = $this->validarEndereco($request);
 
         DB::transaction(function () use ($request, $address, $data) {
             if ($data['is_default']) {
@@ -76,37 +79,5 @@ class ProfileAddressController extends Controller
         if ((int) $address->user_id !== (int) $request->user()->id) {
             throw new HttpException(403, 'Este endereço não é da sua conta.');
         }
-    }
-
-    /** @return array<string, mixed> */
-    private function validated(Request $request): array
-    {
-        $data = $request->validate([
-            'label' => ['nullable', 'string', 'max:60'],
-            'recipient_name' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:20'],
-            'zip' => ['required', 'string', 'regex:/^\d{5}-?\d{3}$/'],
-            'street' => ['required', 'string', 'max:255'],
-            'number' => ['required', 'string', 'max:20'],
-            'complement' => ['nullable', 'string', 'max:255'],
-            'neighborhood' => ['required', 'string', 'max:255'],
-            'city' => ['required', 'string', 'max:255'],
-            'state' => ['required', 'string', 'size:2'],
-            'is_default' => ['boolean'],
-        ], [
-            'zip.regex' => 'Informe um CEP válido (00000-000).',
-            'state.size' => 'A UF tem 2 letras (ex.: SP).',
-        ], [
-            'recipient_name' => 'nome de quem recebe',
-            'phone' => 'telefone',
-            'zip' => 'CEP',
-            'street' => 'rua',
-            'number' => 'número',
-            'neighborhood' => 'bairro',
-            'city' => 'cidade',
-            'state' => 'UF',
-        ]);
-
-        return [...$data, 'is_default' => (bool) ($data['is_default'] ?? false)];
     }
 }

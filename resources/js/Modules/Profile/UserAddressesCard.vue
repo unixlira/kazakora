@@ -101,7 +101,7 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
 </script>
 
 <template>
-    <div class="flex h-full flex-col rounded-2xl border border-store-border bg-store-bg-raised p-6">
+    <div class="flex flex-1 flex-col">
         <div class="mb-4 flex items-center justify-between gap-4">
             <div>
                 <h4 class="text-lg font-semibold">Endereços</h4>

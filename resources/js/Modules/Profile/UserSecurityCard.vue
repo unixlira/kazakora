@@ -27,8 +27,8 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
 </script>
 
 <template>
-    <div class="rounded-2xl border border-store-border bg-store-bg-raised p-6">
-        <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+    <div>
+        <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h4 class="mb-1 text-lg font-semibold">Segurança</h4>
                 <p class="mb-4 text-sm text-store-fg-muted">Troque a senha sempre que achar que alguém pode ter acesso a ela.</p>
@@ -38,7 +38,7 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
                 </div>
             </div>
 
-            <button type="button" class="w-full shrink-0 rounded-full border border-store-border-strong px-4 py-2.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken lg:w-auto"
+            <button type="button" class="w-full shrink-0 rounded-full border border-store-border-strong px-4 py-2.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken sm:w-auto"
                 @click="openModal">
                 <i class="fas fa-pen mr-2 text-xs"></i>Alterar senha
             </button>

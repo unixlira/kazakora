@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CompletarEnderecoPeloCep;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Services\PrecoMudouException;
 use App\Rules\CpfValido;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
@@ -24,8 +25,9 @@ use Illuminate\Support\Facades\Log;
  * cada site tem a sua subclasse (FerraKoraCheckoutController,
  * BeautyKoraCheckoutController).
  *
- * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, frete? (id da opção), turbo? (antigo)}
- * POST pedido  {itens, frete?, turbo?, total_esperado (centavos), cliente{name,email,cpf,phone},
+ * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, frete? (id da opção), turbo? (antigo), cupom?, email?}
+ *              → cupom{codigo, descricao, desconto} ou cupom_erro
+ * POST pedido  {itens, frete?, turbo?, cupom?, total_esperado (centavos), cliente{name,email,cpf,phone},
  *               endereco{zip,street,number,complement,neighborhood,city,state},
  *               pagamento{metodo: pix|card|boleto, mp_card_token, mp_card_installments, mp_payment_method_id}}
  *              → pedido, token, pix{copia_e_cola,...} ou boleto{linha_digitavel, codigo_barras, url, vencimento}
@@ -46,10 +48,12 @@ abstract class CheckoutOutroSiteController extends Controller
             'cep' => ['nullable', 'string', 'max:9'],
             'turbo' => ['nullable', 'boolean'],
             'frete' => ['nullable', 'string', 'max:40'],
+            'cupom' => ['nullable', 'string', 'max:60'],
+            'email' => ['nullable', 'string', 'max:255'],
         ]);
 
         try {
-            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados))));
+            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null)));
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         }
@@ -73,6 +77,7 @@ abstract class CheckoutOutroSiteController extends Controller
             ...$this->regrasDosItens(),
             'turbo' => ['nullable', 'boolean'],
             'frete' => ['nullable', 'string', 'max:40'],
+            'cupom' => ['nullable', 'string', 'max:60'],
             'total_esperado' => ['required', 'integer', 'min:1'],
             'cliente.name' => ['required', 'string', 'min:11', 'max:255'],
             'cliente.email' => ['required', 'email', 'max:255'],
@@ -115,7 +120,7 @@ abstract class CheckoutOutroSiteController extends Controller
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         } catch (PrecoMudouException $e) {
-            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados))], 409);
+            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['cliente']['email'])], 409);
         } catch (UniqueConstraintViolationException) {
             return response()->json(['message' => 'Este CPF ou e-mail já tem cadastro na KazaKora. Use os dados da sua conta.'], 422);
         } catch (MercadoPagoException $e) {
@@ -170,6 +175,30 @@ abstract class CheckoutOutroSiteController extends Controller
         return $this->semCache(response()->json($this->situacao($order)));
     }
 
+    /**
+     * Meus pedidos (FerraKora, pedido do Lira 2026-10-14): só com login. O
+     * cliente entra com a conta do FerraKora (AuthenticateFerraKoraCliente) e
+     * vê os pedidos dessa conta feitos neste site, sem endereço nem telefone.
+     *
+     * GET pedidos (Bearer da sessão)
+     */
+    public function meusPedidos(Request $request): JsonResponse
+    {
+        $cliente = $request->user();
+        abort_unless($cliente instanceof FerraKoraCliente, 401);
+
+        $pedidos = $cliente->pedidos()
+            ->where('site_origem', $this->checkout->site())
+            ->with(['items.product.images', 'items.product.parent.images', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
+            ->latest('created_at')->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (Order $order) => $this->resumoDoPedido($order))
+            ->values();
+
+        return $this->semCache(response()->json(['pedidos' => $pedidos]));
+    }
+
     public function cep(string $cep): JsonResponse
     {
         $endereco = app(CompletarEnderecoPeloCep::class)->completar(['zip' => $cep]);
@@ -212,6 +241,37 @@ abstract class CheckoutOutroSiteController extends Controller
                 'pago' => in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true),
                 'cancelado' => $order->status === Order::STATUS_CANCELLED,
             ],
+        ];
+    }
+
+    /** Pedido para o "Meus pedidos" do site: o mesmo que a página de rastreio da loja mostra. */
+    private function resumoDoPedido(Order $order): array
+    {
+        $etapas = $order->etapas();
+        $cancelado = $order->status === Order::STATUS_CANCELLED;
+        $ultima = collect($etapas)->last(fn (array $etapa) => $etapa['feito']);
+
+        return [
+            'id' => $order->id,
+            'numero' => $order->numero,
+            'criado_em' => $order->created_at?->toIso8601String(),
+            'status' => $order->status,
+            'situacao' => match (true) {
+                $cancelado => 'Cancelado',
+                $ultima['titulo'] === 'Pedido recebido' => 'Aguardando pagamento',
+                default => $ultima['titulo'],
+            },
+            'cancelado' => $cancelado,
+            'pago' => in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true),
+            'total' => CheckoutOutroSite::centavos((float) $order->total),
+            'itens' => $order->items->map(fn ($item) => [
+                'nome' => $item->product_name,
+                'quantidade' => $item->quantity,
+                'imagem' => $item->product?->images->first()?->url ?? $item->product?->parent?->images->first()?->url,
+            ])->values(),
+            'transportadora' => $order->shipping_carrier_name,
+            'codigo_rastreio' => $order->trackingCode(),
+            'etapas' => $etapas,
         ];
     }
 

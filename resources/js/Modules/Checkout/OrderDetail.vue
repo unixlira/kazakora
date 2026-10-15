@@ -49,7 +49,7 @@ const chatAberto = ref(false);
 
     <AppLayout>
         <div class="mx-auto max-w-[1080px] px-4 py-8 md:px-6">
-            <Link href="/pedidos" class="text-sm font-medium text-store-fg-muted no-underline hover:text-[#F27A2A]"><i class="fas fa-arrow-left mr-1"></i> Meus Pedidos</Link>
+            <Link href="/pedidos" class="text-sm font-medium text-store-fg-muted no-underline hover:text-store-link-hover"><i class="fas fa-arrow-left mr-1"></i> Meus Pedidos</Link>
 
             <!-- Cabeçalho -->
             <section class="relative isolate mt-3 overflow-hidden rounded-3xl bg-[#111] p-6 text-white shadow-lg md:p-8">
@@ -98,7 +98,7 @@ const chatAberto = ref(false);
                                     <img v-if="item.imagem" :src="item.imagem" :alt="item.nome" class="h-full w-full object-cover" loading="lazy">
                                 </span>
                                 <div class="min-w-0 flex-1">
-                                    <Link v-if="item.slug" :href="`/produtos/${item.slug}`" class="line-clamp-2 text-sm font-medium text-store-fg no-underline hover:text-[#F27A2A]">{{ item.nome }}</Link>
+                                    <Link v-if="item.slug" :href="`/produtos/${item.slug}`" class="line-clamp-2 text-sm font-medium text-store-fg no-underline hover:text-store-link-hover">{{ item.nome }}</Link>
                                     <p v-else class="line-clamp-2 text-sm font-medium">{{ item.nome }}</p>
                                     <p class="text-xs text-store-fg-muted">{{ item.quantidade }} × {{ formatPrice(item.preco) }}</p>
                                 </div>

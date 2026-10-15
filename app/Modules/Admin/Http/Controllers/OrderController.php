@@ -41,6 +41,12 @@ class OrderController extends Controller
         Order::STATUS_CANCELLED,
     ];
 
+    private const SITES = [
+        'kazakora' => 'KazaKora',
+        Order::SITE_FERRAKORA => 'FerraKora',
+        Order::SITE_BEAUTYKORA => 'Beauty Kora',
+    ];
+
     private const CHANNELS = [
         Order::ORIGIN_STORE,
         Order::ORIGIN_MERCADO_LIVRE,
@@ -67,6 +73,11 @@ class OrderController extends Controller
             ])
             ->withCount('items')
             ->when($request->filled('origin'), fn ($query) => $query->where('origin', $request->string('origin')))
+            // Site do pedido (2026-10-15): pedidos do FerraKora e da Beauty Kora
+            // separados dos da KazaKora (site_origem nulo).
+            ->when(array_key_exists((string) $request->query('site'), self::SITES), fn ($query) => $request->query('site') === 'kazakora'
+                ? $query->whereNull('site_origem')
+                : $query->where('site_origem', $request->query('site')))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = trim($request->string('search')->toString());
                 $digits = preg_replace('/\D+/', '', $search);
@@ -110,7 +121,8 @@ class OrderController extends Controller
             'orders' => $orders,
             'statuses' => self::STATUSES,
             'channels' => self::CHANNELS,
-            'filters' => $request->only('origin', 'search'),
+            'sites' => self::SITES,
+            'filters' => $request->only('origin', 'search', 'site'),
         ]);
     }
 

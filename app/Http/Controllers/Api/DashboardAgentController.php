@@ -84,9 +84,9 @@ class DashboardAgentController extends Controller
         $lastOrders = Order::query()
             ->nonPurchaseReturn()
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, MAX(id) as last_order_id')
-            ->groupBy('origin')
-            ->pluck('last_order_id', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, MAX(id) as last_order_id')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('last_order_id', 'canal');
 
         // selectRaw()+MAX() devolve string crua no formato do MySQL
         // ("2026-08-03 19:44:42"), não um Carbon — sem esse parse, o JSON
@@ -98,18 +98,18 @@ class DashboardAgentController extends Controller
         $lastPrintedJobs = PrintJob::query()
             ->join('orders', 'orders.id', '=', 'print_jobs.order_id')
             ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
-            ->selectRaw('orders.origin, MAX(print_jobs.printed_at) as last_printed_at')
-            ->groupBy('orders.origin')
-            ->pluck('last_printed_at', 'orders.origin')
+            ->selectRaw(Order::canalSql().' as canal, MAX(print_jobs.printed_at) as last_printed_at')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('last_printed_at', 'canal')
             ->map(fn ($value) => $value ? \Carbon\Carbon::parse($value) : null);
 
         $printedTodayByChannel = PrintJob::query()
             ->join('orders', 'orders.id', '=', 'print_jobs.order_id')
             ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
             ->where('print_jobs.printed_at', '>=', $today)
-            ->selectRaw('orders.origin, COUNT(*) as total')
-            ->groupBy('orders.origin')
-            ->pluck('total', 'orders.origin');
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('total', 'canal');
 
         // Uma query agrupada por métrica em vez de uma por canal — 6 canais
         // × várias métricas em query separada viraria N+1 real, pesado pra
@@ -132,33 +132,33 @@ class DashboardAgentController extends Controller
             ->nonPurchaseReturn()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
-            ->groupBy('origin')
-            ->pluck('total', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('total', 'canal');
 
         $revenueTodayByChannel = Order::query()
             ->nonPurchaseReturn()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, SUM('.ContributionMargin::receitaSql().') as total')
-            ->groupBy('origin')
-            ->pluck('total', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('total', 'canal');
 
         $salesMonthByChannel = Order::query()
             ->nonPurchaseReturn()
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, COUNT(*) as total')
-            ->groupBy('origin')
-            ->pluck('total', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('total', 'canal');
 
         $ordersTodayByChannel = Order::query()
             ->nonPurchaseReturn()
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
-            ->selectRaw('origin, COUNT(*) as total')
-            ->groupBy('origin')
-            ->pluck('total', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('total', 'canal');
 
         // Achado real 2026-08-07 ("card de devolução não está ok, tem 1 no
         // meli"): essa definição só olhava Payment estornado (Stripe/Mercado
@@ -179,11 +179,17 @@ class DashboardAgentController extends Controller
                     $query->where('claim_created_at', '>=', $monthStart);
                 });
             })
-            ->selectRaw('origin, COUNT(*) as total')
-            ->groupBy('origin')
-            ->pluck('total', 'origin');
+            ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
+            ->pluck('total', 'canal');
 
-        $channels = collect(self::CHANNELS)->map(function (string $channel) use (
+        // FerraKora e Beauty Kora (2026-10-14) são canal próprio nas métricas,
+        // mas só entram na lista quando têm movimento: o KoraSync ainda não
+        // conhece essas chaves e mostraria um segundo card de "Loja própria".
+        $sites = array_values(array_filter(Order::SITES, fn (string $site) => $lastOrders->has($site)
+            || $salesMonthByChannel->has($site) || $ordersTodayByChannel->has($site)));
+
+        $channels = collect([...self::CHANNELS, ...$sites])->map(function (string $channel) use (
             $accounts, $lastOrders, $lastPrintedJobs, $printedTodayByChannel,
             $revenueMonthByChannel, $revenueTodayByChannel, $salesMonthByChannel,
             $ordersTodayByChannel, $returnsMonthByChannel,
@@ -444,12 +450,13 @@ class DashboardAgentController extends Controller
 
     public function channelOrders(Request $request, string $channel): JsonResponse
     {
-        if (! in_array($channel, self::CHANNELS, true)) {
+        if (! in_array($channel, [...self::CHANNELS, ...Order::SITES], true)) {
             throw new NotFoundHttpException("Canal \"{$channel}\" não existe.");
         }
 
+        // Mesmo canal de métrica do card (Order::canalSql): "loja" é só o kazakora.com.
         $orders = Order::query()
-            ->where('origin', $channel)
+            ->doCanal($channel)
             // Só venda paga ou que já foi paga (pedido 2026-10-11).
             ->whereNotIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
             ->with(['items:id,order_id,product_name,quantity'])
@@ -464,7 +471,7 @@ class DashboardAgentController extends Controller
 
         $shipments = ChannelShipment::query()
             ->whereIn('order_id', $orders->pluck('id'))
-            ->where('channel', $channel)
+            ->where('channel', in_array($channel, Order::SITES, true) ? Order::ORIGIN_STORE : $channel)
             ->get()
             ->keyBy('order_id');
 

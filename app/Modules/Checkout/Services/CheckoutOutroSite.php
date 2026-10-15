@@ -7,6 +7,7 @@ use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
+use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
@@ -15,6 +16,7 @@ use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Modules\FerraKora\Services\PrecoMudouException;
+use App\Support\SiteAtual;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
@@ -44,6 +46,15 @@ use Illuminate\Validation\ValidationException;
  * site_origem, a tabela dos produtos publicados e o nome mostrado ao cliente.
  * Entrega igual à do checkout da KazaKora: FULL na Grande SP (EntregaExpressa)
  * ou grátis com a opção TURBO (SEDEX pela diferença, FreteEmbutido).
+ *
+ * Cupom (Beauty Kora, pedido do Lira 2026-10-14): os mesmos cupons e regras
+ * do checkout da KazaKora (Coupon::motivoInvalido), sem sessão: o site manda
+ * o código no resumo e no pedido, e aqui ele é conferido de novo nos dois.
+ *
+ * Cliente separado (FerraKora, pedido do Lira 2026-10-15): o site que devolve
+ * false em contaNaKazaKora() não cria User nem endereço na KazaKora; o pedido
+ * sai com user_id nulo, CPF em buyer_document e e-mail em shipping_email, e
+ * o site liga o pedido à conta dele em clienteDoSite().
  */
 abstract class CheckoutOutroSite
 {
@@ -61,6 +72,25 @@ abstract class CheckoutOutroSite
 
     /** Nome do site nas mensagens ao cliente. */
     abstract protected function nomeDoSite(): string;
+
+    /** O comprador vira conta (User) da KazaKora? */
+    protected function contaNaKazaKora(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Site com cliente separado: colunas do pedido que ligam à conta (e ao
+     * endereço) do site.
+     *
+     * @param  array{name: string, email: string, cpf: string, phone: string}  $cliente
+     * @param  array<string, mixed>  $entrega  endereço + recipient_name e phone
+     * @return array<string, mixed>
+     */
+    protected function clienteDoSite(array $cliente, array $entrega): array
+    {
+        return [];
+    }
 
     /**
      * Acréscimo do site sobre o preço do anúncio, por produto pai (0.05 = 5%),
@@ -86,6 +116,8 @@ abstract class CheckoutOutroSite
         $frete = app(FreteEmbutido::class);
         $frete->ligar();
         $frete->usarCep($cep);
+        // Oferta Relâmpago deste site (2026-10-14): o mesmo preço que o card mostrou.
+        app(SiteAtual::class)->definir($this->site());
 
         $quantidades = [];
         foreach ($pedidos as $i => $pedido) {
@@ -162,9 +194,12 @@ abstract class CheckoutOutroSite
      * grátis quando é mais barata. $frete é o id da opção (full, correios,
      * turbo ou me:ID); sem ele, ou se ela sumiu, vale a primeira (a grátis).
      *
-     * @return array{subtotal: float, desconto_plataforma: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
+     * Cupom: sai dos produtos antes do Pix, como na KazaKora; o Pix desconta
+     * do que sobrou.
+     *
+     * @return array{subtotal: float, desconto_plataforma: float, desconto_cupom: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
      */
-    public function valores(Collection $itens, ?string $cep = null, ?string $frete = null): array
+    public function valores(Collection $itens, ?string $cep = null, ?string $frete = null, ?Coupon $cupom = null): array
     {
         $subtotal = round($itens->sum('subtotal'), 2);
         $entrega = app(FreteEmbutido::class)->entregaDoCarrinho($itens);
@@ -174,12 +209,14 @@ abstract class CheckoutOutroSite
         $escolhida = collect($opcoes)->firstWhere('id', $frete) ?? $opcoes[0];
         $valorDoFrete = round((float) $escolhida['preco'], 2);
         $plataforma = (float) $entrega['desconto_plataforma'];
-        $total = round($subtotal - $plataforma + $valorDoFrete, 2);
+        $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens)) : 0.0;
+        $total = round(max(0, $subtotal - $plataforma - $descontoCupom) + $valorDoFrete, 2);
         $pix = DescontoPix::desconto(max(0, $total));
 
         return [
             'subtotal' => $subtotal,
             'desconto_plataforma' => $plataforma,
+            'desconto_cupom' => $descontoCupom,
             'desconto_pix' => $pix,
             'frete' => $valorDoFrete,
             'total' => $total,
@@ -230,11 +267,47 @@ abstract class CheckoutOutroSite
         return ($dados['frete'] ?? null) ?: (! empty($dados['turbo']) ? 'turbo' : null);
     }
 
+    /**
+     * Cupom pedido pelo site, conferido com as regras da KazaKora (ativo,
+     * validade, mínimo, limite de usos, um por cliente pelo e-mail).
+     *
+     * @return array{0: ?Coupon, 1: ?string} [cupom que vale, motivo de não valer]
+     */
+    public function cupom(?string $codigo, Collection $itens, ?string $email = null): array
+    {
+        if (blank($codigo)) {
+            return [null, null];
+        }
+
+        $cupom = Coupon::buscar($codigo);
+        if (! $cupom) {
+            return [null, 'Cupom não encontrado. Confira o código.'];
+        }
+
+        $email = filled($email) ? trim($email) : null;
+        $conta = $email ? User::query()->where('email', $email)->first() : null;
+        if ($motivo = $cupom->motivoInvalido(round($itens->sum('subtotal'), 2), $conta, $email)) {
+            return [null, $motivo];
+        }
+        if ($itens->isNotEmpty() && self::subtotalParaCupom($itens) <= 0) {
+            return [null, 'Cupons não valem para produtos da Oferta do Dia: eles já estão com o menor preço.'];
+        }
+
+        return [$cupom, null];
+    }
+
+    /** Base do cupom, como na KazaKora: o carrinho sem os produtos da Oferta do Dia nem da Relâmpago (2026-10-14). */
+    private static function subtotalParaCupom(Collection $itens): float
+    {
+        return round($itens->reject(fn (array $item) => $item['product']->emOferta())->sum('subtotal'), 2);
+    }
+
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */
-    public function resumo(array $pedidos, ?string $cep, ?string $frete = null): array
+    public function resumo(array $pedidos, ?string $cep, ?string $frete = null, ?string $codigoCupom = null, ?string $email = null): array
     {
         $itens = $this->itens($pedidos, $cep);
-        $valores = $this->valores($itens, $cep, $frete);
+        [$cupom, $cupomErro] = $this->cupom($codigoCupom, $itens, $email);
+        $valores = $this->valores($itens, $cep, $frete, $cupom);
 
         return [
             'itens' => $itens->map(fn (array $item) => [
@@ -248,6 +321,14 @@ abstract class CheckoutOutroSite
             ])->values()->all(),
             'subtotal' => self::centavos($valores['subtotal']),
             'desconto_plataforma' => self::centavos($valores['desconto_plataforma']),
+            // Cupom que vale (código, "10% de desconto" e valor) ou o motivo de não valer.
+            'cupom' => $cupom ? [
+                'codigo' => $cupom->code,
+                'descricao' => $cupom->descricaoDesconto(),
+                'desconto' => self::centavos($valores['desconto_cupom']),
+            ] : null,
+            'cupom_erro' => $cupomErro,
+            'desconto_cupom' => self::centavos($valores['desconto_cupom']),
             'desconto_pix' => self::centavos($valores['desconto_pix']),
             'desconto_pix_percentual' => DescontoPix::percentual(),
             'boleto_dias_vencimento' => (int) config('loja.boleto_dias_vencimento', 3),
@@ -287,7 +368,12 @@ abstract class CheckoutOutroSite
 
         return DB::transaction(function () use ($dados, $metodo, $endereco, $localizacao) {
             $itens = $this->itens($dados['itens'], $endereco['zip'], travar: true);
-            $valores = $this->valores($itens, $endereco['zip'], self::freteEscolhido($dados));
+            // Cupom que deixou de valer entre a tela e o pagamento: avisa, não cobra diferente.
+            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email']);
+            if ($cupomErro) {
+                throw ValidationException::withMessages(['cupom' => $cupomErro.' O desconto foi removido: confira o total e finalize de novo.']);
+            }
+            $valores = $this->valores($itens, $endereco['zip'], self::freteEscolhido($dados), $cupom);
             if (! empty($dados['frete']) && $valores['escolhida']['id'] !== $dados['frete']) {
                 // A opção da tela não existe mais (cotação mudou): não troca calado.
                 throw new PrecoMudouException();
@@ -299,13 +385,20 @@ abstract class CheckoutOutroSite
                 throw new PrecoMudouException();
             }
 
-            $user = $this->cliente($dados['cliente']);
-            $address = $user->addresses()->create([
-                ...$endereco,
-                'recipient_name' => $dados['cliente']['name'],
-                'phone' => $dados['cliente']['phone'],
-                'is_default' => $user->addresses()->count() === 0,
-            ]);
+            $cpf = preg_replace('/\D/', '', $dados['cliente']['cpf']);
+            $user = $this->contaNaKazaKora() ? $this->cliente($dados['cliente']) : null;
+            $entrega = [...$endereco, 'recipient_name' => $dados['cliente']['name'], 'phone' => $dados['cliente']['phone']];
+            $doSite = $user ? [] : [
+                ...$this->clienteDoSite($dados['cliente'], $entrega),
+                'buyer_document' => $cpf,
+                'shipping_email' => mb_strtolower(trim($dados['cliente']['email'])),
+            ];
+            $address = $user
+                ? $user->addresses()->create([...$entrega, 'is_default' => $user->addresses()->count() === 0])
+                : (object) [...$entrega, 'complement' => $entrega['complement'] ?? null];
+            $pagador = $user
+                ? ['nome' => $user->name, 'email' => $user->email, 'cpf' => (string) $user->cpf]
+                : ['nome' => $dados['cliente']['name'], 'email' => $doSite['shipping_email'], 'cpf' => $cpf];
             $escolhida = $valores['escolhida'];
             $frete = in_array($escolhida['id'], ['full', 'correios'], true) ? ShippingMethod::freteGratis() : null;
             $transportadora = match (true) {
@@ -315,7 +408,8 @@ abstract class CheckoutOutroSite
             };
 
             $order = Order::create([
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
+                ...$doSite,
                 'site_origem' => $this->site(),
                 'external_order_id' => Order::gerarNumeroDaLoja(),
                 'status' => Order::STATUS_AWAITING_PAYMENT,
@@ -333,7 +427,9 @@ abstract class CheckoutOutroSite
                 ...$localizacao,
                 'subtotal' => $valores['subtotal'],
                 'shipping_cost' => $valores['frete'],
-                'discount_amount' => round($pixDiscount + $valores['desconto_plataforma'], 2),
+                'coupon_code' => $cupom?->code,
+                // Desconto total do pedido (vDesc da NF-e): cupom + Pix + plataforma.
+                'discount_amount' => round($valores['desconto_cupom'] + $pixDiscount + $valores['desconto_plataforma'], 2),
                 'pix_discount_amount' => $pixDiscount,
                 'desconto_plataforma_amount' => $valores['desconto_plataforma'],
                 'total' => $total,
@@ -352,7 +448,7 @@ abstract class CheckoutOutroSite
             }
 
             if ($metodo === Payment::METHOD_PIX) {
-                $mp = $this->mercadoPago->createPixPayment($total, $this->pagador($user, $order), "order-{$order->id}-payment-1", "order:{$order->id}:payment:1");
+                $mp = $this->mercadoPago->createPixPayment($total, $this->pagador($pagador, $order), "order-{$order->id}-payment-1", "order:{$order->id}:payment:1");
 
                 Payment::create([
                     'order_id' => $order->id,
@@ -363,7 +459,7 @@ abstract class CheckoutOutroSite
                     'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
                 ]);
 
-                DB::afterCommit(fn () => $this->enviarEmailDoPix($user, $order, $mp, $total));
+                DB::afterCommit(fn () => $this->enviarEmailDoPix($pagador['email'], $order, $mp, $total));
 
                 return ['order' => $order, 'mp' => $mp];
             }
@@ -372,7 +468,7 @@ abstract class CheckoutOutroSite
             // KazaKora, sem desconto do Pix; quem confirma é a varredura
             // mercadopago:conferir-boletos.
             if ($metodo === Payment::METHOD_BOLETO) {
-                $mp = app(BoletoMercadoPago::class)->gerar($order, $user, $this->pagador($user, $order), $total);
+                $mp = app(BoletoMercadoPago::class)->gerar($order, $user, $this->pagador($pagador, $order), $total);
 
                 return ['order' => $order, 'mp' => $mp];
             }
@@ -384,7 +480,7 @@ abstract class CheckoutOutroSite
                 'capture_mode' => 'automatic',
                 'external_reference' => "order-{$order->id}-payment-1",
                 'total_amount' => (string) $total,
-                'payer' => $this->pagador($user),
+                'payer' => $this->pagador($pagador),
                 'transactions' => ['payments' => [[
                     'amount' => (string) $total,
                     'payment_method' => [
@@ -461,7 +557,12 @@ abstract class CheckoutOutroSite
     /** Token do acompanhamento do pedido no site (sem login). */
     public static function token(Order $order): string
     {
-        return hash_hmac('sha256', $order->site_origem.'-pedido:'.$order->id, (string) config('app.key'));
+        return self::tokenDoPedido((string) $order->site_origem, (int) $order->id);
+    }
+
+    public static function tokenDoPedido(string $site, int $id): string
+    {
+        return hash_hmac('sha256', $site.'-pedido:'.$id, (string) config('app.key'));
     }
 
     public static function centavos(float $reais): int
@@ -520,19 +621,20 @@ abstract class CheckoutOutroSite
     }
 
     /** Igual ao checkout da loja: no Pix e no boleto vai o e-mail nosso, para o Mercado Pago não escrever ao cliente. */
-    private function pagador(User $user, ?Order $pix = null): array
+    /** @param  array{nome: string, email: string, cpf: string}  $quem */
+    private function pagador(array $quem, ?Order $pix = null): array
     {
-        $partes = preg_split('/\s+/', trim($user->name), 2);
+        $partes = preg_split('/\s+/', trim($quem['nome']), 2);
 
         return array_filter([
-            'email' => $pix ? str_replace('{pedido}', (string) $pix->id, (string) config('loja.email_pagador_pix')) : $user->email,
-            'first_name' => $partes[0] ?? $user->name,
-            'last_name' => $partes[1] ?? $partes[0] ?? $user->name,
-            'identification' => ['type' => 'CPF', 'number' => preg_replace('/\D/', '', (string) $user->cpf)],
+            'email' => $pix ? str_replace('{pedido}', (string) $pix->id, (string) config('loja.email_pagador_pix')) : $quem['email'],
+            'first_name' => $partes[0] ?? $quem['nome'],
+            'last_name' => $partes[1] ?? $partes[0] ?? $quem['nome'],
+            'identification' => ['type' => 'CPF', 'number' => preg_replace('/\D/', '', $quem['cpf'])],
         ]);
     }
 
-    private function enviarEmailDoPix(User $user, Order $order, array $mp, float $valor): void
+    private function enviarEmailDoPix(string $email, Order $order, array $mp, float $valor): void
     {
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 
@@ -540,6 +642,6 @@ abstract class CheckoutOutroSite
             return;
         }
 
-        rescue(fn () => Mail::to($user->email)->send(new PixAguardandoPagamento($order, $valor, (string) $qr['qr_code'], $qr['qr_code_base64'] ?? null, $mp['date_of_expiration'] ?? null)), null, false);
+        rescue(fn () => Mail::to($email)->send(new PixAguardandoPagamento($order, $valor, (string) $qr['qr_code'], $qr['qr_code_base64'] ?? null, $mp['date_of_expiration'] ?? null)), null, false);
     }
 }

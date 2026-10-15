@@ -51,6 +51,10 @@ const CHANNEL_LABELS = {
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',
     amazon: 'Amazon',
+    // Projetos com métrica própria (2026-10-14): fora de CHANNEL_ORDER,
+    // aparecem na faixa só quando têm venda.
+    ferrakora: 'FerraKora',
+    beautykora: 'Beauty Kora',
 };
 
 // Cor fixa por canal (nunca pela posição no ranking), na ordem da paleta
@@ -60,16 +64,16 @@ const CHANNEL_LABELS = {
 // de canal leva legenda com o valor escrito ao lado da cor.
 const CHANNEL_ORDER = ['tiktok_shop', 'shopee', 'mercado_livre', 'amazon', 'loja'];
 const CHANNEL_COLORS = {
-    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4' },
-    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181' },
+    light: { tiktok_shop: '#2a78d6', shopee: '#eb6834', mercado_livre: '#1baf7a', amazon: '#eda100', loja: '#e87ba4', ferrakora: '#F27A2A', beautykora: '#d63384' },
+    dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
 };
 const CHROME = {
     // Tema grafite (2026-10-11): neutros quentes e o laranja como destaque.
     // Escuro em preto chapado (#000), igual ao --surface do admin.
     // Destaque grafite no claro (2026-10-11): o laranja se confundia com a
     // Shopee nos gráficos "Este mês" e "Faturamento por categoria".
-    light: { grid: '#e6e2e3', text: '#6b5f63', surface: '#ffffff', accent: '#2b2326', context: '#b3aaad' },
-    dark: { grid: '#2a2a2a', text: '#b3a9ac', surface: '#000000', accent: '#ff8c4d', context: '#7a6f73' },
+    light: { grid: '#dddcdb', text: '#5b6066', surface: '#ffffff', accent: '#3c4044', context: '#b3aaad' },
+    dark: { grid: '#3c4044', text: '#a9adb2', surface: '#2a2d30', accent: '#fd7b41', context: '#7a6f73' },
 };
 
 // O tema muda na hora (botão do layout põe/tira .dark no <html>) — os
@@ -146,7 +150,7 @@ const baseOptions = computed(() => ({
     plugins: {
         legend: { display: false },
         tooltip: {
-            backgroundColor: isDark.value ? '#f1eced' : '#2b2326',
+            backgroundColor: isDark.value ? '#f1eced' : '#3c4044',
             titleColor: isDark.value ? '#000000' : '#ffffff',
             bodyColor: isDark.value ? '#000000' : '#ffffff',
             padding: 10,
@@ -351,8 +355,8 @@ const visitTiles = computed(() => {
     }
     tiles.push(
         { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#198754' },
-        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#2b2326' },
-        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#c2410c' },
+        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#3c4044' },
+        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#9a3412' },
     );
     return tiles;
 });

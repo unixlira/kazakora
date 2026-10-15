@@ -49,7 +49,7 @@ class BoletoMercadoPago
      * @param  array<string, mixed>  $pagador  email, first_name, last_name, identification
      * @return array<string, mixed> resposta do Mercado Pago (ver MercadoPagoPaymentService::dadosDoBoleto)
      */
-    public function gerar(Order $order, User $user, array $pagador, float $valor): array
+    public function gerar(Order $order, ?User $user, array $pagador, float $valor): array
     {
         $mp = $this->mercadoPago->createBoletoPayment(
             $valor,
@@ -95,13 +95,14 @@ class BoletoMercadoPago
     }
 
     /** "Seu boleto está pronto", mesmo esquema do Pix. Falha de e-mail não trava o pedido. */
-    private static function enviarEmail(User $user, Order $order, array $boleto, float $valor): void
+    private static function enviarEmail(?User $user, Order $order, array $boleto, float $valor): void
     {
         if (empty($boleto['linhaDigitavel']) && empty($boleto['pdfUrl'])) {
             return;
         }
 
-        rescue(fn () => Mail::to($user->email)->send(new BoletoAguardandoPagamento(
+        // Pedido de site com cliente separado (FerraKora): sem User, vai ao e-mail do pedido.
+        rescue(fn () => Mail::to($user?->email ?: $order->shipping_email)->send(new BoletoAguardandoPagamento(
             $order,
             $valor,
             $boleto['linhaDigitavel'],

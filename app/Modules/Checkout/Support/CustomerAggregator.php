@@ -193,6 +193,9 @@ class CustomerAggregator
             ->leftJoin('users', function ($join) {
                 $join->on('users.id', '=', 'orders.user_id')->whereNull('users.deleted_at');
             })
+            // Cliente do FerraKora é do FerraKora (pedido do Lira 2026-10-15):
+            // não entra na lista de clientes da KazaKora.
+            ->where(fn ($query) => $query->whereNull('orders.site_origem')->orWhere('orders.site_origem', '!=', Order::SITE_FERRAKORA))
             ->select([
                 'orders.id', 'orders.origin', 'orders.status', 'orders.total', 'orders.created_at',
                 'orders.buyer_document', 'orders.shipping_name', 'orders.shipping_email', 'orders.shipping_phone',

@@ -114,6 +114,46 @@ const gerarAnuncio = () => {
         onFinish: () => { gerandoAnuncio.value = false; },
     });
 };
+// "Gerar descrição com IA pelas fotos" (2026-10-14): o Gemini olha as fotos e
+// o nome e devolve uma descrição para revisar; só vai para o cadastro quando
+// quem cadastra clica em "Usar esta descrição" e depois salva.
+const descricaoIa = ref(null);
+const conteudoIa = ref(null);
+const gerandoDescricao = ref(false);
+const erroDescricao = ref('');
+const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
+const gerarDescricao = async () => {
+    gerandoDescricao.value = true;
+    erroDescricao.value = '';
+    try {
+        const resposta = await fetch(`/admin/produtos/${props.product.id}/descricao-ia`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+            body: '{}',
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) {
+            erroDescricao.value = dados.message || 'Não deu para gerar agora. Tente de novo.';
+            return;
+        }
+        descricaoIa.value = dados.descricao;
+        conteudoIa.value = dados.conteudo;
+    } catch {
+        erroDescricao.value = 'Falha de conexão. Tente de novo.';
+    } finally {
+        gerandoDescricao.value = false;
+    }
+};
+const usarDescricao = () => {
+    form.description = descricaoIa.value;
+    descricaoIa.value = null;
+    conteudoIa.value = null;
+};
+const descartarDescricao = () => {
+    descricaoIa.value = null;
+    conteudoIa.value = null;
+};
 const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR') : '—');
 </script>
 
@@ -139,8 +179,44 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
             </div>
 
             <div class="mt-6">
-                <ProductForm v-if="activeTab === 'geral'" :form="form" :categories="categories" :is-edit="true"
-                    submit-label="Salvar alterações" @submit="submit" />
+                <div v-if="activeTab === 'geral'" class="space-y-6">
+                    <div class="rounded border border-violet-200 bg-violet-50/60 p-4">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button type="button" :disabled="gerandoDescricao || !images.length"
+                                class="rounded bg-violet-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                                @click="gerarDescricao">
+                                <i class="fas mr-1" :class="gerandoDescricao ? 'fa-spinner animate-spin' : 'fa-wand-magic-sparkles'"></i>
+                                {{ gerandoDescricao ? 'Olhando as fotos...' : 'Gerar descrição com IA pelas fotos' }}
+                            </button>
+                            <span class="text-xs text-slate-500">
+                                {{ images.length ? `A IA lê até 6 fotos e o nome. Nada é salvo antes de você revisar.` : 'Cadastre as fotos (aba Fotos e vídeo) para usar.' }}
+                            </span>
+                        </div>
+                        <p v-if="erroDescricao" class="mt-3 text-sm text-red-600" role="alert">{{ erroDescricao }}</p>
+                        <div v-if="descricaoIa !== null" class="mt-4 space-y-3">
+                            <label for="descricao-ia" class="block text-sm font-semibold text-slate-700">Descrição sugerida (pode editar aqui)</label>
+                            <textarea id="descricao-ia" v-model="descricaoIa" rows="12"
+                                class="w-full rounded border border-slate-300 p-3 text-sm text-slate-700"></textarea>
+                            <div v-if="conteudoIa?.destaques?.length" class="text-sm text-slate-600">
+                                <strong>Benefícios da página:</strong> {{ conteudoIa.destaques.join(' · ') }}
+                            </div>
+                            <div v-if="conteudoIa?.blocos?.length" class="text-sm text-slate-600">
+                                <strong>Blocos:</strong> {{ conteudoIa.blocos.map((bloco) => bloco.titulo).join(' · ') }}
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" class="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700" @click="usarDescricao">
+                                    Usar esta descrição
+                                </button>
+                                <button type="button" class="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100" @click="descartarDescricao">
+                                    Descartar
+                                </button>
+                            </div>
+                            <p class="text-xs text-slate-500">"Usar esta descrição" coloca o texto no campo Descrição abaixo; ele só vale depois de "Salvar alterações".</p>
+                        </div>
+                    </div>
+                    <ProductForm :form="form" :categories="categories" :is-edit="true"
+                        submit-label="Salvar alterações" @submit="submit" />
+                </div>
 
                 <VariationsManager v-else-if="activeTab === 'variacoes'" :product="product" :variations="variations"
                     :linkable-orphans="linkableOrphans" />
@@ -166,8 +242,8 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                 <div v-else-if="activeTab === 'anuncio'" class="space-y-5">
                     <p class="text-sm text-slate-500">
                         Benefícios (abaixo das avaliações) e a descrição em blocos com imagem da página do produto.
-                        São gerados pela IA (Gemini) a partir da descrição e das fotos sempre que elas mudam; se a IA
-                        falhar, o sistema monta tudo pela própria descrição.
+                        São gerados pela IA (Gemini) a partir da descrição e das fotos sempre que elas mudam (sem
+                        descrição, só pelas fotos e pelo nome); se a IA falhar, o sistema monta tudo pela própria descrição.
                     </p>
                     <div class="flex flex-wrap items-center gap-3">
                         <span v-if="adContent" class="rounded px-2 py-1 text-xs font-semibold"

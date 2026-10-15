@@ -122,6 +122,8 @@ export const sidebarSections = [
         heading: 'Marketing',
         items: [
             { label: 'Cupons', href: '/admin/cupons', icon: 'fas fa-ticket', cor: 'rosa', permission: 'cadastros.view' },
+            // Ofertas Relâmpago por empresa (2026-10-14): KazaKora, FerraKora e Beauty Kora.
+            { label: 'Ofertas Relâmpago', href: '/admin/ofertas-relampago', icon: 'fas fa-bolt', cor: 'ambar', permission: 'cadastros.view' },
             { label: 'Banners do site', href: '/admin/banners', icon: 'fas fa-images', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Notificações promocionais', href: '/admin/notificacoes-promocionais', icon: 'fas fa-bullhorn', cor: 'laranja', permission: 'cadastros.view' },
             { label: 'Disparos de WhatsApp', href: '/admin/whatsapp/disparos', icon: 'fas fa-paper-plane', cor: 'ciano', permission: 'configuracoes.integracoes' },
@@ -178,6 +180,8 @@ export const sidebarSections = [
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', cor: 'indigo', permission: 'configuracoes.auditoria' },
             // Visitas por site (2026-10-12), só admin igual a Logs. Nomes e ordem
             // definidos pelo Lira em 12/10: BeautyKora, Ferrakora, Kazakora.
+            // Pedidos do site FerraKora (2026-10-15): a lista de pedidos filtrada pelo site.
+            { label: 'Pedidos Ferrakora', href: '/admin/pedidos?site=ferrakora', icon: 'fas fa-box', marca: 'ferrakora', permission: 'pedidos.view' },
             { label: 'Produtos Ferrakora', href: '/admin/produtos-ferrakora', icon: 'fas fa-screwdriver-wrench', marca: 'ferrakora', permission: 'configuracoes.auditoria' },
             { label: 'Visitas BeautyKora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', marca: 'beautykora', permission: 'configuracoes.auditoria' },
             { label: 'Visitas Ferrakora', href: '/admin/visitas-ferrakora', icon: 'fas fa-shoe-prints', marca: 'ferrakora', permission: 'configuracoes.auditoria' },

@@ -24,6 +24,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Uma por requisição: guarda o destino e a tabela de frete dela.
         $this->app->scoped(\App\Modules\Checkout\Support\FreteEmbutido::class);
+        // Site que está vendendo (Ofertas Relâmpago por empresa, 2026-10-14).
+        $this->app->scoped(\App\Support\SiteAtual::class);
     }
 
     /**

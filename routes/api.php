@@ -5,10 +5,15 @@ use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraCatalogoController;
 use App\Http\Controllers\Api\BeautyKoraCheckoutController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
+use App\Http\Controllers\Api\BeautyKoraPerfilController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
+use App\Http\Controllers\Api\FerraKoraBancadaController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Controllers\Api\FerraKoraCheckoutController;
+use App\Http\Controllers\Api\FerraKoraContaController;
+use App\Http\Controllers\Api\FerraKoraPerfilController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
+use App\Http\Middleware\AuthenticateFerraKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Http\Controllers\Api\MelhorEnvioController;
@@ -224,6 +229,38 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1,fk-checkout-status')->name('status');
         Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
     });
+
+    // Conta do cliente (2026-10-14; separada da KazaKora desde 2026-10-15,
+    // tabela ferrakora_clientes) e Meus pedidos só para quem entrou.
+    Route::post('cadastro', [FerraKoraContaController::class, 'cadastro'])->middleware('throttle:10,1,fk-conta-cadastro')->name('cadastro');
+    Route::post('login', [FerraKoraContaController::class, 'login'])->middleware('throttle:10,1,fk-conta-login')->name('login');
+    Route::post('esqueci-senha', [FerraKoraContaController::class, 'esqueciSenha'])->middleware('throttle:5,1,fk-conta-senha')->name('esqueci-senha');
+    Route::post('nova-senha', [FerraKoraContaController::class, 'novaSenha'])->middleware('throttle:10,1,fk-conta-nova-senha')->name('nova-senha');
+    Route::middleware([AuthenticateFerraKoraCliente::class, 'throttle:60,1,fk-conta'])->group(function () {
+        Route::get('eu', [FerraKoraContaController::class, 'eu'])->name('eu');
+        Route::patch('eu', [FerraKoraContaController::class, 'atualizar'])->name('atualizar');
+        Route::post('sair', [FerraKoraContaController::class, 'sair'])->name('sair');
+        Route::get('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->name('pedidos');
+
+        // Minha Bancada (favoritos, 2026-10-15): ids "kz-<id>" do catálogo.
+        Route::prefix('bancada')->name('bancada.')->controller(FerraKoraBancadaController::class)->group(function () {
+            Route::get('/', 'index')->name('ver');
+            Route::post('/', 'guardar')->name('guardar');
+            Route::delete('{produto}', 'tirar')->where('produto', 'kz-[0-9]{1,10}')->name('tirar');
+        });
+
+        // Meu Perfil igual ao da KazaKora (2026-10-14).
+        Route::prefix('perfil')->name('perfil.')->controller(FerraKoraPerfilController::class)->group(function () {
+            Route::get('/', 'show')->name('ver');
+            Route::patch('/', 'update')->name('atualizar');
+            Route::post('avatar', 'avatar')->name('avatar');
+            Route::delete('avatar', 'removerAvatar')->name('avatar.remover');
+            Route::put('senha', 'senha')->name('senha');
+            Route::post('enderecos', 'criarEndereco')->name('enderecos.criar');
+            Route::put('enderecos/{id}', 'atualizarEndereco')->whereNumber('id')->name('enderecos.atualizar');
+            Route::delete('enderecos/{id}', 'apagarEndereco')->whereNumber('id')->name('enderecos.apagar');
+        });
+    });
 });
 
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase
@@ -261,5 +298,17 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
         Route::get('pedidos', [BeautyKoraContaController::class, 'pedidos'])->name('pedidos');
         Route::post('pedidos', [BeautyKoraContaController::class, 'criarPedidos'])->name('pedidos.criar');
         Route::get('pedidos/{id}', [BeautyKoraContaController::class, 'pedido'])->whereNumber('id')->name('pedido');
+
+        // Meu Perfil igual ao da KazaKora (2026-10-14).
+        Route::prefix('perfil')->name('perfil.')->controller(BeautyKoraPerfilController::class)->group(function () {
+            Route::get('/', 'show')->name('ver');
+            Route::patch('/', 'update')->name('atualizar');
+            Route::post('avatar', 'avatar')->name('avatar');
+            Route::delete('avatar', 'removerAvatar')->name('avatar.remover');
+            Route::put('senha', 'senha')->name('senha');
+            Route::post('enderecos', 'criarEndereco')->name('enderecos.criar');
+            Route::put('enderecos/{id}', 'atualizarEndereco')->whereNumber('id')->name('enderecos.atualizar');
+            Route::delete('enderecos/{id}', 'apagarEndereco')->whereNumber('id')->name('enderecos.apagar');
+        });
     });
 });

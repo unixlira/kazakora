@@ -3,22 +3,25 @@
 // November, com o maior desconto REAL da loja (MenuDaLoja::maiorDesconto). O "X"
 // esconde até o mês seguinte.
 import { usePage } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const page = usePage();
 const mes = String(new Date().getMonth() + 1).padStart(2, '0');
 const CHAVE = `kazakora_faixa_black_fechada_${new Date().getFullYear()}${mes}`;
 
 const desconto = computed(() => page.props.menuLoja?.maiorDesconto ?? 0);
-const visivel = ref(false);
 
-onMounted(() => {
+// Lê o "fechada" já na criação (sem SSR, o window existe): a faixa nasce no
+// primeiro desenho, junto com a tarja corrida, e não entra depois empurrando
+// a tarja para baixo (pedido 2026-10-14).
+const jaFechada = () => {
     try {
-        visivel.value = window.localStorage.getItem(CHAVE) !== '1';
+        return window.localStorage.getItem(CHAVE) === '1';
     } catch {
-        visivel.value = true;
+        return false;
     }
-});
+};
+const visivel = ref(!jaFechada());
 
 const fechar = () => {
     visivel.value = false;

@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Checkout\Models\Order;
+use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Carbon;
 
@@ -24,9 +25,14 @@ class BoletoAguardandoPagamento extends Mailable
 
     public function build(): self
     {
+        $marca = MarcaDoEmail::doPedido($this->order);
+
         return $this
+            // Remetente com o nome do site só no FerraKora; KazaKora segue o MAIL_FROM_NAME.
+            ->when($this->order->site_origem === Order::SITE_FERRAKORA, fn (self $mail) => $mail->from((string) config('mail.from.address'), $marca['nome']))
             ->subject("Seu boleto do pedido {$this->order->numero} está pronto")
             ->view('emails.boleto-aguardando-pagamento', [
+                'marcaEmail' => $marca,
                 'vencimento' => $this->venceEm ? Carbon::parse($this->venceEm)->timezone('America/Sao_Paulo') : null,
             ]);
     }

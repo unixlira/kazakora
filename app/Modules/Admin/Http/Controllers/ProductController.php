@@ -10,6 +10,7 @@ use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
+use App\Modules\WhatsApp\Services\GeminiUnavailableException;
 use App\Services\SkuGeneratorService;
 use App\Support\DescontoPix;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -414,6 +415,23 @@ class ProductController extends Controller
         return back()->with('success', $conteudo->fonte === ProductAdContent::FONTE_GEMINI
             ? 'Conteúdo do anúncio gerado com IA.'
             : 'A IA não respondeu agora; o conteúdo foi montado pela regra automática a partir da descrição.');
+    }
+
+    /**
+     * Botão "Gerar descrição com IA pelas fotos" (2026-10-14): devolve a
+     * descrição e o conteúdo para revisar; nada é gravado no produto.
+     */
+    public function descricaoPelasFotos(Product $product): JsonResponse
+    {
+        try {
+            return response()->json(app(AnuncioConteudoService::class)->descricaoPelasFotos($product));
+        } catch (GeminiUnavailableException) {
+            return response()->json(['message' => 'A IA está sem cota ou ocupada agora. Tente de novo em 1 minuto.'], 503);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json(['message' => Str::limit($exception->getMessage(), 300)], 422);
+        }
     }
 
     /**

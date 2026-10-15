@@ -60,6 +60,13 @@ return Application::configure(basePath: dirname(__DIR__))
             BloquearIndexacaoForaDoDominio::class,
         ]);
 
+        // Site da requisição nas rotas /api/ferrakora/* e /api/beautykora/*
+        // (Ofertas Relâmpago por empresa, 2026-10-14). A loja KazaKora é
+        // definida no AtivarFreteEmbutido, junto com o frete.
+        $middleware->api(append: [
+            \App\Http\Middleware\DefinirSiteAtual::class,
+        ]);
+
         $middleware->alias([
             'admin' => EnsureUserIsAdmin::class,
             'staff' => EnsureUserIsStaff::class,

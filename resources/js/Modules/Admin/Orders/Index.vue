@@ -18,6 +18,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    sites: {
+        type: Object,
+        default: () => ({}),
+    },
     filters: {
         type: Object,
         default: () => ({}),
@@ -32,7 +36,15 @@ const channelBadge = {
     amazon: { color: '#146EB4', label: 'Amazon' },
 };
 
+// Pedido feito no site do FerraKora ou da Beauty Kora (2026-10-15): o canal
+// continua "loja", o selo mostra de qual site veio.
+const siteBadge = {
+    ferrakora: { color: '#F27A2A', label: 'FerraKora' },
+    beautykora: { color: '#D63384', label: 'Beauty Kora' },
+};
+
 const filterState = reactive({
+    site: props.filters.site ?? '',
     origin: props.filters.origin ?? '',
     search: props.filters.search ?? '',
 });
@@ -80,7 +92,9 @@ const columns = [
         id: 'origin',
         header: 'Canal',
         cell: ({ row }) => {
-            const badge = channelBadge[row.original.origin] ?? { color: row.original.origin, label: row.original.origin };
+            const badge = siteBadge[row.original.site_origem]
+                ?? channelBadge[row.original.origin]
+                ?? { color: row.original.origin, label: row.original.origin };
             return h(StatusBadge, { status: badge.color, label: badge.label });
         },
     },
@@ -164,7 +178,16 @@ const columns = [
         <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
-            <div class="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
+            <div class="grid gap-3 lg:grid-cols-[180px_220px_minmax(0,1fr)_auto] lg:items-end">
+                <div>
+                    <label class="text-xs font-medium text-slate-500">Site</label>
+                    <select v-model="filterState.site" @change="applyFilters"
+                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
+                        <option value="">Todos os sites</option>
+                        <option v-for="(label, site) in props.sites" :key="site" :value="site">{{ label }}</option>
+                    </select>
+                </div>
+
                 <div>
                     <label class="text-xs font-medium text-slate-500">Marketplace</label>
                     <select v-model="filterState.origin" @change="applyFilters"

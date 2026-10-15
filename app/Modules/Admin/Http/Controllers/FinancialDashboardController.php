@@ -592,6 +592,9 @@ class FinancialDashboardController extends Controller
             'amazon' => 'Amazon',
             // Site próprio (2026-10-11): aparece mesmo sem venda.
             'loja' => 'KazaKora (site)',
+            // Projetos com métrica própria (2026-10-14, Order::canalSql()).
+            Order::SITE_FERRAKORA => Order::ROTULOS_SITE[Order::SITE_FERRAKORA],
+            Order::SITE_BEAUTYKORA => Order::ROTULOS_SITE[Order::SITE_BEAUTYKORA],
         ];
 
         $settlementsByChannel = collect($settlementChannels)->keyBy('channel');
@@ -600,8 +603,8 @@ class FinancialDashboardController extends Controller
         $orders = Order::query()->vendaEfetiva()
             ->whereIn('status', self::REVENUE_STATUSES)
             ->where('created_at', '>=', $startOfMonth)
-            ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
-            ->groupBy('origin')
+            ->selectRaw(Order::canalSql().' as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->get()
             ->keyBy('channel');
 
@@ -620,8 +623,8 @@ class FinancialDashboardController extends Controller
                         ->whereColumn('settlement_check.external_order_id', 'orders.external_order_id')
                         ->where('settlement_check.order_created_at', '>=', $startOfMonth->toDateString());
                 })
-                ->selectRaw('origin as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
-                ->groupBy('origin')
+                ->selectRaw(Order::canalSql().' as channel, COUNT(*) as orders_count, COALESCE(SUM('.$this->localOrderRevenueSql().'), 0) as revenue')
+                ->groupBy(DB::raw(Order::canalSql()))
                 ->get()
                 ->keyBy('channel')
             : $orders;
@@ -639,8 +642,8 @@ class FinancialDashboardController extends Controller
                     ->orWhereNull('o.fiscal_operation_type');
             })
             ->where('o.created_at', '>=', $startOfMonth)
-            ->selectRaw('o.origin as channel, COALESCE(SUM('.ContributionMargin::custoSql('oi', 'p').'), 0) as product_cost')
-            ->groupBy('o.origin')
+            ->selectRaw(Order::canalSql('o').' as channel, COALESCE(SUM('.ContributionMargin::custoSql('oi', 'p').'), 0) as product_cost')
+            ->groupBy(DB::raw(Order::canalSql('o')))
             ->get()
             ->keyBy('channel');
 
@@ -655,8 +658,8 @@ class FinancialDashboardController extends Controller
                 $query->whereNotIn('orders.fiscal_operation_type', ['purchase_return', 'sales_return'])
                     ->orWhereNull('orders.fiscal_operation_type');
             })
-            ->selectRaw('orders.origin as channel, COALESCE(SUM(order_channel_fees.fee_amount), 0) as fee_amount')
-            ->groupBy('orders.origin')
+            ->selectRaw(Order::canalSql().' as channel, COALESCE(SUM(order_channel_fees.fee_amount), 0) as fee_amount')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->get()
             ->keyBy('channel');
 
@@ -680,8 +683,8 @@ class FinancialDashboardController extends Controller
                         ->whereColumn('settlement_check.external_order_id', 'orders.external_order_id')
                         ->where('settlement_check.order_created_at', '>=', $startOfMonth->toDateString());
                 })
-                ->selectRaw('orders.origin as channel, COALESCE(SUM(order_channel_fees.fee_amount), 0) as fee_amount')
-                ->groupBy('orders.origin')
+                ->selectRaw(Order::canalSql().' as channel, COALESCE(SUM(order_channel_fees.fee_amount), 0) as fee_amount')
+                ->groupBy(DB::raw(Order::canalSql()))
                 ->get()
                 ->keyBy('channel')
             : $fees;
@@ -711,13 +714,13 @@ class FinancialDashboardController extends Controller
             ->join('orders', 'orders.id', '=', 'order_channel_fees.order_id')
             ->whereIn('orders.status', self::REVENUE_STATUSES)
             ->where('orders.created_at', '>=', $startOfMonth)
-            ->selectRaw('orders.origin as channel,
+            ->selectRaw(Order::canalSql().' as channel,
                 COALESCE(SUM(COALESCE(order_channel_fees.commission_fee, 0) + COALESCE(order_channel_fees.service_fee, 0)), 0) as comissao,
                 COALESCE(SUM(order_channel_fees.shipping_fee), 0) as frete_loja,
                 COALESCE(SUM(order_channel_fees.seller_discount), 0) as desconto_loja,
                 COALESCE(SUM(order_channel_fees.platform_discount), 0) as desconto_plataforma,
                 SUM(CASE WHEN order_channel_fees.commission_fee IS NOT NULL THEN 1 ELSE 0 END) as com_quebra')
-            ->groupBy('orders.origin')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->get()
             ->keyBy('channel');
 
@@ -732,8 +735,8 @@ class FinancialDashboardController extends Controller
                     ->whereColumn('settlement_check.channel', 'orders.origin')
                     ->whereColumn('settlement_check.external_order_id', 'orders.external_order_id');
             }))
-            ->selectRaw('origin as channel, COUNT(*) as total')
-            ->groupBy('origin')
+            ->selectRaw(Order::canalSql().' as channel, COUNT(*) as total')
+            ->groupBy(DB::raw(Order::canalSql()))
             ->pluck('total', 'channel');
 
         $porCanal = app(ContributionMargin::class)->porCanal($startOfMonth, Carbon::tomorrow());
@@ -901,11 +904,11 @@ class FinancialDashboardController extends Controller
                 ->leftJoin('order_items as oi', 'oi.order_id', '=', 'o.id')
                 ->leftJoin('products as p', 'p.id', '=', 'oi.product_id')
                 ->whereIn('o.external_order_id', $externalIds)
-                ->selectRaw('o.origin as channel,
+                ->selectRaw(Order::canalSql('o').' as channel,
                     COUNT(DISTINCT o.id) as matched_orders,
                     COALESCE(SUM('.ContributionMargin::custoSql('oi', 'p').'), 0) as product_cost,
                     SUM(CASE WHEN oi.id IS NOT NULL AND COALESCE(oi.manual_cost_price, p.cost_price) IS NULL THEN 1 ELSE 0 END) as cost_missing_items')
-                ->groupBy('o.origin')
+                ->groupBy(DB::raw(Order::canalSql('o')))
                 ->get()
                 ->keyBy('channel');
 

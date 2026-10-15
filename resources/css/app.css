@@ -13,12 +13,17 @@
     --font-store: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     --font-store-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
 
-    /* Opção C aprovada pelo Lira (2026-10-11): grafite com acento laranja.
+    /* Paleta Calcite (Lira, 2026-10-14): cinza #DDDCDB, laranja #FD7B41,
+       pêssego #EDBF9B, grafite #3C4044. Laranja é o único acento (botão
+       principal, item ativo, foco, preço promocional); texto sobre laranja
+       é #1F2225 e laranja como texto no claro é #9A3412. Dentro do admin o
+       primary vira o laranja (ver .admin-shell). Antes: opção C (grafite
+       com acento laranja), aprovada em 2026-10-11.
        Segue o preto da logo; cor de verdade fica para os degradês do
        dashboard e para os estados (sucesso, aviso, erro, info). No tema
        escuro o botão inverte e o acento vira laranja (ver .dark .admin-shell). */
-    --color-primary: #2b2326;
-    --color-secondary: #c2410c;
+    --color-primary: #3c4044;
+    --color-secondary: #9a3412;
     --color-success: #10b981;
     --color-warning: #d97706;
     --color-error: #dc2626;
@@ -59,6 +64,8 @@
     --color-store-accent-strong: #000000;
     --color-store-accent-soft: #ededed;
     --color-store-accent-contrast: #ffffff;
+    /* Hover de links: laranja mais forte e vibrante que o #F27A2A da marca (pedido do Lira, 2026-10-14). */
+    --color-store-link-hover: #ff5f00;
     --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 10%, transparent);
     --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 20%, transparent);
 }
@@ -69,53 +76,61 @@
  */
 .admin-shell {
     --surface: #ffffff;
-    --surface-muted: #f5f3f4;
-    /* Fundo da página. No claro é o cinza de apoio; no escuro, preto puro. */
-    --fundo: var(--surface-muted);
-    --surface-foreground: #1f1a1c;
-    --surface-border: #e6e2e3;
-    --sidebar-foreground: #3d3538;
-    /* Texto de apoio (legendas, dicas): legível nos dois temas. */
-    --texto-suave: #6b5f63;
-    /* Ícone do menu: uma cor neutra só (contraste 6,10 no branco). */
-    --icone-menu: #6b5f63;
-    /* Cor do item ativo do menu e de texto em destaque. */
-    --destaque: var(--color-primary);
+    --surface-muted: #f1f0ef;
+    /* Fundo da página: cinza Calcite sólido (sem degradê). */
+    --fundo: #dddcdb;
+    --surface-foreground: #3c4044;
+    --surface-border: #dddcdb;
+    --sidebar-foreground: #3c4044;
+    /* Texto de apoio (legendas, dicas): 6,4 no branco, 4,6 no cinza. */
+    --texto-suave: #5b6066;
+    --icone-menu: #5b6066;
+    /* Texto solto direto no fundo da página (títulos e legendas). */
+    --texto-fundo: #3c4044;
+    --texto-fundo-suave: #4b5056;
+    /* Cor do item ativo do menu e de texto em destaque: laranja escuro
+       (7,3 no branco). O laranja puro nunca é texto no claro. */
+    --destaque: #9a3412;
     /* Preenchimento sólido com texto/ícone branco por cima (bolinhas de
-       ícone, barras, ranking). No escuro vira o laranja, porque o primary
-       de lá é claro (botão invertido) e apagaria o branco. */
-    --primary-solido: var(--color-primary);
-    /* Faixa de destaque dos cards (topo/margem), pedido 2026-10-11: grafite
-       em todo o admin. A cor do card fica no ícone e no fundo. */
-    --faixa-card: var(--color-primary);
+       ícone, barras, ranking): grafite no claro. */
+    --primary-solido: #3c4044;
+    --faixa-card: #3c4044;
+    /* Botão principal: laranja Calcite com texto grafite escuro. */
+    --color-primary: #fd7b41;
+    --color-primary-emphasis: #e5651f;
+    --color-secondary: #9a3412;
+    --color-lightprimary: color-mix(in oklab, #fd7b41 14%, transparent);
+    --color-lightsecondary: color-mix(in oklab, #9a3412 12%, transparent);
+    --foco: #9a3412;
 }
 
 .dark .admin-shell {
-    /* Cards, tabelas, menu e topo em grafite quase preto puxado para o vinho
-       (Lira, 2026-10-14), para descolar do fundo em degradê vinho
-       (.admin-fundo). O muted fica um tom acima para campos, etiquetas e
-       hover não sumirem no card. */
-    --fundo: #000000;
-    --surface: #161113;
-    --surface-muted: #221b1e;
-    --surface-foreground: #f1eced;
-    --surface-border: #3a2e33;
-    --sidebar-foreground: #d9d2d4;
-    --texto-suave: #b3a9ac;
-    --icone-menu: #a99da1;
-    --destaque: #ff8c4d;
-    --primary-solido: #c2410c;
-    /* Grafite claro: o escuro do tema some no fundo (1,14); este dá 4,6. */
-    --faixa-card: #8f8589;
+    /* Calcite escuro: fundo grafite sólido #1F2225, cards #2A2D30, campos e
+       hover #34383C. Texto #F5F4F3 (10,1 no card), apoio #A9ADB2 (6,1). */
+    --fundo: #1f2225;
+    --surface: #2a2d30;
+    --surface-muted: #34383c;
+    --surface-foreground: #f5f4f3;
+    --surface-border: #3c4044;
+    --sidebar-foreground: #dcdddf;
+    --texto-suave: #a9adb2;
+    --icone-menu: #a9adb2;
+    --texto-fundo: #f5f4f3;
+    --texto-fundo-suave: #cfd1d3;
+    --destaque: #fd7b41;
+    /* Laranja mais fechado: o ícone branco por cima continua visível. */
+    --primary-solido: #e5651f;
+    --faixa-card: #8a8f95;
+    --foco: #fd7b41;
 
-    /* Botão invertido: grafite não aparece no fundo escuro (1,14), então o
-       botão principal fica claro com texto escuro (14,20). */
-    --color-primary: #ece6e8;
-    --color-primary-emphasis: #d8cfd2;
+    /* Botão principal laranja com texto #1F2225 (6,1). */
+    --color-primary: #fd7b41;
+    --color-primary-emphasis: #ff9462;
+    --color-secondary: #fd7b41;
 
     /* Pastel tints need more opacity to stay legible on dark surfaces.
        O lightprimary do escuro é laranja: fundo do item ativo do menu. */
-    --color-lightprimary: color-mix(in oklab, #ff8c4d 16%, transparent);
+    --color-lightprimary: color-mix(in oklab, #fd7b41 16%, transparent);
     --color-lightsecondary: color-mix(in oklab, var(--color-secondary) 20%, transparent);
     --color-lightsuccess: color-mix(in oklab, var(--color-success) 20%, transparent);
     --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
@@ -179,18 +194,13 @@
 .dark .admin-shell .icone-cor-cinza-azul { --cor-icone: #94a3b8; }
 
 /*
- * Fundo da página do admin em degradê (Lira, 2026-10-14): verde no tema
- * claro e vinho no escuro, os mesmos degradês dos cards "Acessos ao site" e
- * "Faturamento por canal" do Dashboard. Cards, tabelas e métricas continuam
+ * Fundo da página do admin em degradê (Lira, 2026-10-14) agora é sólido (Calcite):
+ * cinza no tema claro e grafite no escuro. Antes: degradê verde e vinho. Cards, tabelas e métricas continuam
  * sólidos (--surface: branco no claro, grafite no escuro). O degradê fica
  * parado na janela para não esticar em página comprida.
  */
 .admin-shell.admin-fundo {
-    background-image: linear-gradient(264deg, #91ffe8 0%, #40ccb4 9.84%, #32998b 25.08%, #23524c 85.05%, #1b423d 98.44%);
-    background-attachment: fixed;
-}
-.dark .admin-shell.admin-fundo {
-    background-image: linear-gradient(87deg, #290c15 0%, #78233d 40%, #9b2743 74.52%, #db586e 100%);
+    background-image: none;
 }
 
 /*
@@ -204,21 +214,21 @@
 }
 
 /*
- * Texto solto direto no degradê (títulos e legendas das telas) fica branco,
- * como os textos dos cards em degradê. Dentro de card, tabela ou caixa
+ * Texto solto direto no fundo (títulos e legendas das telas) usa
+ * --texto-fundo (grafite no claro, quase branco no escuro). Dentro de card, tabela ou caixa
  * sólida volta à cor normal do tema.
  */
 .admin-conteudo {
-    color: #ffffff;
+    color: var(--texto-fundo);
 }
 .admin-conteudo :is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table) {
     color: var(--surface-foreground);
 }
 .admin-shell .admin-conteudo :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-gray-400, .text-gray-500, .text-gray-600, .text-\[var\(--texto-suave\)\]):not(:is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table) *) {
-    color: rgb(255 255 255 / 0.8);
+    color: var(--texto-fundo-suave);
 }
 .admin-shell .admin-conteudo :is(.text-slate-700, .text-slate-800, .text-slate-900, .text-gray-700, .text-gray-800, .text-gray-900, .text-black, .text-primary, .text-\[var\(--surface-foreground\)\], .text-\[var\(--destaque\)\]):not(:is(.bg-white, .bg-slate-50, .bg-gray-50, .bg-\[var\(--surface\)\], .bg-\[var\(--surface-muted\)\], table, .bg-primary) *):not(.bg-primary) {
-    color: #ffffff;
+    color: var(--texto-fundo);
 }
 
 /*
@@ -228,7 +238,7 @@
  * o resto do admin (fundo em degradê vinho, menu e topo em --surface).
  */
 .dark .admin-shell:has(.radar-grafite) {
-    --fundo: #000000;
+    --fundo: #1f2225;
 }
 
 /*
@@ -246,7 +256,7 @@
     --icone-menu: #e4dee0;
     --surface-muted: rgb(255 255 255 / 0.12);
     --surface-border: rgb(255 255 255 / 0.14);
-    background-color: rgb(0 0 0 / 0.72);
+    background-color: rgb(31 34 37 / 0.72);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
     backdrop-filter: blur(16px) saturate(140%);
     color: #f1eced;
@@ -265,8 +275,8 @@
     color: rgb(241 236 237 / 0.6);
 }
 .dark .admin-topo-fume .topo-menu {
-    --surface-muted: #221b1e;
-    --surface-border: #3a2e33;
+    --surface-muted: #34383c;
+    --surface-border: #3c4044;
     color: var(--surface-foreground);
 }
 
@@ -330,9 +340,9 @@
 .dark .admin-shell .text-slate-500, .dark .admin-shell .text-gray-500 { color: #a99da1; }
 .dark .admin-shell .text-slate-600, .dark .admin-shell .text-gray-600 { color: #c9c0c3; }
 .dark .admin-shell .text-slate-700, .dark .admin-shell .text-slate-800, .dark .admin-shell .text-slate-900, .dark .admin-shell .text-gray-700, .dark .admin-shell .text-gray-800, .dark .admin-shell .text-gray-900, .dark .admin-shell .text-black { color: var(--surface-foreground); }
-.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #ff8c4d; }
+.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #fd7b41; }
 .dark .admin-shell .text-secondary { color: #fb9a5c; }
-.dark .admin-shell .bg-primary { color: #000000; }
+.dark .admin-shell .bg-primary { color: #1f2225; }
 .dark .admin-shell .placeholder\:text-slate-400::placeholder { color: #857a7e; }
 /* Fundos slate/gray escuros fixos nas telas (dark:bg-slate-800 etc.) eram
    azulados e quebravam o preto: viram os tons neutros do tema. */
@@ -341,7 +351,7 @@
 .dark .admin-shell .dark\:bg-slate-900\/30 { background-color: color-mix(in oklab, var(--surface-muted) 60%, transparent); }
 .dark .admin-shell .dark\:bg-slate-900\/60 { background-color: rgb(0 0 0 / 0.6); }
 /* Hover que usava o muted continua visível em cima do muted. */
-.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #000000; }
+.dark .admin-shell .hover\:bg-\[var\(--surface-muted\)\]:hover { background-color: #1f2225; }
 .dark .admin-shell .bg-red-50, .dark .admin-shell .bg-red-100 { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 .dark .admin-shell .border-red-100, .dark .admin-shell .border-red-200, .dark .admin-shell .border-red-300 { border-color: color-mix(in oklab, #ef4444 40%, transparent); }
 .dark .admin-shell .text-red-600, .dark .admin-shell .text-red-700, .dark .admin-shell .text-red-800, .dark .admin-shell .text-red-900 { color: #fca5a5; }
@@ -398,8 +408,8 @@
  * Ajustes do tema grafite (revisão do Jonathan, 2026-10-11).
  * - color-scheme: barra de rolagem, campos de data e controles nativos
  *   acompanham o tema escuro.
- * - Links: no claro o grafite ficava igual ao texto; viram laranja #c2410c
- *   (5,18 no branco) com sublinhado no hover. Só <a> com text-primary sem
+ * - Links: no claro o grafite ficava igual ao texto; viram laranja #9a3412
+ *   (7,3 no branco) com sublinhado no hover. Só <a> com text-primary sem
  *   fundo próprio (botões em forma de link ficam como estão).
  * - Lucro em texto: #10b981 dá 2,5 no branco; valor escrito usa #047857
  *   (5,48). O #10b981 fica para ícone e barra.
@@ -411,17 +421,17 @@ html.dark:has(.admin-shell), .dark .admin-shell { color-scheme: dark; }
    a barra nativa escura fica cinza e destoa do #000. Na página o trilho é o
    fundo; em caixas com rolagem (inclusive modais teleportados para o body)
    o trilho some e fica só o polegar. */
-html.dark:has(.admin-shell) { scrollbar-color: #3a3a3a #000000; }
-html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
-.admin-shell a.text-primary:not([class*="bg-"]), .admin-shell a.hover\:text-primary:hover { color: #c2410c; }
+html.dark:has(.admin-shell) { scrollbar-color: #4a4f54 #1f2225; }
+html.dark:has(.admin-shell) body * { scrollbar-color: #4a4f54 transparent; }
+.admin-shell a.text-primary:not([class*="bg-"]), .admin-shell a.hover\:text-primary:hover { color: #9a3412; }
 .admin-shell a.text-primary:not([class*="bg-"]):hover, .admin-shell a.hover\:text-primary:hover { text-decoration: underline; text-underline-offset: 2px; }
-.dark .admin-shell a.text-primary:not([class*="bg-"]), .dark .admin-shell a.hover\:text-primary:hover { color: #ff8c4d; }
+.dark .admin-shell a.text-primary:not([class*="bg-"]), .dark .admin-shell a.hover\:text-primary:hover { color: #fd7b41; }
 .admin-shell .text-lucro { color: #047857; }
 .dark .admin-shell .text-lucro { color: #6ee7b7; }
-.admin-shell .text-link { color: #c2410c; }
-.dark .admin-shell .text-link { color: #ff8c4d; }
-.dark .admin-shell .acao-principal { background-color: color-mix(in oklab, #ff8c4d 16%, transparent); color: #ff8c4d; }
-.dark .admin-shell .acao-principal:hover { background-color: #ff8c4d; color: #000000; }
+.admin-shell .text-link { color: #9a3412; }
+.dark .admin-shell .text-link { color: #fd7b41; }
+.dark .admin-shell .acao-principal { background-color: color-mix(in oklab, #fd7b41 16%, transparent); color: #fd7b41; }
+.dark .admin-shell .acao-principal:hover { background-color: #fd7b41; color: #1f2225; }
 .dark .admin-shell .acao-destrutiva:hover { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
 
 /*
@@ -684,9 +694,9 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
     --surface-foreground: #ffffff;
     --surface-border: #3a3a3a;
     --texto-suave: #ffffff;
-    --color-primary: #ff8c4d;
-    --primary-solido: #c2410c;
-    --color-lightprimary: color-mix(in oklab, #ff8c4d 16%, transparent);
+    --color-primary: #fd7b41;
+    --primary-solido: #e5651f;
+    --color-lightprimary: color-mix(in oklab, #fd7b41 16%, transparent);
     --color-lightsuccess: color-mix(in oklab, var(--color-success) 20%, transparent);
     --color-lightwarning: color-mix(in oklab, var(--color-warning) 20%, transparent);
     --color-lighterror: color-mix(in oklab, var(--color-error) 20%, transparent);
@@ -708,3 +718,20 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #3a3a3a transparent; }
 .dark .admin-shell .border-error { border-color: #f87171; }
 .dark .admin-shell .border-l-error { border-left-color: #f87171; }
 .dark .admin-shell .shopee-preto .ring-error\/50 { --tw-ring-color: color-mix(in oklab, #f87171 50%, transparent); }
+
+/*
+ * Calcite: botão principal e foco (Lira, 2026-10-14).
+ * - bg-primary é o laranja #FD7B41 e o texto por cima é grafite escuro
+ *   #1F2225 (6,1), nunca branco (2,6). O texto-branco do Tailwind perde pela
+ *   especificidade.
+ * - text-primary no claro vira laranja escuro (7,3 no branco); no escuro o
+ *   laranja puro já passa (5,3 no card).
+ * - Foco de teclado: anel de 2px, laranja escuro no claro e laranja no escuro.
+ */
+.admin-shell .bg-primary { color: #1f2225; }
+.admin-shell .text-primary, .admin-shell .hover\:text-primary:hover { color: #9a3412; }
+.dark .admin-shell .text-primary, .dark .admin-shell .hover\:text-primary:hover { color: #fd7b41; }
+.admin-shell :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--foco);
+    outline-offset: 2px;
+}

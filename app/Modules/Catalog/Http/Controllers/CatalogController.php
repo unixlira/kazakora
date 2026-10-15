@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Banner;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
+use App\Modules\Catalog\Models\OfertaDoDia;
+use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
@@ -16,6 +18,7 @@ use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Operacional\Models\ShippingMethod;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -115,6 +118,96 @@ class CatalogController extends Controller
                 ? Review::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
             'filters' => $request->only('search', 'tipo', 'categoria', 'todos', 'ordenar'),
+        ]);
+    }
+
+    /** Faixas de preço do filtro de ofertas: chave => [mínimo, máximo). */
+    private const FAIXAS_PRECO = [
+        'ate-50' => [0, 50],
+        '50-100' => [50, 100],
+        '100-200' => [100, 200],
+        '200-mais' => [200, PHP_INT_MAX],
+    ];
+
+    /**
+     * Página de ofertas (pedido 2026-10-15, layout de filtros da Beauty
+     * Kora): Ofertas Relâmpago no ar agora e Ofertas do Dia de hoje. São
+     * poucas, então filtro e ordem rodam aqui mesmo, sem paginação. Tudo fica
+     * na URL: departamento, desconto mínimo, faixa de preço, "termina em
+     * breve" (menos de 2 h) e ordem (padrão: maior desconto).
+     */
+    public function ofertas(Request $request): Response
+    {
+        $ids = array_unique([...array_keys(OfertaDoDia::precosDeHoje()), ...array_keys(OfertaRelampago::ativasAgora())]);
+        $agora = now();
+
+        $todas = Product::query()
+            ->forCard()
+            ->where('is_active', true)
+            ->comEstoque()
+            ->whereNull('parent_product_id')
+            ->whereIn('id', $ids)
+            ->with('category:id,name,slug')
+            ->get()
+            ->filter(fn (Product $produto) => $produto->emOferta())
+            ->each(function (Product $produto) use ($agora) {
+                $preco = (float) $produto->final_price;
+                $de = (float) $produto->preco_sem_oferta;
+                $relampago = $produto->relampagoNoAr();
+                $doDia = $produto->precoOfertaDeHoje();
+                // Termina quando acaba a oferta que dá o preço de agora.
+                $fim = $relampago && ($doDia === null || $produto->precoRelampago() <= $doDia)
+                    ? $relampago->fim_em
+                    : $agora->copy()->endOfDay();
+
+                $produto->setAttribute('desconto_oferta', $de > 0 ? (int) round((1 - $preco / $de) * 100) : 0);
+                $produto->setAttribute('oferta_termina_em', $fim->toIso8601String());
+            });
+
+        $categoria = (string) $request->query('categoria', '');
+        $desconto = (int) $request->query('desconto', 0);
+        $faixa = self::FAIXAS_PRECO[(string) $request->query('preco', '')] ?? null;
+        $acabando = $request->boolean('acabando');
+        $ordenar = (string) $request->query('ordenar', '');
+
+        // Filtros, menos o departamento: a contagem de cada departamento já
+        // considera desconto, preço e "termina em breve".
+        $filtradas = $todas
+            ->when($desconto > 0, fn ($lista) => $lista->filter(fn (Product $p) => $p->desconto_oferta >= $desconto))
+            ->when($faixa, fn ($lista) => $lista->filter(fn (Product $p) => $p->final_price >= $faixa[0] && $p->final_price < $faixa[1]))
+            ->when($acabando, fn ($lista) => $lista->filter(fn (Product $p) => Carbon::parse($p->oferta_termina_em)->lte($agora->copy()->addHours(2))));
+
+        $departamentos = $filtradas
+            ->filter(fn (Product $p) => $p->category)
+            ->groupBy(fn (Product $p) => $p->category->slug)
+            ->map(fn ($lista) => ['slug' => $lista->first()->category->slug, 'name' => $lista->first()->category->name, 'total' => $lista->count()])
+            ->sortBy('name')
+            ->values();
+
+        $produtos = $filtradas
+            ->when($categoria !== '', fn ($lista) => $lista->filter(fn (Product $p) => $p->category?->slug === $categoria))
+            ->sortBy(match ($ordenar) {
+                'termina' => [['oferta_termina_em', 'asc'], ['desconto_oferta', 'desc']],
+                'menor_preco' => [['final_price', 'asc']],
+                'maior_preco' => [['final_price', 'desc']],
+                default => [['desconto_oferta', 'desc'], ['final_price', 'asc']],
+            })
+            ->values();
+
+        $ids = $produtos->pluck('id');
+
+        return Inertia::render('Catalog/Ofertas', [
+            'produtos' => $produtos,
+            'totalOfertas' => $todas->count(),
+            'departamentos' => $departamentos,
+            'filters' => $request->only('categoria', 'desconto', 'preco', 'acabando', 'ordenar'),
+            'favoriteIds' => $request->user()
+                ? Favorite::query()->where('user_id', $request->user()->id)->whereIn('product_id', $ids)->pluck('product_id')
+                : [],
+            'reviewableProductIds' => $this->reviewableProductIds($request),
+            'reviewedProductIds' => $request->user()
+                ? Review::query()->where('user_id', $request->user()->id)->whereIn('product_id', $ids)->pluck('product_id')
+                : [],
         ]);
     }
 

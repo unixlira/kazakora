@@ -193,6 +193,10 @@ onBeforeUnmount(() => observador?.disconnect());
                             <i class="fa-solid fa-stopwatch animate-pulse"></i> Termina em <span class="font-mono tabular-nums">{{ restanteOfertas }}</span>
                         </span>
                         <span class="text-xs font-semibold uppercase tracking-wide text-[#E02424] md:hidden">Preço baixo por tempo limitado</span>
+                        <!-- Página com todas as ofertas e filtros (pedido 2026-10-15). -->
+                        <Link href="/ofertas" class="text-sm font-semibold text-store-accent hover:underline">
+                            Ver todas as ofertas <i class="fas fa-arrow-right ml-1 text-xs"></i>
+                        </Link>
                     </div>
                 </template>
             </SecaoProdutos>

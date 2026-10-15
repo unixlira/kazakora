@@ -225,7 +225,7 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('pedido.cancelado', false);
     }
 
-    public function test_meus_pedidos_pelo_email_e_cpf_ou_pelos_pedidos_do_aparelho(): void
+    public function test_meus_pedidos_so_com_login_da_conta_kazakora(): void
     {
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 556, 'status' => 'pending']));
         $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
@@ -234,7 +234,15 @@ class CheckoutFerraKoraTest extends TestCase
         // Pedido da mesma pessoa na KazaKora não aparece no FerraKora.
         Order::create([...collect($order->getAttributes())->only(['user_id', 'origin', 'shipping_name', 'shipping_phone', 'shipping_zip', 'shipping_street', 'shipping_number', 'shipping_neighborhood', 'shipping_city', 'shipping_state'])->all(), 'status' => Order::STATUS_PAID, 'subtotal' => 50, 'total' => 50]);
 
-        $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09'])
+        // Sem login não vê nada, nem pelo jeito antigo (e-mail + CPF).
+        $this->getJson('/api/ferrakora/pedidos')->assertUnauthorized();
+        $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09'])->assertStatus(405);
+
+        // A conta criada no checkout é a da KazaKora: entra com a senha dela.
+        $order->user->forceFill(['password' => 'senhaDaMaria1'])->save();
+        $token = $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaDaMaria1'])->assertOk()->json('token');
+
+        $this->withToken($token)->getJson('/api/ferrakora/pedidos')
             ->assertOk()
             ->assertJsonCount(1, 'pedidos')
             ->assertJsonPath('pedidos.0.numero', $order->numero)
@@ -244,21 +252,13 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('pedidos.0.itens.0.quantidade', 2)
             ->assertJsonMissingPath('pedidos.0.shipping_street');
 
-        $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '987.654.321-00'])->assertNotFound();
-        $this->postJson('/api/ferrakora/pedidos', ['email' => 'outra@exemplo.com', 'cpf' => '123.456.789-09'])->assertNotFound();
-        $this->postJson('/api/ferrakora/pedidos', [])->assertStatus(422);
-
-        $this->postJson('/api/ferrakora/pedidos', ['pedidos' => [
-            ['id' => $order->id, 'token' => $resposta->json('token')],
-            ['id' => $order->id + 1, 'token' => 'errado'],
-        ]])->assertOk()->assertJsonCount(1, 'pedidos')->assertJsonPath('pedidos.0.id', $order->id);
-
-        $this->postJson('/api/ferrakora/pedidos', ['pedidos' => [['id' => $order->id, 'token' => 'errado']]])
-            ->assertOk()->assertJsonCount(0, 'pedidos');
-
         $order->update(['status' => Order::STATUS_PAID]);
-        $this->postJson('/api/ferrakora/pedidos', ['pedidos' => [['id' => $order->id, 'token' => $resposta->json('token')]]])
+        $this->withToken($token)->getJson('/api/ferrakora/pedidos')
             ->assertJsonPath('pedidos.0.situacao', 'Pagamento aprovado')
             ->assertJsonPath('pedidos.0.pago', true);
+
+        // Outra conta não vê o pedido da Maria.
+        $outro = $this->postJson('/api/ferrakora/cadastro', ['name' => 'Ana', 'email' => 'ana@exemplo.com', 'password' => 'segredo123'])->json('token');
+        $this->withToken($outro)->getJson('/api/ferrakora/pedidos')->assertOk()->assertJsonCount(0, 'pedidos');
     }
 }

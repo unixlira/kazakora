@@ -176,48 +176,20 @@ abstract class CheckoutOutroSiteController extends Controller
     }
 
     /**
-     * Meus pedidos (FerraKora, pedido do Lira 2026-10-14): o site não tem
-     * login, então o cliente consulta pelo e-mail E o CPF da compra (os dois
-     * da mesma conta) ou o site manda os pedidos feitos naquele aparelho
-     * ({id, token} guardados depois do checkout). Só pedidos deste site, sem
-     * endereço nem telefone na resposta.
+     * Meus pedidos (FerraKora, pedido do Lira 2026-10-14): só com login. O
+     * cliente entra com a conta da KazaKora (AuthenticateFerraKoraCliente) e
+     * vê os pedidos dessa conta feitos neste site, sem endereço nem telefone.
      *
-     * POST pedidos {email, cpf} ou {pedidos: [{id, token}]}
+     * GET pedidos (Bearer da sessão)
      */
     public function meusPedidos(Request $request): JsonResponse
     {
-        $dados = $request->validate([
-            'email' => ['required_without:pedidos', 'nullable', 'email', 'max:255'],
-            'cpf' => ['required_without:pedidos', 'nullable', 'string', 'max:14'],
-            'pedidos' => ['nullable', 'array', 'max:30'],
-            'pedidos.*.id' => ['required', 'integer'],
-            'pedidos.*.token' => ['required', 'string', 'max:64'],
-        ], [
-            'email.required_without' => 'Digite o e-mail usado na compra.',
-            'cpf.required_without' => 'Digite o CPF usado na compra.',
-        ], ['email' => 'e-mail']);
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
 
-        $consulta = Order::query()->where('site_origem', $this->checkout->site());
-
-        if (filled($dados['email'] ?? null)) {
-            $cpf = preg_replace('/\D/', '', (string) $dados['cpf']);
-            $user = strlen($cpf) === 11
-                ? User::query()->where('email', trim($dados['email']))->first()
-                : null;
-
-            if (! $user || preg_replace('/\D/', '', (string) $user->cpf) !== $cpf) {
-                return response()->json(['message' => 'Não encontramos pedidos com esse e-mail e CPF. Confira os dados usados na compra.'], 404);
-            }
-
-            $consulta->where('user_id', $user->id);
-        } else {
-            $ids = collect($dados['pedidos'])
-                ->filter(fn (array $pedido) => hash_equals(CheckoutOutroSite::tokenDoPedido($this->checkout->site(), (int) $pedido['id']), $pedido['token']))
-                ->pluck('id');
-            $consulta->whereIn('id', $ids);
-        }
-
-        $pedidos = $consulta
+        $pedidos = Order::query()
+            ->where('site_origem', $this->checkout->site())
+            ->where('user_id', $user->id)
             ->with(['items.product.images', 'items.product.parent.images', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
             ->latest('created_at')->latest('id')
             ->limit(50)

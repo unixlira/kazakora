@@ -157,7 +157,7 @@ onUnmounted(() => {
                         <details v-for="item in brief.matrix" :key="item.key" class="group rounded-2xl border border-slate-100 bg-slate-50 p-4 open:bg-white open:shadow-sm">
                             <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
                                 <div>
-                                    <p class="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-purple-700">Arte {{ item.key }} <StatusBadge :status="item.status || 'pending'" context="ad_photo" /></p>
+                                    <p class="flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-purple-700">Arte {{ item.key }} <StatusBadge :status="item.status || 'pending'" context="ad_photo" /> <span v-if="item.stage_label" class="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] tracking-normal text-purple-700">{{ item.stage_label }}</span></p>
                                     <h3 class="mt-1 text-base font-black text-slate-900">{{ item.title }}</h3>
                                     <p class="mt-1 text-sm leading-6 text-slate-500">{{ item.function }}</p>
                                 </div>

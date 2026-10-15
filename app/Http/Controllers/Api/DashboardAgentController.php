@@ -85,7 +85,7 @@ class DashboardAgentController extends Controller
             ->nonPurchaseReturn()
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, MAX(id) as last_order_id')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('last_order_id', 'canal');
 
         // selectRaw()+MAX() devolve string crua no formato do MySQL
@@ -99,7 +99,7 @@ class DashboardAgentController extends Controller
             ->join('orders', 'orders.id', '=', 'print_jobs.order_id')
             ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
             ->selectRaw(Order::canalSql().' as canal, MAX(print_jobs.printed_at) as last_printed_at')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('last_printed_at', 'canal')
             ->map(fn ($value) => $value ? \Carbon\Carbon::parse($value) : null);
 
@@ -108,7 +108,7 @@ class DashboardAgentController extends Controller
             ->where('print_jobs.status', PrintJob::STATUS_PRINTED)
             ->where('print_jobs.printed_at', '>=', $today)
             ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal');
 
         // Uma query agrupada por métrica em vez de uma por canal — 6 canais
@@ -133,7 +133,7 @@ class DashboardAgentController extends Controller
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal');
 
         $revenueTodayByChannel = Order::query()
@@ -141,7 +141,7 @@ class DashboardAgentController extends Controller
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, SUM('.ContributionMargin::receitaSql().') as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal');
 
         $salesMonthByChannel = Order::query()
@@ -149,7 +149,7 @@ class DashboardAgentController extends Controller
             ->where('created_at', '>=', $monthStart)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal');
 
         $ordersTodayByChannel = Order::query()
@@ -157,7 +157,7 @@ class DashboardAgentController extends Controller
             ->where('created_at', '>=', $today)
             ->whereIn('status', self::PAID_STATUSES)
             ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal');
 
         // Achado real 2026-08-07 ("card de devolução não está ok, tem 1 no
@@ -180,7 +180,7 @@ class DashboardAgentController extends Controller
                 });
             })
             ->selectRaw(Order::canalSql().' as canal, COUNT(*) as total')
-            ->groupBy(DB::raw(Order::canalSql()))
+            ->groupBy('canal')
             ->pluck('total', 'canal');
 
         // FerraKora e Beauty Kora (2026-10-14) são canal próprio nas métricas,

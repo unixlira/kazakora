@@ -56,7 +56,7 @@ class SerieDiaria
             ->where('orders.created_at', '>=', $desde)->where('orders.created_at', '<', $ate)
             ->tap(fn ($q) => ContributionMargin::semDevolucao($q))
             ->selectRaw(Order::canalSql().' as canal, DATE(orders.created_at) as dia, COUNT(*) as pedidos, COALESCE(SUM('.ContributionMargin::receitaSql().'), 0) as receita')
-            ->groupBy(DB::raw(Order::canalSql()), DB::raw('DATE(orders.created_at)'))
+            ->groupBy('canal', 'dia')
             ->get()
             ->each(function ($l) use ($por) {
                 $por($l->canal, 'pedidos', (string) $l->dia, (int) $l->pedidos);
@@ -67,7 +67,7 @@ class SerieDiaria
             ->whereIn(DB::raw(Order::canalSql()), $canais)
             ->where('created_at', '>=', $desde)->where('created_at', '<', $ate)
             ->selectRaw(Order::canalSql()." as canal, DATE(orders.created_at) as dia, COUNT(*) as total, SUM(CASE WHEN orders.status = 'cancelled' THEN 1 ELSE 0 END) as cancelados")
-            ->groupBy(DB::raw(Order::canalSql()), DB::raw('DATE(orders.created_at)'))
+            ->groupBy('canal', 'dia')
             ->toBase()->get()
             ->each(function ($l) use ($por) {
                 $por($l->canal, 'todos', (string) $l->dia, (int) $l->total);

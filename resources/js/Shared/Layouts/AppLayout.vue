@@ -66,6 +66,7 @@ const markAllNotificationsRead = () => {
 };
 
 const mobileMenuOpen = ref(false);
+const contaMobileAberta = ref(false);
 
 // Mega menu de Departamentos e menu do Fale conosco (pedido 2026-10-10).
 // Abrem ao passar o mouse (com uma folguinha pra não fechar no caminho) e
@@ -87,7 +88,11 @@ const alternarMenu = (nome) => {
 };
 const navRef = ref(null);
 useClickOutside(navRef, () => (menuAberto.value = null));
-const pararDeOuvir = router.on('start', () => { menuAberto.value = null; });
+const pararDeOuvir = router.on('start', () => {
+    menuAberto.value = null;
+    mobileMenuOpen.value = false;
+    contaMobileAberta.value = false;
+});
 onUnmounted(pararDeOuvir);
 
 // Busca (pedido 2026-10-10): o termo continua no campo depois de buscar e
@@ -101,9 +106,10 @@ const submitSearch = () => {
     router.get('/', termo ? { search: termo } : { todos: 1 });
 };
 
-// Busca do celular recolhida atrás da lupa (pedido 2026-10-15): a lupa abre a
-// barra e vira "X"; o "X" fecha, limpa o termo e, se havia busca na tela, volta
-// para a vitrine sem filtro. Já abre aberta quando a página veio de uma busca.
+// Busca do celular recolhida atrás da lupa, dentro do menu (pedido 2026-10-15):
+// a lupa abre a barra e vira "X"; o "X" fecha, limpa o termo e, se havia busca
+// na tela, volta para a vitrine sem filtro. Já abre aberta quando a página veio
+// de uma busca (aparece ao abrir o menu).
 const buscaMobileAberta = ref(termoDaUrl() !== '');
 const buscaMobilePronta = ref(buscaMobileAberta.value);
 const buscaMobileInput = ref(null);
@@ -282,17 +288,12 @@ const REDES = [
                 <BuscaInstantanea v-model="search" class="hidden max-w-xs flex-1 lg:block" @buscar="submitSearch" />
 
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
-                    <!-- Celular: lupa, coração, carrinho, da esquerda para a direita (pedido 2026-10-15). -->
-                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-store-fg hover:bg-store-bg-sunken lg:hidden"
-                        :aria-label="buscaMobileAberta ? 'Fechar busca' : 'Buscar'" :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile"
-                        @click="alternarBuscaMobile">
-                        <i class="fas text-base" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
-                    </button>
-                    <Link href="/favoritos" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
+                    <!-- Celular: lupa, coração, carrinho e conta ficam dentro do menu (pedido 2026-10-15). -->
+                    <Link href="/favoritos" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
                         <i class="far fa-heart text-base"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
-                    <Link href="/carrinho" class="relative flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
+                    <Link href="/carrinho" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">
                         <i class="fas fa-cart-shopping text-base"></i>
                         <span v-if="cartCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ cartCount }}</span>
                     </Link>
@@ -337,11 +338,12 @@ const REDES = [
                     </div>
 
                     <div ref="userMenuRef" class="relative">
-                        <button v-if="user" type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
+                        <button v-if="user" type="button" class="hidden h-9 w-9 items-center justify-center rounded-full lg:flex lg:h-10 lg:w-10 hover:bg-store-bg-sunken" @click="userMenuOpen = !userMenuOpen">
                             <img v-if="user.avatar_url" :src="user.avatar_url" class="h-8 w-8 rounded-full object-cover" alt="">
                             <span v-else class="flex h-8 w-8 items-center justify-center rounded-full bg-store-accent-soft text-xs font-semibold text-store-accent-strong">{{ user.initials }}</span>
                         </button>
-                        <Link v-else href="/entrar" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
+                        <!-- Celular: a conta e o Entrar ficam só no menu (pedido 2026-10-15); os ícones do topo são só do computador. -->
+                        <Link v-else href="/entrar" class="hidden h-9 w-9 items-center justify-center rounded-full lg:flex lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
                             <i class="far fa-user text-base"></i>
                         </Link>
 
@@ -362,33 +364,84 @@ const REDES = [
                         </div>
                     </div>
 
-                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" @click="mobileMenuOpen = !mobileMenuOpen">
-                        <i class="fas fa-bars text-base"></i>
+                    <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken lg:hidden" aria-label="Menu" :aria-expanded="mobileMenuOpen" aria-controls="menu-mobile" @click="mobileMenuOpen = !mobileMenuOpen">
+                        <i class="fas text-base" :class="mobileMenuOpen ? 'fa-xmark' : 'fa-bars'"></i>
                     </button>
                 </div>
             </div>
 
-            <!-- Busca do celular: abre e fecha pela lupa do topo (pedido 2026-10-15).
-                 Aberta, deixa a lista da busca instantânea passar para fora. -->
-            <div id="busca-mobile" class="grid transition-[grid-template-rows] duration-200 ease-out lg:hidden"
-                :class="buscaMobileAberta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'" :inert="!buscaMobileAberta"
-                @transitionend.self="buscaMobilePronta = buscaMobileAberta">
-                <div :class="buscaMobilePronta && buscaMobileAberta ? 'overflow-visible' : 'overflow-hidden'">
-                    <div class="px-3 pb-2.5" @keydown.esc="alternarBuscaMobile">
-                        <BuscaInstantanea ref="buscaMobileInput" v-model="search" celular @buscar="submitSearch" />
+            <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
+                 Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
+            <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
+                <div class="grid grid-cols-4 gap-2">
+                    <button type="button" class="menu-mobile-icone"
+                        :class="{ 'menu-mobile-icone-ativo': buscaMobileAberta }"
+                        :aria-expanded="buscaMobileAberta" aria-controls="busca-mobile" @click="alternarBuscaMobile">
+                        <i class="fas text-lg" :class="buscaMobileAberta ? 'fa-xmark' : 'fa-magnifying-glass'"></i>
+                        <span>{{ buscaMobileAberta ? 'Fechar' : 'Buscar' }}</span>
+                    </button>
+                    <Link href="/favoritos" class="menu-mobile-icone" preserve-scroll>
+                        <span class="relative"><i class="fas fa-heart text-lg text-[#ef4444]"></i>
+                            <span v-if="favoritesCount > 0" class="menu-mobile-contador">{{ favoritesCount }}</span></span>
+                        <span>Favoritos</span>
+                    </Link>
+                    <Link href="/carrinho" class="menu-mobile-icone">
+                        <span class="relative"><i class="fas fa-cart-shopping text-lg"></i>
+                            <span v-if="cartCount > 0" class="menu-mobile-contador">{{ cartCount }}</span></span>
+                        <span>Carrinho</span>
+                    </Link>
+                    <button v-if="user" type="button" class="menu-mobile-icone"
+                        :class="{ 'menu-mobile-icone-ativo': contaMobileAberta }"
+                        :aria-expanded="contaMobileAberta" aria-controls="conta-mobile" @click="contaMobileAberta = !contaMobileAberta">
+                        <img v-if="user.avatar_url" :src="user.avatar_url" class="h-6 w-6 rounded-full object-cover" alt="">
+                        <span v-else class="flex h-6 w-6 items-center justify-center rounded-full bg-store-accent-soft text-[0.6rem] font-semibold text-store-accent-strong">{{ user.initials }}</span>
+                        <span>Conta</span>
+                    </button>
+                    <Link v-else href="/entrar" class="menu-mobile-icone">
+                        <i class="fa-regular fa-circle-user text-lg text-[#f27a2a]"></i>
+                        <span>Entrar</span>
+                    </Link>
+                </div>
+
+                <!-- Busca: abre e fecha pela lupa do menu. Aberta, deixa a lista da busca instantânea passar para fora. -->
+                <div id="busca-mobile" class="grid transition-[grid-template-rows] duration-200 ease-out"
+                    :class="buscaMobileAberta ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'" :inert="!buscaMobileAberta"
+                    @transitionend.self="buscaMobilePronta = buscaMobileAberta">
+                    <div :class="buscaMobilePronta && buscaMobileAberta ? 'overflow-visible' : 'overflow-hidden'">
+                        <div class="pt-3" @keydown.esc="alternarBuscaMobile">
+                            <BuscaInstantanea ref="buscaMobileInput" v-model="search" celular @buscar="submitSearch" />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div v-if="mobileMenuOpen" class="border-t border-store-border px-4 py-4 lg:hidden">
-                <nav class="flex flex-col gap-3">
-                    <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
-                    <a href="/?todos=1#produtos" class="text-sm font-medium">Produtos</a>
-                    <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>
-                    <Link href="/carrinho" class="text-sm font-medium">Carrinho</Link>
-                    <Link href="/rastreio" class="text-sm font-medium">Rastrear pedido</Link>
-                    <a :href="COMPANY.whatsappLink" target="_blank" class="text-sm font-medium"><i class="fa-brands fa-whatsapp mr-1.5 text-[#25D366]"></i>Fale conosco no WhatsApp</a>
-                    <Link href="/fale-conosco" class="text-sm font-medium"><i class="fa-regular fa-envelope mr-1.5 text-[#f27a2a]"></i>Mandar mensagem</Link>
+                <!-- Conta (logado): o que fica no menu do avatar no computador. -->
+                <nav v-if="user && contaMobileAberta" id="conta-mobile" class="mt-3 overflow-hidden rounded-xl border border-store-border text-sm font-medium">
+                    <p class="truncate bg-store-bg-sunken px-3 py-2 text-xs text-store-fg-muted">Olá, <strong class="text-store-fg">{{ user.name }}</strong></p>
+                    <Link href="/perfil" class="flex items-center gap-3 px-3 py-2.5 no-underline"><i class="far fa-user w-4 text-center text-[#F27A2A]"></i> Meu Perfil</Link>
+                    <Link href="/pedidos" class="flex items-center gap-3 px-3 py-2.5 no-underline"><i class="fas fa-bag-shopping w-4 text-center text-[#F27A2A]"></i> Meus Pedidos</Link>
+                    <Link href="/configuracoes" class="flex items-center gap-3 px-3 py-2.5 no-underline"><i class="fas fa-gear w-4 text-center text-[#F27A2A]"></i> Configurações</Link>
+                    <Link v-if="user.role === 'admin'" href="/admin" class="flex items-center gap-3 px-3 py-2.5 no-underline"><i class="fas fa-screwdriver-wrench w-4 text-center text-[#F27A2A]"></i> Painel Admin</Link>
+                    <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-3 py-2.5 text-left text-red-600" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
+                </nav>
+
+                <!-- Abaixo da linha, os atalhos no mesmo padrão dos ícones do alto (pedido 2026-10-15, sem o WhatsApp); ícones coloridos e chamativos, uma cor por botão. -->
+                <nav class="menu-mobile-atalhos mt-4 grid grid-cols-4 gap-2 border-t border-store-border pt-4">
+                    <a href="/#categorias" class="menu-mobile-icone">
+                        <i class="fas fa-table-cells-large text-xl text-[#8b5cf6]"></i>
+                        <span>Departamentos</span>
+                    </a>
+                    <a href="/?todos=1#produtos" class="menu-mobile-icone">
+                        <i class="fas fa-box-open text-xl text-[#f27a2a]"></i>
+                        <span>Produtos</span>
+                    </a>
+                    <Link href="/rastreio" class="menu-mobile-icone">
+                        <i class="fas fa-truck-fast text-xl text-[#10b981]"></i>
+                        <span>Rastrear pedido</span>
+                    </Link>
+                    <Link href="/fale-conosco" class="menu-mobile-icone">
+                        <i class="fas fa-envelope text-xl text-[#3b82f6]"></i>
+                        <span>Mandar mensagem</span>
+                    </Link>
                 </nav>
             </div>
         </header>

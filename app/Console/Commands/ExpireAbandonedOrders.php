@@ -5,8 +5,10 @@ namespace App\Console\Commands;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ExpireAbandonedOrders extends Command
 {
@@ -21,7 +23,13 @@ class ExpireAbandonedOrders extends Command
      */
     private const ABANDONED_AFTER_MINUTES = 30;
 
-    public function handle(OrderPaymentFinalizer $finalizer): int
+    private const LIVRE_PARA_CANCELAR = 'livre';
+
+    private const PAGO = 'pago';
+
+    private const NAO_CONFERIDO = 'nao_conferido';
+
+    public function handle(OrderPaymentFinalizer $finalizer, MercadoPagoPaymentService $mercadoPago): int
     {
         // BUG REAL 2026-08-18 (pedido #476, Shopee 260819PQEFC0TQ, cancelado
         // por engano com estoque restaurado enquanto o pagamento já estava
@@ -69,6 +77,23 @@ class ExpireAbandonedOrders extends Command
                 continue;
             }
 
+            // Auditoria 2026-10-15: o Pix só era confirmado enquanto a tela do
+            // cliente consultava o status (não há webhook do tópico "payment"
+            // ligado). Quem pagava e fechava a aba tinha o pedido cancelado
+            // aqui com o dinheiro já recebido. Antes de cancelar, pergunta ao
+            // Mercado Pago; na dúvida (API fora), não cancela nesta rodada.
+            $situacao = $this->conferirNoMercadoPago($fresh, $finalizer, $mercadoPago);
+
+            if ($situacao !== self::LIVRE_PARA_CANCELAR) {
+                continue;
+            }
+
+            $fresh->refresh();
+
+            if (! in_array($fresh->status, [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING], true)) {
+                continue;
+            }
+
             foreach ($finalizer->refundOrder($fresh) as $error) {
                 Log::error('orders.expire_abandoned.refund_failed', ['order_id' => $fresh->id, 'message' => $error]);
             }
@@ -80,5 +105,84 @@ class ExpireAbandonedOrders extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Atualiza os pagamentos do Mercado Pago ainda "aguardando confirmação"
+     * pelo status real lá (mesmo vocabulário de CheckoutController::status()).
+     * Pix ainda pendente é cancelado no Mercado Pago antes de o pedido ser
+     * cancelado aqui, para ninguém pagar um pedido que já não existe.
+     */
+    private function conferirNoMercadoPago(Order $order, OrderPaymentFinalizer $finalizer, MercadoPagoPaymentService $mercadoPago): string
+    {
+        $pendentes = $order->payments->filter(fn (Payment $payment) => $payment->provider === Payment::PROVIDER_MERCADOPAGO
+            && $payment->status === Payment::STATUS_REQUIRES_CONFIRMATION);
+
+        if ($pendentes->isEmpty()) {
+            return self::LIVRE_PARA_CANCELAR;
+        }
+
+        try {
+            foreach ($pendentes as $payment) {
+                $novoStatus = $payment->mercadopago_order_id
+                    ? $this->statusDoCartao($mercadoPago->retrieveOrder($payment->mercadopago_order_id))
+                    : $this->statusDoPix($payment, $mercadoPago);
+
+                if ($novoStatus !== null) {
+                    $payment->update(['status' => $novoStatus]);
+                }
+            }
+        } catch (Throwable $exception) {
+            Log::warning('orders.expire_abandoned.mercadopago_indisponivel', [
+                'order_id' => $order->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return self::NAO_CONFERIDO;
+        }
+
+        if ($finalizer->finalize($order->fresh(['payments']))) {
+            Log::info('orders.expire_abandoned.pago_no_mercadopago', ['order_id' => $order->id]);
+            $this->info("Pedido #{$order->id} estava pago no Mercado Pago: confirmado em vez de cancelado.");
+
+            return self::PAGO;
+        }
+
+        return self::LIVRE_PARA_CANCELAR;
+    }
+
+    /** Cartão — API de Orders. */
+    private function statusDoCartao(array $mpOrder): ?string
+    {
+        $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
+
+        return match (true) {
+            ($mpPayment['status'] ?? null) === 'processed' => Payment::STATUS_CAPTURED,
+            ($mpPayment['status'] ?? null) === 'action_required' && ($mpPayment['status_detail'] ?? null) === 'waiting_capture' => Payment::STATUS_AUTHORIZED,
+            in_array($mpPayment['status'] ?? null, ['failed', 'rejected', 'cancelled'], true) => Payment::STATUS_CANCELED,
+            default => null,
+        };
+    }
+
+    /** Pix — API de Payments clássica. Pendente é cancelado lá antes de cancelar o pedido. */
+    private function statusDoPix(Payment $payment, MercadoPagoPaymentService $mercadoPago): ?string
+    {
+        if (! $payment->mercadopago_payment_id) {
+            return null;
+        }
+
+        $status = $mercadoPago->retrievePayment($payment->mercadopago_payment_id)['status'] ?? null;
+
+        if (in_array($status, ['pending', 'in_process', 'authorized'], true)) {
+            // Se o cliente pagou no último segundo, o cancelamento falha ou
+            // volta "approved": a resposta decide.
+            $status = $mercadoPago->cancelPayment($payment->mercadopago_payment_id)['status'] ?? null;
+        }
+
+        return match (true) {
+            $status === 'approved' => Payment::STATUS_CAPTURED,
+            in_array($status, ['cancelled', 'rejected'], true) => Payment::STATUS_CANCELED,
+            default => null,
+        };
     }
 }

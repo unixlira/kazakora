@@ -24,8 +24,9 @@ use Illuminate\Support\Facades\Log;
  * cada site tem a sua subclasse (FerraKoraCheckoutController,
  * BeautyKoraCheckoutController).
  *
- * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, frete? (id da opção), turbo? (antigo)}
- * POST pedido  {itens, frete?, turbo?, total_esperado (centavos), cliente{name,email,cpf,phone},
+ * POST resumo  {itens: [{variante: "kzv-1", quantidade: 1}], cep?, frete? (id da opção), turbo? (antigo), cupom?, email?}
+ *              → cupom{codigo, descricao, desconto} ou cupom_erro
+ * POST pedido  {itens, frete?, turbo?, cupom?, total_esperado (centavos), cliente{name,email,cpf,phone},
  *               endereco{zip,street,number,complement,neighborhood,city,state},
  *               pagamento{metodo: pix|card|boleto, mp_card_token, mp_card_installments, mp_payment_method_id}}
  *              → pedido, token, pix{copia_e_cola,...} ou boleto{linha_digitavel, codigo_barras, url, vencimento}
@@ -46,10 +47,12 @@ abstract class CheckoutOutroSiteController extends Controller
             'cep' => ['nullable', 'string', 'max:9'],
             'turbo' => ['nullable', 'boolean'],
             'frete' => ['nullable', 'string', 'max:40'],
+            'cupom' => ['nullable', 'string', 'max:60'],
+            'email' => ['nullable', 'string', 'max:255'],
         ]);
 
         try {
-            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados))));
+            return $this->semCache(response()->json($this->checkout->resumo($dados['itens'], $dados['cep'] ?? null, CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['email'] ?? null)));
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         }
@@ -73,6 +76,7 @@ abstract class CheckoutOutroSiteController extends Controller
             ...$this->regrasDosItens(),
             'turbo' => ['nullable', 'boolean'],
             'frete' => ['nullable', 'string', 'max:40'],
+            'cupom' => ['nullable', 'string', 'max:60'],
             'total_esperado' => ['required', 'integer', 'min:1'],
             'cliente.name' => ['required', 'string', 'min:11', 'max:255'],
             'cliente.email' => ['required', 'email', 'max:255'],
@@ -115,7 +119,7 @@ abstract class CheckoutOutroSiteController extends Controller
         } catch (CartStockChangedException $e) {
             return response()->json(['message' => $e->getMessage(), 'estoque' => true], 409);
         } catch (PrecoMudouException $e) {
-            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados))], 409);
+            return response()->json(['message' => $e->getMessage(), 'resumo' => $this->checkout->resumo($dados['itens'], $dados['endereco']['zip'], CheckoutOutroSite::freteEscolhido($dados), $dados['cupom'] ?? null, $dados['cliente']['email'])], 409);
         } catch (UniqueConstraintViolationException) {
             return response()->json(['message' => 'Este CPF ou e-mail já tem cadastro na KazaKora. Use os dados da sua conta.'], 422);
         } catch (MercadoPagoException $e) {

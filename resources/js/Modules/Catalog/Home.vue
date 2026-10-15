@@ -229,7 +229,7 @@ onBeforeUnmount(() => observador?.disconnect());
             </div>
 
             <!-- Filtros: abas e departamentos em pílulas -->
-            <div class="no-scrollbar mb-8 flex gap-2 overflow-x-auto pb-1">
+            <div class="mb-8 flex flex-wrap gap-2">
                 <Link v-for="tab in TIPO_TABS" :key="tab.label" :href="filtroHref({ tipo: tab.key, categoria: null })" preserve-scroll
                     class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
                     :class="!filters.categoria && (filters.tipo ?? null) === tab.key
@@ -237,7 +237,7 @@ onBeforeUnmount(() => observador?.disconnect());
                         : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
                     {{ tab.label }}
                 </Link>
-                <span class="mx-1 w-px shrink-0 bg-store-border-strong"></span>
+                <span class="mx-1 hidden w-px shrink-0 bg-store-border-strong sm:block"></span>
                 <Link v-for="category in categories" :key="category.id" :href="filtroHref({ categoria: filters.categoria === category.slug ? null : category.slug, tipo: null })" preserve-scroll
                     class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
                     :class="filters.categoria === category.slug

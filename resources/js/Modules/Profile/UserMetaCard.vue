@@ -26,7 +26,7 @@ const ROLE_LABELS = {
     admin: 'Administrador',
     manager: 'Gerente',
     subscriber: 'Assinante',
-    customer: 'Cliente',
+    customer: 'Super Cliente',
 };
 
 const roleLabel = computed(() => ROLE_LABELS[props.profileUser.role] ?? props.profileUser.role);

@@ -290,7 +290,8 @@ const REDES = [
                 <div class="ml-auto flex items-center gap-0.5 lg:ml-0 lg:gap-1">
                     <!-- Celular: lupa, coração, carrinho e conta ficam dentro do menu (pedido 2026-10-15). -->
                     <Link href="/favoritos" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Favoritos" preserve-scroll>
-                        <i class="far fa-heart text-base"></i>
+                        <!-- Coração vermelho igual ao do menu do celular (pedido 2026-10-15). -->
+                        <i class="fas fa-heart text-base text-[#ef4444]"></i>
                         <span v-if="favoritesCount > 0" class="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[0.6rem] font-store-mono leading-tight text-white">{{ favoritesCount }}</span>
                     </Link>
                     <Link href="/carrinho" class="relative hidden h-9 w-9 lg:flex items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Carrinho">

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\CartStockChangedException;
@@ -170,6 +171,59 @@ abstract class CheckoutOutroSiteController extends Controller
         return $this->semCache(response()->json($this->situacao($order)));
     }
 
+    /**
+     * Meus pedidos (FerraKora, pedido do Lira 2026-10-14): o site não tem
+     * login, então o cliente consulta pelo e-mail E o CPF da compra (os dois
+     * da mesma conta) ou o site manda os pedidos feitos naquele aparelho
+     * ({id, token} guardados depois do checkout). Só pedidos deste site, sem
+     * endereço nem telefone na resposta.
+     *
+     * POST pedidos {email, cpf} ou {pedidos: [{id, token}]}
+     */
+    public function meusPedidos(Request $request): JsonResponse
+    {
+        $dados = $request->validate([
+            'email' => ['required_without:pedidos', 'nullable', 'email', 'max:255'],
+            'cpf' => ['required_without:pedidos', 'nullable', 'string', 'max:14'],
+            'pedidos' => ['nullable', 'array', 'max:30'],
+            'pedidos.*.id' => ['required', 'integer'],
+            'pedidos.*.token' => ['required', 'string', 'max:64'],
+        ], [
+            'email.required_without' => 'Digite o e-mail usado na compra.',
+            'cpf.required_without' => 'Digite o CPF usado na compra.',
+        ], ['email' => 'e-mail']);
+
+        $consulta = Order::query()->where('site_origem', $this->checkout->site());
+
+        if (filled($dados['email'] ?? null)) {
+            $cpf = preg_replace('/\D/', '', (string) $dados['cpf']);
+            $user = strlen($cpf) === 11
+                ? User::query()->where('email', trim($dados['email']))->first()
+                : null;
+
+            if (! $user || preg_replace('/\D/', '', (string) $user->cpf) !== $cpf) {
+                return response()->json(['message' => 'Não encontramos pedidos com esse e-mail e CPF. Confira os dados usados na compra.'], 404);
+            }
+
+            $consulta->where('user_id', $user->id);
+        } else {
+            $ids = collect($dados['pedidos'])
+                ->filter(fn (array $pedido) => hash_equals(CheckoutOutroSite::tokenDoPedido($this->checkout->site(), (int) $pedido['id']), $pedido['token']))
+                ->pluck('id');
+            $consulta->whereIn('id', $ids);
+        }
+
+        $pedidos = $consulta
+            ->with(['items.product.images', 'items.product.parent.images', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
+            ->latest('created_at')->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (Order $order) => $this->resumoDoPedido($order))
+            ->values();
+
+        return $this->semCache(response()->json(['pedidos' => $pedidos]));
+    }
+
     public function cep(string $cep): JsonResponse
     {
         $endereco = app(CompletarEnderecoPeloCep::class)->completar(['zip' => $cep]);
@@ -212,6 +266,37 @@ abstract class CheckoutOutroSiteController extends Controller
                 'pago' => in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true),
                 'cancelado' => $order->status === Order::STATUS_CANCELLED,
             ],
+        ];
+    }
+
+    /** Pedido para o "Meus pedidos" do site: o mesmo que a página de rastreio da loja mostra. */
+    private function resumoDoPedido(Order $order): array
+    {
+        $etapas = $order->etapas();
+        $cancelado = $order->status === Order::STATUS_CANCELLED;
+        $ultima = collect($etapas)->last(fn (array $etapa) => $etapa['feito']);
+
+        return [
+            'id' => $order->id,
+            'numero' => $order->numero,
+            'criado_em' => $order->created_at?->toIso8601String(),
+            'status' => $order->status,
+            'situacao' => match (true) {
+                $cancelado => 'Cancelado',
+                $ultima['titulo'] === 'Pedido recebido' => 'Aguardando pagamento',
+                default => $ultima['titulo'],
+            },
+            'cancelado' => $cancelado,
+            'pago' => in_array($order->status, [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true),
+            'total' => CheckoutOutroSite::centavos((float) $order->total),
+            'itens' => $order->items->map(fn ($item) => [
+                'nome' => $item->product_name,
+                'quantidade' => $item->quantity,
+                'imagem' => $item->product?->images->first()?->url ?? $item->product?->parent?->images->first()?->url,
+            ])->values(),
+            'transportadora' => $order->shipping_carrier_name,
+            'codigo_rastreio' => $order->trackingCode(),
+            'etapas' => $etapas,
         ];
     }
 

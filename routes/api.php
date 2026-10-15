@@ -224,6 +224,9 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1,fk-checkout-status')->name('status');
         Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
     });
+
+    // Meus pedidos do FerraKora (2026-10-14): sem login, pelo e-mail + CPF da compra.
+    Route::post('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->middleware('throttle:10,1,fk-meus-pedidos')->name('pedidos');
 });
 
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase

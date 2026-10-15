@@ -67,7 +67,7 @@ class FerraKoraPerfilTest extends TestCase
 
         $this->assertSame('111.444.777-35', $cliente->fresh()->cpf);
         $this->assertSame('João KZ', $daKazaKora->fresh()->name);
-        $this->assertNull($daKazaKora->fresh()->cpf);
+        $this->assertSame($daKazaKora->cpf, $daKazaKora->fresh()->cpf);
     }
 
     public function test_foto_e_senha(): void

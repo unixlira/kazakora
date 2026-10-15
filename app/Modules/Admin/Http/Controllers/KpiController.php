@@ -39,7 +39,9 @@ class KpiController extends Controller
         // de conversão só faz sentido pro funil visita->compra da PRÓPRIA
         // loja (ORIGIN_STORE); pedido de marketplace não entra nem no
         // numerador nem no denominador dessa conta.
-        $storeOrdersMonth = (clone $validOrdersMonth)->where('origin', Order::ORIGIN_STORE);
+        // Só kazakora.com (2026-10-14): pedido do FerraKora/Beauty Kora não
+        // conta contra os visitantes da loja.
+        $storeOrdersMonth = (clone $validOrdersMonth)->doCanal(Order::ORIGIN_STORE);
 
         // subtotal, não total — 'total' inclui frete (não é receita do
         // vendedor), ver comentário em FinancialDashboardController::index().

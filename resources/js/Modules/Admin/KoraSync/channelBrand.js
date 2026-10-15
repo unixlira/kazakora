@@ -12,6 +12,8 @@ export const CHANNEL_BRAND = {
     tiktok_shop: { name: 'TikTok Shop', short: 'TikTok', color: '#7B61FF' },
     amazon: { name: 'Amazon', short: 'Amazon', color: '#FF9900' },
     shein: { name: 'Shein', short: 'Shein', color: '#3D3D3D' },
+    ferrakora: { name: 'FerraKora', short: 'FerraKora', color: '#F27A2A' },
+    beautykora: { name: 'Beauty Kora', short: 'Beauty', color: '#d63384' },
 };
 
 export function channelBrand(channel) {

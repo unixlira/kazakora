@@ -99,8 +99,10 @@ const ORDENS = computed(() => [
     { valor: 'nome', label: 'Nome (A–Z)' },
 ]);
 
+// Na busca, sem Departamento (o Lira não gostou dos departamentos à mostra
+// nos resultados, 2026-10-15): só Mostrar, Desconto, Preço e Ordenar.
 const gruposFiltro = computed(() => [
-    {
+    ...(props.filters.search ? [] : [{
         chave: 'categoria',
         titulo: 'Departamentos',
         rotulo: 'Departamento',
@@ -109,7 +111,7 @@ const gruposFiltro = computed(() => [
             { valor: null, label: 'Todos os departamentos', labelPainel: 'Todos' },
             ...props.departamentosFiltro.map((d) => ({ valor: d.slug, label: d.name, total: d.total })),
         ],
-    },
+    }]),
     { chave: 'tipo', titulo: 'Mostrar', opcoes: TIPO_TABS.map((tab) => ({ valor: tab.key, label: tab.label })) },
     { chave: 'desconto', titulo: 'Desconto', prefixoEtiqueta: 'Desconto de ', opcoes: DESCONTOS },
     { chave: 'preco', titulo: 'Preço', opcoes: PRECOS },

@@ -92,6 +92,8 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
 // Todas as ofertas no ar, com filtros (pedido 2026-10-15).
 Route::get('/ofertas', [CatalogController::class, 'ofertas'])->name('catalogo.ofertas');
+// Busca instantânea do topo: foto e nome enquanto digita (pedido 2026-10-15).
+Route::get('/busca/sugestoes', [CatalogController::class, 'sugestoes'])->middleware('throttle:120,1')->name('catalogo.busca.sugestoes');
 // Mapa do site para o Google Search Console (pedido 2026-10-12).
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])

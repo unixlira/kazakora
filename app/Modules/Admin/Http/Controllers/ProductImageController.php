@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
+use App\Modules\Catalog\Support\DuplicateProductGuard;
 use App\Modules\Catalog\Support\ProductImageOptimizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,15 @@ class ProductImageController extends Controller
 
         $path = $request->file('image')->store("products/{$product->id}", 'public');
         $path = ProductImageOptimizer::optimize($path) ?? $path;
+
+        // Trava de duplicado (2026-10-15): foto idêntica à de outro produto
+        // (fora da família de variações) é recusada.
+        $igual = app(DuplicateProductGuard::class)->productWithIdenticalImage($product, $path);
+        if ($igual) {
+            Storage::disk('public')->delete($path);
+
+            return back()->with('error', "Essa foto já está no produto #{$igual->id} ({$igual->name}). Se for o mesmo item, cadastre como variação dele.");
+        }
 
         $product->images()->create([
             'path' => $path,

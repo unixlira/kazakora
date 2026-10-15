@@ -273,26 +273,29 @@ const precoPartes = computed(() => {
                     </div>
                     <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
                     <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
+                </div>
+                <div class="mt-1.5 flex h-5 items-center gap-2">
+                    <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
+                    <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
+                    <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
+                    <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
+                        Frete grátis
+                        <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
+                        <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
+                        <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
+                            <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>
+                            <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
+                        </span>
+                    </p>
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
-                         computador fica do lado do preço; no celular vira a última linha
-                         do card. Laranja da KazaKora, hover no laranja mais forte. -->
+                         computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL
+                         (margem negativa: o botão é mais alto que a linha e não muda a altura
+                         do card); no celular vira a última linha do card. -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="ml-auto hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        class="-my-[5px] hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
                         Detalhes
                     </Link>
                 </div>
-                <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
-                <p v-if="product.stock <= 0" class="mt-1.5 flex h-5 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
-                <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
-                <p v-else class="mt-1.5 flex h-5 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
-                    Frete grátis
-                    <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
-                    <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
-                    <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
-                        <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>
-                        <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
-                    </span>
-                </p>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
                     class="mt-3 flex w-full items-center justify-center rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
                     Ver detalhes

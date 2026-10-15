@@ -15,6 +15,7 @@ class ProductImage extends Model
         'thumb_path',
         'position',
         'is_primary',
+        'is_variant',
     ];
 
     protected $appends = ['url', 'thumb_url'];
@@ -55,6 +56,7 @@ class ProductImage extends Model
         return [
             'position' => 'integer',
             'is_primary' => 'boolean',
+            'is_variant' => 'boolean',
         ];
     }
 

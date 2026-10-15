@@ -1017,11 +1017,18 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
     .pd2 .compra h1 { font-size: 20px; }
     .pd2 .nota { font-size: 14px; }
+    /* Foto e compra num card só no celular (pedido 2026-10-15): eram dois cards
+       e, com a faixa da Oferta Relâmpago, o preço ia parar longe da foto. O
+       clip-path corta a sombra na emenda para não marcar uma linha. */
+    .pd2 .galeria-card { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: var(--shadow); clip-path: inset(-30px -30px 0 -30px); }
+    .pd2 .col-principal > .compra { margin-top: -20px; padding-top: 10px; border-top-left-radius: 0; border-top-right-radius: 0; box-shadow: var(--shadow); clip-path: inset(0 -30px -30px -30px); }
     .pd2 .galeria { flex-direction: column; gap: 10px; }
     .pd2 .foto { flex-basis: auto; width: 100%; }
     .pd2 .miniaturas { flex-direction: row; gap: 8px; max-height: none; overflow-x: auto; }
     .pd2 .miniaturas button { flex: 0 0 calc(25% - 6px); }
-    .pd2 .preco { grid-template-columns: 20% 80%; }
+    /* Preço na largura toda do card (o "Preço:" ao lado espremia o 12x). */
+    .pd2 .preco { grid-template-columns: minmax(0, 1fr); }
+    .pd2 .preco .rot { display: none; }
     .pd2 .btn { font-size: 20px; }
     .pd2 .fretefundo li { font-size: 14px; }
     .pd2 .fretefundo i { color: #7b7b7b; }

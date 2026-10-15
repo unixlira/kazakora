@@ -2,6 +2,7 @@
 
 namespace App\Services\NFe;
 
+use App\Models\IbgeMunicipio;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -11,15 +12,18 @@ use RuntimeException;
 /**
  * Resolve nome de cidade + UF para o código de município do IBGE (7 dígitos),
  * exigido em várias tags da NF-e (cMunFG, enderEmit/cMun, enderDest/cMun).
- * Não temos uma tabela própria de municípios — usa a API pública e gratuita
- * do IBGE (sem autenticação), com cache de 30 dias por UF pra não bater na
- * API toda hora.
+ *
+ * Desde 2026-10-15 lê PRIMEIRO a tabela ibge_municipios (populada pela
+ * migration com o arquivo versionado e atualizada por `ibge:sincronizar`).
+ * A API do IBGE / BrasilAPI com cache só entra se a UF não tiver dados na
+ * tabela (ex.: tabela ainda não migrada).
  */
 class IbgeMunicipioResolver
 {
     public function resolve(string $cidade, string $uf): string
     {
-        $municipios = $this->municipiosDoEstado($uf);
+        $uf = strtoupper(trim($uf));
+        $municipios = $this->municipiosDaTabela($uf) ?? $this->municipiosDoEstado($uf);
 
         $normalizado = $this->normalize($cidade);
         $encontrado = collect($municipios)->first(fn (array $m) => $this->normalize($m['nome']) === $normalizado);
@@ -75,6 +79,31 @@ class IbgeMunicipioResolver
 
             return ['code' => $code, 'city' => $city];
         });
+    }
+
+    /**
+     * BUG REAL 2026-10-15: a "última lista boa" ficava só no cache e o
+     * deploy limpou o cache; com IBGE (cURL 60) e BrasilAPI (504) fora,
+     * todas as notas pararam. A tabela não depende de nada externo.
+     * Devolve null quando a UF não tem dados (ou a tabela não existe).
+     *
+     * @return array<int, array{id: int, nome: string}>|null
+     */
+    private function municipiosDaTabela(string $uf): ?array
+    {
+        try {
+            $municipios = IbgeMunicipio::query()
+                ->where('uf', $uf)
+                ->get(['id', 'nome'])
+                ->map(fn (IbgeMunicipio $m) => ['id' => (int) $m->id, 'nome' => $m->nome])
+                ->all();
+        } catch (\Throwable $e) {
+            Log::warning('ibge.municipios.tabela_indisponivel', ['uf' => $uf, 'error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        return $municipios === [] ? null : $municipios;
     }
 
     /**

@@ -2,6 +2,7 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
+import { atualizarFavoritos, totalFavoritos } from '@/Shared/favoritos';
 import { useClickOutside } from '@/Shared/useClickOutside';
 import { COMPANY } from '@/Shared/company';
 import FaixaPromo from '@/Shared/Components/FaixaPromo.vue';
@@ -12,8 +13,15 @@ import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 const page = usePage();
 const marca = computed(() => page.props.marca ?? { logoNav: '/images/marca/logo-nav.png', logoRodape: '/images/marca/logo-rodape.png' });
 const cartCount = computed(() => page.props.cart?.count ?? 0);
-const favoritesCount = computed(() => page.props.favorites?.count ?? 0);
+const favoritesCount = computed(() => totalFavoritos());
 const user = computed(() => page.props.auth?.user);
+
+// Favoritos sem login ficam no navegador; com login, vêm da conta (2026-10-15).
+watch(
+    () => [Boolean(user.value), page.props.favorites?.ids],
+    ([logado, ids]) => atualizarFavoritos(logado, ids ?? []),
+    { immediate: true },
+);
 const notifications = computed(() => page.props.notifications?.items ?? []);
 const unreadNotifications = computed(() => page.props.notifications?.unreadCount ?? 0);
 

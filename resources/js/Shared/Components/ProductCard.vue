@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
+import { ehFavorito } from '@/Shared/favoritos';
 
 const props = defineProps({
     product: {
@@ -202,15 +203,14 @@ const precoPartes = computed(() => {
             <div v-else class="flex h-full w-full items-center justify-center">
                 <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
             </div>
-            <button v-if="isAuthenticated" type="button"
-                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow"
-                :aria-pressed="isFavorite" @click.stop="toggleFavorite(product.id)">
-                <i class="text-sm" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
+            <!-- Favorito com ou sem login; guardado = fundo laranja com check (pedido 2026-10-15). -->
+            <button type="button"
+                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full shadow transition-colors"
+                :class="ehFavorito(product.id) ? 'favorito-ativo' : 'bg-store-bg-raised'"
+                :aria-pressed="ehFavorito(product.id)" :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'"
+                @click.stop="toggleFavorite(product.id)">
+                <i class="text-sm" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
             </button>
-            <Link v-else href="/entrar" @click.stop
-                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow">
-                <i class="far fa-heart text-sm text-store-fg-muted"></i>
-            </Link>
 
 
             <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card). -->

@@ -114,6 +114,9 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame('maria@exemplo.com', $order->shipping_email);
         $this->assertSame('12345678909', $order->buyer_document);
         $this->assertSame(Order::SITE_FERRAKORA, $order->payments()->firstOrFail()->site_origem);
+        $this->assertSame('01310100', $order->ferrakoraCliente->enderecos()->sole()->zip);
+        $this->assertSame($order->ferrakora_endereco_id, $order->ferrakoraCliente->enderecos()->sole()->id);
+        $this->assertSame(0, \App\Modules\Checkout\Models\Address::count());
         Mail::assertNotSent(\App\Modules\Auth\Mail\WelcomeEmail::class);
         $this->assertSame($resposta->json('token'), CheckoutFerraKora::token($order));
 

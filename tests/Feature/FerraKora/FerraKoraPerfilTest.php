@@ -4,6 +4,7 @@ namespace Tests\Feature\FerraKora;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Models\FerraKoraSessao;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -11,7 +12,10 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-/** Meu Perfil do site FerraKora igual ao da KazaKora (pedido 2026-10-14). */
+/**
+ * Meu Perfil do site FerraKora igual ao da KazaKora (pedido 2026-10-14), na
+ * conta própria do FerraKora (separada da KazaKora desde 2026-10-15).
+ */
 class FerraKoraPerfilTest extends TestCase
 {
     use RefreshDatabase;
@@ -25,15 +29,24 @@ class FerraKoraPerfilTest extends TestCase
         ];
     }
 
-    private function logar(User $user): string
+    private function cliente(array $dados = []): FerraKoraCliente
     {
-        return FerraKoraSessao::abrir($user, request());
+        static $n = 0;
+
+        return FerraKoraCliente::create(['name' => 'Cliente', 'email' => 'cliente'.(++$n).'@exemplo.com', 'password' => 'segredo123', ...$dados]);
+    }
+
+    private function logar(FerraKoraCliente $cliente): string
+    {
+        return FerraKoraSessao::abrir($cliente, request());
     }
 
     public function test_ve_e_edita_os_dados_pessoais(): void
     {
-        $user = User::factory()->create(['name' => 'João', 'email' => 'joao@exemplo.com', 'role' => User::ROLE_CUSTOMER]);
-        User::factory()->create(['email' => 'outra@exemplo.com', 'cpf' => '529.982.247-25']);
+        $user = $this->cliente(['name' => 'João', 'email' => 'joao@exemplo.com']);
+        $this->cliente(['email' => 'outra@exemplo.com', 'cpf' => '52998224725']);
+        // CPF de conta da KazaKora não conta: são cadastros separados.
+        User::factory()->create(['email' => 'joao@exemplo.com', 'cpf' => '111.444.777-35']);
         $token = $this->logar($user);
 
         $this->getJson('/api/ferrakora/perfil')->assertUnauthorized();
@@ -55,13 +68,15 @@ class FerraKoraPerfilTest extends TestCase
             ->assertJsonPath('perfil.initials', 'JS')
             ->assertJsonPath('user.name', 'João Silva');
 
-        $this->assertSame('111.444.777-35', $user->fresh()->cpf);
+        $this->assertSame('11144477735', $user->fresh()->cpf);
+        $this->assertSame('(11) 91234-5678', $user->fresh()->phone);
+        $this->assertNull(User::query()->where('email', 'joao@exemplo.com')->value('birth_date'));
     }
 
     public function test_foto_e_senha(): void
     {
         Storage::fake('public');
-        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $user = $this->cliente();
         $token = $this->logar($user);
 
         $url = $this->withToken($token)->post('/api/ferrakora/perfil/avatar', ['avatar' => UploadedFile::fake()->image('eu.png')], ['Accept' => 'application/json'])
@@ -79,7 +94,7 @@ class FerraKoraPerfilTest extends TestCase
 
     public function test_enderecos_principal_e_travado_por_pedido(): void
     {
-        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $user = $this->cliente();
         $token = $this->logar($user);
 
         $primeiro = $this->withToken($token)->postJson('/api/ferrakora/perfil/enderecos', $this->endereco())
@@ -91,7 +106,7 @@ class FerraKoraPerfilTest extends TestCase
         $this->assertFalse(collect($enderecos)->firstWhere('id', $primeiro)['is_default']);
 
         Order::create([
-            'user_id' => $user->id, 'address_id' => $primeiro, 'status' => Order::STATUS_PENDING,
+            'ferrakora_cliente_id' => $user->id, 'ferrakora_endereco_id' => $primeiro, 'status' => Order::STATUS_PENDING,
             'shipping_name' => 'João', 'shipping_phone' => '11999999999', 'shipping_zip' => '01001-000', 'shipping_street' => 'Praça da Sé',
             'shipping_number' => '1', 'shipping_neighborhood' => 'Sé', 'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',
             'subtotal' => 100, 'total' => 100,
@@ -102,7 +117,8 @@ class FerraKoraPerfilTest extends TestCase
             ->assertOk()->assertJsonPath('enderecos.0.id', $primeiro)->assertJsonPath('enderecos.0.tem_pedido', true);
 
         // Endereço de outra conta: 404.
-        $outro = User::factory()->create()->addresses()->create([...$this->endereco(), 'state' => 'SP']);
+        $outro = $this->cliente()->enderecos()->create([...$this->endereco(), 'state' => 'SP']);
+        $this->assertSame(0, \App\Modules\Checkout\Models\Address::count());
         $this->withToken($token)->putJson("/api/ferrakora/perfil/enderecos/{$outro->id}", $this->endereco())->assertNotFound();
         $this->withToken($token)->deleteJson("/api/ferrakora/perfil/enderecos/{$outro->id}")->assertNotFound();
     }

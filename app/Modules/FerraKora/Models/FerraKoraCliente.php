@@ -17,18 +17,77 @@ class FerraKoraCliente extends Model
 {
     protected $table = 'ferrakora_clientes';
 
-    protected $fillable = ['name', 'email', 'cpf', 'phone', 'password', 'senha_definida'];
+    protected $fillable = ['name', 'email', 'cpf', 'phone', 'birth_date', 'avatar_path', 'password', 'senha_definida'];
 
     protected $hidden = ['password'];
 
     protected function casts(): array
     {
-        return ['password' => 'hashed', 'senha_definida' => 'boolean'];
+        return ['password' => 'hashed', 'senha_definida' => 'boolean', 'birth_date' => 'date'];
     }
 
     public function pedidos(): HasMany
     {
         return $this->hasMany(Order::class, 'ferrakora_cliente_id');
+    }
+
+    public function enderecos(): HasMany
+    {
+        return $this->hasMany(FerraKoraEndereco::class, 'cliente_id');
+    }
+
+    /** CPF em outra conta do FerraKora? (só dígitos) */
+    public static function cpfEmUso(string $cpf, ?int $exceto = null): bool
+    {
+        return static::query()->where('cpf', $cpf)->when($exceto, fn ($query) => $query->whereKeyNot($exceto))->exists();
+    }
+
+    /**
+     * Endereço da entrega no caderno do cliente: o mesmo CEP e número não
+     * duplica; o primeiro vira o principal.
+     *
+     * @param  array<string, mixed>  $entrega  campos de FerraKoraEndereco::CAMPOS
+     */
+    public function guardarEndereco(array $entrega): FerraKoraEndereco
+    {
+        $zip = preg_replace('/\D/', '', (string) $entrega['zip']);
+        $existente = $this->enderecos()->get()->first(fn (FerraKoraEndereco $endereco) => preg_replace('/\D/', '', $endereco->zip) === $zip
+            && trim(mb_strtolower($endereco->number)) === trim(mb_strtolower((string) $entrega['number'])));
+
+        return $existente ?? $this->enderecos()->create([
+            ...collect($entrega)->only(FerraKoraEndereco::CAMPOS)->all(),
+            'state' => mb_strtoupper((string) $entrega['state']),
+            'is_default' => ! $this->enderecos()->exists(),
+        ]);
+    }
+
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path ? asset('storage/'.$this->avatar_path) : null;
+    }
+
+    public function iniciais(): string
+    {
+        $palavras = array_filter(preg_split('/\s+/', trim($this->name ?? '')));
+        $letras = array_map(fn (string $palavra) => mb_strtoupper(mb_substr($palavra, 0, 1)), $palavras);
+
+        return implode('', array_slice($letras, 0, 2)) ?: '?';
+    }
+
+    /**
+     * Selo do Meu Perfil, igual ao da KazaKora (User::seloCliente): "Super
+     * Cliente" até passar de config('loja.selo_cliente.pedidos') pedidos
+     * finalizados feitos desde config('loja.selo_cliente.desde'); depois, "5 ★".
+     */
+    public function seloCliente(): string
+    {
+        $finalizados = $this->pedidos()
+            ->where('status', Order::STATUS_COMPLETED)
+            ->where('created_at', '>=', config('loja.selo_cliente.desde'))
+            ->vendaEfetiva()
+            ->count();
+
+        return $finalizados > config('loja.selo_cliente.pedidos') ? 'cinco_estrelas' : 'super_cliente';
     }
 
     /**

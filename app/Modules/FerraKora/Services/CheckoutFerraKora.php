@@ -34,8 +34,10 @@ class CheckoutFerraKora extends CheckoutOutroSite
         return false;
     }
 
-    protected function clienteDoSite(array $cliente): array
+    protected function clienteDoSite(array $cliente, array $entrega): array
     {
-        return ['ferrakora_cliente_id' => FerraKoraCliente::doCheckout($cliente)->id];
+        $conta = FerraKoraCliente::doCheckout($cliente);
+
+        return ['ferrakora_cliente_id' => $conta->id, 'ferrakora_endereco_id' => $conta->guardarEndereco($entrega)->id];
     }
 }

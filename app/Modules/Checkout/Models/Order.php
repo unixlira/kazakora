@@ -186,6 +186,7 @@ class Order extends Model
         'site_origem',
         // Cliente do FerraKora (2026-10-15): conta separada, user_id fica nulo.
         'ferrakora_cliente_id',
+        'ferrakora_endereco_id',
         'external_order_id',
         'channel_pack_id',
         'fiscal_operation_type',

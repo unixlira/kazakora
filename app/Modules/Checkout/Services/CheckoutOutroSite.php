@@ -79,12 +79,14 @@ abstract class CheckoutOutroSite
     }
 
     /**
-     * Site com cliente separado: colunas do pedido que ligam à conta do site.
+     * Site com cliente separado: colunas do pedido que ligam à conta (e ao
+     * endereço) do site.
      *
      * @param  array{name: string, email: string, cpf: string, phone: string}  $cliente
+     * @param  array<string, mixed>  $entrega  endereço + recipient_name e phone
      * @return array<string, mixed>
      */
-    protected function clienteDoSite(array $cliente): array
+    protected function clienteDoSite(array $cliente, array $entrega): array
     {
         return [];
     }
@@ -382,12 +384,12 @@ abstract class CheckoutOutroSite
 
             $cpf = preg_replace('/\D/', '', $dados['cliente']['cpf']);
             $user = $this->contaNaKazaKora() ? $this->cliente($dados['cliente']) : null;
+            $entrega = [...$endereco, 'recipient_name' => $dados['cliente']['name'], 'phone' => $dados['cliente']['phone']];
             $doSite = $user ? [] : [
-                ...$this->clienteDoSite($dados['cliente']),
+                ...$this->clienteDoSite($dados['cliente'], $entrega),
                 'buyer_document' => $cpf,
                 'shipping_email' => mb_strtolower(trim($dados['cliente']['email'])),
             ];
-            $entrega = [...$endereco, 'recipient_name' => $dados['cliente']['name'], 'phone' => $dados['cliente']['phone']];
             $address = $user
                 ? $user->addresses()->create([...$entrega, 'is_default' => $user->addresses()->count() === 0])
                 : (object) [...$entrega, 'complement' => $entrega['complement'] ?? null];

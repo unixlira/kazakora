@@ -37,8 +37,8 @@ const props = defineProps({
         <div class="mx-auto max-w-[1180px] px-4 py-12 md:px-6">
             <h1 class="font-display text-3xl font-semibold">{{ isOwnProfile ? 'Meu Perfil' : profileUser.name }}</h1>
 
-            <!-- Pedido 2026-10-14: perfil + dados pessoais à esquerda,
-                 endereços à direita e segurança embaixo. -->
+            <!-- Pedido 2026-10-14: dois cards lado a lado. Esquerda: perfil +
+                 dados pessoais. Direita: endereços e, logo abaixo, segurança. -->
             <div class="mt-8 grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12">
                 <section class="rounded-2xl border border-store-border bg-store-bg-raised p-6 lg:col-span-5">
                     <UserMetaCard :profile-user="profileUser" :is-own-profile="isOwnProfile" :can-manage-users="canManageUsers" :roles="roles" />
@@ -46,12 +46,12 @@ const props = defineProps({
                     <UserInfoCard :profile-user="profileUser" :is-own-profile="isOwnProfile" />
                 </section>
 
-                <section class="lg:col-span-7">
+                <section class="flex flex-col rounded-2xl border border-store-border bg-store-bg-raised p-6 lg:col-span-7">
                     <UserAddressesCard :addresses="addresses" :editable="isOwnProfile" />
-                </section>
-
-                <section v-if="isOwnProfile" class="lg:col-span-12">
-                    <UserSecurityCard />
+                    <template v-if="isOwnProfile">
+                        <hr class="my-6 border-store-border">
+                        <UserSecurityCard />
+                    </template>
                 </section>
             </div>
         </div>

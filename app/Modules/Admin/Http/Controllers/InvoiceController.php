@@ -220,7 +220,7 @@ class InvoiceController extends Controller
         }
 
         try {
-            $service->submit($order);
+            $service->submit($order, reenviar: true);
 
             return back()->with('success', 'Nota fiscal reenviada ao canal com sucesso.');
         } catch (Throwable $exception) {

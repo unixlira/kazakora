@@ -2,7 +2,9 @@
     // Layout de todos os e-mails da loja (pedido 2026-10-10): logo no topo e,
     // no rodapé, os selos, o CNPJ e o WhatsApp de contato.
     $empresa = config('loja.empresa');
-    $logoTopo = \App\Support\Marca::urlAbsoluta('logo_nav');
+    // Marca do pedido (FerraKora tem a dele, 2026-10-15); sem ela, KazaKora.
+    $marcaEmail ??= \App\Support\MarcaDoEmail::kazakora();
+    $logoTopo = $marcaEmail['logo'];
     $semLink = fn (string $texto) => preg_replace('#([./\-, ])#u', '$1&#8203;', e($texto));
 @endphp
 <!DOCTYPE html>
@@ -13,7 +15,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="color-scheme" content="light">
     <meta name="supported-color-schemes" content="light">
-    <title>@yield('title', 'KazaKora')</title>
+    <title>@yield('title', $marcaEmail['nome'])</title>
     <style>
         body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
         table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
@@ -42,9 +44,9 @@
             <td align="center" style="padding: 32px 16px;">
                 <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" style="width: 600px; max-width: 600px; background-color: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 10px rgba(16, 24, 40, 0.06);">
                     <tr>
-                        <td style="background-color: #ffffff; padding: 26px 32px 22px; text-align: center; border-bottom: 4px solid #f27a2a;">
-                            <a href="{{ url('/') }}" target="_blank" style="text-decoration: none;">
-                                <img src="{{ $logoTopo }}" alt="KazaKora" width="190" style="display: inline-block; width: 190px; max-width: 70%; height: auto;">
+                        <td style="background-color: {{ $marcaEmail['fundo_topo'] }}; padding: 26px 32px 22px; text-align: center; border-bottom: 4px solid #f27a2a;">
+                            <a href="{{ $marcaEmail['site'] }}" target="_blank" style="text-decoration: none;">
+                                <img src="{{ $logoTopo }}" alt="{{ $marcaEmail['nome'] }}" width="190" style="display: inline-block; width: 190px; max-width: 70%; height: auto;">
                             </a>
                         </td>
                     </tr>

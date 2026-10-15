@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Checkout\Models\Order;
+use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Support\Facades\Storage;
@@ -23,9 +24,14 @@ class OrderConfirmation extends Mailable
 
     public function build(): self
     {
+        // Pedido do site FerraKora sai com a marca dele (2026-10-15).
+        $marca = MarcaDoEmail::doPedido($this->order);
+
         return $this
-            ->subject("Pedido {$this->order->numero} confirmado - KazaKora")
-            ->view('emails.order-confirmation');
+            // Remetente com o nome do site só no FerraKora; KazaKora segue o MAIL_FROM_NAME.
+            ->when($this->order->site_origem === Order::SITE_FERRAKORA, fn (self $mail) => $mail->from((string) config('mail.from.address'), $marca['nome']))
+            ->subject("Pedido {$this->order->numero} confirmado - {$marca['nome']}")
+            ->view('emails.order-confirmation', ['marcaEmail' => $marca]);
     }
 
     /**

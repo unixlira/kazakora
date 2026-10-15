@@ -92,4 +92,22 @@ class OfertasDoDiaTest extends TestCase
             ->where('vitrine.ofertas.0.final_price', 130)
             ->where('products', null));
     }
+
+    public function test_produtos_fixos_vem_primeiro_na_ordem_e_respeitam_estoque_e_margem(): void
+    {
+        config(['ofertas.completar_com_margem' => false]);
+        $outro = $this->produto();
+        $semDesconto = $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20]);
+        $primeiro = $this->produto();
+        $semEstoque = $this->produto(['stock' => 0]);
+        $prejuizo = $this->produto(['cost_price' => 110]);
+        config(['ofertas.fixas' => [$semDesconto->id, $semEstoque->id, $prejuizo->id, $primeiro->id]]);
+        OfertaDoDia::query()->create(['data' => now()->subDay()->toDateString(), 'product_id' => $primeiro->id, 'desconto_extra' => 5, 'preco_antes' => 140, 'preco_oferta' => 130, 'lucro_estimado' => 50]);
+
+        $this->artisan('loja:ofertas-do-dia')->assertSuccessful();
+
+        $hoje = OfertaDoDia::query()->whereDate('data', now()->toDateString())->orderBy('posicao');
+        $this->assertSame([$semDesconto->id, $primeiro->id, $outro->id], $hoje->pluck('product_id')->all());
+        $this->assertSame(95.0, OfertaDoDia::query()->where('product_id', $semDesconto->id)->value('preco_oferta'));
+    }
 }

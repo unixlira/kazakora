@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
  * (CalculadoraOferta). Não repete produto dos últimos dias; sem candidatos
  * suficientes, completa com os de melhor margem que aguentam o extra.
  * Roda todo dia 00:05 e a home chama se o dia ainda estiver sem ofertas.
+ * Os produtos de ofertas.fixas vêm primeiro, todo dia (pedido 2026-10-14).
  */
 class EscolherOfertasDoDia extends Command
 {
@@ -60,7 +61,15 @@ class EscolherOfertasDoDia extends Command
             })
             ->filter(fn ($item) => $item['seguro']);
 
-        $escolhidos = $this->escolher($candidatos->where('desconto', '>', (float) config('ofertas.desconto_minimo')), $recentes, $quantidade);
+        $fixas = config('ofertas.fixas', []);
+        $escolhidos = collect($fixas)
+            ->map(fn ($id) => $candidatos->first(fn ($item) => $item['product']->id === $id))
+            ->filter()
+            ->take($quantidade)
+            ->values();
+        $candidatos = $candidatos->reject(fn ($item) => in_array($item['product']->id, $fixas, true));
+
+        $escolhidos = $escolhidos->concat($this->escolher($candidatos->where('desconto', '>', (float) config('ofertas.desconto_minimo')), $recentes, $quantidade - $escolhidos->count()));
 
         if ($escolhidos->count() < $quantidade && config('ofertas.completar_com_margem')) {
             $faltam = $candidatos->reject(fn ($item) => $escolhidos->contains(fn ($ja) => $ja['product']->id === $item['product']->id))

@@ -102,6 +102,7 @@ class CheckoutFerraKoraTest extends TestCase
         $order = Order::findOrFail($resposta->json('pedido.id'));
         $this->assertSame(Order::ORIGIN_STORE, $order->origin);
         $this->assertSame(Order::SITE_FERRAKORA, $order->site_origem);
+        $this->assertSame(Order::PROJETO_FERRAKORA, $order->fresh()->projeto_origem);
         $this->assertSame('SP', $order->shipping_state);
         $this->assertSame('10.00', $order->pix_discount_amount);
         $this->assertSame(3, $this->produto->fresh()->stock);

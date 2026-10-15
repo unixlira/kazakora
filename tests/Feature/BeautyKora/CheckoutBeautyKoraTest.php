@@ -238,6 +238,7 @@ class CheckoutBeautyKoraTest extends TestCase
 
         $order = Order::findOrFail($resposta->json('pedido.id'));
         $this->assertSame(Order::SITE_BEAUTYKORA, $order->site_origem);
+        $this->assertSame(Order::PROJETO_BEAUTYKORA, $order->fresh()->projeto_origem);
         $this->assertSame(FreteEmbutido::TURBO, $order->shipping_carrier_name);
         $this->assertNull($order->shipping_method_id);
         $this->assertSame('25.00', $order->shipping_cost);

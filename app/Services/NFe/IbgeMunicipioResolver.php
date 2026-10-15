@@ -4,6 +4,7 @@ namespace App\Services\NFe;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -85,15 +86,68 @@ class IbgeMunicipioResolver
         // baseados em serialização (ex: Redis) podem devolver
         // __PHP_Incomplete_Class ao reler um objeto complexo já dentro do
         // mesmo processo; array plano evita esse problema por completo.
+        //
+        // BUG REAL 2026-10-14 17:42 (pedidos #3137, #3140, #3141, #3142 sem
+        // nota): o servidor do IBGE passou a mandar o certificado sem a
+        // cadeia intermediária (Sectigo DV R36), o cURL recusa (erro 60) e,
+        // como o emitente é de SP, TODA emissão parou quando o cache de 30
+        // dias venceu. Agora: IBGE → BrasilAPI (mesma lista do IBGE, outro
+        // servidor) → última lista boa guardada sem prazo. Só estoura se as
+        // três falharem.
         return Cache::remember("ibge.municipios.{$uf}", now()->addDays(30), function () use ($uf) {
-            $response = Http::timeout(10)->get("https://servicodados.ibge.gov.br/api/v1/localidades/estados/{$uf}/municipios");
+            $fontes = [
+                "https://servicodados.ibge.gov.br/api/v1/localidades/estados/{$uf}/municipios",
+                "https://brasilapi.com.br/api/ibge/municipios/v1/{$uf}",
+            ];
 
-            if (! $response->successful()) {
-                throw new RuntimeException("Falha ao consultar a API do IBGE para o estado {$uf}.");
+            foreach ($fontes as $url) {
+                $municipios = $this->buscarMunicipios($url);
+
+                if ($municipios !== null) {
+                    Cache::forever("ibge.municipios.{$uf}.ultimo", $municipios);
+
+                    return $municipios;
+                }
             }
 
-            return collect($response->json())->map(fn ($m) => ['id' => $m['id'], 'nome' => $m['nome']])->all();
+            $ultimo = Cache::get("ibge.municipios.{$uf}.ultimo");
+
+            if (is_array($ultimo) && $ultimo !== []) {
+                return $ultimo;
+            }
+
+            throw new RuntimeException("Falha ao consultar a API do IBGE para o estado {$uf}.");
         });
+    }
+
+    /**
+     * IBGE devolve {id, nome}; BrasilAPI devolve {codigo_ibge, nome}.
+     *
+     * @return array<int, array{id: int, nome: string}>|null
+     */
+    private function buscarMunicipios(string $url): ?array
+    {
+        try {
+            $response = Http::timeout(10)->get($url);
+        } catch (\Throwable $e) {
+            Log::warning('ibge.municipios.fonte_falhou', ['url' => $url, 'error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if (! $response->successful() || ! is_array($response->json())) {
+            Log::warning('ibge.municipios.fonte_falhou', ['url' => $url, 'status' => $response->status()]);
+
+            return null;
+        }
+
+        $municipios = collect($response->json())
+            ->map(fn ($m) => ['id' => (int) ($m['id'] ?? $m['codigo_ibge'] ?? 0), 'nome' => (string) ($m['nome'] ?? '')])
+            ->filter(fn ($m) => strlen((string) $m['id']) === 7 && $m['nome'] !== '')
+            ->values()
+            ->all();
+
+        return $municipios === [] ? null : $municipios;
     }
 
     private function normalize(string $value): string

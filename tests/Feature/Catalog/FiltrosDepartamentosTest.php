@@ -79,6 +79,18 @@ class FiltrosDepartamentosTest extends TestCase
             ->where('filters.preco', '200-mais'));
     }
 
+    public function test_ordem_por_preco_segue_o_card(): void
+    {
+        // Pote custa 40 no cadastro, mas sai a 36 na Oferta do Dia: vem antes do Copo de 38.
+        $copo = Product::factory()->create(['name' => 'Copo', 'price' => 38, 'stock' => 5, 'is_active' => true,
+            'category_id' => $this->pote->category_id, 'discount_percentage' => null, 'discount_amount' => null]);
+
+        $ordem = fn (string $url) => collect($this->get($url)->viewData('page')['props']['products']['data'])->pluck('id')->all();
+
+        $this->assertSame([$this->pote->id, $copo->id, $this->panela->id], $ordem('/?categoria=casa&ordenar=menor_preco'));
+        $this->assertSame([$this->caixa->id, $this->panela->id, $copo->id, $this->pote->id], $ordem('/?todos=1&ordenar=maior_preco'));
+    }
+
     public function test_busca_continua_com_filtro(): void
     {
         $this->assertSame([$this->pote->id], $this->ids('/?search=pote&preco=ate-50'));

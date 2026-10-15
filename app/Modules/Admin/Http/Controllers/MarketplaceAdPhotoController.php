@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Marketplace\Models\MarketplaceAdPhotoBrief;
+use App\Modules\Marketplace\Support\SequenciaPsicologicaImagens;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -101,7 +102,15 @@ class MarketplaceAdPhotoController extends Controller
         $referenceLinks = trim($validated['reference_links'] ?? '');
         $categoryHint = trim($validated['category_hint'] ?? '');
         $productName = trim($validated['product_name'] ?? '') ?: $this->guessProductName($description);
-        $matrix = $this->withPrompts($this->matrixFor($marketplace), $productName, $description, $immutableNotes, $marketplace);
+        $matrix = $this->matrixFor($marketplace);
+        $sequencia = new SequenciaPsicologicaImagens;
+        $ehFerramenta = $sequencia->ehFerramenta($categoryHint, $productName, $description);
+
+        if ($ehFerramenta) {
+            $matrix = $sequencia->aplicar($matrix, $marketplace);
+        }
+
+        $matrix = $this->withPrompts($matrix, $productName, $description, $immutableNotes, $marketplace);
         $generatedProduct = $this->generatedProductPack($productName, $categoryHint, $description, $immutableNotes);
 
         $brief = MarketplaceAdPhotoBrief::create([
@@ -216,7 +225,13 @@ class MarketplaceAdPhotoController extends Controller
         $tone = $this->marketplaces()[$marketplace]['tone'];
         $dontChange = $immutableNotes !== '' ? $immutableNotes : 'Preservar cor, formato, proporção, materiais, medidas e aparência real conforme imagem/descrição enviada.';
 
-        return collect($matrix)->map(function (array $item) use ($productName, $description, $dontChange, $tone): array {
+        $sequencia = new SequenciaPsicologicaImagens;
+
+        return collect($matrix)->map(function (array $item) use ($productName, $description, $dontChange, $tone, $sequencia): array {
+            $etapa = filled($item['stage'] ?? null)
+                ? "Sequência psicológica obrigatória (desejo, objeções, CTA): {$sequencia->orientacao($item['stage'])}"
+                : null;
+
             return [
                 ...$item,
                 'status' => 'pending',
@@ -227,6 +242,7 @@ class MarketplaceAdPhotoController extends Controller
                     "Produto: {$productName}.",
                     "Função comercial: {$item['function']}",
                     "Direção visual: {$item['direction']}",
+                    ...($etapa ? [$etapa] : []),
                     "Descrição real do produto: {$description}",
                     "Fidelidade obrigatória: {$dontChange}",
                     "Estilo: {$tone}",

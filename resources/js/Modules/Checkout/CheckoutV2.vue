@@ -541,14 +541,6 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
             <!-- FORMULÁRIO -->
             <main class="order-2 lg:order-1">
-                <div class="mb-5 flex items-center gap-3">
-                    <span class="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><i class="fa-solid fa-lock text-lg"></i></span>
-                    <div>
-                        <h1 class="text-2xl font-bold text-slate-900">Finalize sua compra</h1>
-                        <p class="text-sm text-slate-500">Seus dados estão protegidos.</p>
-                    </div>
-                </div>
-
                 <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>

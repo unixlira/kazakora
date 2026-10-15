@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\BeautyKoraCheckoutController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraPerfilController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
+use App\Http\Controllers\Api\FerraKoraBancadaController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
 use App\Http\Controllers\Api\FerraKoraCheckoutController;
 use App\Http\Controllers\Api\FerraKoraContaController;
@@ -240,6 +241,13 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::patch('eu', [FerraKoraContaController::class, 'atualizar'])->name('atualizar');
         Route::post('sair', [FerraKoraContaController::class, 'sair'])->name('sair');
         Route::get('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->name('pedidos');
+
+        // Minha Bancada (favoritos, 2026-10-15): ids "kz-<id>" do catálogo.
+        Route::prefix('bancada')->name('bancada.')->controller(FerraKoraBancadaController::class)->group(function () {
+            Route::get('/', 'index')->name('ver');
+            Route::post('/', 'guardar')->name('guardar');
+            Route::delete('{produto}', 'tirar')->where('produto', 'kz-[0-9]{1,10}')->name('tirar');
+        });
 
         // Meu Perfil igual ao da KazaKora (2026-10-14).
         Route::prefix('perfil')->name('perfil.')->controller(FerraKoraPerfilController::class)->group(function () {

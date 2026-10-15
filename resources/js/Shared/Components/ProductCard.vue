@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
+import { useContagemRegressiva } from '@/Shared/useContagemRegressiva';
 
 const props = defineProps({
     product: {
@@ -169,6 +170,10 @@ onMounted(() => {
 });
 onBeforeUnmount(() => observador?.disconnect());
 
+// Oferta Relâmpago: o selo mostra quanto falta (pedido 2026-10-15).
+const relampago = useContagemRegressiva(computed(() => props.product.oferta_relampago?.fim));
+const relampagoNoAr = computed(() => !!props.product.oferta_relampago && !relampago.acabou.value);
+
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
 const precoAntes = computed(() => {
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
@@ -223,8 +228,9 @@ const precoPartes = computed(() => {
             <!-- Selo promocional sobre a foto (canto inferior esquerdo): "Oferta do dia"
                  nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
             <div class="promo-badge">
-                <span class="promo-badge-icon">%</span>
-                <span class="promo-badge-text">{{ product.oferta_relampago ? 'Oferta Relâmpago' : (product.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
+                <span class="promo-badge-icon"><i v-if="relampagoNoAr" class="fa-solid fa-bolt" aria-hidden="true"></i><template v-else>%</template></span>
+                <span v-if="relampagoNoAr" class="promo-badge-text" :aria-label="`Oferta Relâmpago, termina em ${relampago.texto.value}`">Relâmpago {{ relampago.texto.value }}</span>
+                <span v-else class="promo-badge-text">{{ product.oferta_relampago ? 'Oferta Relâmpago' : (product.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
             </div>
 
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->

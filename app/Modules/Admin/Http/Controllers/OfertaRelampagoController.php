@@ -148,18 +148,28 @@ class OfertaRelampagoController extends Controller
         };
     }
 
-    /** @return array{product_id: int, desconto_pct: float, inicio_em: Carbon, fim_em: Carbon} */
+    /**
+     * Duração (pedido 2026-10-15): a oferta dura 24h por padrão; o Lira
+     * escolhe o início e, se quiser, outra duração (duracao_horas, 1 a 168)
+     * ou um fim exato (fim_em). Sem nenhum dos dois, fim = início + 24h.
+     *
+     * @return array{product_id: int, desconto_pct: float, inicio_em: Carbon, fim_em: Carbon}
+     */
     private function validar(Request $request, string $site, ?int $ignorar = null): array
     {
         $dados = $request->validate([
             'product_id' => ['required', 'integer'],
             'desconto_pct' => ['required', 'numeric', 'min:1', 'max:90'],
             'inicio_em' => ['required', 'date'],
-            'fim_em' => ['required', 'date', 'after:inicio_em'],
+            'duracao_horas' => ['nullable', 'integer', 'min:1', 'max:'.OfertaRelampago::DURACAO_MAXIMA_HORAS],
+            'fim_em' => ['nullable', 'date', 'after:inicio_em'],
         ], [
             'product_id.required' => 'Escolha o produto.',
             'desconto_pct.min' => 'O desconto vai de 1% a 90%.',
             'desconto_pct.max' => 'O desconto vai de 1% a 90%.',
+            'inicio_em.required' => 'Escolha quando a oferta começa.',
+            'duracao_horas.min' => 'A duração vai de 1 a '.OfertaRelampago::DURACAO_MAXIMA_HORAS.' horas.',
+            'duracao_horas.max' => 'A duração vai de 1 a '.OfertaRelampago::DURACAO_MAXIMA_HORAS.' horas.',
             'fim_em.after' => 'O fim tem que ser depois do início.',
         ]);
 
@@ -172,7 +182,11 @@ class OfertaRelampagoController extends Controller
         }
 
         $inicio = Carbon::parse($dados['inicio_em'])->seconds(0);
-        $fim = Carbon::parse($dados['fim_em'])->seconds(0);
+        $fim = match (true) {
+            isset($dados['duracao_horas']) => $inicio->copy()->addHours((int) $dados['duracao_horas']),
+            isset($dados['fim_em']) => Carbon::parse($dados['fim_em'])->seconds(0),
+            default => $inicio->copy()->addHours(OfertaRelampago::DURACAO_PADRAO_HORAS),
+        };
 
         if (OfertaRelampago::query()->sobrepostas($site, $paiId, $inicio, $fim, $ignorar)->exists()) {
             throw ValidationException::withMessages(['inicio_em' => 'Já existe uma Oferta Relâmpago deste produto na '.SiteAtual::SITES[$site].' nesse horário.']);

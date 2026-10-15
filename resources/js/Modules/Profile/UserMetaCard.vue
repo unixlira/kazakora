@@ -26,7 +26,7 @@ const ROLE_LABELS = {
     admin: 'Administrador',
     manager: 'Gerente',
     subscriber: 'Assinante',
-    customer: 'Super Cliente',
+    customer: 'Cliente',
 };
 
 const roleLabel = computed(() => ROLE_LABELS[props.profileUser.role] ?? props.profileUser.role);
@@ -49,6 +49,9 @@ const changeRole = (event) => {
                         @change="changeRole">
                         <option v-for="role in roles" :key="role" :value="role">{{ ROLE_LABELS[role] ?? role }}</option>
                     </select>
+                    <span v-else-if="profileUser.role === 'customer'" class="inline-flex items-center gap-1 font-semibold text-store-fg" aria-label="5 estrelas">
+                        5 <span class="text-amber-400" aria-hidden="true">★</span>
+                    </span>
                     <span v-else>{{ roleLabel }}</span>
                     <span class="hidden h-3.5 w-px bg-store-border-strong sm:block"></span>
                     <span class="break-all">{{ profileUser.email }}</span>

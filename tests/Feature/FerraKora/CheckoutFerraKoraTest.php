@@ -224,4 +224,41 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('pedido.pago', false)
             ->assertJsonPath('pedido.cancelado', false);
     }
+
+    public function test_meus_pedidos_pelo_email_e_cpf_ou_pelos_pedidos_do_aparelho(): void
+    {
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 556, 'status' => 'pending']));
+        $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+
+        // Pedido da mesma pessoa na KazaKora não aparece no FerraKora.
+        Order::create([...collect($order->getAttributes())->only(['user_id', 'origin', 'shipping_name', 'shipping_phone', 'shipping_zip', 'shipping_street', 'shipping_number', 'shipping_neighborhood', 'shipping_city', 'shipping_state'])->all(), 'status' => Order::STATUS_PAID, 'subtotal' => 50, 'total' => 50]);
+
+        $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09'])
+            ->assertOk()
+            ->assertJsonCount(1, 'pedidos')
+            ->assertJsonPath('pedidos.0.numero', $order->numero)
+            ->assertJsonPath('pedidos.0.situacao', 'Aguardando pagamento')
+            ->assertJsonPath('pedidos.0.total', 19000)
+            ->assertJsonPath('pedidos.0.itens.0.nome', 'Trena Emborrachada 5m')
+            ->assertJsonPath('pedidos.0.itens.0.quantidade', 2)
+            ->assertJsonMissingPath('pedidos.0.shipping_street');
+
+        $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '987.654.321-00'])->assertNotFound();
+        $this->postJson('/api/ferrakora/pedidos', ['email' => 'outra@exemplo.com', 'cpf' => '123.456.789-09'])->assertNotFound();
+        $this->postJson('/api/ferrakora/pedidos', [])->assertStatus(422);
+
+        $this->postJson('/api/ferrakora/pedidos', ['pedidos' => [
+            ['id' => $order->id, 'token' => $resposta->json('token')],
+            ['id' => $order->id + 1, 'token' => 'errado'],
+        ]])->assertOk()->assertJsonCount(1, 'pedidos')->assertJsonPath('pedidos.0.id', $order->id);
+
+        $this->postJson('/api/ferrakora/pedidos', ['pedidos' => [['id' => $order->id, 'token' => 'errado']]])
+            ->assertOk()->assertJsonCount(0, 'pedidos');
+
+        $order->update(['status' => Order::STATUS_PAID]);
+        $this->postJson('/api/ferrakora/pedidos', ['pedidos' => [['id' => $order->id, 'token' => $resposta->json('token')]]])
+            ->assertJsonPath('pedidos.0.situacao', 'Pagamento aprovado')
+            ->assertJsonPath('pedidos.0.pago', true);
+    }
 }

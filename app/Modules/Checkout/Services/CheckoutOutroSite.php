@@ -522,7 +522,12 @@ abstract class CheckoutOutroSite
     /** Token do acompanhamento do pedido no site (sem login). */
     public static function token(Order $order): string
     {
-        return hash_hmac('sha256', $order->site_origem.'-pedido:'.$order->id, (string) config('app.key'));
+        return self::tokenDoPedido((string) $order->site_origem, (int) $order->id);
+    }
+
+    public static function tokenDoPedido(string $site, int $id): string
+    {
+        return hash_hmac('sha256', $site.'-pedido:'.$id, (string) config('app.key'));
     }
 
     public static function centavos(float $reais): int

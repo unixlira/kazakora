@@ -294,8 +294,7 @@ const precoPartes = computed(() => {
                     </span>
                 </p>
                 <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
-                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
                     Ver detalhes
                 </Link>
             </div>

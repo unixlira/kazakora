@@ -7,6 +7,7 @@ use App\Modules\Auth\Mail\WelcomeEmail;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
+use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
@@ -44,6 +45,10 @@ use Illuminate\Validation\ValidationException;
  * site_origem, a tabela dos produtos publicados e o nome mostrado ao cliente.
  * Entrega igual à do checkout da KazaKora: FULL na Grande SP (EntregaExpressa)
  * ou grátis com a opção TURBO (SEDEX pela diferença, FreteEmbutido).
+ *
+ * Cupom (Beauty Kora, pedido do Lira 2026-10-14): os mesmos cupons e regras
+ * do checkout da KazaKora (Coupon::motivoInvalido), sem sessão: o site manda
+ * o código no resumo e no pedido, e aqui ele é conferido de novo nos dois.
  */
 abstract class CheckoutOutroSite
 {
@@ -162,9 +167,12 @@ abstract class CheckoutOutroSite
      * grátis quando é mais barata. $frete é o id da opção (full, correios,
      * turbo ou me:ID); sem ele, ou se ela sumiu, vale a primeira (a grátis).
      *
-     * @return array{subtotal: float, desconto_plataforma: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
+     * Cupom: sai dos produtos antes do Pix, como na KazaKora; o Pix desconta
+     * do que sobrou.
+     *
+     * @return array{subtotal: float, desconto_plataforma: float, desconto_cupom: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
      */
-    public function valores(Collection $itens, ?string $cep = null, ?string $frete = null): array
+    public function valores(Collection $itens, ?string $cep = null, ?string $frete = null, ?Coupon $cupom = null): array
     {
         $subtotal = round($itens->sum('subtotal'), 2);
         $entrega = app(FreteEmbutido::class)->entregaDoCarrinho($itens);
@@ -174,12 +182,14 @@ abstract class CheckoutOutroSite
         $escolhida = collect($opcoes)->firstWhere('id', $frete) ?? $opcoes[0];
         $valorDoFrete = round((float) $escolhida['preco'], 2);
         $plataforma = (float) $entrega['desconto_plataforma'];
-        $total = round($subtotal - $plataforma + $valorDoFrete, 2);
+        $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens)) : 0.0;
+        $total = round(max(0, $subtotal - $plataforma - $descontoCupom) + $valorDoFrete, 2);
         $pix = DescontoPix::desconto(max(0, $total));
 
         return [
             'subtotal' => $subtotal,
             'desconto_plataforma' => $plataforma,
+            'desconto_cupom' => $descontoCupom,
             'desconto_pix' => $pix,
             'frete' => $valorDoFrete,
             'total' => $total,
@@ -230,11 +240,47 @@ abstract class CheckoutOutroSite
         return ($dados['frete'] ?? null) ?: (! empty($dados['turbo']) ? 'turbo' : null);
     }
 
+    /**
+     * Cupom pedido pelo site, conferido com as regras da KazaKora (ativo,
+     * validade, mínimo, limite de usos, um por cliente pelo e-mail).
+     *
+     * @return array{0: ?Coupon, 1: ?string} [cupom que vale, motivo de não valer]
+     */
+    public function cupom(?string $codigo, Collection $itens, ?string $email = null): array
+    {
+        if (blank($codigo)) {
+            return [null, null];
+        }
+
+        $cupom = Coupon::buscar($codigo);
+        if (! $cupom) {
+            return [null, 'Cupom não encontrado. Confira o código.'];
+        }
+
+        $email = filled($email) ? trim($email) : null;
+        $conta = $email ? User::query()->where('email', $email)->first() : null;
+        if ($motivo = $cupom->motivoInvalido(round($itens->sum('subtotal'), 2), $conta, $email)) {
+            return [null, $motivo];
+        }
+        if ($itens->isNotEmpty() && self::subtotalParaCupom($itens) <= 0) {
+            return [null, 'Cupons não valem para produtos da Oferta do Dia: eles já estão com o menor preço.'];
+        }
+
+        return [$cupom, null];
+    }
+
+    /** Base do cupom, como na KazaKora: o carrinho sem os produtos da Oferta do Dia. */
+    private static function subtotalParaCupom(Collection $itens): float
+    {
+        return round($itens->reject(fn (array $item) => $item['product']->oferta_do_dia)->sum('subtotal'), 2);
+    }
+
     /** Resumo para a tela do checkout (preços em centavos, como o catálogo). */
-    public function resumo(array $pedidos, ?string $cep, ?string $frete = null): array
+    public function resumo(array $pedidos, ?string $cep, ?string $frete = null, ?string $codigoCupom = null, ?string $email = null): array
     {
         $itens = $this->itens($pedidos, $cep);
-        $valores = $this->valores($itens, $cep, $frete);
+        [$cupom, $cupomErro] = $this->cupom($codigoCupom, $itens, $email);
+        $valores = $this->valores($itens, $cep, $frete, $cupom);
 
         return [
             'itens' => $itens->map(fn (array $item) => [
@@ -248,6 +294,14 @@ abstract class CheckoutOutroSite
             ])->values()->all(),
             'subtotal' => self::centavos($valores['subtotal']),
             'desconto_plataforma' => self::centavos($valores['desconto_plataforma']),
+            // Cupom que vale (código, "10% de desconto" e valor) ou o motivo de não valer.
+            'cupom' => $cupom ? [
+                'codigo' => $cupom->code,
+                'descricao' => $cupom->descricaoDesconto(),
+                'desconto' => self::centavos($valores['desconto_cupom']),
+            ] : null,
+            'cupom_erro' => $cupomErro,
+            'desconto_cupom' => self::centavos($valores['desconto_cupom']),
             'desconto_pix' => self::centavos($valores['desconto_pix']),
             'desconto_pix_percentual' => DescontoPix::percentual(),
             'boleto_dias_vencimento' => (int) config('loja.boleto_dias_vencimento', 3),
@@ -287,7 +341,12 @@ abstract class CheckoutOutroSite
 
         return DB::transaction(function () use ($dados, $metodo, $endereco, $localizacao) {
             $itens = $this->itens($dados['itens'], $endereco['zip'], travar: true);
-            $valores = $this->valores($itens, $endereco['zip'], self::freteEscolhido($dados));
+            // Cupom que deixou de valer entre a tela e o pagamento: avisa, não cobra diferente.
+            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email']);
+            if ($cupomErro) {
+                throw ValidationException::withMessages(['cupom' => $cupomErro.' O desconto foi removido: confira o total e finalize de novo.']);
+            }
+            $valores = $this->valores($itens, $endereco['zip'], self::freteEscolhido($dados), $cupom);
             if (! empty($dados['frete']) && $valores['escolhida']['id'] !== $dados['frete']) {
                 // A opção da tela não existe mais (cotação mudou): não troca calado.
                 throw new PrecoMudouException();
@@ -333,7 +392,9 @@ abstract class CheckoutOutroSite
                 ...$localizacao,
                 'subtotal' => $valores['subtotal'],
                 'shipping_cost' => $valores['frete'],
-                'discount_amount' => round($pixDiscount + $valores['desconto_plataforma'], 2),
+                'coupon_code' => $cupom?->code,
+                // Desconto total do pedido (vDesc da NF-e): cupom + Pix + plataforma.
+                'discount_amount' => round($valores['desconto_cupom'] + $pixDiscount + $valores['desconto_plataforma'], 2),
                 'pix_discount_amount' => $pixDiscount,
                 'desconto_plataforma_amount' => $valores['desconto_plataforma'],
                 'total' => $total,

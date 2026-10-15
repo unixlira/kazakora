@@ -3,10 +3,12 @@
 namespace Tests\Feature\BeautyKora;
 
 use App\Models\MelhorEnvioToken;
+use App\Models\User;
 use App\Modules\BeautyKora\Models\BeautyKoraCliente;
 use App\Modules\BeautyKora\Models\BeautyKoraPedido;
 use App\Modules\BeautyKora\Models\BeautyKoraProduto;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Services\CheckoutOutroSite;
 use App\Modules\Checkout\Support\FreteEmbutido;
@@ -310,5 +312,89 @@ class CheckoutBeautyKoraTest extends TestCase
         $this->postJson('/api/beautykora/checkout/pedido', $this->pedido())->assertCreated();
 
         $this->assertSame(0, BeautyKoraPedido::count());
+    }
+
+    private function cupom(array $extra = []): Coupon
+    {
+        return Coupon::create([
+            'code' => 'BELEZA10', 'name' => 'Beleza 10', 'discount_type' => Coupon::TYPE_PERCENTAGE, 'discount_value' => 10,
+            'is_active' => true, ...$extra,
+        ]);
+    }
+
+    public function test_cupom_sai_dos_produtos_e_o_pix_desconta_do_que_sobrou(): void
+    {
+        $this->cupom();
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FULL, 'cupom' => ' beleza10 '])
+            ->assertOk()
+            ->assertJsonPath('cupom.codigo', 'BELEZA10')
+            ->assertJsonPath('cupom.descricao', '10% de desconto')
+            ->assertJsonPath('cupom.desconto', 2000)
+            ->assertJsonPath('cupom_erro', null)
+            ->assertJsonPath('subtotal', 20000)
+            ->assertJsonPath('total', 18000)
+            ->assertJsonPath('desconto_pix', 900)
+            ->assertJsonPath('total_pix', 17100);
+    }
+
+    public function test_cupom_que_nao_vale_volta_o_motivo_e_nao_desconta(): void
+    {
+        $this->cupom(['min_order_value' => 500]);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cep' => self::CEP_FULL, 'cupom' => 'BELEZA10'])
+            ->assertOk()
+            ->assertJsonPath('cupom', null)
+            ->assertJsonPath('cupom_erro', 'Este cupom vale para compras a partir de R$ 500,00.')
+            ->assertJsonPath('total', 20000);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cupom' => 'NAOEXISTE'])
+            ->assertOk()
+            ->assertJsonPath('cupom_erro', 'Cupom não encontrado. Confira o código.');
+    }
+
+    public function test_pedido_com_cupom_grava_o_codigo_e_o_desconto_total(): void
+    {
+        $this->cupom();
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->once()
+            ->withArgs(fn ($valor) => $valor === 171.0)
+            ->andReturn(['id' => 91, 'status' => 'pending']));
+
+        $resposta = $this->postJson('/api/beautykora/checkout/pedido', $this->pedido(['cupom' => 'BELEZA10', 'total_esperado' => 17100]))
+            ->assertCreated();
+
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+        $this->assertSame('BELEZA10', $order->coupon_code);
+        $this->assertSame('29.00', $order->discount_amount);
+        $this->assertSame('9.00', $order->pix_discount_amount);
+        $this->assertSame('171.00', $order->total);
+    }
+
+    public function test_cupom_que_expirou_antes_de_pagar_nao_cria_pedido(): void
+    {
+        $this->cupom(['expires_at' => now()->subDay()]);
+        $this->mercadoPago(fn ($mock) => $mock->shouldNotReceive('createPixPayment'));
+
+        $this->postJson('/api/beautykora/checkout/pedido', $this->pedido(['cupom' => 'BELEZA10', 'total_esperado' => 17100]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cupom');
+
+        $this->assertSame(0, Order::count());
+    }
+
+    public function test_cupom_de_um_por_cliente_ja_usado_pelo_email_nao_vale(): void
+    {
+        $this->cupom(['one_per_customer' => true]);
+        $usuario = User::factory()->create(['email' => 'maria@exemplo.com']);
+        Order::create([
+            'user_id' => $usuario->id, 'status' => Order::STATUS_PAID, 'origin' => Order::ORIGIN_STORE, 'coupon_code' => 'BELEZA10',
+            'shipping_name' => 'X', 'shipping_phone' => '11999990000', 'shipping_zip' => '01000000', 'shipping_street' => 'Rua',
+            'shipping_number' => '1', 'shipping_neighborhood' => 'Centro', 'shipping_city' => 'São Paulo', 'shipping_state' => 'SP',
+            'subtotal' => 100, 'shipping_cost' => 0, 'total' => 90,
+        ]);
+
+        $this->postJson('/api/beautykora/checkout/resumo', ['itens' => $this->itens(), 'cupom' => 'BELEZA10', 'email' => 'maria@exemplo.com'])
+            ->assertOk()
+            ->assertJsonPath('cupom_erro', 'Você já usou este cupom em outra compra.');
     }
 }

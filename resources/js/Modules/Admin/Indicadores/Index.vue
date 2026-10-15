@@ -28,8 +28,8 @@ const CORES = {
     dark: { tiktok_shop: '#3987e5', shopee: '#d95926', mercado_livre: '#199e70', amazon: '#c98500', loja: '#d55181', ferrakora: '#e8691a', beautykora: '#e05a9d' },
 };
 const CHROME = {
-    light: { grid: '#e6e2e3', text: '#6b5f63', accent: '#2b2326', context: '#b3aaad', surface: '#ffffff' },
-    dark: { grid: '#2a2a2a', text: '#b3a9ac', accent: '#ff8c4d', context: '#7a6f73', surface: '#161113' },
+    light: { grid: '#dddcdb', text: '#5b6066', accent: '#3c4044', context: '#b3aaad', surface: '#ffffff' },
+    dark: { grid: '#3c4044', text: '#a9adb2', accent: '#fd7b41', context: '#7a6f73', surface: '#2a2d30' },
 };
 const STATUS = { critico: '#dc2626', atencao: '#d97706', bom: '#198754' };
 
@@ -136,7 +136,7 @@ const cards = computed(() => {
         { rotulo: 'Pedidos', valor: inteiro(pedidos), var: variacao(pedidos, pedidosAnt), bom: 'alto', icone: 'fas fa-cart-shopping', cor: '#7c3aed' },
         { rotulo: 'Ticket médio', valor: ticket === null ? '—' : moeda(ticket), var: variacao(ticket, ticketAnt), bom: 'alto', icone: 'fas fa-receipt', cor: '#0891b2' },
         { rotulo: 'Margem de contribuição', valor: moeda(margem), nota: receita ? `${pct((margem / receita) * 100)} da venda` : null, var: variacao(margem, margemAnt), bom: 'alto', icone: 'fas fa-chart-line', cor: margem < 0 ? STATUS.critico : STATUS.bom },
-        { rotulo: 'Investimento em ADS', valor: moeda(gasto), var: variacao(gasto, gastoAnt), bom: 'neutro', icone: 'fas fa-bullhorn', cor: '#c2410c' },
+        { rotulo: 'Investimento em ADS', valor: moeda(gasto), var: variacao(gasto, gastoAnt), bom: 'neutro', icone: 'fas fa-bullhorn', cor: '#9a3412' },
         { rotulo: 'ROAS', valor: roas === null ? '—' : um(roas), nota: roas ? `R$ ${um(roas)} vendidos por R$ 1` : null, var: variacao(roas, roasAnt), bom: 'alto', icone: 'fas fa-bullseye', cor: '#eb6834' },
         { rotulo: 'Cancelamento', valor: cancel === null ? '—' : pct(cancel), var: variacao(cancel, cancelAnt), bom: 'baixo', icone: 'fas fa-ban', cor: '#b91c1c' },
         { rotulo: 'Visitantes do site', valor: comSite && visit ? inteiro(visit.valor) : '—', nota: comSite ? null : 'selecione KazaKora', var: comSite && visit ? visit.variacao : null, bom: 'alto', icone: 'fas fa-users', cor: '#e87ba4' },
@@ -158,7 +158,7 @@ const seta = (c) => {
 
 // ---- Opções comuns -----------------------------------------------------
 const tooltip = computed(() => ({
-    backgroundColor: isDark.value ? '#f1eced' : '#2b2326',
+    backgroundColor: isDark.value ? '#f1eced' : '#3c4044',
     titleColor: isDark.value ? '#000000' : '#ffffff',
     bodyColor: isDark.value ? '#000000' : '#ffffff',
     padding: 10,
@@ -268,7 +268,7 @@ const comp = computed(() => {
     return s;
 });
 const partesComp = computed(() => [
-    { rotulo: 'Custo dos produtos', valor: comp.value.custo_produtos, cor: isDark.value ? '#8a7f83' : '#2b2326' },
+    { rotulo: 'Custo dos produtos', valor: comp.value.custo_produtos, cor: isDark.value ? '#8a7f83' : '#3c4044' },
     { rotulo: 'Taxas dos canais', valor: comp.value.taxas, cor: isDark.value ? '#a99fa2' : '#6b5f63' },
     { rotulo: 'Frete pago pela loja', valor: comp.value.frete, cor: isDark.value ? '#c9c1c3' : '#9a8f92' },
     { rotulo: 'ADS', valor: comp.value.ads, cor: isDark.value ? '#e3dcde' : '#c9c1c3' },

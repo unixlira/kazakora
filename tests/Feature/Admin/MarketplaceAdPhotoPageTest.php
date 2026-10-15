@@ -55,4 +55,40 @@ class MarketplaceAdPhotoPageTest extends TestCase
         $this->actingAs($admin)->patch('/admin/marketplaces/fotos-anuncio/'.$brief->uuid.'/aprovar')->assertRedirect();
         $this->assertSame(MarketplaceAdPhotoBrief::APPROVAL_APPROVED, $brief->fresh()->approval_status);
     }
+
+    public function test_ferramenta_segue_sequencia_desejo_objecao_cta(): void
+    {
+        foreach (['shopee' => 'H', 'mercado_livre' => 'J'] as $marketplace => $chaveCta) {
+            $this->actingAs($this->admin())->post('/admin/marketplaces/fotos-anuncio', [
+                'marketplace' => $marketplace,
+                'product_name' => 'Parafusadeira 21V',
+                'category_hint' => 'Ferramentas e Automotivo',
+                'description' => 'Parafusadeira com 2 baterias.',
+            ])->assertRedirect();
+
+            $brief = MarketplaceAdPhotoBrief::query()->where('marketplace', $marketplace)->firstOrFail();
+            $etapas = collect($brief->matrix)->pluck('stage')->all();
+
+            $this->assertSame('desejo', $etapas[0]);
+            $this->assertSame('cta', end($etapas));
+            $this->assertSame($chaveCta, collect($brief->matrix)->last()['key']);
+            $this->assertSame($etapas, collect($etapas)->sortBy(fn ($e) => array_search($e, ['desejo', 'objecao', 'cta']))->values()->all());
+            $this->assertStringContainsString('Sequência psicológica', $brief->matrix[0]['prompt']);
+        }
+    }
+
+    public function test_produto_fora_de_ferramenta_mantem_a_matriz_original(): void
+    {
+        $this->actingAs($this->admin())->post('/admin/marketplaces/fotos-anuncio', [
+            'marketplace' => 'shopee',
+            'product_name' => 'Organizador de gaveta',
+            'category_hint' => 'Casa e Decoração',
+            'description' => 'Organizador de plástico.',
+        ])->assertRedirect();
+
+        $matrix = MarketplaceAdPhotoBrief::query()->firstOrFail()->matrix;
+
+        $this->assertArrayNotHasKey('stage', $matrix[0]);
+        $this->assertSame('H', $matrix[7]['key']);
+    }
 }

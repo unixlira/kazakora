@@ -161,7 +161,7 @@ onBeforeUnmount(() => observador?.disconnect());
         <section v-if="vitrine" class="relative z-10 mx-auto max-w-[1320px] px-4 md:px-6" :class="banners.length ? 'mb-8 mt-4 md:-mt-11' : 'my-6'">
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
                 <div v-for="beneficio in BENEFICIOS" :key="beneficio.titulo"
-                    class="flex items-center gap-3 rounded-xl border border-black bg-store-bg-raised text-orange-500 px-3 py-3 shadow-[0_8px_24px_var(--store-shadow)] md:px-5 md:py-4">
+                    class="flex items-center gap-3 rounded-xl bg-store-bg-raised text-orange-500 px-3 py-3 shadow-[0_8px_24px_var(--store-shadow)] md:px-5 md:py-4">
                     <i class="fa-solid shrink-0 text-2xl text-orange-500 md:text-3xl" :class="beneficio.icone"></i>
                     <div class="min-w-0">
                         <h3 class="text-sm font-bold leading-tight md:text-base">{{ beneficio.titulo }}</h3>

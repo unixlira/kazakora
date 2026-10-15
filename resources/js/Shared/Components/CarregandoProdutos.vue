@@ -3,7 +3,7 @@
  * Aviso de carregamento da rolagem infinita (pedido 2026-10-13).
  *
  * Cards fantasma no mesmo formato do ProductCard e na MESMA grade da lista de
- * Home.vue (grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6), para os produtos novos
+ * Home.vue (grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4), para os produtos novos
  * "aparecerem" no lugar. Embaixo, uma linha curta com três pontinhos.
  * Só tokens store-* (tema claro e escuro). Sem animação com prefers-reduced-motion.
  */
@@ -24,7 +24,7 @@ defineProps({
 <template>
     <div role="status" aria-live="polite" aria-busy="true" class="carregando-produtos mt-4 lg:mt-6">
         <!-- Mesmas classes de colunas da lista em Home.vue: encaixa como continuação. -->
-        <div class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" aria-hidden="true">
+        <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4" aria-hidden="true">
             <div v-for="n in quantidade" :key="n"
                 class="fantasma flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)]"
                 :style="{ '--atraso': `${(n - 1) * 90}ms` }">
@@ -40,11 +40,15 @@ defineProps({
                     </div>
                     <!-- Selo Envio Express (centralizado) -->
                     <div class="osso mx-auto h-6 w-28 rounded-full"></div>
-                    <!-- Preço e frete -->
+                    <!-- Preço (+ "Detalhes" no computador), frete e "Ver detalhes" no celular -->
                     <div class="mt-auto flex flex-col gap-2 pt-1">
                         <div class="osso h-3 w-1/3"></div>
-                        <div class="osso h-6 w-1/2"></div>
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="osso h-6 w-1/2"></div>
+                            <div class="osso hidden h-[30px] w-[74px] md:block"></div>
+                        </div>
                         <div class="osso h-3.5 w-2/3"></div>
+                        <div class="osso mt-1 h-8 w-full md:hidden"></div>
                     </div>
                 </div>
             </div>

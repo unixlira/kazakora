@@ -1,4 +1,5 @@
 import { router } from '@inertiajs/vue3';
+import { alternarFavorito } from '@/Shared/favoritos';
 
 export const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -7,9 +8,8 @@ export const addToCart = (productId) => {
     router.post('/carrinho', { product_id: productId, quantity: 1 }, { preserveScroll: true });
 };
 
-export const toggleFavorite = (productId) => {
-    router.post(`/favoritos/${productId}`, {}, { preserveScroll: true });
-};
+// Favorito com ou sem login, aviso laranja (Shared/favoritos.js, 2026-10-15).
+export const toggleFavorite = (productId) => alternarFavorito(productId);
 
 /**
  * Performance 2026-09-03: card e carrinho mostram a foto num quadro de

@@ -96,9 +96,12 @@ class HandleInertiaRequests extends Middleware
                 // Ícone do topo: o carrinho de verdade, mesmo durante uma compra direta.
                 'count' => app(CartManager::class)->quantidadeNoCarrinho(),
             ],
-            'favorites' => fn () => [
-                'count' => $request->user() ? Favorite::query()->where('user_id', $request->user()->id)->count() : 0,
-            ],
+            // ids: o botão de favorito pinta pelo que está na conta (2026-10-15).
+            'favorites' => function () use ($request) {
+                $ids = $request->user() ? Favorite::idsDoUsuario($request->user()->id) : [];
+
+                return ['count' => count($ids), 'ids' => $ids];
+            },
             'notifications' => fn () => $this->notificationsFor($request),
             // Contadores do menu lateral do admin (item com `badgeKey` em
             // adminSidebarItems.js). Só dentro de /admin e só pra equipe; o

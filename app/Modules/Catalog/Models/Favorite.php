@@ -13,6 +13,16 @@ class Favorite extends Model
         'product_id',
     ];
 
+    /**
+     * Ids dos produtos favoritos da conta, mais recente primeiro.
+     *
+     * @return list<int>
+     */
+    public static function idsDoUsuario(int $userId): array
+    {
+        return static::query()->where('user_id', $userId)->latest('id')->pluck('product_id')->all();
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
 import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
+import { ehFavorito } from '@/Shared/favoritos';
 
 const props = defineProps({
     product: {
@@ -202,15 +203,14 @@ const precoPartes = computed(() => {
             <div v-else class="flex h-full w-full items-center justify-center">
                 <i class="fas fa-box-open text-4xl text-store-accent-strong opacity-40"></i>
             </div>
-            <button v-if="isAuthenticated" type="button"
-                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow"
-                :aria-pressed="isFavorite" @click.stop="toggleFavorite(product.id)">
-                <i class="text-sm" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
+            <!-- Favorito com ou sem login; guardado = fundo laranja com check (pedido 2026-10-15). -->
+            <button type="button"
+                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full shadow transition-colors"
+                :class="ehFavorito(product.id) ? 'favorito-ativo' : 'bg-store-bg-raised'"
+                :aria-pressed="ehFavorito(product.id)" :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'"
+                @click.stop="toggleFavorite(product.id)">
+                <i class="text-sm" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
             </button>
-            <Link v-else href="/entrar" @click.stop
-                class="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-store-bg-raised shadow">
-                <i class="far fa-heart text-sm text-store-fg-muted"></i>
-            </Link>
 
 
             <!-- Quem comprou e ainda não avaliou: selo no canto da foto (não muda a altura do card). -->
@@ -273,6 +273,13 @@ const precoPartes = computed(() => {
                     </div>
                     <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
                     <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
+                    <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
+                         computador fica do lado do preço; no celular vira a última linha
+                         do card. Laranja da KazaKora, hover no laranja mais forte. -->
+                    <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
+                        class="ml-auto hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        Detalhes
+                    </Link>
                 </div>
                 <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
                 <p v-if="product.stock <= 0" class="mt-1.5 flex h-5 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
@@ -286,6 +293,10 @@ const precoPartes = computed(() => {
                         <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
                     </span>
                 </p>
+                <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
+                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
+                    Ver detalhes
+                </Link>
             </div>
         </div>
     </article>

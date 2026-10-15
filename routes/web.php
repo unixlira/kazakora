@@ -90,6 +90,8 @@ use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
+// Todas as ofertas no ar, com filtros (pedido 2026-10-15).
+Route::get('/ofertas', [CatalogController::class, 'ofertas'])->name('catalogo.ofertas');
 // Mapa do site para o Google Search Console (pedido 2026-10-12).
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
@@ -149,9 +151,15 @@ Route::view('/api/documentacao', 'api.documentation')->name('api.documentacao');
 // Minigame público, isolado da loja/checkout. Usa só créditos fictícios no navegador.
 Route::view('/frute-jogo', 'frute-jogo')->name('frute-jogo');
 
+// Favoritos sem login (pedido 2026-10-15): o visitante guarda no navegador
+// (localStorage) e a página lista pelos ids que ele manda; ao entrar, o que
+// estava no navegador se junta à conta por /favoritos/sincronizar.
 Route::get('/favoritos', [FavoriteController::class, 'index'])
-    ->middleware('auth')
     ->name('favoritos.listar');
+
+Route::post('/favoritos/sincronizar', [FavoriteController::class, 'sincronizar'])
+    ->middleware(['auth', 'throttle:30,1'])
+    ->name('favoritos.sincronizar');
 
 Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
     ->middleware('auth')

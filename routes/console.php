@@ -297,3 +297,7 @@ Schedule::command('beautykora:gerar-conteudo')->hourly()->withoutOverlapping(30)
 // Diagnóstico do Cauê (Shopee) e do Diego (Mercado Livre) no dashboard
 // (2026-10-11): só leitura das APIs, a cada 3 h.
 Schedule::command('marketplace:diagnostico')->cron('20 */3 * * *')->withoutOverlapping(60);
+
+// Tabela de estados e municípios do IBGE usada na NF-e (2026-10-15):
+// atualiza 1x por mês; se a API falhar não apaga nada.
+Schedule::command('ibge:sincronizar')->monthlyOn(1, '04:10')->withoutOverlapping(30);

@@ -735,3 +735,22 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #4a4f54 transparent; }
     outline: 2px solid var(--foco);
     outline-offset: 2px;
 }
+
+/* Favoritos (pedido 2026-10-15): botão guardado com fundo laranja e check
+   branco; aviso de fundo laranja e letra vermelha ao adicionar e ao tirar. */
+.favorito-ativo {
+    background-color: #f2540d;
+    border-color: #f2540d;
+    color: #fff;
+}
+.swal2-popup.kz-aviso-favorito {
+    background: #feab86;
+    color: #991b1b;
+}
+.swal2-popup.kz-aviso-favorito .swal2-title {
+    color: #991b1b;
+    font-weight: 700;
+}
+.swal2-popup.kz-aviso-favorito .swal2-timer-progress-bar {
+    background: rgba(153, 27, 27, 0.5);
+}

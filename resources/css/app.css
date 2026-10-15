@@ -64,6 +64,8 @@
     --color-store-accent-strong: #000000;
     --color-store-accent-soft: #ededed;
     --color-store-accent-contrast: #ffffff;
+    /* Hover de links: laranja mais forte e vibrante que o #F27A2A da marca (pedido do Lira, 2026-10-14). */
+    --color-store-link-hover: #ff5f00;
     --color-store-border: color-mix(in oklab, var(--color-store-accent-strong) 10%, transparent);
     --color-store-border-strong: color-mix(in oklab, var(--color-store-accent-strong) 20%, transparent);
 }

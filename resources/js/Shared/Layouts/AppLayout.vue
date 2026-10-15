@@ -190,7 +190,7 @@ const REDES = [
                                                     <i v-else class="fa-solid fa-tag text-store-fg-faint"></i>
                                                 </span>
                                                 <span class="min-w-0">
-                                                    <span class="block truncate text-sm font-semibold text-store-fg group-hover:text-[#f27a2a]">{{ dep.name }}</span>
+                                                    <span class="block truncate text-sm font-semibold text-store-fg group-hover:text-store-link-hover">{{ dep.name }}</span>
                                                     <span class="block text-xs text-store-fg-faint">{{ dep.total }} {{ dep.total === 1 ? 'produto' : 'produtos' }}</span>
                                                 </span>
                                             </Link>
@@ -321,11 +321,11 @@ const REDES = [
                                 <p class="truncate text-[15px] font-bold text-store-fg">{{ user?.name }}</p>
                             </div>
                             <nav class="py-1.5 text-[15px] font-medium text-store-fg">
-                                <Link href="/perfil" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="far fa-user w-4 text-center text-[#F27A2A]"></i> Meu Perfil</Link>
-                                <Link href="/pedidos" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-bag-shopping w-4 text-center text-[#F27A2A]"></i> Meus Pedidos</Link>
-                                <Link href="/rastreio" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-truck-fast w-4 text-center text-[#F27A2A]"></i> Rastrear Pedido</Link>
-                                <Link href="/configuracoes" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-gear w-4 text-center text-[#F27A2A]"></i> Configurações</Link>
-                                <Link v-if="user?.role === 'admin'" href="/admin" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-[#F27A2A]"><i class="fas fa-screwdriver-wrench w-4 text-center text-[#F27A2A]"></i> Painel Admin</Link>
+                                <Link href="/perfil" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-store-link-hover"><i class="far fa-user w-4 text-center text-[#F27A2A]"></i> Meu Perfil</Link>
+                                <Link href="/pedidos" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-store-link-hover"><i class="fas fa-bag-shopping w-4 text-center text-[#F27A2A]"></i> Meus Pedidos</Link>
+                                <Link href="/rastreio" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-store-link-hover"><i class="fas fa-truck-fast w-4 text-center text-[#F27A2A]"></i> Rastrear Pedido</Link>
+                                <Link href="/configuracoes" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-store-link-hover"><i class="fas fa-gear w-4 text-center text-[#F27A2A]"></i> Configurações</Link>
+                                <Link v-if="user?.role === 'admin'" href="/admin" class="flex items-center gap-3 px-4 py-2.5 no-underline hover:bg-store-bg-sunken hover:text-store-link-hover"><i class="fas fa-screwdriver-wrench w-4 text-center text-[#F27A2A]"></i> Painel Admin</Link>
                             </nav>
                             <button type="button" class="flex w-full items-center gap-3 border-t border-store-border px-4 py-3 text-left text-[15px] font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30" @click="logout"><i class="fas fa-arrow-right-from-bracket w-4 text-center"></i> Sair</button>
                         </div>

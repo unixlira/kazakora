@@ -31,10 +31,6 @@ const ROLE_LABELS = {
 
 const roleLabel = computed(() => ROLE_LABELS[props.profileUser.role] ?? props.profileUser.role);
 
-// Cliente não precisa ver o próprio cargo "Cliente"; admin vendo outro usuário
-// continua com o seletor e a equipe continua vendo o cargo.
-const showRole = computed(() => (props.canManageUsers && !props.isOwnProfile) || props.profileUser.role !== 'customer');
-
 const changeRole = (event) => {
     router.patch(`/admin/usuarios-permissoes/usuarios/${props.profileUser.id}`, { role: event.target.value }, { preserveScroll: true });
 };
@@ -53,8 +49,8 @@ const changeRole = (event) => {
                         @change="changeRole">
                         <option v-for="role in roles" :key="role" :value="role">{{ ROLE_LABELS[role] ?? role }}</option>
                     </select>
-                    <span v-else-if="showRole">{{ roleLabel }}</span>
-                    <span v-if="showRole" class="hidden h-3.5 w-px bg-store-border-strong sm:block" aria-hidden="true"></span>
+                    <span v-else>{{ roleLabel }}</span>
+                    <span class="hidden h-3.5 w-px bg-store-border-strong sm:block" aria-hidden="true"></span>
                     <span class="break-all">{{ profileUser.email }}</span>
                 </div>
             </div>

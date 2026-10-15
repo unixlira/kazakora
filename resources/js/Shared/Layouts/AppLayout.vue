@@ -142,8 +142,10 @@ const REDES = [
         <!-- Marquee -->
         <div class="overflow-hidden whitespace-nowrap bg-store-accent-strong text-store-accent-contrast">
             <!-- Faixa contínua (pedido 2026-10-10): 6 cópias e a animação anda metade
-                 (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco. -->
-            <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2 motion-reduce:animate-none">
+                 (3 cópias, mais largo que qualquer tela) — nunca sobra espaço em branco.
+                 Roda também com "reduzir movimento" ligado (pedido 2026-10-15): no celular
+                 essa opção liga sozinha com a economia de bateria e a faixa ficava parada. -->
+            <div class="inline-flex animate-[scroll-left_60s_linear_infinite] items-center py-2">
                 <span v-for="n in 6" :key="n" class="contents">
                     <span class="font-store-mono px-5 text-[0.68rem] uppercase tracking-wider opacity-90 after:ml-5 after:content-['·']">Frete grátis em todos os produtos</span>
                     <!-- Full na faixa do topo (pedido 2026-10-10). -->

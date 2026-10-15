@@ -6,6 +6,8 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
+use App\Modules\WhatsApp\Services\GeminiUnavailableException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -23,12 +25,21 @@ use Throwable;
  * ele falhar por qualquer motivo (conexão, cota, JSON ruim), uma regra
  * própria monta a estrutura a partir da própria descrição — gerar() nunca
  * lança exceção, a página do produto nunca fica sem conteúdo.
+ *
+ * Desde 2026-10-14 também roda só com as fotos (até 6) e o nome, sem
+ * descrição cadastrada: o Gemini descreve o que vê. O mesmo conteúdo serve
+ * às três lojas do grupo (KazaKora, FerraKora pela API do catálogo e Beauty
+ * Kora). descricaoPelasFotos() é o botão do admin que escreve a descrição
+ * para quem cadastra revisar antes de salvar.
  */
 class AnuncioConteudoService
 {
     private const MAX_IMAGENS = 6;
 
     private const MAX_BYTES_IMAGEM = 1_500_000;
+
+    /** Prévia do botão do admin guardada para não pagar o Gemini de novo ao salvar. */
+    private const PREVIA_HORAS = 6;
 
     public function __construct(private readonly GeminiClient $gemini) {}
 
@@ -51,7 +62,12 @@ class AnuncioConteudoService
         return ! $product->adContent || $product->adContent->origem_hash !== $this->hash($product);
     }
 
-    public function gerar(Product $product, bool $forcar = false): ProductAdContent
+    /**
+     * $lancarSeIndisponivel (lote do comando): quando o Gemini responde
+     * 429/5xx, lança GeminiUnavailableException em vez de gravar a regra
+     * automática, para quem chama esperar e tentar de novo.
+     */
+    public function gerar(Product $product, bool $forcar = false, bool $lancarSeIndisponivel = false): ProductAdContent
     {
         $product->loadMissing(['images', 'adContent']);
         $hash = $this->hash($product);
@@ -63,16 +79,29 @@ class AnuncioConteudoService
         $dados = null;
         $fonte = ProductAdContent::FONTE_GEMINI;
         $erro = null;
+        $temBase = filled($product->description) || $product->images->isNotEmpty();
 
-        if ($this->gemini->isConfigured() && filled($product->description)) {
+        // Descrição que veio do botão "Gerar descrição com IA pelas fotos" e
+        // foi salva sem mudança: o conteúdo já foi gerado junto.
+        $previa = $forcar ? null : Cache::pull($this->chavePrevia($hash));
+
+        if (is_array($previa) && $previa !== []) {
+            $dados = $previa;
+        } elseif ($this->gemini->isConfigured() && $temBase) {
             try {
                 $dados = $this->viaGemini($product);
+            } catch (GeminiUnavailableException $exception) {
+                if ($lancarSeIndisponivel) {
+                    throw $exception;
+                }
+                $erro = Str::limit($exception->getMessage(), 1000);
+                Log::warning('anuncio.gemini_falhou', ['product_id' => $product->id, 'erro' => $erro]);
             } catch (Throwable $exception) {
                 $erro = Str::limit($exception->getMessage(), 1000);
                 Log::warning('anuncio.gemini_falhou', ['product_id' => $product->id, 'erro' => $erro]);
             }
         } else {
-            $erro = filled($product->description) ? 'Gemini não configurado.' : 'Produto sem descrição.';
+            $erro = $temBase ? 'Gemini não configurado.' : 'Produto sem descrição e sem fotos.';
         }
 
         if ($dados === null) {
@@ -94,8 +123,48 @@ class AnuncioConteudoService
         }
     }
 
-    /** @return array<string, mixed> */
-    private function viaGemini(Product $product): array
+    /**
+     * Botão do admin (2026-10-14): o Gemini olha as fotos (até 6) e o nome e
+     * escreve a descrição do produto, mais o conteúdo da página. Nada é
+     * gravado no produto: quem cadastra revisa, edita e salva. O conteúdo
+     * fica guardado algumas horas e é usado se a descrição for salva igual.
+     * Lança exceção se o Gemini falhar (o admin mostra a mensagem).
+     *
+     * @return array{descricao: string, conteudo: array<string, mixed>}
+     */
+    public function descricaoPelasFotos(Product $product): array
+    {
+        $product->loadMissing('images');
+
+        if ($product->images->isEmpty()) {
+            throw new RuntimeException('Cadastre pelo menos uma foto antes de gerar a descrição.');
+        }
+
+        if (! $this->gemini->isConfigured()) {
+            throw new RuntimeException('Gemini não configurado.');
+        }
+
+        $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true);
+        $descricao = (string) ($dados['descricao'] ?? '');
+        unset($dados['descricao']);
+
+        if ($descricao === '') {
+            throw new RuntimeException('O Gemini não devolveu a descrição. Tente de novo.');
+        }
+
+        $hashFuturo = hash('sha256', implode('|', [$product->name, $descricao, $product->images->pluck('id')->implode(',')]));
+        Cache::put($this->chavePrevia($hashFuturo), $dados, now()->addHours(self::PREVIA_HORAS));
+
+        return ['descricao' => $descricao, 'conteudo' => $dados];
+    }
+
+    private function chavePrevia(string $hash): string
+    {
+        return "anuncio:previa:{$hash}";
+    }
+
+    /** @return array<int, string|null> índice => bytes da foto (miniatura quando existe) */
+    private function imagensDoProduto(Product $product): array
     {
         $imagens = [];
 
@@ -103,6 +172,14 @@ class AnuncioConteudoService
             $caminho = (string) ($imagem->thumb_path ?: $imagem->path);
             $imagens[$indice] = rescue(fn () => Storage::disk('public')->get($caminho), null, report: false);
         }
+
+        return $imagens;
+    }
+
+    /** @return array<string, mixed> */
+    private function viaGemini(Product $product): array
+    {
+        $imagens = $this->imagensDoProduto($product);
 
         return $this->gerarViaGemini('KazaKora', $product->name, (string) $product->description, $imagens, count($imagens));
     }
@@ -112,11 +189,13 @@ class AnuncioConteudoService
      * não tem o produto no banco: recebe nome, descrição e o conteúdo das
      * fotos (índice => bytes, null quando não deu para baixar). Lança exceção
      * quando o Gemini falha; quem chama decide o plano B (automaticoDe).
+     * Descrição vazia = o Gemini trabalha só com o nome e as fotos.
+     * $comDescricao devolve também "descricao" (texto para o cadastro).
      *
      * @param  array<int, string|null>  $imagens
      * @return array<string, mixed>
      */
-    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens): array
+    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens, bool $comDescricao = false): array
     {
         $partes = [];
 
@@ -129,7 +208,11 @@ class AnuncioConteudoService
             $partes[] = ['inline_data' => ['mime_type' => $this->mime($conteudo), 'data' => base64_encode($conteudo)]];
         }
 
-        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens)];
+        if ($partes === [] && trim($descricao) === '') {
+            throw new RuntimeException('Sem descrição e nenhuma foto pôde ser lida.');
+        }
+
+        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens, $comDescricao)];
 
         $resposta = $this->gemini->generate(
             (string) config('services.gemini.chat_model'),
@@ -139,7 +222,27 @@ class AnuncioConteudoService
             GeminiUsageLog::PURPOSE_AD_CONTENT,
         );
 
-        return $this->validar($this->extrairJson($resposta), $totalImagens);
+        $json = $this->extrairJson($resposta);
+        $dados = $this->validar($json, $totalImagens);
+
+        if ($comDescricao) {
+            $dados['descricao'] = $this->descricaoLimpa($json['descricao'] ?? null);
+        }
+
+        return $dados;
+    }
+
+    /** Texto puro, uma ideia por linha, sem linhas em branco repetidas. */
+    private function descricaoLimpa(mixed $valor): string
+    {
+        if (! is_string($valor)) {
+            return '';
+        }
+
+        $texto = str_replace(['**', '__', '#'], '', strip_tags($valor));
+        $texto = preg_replace("/\n{3,}/", "\n\n", str_replace("\r", '', $texto));
+
+        return Str::limit(trim((string) $texto), 4000, '');
     }
 
     /** Tipo da imagem pelos primeiros bytes (a URL da Hostinger nem sempre tem extensão). */
@@ -152,33 +255,40 @@ class AnuncioConteudoService
         };
     }
 
-    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens): string
+    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens, bool $comDescricao = false): string
     {
         $ultimaImagem = max(0, $totalImagens - 1);
+        $temDescricao = trim($descricao) !== '';
+        $base = $temDescricao
+            ? "Descrição cadastrada:\n{$descricao}"
+            : 'Não há descrição cadastrada: escreva a partir do nome e do que dá pra ver nas imagens (olhe todas, inclusive textos e medidas impressos nelas).';
+        $fonte = $temDescricao ? 'da descrição e do que dá pra ver nas imagens' : 'do nome e do que dá pra ver nas imagens (incluindo textos escritos nelas)';
+        $campoDescricao = $comDescricao
+            ? "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro: um parágrafo de abertura, depois seções com um título terminado em ':' numa linha e o texto abaixo, e uma seção 'Características:' com itens começando por '- '\","
+            : '';
 
         return <<<TXT
         Monte o conteúdo da página de venda deste produto da loja {$loja}.
 
         Produto: {$nome}
-        Descrição cadastrada:
-        {$descricao}
+        {$base}
 
         Há {$totalImagens} imagem(ns), numeradas de 0 a {$ultimaImagem} (a 0 é a foto principal).
 
         Regras:
         - Português do Brasil, tom persuasivo e direto, focado em quebrar objeções de compra.
-        - Use SÓ informações da descrição e do que dá pra ver nas imagens. Não invente medidas, materiais, garantias, prazos, brindes nem números.
+        - Use SÓ informações {$fonte}. Não invente medidas, materiais, garantias, prazos, brindes nem números.
         - Sem HTML, sem emojis, sem markdown.
         - Em cada bloco escolha a imagem que melhor ilustra o texto (índice), sem repetir imagem entre blocos quando der; use null se nenhuma servir.
 
         Formato (JSON):
-        {
+        {{$campoDescricao}
           "destaques": ["3 benefícios curtos, até 60 caracteres cada"],
           "chamada": "uma frase curta com o principal benefício",
           "blocos": [{"titulo": "título forte", "texto": "2 a 3 frases persuasivas", "imagem": 1}],
           "comparativo": {"titulo": "...", "intro": "uma frase", "linhas": [["critério", "limitação da solução comum", "vantagem deste produto"]]},
           "beneficios": [["benefício curto", "explicação em uma linha"]],
-          "duvidas": [["pergunta que o cliente faria", "resposta objetiva com base na descrição"]]
+          "duvidas": [["pergunta que o cliente faria", "resposta objetiva com base no que se sabe do produto"]]
         }
         Quantidades: 3 a 5 blocos, 3 a 4 linhas no comparativo, 4 a 6 benefícios, 3 a 4 dúvidas.
         TXT;

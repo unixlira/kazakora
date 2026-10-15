@@ -2,6 +2,7 @@
 
 namespace App\Modules\Catalog\Models;
 
+use App\Modules\Catalog\Support\BannerMobileOptimizer;
 use App\Support\Rbac\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,7 +19,7 @@ class Banner extends Model
         'is_active',
     ];
 
-    protected $appends = ['image_url', 'image_url_mobile'];
+    protected $appends = ['image_url', 'image_url_mobile', 'image_srcset_mobile'];
 
     protected function casts(): array
     {
@@ -36,5 +37,10 @@ class Banner extends Model
     public function getImageUrlMobileAttribute(): ?string
     {
         return $this->image_path_mobile ? asset('storage/'.$this->image_path_mobile) : null;
+    }
+
+    public function getImageSrcsetMobileAttribute(): ?string
+    {
+        return $this->image_path_mobile ? BannerMobileOptimizer::srcset($this->image_path_mobile) : null;
     }
 }

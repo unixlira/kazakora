@@ -41,6 +41,19 @@ class BeautyKoraContaTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'maria@exemplo.com']);
     }
 
+    public function test_navegar_no_catalogo_nao_gasta_o_limite_do_login(): void
+    {
+        $this->cadastrar();
+
+        // Antes de 2026-10-15 o login (10/min) contava no mesmo balde do catálogo.
+        for ($i = 0; $i < 12; $i++) {
+            $this->getJson('/api/beautykora/produtos');
+        }
+
+        $this->postJson('/api/beautykora/login', ['email' => 'maria@exemplo.com', 'password' => 'segredo123'])
+            ->assertOk();
+    }
+
     public function test_email_repetido_e_senha_curta_sao_recusados(): void
     {
         $this->cadastrar();

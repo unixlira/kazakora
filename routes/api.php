@@ -266,29 +266,31 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase
 // do Horizons. Token do Sanctum só de BeautyKoraCliente.
 Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
-    Route::post('cadastro', [BeautyKoraContaController::class, 'cadastro'])->middleware('throttle:10,1')->name('cadastro');
-    Route::post('login', [BeautyKoraContaController::class, 'login'])->middleware('throttle:10,1')->name('login');
+    // Cada rota com prefixo próprio no limite (2026-10-15): sem ele todas contavam por IP no
+    // mesmo balde do catálogo (120/min), e abrir umas páginas já travava o login com 429.
+    Route::post('cadastro', [BeautyKoraContaController::class, 'cadastro'])->middleware('throttle:10,1,bk-conta-cadastro')->name('cadastro');
+    Route::post('login', [BeautyKoraContaController::class, 'login'])->middleware('throttle:10,1,bk-conta-login')->name('login');
     // Página de produto (2026-10-12): conteúdo gerado pelo Gemini, igual ao da KazaKora.
     Route::get('produtos/{id}/conteudo', [BeautyKoraProdutoController::class, 'conteudo'])
-        ->where('id', '(prod_[A-Za-z0-9]{10,40}|kz-[0-9]{1,10})')->middleware('throttle:30,1')->name('produto.conteudo');
+        ->where('id', '(prod_[A-Za-z0-9]{10,40}|kz-[0-9]{1,10})')->middleware('throttle:30,1,bk-produto-conteudo')->name('produto.conteudo');
     // Catálogo vindo do KazaKora (2026-10-12): o site lê daqui, quem cadastra envia o JSON.
-    Route::get('produtos', [BeautyKoraCatalogoController::class, 'index'])->middleware('throttle:120,1')->name('produtos');
+    Route::get('produtos', [BeautyKoraCatalogoController::class, 'index'])->middleware('throttle:120,1,bk-produtos')->name('produtos');
     Route::get('produtos/{id}', [BeautyKoraCatalogoController::class, 'show'])
-        ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
-    Route::post('produtos', [BeautyKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+        ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1,bk-produto')->name('produto');
+    Route::post('produtos', [BeautyKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1,bk-produtos-sincronizar')->name('produtos.sincronizar');
     // Região do visitante (2026-10-15): o site pergunta ao abrir e mostra no card
     // o frete grátis e o raio da entrega FULL (Grande SP), pelo IP ou pelo CEP.
-    Route::get('regiao', [BeautyKoraCatalogoController::class, 'regiao'])->middleware('throttle:120,1')->name('regiao');
+    Route::get('regiao', [BeautyKoraCatalogoController::class, 'regiao'])->middleware('throttle:120,1,bk-regiao')->name('regiao');
 
     // Checkout pelo Mercado Pago da KazaKora (2026-10-14, só homolog): sai a Hostinger.
     Route::prefix('checkout')->name('checkout.')->group(function () {
-        Route::post('resumo', [BeautyKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1')->name('resumo');
-        Route::post('pedido', [BeautyKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1')->name('pedido');
-        Route::get('pedido/{order}', [BeautyKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1')->name('status');
-        Route::get('cep/{cep}', [BeautyKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1')->name('cep');
+        Route::post('resumo', [BeautyKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1,bk-checkout-resumo')->name('resumo');
+        Route::post('pedido', [BeautyKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1,bk-checkout-pedido')->name('pedido');
+        Route::get('pedido/{order}', [BeautyKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1,bk-checkout-status')->name('status');
+        Route::get('cep/{cep}', [BeautyKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,bk-checkout-cep')->name('cep');
     });
 
-    Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1'])->group(function () {
+    Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1,bk-conta'])->group(function () {
         Route::get('eu', [BeautyKoraContaController::class, 'eu'])->name('eu');
         Route::patch('eu', [BeautyKoraContaController::class, 'atualizar'])->name('atualizar');
         Route::post('sair', [BeautyKoraContaController::class, 'sair'])->name('sair');

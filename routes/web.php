@@ -90,6 +90,8 @@ use App\Modules\Profile\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [CatalogController::class, 'index'])->name('catalogo.inicio');
+// Todas as ofertas no ar, com filtros (pedido 2026-10-15).
+Route::get('/ofertas', [CatalogController::class, 'ofertas'])->name('catalogo.ofertas');
 // Mapa do site para o Google Search Console (pedido 2026-10-12).
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])

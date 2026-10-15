@@ -43,8 +43,9 @@ class CatalogController extends Controller
         $tipo = $request->query('tipo');
         $categoria = (string) $request->query('categoria', '');
 
-        $baseQuery = Product::query()
-            ->forCard()
+        // Catálogo da busca/aba, sem departamento: base da contagem por
+        // departamento da coluna de filtros (pedido 2026-10-15).
+        $catalogo = Product::query()
             ->where('is_active', true)
             ->comEstoque()
             // Variações continuam com página própria e compra própria, mas
@@ -65,9 +66,30 @@ class CatalogController extends Controller
                 }
             })
             ->when($tipo === 'destaque', fn ($query) => $query->where('is_featured', true))
-            ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true))
+            ->when($tipo === 'lancamento', fn ($query) => $query->where('is_new_release', true));
+
+        $baseQuery = (clone $catalogo)
+            ->forCard()
             // Departamentos (pedido 2026-10-10): clicar no círculo filtra a vitrine.
             ->when($categoria !== '', fn ($query) => $query->whereHas('category', fn ($c) => $c->where('slug', $categoria)));
+
+        // Preço e desconto da coluna de filtros (pedido 2026-10-15): valem o
+        // preço e o "X% OFF" que o card mostra (com Oferta do Dia, Relâmpago e
+        // frete embutido), que só dá para calcular aqui. O catálogo é pequeno,
+        // então confere produto a produto e a lista filtra pelos ids.
+        $faixa = self::FAIXAS_PRECO[(string) $request->query('preco', '')] ?? null;
+        $desconto = (int) $request->query('desconto', 0);
+        $filtraPreco = $faixa !== null || $desconto > 0;
+        $passam = null;
+        $produtosQuePassam = function () use (&$passam, $catalogo, $faixa, $desconto) {
+            return $passam ??= (clone $catalogo)->get()
+                ->filter(fn (Product $produto) => ($faixa === null || ($produto->final_price >= $faixa[0] && $produto->final_price < $faixa[1]))
+                    && ($desconto <= 0 || self::descontoDoCard($produto) >= $desconto))
+                ->values();
+        };
+        if ($filtraPreco) {
+            $baseQuery->whereIn('id', $produtosQuePassam()->pluck('id'));
+        }
 
         // Ordenar (pedido 2026-10-10). Preço = o que o cliente paga (já com desconto).
         $ordenar = (string) $request->query('ordenar', '');
@@ -103,13 +125,30 @@ class CatalogController extends Controller
         };
 
         // Sem busca/filtro a home é a vitrine (seções); com filtro, a lista com "Carregar mais".
-        $modoLista = $search->isNotEmpty() || $tipo || $categoria !== '' || $request->boolean('todos');
+        $modoLista = $search->isNotEmpty() || $tipo || $categoria !== '' || $filtraPreco || $request->boolean('todos');
+
+        // Coluna de filtros: departamentos com quantos produtos cada um tem
+        // na busca/aba e no preço/desconto escolhidos (o escolhido fica mesmo
+        // com 0, para dar para desmarcar).
+        $departamentosFiltro = function () use ($catalogo, $filtraPreco, $produtosQuePassam, $categoria) {
+            $totais = $filtraPreco
+                ? $produtosQuePassam()->countBy('category_id')->all()
+                : (clone $catalogo)->toBase()->selectRaw('category_id, count(*) as total')->groupBy('category_id')->pluck('total', 'category_id')->all();
+
+            return collect($this->departamentos())
+                ->map(fn (array $dep) => ['slug' => $dep['slug'], 'name' => $dep['name'], 'total' => (int) ($totais[$dep['id']] ?? 0)])
+                ->filter(fn (array $dep) => $dep['total'] > 0 || $dep['slug'] === $categoria)
+                ->sortBy('name')
+                ->values()
+                ->all();
+        };
 
         return Inertia::render('Catalog/Home', [
             'vitrine' => $modoLista ? null : fn () => app(VitrineHome::class)->montar(),
             'banners' => Banner::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'image_path', 'image_path_mobile', 'link_url']),
             'products' => $modoLista ? $products : null,
             'categories' => $this->departamentos(),
+            'departamentosFiltro' => $modoLista ? $departamentosFiltro : [],
             'favoriteIds' => $request->user()
                 ? Favorite::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
@@ -117,11 +156,21 @@ class CatalogController extends Controller
             'reviewedProductIds' => $request->user()
                 ? Review::query()->where('user_id', $request->user()->id)->pluck('product_id')
                 : [],
-            'filters' => $request->only('search', 'tipo', 'categoria', 'todos', 'ordenar'),
+            'filters' => $request->only('search', 'tipo', 'categoria', 'todos', 'ordenar', 'preco', 'desconto'),
         ]);
     }
 
-    /** Faixas de preço do filtro de ofertas: chave => [mínimo, máximo). */
+    /** O "X% OFF" do card (ProductCard.vue): preço final contra o riscado. */
+    private static function descontoDoCard(Product $produto): int
+    {
+        $antes = $produto->emOferta()
+            ? (float) $produto->preco_sem_oferta
+            : ($produto->has_discount ? (float) ($produto->preco_de ?? $produto->price) : 0.0);
+
+        return $antes > 0 ? max(1, (int) round((1 - $produto->final_price / $antes) * 100)) : 0;
+    }
+
+    /** Faixas de preço dos filtros (ofertas, departamentos e busca): chave => [mínimo, máximo). */
     private const FAIXAS_PRECO = [
         'ate-50' => [0, 50],
         '50-100' => [50, 100],

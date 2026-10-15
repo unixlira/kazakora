@@ -3,9 +3,11 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import BannerCarousel from '@/Shared/Components/BannerCarousel.vue';
 import CarregandoProdutos from '@/Shared/Components/CarregandoProdutos.vue';
 import CategoryCarousel from '@/Shared/Components/CategoryCarousel.vue';
+import FiltrosCatalogo from '@/Shared/Components/FiltrosCatalogo.vue';
 import MaisBuscadosSlider from '@/Shared/Components/MaisBuscadosSlider.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import SecaoProdutos from '@/Shared/Components/SecaoProdutos.vue';
+import { DESCONTOS, PRECOS } from '@/Shared/filtrosCatalogo';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -25,6 +27,12 @@ const props = defineProps({
         default: null,
     },
     categories: {
+        type: Array,
+        default: () => [],
+    },
+    // Departamentos da coluna de filtros, com quantos produtos cada um tem na
+    // busca/filtro atual (só na lista).
+    departamentosFiltro: {
         type: Array,
         default: () => [],
     },
@@ -68,15 +76,41 @@ const listTitle = computed(() => {
 });
 
 
-// Monta o link do filtro mantendo a busca e a ordenação atuais.
-const filtroHref = (mudancas) => {
+// Filtros da lista (pedido 2026-10-15, o mesmo layout de /ofertas): coluna
+// lateral no computador e FILTRAR com tela cinza e Confirmar no celular. A
+// busca continua junto; sem busca, aba nem filtro, ?todos=1 mantém a lista.
+const href = (filtros) => {
     const params = new URLSearchParams();
-    const atual = { search: props.filters.search, ordenar: props.filters.ordenar, tipo: props.filters.tipo, categoria: props.filters.categoria, ...mudancas };
-    Object.entries(atual).forEach(([chave, valor]) => { if (valor) params.set(chave, valor); });
-    if (![...params.keys()].some((chave) => ['search', 'tipo', 'categoria'].includes(chave))) params.set('todos', '1');
+    const tudo = { search: props.filters.search, ...filtros };
+    ['search', 'tipo', 'categoria', 'desconto', 'preco', 'ordenar'].forEach((chave) => { if (tudo[chave]) params.set(chave, tudo[chave]); });
+    if (![...params.keys()].some((chave) => ['search', 'tipo', 'categoria', 'desconto', 'preco'].includes(chave))) params.set('todos', '1');
     return `/?${params.toString()}#produtos`;
 };
+const filtroHref = (mudancas) => href({ ...props.filters, ...mudancas });
 const ordenarPor = (valor) => router.get(filtroHref({ ordenar: valor || null }).split('#')[0], {}, { preserveScroll: true });
+
+const temFiltro = computed(() => ['search', 'tipo', 'categoria', 'desconto', 'preco'].some((chave) => props.filters[chave]));
+
+const ORDENS = computed(() => [
+    { valor: null, label: props.filters.search ? 'Mais relevantes' : 'Mais recentes' },
+    { valor: 'menor_preco', label: 'Menor preço' },
+    { valor: 'maior_preco', label: 'Maior preço' },
+    { valor: 'nome', label: 'Nome (A–Z)' },
+]);
+
+const gruposFiltro = computed(() => [
+    {
+        chave: 'categoria',
+        titulo: 'Departamentos',
+        opcoes: [
+            { valor: null, label: 'Todos os departamentos', labelPainel: 'Todos' },
+            ...props.departamentosFiltro.map((d) => ({ valor: d.slug, label: d.name, total: d.total })),
+        ],
+    },
+    { chave: 'tipo', titulo: 'Mostrar', opcoes: TIPO_TABS.map((tab) => ({ valor: tab.key, label: tab.label })) },
+    { chave: 'desconto', titulo: 'Desconto', opcoes: DESCONTOS },
+    { chave: 'preco', titulo: 'Preço', opcoes: PRECOS },
+]);
 
 const BENEFICIOS = [
     { icone: 'fa-truck-fast', titulo: 'Frete Grátis', texto: 'Entrega em todo Brasil' },
@@ -212,67 +246,58 @@ onBeforeUnmount(() => observador?.disconnect());
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds" />
         </template>
 
-        <!-- Lista (busca, aba ou departamento) com rolagem infinita -->
+        <!-- Lista (busca, aba ou departamento) com filtros e rolagem infinita -->
         <section v-else id="produtos" class="mx-auto max-w-[1320px] px-4 pb-20 pt-8 md:px-6">
-            <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold md:text-3xl">{{ listTitle }}</h1>
-                    <p class="mt-1 text-sm text-store-fg-muted">
-                        {{ products?.total ?? 0 }} produto{{ (products?.total ?? 0) === 1 ? '' : 's' }}
-                        <Link v-if="filters.search || filters.categoria || filters.tipo" href="/?todos=1#produtos" class="ml-2 font-semibold text-store-accent hover:underline">Limpar filtros</Link>
-                    </p>
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold md:text-3xl">{{ listTitle }}</h1>
+            </div>
+
+            <div class="flex flex-col gap-8 lg:flex-row">
+                <!-- Computador: coluna de filtros (modelo Beauty Kora, igual a /ofertas) -->
+                <FiltrosCatalogo modo="lateral" :grupos="gruposFiltro" :filters="filters" :href="href" />
+
+                <div class="min-w-0 flex-1">
+                    <div class="mb-5 flex items-center justify-between gap-4">
+                        <p class="text-sm text-store-fg-muted">
+                            {{ products?.total ?? 0 }} produto{{ (products?.total ?? 0) === 1 ? '' : 's' }}
+                            <Link v-if="temFiltro" href="/?todos=1#produtos" class="ml-2 font-semibold text-store-accent hover:underline">Limpar filtros</Link>
+                        </p>
+
+                        <!-- Celular: a palavra FILTRAR abre a tela cinza com Confirmar -->
+                        <div class="lg:hidden">
+                            <FiltrosCatalogo modo="botao" :grupos="gruposFiltro" :ordens="ORDENS" :filters="filters" :href="href" />
+                        </div>
+
+                        <label class="hidden items-center gap-2 text-sm text-store-fg-muted lg:flex">
+                            Ordenar por
+                            <select :value="filters.ordenar ?? ''" class="rounded-lg border border-store-border-strong bg-store-bg-raised px-3 py-2 text-sm text-store-fg" @change="ordenarPor($event.target.value)">
+                                <option v-for="op in ORDENS" :key="op.label" :value="op.valor ?? ''">{{ op.label }}</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
+                        <i class="fas fa-magnifying-glass mb-3 text-3xl text-store-fg-faint"></i>
+                        <p class="text-base font-semibold text-store-fg">
+                            Nenhum produto encontrado{{ filters.search ? ` para "${filters.search}"` : '' }}.
+                        </p>
+                        <p class="mt-1 text-sm">Tente outra palavra, use menos termos ou veja todos os produtos.</p>
+                        <Link href="/?todos=1#produtos" class="mt-4 inline-block rounded-lg bg-store-accent px-5 py-2.5 text-sm font-semibold text-store-accent-contrast">Ver todos os produtos</Link>
+                    </div>
+
+                    <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4">
+                        <ProductCard v-for="product in listaProdutos" :key="product.id" :product="product"
+                            :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
+                            :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
+                    </div>
+
+                    <!-- Enquanto a próxima leva chega: cards fantasma na mesma grade (2026-10-13) -->
+                    <CarregandoProdutos v-if="carregandoMais" />
+
+                    <div v-if="temMais" ref="fimDaLista" class="mt-10 flex flex-col items-center gap-2">
+                        <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products?.total }}</span>
+                    </div>
                 </div>
-
-                <label class="flex items-center gap-2 text-sm text-store-fg-muted">
-                    Ordenar por
-                    <select :value="filters.ordenar ?? ''" class="rounded-lg border border-store-border-strong bg-store-bg-raised px-3 py-2 text-sm text-store-fg" @change="ordenarPor($event.target.value)">
-                        <option value="">{{ filters.search ? 'Mais relevantes' : 'Mais recentes' }}</option>
-                        <option value="menor_preco">Menor preço</option>
-                        <option value="maior_preco">Maior preço</option>
-                        <option value="nome">Nome (A–Z)</option>
-                    </select>
-                </label>
-            </div>
-
-            <!-- Filtros: abas e departamentos em pílulas -->
-            <div class="mb-8 flex flex-wrap gap-2">
-                <Link v-for="tab in TIPO_TABS" :key="tab.label" :href="filtroHref({ tipo: tab.key, categoria: null })" preserve-scroll
-                    class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
-                    :class="!filters.categoria && (filters.tipo ?? null) === tab.key
-                        ? 'bg-store-accent text-store-accent-contrast'
-                        : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
-                    {{ tab.label }}
-                </Link>
-                <span class="mx-1 hidden w-px shrink-0 bg-store-border-strong sm:block"></span>
-                <Link v-for="category in categories" :key="category.id" :href="filtroHref({ categoria: filters.categoria === category.slug ? null : category.slug, tipo: null })" preserve-scroll
-                    class="shrink-0 rounded-full px-4 py-1.5 text-sm font-medium no-underline transition-colors"
-                    :class="filters.categoria === category.slug
-                        ? 'bg-store-accent text-store-accent-contrast'
-                        : 'border border-store-border-strong text-store-fg-muted hover:border-store-fg'">
-                    {{ category.name }}
-                </Link>
-            </div>
-
-            <div v-if="listaProdutos.length === 0" class="py-16 text-center text-store-fg-muted">
-                <i class="fas fa-magnifying-glass mb-3 text-3xl text-store-fg-faint"></i>
-                <p class="text-base font-semibold text-store-fg">
-                    Nenhum produto encontrado{{ filters.search ? ` para "${filters.search}"` : '' }}.
-                </p>
-                <p class="mt-1 text-sm">Tente outra palavra, use menos termos ou veja todos os produtos.</p>
-                <Link href="/?todos=1#produtos" class="mt-4 inline-block rounded-lg bg-store-accent px-5 py-2.5 text-sm font-semibold text-store-accent-contrast">Ver todos os produtos</Link>
-            </div>
-
-            <div v-else class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6">
-                <ProductCard v-for="product in listaProdutos" :key="product.id" :product="product"
-                    :is-favorite="isFavorite(product.id)" :is-authenticated="isAuthenticated"
-                    :can-review="canReview(product.id)" :has-reviewed="hasReviewed(product.id)" />
-            </div>
-
-            <!-- Enquanto a próxima leva chega: cards fantasma na mesma grade (2026-10-13) -->
-            <CarregandoProdutos v-if="carregandoMais" />
-
-            <div v-if="temMais" ref="fimDaLista" class="mt-10 flex flex-col items-center gap-2">
-                <span class="text-xs text-store-fg-muted">Mostrando {{ listaProdutos.length }} de {{ products?.total }}</span>
             </div>
         </section>
 

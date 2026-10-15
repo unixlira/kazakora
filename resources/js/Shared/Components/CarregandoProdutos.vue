@@ -3,7 +3,7 @@
  * Aviso de carregamento da rolagem infinita (pedido 2026-10-13).
  *
  * Cards fantasma no mesmo formato do ProductCard e na MESMA grade da lista de
- * Home.vue (grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6), para os produtos novos
+ * Home.vue (grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4), para os produtos novos
  * "aparecerem" no lugar. Embaixo, uma linha curta com três pontinhos.
  * Só tokens store-* (tema claro e escuro). Sem animação com prefers-reduced-motion.
  */
@@ -24,7 +24,7 @@ defineProps({
 <template>
     <div role="status" aria-live="polite" aria-busy="true" class="carregando-produtos mt-4 lg:mt-6">
         <!-- Mesmas classes de colunas da lista em Home.vue: encaixa como continuação. -->
-        <div class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" aria-hidden="true">
+        <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:gap-6 xl:grid-cols-4" aria-hidden="true">
             <div v-for="n in quantidade" :key="n"
                 class="fantasma flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)]"
                 :style="{ '--atraso': `${(n - 1) * 90}ms` }">

@@ -31,6 +31,7 @@ class Payment extends Model
 
     protected $fillable = [
         'order_id',
+        'site_origem',
         'provider',
         'stripe_payment_intent_id',
         'mercadopago_payment_id',
@@ -42,6 +43,17 @@ class Payment extends Model
         'boleto_url',
         'expira_em',
     ];
+
+    /**
+     * Pagamento marcado com o site do pedido (FerraKora, Beauty Kora; nulo =
+     * kazakora.com), pedido do Lira 2026-10-15 para separar os dados dos sites.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $payment) {
+            $payment->site_origem ??= Order::query()->whereKey($payment->order_id)->value('site_origem');
+        });
+    }
 
     protected function casts(): array
     {

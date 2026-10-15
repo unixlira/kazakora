@@ -2,31 +2,29 @@
 
 namespace App\Http\Middleware;
 
-use App\Modules\FerraKora\Models\FerraKoraCliente;
+use App\Modules\FerraKora\Models\FerraKoraSessao;
 use Closure;
 use Illuminate\Http\Request;
-use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Cliente logado no site FerraKora (pedido 2026-10-14): Bearer do Sanctum que
- * pertence a um FerraKoraCliente. Mesma regra do AuthenticateBeautyKoraCliente:
- * token de outro dono (ApiPartner, cliente do Beauty Kora) não entra.
+ * Cliente logado no site FerraKora (pedido 2026-10-14): Bearer de uma
+ * FerraKoraSessao válida, cujo dono é a conta da KazaKora (User). Token do
+ * Sanctum (ApiPartner, cliente do Beauty Kora) não entra.
  */
 class AuthenticateFerraKoraCliente
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $token = PersonalAccessToken::findToken((string) $request->bearerToken());
-        $cliente = $token?->tokenable;
+        $sessao = FerraKoraSessao::doToken($request->bearerToken());
 
-        if (! $cliente instanceof FerraKoraCliente || $token->expires_at?->isPast()) {
+        if (! $sessao) {
             return response()->json(['message' => 'Faça login para continuar.'], 401);
         }
 
-        $token->forceFill(['last_used_at' => now()])->save();
-        $request->attributes->set('ferrakora_token', $token);
-        $request->setUserResolver(fn () => $cliente->withAccessToken($token));
+        $sessao->marcarUso();
+        $request->attributes->set('ferrakora_sessao', $sessao);
+        $request->setUserResolver(fn () => $sessao->user);
 
         return $next($request);
     }

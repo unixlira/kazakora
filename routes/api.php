@@ -227,16 +227,16 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
         Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
     });
 
-    // Meus pedidos do FerraKora (2026-10-14): sem login, pelo e-mail + CPF da compra.
-    Route::post('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->middleware('throttle:10,1,fk-meus-pedidos')->name('pedidos');
-
-    // Conta do cliente (2026-10-14): menu de conta do topo do site, como no Beauty Kora.
+    // Conta do cliente (2026-10-14): login com a conta da KazaKora (users) e
+    // Meus pedidos só para quem entrou.
     Route::post('cadastro', [FerraKoraContaController::class, 'cadastro'])->middleware('throttle:10,1,fk-conta-cadastro')->name('cadastro');
     Route::post('login', [FerraKoraContaController::class, 'login'])->middleware('throttle:10,1,fk-conta-login')->name('login');
+    Route::post('esqueci-senha', [FerraKoraContaController::class, 'esqueciSenha'])->middleware('throttle:5,1,fk-conta-senha')->name('esqueci-senha');
     Route::middleware([AuthenticateFerraKoraCliente::class, 'throttle:60,1,fk-conta'])->group(function () {
         Route::get('eu', [FerraKoraContaController::class, 'eu'])->name('eu');
         Route::patch('eu', [FerraKoraContaController::class, 'atualizar'])->name('atualizar');
         Route::post('sair', [FerraKoraContaController::class, 'sair'])->name('sair');
+        Route::get('pedidos', [FerraKoraCheckoutController::class, 'meusPedidos'])->name('pedidos');
     });
 });
 

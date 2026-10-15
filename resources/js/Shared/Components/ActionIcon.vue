@@ -29,7 +29,7 @@ defineEmits(['click']);
 // virou a ação principal: grafite no claro, laranja no escuro. Selos de
 // status continuam com as cores de estado. Ação destrutiva (red) só com
 // contorno, nunca botão cheio, para não se confundir com o laranja.
-const ACAO_PRINCIPAL = 'acao-principal bg-[#2b2326]/10 text-[#2b2326] hover:bg-[#2b2326] hover:text-white';
+const ACAO_PRINCIPAL = 'acao-principal bg-[#3c4044]/10 text-[#3c4044] hover:bg-[#3c4044] hover:text-white';
 const COLOR_CLASSES = {
     slate: 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300',
     blue: ACAO_PRINCIPAL,

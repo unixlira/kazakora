@@ -72,8 +72,8 @@ const CHROME = {
     // Escuro em preto chapado (#000), igual ao --surface do admin.
     // Destaque grafite no claro (2026-10-11): o laranja se confundia com a
     // Shopee nos gráficos "Este mês" e "Faturamento por categoria".
-    light: { grid: '#e6e2e3', text: '#6b5f63', surface: '#ffffff', accent: '#2b2326', context: '#b3aaad' },
-    dark: { grid: '#2a2a2a', text: '#b3a9ac', surface: '#000000', accent: '#ff8c4d', context: '#7a6f73' },
+    light: { grid: '#dddcdb', text: '#5b6066', surface: '#ffffff', accent: '#3c4044', context: '#b3aaad' },
+    dark: { grid: '#3c4044', text: '#a9adb2', surface: '#2a2d30', accent: '#fd7b41', context: '#7a6f73' },
 };
 
 // O tema muda na hora (botão do layout põe/tira .dark no <html>) — os
@@ -150,7 +150,7 @@ const baseOptions = computed(() => ({
     plugins: {
         legend: { display: false },
         tooltip: {
-            backgroundColor: isDark.value ? '#f1eced' : '#2b2326',
+            backgroundColor: isDark.value ? '#f1eced' : '#3c4044',
             titleColor: isDark.value ? '#000000' : '#ffffff',
             bodyColor: isDark.value ? '#000000' : '#ffffff',
             padding: 10,
@@ -355,8 +355,8 @@ const visitTiles = computed(() => {
     }
     tiles.push(
         { label: v.mesAtual ? 'Visitantes no mês' : `Visitantes em ${formatMonthLong(v.mes)}`, value: formatInt(v.visitantesMes), hint: 'pessoas diferentes no mês', icon: 'fas fa-users', color: '#198754' },
-        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#2b2326' },
-        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#c2410c' },
+        { label: 'Páginas vistas', value: formatInt(v.paginasMes), hint: v.visitantesMes ? `${(v.paginasMes / v.visitantesMes).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} páginas por visitante` : 'no mês', icon: 'fas fa-eye', color: '#3c4044' },
+        { label: 'Média por dia', value: formatInt(Math.round(v.mediaDia ?? 0)), hint: v.melhorDia?.visitantes ? `melhor dia: ${formatDay(v.melhorDia.dia)} (${formatInt(v.melhorDia.visitantes)})` : 'visitantes por dia', icon: 'fas fa-chart-line', color: '#9a3412' },
     );
     return tiles;
 });

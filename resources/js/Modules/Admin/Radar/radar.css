@@ -5,11 +5,11 @@
 .fonte-tiktok { --cor: #111111; --cor-texto: #111111; --tinta: 9%; }
 .fonte-ml { --cor: #2d3277; --cor-texto: #2d3277; --cor-fundo: #ffe600; --tinta: 18%; }
 .fonte-google { --cor: #1a73e8; --cor-texto: #1557b0; --tinta: 10%; }
-.fonte-destaque { --cor: #c2410c; --cor-texto: #c2410c; --tinta: 12%; }
+.fonte-destaque { --cor: #9a3412; --cor-texto: #9a3412; --tinta: 12%; }
 .dark .fonte-tiktok { --cor: #000000; --cor-texto: #e8e3e5; --tinta: 14%; }
 .dark .fonte-ml { --cor-texto: #ffe866; --tinta: 12%; }
 .dark .fonte-google { --cor-texto: #8ab4f8; --tinta: 16%; }
-.dark .fonte-destaque { --cor: #ff8c4d; --cor-texto: #ff8c4d; --tinta: 16%; }
+.dark .fonte-destaque { --cor: #fd7b41; --cor-texto: #fd7b41; --tinta: 16%; }
 
 .kpi {
     display: flex;
@@ -43,25 +43,25 @@
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
-    border-color: color-mix(in oklab, var(--cor-texto, #c2410c) 55%, var(--surface-border));
+    border-color: color-mix(in oklab, var(--cor-texto, #9a3412) 55%, var(--surface-border));
 }
 .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible, .card-fonte:hover, .card-fonte:focus-within {
     box-shadow: 0 8px 20px -8px rgb(0 0 0 / 0.25);
 }
 .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: translateY(-2px); }
-.card-sinal:focus-visible { outline: 2px solid #c2410c; outline-offset: 2px; }
+.card-sinal:focus-visible { outline: 2px solid #9a3412; outline-offset: 2px; }
 .dark .kpi:hover, .dark .card-sinal:hover, .dark .card-sinal:focus-visible, .dark .card-fonte:hover, .dark .card-fonte:focus-within {
     box-shadow: 0 8px 22px -8px rgb(0 0 0 / 0.7);
 }
-.dark .card-sinal:focus-visible { outline-color: #ff8c4d; }
+.dark .card-sinal:focus-visible { outline-color: #fd7b41; }
 @media (prefers-reduced-motion: reduce) {
     .kpi, .card-sinal, .card-fonte { transition: none; }
     .kpi:hover, .card-sinal:hover, .card-sinal:focus-visible { transform: none; }
 }
 
 .destaque {
-    border-left: 4px solid #c2410c;
-    background: linear-gradient(135deg, color-mix(in oklab, #c2410c 7%, var(--surface)) 0%, var(--surface) 60%);
+    border-left: 4px solid #9a3412;
+    background: linear-gradient(135deg, color-mix(in oklab, #9a3412 7%, var(--surface)) 0%, var(--surface) 60%);
 }
 
 .card-fonte {

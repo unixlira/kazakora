@@ -381,6 +381,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
 
     Route::put('produtos/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('produtos.fiscal.atualizar');
     Route::post('produtos/{product}/conteudo-anuncio', [ProductController::class, 'regenerateAdContent'])->middleware('throttle:10,1')->name('produtos.conteudo-anuncio.gerar');
+    Route::post('produtos/{product}/descricao-ia', [ProductController::class, 'descricaoPelasFotos'])->middleware('throttle:10,1')->name('produtos.descricao-ia');
     Route::put('produtos/{product}/logistica', [ProductLogisticsController::class, 'update'])->name('produtos.logistica.atualizar');
     Route::put('produtos/{product}/descontos-quantidade', [ProductQuantityDiscountController::class, 'update'])->name('produtos.descontos-quantidade.atualizar');
     Route::post('produtos/{product}/imagens', [ProductImageController::class, 'store'])->name('produtos.imagens.adicionar');

@@ -30,7 +30,8 @@ class FerraKoraCatalogoController extends Controller
     public function show(string $id): JsonResponse
     {
         $this->ligarFreteEmbutido();
-        $produto = $this->catalogo->produto($id);
+        // Página do produto: leva o conteúdo gerado pelo Gemini (2026-10-14).
+        $produto = $this->catalogo->produtoComConteudo($id);
 
         return $produto === null
             ? response()->json(['message' => 'Produto não encontrado.'], 404)

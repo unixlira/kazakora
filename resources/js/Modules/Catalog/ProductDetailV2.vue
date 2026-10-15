@@ -18,6 +18,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 const props = defineProps({
     product: { type: Object, required: true },
     variations: { type: Array, default: () => [] },
+    galeria: { type: Array, default: null },
     reviews: { type: Array, default: () => [] },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
@@ -59,11 +60,21 @@ const stars = (value) => Math.round(value);
 const mediaItems = computed(() => {
     const items = [];
     if (props.product.video_url) items.push({ type: 'video', src: props.product.video_url });
-    for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.url });
+    // Variações: galeria única do grupo (mesmas fotos e ordem em toda variação);
+    // a foto da variação escolhida só ganha borda, não muda de lugar.
+    if (props.galeria?.length) {
+        for (const image of props.galeria) items.push({ type: 'image', src: image.url, variantId: image.variant_id });
+    } else {
+        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.url });
+    }
     return items;
 });
 
-const activeIndex = ref(0);
+const variantIndex = () => {
+    const index = mediaItems.value.findIndex((item) => item.variantId === props.product.id);
+    return index >= 0 ? index : 0;
+};
+const activeIndex = ref(variantIndex());
 const activeMedia = computed(() => mediaItems.value[activeIndex.value] ?? null);
 const isLightboxOpen = ref(false);
 
@@ -107,7 +118,7 @@ const onKeydown = (event) => {
 
 watch(isLightboxOpen, (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
 watch(() => props.product.id, () => {
-    activeIndex.value = 0;
+    activeIndex.value = variantIndex();
     isLightboxOpen.value = false;
     quantity.value = 1;
 });
@@ -377,7 +388,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <div v-if="mediaItems.length > 1" class="miniaturas">
                                     <button v-for="(item, index) in mediaItems" :key="index" type="button"
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
-                                        :aria-current="index === activeIndex" @click="activeIndex = index">
+                                        :aria-current="index === activeIndex" :class="{ 'da-variacao': item.variantId === product.id }" @click="activeIndex = index">
                                         <template v-if="item.type === 'video'">
                                             <img v-if="videoPoster" :src="videoPoster" alt="">
                                             <video v-else :src="item.src" muted preload="metadata"></video>
@@ -781,6 +792,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .miniaturas button { position: relative; display: block; width: 100%; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 2px; overflow: hidden; background: none; cursor: pointer; aspect-ratio: 1; transition: border-color .2s; }
 .pd2 .miniaturas button:hover { border-color: var(--line); }
 .pd2 .miniaturas button[aria-current=true] { border-color: var(--yellow); }
+/* Foto da variação escolhida: borda azul, sem sair do lugar na galeria. */
+.pd2 .miniaturas button.da-variacao { border-color: var(--blue); }
+.pd2 .miniaturas button.da-variacao[aria-current=true] { box-shadow: 0 0 0 2px var(--yellow); }
 /* Foto e vídeo presos no quadrado da miniatura (o <video> tem altura própria
    e ficava maior que as fotos). */
 .pd2 .miniaturas img, .pd2 .miniaturas video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0; background: #000; }

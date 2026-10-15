@@ -28,9 +28,62 @@ class KoraFlexController extends Controller
     public function __construct(private readonly FlexPickupService $flex) {}
 
     /** O que a transportadora tem que levar hoje. */
-    public function dia(): JsonResponse
+    public function dia(Request $request): JsonResponse
     {
-        return response()->json($this->flex->dia());
+        $dia = $this->flex->dia();
+        $aviso = $this->avisoDeAtualizacao($request);
+
+        if ($aviso !== null) {
+            $dia['aviso'] = $aviso;
+            $dia['atrasados'] = [$this->cartaoDeAviso($aviso), ...array_values(collect($dia['atrasados'])->all())];
+        }
+
+        return response()->json($dia);
+    }
+
+    /**
+     * APK antigo do KoraFlex (1.3.0 ou anterior) não sabe se atualizar e
+     * ninguém lembra em que celular ele está. O 1.4.0 em diante manda
+     * X-KoraFlex-Versao; quem chega SEM o cabeçalho e de dentro de um app
+     * Android (WebView: "; wv)" no user-agent) recebe o recado. O PWA do
+     * iPhone e o navegador não entram aqui: eles se atualizam pelo site.
+     */
+    private function avisoDeAtualizacao(Request $request): ?string
+    {
+        $aviso = trim((string) config('services.koraflex.update_notice'));
+
+        if ($aviso === '' || $request->hasHeader('X-KoraFlex-Versao')) {
+            return null;
+        }
+
+        return preg_match('/;\s*wv\)/', (string) $request->userAgent()) ? $aviso : null;
+    }
+
+    /**
+     * O recado no formato de uma venda, porque é o único lugar que o app
+     * antigo desenha texto vindo do servidor. Pedido 0, sem peças e com
+     * etiqueta "impressa" pra não acender alerta; estado pendente só pra o
+     * cartão ficar em destaque (não entra em Faltam, que vem do servidor).
+     */
+    private function cartaoDeAviso(string $aviso): array
+    {
+        return [
+            'pedido' => 0,
+            'venda' => null,
+            'envio' => null,
+            'rastreio' => null,
+            'cliente' => $aviso,
+            'cidade' => 'aviso do sistema, não é uma venda',
+            'bairro' => null,
+            'vendida_em' => '—',
+            'itens' => [],
+            'pecas' => 0,
+            'estado' => FlexPickupService::ESTADO_PENDENTE,
+            'separado_em' => null,
+            'pronto_em' => null,
+            'coletado_em' => null,
+            'etiqueta_impressa' => true,
+        ];
     }
 
     /**

@@ -445,4 +445,44 @@ class KoraFlexControllerTest extends TestCase
         // A separação continua verdadeira — a caixa foi separada mesmo.
         $this->assertNotNull($order->packed_at);
     }
+
+    private const UA_APK = 'Mozilla/5.0 (Linux; Android 13; SM-A135M Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0.0.0 Mobile Safari/537.36';
+
+    private const UA_IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+
+    /** APK antigo (sem X-KoraFlex-Versao) recebe o recado como 1º cartão das atrasadas. */
+    public function test_old_android_app_gets_the_update_notice_as_the_first_late_card(): void
+    {
+        $this->makeFlexOrder('3000', Carbon::now()->subDays(3));
+
+        $resposta = $this->getJson('/api/koraflex/dia', $this->headers() + ['User-Agent' => self::UA_APK])->assertOk();
+
+        $this->assertStringContainsString('ATUALIZE O KORAFLEX', $resposta->json('aviso'));
+        $this->assertSame(0, $resposta->json('atrasados.0.pedido'));
+        $this->assertStringContainsString('ATUALIZE O KORAFLEX', $resposta->json('atrasados.0.cliente'));
+        // A venda atrasada de verdade continua lá, logo depois do recado.
+        $this->assertCount(2, $resposta->json('atrasados'));
+        $this->assertNotSame(0, $resposta->json('atrasados.1.pedido'));
+        // Os contadores não mudam por causa do recado.
+        $this->assertSame(1, $resposta->json('atrasados_total'));
+    }
+
+    public function test_new_app_and_iphone_pwa_do_not_get_the_notice(): void
+    {
+        $novo = $this->getJson('/api/koraflex/dia', $this->headers() + ['User-Agent' => self::UA_APK, 'X-KoraFlex-Versao' => '1.4.0'])->assertOk();
+        $this->assertNull($novo->json('aviso'));
+        $this->assertSame([], $novo->json('atrasados'));
+
+        $iphone = $this->getJson('/api/koraflex/dia', $this->headers() + ['User-Agent' => self::UA_IPHONE])->assertOk();
+        $this->assertNull($iphone->json('aviso'));
+    }
+
+    public function test_empty_notice_turns_it_off(): void
+    {
+        config(['services.koraflex.update_notice' => '']);
+
+        $resposta = $this->getJson('/api/koraflex/dia', $this->headers() + ['User-Agent' => self::UA_APK])->assertOk();
+
+        $this->assertNull($resposta->json('aviso'));
+    }
 }

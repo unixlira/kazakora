@@ -109,6 +109,15 @@ return [
         // pacotes, permanece; só as imagens somem).
         'receipt_retention_days' => (int) env('KORAFLEX_RECEIPT_RETENTION_DAYS', 180),
 
+        // Recado pra quem ainda está com o APK antigo (1.3.0 ou anterior, que
+        // não manda o cabeçalho X-KoraFlex-Versao). Esses apps não têm campo
+        // de aviso: o recado entra como o primeiro cartão das "Atrasadas",
+        // que toda versão desenha. Vazio desliga. Ver KoraFlexController::dia.
+        'update_notice' => env(
+            'KORAFLEX_AVISO_ATUALIZAR',
+            'ATUALIZE O KORAFLEX: peça ao Lira o app novo (1.4.0) e instale por cima, sem desinstalar.'
+        ),
+
         // Quantas horas depois da entrega ao entregador o Mercado Livre
         // ainda pode não mostrar a rota iniciada antes de virar alerta na
         // tela Envios Flex (2026-09-11: "tem entregador que não está

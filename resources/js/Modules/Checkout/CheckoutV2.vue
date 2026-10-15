@@ -545,7 +545,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     <span class="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><i class="fa-solid fa-lock text-lg"></i></span>
                     <div>
                         <h1 class="text-2xl font-bold text-slate-900">Finalize sua compra</h1>
-                        <p class="text-sm text-slate-500">Leva menos de 1 minuto. Seus dados estão protegidos.</p>
+                        <p class="text-sm text-slate-500">Seus dados estão protegidos.</p>
                     </div>
                 </div>
 

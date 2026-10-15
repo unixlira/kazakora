@@ -382,6 +382,8 @@ const REDES = [
 
             <div v-if="mobileMenuOpen" class="border-t border-store-border px-4 py-4 lg:hidden">
                 <nav class="flex flex-col gap-3">
+                    <!-- Entrar em primeiro, com avatar (pedido 2026-10-15). Logado, o acesso fica no avatar do topo. -->
+                    <Link v-if="!user" href="/entrar" class="text-sm font-medium"><i class="fa-regular fa-circle-user mr-1.5 text-[#f27a2a]"></i>Entrar</Link>
                     <a href="/#categorias" class="text-sm font-medium">Departamentos</a>
                     <a href="/?todos=1#produtos" class="text-sm font-medium">Produtos</a>
                     <Link href="/favoritos" class="text-sm font-medium">Favoritos</Link>

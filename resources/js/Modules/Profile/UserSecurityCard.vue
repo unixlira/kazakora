@@ -30,7 +30,7 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
     <div>
         <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
-                <h4 class="mb-1 text-lg font-semibold">Segurança</h4>
+                <h2 class="mb-1 text-lg font-semibold">Segurança</h2>
                 <p class="mb-4 text-sm text-store-fg-muted">Troque a senha sempre que achar que alguém pode ter acesso a ela.</p>
                 <div>
                     <p class="mb-1 text-xs text-store-fg-muted">Senha</p>
@@ -40,24 +40,25 @@ const inputClass = 'mt-1 w-full rounded-lg border border-store-border-strong bg-
 
             <button type="button" class="w-full shrink-0 rounded-full border border-store-border-strong px-4 py-2.5 text-sm font-medium text-store-fg hover:bg-store-bg-sunken sm:w-auto"
                 @click="openModal">
-                <i class="fas fa-pen mr-2 text-xs"></i>Alterar senha
+                <i class="fas fa-pen mr-2 text-xs" aria-hidden="true"></i>Alterar senha
             </button>
         </div>
     </div>
 
     <Modal :open="isOpen" @close="closeModal">
-        <h4 class="mb-1 text-xl font-semibold">Alterar senha</h4>
+        <h2 class="mb-1 text-xl font-semibold">Alterar senha</h2>
         <p class="mb-6 text-sm text-store-fg-muted">Escolha uma nova senha com pelo menos 8 caracteres.</p>
 
         <form class="grid grid-cols-1 gap-4" @submit.prevent="submit">
             <div>
-                <label class="text-sm font-medium">Nova senha</label>
-                <CampoSenha v-model="form.password" required minlength="8" :class="inputClass" />
+                <label for="senha-nova" class="text-sm font-medium">Nova senha</label>
+                <CampoSenha id="senha-nova" v-model="form.password" required minlength="8" autocomplete="new-password" :class="inputClass" />
                 <p v-if="form.errors.password" class="mt-1 text-xs text-red-600">{{ form.errors.password }}</p>
             </div>
             <div>
-                <label class="text-sm font-medium">Confirmar nova senha</label>
-                <CampoSenha v-model="form.password_confirmation" required minlength="8" :class="inputClass" />
+                <label for="senha-confirmar" class="text-sm font-medium">Confirmar nova senha</label>
+                <CampoSenha id="senha-confirmar" v-model="form.password_confirmation" required minlength="8" autocomplete="new-password" :class="inputClass" />
+                <p v-if="form.errors.password_confirmation" class="mt-1 text-xs text-red-600">{{ form.errors.password_confirmation }}</p>
             </div>
 
             <div class="flex items-center justify-end gap-3">

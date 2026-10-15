@@ -4,6 +4,7 @@ import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
 import { formatPrice, toggleFavorite } from '@/Shared/productCard';
+import { ehFavorito } from '@/Shared/favoritos';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
@@ -430,13 +431,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <button type="button" class="mt-1 text-sm font-semibold text-store-accent hover:underline" @click="showPaymentModal = true">Ver meios de pagamento</button>
                             </div>
 
-                            <button v-if="isAuthenticated" type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-store-border bg-store-bg-raised hover:bg-store-bg-sunken"
-                                :aria-pressed="isFavorite" @click="toggleFavorite(product.id)">
-                                <i class="text-lg" :class="isFavorite ? 'fas fa-heart text-store-accent' : 'far fa-heart text-store-fg-muted'"></i>
+                            <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
+                            <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors"
+                                :class="ehFavorito(product.id) ? 'favorito-ativo' : 'border-store-border bg-store-bg-raised hover:bg-store-bg-sunken'"
+                                :aria-pressed="ehFavorito(product.id)" :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'"
+                                @click="toggleFavorite(product.id)">
+                                <i class="text-lg" :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart text-store-fg-muted'"></i>
                             </button>
-                            <Link v-else href="/entrar" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-store-border bg-store-bg-raised hover:bg-store-bg-sunken" aria-label="Favoritar">
-                                <i class="far fa-heart text-lg text-store-fg-muted"></i>
-                            </Link>
                         </div>
 
                         <div v-if="variations.length" class="mt-5 border-t border-store-border pt-5">

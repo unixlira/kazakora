@@ -11,6 +11,7 @@ import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { COMPANY } from '@/Shared/company';
 import { formatPrice, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
+import { ehFavorito } from '@/Shared/favoritos';
 import { maskCep } from '@/Shared/useCep';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -404,10 +405,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <aside id="comprar" class="card compra">
                             <div class="titulo">
                                 <h1>{{ product.name }}</h1>
-                                <button v-if="isAuthenticated" type="button" class="fav" :aria-pressed="isFavorite" aria-label="Favoritar" @click="toggleFavorite(product.id)">
-                                    <i :class="isFavorite ? 'fas fa-heart ativo' : 'far fa-heart'"></i>
+                                <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
+                                <button type="button" class="fav" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
+                                    :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click="toggleFavorite(product.id)">
+                                    <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                 </button>
-                                <Link v-else href="/entrar" class="fav" aria-label="Favoritar"><i class="far fa-heart"></i></Link>
                             </div>
 
                             <!-- Estrelas e vendidos em destaque (pedido 2026-10-10: saem do card e
@@ -813,7 +815,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .titulo { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .pd2 .compra h1 { font-size: 26px; font-weight: 500; text-transform: capitalize; }
 .pd2 .fav { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; color: var(--muted); cursor: pointer; text-decoration: none; }
-.pd2 .fav .ativo { color: #e11d48; }
+.pd2 .fav.favorito-ativo { background: #f2540d; border-color: #f2540d; color: #fff; }
 .pd2 .nota { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 16px; font-weight: 500; color: var(--ink); line-height: 1.7; }
 .pd2 .nota a { text-decoration: none; }
 .pd2 .nota .vendidos { font-weight: 600; color: var(--ink); font-size: 14px; }

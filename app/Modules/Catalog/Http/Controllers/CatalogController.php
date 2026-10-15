@@ -209,6 +209,38 @@ class CatalogController extends Controller
             ->with(['images' => fn ($query) => $query->where('is_primary', true)->limit(1)])
             ->get(['id', 'name', 'slug', 'variation', 'price', 'stock']);
 
+        // Galeria única do grupo de variações (pedido 2026-10-15): todas as
+        // variações mostram as mesmas fotos, na mesma ordem (as do produto
+        // pai, depois a foto principal de cada variação que o pai ainda não
+        // tem). Escolher a variação só destaca a foto dela (`variant_id`),
+        // sem reordenar. Produto sem variação segue com as próprias fotos.
+        $galeria = null;
+        if ($variations->isNotEmpty()) {
+            $parentId = $product->parent_product_id ?? $product->id;
+            $pai = $parentId === $product->id
+                ? $product
+                : Product::query()->with(['images' => fn ($query) => $query->orderBy('position')])->find($parentId);
+
+            if ($pai) {
+                $principalPai = $pai->images->firstWhere('is_primary', true) ?? $pai->images->first();
+                $galeria = $pai->images->map(fn ($image) => [
+                    'url' => $image->url,
+                    'variant_id' => $principalPai && $image->id === $principalPai->id ? $pai->id : null,
+                ])->all();
+
+                // [id => foto principal] de todas as variações, inclusive a da página.
+                $irmas = $variations->mapWithKeys(fn ($v) => [$v->id => $v->images->firstWhere('is_primary', true) ?? $v->images->first()]);
+                $irmas->put($product->id, $product->images->firstWhere('is_primary', true) ?? $product->images->first());
+
+                foreach ($irmas->sortKeys() as $irmaId => $imagem) {
+                    if ($irmaId === $pai->id || ! $imagem || collect($galeria)->contains('url', $imagem->url)) {
+                        continue;
+                    }
+                    $galeria[] = ['url' => $imagem->url, 'variant_id' => $irmaId];
+                }
+            }
+        }
+
         // Página de produto v2 (layout de loja com box de compra fixo, pedido
         // 2026-10-09). A v1 continua no código: ?v=1 mostra a antiga, e pra
         // voltar de vez é só trocar PRODUCT_PAGE_VERSION para 1.
@@ -219,6 +251,7 @@ class CatalogController extends Controller
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             'product' => $product,
             'variations' => $variations,
+            'galeria' => $galeria,
             'reviews' => $reviews,
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)

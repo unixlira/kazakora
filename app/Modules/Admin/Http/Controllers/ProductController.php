@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
+use App\Modules\Catalog\Support\DuplicateProductGuard;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
@@ -19,6 +20,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -116,6 +118,15 @@ class ProductController extends Controller
         $validated['parent_product_id'] = $request->validate([
             'parent_product_id' => ['nullable', 'integer', Rule::exists('products', 'id')],
         ])['parent_product_id'] ?? null;
+
+        // Trava de duplicado (2026-10-15): mesmo nome de outro produto só
+        // entra como variação do próprio produto.
+        $igual = app(DuplicateProductGuard::class)->productWithSameName($validated['name'], $validated['parent_product_id']);
+        if ($igual) {
+            throw ValidationException::withMessages([
+                'name' => "Já existe um produto com esse nome (#{$igual->id}, SKU {$igual->sku}). Edite o existente ou cadastre como variação dele.",
+            ]);
+        }
 
         $validated['slug'] = $this->uniqueSlug($validated['name']);
         $validated = $this->comAcrescimoPix($validated);

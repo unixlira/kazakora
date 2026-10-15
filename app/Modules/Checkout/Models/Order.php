@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Models;
 
 use App\Models\User;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -183,6 +184,9 @@ class Order extends Model
         'status',
         'origin',
         'site_origem',
+        // Cliente do FerraKora (2026-10-15): conta separada, user_id fica nulo.
+        'ferrakora_cliente_id',
+        'ferrakora_endereco_id',
         'external_order_id',
         'channel_pack_id',
         'fiscal_operation_type',
@@ -258,6 +262,11 @@ class Order extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function ferrakoraCliente(): BelongsTo
+    {
+        return $this->belongsTo(FerraKoraCliente::class, 'ferrakora_cliente_id');
     }
 
     public function items(): HasMany

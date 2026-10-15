@@ -454,6 +454,8 @@ return [
         // Catálogo vindo do KazaKora (2026-10-13): token de quem envia o JSON
         // dos produtos em POST /api/ferrakora/produtos.
         'catalogo_token' => env('FERRAKORA_CATALOGO_TOKEN'),
+        // Endereço do site, para o link de nova senha (2026-10-15).
+        'url' => env('FERRAKORA_URL', 'https://ferrakora.devlira.com.br'),
     ],
 
     // Site Beauty Kora (2026-10-12): domínios que podem avisar visita em

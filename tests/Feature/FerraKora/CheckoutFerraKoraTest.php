@@ -5,6 +5,7 @@ namespace Tests\Feature\FerraKora;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\FerraKora\Services\CheckoutFerraKora;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
@@ -106,7 +107,17 @@ class CheckoutFerraKoraTest extends TestCase
         $this->assertSame('SP', $order->shipping_state);
         $this->assertSame('10.00', $order->pix_discount_amount);
         $this->assertSame(3, $this->produto->fresh()->stock);
-        $this->assertSame('maria@exemplo.com', $order->user->email);
+        // Cliente separado da KazaKora (2026-10-15): nenhum User, conta do FerraKora.
+        $this->assertNull($order->user_id);
+        $this->assertSame(0, User::count());
+        $this->assertSame('maria@exemplo.com', $order->ferrakoraCliente->email);
+        $this->assertSame('maria@exemplo.com', $order->shipping_email);
+        $this->assertSame('12345678909', $order->buyer_document);
+        $this->assertSame(Order::SITE_FERRAKORA, $order->payments()->firstOrFail()->site_origem);
+        $this->assertSame('01310100', $order->ferrakoraCliente->enderecos()->sole()->zip);
+        $this->assertSame($order->ferrakora_endereco_id, $order->ferrakoraCliente->enderecos()->sole()->id);
+        $this->assertSame(0, \App\Modules\Checkout\Models\Address::count());
+        Mail::assertNotSent(\App\Modules\Auth\Mail\WelcomeEmail::class);
         $this->assertSame($resposta->json('token'), CheckoutFerraKora::token($order));
 
         $this->getJson("/api/ferrakora/checkout/pedido/{$order->id}?token=errado")->assertNotFound();
@@ -137,12 +148,12 @@ class CheckoutFerraKoraTest extends TestCase
 
         $this->assertSame(0, Order::count());
         $this->assertSame(5, $this->produto->fresh()->stock);
-        $this->assertSame(0, User::count());
+        $this->assertSame(0, FerraKoraCliente::count());
     }
 
     public function test_email_de_outra_conta_com_outro_cpf_e_recusado(): void
     {
-        User::factory()->create(['email' => 'maria@exemplo.com', 'cpf' => '52998224725']);
+        FerraKoraCliente::create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '52998224725', 'password' => 'segredo123']);
         $this->mercadoPago(fn ($mock) => $mock->shouldNotReceive('createPixPayment'));
 
         $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())
@@ -153,12 +164,26 @@ class CheckoutFerraKoraTest extends TestCase
 
     public function test_mesma_conta_por_email_e_cpf_e_reaproveitada(): void
     {
-        $conta = User::factory()->create(['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09']);
+        $conta = FerraKoraCliente::create(['name' => 'Maria', 'email' => 'maria@exemplo.com', 'cpf' => '12345678909', 'password' => 'segredo123']);
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 9, 'status' => 'pending']));
 
         $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
 
-        $this->assertSame($conta->id, Order::find($resposta->json('pedido.id'))->user_id);
+        $this->assertSame($conta->id, Order::find($resposta->json('pedido.id'))->ferrakora_cliente_id);
+        $this->assertTrue($conta->fresh()->senha_definida);
+    }
+
+    public function test_conta_da_kazakora_com_o_mesmo_email_nao_e_usada(): void
+    {
+        $kazakora = User::factory()->create(['email' => 'maria@exemplo.com', 'cpf' => '52998224725']);
+        $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 11, 'status' => 'pending']));
+
+        $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
+
+        $order = Order::findOrFail($resposta->json('pedido.id'));
+        $this->assertNull($order->user_id);
+        $this->assertSame(0, $kazakora->addresses()->count());
+        $this->assertFalse($order->ferrakoraCliente->senha_definida);
     }
 
     public function test_cartao_recusado_desfaz_tudo(): void
@@ -226,21 +251,22 @@ class CheckoutFerraKoraTest extends TestCase
             ->assertJsonPath('pedido.cancelado', false);
     }
 
-    public function test_meus_pedidos_so_com_login_da_conta_kazakora(): void
+    public function test_meus_pedidos_so_com_login_da_conta_ferrakora(): void
     {
         $this->mercadoPago(fn ($mock) => $mock->shouldReceive('createPixPayment')->andReturn(['id' => 556, 'status' => 'pending']));
         $resposta = $this->postJson('/api/ferrakora/checkout/pedido', $this->pedido())->assertCreated();
         $order = Order::findOrFail($resposta->json('pedido.id'));
 
         // Pedido da mesma pessoa na KazaKora não aparece no FerraKora.
-        Order::create([...collect($order->getAttributes())->only(['user_id', 'origin', 'shipping_name', 'shipping_phone', 'shipping_zip', 'shipping_street', 'shipping_number', 'shipping_neighborhood', 'shipping_city', 'shipping_state'])->all(), 'status' => Order::STATUS_PAID, 'subtotal' => 50, 'total' => 50]);
+        $kazakora = User::factory()->create(['email' => 'maria@exemplo.com']);
+        Order::create([...collect($order->getAttributes())->only(['origin', 'shipping_name', 'shipping_phone', 'shipping_zip', 'shipping_street', 'shipping_number', 'shipping_neighborhood', 'shipping_city', 'shipping_state'])->all(), 'user_id' => $kazakora->id, 'status' => Order::STATUS_PAID, 'subtotal' => 50, 'total' => 50]);
 
         // Sem login não vê nada, nem pelo jeito antigo (e-mail + CPF).
         $this->getJson('/api/ferrakora/pedidos')->assertUnauthorized();
         $this->postJson('/api/ferrakora/pedidos', ['email' => 'maria@exemplo.com', 'cpf' => '123.456.789-09'])->assertStatus(405);
 
-        // A conta criada no checkout é a da KazaKora: entra com a senha dela.
-        $order->user->forceFill(['password' => 'senhaDaMaria1'])->save();
+        // A conta criada no checkout é a do FerraKora (senha criada pelo link do e-mail).
+        $order->ferrakoraCliente->forceFill(['password' => 'senhaDaMaria1', 'senha_definida' => true])->save();
         $token = $this->postJson('/api/ferrakora/login', ['email' => 'maria@exemplo.com', 'password' => 'senhaDaMaria1'])->assertOk()->json('token');
 
         $this->withToken($token)->getJson('/api/ferrakora/pedidos')

@@ -49,6 +49,11 @@ use Illuminate\Validation\ValidationException;
  * Cupom (Beauty Kora, pedido do Lira 2026-10-14): os mesmos cupons e regras
  * do checkout da KazaKora (Coupon::motivoInvalido), sem sessão: o site manda
  * o código no resumo e no pedido, e aqui ele é conferido de novo nos dois.
+ *
+ * Cliente separado (FerraKora, pedido do Lira 2026-10-15): o site que devolve
+ * false em contaNaKazaKora() não cria User nem endereço na KazaKora; o pedido
+ * sai com user_id nulo, CPF em buyer_document e e-mail em shipping_email, e
+ * o site liga o pedido à conta dele em clienteDoSite().
  */
 abstract class CheckoutOutroSite
 {
@@ -66,6 +71,25 @@ abstract class CheckoutOutroSite
 
     /** Nome do site nas mensagens ao cliente. */
     abstract protected function nomeDoSite(): string;
+
+    /** O comprador vira conta (User) da KazaKora? */
+    protected function contaNaKazaKora(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Site com cliente separado: colunas do pedido que ligam à conta (e ao
+     * endereço) do site.
+     *
+     * @param  array{name: string, email: string, cpf: string, phone: string}  $cliente
+     * @param  array<string, mixed>  $entrega  endereço + recipient_name e phone
+     * @return array<string, mixed>
+     */
+    protected function clienteDoSite(array $cliente, array $entrega): array
+    {
+        return [];
+    }
 
     /**
      * Acréscimo do site sobre o preço do anúncio, por produto pai (0.05 = 5%),
@@ -358,13 +382,20 @@ abstract class CheckoutOutroSite
                 throw new PrecoMudouException();
             }
 
-            $user = $this->cliente($dados['cliente']);
-            $address = $user->addresses()->create([
-                ...$endereco,
-                'recipient_name' => $dados['cliente']['name'],
-                'phone' => $dados['cliente']['phone'],
-                'is_default' => $user->addresses()->count() === 0,
-            ]);
+            $cpf = preg_replace('/\D/', '', $dados['cliente']['cpf']);
+            $user = $this->contaNaKazaKora() ? $this->cliente($dados['cliente']) : null;
+            $entrega = [...$endereco, 'recipient_name' => $dados['cliente']['name'], 'phone' => $dados['cliente']['phone']];
+            $doSite = $user ? [] : [
+                ...$this->clienteDoSite($dados['cliente'], $entrega),
+                'buyer_document' => $cpf,
+                'shipping_email' => mb_strtolower(trim($dados['cliente']['email'])),
+            ];
+            $address = $user
+                ? $user->addresses()->create([...$entrega, 'is_default' => $user->addresses()->count() === 0])
+                : (object) [...$entrega, 'complement' => $entrega['complement'] ?? null];
+            $pagador = $user
+                ? ['nome' => $user->name, 'email' => $user->email, 'cpf' => (string) $user->cpf]
+                : ['nome' => $dados['cliente']['name'], 'email' => $doSite['shipping_email'], 'cpf' => $cpf];
             $escolhida = $valores['escolhida'];
             $frete = in_array($escolhida['id'], ['full', 'correios'], true) ? ShippingMethod::freteGratis() : null;
             $transportadora = match (true) {
@@ -374,7 +405,8 @@ abstract class CheckoutOutroSite
             };
 
             $order = Order::create([
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
+                ...$doSite,
                 'site_origem' => $this->site(),
                 'external_order_id' => Order::gerarNumeroDaLoja(),
                 'status' => Order::STATUS_AWAITING_PAYMENT,
@@ -413,7 +445,7 @@ abstract class CheckoutOutroSite
             }
 
             if ($metodo === Payment::METHOD_PIX) {
-                $mp = $this->mercadoPago->createPixPayment($total, $this->pagador($user, $order), "order-{$order->id}-payment-1", "order:{$order->id}:payment:1");
+                $mp = $this->mercadoPago->createPixPayment($total, $this->pagador($pagador, $order), "order-{$order->id}-payment-1", "order:{$order->id}:payment:1");
 
                 Payment::create([
                     'order_id' => $order->id,
@@ -424,7 +456,7 @@ abstract class CheckoutOutroSite
                     'status' => Payment::STATUS_REQUIRES_CONFIRMATION,
                 ]);
 
-                DB::afterCommit(fn () => $this->enviarEmailDoPix($user, $order, $mp, $total));
+                DB::afterCommit(fn () => $this->enviarEmailDoPix($pagador['email'], $order, $mp, $total));
 
                 return ['order' => $order, 'mp' => $mp];
             }
@@ -433,7 +465,7 @@ abstract class CheckoutOutroSite
             // KazaKora, sem desconto do Pix; quem confirma é a varredura
             // mercadopago:conferir-boletos.
             if ($metodo === Payment::METHOD_BOLETO) {
-                $mp = app(BoletoMercadoPago::class)->gerar($order, $user, $this->pagador($user, $order), $total);
+                $mp = app(BoletoMercadoPago::class)->gerar($order, $user, $this->pagador($pagador, $order), $total);
 
                 return ['order' => $order, 'mp' => $mp];
             }
@@ -445,7 +477,7 @@ abstract class CheckoutOutroSite
                 'capture_mode' => 'automatic',
                 'external_reference' => "order-{$order->id}-payment-1",
                 'total_amount' => (string) $total,
-                'payer' => $this->pagador($user),
+                'payer' => $this->pagador($pagador),
                 'transactions' => ['payments' => [[
                     'amount' => (string) $total,
                     'payment_method' => [
@@ -586,19 +618,20 @@ abstract class CheckoutOutroSite
     }
 
     /** Igual ao checkout da loja: no Pix e no boleto vai o e-mail nosso, para o Mercado Pago não escrever ao cliente. */
-    private function pagador(User $user, ?Order $pix = null): array
+    /** @param  array{nome: string, email: string, cpf: string}  $quem */
+    private function pagador(array $quem, ?Order $pix = null): array
     {
-        $partes = preg_split('/\s+/', trim($user->name), 2);
+        $partes = preg_split('/\s+/', trim($quem['nome']), 2);
 
         return array_filter([
-            'email' => $pix ? str_replace('{pedido}', (string) $pix->id, (string) config('loja.email_pagador_pix')) : $user->email,
-            'first_name' => $partes[0] ?? $user->name,
-            'last_name' => $partes[1] ?? $partes[0] ?? $user->name,
-            'identification' => ['type' => 'CPF', 'number' => preg_replace('/\D/', '', (string) $user->cpf)],
+            'email' => $pix ? str_replace('{pedido}', (string) $pix->id, (string) config('loja.email_pagador_pix')) : $quem['email'],
+            'first_name' => $partes[0] ?? $quem['nome'],
+            'last_name' => $partes[1] ?? $partes[0] ?? $quem['nome'],
+            'identification' => ['type' => 'CPF', 'number' => preg_replace('/\D/', '', $quem['cpf'])],
         ]);
     }
 
-    private function enviarEmailDoPix(User $user, Order $order, array $mp, float $valor): void
+    private function enviarEmailDoPix(string $email, Order $order, array $mp, float $valor): void
     {
         $qr = $mp['point_of_interaction']['transaction_data'] ?? [];
 
@@ -606,6 +639,6 @@ abstract class CheckoutOutroSite
             return;
         }
 
-        rescue(fn () => Mail::to($user->email)->send(new PixAguardandoPagamento($order, $valor, (string) $qr['qr_code'], $qr['qr_code_base64'] ?? null, $mp['date_of_expiration'] ?? null)), null, false);
+        rescue(fn () => Mail::to($email)->send(new PixAguardandoPagamento($order, $valor, (string) $qr['qr_code'], $qr['qr_code_base64'] ?? null, $mp['date_of_expiration'] ?? null)), null, false);
     }
 }

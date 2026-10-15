@@ -75,6 +75,27 @@ class User extends Authenticatable
         return $this->hasMany(Order::class);
     }
 
+    /**
+     * Selo do cliente no Meu Perfil (2026-10-14): "Super Cliente" até passar
+     * de config('loja.selo_cliente.pedidos') pedidos finalizados feitos desde
+     * config('loja.selo_cliente.desde'); depois disso, "5 ★" (cinco_estrelas).
+     * Null para quem não é cliente.
+     */
+    public function seloCliente(): ?string
+    {
+        if ($this->role !== self::ROLE_CUSTOMER) {
+            return null;
+        }
+
+        $finalizados = $this->orders()
+            ->where('status', Order::STATUS_COMPLETED)
+            ->where('created_at', '>=', config('loja.selo_cliente.desde'))
+            ->vendaEfetiva()
+            ->count();
+
+        return $finalizados > config('loja.selo_cliente.pedidos') ? 'cinco_estrelas' : 'super_cliente';
+    }
+
     public function addresses(): HasMany
     {
         return $this->hasMany(Address::class)->orderByDesc('is_default')->latest();

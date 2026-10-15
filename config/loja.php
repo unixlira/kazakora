@@ -73,4 +73,15 @@ return [
         'aliquota' => (float) env('LOJA_SIMPLES_ALIQUOTA', 4.5),
         'desde' => env('LOJA_SIMPLES_DESDE', '2026-09-01'),
     ],
+
+    /*
+    | Selo do cliente no Meu Perfil (pedido 2026-10-14): todo cliente começa
+    | como "Super Cliente"; com MAIS de `pedidos` pedidos finalizados
+    | (entregues) vira "5 ★". Só contam pedidos feitos a partir de `desde`
+    | (os anteriores são desconsiderados).
+    */
+    'selo_cliente' => [
+        'pedidos' => (int) env('LOJA_SELO_CLIENTE_PEDIDOS', 10),
+        'desde' => env('LOJA_SELO_CLIENTE_DESDE', '2026-10-15'),
+    ],
 ];

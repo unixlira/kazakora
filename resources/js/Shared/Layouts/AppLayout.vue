@@ -341,7 +341,8 @@ const REDES = [
                             <img v-if="user.avatar_url" :src="user.avatar_url" class="h-8 w-8 rounded-full object-cover" alt="">
                             <span v-else class="flex h-8 w-8 items-center justify-center rounded-full bg-store-accent-soft text-xs font-semibold text-store-accent-strong">{{ user.initials }}</span>
                         </button>
-                        <Link v-else href="/entrar" class="flex h-9 w-9 items-center justify-center rounded-full lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
+                        <!-- Celular: o Entrar fica só no menu (pedido 2026-10-15); o ícone do topo é só no computador. -->
+                        <Link v-else href="/entrar" class="hidden h-9 w-9 items-center justify-center rounded-full lg:flex lg:h-10 lg:w-10 text-store-fg hover:bg-store-bg-sunken" aria-label="Entrar">
                             <i class="far fa-user text-base"></i>
                         </Link>
 

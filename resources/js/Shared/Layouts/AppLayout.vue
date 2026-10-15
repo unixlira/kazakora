@@ -370,7 +370,7 @@ const REDES = [
                 </div>
             </div>
 
-            <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos, Carrinho e
+            <!-- Menu do celular (pedido 2026-10-15): no alto, Lupa, Favoritos (coração vermelho), Carrinho e
                  Conta, nessa ordem. A lupa abre a busca logo abaixo e o menu cresce junto. -->
             <div v-if="mobileMenuOpen" id="menu-mobile" class="border-t border-store-border px-4 py-3 lg:hidden">
                 <div class="grid grid-cols-4 gap-2">
@@ -381,7 +381,7 @@ const REDES = [
                         <span>{{ buscaMobileAberta ? 'Fechar' : 'Buscar' }}</span>
                     </button>
                     <Link href="/favoritos" class="menu-mobile-icone" preserve-scroll>
-                        <span class="relative"><i class="far fa-heart text-lg"></i>
+                        <span class="relative"><i class="fas fa-heart text-lg text-[#ef4444]"></i>
                             <span v-if="favoritesCount > 0" class="menu-mobile-contador">{{ favoritesCount }}</span></span>
                         <span>Favoritos</span>
                     </Link>

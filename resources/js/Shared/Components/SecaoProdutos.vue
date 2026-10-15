@@ -17,6 +17,8 @@ const props = defineProps({
     cinco: { type: Boolean, default: false },
     // Celular: slide com 1 card por tela (Ofertas do dia, pedido 2026-10-10).
     slider: { type: Boolean, default: false },
+    // Celular: título, texto e contador centralizados (Oferta Relâmpago, pedido 2026-10-15).
+    centro: { type: Boolean, default: false },
 });
 
 const page = usePage();
@@ -38,7 +40,7 @@ const irPara = (indice) => {
 
 <template>
     <section v-if="produtos.length" class="mx-auto max-w-[1320px] px-4 py-10 md:px-6">
-        <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div class="mb-6 flex flex-wrap items-end justify-between gap-3" :class="{ 'max-md:flex-col max-md:items-center max-md:text-center': centro }">
             <div>
                 <h2 class="text-2xl font-bold md:text-3xl">{{ titulo }}</h2>
                 <p v-if="subtitulo" class="mt-1 text-sm text-store-fg-muted">{{ subtitulo }}</p>

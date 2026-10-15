@@ -40,11 +40,15 @@ defineProps({
                     </div>
                     <!-- Selo Envio Express (centralizado) -->
                     <div class="osso mx-auto h-6 w-28 rounded-full"></div>
-                    <!-- Preço e frete -->
+                    <!-- Preço (+ "Detalhes" no computador), frete e "Ver detalhes" no celular -->
                     <div class="mt-auto flex flex-col gap-2 pt-1">
                         <div class="osso h-3 w-1/3"></div>
-                        <div class="osso h-6 w-1/2"></div>
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="osso h-6 w-1/2"></div>
+                            <div class="osso hidden h-[30px] w-[74px] md:block"></div>
+                        </div>
                         <div class="osso h-3.5 w-2/3"></div>
+                        <div class="osso mt-1 h-8 w-full md:hidden"></div>
                     </div>
                 </div>
             </div>

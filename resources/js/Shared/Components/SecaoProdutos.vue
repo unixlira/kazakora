@@ -3,7 +3,7 @@
 // e grade de cards — 2 por linha no celular, 4 no computador.
 import ProductCard from '@/Shared/Components/ProductCard.vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps({
     titulo: { type: String, required: true },
@@ -25,17 +25,24 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const trilho = ref(null);
-const atual = ref(0);
-const aoRolar = () => {
+const pagina = ref(0);
+const paginas = ref(1);
+// Bolinhas = páginas do carrossel, não uma por produto (pedido 2026-10-15).
+const atualizar = () => {
     const el = trilho.value;
-    if (el) atual.value = Math.round(el.scrollLeft / el.clientWidth);
+    if (!el || !el.clientWidth) return;
+    paginas.value = Math.max(1, Math.ceil(el.scrollWidth / el.clientWidth - 0.05));
+    pagina.value = Math.min(paginas.value - 1, Math.round(el.scrollLeft / el.clientWidth));
 };
 const irPara = (indice) => {
     const el = trilho.value;
     if (!el) return;
-    const destino = Math.max(0, Math.min(props.produtos.length - 1, indice));
+    const destino = Math.max(0, Math.min(paginas.value - 1, indice));
     el.scrollTo({ left: destino * el.clientWidth, behavior: 'smooth' });
 };
+
+onMounted(() => { atualizar(); window.addEventListener('resize', atualizar); });
+onBeforeUnmount(() => window.removeEventListener('resize', atualizar));
 </script>
 
 <template>
@@ -51,32 +58,39 @@ const irPara = (indice) => {
                 </Link>
             </slot>
         </div>
-        <!-- Slide do celular: 1 card por tela, arrasta com o dedo, setas e bolinhas. -->
-        <div v-if="slider" class="relative md:hidden">
-            <div ref="trilho" class="no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
-                <div v-for="product in produtos" :key="product.id" class="w-full shrink-0 snap-center px-1">
-                    <ProductCard :product="product" estrelas
+        <!-- Carrossel do celular: arrasta com o dedo, setas e uma bolinha por PÁGINA.
+             Ofertas do dia (slider) 1 card por tela; as demais seções 2 por tela. -->
+        <div class="relative md:hidden">
+            <div ref="trilho" class="no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="atualizar">
+                <div v-for="product in produtos" :key="product.id" class="shrink-0 snap-start px-1"
+                    :class="slider ? 'w-full' : 'w-1/2'">
+                    <ProductCard :product="product" :estrelas="slider"
                         :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                         :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />
                 </div>
             </div>
             <!-- Setas laranja (pedido 2026-10-10): fica claro que é ali que passa. -->
-            <button v-if="atual > 0" type="button" aria-label="Oferta anterior"
+            <button v-if="pagina > 0" type="button" aria-label="Anterior"
                 class="absolute left-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
-                @click="irPara(atual - 1)"><i class="fas fa-angle-left"></i></button>
-            <button v-if="atual < produtos.length - 1" type="button" aria-label="Próxima oferta"
+                @click="irPara(pagina - 1)"><i class="fas fa-angle-left"></i></button>
+            <button v-if="pagina < paginas - 1" type="button" aria-label="Próxima"
                 class="absolute right-0 top-[35%] flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#f27a2a] text-lg text-white shadow-md"
-                @click="irPara(atual + 1)"><i class="fas fa-angle-right"></i></button>
-            <div class="mt-3 flex justify-center gap-2">
-                <button v-for="(product, indice) in produtos" :key="product.id" type="button" :aria-label="`Oferta ${indice + 1}`"
-                    class="h-2 rounded-full transition-all" :class="indice === atual ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"
-                    @click="irPara(indice)"></button>
+                @click="irPara(pagina + 1)"><i class="fas fa-angle-right"></i></button>
+            <div v-if="paginas > 1" class="mt-3 flex justify-center gap-2">
+                <button v-for="indice in paginas" :key="indice" type="button" :aria-label="`Página ${indice}`"
+                    class="h-2 rounded-full transition-all" :class="indice - 1 === pagina ? 'w-6 bg-store-accent' : 'w-2 bg-store-border-strong'"
+                    @click="irPara(indice - 1)"></button>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6" :class="{ 'lg:grid-cols-5': cinco, 'max-md:hidden': slider }">
+        <div class="grid grid-cols-2 gap-4 max-md:hidden md:grid-cols-4 lg:gap-6" :class="{ 'lg:grid-cols-5': cinco }">
             <ProductCard v-for="product in produtos" :key="product.id" :product="product"
                 :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                 :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />
         </div>
     </section>
 </template>
+
+<style scoped>
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+</style>

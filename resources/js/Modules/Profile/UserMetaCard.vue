@@ -20,6 +20,11 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    // 'super_cliente' | 'cinco_estrelas' | null (User::seloCliente()).
+    seloCliente: {
+        type: String,
+        default: null,
+    },
 });
 
 const ROLE_LABELS = {
@@ -49,9 +54,10 @@ const changeRole = (event) => {
                         @change="changeRole">
                         <option v-for="role in roles" :key="role" :value="role">{{ ROLE_LABELS[role] ?? role }}</option>
                     </select>
-                    <span v-else-if="profileUser.role === 'customer'" class="inline-flex items-center gap-1 font-semibold text-store-fg" aria-label="5 estrelas">
+                    <span v-else-if="seloCliente === 'cinco_estrelas'" class="inline-flex items-center gap-1 font-semibold text-store-fg" aria-label="5 estrelas">
                         5 <span class="text-amber-400" aria-hidden="true">★</span>
                     </span>
+                    <span v-else-if="seloCliente === 'super_cliente'" class="font-semibold text-store-fg">Super Cliente</span>
                     <span v-else>{{ roleLabel }}</span>
                     <span class="hidden h-3.5 w-px bg-store-border-strong sm:block" aria-hidden="true"></span>
                     <span class="break-all">{{ profileUser.email }}</span>

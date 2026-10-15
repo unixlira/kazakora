@@ -22,6 +22,7 @@ class ProfileController extends Controller
             'isOwnProfile' => $target->is($request->user()),
             'canManageUsers' => $request->user()->isAdmin(),
             'roles' => $request->user()->isAdmin() ? User::ASSIGNABLE_ROLES : [],
+            'seloCliente' => $target->seloCliente(),
             // tem_pedido trava o botão de excluir (pedido 2026-10-14).
             'addresses' => $target->addresses()->withExists(['orders as tem_pedido'])->get(),
         ]);

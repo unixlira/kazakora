@@ -27,6 +27,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    seloCliente: {
+        type: String,
+        default: null,
+    },
 });
 </script>
 
@@ -41,7 +45,7 @@ const props = defineProps({
                  dados pessoais. Direita: endereços e, logo abaixo, segurança. -->
             <div class="mt-8 grid grid-cols-1 items-stretch gap-6 lg:grid-cols-12">
                 <section class="rounded-2xl border border-store-border bg-store-bg-raised p-6 lg:col-span-5">
-                    <UserMetaCard :profile-user="profileUser" :is-own-profile="isOwnProfile" :can-manage-users="canManageUsers" :roles="roles" />
+                    <UserMetaCard :profile-user="profileUser" :is-own-profile="isOwnProfile" :can-manage-users="canManageUsers" :roles="roles" :selo-cliente="seloCliente" />
                     <hr class="my-6 border-store-border">
                     <UserInfoCard :profile-user="profileUser" :is-own-profile="isOwnProfile" />
                 </section>

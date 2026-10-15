@@ -22,28 +22,8 @@ const medir = () => {
     const el = scroller.value;
     isCarousel.value = !!el && el.scrollWidth > el.clientWidth + 4;
 };
-
-// Celular (pedido 2026-10-15): troca sozinho a cada 4 s e volta ao primeiro no
-// fim. Pausa enquanto o dedo/mouse está na faixa ou a aba está escondida.
-const INTERVALO_AUTO = 4000;
-const pausado = ref(false);
-let timer = null;
-const avancarAuto = () => {
-    const el = scroller.value;
-    if (pausado.value || document.hidden || !el || window.innerWidth >= 768) return;
-    const fim = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4;
-    if (fim) el.scrollTo({ left: 0, behavior: 'smooth' });
-    else el.scrollBy({ left: el.clientWidth, behavior: 'smooth' });
-};
-onMounted(() => {
-    nextTick(medir);
-    window.addEventListener('resize', medir);
-    timer = setInterval(avancarAuto, INTERVALO_AUTO);
-});
-onBeforeUnmount(() => {
-    window.removeEventListener('resize', medir);
-    clearInterval(timer);
-});
+onMounted(() => { nextTick(medir); window.addEventListener('resize', medir); });
+onBeforeUnmount(() => window.removeEventListener('resize', medir));
 
 const scrollByPage = (direction) => {
     const el = scroller.value;
@@ -62,8 +42,6 @@ const hrefDe = (category) => (props.ativa === category.slug ? '/#produtos' : `/?
              setas discretas dos lados. Computador: w-fit + mx-auto, centralizado
              quando cabe e rolando de lado quando não cabe. -->
         <div ref="scroller"
-            @touchstart.passive="pausado = true" @touchend.passive="pausado = false" @touchcancel.passive="pausado = false"
-            @mouseenter="pausado = true" @mouseleave="pausado = false"
             class="no-scrollbar mx-auto flex w-full max-w-full snap-x snap-mandatory overflow-x-auto scroll-smooth pb-2 md:w-fit md:gap-8 md:px-1">
             <Link v-for="category in categories" :key="category.id" :href="hrefDe(category)"
                 class="group flex w-full shrink-0 snap-center flex-col items-center gap-2 text-center text-store-fg no-underline md:w-[160px] md:snap-start">
@@ -78,15 +56,15 @@ const hrefDe = (category) => (props.ativa === category.slug ? '/#produtos' : `/?
             </Link>
         </div>
 
-        <!-- Setas do celular: laranja, sem fundo. -->
+        <!-- Setas do celular: discretas, cinza-claro, sem fundo. -->
         <template v-if="categories.length > 1">
             <button type="button" aria-label="Departamento anterior"
-                class="absolute left-1 top-[90px] flex h-10 w-10 -translate-y-1/2 items-center justify-center text-3xl text-orange-500 transition hover:text-orange-600 md:hidden"
+                class="absolute left-1 top-[90px] flex h-10 w-10 -translate-y-1/2 items-center justify-center text-3xl text-slate-300 transition hover:text-slate-400 md:hidden"
                 @click="scrollByPage(-1)">
                 <i class="fas fa-angle-left"></i>
             </button>
             <button type="button" aria-label="Próximo departamento"
-                class="absolute right-1 top-[90px] flex h-10 w-10 -translate-y-1/2 items-center justify-center text-3xl text-orange-500 transition hover:text-orange-600 md:hidden"
+                class="absolute right-1 top-[90px] flex h-10 w-10 -translate-y-1/2 items-center justify-center text-3xl text-slate-300 transition hover:text-slate-400 md:hidden"
                 @click="scrollByPage(1)">
                 <i class="fas fa-angle-right"></i>
             </button>

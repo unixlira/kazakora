@@ -63,11 +63,11 @@ const removeAvatar = async () => {
         <template v-if="editable">
             <button type="button" class="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised text-store-fg-muted shadow-sm hover:text-store-accent disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="form.processing" aria-label="Trocar foto" title="JPG, PNG ou WEBP, até 2MB" @click="fileInput.click()">
-                <i class="fas fa-camera text-xs"></i>
+                <i class="fas fa-camera text-xs" aria-hidden="true"></i>
             </button>
             <button v-if="profileUser.avatar_url" type="button" class="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised text-red-500 shadow-sm hover:bg-red-50"
                 aria-label="Remover foto" @click="removeAvatar">
-                <i class="fas fa-xmark text-[10px]"></i>
+                <i class="fas fa-xmark text-[10px]" aria-hidden="true"></i>
             </button>
             <input ref="fileInput" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onFileSelect">
         </template>

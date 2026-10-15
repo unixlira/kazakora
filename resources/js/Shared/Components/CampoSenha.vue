@@ -13,7 +13,7 @@ const visivel = ref(false);
         <input v-model="model" v-bind="$attrs" :type="visivel ? 'text' : 'password'" style="padding-right: 2.75rem">
         <button type="button" class="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center text-store-fg-muted hover:text-store-fg"
             :aria-label="visivel ? 'Esconder senha' : 'Mostrar senha'" :title="visivel ? 'Esconder senha' : 'Mostrar senha'" @click="visivel = !visivel">
-            <i class="far" :class="visivel ? 'fa-eye-slash' : 'fa-eye'"></i>
+            <i class="far" :class="visivel ? 'fa-eye-slash' : 'fa-eye'" aria-hidden="true"></i>
         </button>
     </div>
 </template>

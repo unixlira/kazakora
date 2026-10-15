@@ -31,6 +31,10 @@ const ROLE_LABELS = {
 
 const roleLabel = computed(() => ROLE_LABELS[props.profileUser.role] ?? props.profileUser.role);
 
+// Cliente não precisa ver o próprio cargo "Cliente"; admin vendo outro usuário
+// continua com o seletor e a equipe continua vendo o cargo.
+const showRole = computed(() => (props.canManageUsers && !props.isOwnProfile) || props.profileUser.role !== 'customer');
+
 const changeRole = (event) => {
     router.patch(`/admin/usuarios-permissoes/usuarios/${props.profileUser.id}`, { role: event.target.value }, { preserveScroll: true });
 };
@@ -42,15 +46,15 @@ const changeRole = (event) => {
             <AvatarManager :profile-user="profileUser" :editable="isOwnProfile" />
 
             <div>
-                <h4 class="text-lg font-semibold">{{ profileUser.name }}</h4>
+                <h2 class="text-lg font-semibold">{{ profileUser.name }}</h2>
                 <div class="mt-1 flex flex-col items-center gap-1 text-sm text-store-fg-muted sm:flex-row sm:flex-wrap sm:gap-x-3">
-                    <select v-if="canManageUsers && !isOwnProfile" :value="profileUser.role"
+                    <select v-if="canManageUsers && !isOwnProfile" :value="profileUser.role" aria-label="Cargo"
                         class="rounded-full border border-store-border-strong bg-store-bg px-3 py-1 text-xs font-medium text-store-fg focus:border-store-accent focus:outline-none"
                         @change="changeRole">
                         <option v-for="role in roles" :key="role" :value="role">{{ ROLE_LABELS[role] ?? role }}</option>
                     </select>
-                    <span v-else>{{ roleLabel }}</span>
-                    <span class="hidden h-3.5 w-px bg-store-border-strong sm:block"></span>
+                    <span v-else-if="showRole">{{ roleLabel }}</span>
+                    <span v-if="showRole" class="hidden h-3.5 w-px bg-store-border-strong sm:block" aria-hidden="true"></span>
                     <span class="break-all">{{ profileUser.email }}</span>
                 </div>
             </div>

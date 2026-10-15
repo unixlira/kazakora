@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Modules\Catalog\Models\Banner;
+use App\Modules\Catalog\Support\BannerMobileOptimizer;
 use App\Support\Marca;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -84,7 +85,7 @@ class BannerController extends Controller
         $validated['image_path'] = $request->file('image')->store('banners', 'public');
 
         if ($request->hasFile('image_mobile')) {
-            $validated['image_path_mobile'] = $request->file('image_mobile')->store('banners', 'public');
+            $validated['image_path_mobile'] = $this->guardarMobile($request->file('image_mobile'));
         }
 
         $validated['sort_order'] = (int) Banner::query()->max('sort_order') + 1;
@@ -111,10 +112,8 @@ class BannerController extends Controller
         }
 
         if ($request->hasFile('image_mobile')) {
-            if ($banner->image_path_mobile) {
-                Storage::disk('public')->delete($banner->image_path_mobile);
-            }
-            $validated['image_path_mobile'] = $request->file('image_mobile')->store('banners', 'public');
+            BannerMobileOptimizer::apagar($banner->image_path_mobile);
+            $validated['image_path_mobile'] = $this->guardarMobile($request->file('image_mobile'));
         }
 
         $banner->update($validated);
@@ -122,12 +121,18 @@ class BannerController extends Controller
         return redirect()->route('admin.banners.listar')->with('success', 'Banner atualizado com sucesso.');
     }
 
+    /** Grava a imagem mobile já em WebP e nas larguras do celular; sem GD, fica o original. */
+    private function guardarMobile(\Illuminate\Http\UploadedFile $arquivo): string
+    {
+        $caminho = $arquivo->store('banners', 'public');
+
+        return BannerMobileOptimizer::otimizar($caminho) ?? $caminho;
+    }
+
     public function destroy(Banner $banner): RedirectResponse
     {
         Storage::disk('public')->delete($banner->image_path);
-        if ($banner->image_path_mobile) {
-            Storage::disk('public')->delete($banner->image_path_mobile);
-        }
+        BannerMobileOptimizer::apagar($banner->image_path_mobile);
         $banner->delete();
 
         return back()->with('success', 'Banner removido com sucesso.');

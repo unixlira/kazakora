@@ -80,7 +80,8 @@ const limparPainel = () => {
 };
 const confirmar = () => {
     painelAberto.value = false;
-    router.visit(props.href(rascunho.value), { preserveScroll: true });
+    // Sem preserveScroll: a página vai para o começo da lista (#produtos).
+    router.visit(props.href(rascunho.value));
 };
 
 const fechar = () => { aberto.value = null; painelAberto.value = false; };

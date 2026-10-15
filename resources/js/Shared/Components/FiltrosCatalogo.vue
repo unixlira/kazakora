@@ -91,7 +91,8 @@ const opcao = (ativo) => ativo ? 'font-semibold text-store-fg' : 'text-store-fg-
     <div ref="barra" class="mb-6">
         <p class="mb-3 text-sm text-store-fg-muted lg:hidden">{{ contagem }}</p>
 
-        <nav class="flex items-center gap-2 overflow-x-auto rounded-xl border border-store-border bg-store-bg-raised px-2 py-2 shadow-sm [scrollbar-width:none] lg:gap-3 lg:overflow-visible lg:px-3 lg:py-2.5 [&::-webkit-scrollbar]:hidden" aria-label="Filtros">
+        <!-- No celular a faixa vai até a borda da tela e rola para o lado; no computador vira a faixa branca com moldura. -->
+        <nav class="-mx-4 flex items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] md:-mx-6 md:px-6 lg:mx-0 lg:gap-3 lg:overflow-visible lg:rounded-xl lg:border lg:border-store-border lg:bg-store-bg-raised lg:px-3 lg:py-2.5 lg:shadow-sm [&::-webkit-scrollbar]:hidden" aria-label="Filtros">
             <div v-for="g in grupos" :key="g.chave" class="relative shrink-0">
                 <button type="button" class="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-semibold transition-colors lg:px-4"
                     :class="botao(!!opcaoAtual(g))" :aria-expanded="aberto === g.chave" aria-haspopup="true" @click="alternar(g.chave)">

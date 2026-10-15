@@ -182,10 +182,12 @@ class FreteEmbutido
      * - desconto_plataforma: com mais de uma unidade, os itens vão numa caixa
      *   só e o frete real (peso somado) sai menor que o frete embutido item a
      *   item; a diferença volta como desconto (pedido 2026-10-12);
-     * - turbo: SEDEX da caixa inteira pela diferença, quando chega antes.
+     * - turbo: SEDEX da caixa inteira pela diferença, quando chega antes;
+     * - servico, custo e peso_g: serviço e frete da caixa que o preço já paga
+     *   e o peso tarifável somado (base das outras transportadoras).
      *
      * @param  Collection<int, array{product: Product, quantity: int}>  $itens
-     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float}
+     * @return array{prazo: ?int, turbo: ?array{preco: float, prazo: ?int, dias_a_menos: ?int}, estimado: bool, desconto_plataforma: float, servico?: string, custo?: float, peso_g?: int}
      */
     public function entregaDoCarrinho(Collection $itens): array
     {
@@ -206,7 +208,7 @@ class FreteEmbutido
         }
 
         if ($itens->isEmpty()) {
-            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0];
+            return ['prazo' => null, 'turbo' => null, 'estimado' => false, 'desconto_plataforma' => 0.0, 'servico' => 'pac', 'custo' => 0.0, 'peso_g' => 0];
         }
 
         // A caixa inteira (peso somado) na tabela do destino.
@@ -220,6 +222,9 @@ class FreteEmbutido
                 'turbo' => self::turboAteOTeto($extraItemAItem > 0 ? ['preco' => round($extraItemAItem, 2), 'prazo' => null, 'dias_a_menos' => null] : null),
                 'estimado' => true,
                 'desconto_plataforma' => 0.0,
+                'servico' => 'pac',
+                'custo' => round($embutido, 2),
+                'peso_g' => $peso,
             ];
         }
 
@@ -241,6 +246,10 @@ class FreteEmbutido
             'turbo' => self::turboAteOTeto($turbo),
             'estimado' => false,
             'desconto_plataforma' => $unidades > 1 ? round(max(0, $embutido - $real), 2) : 0.0,
+            // Frete da caixa que o preço já paga (o desconto acima devolve o excesso).
+            'servico' => $sedexMaisBarato ? 'sedex' : 'pac',
+            'custo' => round($real, 2),
+            'peso_g' => $peso,
         ];
     }
 

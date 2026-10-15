@@ -33,6 +33,12 @@ class Order extends Model
 
     public const ORIGIN_STORE = 'loja';
 
+    /** site_origem do pedido feito no checkout do FerraKora (origin continua "loja"). */
+    public const SITE_FERRAKORA = 'ferrakora';
+
+    /** site_origem do pedido feito no checkout do Beauty Kora (2026-10-14). */
+    public const SITE_BEAUTYKORA = 'beautykora';
+
     // Mesmo vocabulário de canal que o módulo de Marketplace já usa
     // (product_channel_listings.channel, marketplace_accounts.channel) —
     // não um conjunto paralelo, pra "canal" ser um conceito único no app
@@ -150,6 +156,7 @@ class Order extends Model
         'user_id',
         'status',
         'origin',
+        'site_origem',
         'external_order_id',
         'channel_pack_id',
         'fiscal_operation_type',

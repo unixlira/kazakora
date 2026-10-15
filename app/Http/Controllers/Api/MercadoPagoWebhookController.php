@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Checkout\Models\Payment;
+use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +36,12 @@ class MercadoPagoWebhookController extends Controller
         // A aplicação só está inscrita nos tópicos order/fraude/contestação
         // (não "payment") — fraude e contestação só são reconhecidos e
         // logados por enquanto, sem lógica de negócio ainda.
+        // Boleto (2026-10-14): se o tópico "payment" for ligado no painel, o
+        // boleto pago confirma na hora em vez de esperar a varredura de 30 min.
+        if ($type === 'payment' && $resourceId) {
+            return $this->handleBoleto((string) $resourceId);
+        }
+
         if ($type !== 'order' || ! $resourceId) {
             return response()->json(['status' => 'ignored']);
         }
@@ -70,6 +77,32 @@ class MercadoPagoWebhookController extends Controller
             in_array($mpStatus, ['failed', 'rejected', 'cancelled'], true) => $this->handleFailure($payment),
             default => null,
         };
+
+        return response()->json(['status' => 'received']);
+    }
+
+    private function handleBoleto(string $paymentId): JsonResponse
+    {
+        $payment = Payment::query()
+            ->where('provider', Payment::PROVIDER_MERCADOPAGO)
+            ->where('method_type', Payment::METHOD_BOLETO)
+            ->where('mercadopago_payment_id', $paymentId)
+            ->first();
+
+        if (! $payment) {
+            return response()->json(['status' => 'ignored']);
+        }
+
+        try {
+            app(BoletoMercadoPago::class)->sincronizar($payment);
+        } catch (Throwable $exception) {
+            Log::channel('mercadopago')->error('mercadopago.webhook.boleto_failed', [
+                'payment_id' => $paymentId,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json(['status' => 'error'], 500);
+        }
 
         return response()->json(['status' => 'received']);
     }

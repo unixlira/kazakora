@@ -3,9 +3,11 @@
 use App\Http\Controllers\Api\AmazonController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraCatalogoController;
+use App\Http\Controllers\Api\BeautyKoraCheckoutController;
 use App\Http\Controllers\Api\BeautyKoraContaController;
 use App\Http\Controllers\Api\BeautyKoraProdutoController;
 use App\Http\Controllers\Api\FerraKoraCatalogoController;
+use App\Http\Controllers\Api\FerraKoraCheckoutController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -212,6 +214,16 @@ Route::prefix('ferrakora')->name('api.ferrakora.')->group(function () {
     Route::get('produtos/{id}', [FerraKoraCatalogoController::class, 'show'])
         ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
     Route::post('produtos', [FerraKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+
+    // Checkout próprio do FerraKora (2026-10-14): pedido e Mercado Pago pelo KazaKora.
+    // Limite com prefixo próprio: sem ele o contador é um só por IP para todas
+    // as rotas com throttle e a vitrine + resumo esgotavam o do pedido (429).
+    Route::prefix('checkout')->name('checkout.')->group(function () {
+        Route::post('resumo', [FerraKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1,fk-checkout-resumo')->name('resumo');
+        Route::post('pedido', [FerraKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1,fk-checkout-pedido')->name('pedido');
+        Route::get('pedido/{order}', [FerraKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1,fk-checkout-status')->name('status');
+        Route::get('cep/{cep}', [FerraKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,fk-checkout-cep')->name('cep');
+    });
 });
 
 // Conta e pedidos do site Beauty Kora (2026-10-12): substituem o PocketBase
@@ -227,6 +239,17 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
     Route::get('produtos/{id}', [BeautyKoraCatalogoController::class, 'show'])
         ->where('id', '[a-z0-9-]{1,200}')->middleware('throttle:120,1')->name('produto');
     Route::post('produtos', [BeautyKoraCatalogoController::class, 'sincronizar'])->middleware('throttle:20,1')->name('produtos.sincronizar');
+    // Região do visitante (2026-10-15): o site pergunta ao abrir e mostra no card
+    // o frete grátis e o raio da entrega FULL (Grande SP), pelo IP ou pelo CEP.
+    Route::get('regiao', [BeautyKoraCatalogoController::class, 'regiao'])->middleware('throttle:120,1')->name('regiao');
+
+    // Checkout pelo Mercado Pago da KazaKora (2026-10-14, só homolog): sai a Hostinger.
+    Route::prefix('checkout')->name('checkout.')->group(function () {
+        Route::post('resumo', [BeautyKoraCheckoutController::class, 'resumo'])->middleware('throttle:60,1')->name('resumo');
+        Route::post('pedido', [BeautyKoraCheckoutController::class, 'pedido'])->middleware('throttle:10,1')->name('pedido');
+        Route::get('pedido/{order}', [BeautyKoraCheckoutController::class, 'status'])->whereNumber('order')->middleware('throttle:60,1')->name('status');
+        Route::get('cep/{cep}', [BeautyKoraCheckoutController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1')->name('cep');
+    });
 
     Route::middleware([AuthenticateBeautyKoraCliente::class, 'throttle:60,1'])->group(function () {
         Route::get('eu', [BeautyKoraContaController::class, 'eu'])->name('eu');

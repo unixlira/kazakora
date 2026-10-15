@@ -31,6 +31,9 @@ const props = defineProps({
     methodType: { type: String, default: null },
     mercadoPagoPix: { type: Object, default: null },
     mercadoPagoCardConfirmed: { type: Boolean, default: false },
+    // Boleto (2026-10-14): { linhaDigitavel, codigoBarras, pdfUrl, vencimento }.
+    mercadoPagoBoleto: { type: Object, default: null },
+    boletoDiasVencimento: { type: Number, default: 3 },
 });
 
 const page = usePage();
@@ -266,7 +269,7 @@ const SELOS = [
     { imagem: '/images/checkout/pagamento-100-seguro-checkout-v4.png', titulo: 'Pagamento 100% Seguro', texto: 'Seu pagamento passa direto pelo Mercado Pago, com criptografia. Seus dados de cartão nunca ficam com a gente.' },
     { imagem: '/images/checkout/avaliacoes-positivas-checkout-v4.png', titulo: 'Avaliações Positivas', texto: 'Cada produto é escolhido a dedo e avaliado por quem já comprou. Dúvidas? A gente responde no WhatsApp.' },
     { imagem: '/images/checkout/satisfacao-garantida-checkout-v4.png', titulo: 'Satisfação Garantida', texto: 'Receba sua compra e fique 100% satisfeito(a). Se não gostar, devolvemos todo o seu dinheiro, sem burocracia.' },
-    { imagem: '/images/checkout/parcele-12x-cartao-checkout-v4.png', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora.' },
+    { imagem: '/images/checkout/parcele-12x-cartao-checkout-v4.png', titulo: 'Parcele em até 12x', texto: 'No cartão, com proteção antifraude e envio rápido. Ou pague no Pix e ganhe desconto na hora, ou no boleto.' },
 ];
 
 // ---------- Finalizar ----------
@@ -491,6 +494,15 @@ watch(() => props.mercadoPagoPix, (pix) => {
     acompanhar(props.order.id);
 }, { immediate: true });
 
+// Boleto gerado (2026-10-14): sem polling — o pagamento chega em dias e quem
+// confirma é a varredura do servidor. A tela só mostra a linha e o PDF.
+watch(() => props.mercadoPagoBoleto, (boleto) => {
+    if (!boleto || !props.order) return;
+    pararTimers();
+    urlSucesso.value = `/pedidos/${props.order.id}`;
+    estado.value = 'boleto';
+}, { immediate: true });
+
 watch(() => props.mercadoPagoCardConfirmed, (confirmado) => {
     if (!confirmado || !props.order) return;
     pararTimers();
@@ -529,14 +541,6 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
             <!-- FORMULÁRIO -->
             <main class="order-2 lg:order-1">
-                <div class="mb-5 flex items-center gap-3">
-                    <span class="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><i class="fa-solid fa-lock text-lg"></i></span>
-                    <div>
-                        <h1 class="text-2xl font-bold text-slate-900">Finalize sua compra</h1>
-                        <p class="text-sm text-slate-500">Leva menos de 1 minuto. Seus dados estão protegidos.</p>
-                    </div>
-                </div>
-
                 <div v-if="erroGeral || serverErrors.payment || serverErrors.cart" role="alert" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
                     <div>
@@ -716,7 +720,8 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <p class="mt-0.5 text-sm text-slate-500">Escolha a melhor forma de pagamento para você</p>
                         </header>
 
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                            <!-- Ordem e nomes iguais nos 3 sites (pedido do Lira 2026-10-14): Pix, Cartão de Crédito, Boleto Bancário. -->
                             <button type="button" class="relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
                                 :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
                                 @click="metodo = 'pix'">
@@ -729,8 +734,15 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 :class="metodo === 'card' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
                                 @click="metodo = 'card'">
                                 <i class="fa-solid fa-credit-card text-2xl text-slate-700"></i>
-                                <span class="text-sm font-semibold text-slate-900">Cartão de crédito</span>
+                                <span class="text-sm font-semibold text-slate-900">Cartão de Crédito</span>
                                 <span class="text-xs text-slate-500">Até 12x de {{ formatPrice(parcela12) }}</span>
+                            </button>
+                            <button type="button" class="flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
+                                :class="metodo === 'boleto' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
+                                @click="metodo = 'boleto'">
+                                <i class="fa-solid fa-barcode text-2xl text-slate-700"></i>
+                                <span class="text-sm font-semibold text-slate-900">Boleto Bancário</span>
+                                <span class="text-xs text-slate-500">Vence em {{ boletoDiasVencimento }} dias</span>
                             </button>
                         </div>
 
@@ -743,6 +755,15 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <li><i class="fa-solid fa-mobile-screen mr-2 w-4"></i>Pague pelo app do seu banco, copiando o código ou lendo o QR.</li>
                                 <li><i class="fa-solid fa-bolt mr-2 w-4"></i>Aprovação em segundos e envio mais rápido.</li>
                             </ul>
+                        </div>
+
+                        <div v-else-if="metodo === 'boleto'" class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+                            <ul class="space-y-1">
+                                <li><i class="fa-solid fa-barcode mr-2 w-4"></i>O boleto aparece assim que você finalizar e também vai para o seu e-mail.</li>
+                                <li><i class="fa-solid fa-calendar-day mr-2 w-4"></i>Vence em {{ boletoDiasVencimento }} dias. Pague pelo app do banco ou na lotérica.</li>
+                                <li><i class="fa-solid fa-clock mr-2 w-4"></i>O banco leva até 3 dias úteis para confirmar; o envio começa depois disso.</li>
+                            </ul>
+                            <p v-if="pixDiscountPercentage > 0" class="mt-2 text-xs text-slate-500">O desconto de {{ pixDiscountPercentage }}% vale só no Pix.</p>
                         </div>
 
                         <div v-else class="mt-4">
@@ -847,6 +868,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
             :pix-seconds-left="pixSegundos"
             :failure-message="motivoFalha"
             :success-url="urlSucesso"
+            :boleto="mercadoPagoBoleto"
             @retry="tentarDeNovo" />
     </CheckoutLayout>
 </template>

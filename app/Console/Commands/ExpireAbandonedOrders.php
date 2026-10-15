@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -45,6 +46,11 @@ class ExpireAbandonedOrders extends Command
             ->where('origin', Order::ORIGIN_STORE)
             ->whereIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
             ->where('created_at', '<=', now()->subMinutes(self::ABANDONED_AFTER_MINUTES))
+            // Boleto (2026-10-14) fica dias aguardando: quem cancela é a
+            // mercadopago:conferir-boletos, pelo status real no Mercado Pago.
+            ->whereDoesntHave('payments', fn ($q) => $q
+                ->where('method_type', Payment::METHOD_BOLETO)
+                ->where('status', Payment::STATUS_REQUIRES_CONFIRMATION))
             ->get();
 
         if ($candidates->isEmpty()) {

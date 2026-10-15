@@ -17,8 +17,8 @@ use Illuminate\Support\Str;
  * front usar os mesmos extratores. Ids: "kz-<pai>" no produto e
  * "kzv-<variação>" na variação. Preço é o de cadastro (sem o frete embutido
  * da loja KazaKora), a não ser no site que liga comFreteEmbutido() (FerraKora,
- * 2026-10-13): aí vale o mesmo final_price da página do KazaKora para a região
- * do visitante.
+ * 2026-10-13; Beauty Kora, 2026-10-15): aí vale o mesmo final_price da página
+ * do KazaKora para a região do visitante, mais o acréscimo do site (acrescimo()).
  *
  * Cada site tem a sua tabela (qual produto aparece, título, ordem, ativo) e
  * pode acrescentar campos próprios no item recebido e no produto devolvido.
@@ -55,6 +55,31 @@ abstract class CatalogoOutroSite
     protected function comFreteEmbutido(): bool
     {
         return false;
+    }
+
+    /**
+     * Acréscimo sobre o preço original do anúncio (0.05 = 5%), por produto do
+     * site. Beauty Kora: produto clonado (2026-10-15). O frete embutido fica
+     * fora da conta: o acréscimo é só sobre o anúncio.
+     */
+    protected function acrescimo(Model $registro): float
+    {
+        return 0.0;
+    }
+
+    /**
+     * Preço com o acréscimo sobre a parte do anúncio (sem o frete embutido).
+     * O checkout usa a mesma conta, para cobrar o que o card mostrou.
+     */
+    public static function comAcrescimo(Product $produto, float $valor, float $acrescimo): float
+    {
+        if ($acrescimo <= 0) {
+            return $valor;
+        }
+
+        $frete = $produto->freteEmbutido();
+
+        return round($frete + ($valor - $frete) * (1 + $acrescimo), 2);
     }
 
     /** Campos próprios do site acrescentados no fim do produto devolvido. */
@@ -154,9 +179,10 @@ abstract class CatalogoOutroSite
         $grupo = collect([$pai])->merge($pai->children ?? collect())->filter(fn (Product $produto) => $produto->is_active)->values();
         $temOpcao = $grupo->count() > 1;
         $opcaoId = 'kzo-'.$pai->id;
+        $acrescimo = $this->acrescimo($registro);
 
-        $variantes = $grupo->map(function (Product $produto) use ($pai, $temOpcao, $opcaoId) {
-            [$preco, $final] = $this->precos($produto);
+        $variantes = $grupo->map(function (Product $produto) use ($pai, $temOpcao, $opcaoId, $acrescimo) {
+            [$preco, $final] = $this->precos($produto, $acrescimo);
             $id = self::PREFIXO_VARIACAO.$produto->id;
 
             return [
@@ -231,17 +257,23 @@ abstract class CatalogoOutroSite
      * Com frete embutido: os mesmos números do card da loja KazaKora, o
      * final_price (frete da região + oferta do dia) e, riscado, o preço sem a
      * oferta ou o preço "de" do desconto, ambos com o mesmo frete.
+     * Os dois levam o acréscimo do site (acrescimo()), só sobre o anúncio.
      *
      * @return array{0: int, 1: int}
      */
-    private function precos(Product $produto): array
+    private function precos(Product $produto, float $acrescimo = 0.0): array
     {
         if (! $this->comFreteEmbutido()) {
-            return [(int) round((float) $produto->price * 100), (int) round($produto->precoSemOferta() * 100)];
+            $cheio = self::comAcrescimo($produto, (float) $produto->price, $acrescimo);
+            $final = self::comAcrescimo($produto, $produto->precoSemOferta(), $acrescimo);
+
+            return [(int) round($cheio * 100), (int) round($final * 100)];
         }
 
         $final = (float) $produto->final_price;
         $cheio = $produto->preco_sem_oferta ?? $produto->preco_de ?? $final;
+        $final = self::comAcrescimo($produto, $final, $acrescimo);
+        $cheio = self::comAcrescimo($produto, (float) $cheio, $acrescimo);
 
         return [(int) round(max($cheio, $final) * 100), (int) round($final * 100)];
     }

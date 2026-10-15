@@ -35,15 +35,20 @@ const props = defineProps({
     // desta página renderizar (sem Payment Element pra confirmar) — só
     // falta começar o polling, igual ao Pix.
     mercadoPagoCardConfirmed: { type: Boolean, default: false },
+    // Boleto via Mercado Pago (2026-10-14): já gerado no backend.
+    mercadoPagoBoleto: { type: Object, default: null },
+    boletoDiasVencimento: { type: Number, default: 3 },
 });
 
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const METHOD_LABELS = {
-    card: 'Cartão de crédito',
+    card: 'Cartão de Crédito',
     pix: 'Pix',
+    boleto: 'Boleto Bancário',
 };
+
 
 // Fase 1: escolher método(s) de pagamento
 const chooseForm = useForm({
@@ -52,6 +57,13 @@ const chooseForm = useForm({
     payment_method_secondary: 'pix',
     split_percentage: 50,
     terms_accepted: false,
+});
+
+// Boleto (2026-10-14): só pelo Mercado Pago e só como forma única.
+// Ordem igual nos 3 sites (KazaKora, FerraKora, Beauty Kora): Pix, Cartão de Crédito, Boleto Bancário.
+const primaryMethods = computed(() => (props.paymentGateway === 'mercadopago' && ! chooseForm.split ? ['pix', 'card', 'boleto'] : ['pix', 'card']));
+watch(() => chooseForm.split, (split) => {
+    if (split && chooseForm.payment_method === 'boleto') chooseForm.payment_method = 'card';
 });
 
 // Cartão + Mercado Pago precisa do Card Payment Brick tokenizar o cartão
@@ -304,7 +316,16 @@ const savings = computed(() => props.discountAmount + pixSaving.value);
 // Verdadeiro só na Fase 1 (escolher método) — usado tanto lá quanto pro
 // cupom no resumo da compra, que não faz sentido nas fases seguintes.
 const isChoosingMethod = computed(() =>
-    ! props.clientSecret && ! props.mercadoPagoPix && ! mpCardPhase.value && ! props.mercadoPagoCardConfirmed);
+    ! props.clientSecret && ! props.mercadoPagoPix && ! mpCardPhase.value && ! props.mercadoPagoCardConfirmed && ! props.mercadoPagoBoleto);
+
+// Boleto gerado: só mostra a linha digitável e o PDF, sem polling (o
+// pagamento chega em dias; quem confirma é a varredura do servidor).
+watch(() => props.mercadoPagoBoleto, (boleto) => {
+    if (! boleto || ! props.order) return;
+    clearTimers();
+    successUrl.value = `/pedidos/${props.order.id}`;
+    paymentState.value = 'boleto';
+}, { immediate: true });
 
 // Pix via Mercado Pago já chega com o QR pronto (a criação do pagamento
 // aconteceu no backend, antes desta página renderizar) — só mostrar e
@@ -415,15 +436,15 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                                 {{ chooseForm.split ? 'Meio de pagamento 1' : 'Meio de pagamento' }}
                             </h2>
                             <div class="flex flex-col gap-2">
-                                <label v-for="method in ['pix', 'card']" :key="method"
+                                <label v-for="method in primaryMethods" :key="method"
                                     class="flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors"
                                     :class="chooseForm.payment_method === method ? 'border-store-accent bg-store-accent/5' : 'border-store-border hover:border-store-border-strong'">
                                     <input v-model="chooseForm.payment_method" type="radio" :value="method" class="h-4 w-4 accent-store-accent">
-                                    <i class="fas w-5 text-store-accent" :class="method === 'pix' ? 'fa-qrcode' : 'fa-credit-card'"></i>
+                                    <i class="fas w-5 text-store-accent" :class="method === 'pix' ? 'fa-qrcode' : method === 'card' ? 'fa-credit-card' : 'fa-barcode'"></i>
                                     <div>
                                         <p class="text-sm font-medium">{{ METHOD_LABELS[method] }}</p>
                                         <p class="text-xs text-store-fg-muted">
-                                            {{ method === 'pix' ? 'Aprovação imediata' : 'Em até 12x' }}
+                                            {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Em até 12x' : `Vence em ${boletoDiasVencimento} dias · confirmação em até 3 dias úteis` }}
                                             <span v-if="method === 'pix' && pixDiscountPercentage > 0" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ pixDiscountPercentage }}% de desconto</span>
                                         </p>
                                     </div>
@@ -468,6 +489,14 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                                 @click="submitChoice">
                                 Continuar
                             </button>
+                        </div>
+                    </template>
+
+                    <!-- Boleto via Mercado Pago: linha e PDF no PaymentProcessingModal -->
+                    <template v-else-if="mercadoPagoBoleto">
+                        <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
+                            <h2 class="mb-2 text-sm font-semibold uppercase text-store-fg-muted">Boleto gerado</h2>
+                            <p class="text-sm text-store-fg-muted">Seu boleto também foi enviado para o seu e-mail.</p>
                         </div>
                     </template>
 
@@ -569,6 +598,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
             :pix-seconds-left="pixSecondsLeft"
             :failure-message="failureMessage"
             :success-url="successUrl"
+            :boleto="mercadoPagoBoleto"
             @retry="() => router.visit('/finalizacao/pagamento')"
         />
     </AppLayout>

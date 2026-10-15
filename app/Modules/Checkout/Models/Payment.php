@@ -38,13 +38,25 @@ class Payment extends Model
         'method_type',
         'amount',
         'status',
+        'boleto_linha_digitavel',
+        'boleto_url',
+        'expira_em',
     ];
 
     protected function casts(): array
     {
         return [
             'amount' => 'decimal:2',
+            'expira_em' => 'datetime',
         ];
+    }
+
+    /** Boleto do Mercado Pago ainda dentro do jogo (gerado e não pago nem cancelado). */
+    public function boletoPendente(): bool
+    {
+        return $this->method_type === self::METHOD_BOLETO
+            && $this->provider === self::PROVIDER_MERCADOPAGO
+            && $this->status === self::STATUS_REQUIRES_CONFIRMATION;
     }
 
     public function order(): BelongsTo

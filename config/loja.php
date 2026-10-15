@@ -47,6 +47,18 @@ return [
     'email_pagador_pix' => env('MERCADOPAGO_EMAIL_PAGADOR_PIX', 'pedido-{pedido}@kazakora.com'),
 
     /*
+    | Boleto pelo Mercado Pago (pedido 2026-10-14). Vence em N dias corridos
+    | (às 23:59 de São Paulo); sem desconto do Pix e sem dividir com cartão.
+    | O mesmo e-mail nosso do Pix vai como pagador, para o Mercado Pago não
+    | escrever ao cliente (quem manda o boleto é a KazaKora).
+    | boleto_cancelar_apos_dias: se o Mercado Pago ainda disser "pendente"
+    | esse tanto de dias DEPOIS do vencimento (compensação leva até 3 dias
+    | úteis), a loja cancela o boleto e o pedido e devolve o estoque.
+    */
+    'boleto_dias_vencimento' => (int) env('LOJA_BOLETO_DIAS_VENCIMENTO', 3),
+    'boleto_cancelar_apos_dias' => (int) env('LOJA_BOLETO_CANCELAR_APOS_DIAS', 7),
+
+    /*
     | Relatórios internos por e-mail (resultado do dia, pedidos cancelados
     | depois de separados). Vários endereços separados por vírgula.
     */

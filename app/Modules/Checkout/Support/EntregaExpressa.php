@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Support;
 
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Entrega expressa na Grande São Paulo (pedido 2026-10-09): diz se o CEP
@@ -39,6 +40,27 @@ class EntregaExpressa
                 : 'Receba amanhã',
             'local' => $faixa['local'],
         ];
+    }
+
+    /**
+     * Mesma consulta pela cidade (sem CEP): visitante localizado só pelo IP
+     * (CF-IPCity da Cloudflare). Vale a primeira faixa com o "local" igual à
+     * cidade, sem diferença de acento ou maiúscula.
+     *
+     * @return array{tipo: string, mensagem: string, local: string}|null
+     */
+    public function consultarCidade(?string $cidade, ?CarbonInterface $agora = null): ?array
+    {
+        $nome = Str::lower(Str::ascii(trim((string) $cidade)));
+
+        if ($nome === '' || ! config('entrega_expressa.ativa', true)) {
+            return null;
+        }
+
+        $faixa = collect(config('entrega_expressa.faixas', []))
+            ->first(fn (array $faixa) => Str::lower(Str::ascii($faixa['local'])) === $nome);
+
+        return $faixa ? $this->consultar((string) $faixa['inicio'], $agora) : null;
     }
 
     public function atende(?string $cep): bool

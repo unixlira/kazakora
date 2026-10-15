@@ -38,7 +38,8 @@ const copiar = async (valor, chave) => {
     }
 };
 
-const METODO = { pix: 'Pix', card: 'Cartão de crédito' };
+const METODO = { pix: 'Pix', card: 'Cartão de crédito', boleto: 'Boleto' };
+const dataCurta = (valor) => (valor ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' }).format(new Date(valor)) : null);
 const PAGAMENTO_STATUS = { captured: 'Aprovado', authorized: 'Aprovado', succeeded: 'Aprovado', refunded: 'Estornado', requires_confirmation: 'Aguardando', failed: 'Recusado', cancelled: 'Cancelado' };
 const chatAberto = ref(false);
 </script>
@@ -138,6 +139,20 @@ const chatAberto = ref(false);
                             <p class="mt-2 flex items-center justify-between text-sm"><span class="text-store-fg-muted">Forma</span><span class="font-semibold"><i v-if="pedido.pagamento.metodo === 'pix'" class="fa-brands fa-pix mr-1 text-[#32BCAD]"></i>{{ METODO[pedido.pagamento.metodo] ?? pedido.pagamento.metodo }}</span></p>
                             <p class="mt-1 flex items-center justify-between text-sm"><span class="text-store-fg-muted">Situação</span><span class="font-semibold">{{ PAGAMENTO_STATUS[pedido.pagamento.status] ?? pedido.pagamento.status }}</span></p>
                             <p class="mt-1 flex items-center justify-between text-sm"><span class="text-store-fg-muted">Valor</span><span class="font-semibold">{{ formatPrice(pedido.pagamento.valor) }}</span></p>
+                            <!-- Boleto aguardando (2026-10-14): linha digitável e PDF de novo aqui. -->
+                            <div v-if="pedido.pagamento.boleto" class="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-slate-800">
+                                <p class="text-[11px] font-bold uppercase tracking-wide text-[#c2410c]">Boleto<template v-if="pedido.pagamento.boleto.vencimento"> · vence em {{ dataCurta(pedido.pagamento.boleto.vencimento) }}</template></p>
+                                <div v-if="pedido.pagamento.boleto.linha_digitavel" class="mt-1 flex items-start justify-between gap-2">
+                                    <code class="break-all font-mono text-sm">{{ pedido.pagamento.boleto.linha_digitavel }}</code>
+                                    <button type="button" class="text-sm text-[#F27A2A]" aria-label="Copiar linha digitável" @click="copiar(pedido.pagamento.boleto.linha_digitavel, 'boleto')">
+                                        <i class="fas" :class="copiado === 'boleto' ? 'fa-check text-[#0FB930]' : 'fa-copy'"></i>
+                                    </button>
+                                </div>
+                                <a v-if="pedido.pagamento.boleto.url" :href="pedido.pagamento.boleto.url" target="_blank" rel="noopener" class="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-[#c2410c] hover:underline">
+                                    <i class="fas fa-file-pdf"></i> Abrir o boleto (PDF)
+                                </a>
+                                <p class="mt-1 text-[11px] text-slate-500">O banco leva até 3 dias úteis para confirmar o pagamento.</p>
+                            </div>
                             <div v-if="pedido.pagamento.transacao" class="mt-3 rounded-xl bg-store-bg-sunken p-3">
                                 <p class="text-[11px] font-bold uppercase tracking-wide text-store-fg-muted">ID da transação</p>
                                 <div class="mt-1 flex items-center justify-between gap-2">

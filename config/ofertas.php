@@ -22,4 +22,8 @@ return [
     // Sem 5 produtos acima do desconto mínimo, completa com os de melhor
     // margem que aguentam o desconto extra (a seção nunca fica vazia).
     'completar_com_margem' => (bool) env('OFERTAS_COMPLETAR', true),
+    // Produtos fixos nas primeiras posições, nesta ordem (pedido do Lira
+    // 2026-10-14): caixa 168 peças, parafusadeira 36v, jogo soquete 61 peças
+    // e caixa 85 peças. Também só entram com estoque e sem prejuízo.
+    'fixas' => array_values(array_filter(array_map('intval', explode(',', (string) env('OFERTAS_FIXAS', '178,53,54,177'))))),
 ];

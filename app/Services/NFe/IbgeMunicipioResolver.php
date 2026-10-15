@@ -11,12 +11,19 @@ use RuntimeException;
 /**
  * Resolve nome de cidade + UF para o código de município do IBGE (7 dígitos),
  * exigido em várias tags da NF-e (cMunFG, enderEmit/cMun, enderDest/cMun).
- * Não temos uma tabela própria de municípios — usa a API pública e gratuita
- * do IBGE (sem autenticação), com cache de 30 dias por UF pra não bater na
- * API toda hora.
+ * Fonte principal: a lista oficial do IBGE gravada no próprio repositório
+ * (resources/data/ibge-municipios.json, 5.571 municípios, baixada em
+ * 15/10/2026). A API pública do IBGE (e a BrasilAPI) só entram se a UF não
+ * estiver no arquivo, com cache de 30 dias por UF.
  */
 class IbgeMunicipioResolver
 {
+    /** @var array<string, array<int, array{0: int, 1: string}>>|null */
+    private ?array $locais = null;
+
+    /** Só os testes trocam o arquivo (para exercitar as fontes de rede). */
+    public function __construct(private ?string $arquivoLocal = null) {}
+
     public function resolve(string $cidade, string $uf): string
     {
         $municipios = $this->municipiosDoEstado($uf);
@@ -94,6 +101,19 @@ class IbgeMunicipioResolver
         // dias venceu. Agora: IBGE → BrasilAPI (mesma lista do IBGE, outro
         // servidor) → última lista boa guardada sem prazo. Só estoura se as
         // três falharem.
+        //
+        // BUG REAL 2026-10-15 15:30 (pedidos #3164 e #3165 sem nota por 2h):
+        // o cache venceu de novo, o IBGE seguia com o certificado quebrado,
+        // a BrasilAPI dava timeout (504) e a "última lista boa" nunca tinha
+        // sido gravada, porque desde a correção nenhuma fonte respondeu.
+        // Município quase nunca muda (o último criado foi em 2013): a lista
+        // local resolve sem rede; a internet fica só para UF fora dela.
+        $local = $this->municipiosLocais($uf);
+
+        if ($local !== null) {
+            return $local;
+        }
+
         return Cache::remember("ibge.municipios.{$uf}", now()->addDays(30), function () use ($uf) {
             $fontes = [
                 "https://servicodados.ibge.gov.br/api/v1/localidades/estados/{$uf}/municipios",
@@ -118,6 +138,25 @@ class IbgeMunicipioResolver
 
             throw new RuntimeException("Falha ao consultar a API do IBGE para o estado {$uf}.");
         });
+    }
+
+    /**
+     * @return array<int, array{id: int, nome: string}>|null
+     */
+    private function municipiosLocais(string $uf): ?array
+    {
+        if ($this->locais === null) {
+            $conteudo = @file_get_contents($this->arquivoLocal ?? resource_path('data/ibge-municipios.json'));
+            $this->locais = is_string($conteudo) ? (json_decode($conteudo, true) ?: []) : [];
+        }
+
+        $lista = $this->locais[strtoupper($uf)] ?? null;
+
+        if (! is_array($lista) || $lista === []) {
+            return null;
+        }
+
+        return array_map(fn (array $m) => ['id' => (int) $m[0], 'nome' => (string) $m[1]], $lista);
     }
 
     /**

@@ -24,7 +24,7 @@ const COLETAS = {
   amazon: { script: 'amazon.mjs', args: ['diario'] },
 };
 const cfgArq = path.join(PASTA, 'financeiro.json');
-const cfg = fs.existsSync(cfgArq) ? JSON.parse(fs.readFileSync(cfgArq, 'utf8')) : { ativas: ['tiktok'] };
+const cfg = fs.existsSync(cfgArq) ? JSON.parse(fs.readFileSync(cfgArq, 'utf8')) : { ativas: ['tiktok', 'amazon'] };
 
 const agora = () => new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).replace(' ', 'T');
 const log = (...m) => fs.appendFileSync(path.join(LOGS, 'financeiro.log'), `[${agora()}] ${m.join(' ')}\n`);
@@ -33,6 +33,9 @@ const log = (...m) => fs.appendFileSync(path.join(LOGS, 'financeiro.log'), `[${a
 function classificar(saida, codigo) {
   if (/outra execução em andamento/i.test(saida)) return 'pulado';
   if (codigo === 0) return 'ok';
+  // Rota da API ainda não publicada na produção (Amazon até o deploy): a
+  // coleta leu a tela; como pega 30 dias, a primeira hora depois do deploy recupera tudo.
+  if (/API recusou .*HTTP 404/.test(saida)) return 'sem_api';
   if (/Sessão d[oa] .* caiu|faça login|sem permissão|\/ap\/signin|Two-Step|Verificação em duas etapas/i.test(saida)) return 'login';
   if (/ocupado por outro programa|connectOverCDP|ECONNREFUSED/i.test(saida)) return 'chrome';
   return 'erro';

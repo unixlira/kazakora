@@ -751,6 +751,19 @@ class AmazonDriver extends AbstractMarketplaceDriver
         ]);
     }
 
+    /**
+     * O pedido já está "Enviado" (ou entregue) na Amazon? Usado quando a
+     * confirmação de envio é recusada por já ter sido feita à mão.
+     */
+    public function jaEnviado(Order $order): bool
+    {
+        $this->ensureConfigured();
+
+        $status = $this->client->get("/orders/v0/orders/{$order->external_order_id}")['payload']['OrderStatus'] ?? null;
+
+        return in_array($status, ['Shipped', 'InvoiceUnconfirmed'], true);
+    }
+
     protected function blingBuyerFallbackName(): string
     {
         return 'Comprador Amazon';

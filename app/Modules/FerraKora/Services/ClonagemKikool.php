@@ -35,8 +35,8 @@ class ClonagemKikool
 
     public const CATEGORIAS_LOJA = ['Casa e Cozinha', 'Eletrônicos e Acessórios', 'Ferramentas e Automotivo', 'Beleza e Bem-Estar', 'Brinquedos e Games'];
 
-    /** Mesmas categorias do menu do site (ferrakora/src/lib/produto.js). */
-    public const CATEGORIAS_FERRAKORA = ['Ferramentas Elétricas', 'Ferramentas Manuais', 'Níveis Laser', 'Trenas', 'Esquadros', 'Organizadores'];
+    /** Mesmas categorias do menu do site (ferrakora/src/lib/produto.js), 6 desde 16/10/2026. */
+    public const CATEGORIAS_FERRAKORA = ['Ferramentas Elétricas', 'Chaves, Kits e Maletas', 'Alicates e Elétrica', 'Construção e Medição', 'Automotivo', 'Jardim e Limpeza'];
 
     private const MAX_FOTOS = 6;
 

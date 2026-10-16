@@ -4,6 +4,13 @@ on:
   push:
     branches: [homolog]
 
+# Um deploy por vez: em 16/10 dois merges com segundos de diferença
+# rodaram o rsync juntos e o commit mais antigo sobrescreveu o mais novo.
+# Sem cancel-in-progress: o deploy em andamento termina e o próximo espera.
+concurrency:
+  group: deploy-homolog
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

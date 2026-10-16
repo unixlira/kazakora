@@ -44,7 +44,10 @@ class Product extends Model
         'is_new_release',
     ];
 
-    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de'];
+    protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine'];
+
+    /** Só serve para calcular o preco_vitrine; não vai no JSON. */
+    protected $hidden = ['variacoesAtivas'];
 
     protected function casts(): array
     {
@@ -194,6 +197,63 @@ class Product extends Model
         return $this->hasMany(Product::class, 'parent_product_id');
     }
 
+    /** Variações ativas, só com o que entra no preço do card (scopeComPrecoDaVariacao). */
+    public function variacoesAtivas(): HasMany
+    {
+        return $this->children()->where('is_active', true)
+            ->select(['id', 'parent_product_id', 'price', 'discount_percentage', 'discount_amount', 'stock']);
+    }
+
+    /** Carrega as variações ativas do pai para o card mostrar o menor preço. */
+    public function scopeComPrecoDaVariacao(Builder $query): Builder
+    {
+        return $query->with('variacoesAtivas');
+    }
+
+    /**
+     * Anúncio com variação mostra o menor preço (pedido 2026-10-16, ex.:
+     * Árvore de Natal): entre o pai e as variações ativas, a mais barata,
+     * contando só as com estoque quando houver alguma. Sem as variações
+     * carregadas (comPrecoDaVariacao), é o próprio produto.
+     */
+    public function variacaoMaisBarata(): Product
+    {
+        if ($this->parent_product_id !== null || ! $this->relationLoaded('variacoesAtivas') || $this->variacoesAtivas->isEmpty()) {
+            return $this;
+        }
+
+        $opcoes = collect([$this])->concat($this->variacoesAtivas);
+        $comEstoque = $opcoes->filter(fn (Product $opcao) => $opcao->stock > 0);
+
+        return ($comEstoque->isNotEmpty() ? $comEstoque : $opcoes)->sortBy(fn (Product $opcao) => $opcao->final_price)->first();
+    }
+
+    /**
+     * Preço do card (ProductCard) de anúncio com variação: os campos de preço
+     * da variação mais barata e `a_partir_de` quando as variações têm preços
+     * diferentes. Null em produto sem variação ou sem comPrecoDaVariacao.
+     */
+    public function getPrecoVitrineAttribute(): ?array
+    {
+        if ($this->parent_product_id !== null || ! $this->relationLoaded('variacoesAtivas') || $this->variacoesAtivas->isEmpty()) {
+            return null;
+        }
+
+        $maisBarata = $this->variacaoMaisBarata();
+        $precos = collect([$this])->concat($this->variacoesAtivas)->map(fn (Product $opcao) => $opcao->final_price);
+
+        return [
+            'final_price' => $maisBarata->final_price,
+            'price' => (float) $maisBarata->price,
+            'has_discount' => $maisBarata->has_discount,
+            'preco_de' => $maisBarata->preco_de,
+            'preco_sem_oferta' => $maisBarata->preco_sem_oferta,
+            'oferta_do_dia' => $maisBarata->oferta_do_dia,
+            'oferta_relampago' => $maisBarata->oferta_relampago,
+            'a_partir_de' => $precos->min() < $precos->max(),
+        ];
+    }
+
     /**
      * IDs de todo o grupo de variações (o produto em si + irmãos), sempre
      * incluindo o próprio ID mesmo sem variação nenhuma — pensado pra
@@ -267,6 +327,8 @@ class Product extends Model
                 'stock',
                 'created_at',
             ])
+            // Anúncio com variação mostra o menor preço (pedido 2026-10-16).
+            ->comPrecoDaVariacao()
             // Card usa só a foto principal e a do hover: as outras iam no JSON
             // de toda vitrine à toa (velocidade, pedido 2026-10-10).
             // Vendidos (pedido 2026-10-10, como no Mercado Livre): pedidos pagos,

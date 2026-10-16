@@ -171,18 +171,24 @@ onMounted(() => {
 onBeforeUnmount(() => observador?.disconnect());
 
 // Preço do card: o "antes" (riscado) e o % de desconto em cima dele.
+// Anúncio com variação mostra o da variação mais barata (pedido 2026-10-16).
+const preco = computed(() => props.product.preco_vitrine ?? props.product);
+const aPartirDe = computed(() => Boolean(props.product.preco_vitrine?.a_partir_de));
 const precoAntes = computed(() => {
     // Oferta Relâmpago (2026-10-14) risca o preço sem ela, como a Oferta do Dia.
-    if ((props.product.oferta_do_dia || props.product.oferta_relampago) && props.product.preco_sem_oferta) return Number(props.product.preco_sem_oferta);
-    return props.product.has_discount ? Number(props.product.preco_de ?? props.product.price) : null;
+    if ((preco.value.oferta_do_dia || preco.value.oferta_relampago) && preco.value.preco_sem_oferta) return Number(preco.value.preco_sem_oferta);
+    return preco.value.has_discount ? Number(preco.value.preco_de ?? preco.value.price) : null;
 });
 const descontoPct = computed(() => (precoAntes.value
-    ? Math.max(1, Math.round((1 - Number(props.product.final_price) / precoAntes.value) * 100))
+    ? Math.max(1, Math.round((1 - Number(preco.value.final_price) / precoAntes.value) * 100))
     : 0));
 const precoPartes = computed(() => {
-    const [inteiro, centavos] = Number(props.product.final_price).toFixed(2).split('.');
+    const [inteiro, centavos] = Number(preco.value.final_price).toFixed(2).split('.');
     return { inteiro: Number(inteiro).toLocaleString('pt-BR'), centavos };
 });
+// Variações com preços diferentes: o carrinho do card abre o produto para
+// escolher (o preço do card é o da mais barata, não o do produto da página).
+const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props.product.id));
 </script>
 
 <template>
@@ -224,14 +230,14 @@ const precoPartes = computed(() => {
                  nos produtos em oferta, "Oferta MM.MM" do mês nos demais. -->
             <div class="promo-badge">
                 <span class="promo-badge-icon">%</span>
-                <span class="promo-badge-text">{{ product.oferta_relampago ? 'Oferta Relâmpago' : (product.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
+                <span class="promo-badge-text">{{ preco.oferta_relampago ? 'Oferta Relâmpago' : (preco.oferta_do_dia ? 'Oferta do Dia' : SELO_DO_MES) }}</span>
             </div>
 
             <!-- Adicionar ao carrinho: encostado na lateral direita, sobre a linha imagem/descrição -->
             <button type="button" :disabled="product.stock < 1"
                 class="absolute right-[5px] z-10 flex h-10 w-10 items-center justify-center rounded-full border border-store-border-strong bg-store-bg-raised shadow-md transition-colors hover:bg-store-accent hover:text-store-accent-contrast disabled:cursor-not-allowed disabled:opacity-40"
                 :class="'bottom-0 translate-y-1/2'"
-                aria-label="Adicionar ao carrinho" @click.stop="addToCart(product.id)">
+                :aria-label="aPartirDe ? 'Escolher a variação' : 'Adicionar ao carrinho'" @click.stop="comprarPeloCard">
                 <i class="fas fa-cart-shopping text-sm"></i>
             </button>
         </div>
@@ -260,6 +266,7 @@ const precoPartes = computed(() => {
                      desconto/vendidos, todo card tem o mesmo tamanho e o preço fica
                      sempre na mesma posição. -->
                 <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
+                    <span v-if="aPartirDe" class="shrink-0 text-[11px] text-store-fg-muted md:text-xs">A partir de</span>
                     <template v-if="precoAntes">
                         <span class="rounded bg-[#00A650] px-1 py-px text-[10px] font-bold leading-tight text-white">{{ descontoPct }}% OFF</span>
                         <s class="truncate text-xs text-store-fg-faint">{{ formatPrice(precoAntes) }}</s>

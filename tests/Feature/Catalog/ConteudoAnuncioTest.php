@@ -74,6 +74,31 @@ class ConteudoAnuncioTest extends TestCase
         $this->assertNull($conteudo->erro);
     }
 
+    public function test_padrao_desejo_objecao_cta_usa_um_bloco_por_foto_ate_dez(): void
+    {
+        $product = Product::factory()->create(['name' => 'Aspirador', 'description' => self::DESCRICAO, 'is_active' => true]);
+        foreach (range(0, 9) as $i) {
+            $product->images()->create(['path' => "products/x/{$i}.jpg", 'position' => $i, 'is_primary' => $i === 0]);
+        }
+
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'destaques' => ['Aspira e sopra', 'Sem fio', '6 bicos'],
+            'blocos' => collect(range(0, 11))->map(fn ($i) => ['titulo' => "Bloco {$i}", 'texto' => 'Texto.', 'imagem' => $i])->all(),
+        ]))]);
+
+        $conteudo = app(AnuncioConteudoService::class)->gerar($product->fresh());
+
+        $this->assertCount(10, $conteudo->blocos);
+        $this->assertSame(9, $conteudo->blocos[9]['imagem']);
+        Http::assertSent(function ($request) {
+            $partes = $request->data()['contents'][0]['parts'];
+            $prompt = end($partes)['text'];
+
+            return str_contains($prompt, 'Desejo') && str_contains($prompt, 'Quebra de objeção') && str_contains($prompt, 'CTA')
+                && str_contains($prompt, 'numeradas de 0 a 9');
+        });
+    }
+
     public function test_erro_de_conexao_cai_na_regra_automatica_sem_quebrar(): void
     {
         Http::fake(fn () => throw new ConnectionException('timeout'));

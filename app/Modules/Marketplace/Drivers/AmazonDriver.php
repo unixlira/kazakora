@@ -23,7 +23,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Throwable;
 
 /**
  * Amazon (Selling Partner API / SP-API) — docs:
@@ -117,7 +116,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function importOrder(string $externalOrderId): array
     {
         if ($this->viaBling()) {
-            return $this->comPagamentoConferido($this->importOrderFromBling($externalOrderId));
+            return $this->comPagamentoConferidoNaAmazon($this->importOrderFromBling($externalOrderId));
         }
 
         $this->ensureConfigured();
@@ -195,36 +194,6 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * O Bling não sabe se a Amazon já aprovou o pagamento: a situação dele
-     * vira "pago" aqui (mapBlingOrderStatus()) mesmo com o pedido "Pending"
-     * na Amazon. Pago só com a Amazon dizendo que está pago (PagamentoAmazon);
-     * sem conseguir perguntar, fica aguardando e a varredura de hora em hora
-     * confere de novo.
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
-     */
-    private function comPagamentoConferido(array $data): array
-    {
-        if ($data['status'] !== Order::STATUS_PAID) {
-            return $data;
-        }
-
-        try {
-            $status = app(PagamentoAmazon::class)->statusNaAmazon((string) $data['external_order_id']);
-        } catch (Throwable $e) {
-            Log::channel('amazon')->warning('amazon.pagamento_nao_conferido', [
-                'amazon_order_id' => $data['external_order_id'],
-                'erro' => $e->getMessage(),
-            ]);
-
-            return ['status' => Order::STATUS_AWAITING_PAYMENT] + $data;
-        }
-
-        return ['status' => PagamentoAmazon::statusDoPedido($status)] + $data;
-    }
-
-    /**
      * Vocabulário real de `OrderStatus`: PendingAvailability, Pending,
      * Unshipped, PartiallyShipped, Shipped, Canceled, Unfulfillable. A
      * Amazon só libera o pedido pro vendedor depois do pagamento
@@ -239,6 +208,50 @@ class AmazonDriver extends AbstractMarketplaceDriver
             'Shipped' => Order::STATUS_SHIPPED,
             'Canceled', 'Unfulfillable' => Order::STATUS_CANCELLED,
             default => Order::STATUS_AWAITING_PAYMENT,
+        };
+    }
+
+    /**
+     * BUG REAL 2026-10-03 (#2730, #2748, #2749): pelo Bling, todo pedido
+     * que não está cancelado vira "pago" (ReadsOrdersFromBling::
+     * mapBlingOrderStatus()), inclusive o que ainda está "Pending" na
+     * Amazon (cartão em análise). Os três ganharam NF-e, etiqueta e
+     * impressão em segundos e a Amazon cancelou de 1 a 11 minutos depois.
+     *
+     * Com a SP-API conectada, o status de pagamento vem da Amazon: Pending/
+     * PendingAvailability seguram o pedido em "aguardando pagamento" (sem
+     * nota, sem etiqueta, fora da fila do KoraSync) e Canceled/Unfulfillable
+     * cancelam. Os demais status ficam com o que o Bling disse, de
+     * propósito: "Shipped" na Amazon é a NOSSA confirmação de envio, que sai
+     * logo depois da etiqueta (ConfirmAmazonShipment), e trazer isso pra cá
+     * tiraria da fila do KoraSync um pacote ainda não embalado.
+     *
+     * SP-API fora do ar: segura em "aguardando pagamento" em vez de
+     * expedir sem saber. Quando o pagamento confirmar, a reentrega do
+     * webhook ou o orders:sync-amazon de hora em hora reimporta e
+     * OrderImportService::syncStatus() libera nota e etiqueta.
+     */
+    private function comPagamentoConferidoNaAmazon(array $data): array
+    {
+        if ($data['status'] !== Order::STATUS_PAID || ! $this->isConfigured()) {
+            return $data;
+        }
+
+        try {
+            $status = (string) ($this->client->get("/orders/v0/orders/{$data['external_order_id']}")['payload']['OrderStatus'] ?? '');
+        } catch (AmazonException $exception) {
+            Log::warning('amazon.pagamento_nao_conferido', [
+                'external_order_id' => $data['external_order_id'],
+                'erro' => $exception->getMessage(),
+            ]);
+
+            return ['status' => Order::STATUS_AWAITING_PAYMENT] + $data;
+        }
+
+        return match ($status) {
+            'Pending', 'PendingAvailability', '' => ['status' => Order::STATUS_AWAITING_PAYMENT] + $data,
+            'Canceled', 'Unfulfillable' => ['status' => Order::STATUS_CANCELLED] + $data,
+            default => $data,
         };
     }
 

@@ -16,7 +16,10 @@ use RuntimeException;
  * O pedido entra pelo Bling (AmazonDriver::viaBling()), e lá a situação
  * "Em aberto" virava "pago" aqui sem ninguém olhar a Amazon — um pedido
  * ainda "Pending" (pagamento não aprovado) ganhava nota, etiqueta e ia pra
- * bancada. Agora o status de verdade vem da SP-API (getOrder.OrderStatus).
+ * bancada. Agora o status de verdade vem da SP-API (getOrder.OrderStatus):
+ * na importação (AmazonDriver::comPagamentoConferidoNaAmazon()) e de novo
+ * aqui, na hora de emitir a NF-e e gerar a etiqueta, porque o pedido pode
+ * ter ficado "pago" por outro caminho.
  *
  * Na dúvida, segura: SP-API fora do ar ou desconectada não libera nada.
  * Quem segura não perde o pedido — quando a Amazon confirmar, a varredura
@@ -58,18 +61,6 @@ class PagamentoAmazon
     public static function pago(string $status): bool
     {
         return in_array($status, self::PAGOS, true);
-    }
-
-    /**
-     * Status do KazaKora pelo pagamento real na Amazon.
-     */
-    public static function statusDoPedido(string $status): string
-    {
-        return match (true) {
-            self::pago($status) => Order::STATUS_PAID,
-            in_array($status, self::CANCELADOS, true) => Order::STATUS_CANCELLED,
-            default => Order::STATUS_AWAITING_PAYMENT,
-        };
     }
 
     /**

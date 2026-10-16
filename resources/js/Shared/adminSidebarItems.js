@@ -176,6 +176,8 @@ export const sidebarSections = [
         heading: 'Sistema',
         items: [
             // Logs (2026-09-14): tudo de storage/logs numa lista, só admin.
+            // Alertas do painel (2026-10-16): o que precisa de ação do Lira.
+            { label: 'Alertas', href: '/admin/alertas', icon: 'fas fa-triangle-exclamation', cor: 'vermelho', permission: 'configuracoes.auditoria', badgeKey: 'alertasAbertos' },
             { label: 'Logs', href: '/admin/logs', icon: 'fas fa-terminal', cor: 'cinza-azul', permission: 'configuracoes.auditoria' },
             { label: 'Auditoria', href: '/admin/auditoria', icon: 'fas fa-clipboard-list', cor: 'indigo', permission: 'configuracoes.auditoria' },
             // Visitas por site (2026-10-12), só admin igual a Logs. Nomes e ordem

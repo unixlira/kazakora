@@ -395,8 +395,16 @@ class CatalogController extends Controller
             ->whereIn('id', $product->variantGroupIds())
             ->where('id', '!=', $product->id)
             ->where('is_active', true)
-            ->with(['images' => fn ($query) => $query->where(fn ($q) => $q->where('is_primary', true)->orWhere('is_variant', true))->reorder()->orderByDesc('is_variant')->limit(1)])
-            ->get(['id', 'name', 'slug', 'variation', 'price', 'stock']);
+            ->with([
+                'images' => fn ($query) => $query->where(fn ($q) => $q->where('is_primary', true)->orWhere('is_variant', true))->reorder()->orderByDesc('is_variant')->limit(1),
+                'quantityDiscounts',
+            ])
+            ->orderBy('id')
+            ->get()
+            // Trocar de variação é na própria página, sem recarregar (pedido
+            // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
+            // por quantidade. Custo é dado interno.
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price'));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto

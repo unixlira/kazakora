@@ -71,7 +71,9 @@ const mediaItems = computed(() => {
     return items;
 });
 
+// O pai abre na capa (montagem dos modelos); a variação abre na foto dela.
 const variantIndex = () => {
+    if (!props.product.parent_product_id) return 0;
     const index = mediaItems.value.findIndex((item) => item.variantId === props.product.id);
     return index >= 0 ? index : 0;
 };

@@ -74,7 +74,21 @@ const mediaItems = computed(() => {
 // Variação escolhida (pedido 2026-10-15): trocar de modelo é na própria
 // página, sem recarregar e sem mudar a URL. Preço, estoque, SKU e a compra
 // seguem a escolhida; cada uma mantém o próprio SKU.
-const selecionada = ref(props.product);
+// Com variações, a página abre sem nenhuma escolhida (pedido 2026-10-15): o
+// cliente precisa escolher antes de mudar a quantidade ou comprar. Até lá,
+// preço e ficha mostram o produto da página.
+const escolhida = ref(props.variations.length ? null : props.product);
+const selecionada = computed(() => escolhida.value ?? props.product);
+const faltaVariacao = computed(() => props.variations.length > 0 && !escolhida.value);
+const alertaVariacao = ref(0); // conta os avisos: cada clique sem variação treme o alerta de novo
+const variacoesEl = ref(null);
+// Quantidade ou COMPRAR sem variação: alerta vermelho ao lado de "Escolha a variação".
+const exigirVariacao = () => {
+    if (!faltaVariacao.value) return false;
+    alertaVariacao.value += 1;
+    variacoesEl.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return true;
+};
 const opcoesVariacao = computed(() => (props.variations.length
     ? [props.product, ...props.variations].sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
     : []));
@@ -85,7 +99,8 @@ const variantIndex = (id) => {
 // A página sempre abre na capa (montagem com todos os modelos).
 const activeIndex = ref(0);
 const escolherVariacao = (variant) => {
-    selecionada.value = variant;
+    escolhida.value = variant;
+    alertaVariacao.value = 0;
     activeIndex.value = variantIndex(variant.id);
     quantity.value = 1;
     prazo.value = null;
@@ -136,10 +151,11 @@ watch(isLightboxOpen, (open) => { document.body.style.overflow = open ? 'hidden'
 // os valores novos; outro produto volta para a capa.
 watch(() => [props.product, props.variations], ([novo], [antigo]) => {
     if (novo.id === antigo?.id) {
-        selecionada.value = [novo, ...props.variations].find((item) => item.id === selecionada.value.id) ?? novo;
+        if (escolhida.value) escolhida.value = [novo, ...props.variations].find((item) => item.id === escolhida.value.id) ?? novo;
         return;
     }
-    selecionada.value = props.product;
+    escolhida.value = props.variations.length ? null : props.product;
+    alertaVariacao.value = 0;
     activeIndex.value = 0;
     isLightboxOpen.value = false;
     quantity.value = 1;
@@ -181,9 +197,13 @@ const precoDe = computed(() => {
 const percentualTotal = computed(() => (precoDe.value ? Math.round((1 - precoPor.value / precoDe.value) * 100) : 0));
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(selecionada.value.final_price) / PARCELAS);
-const inStock = computed(() => selecionada.value.stock > 0);
+// Antes de escolher, vale o estoque de qualquer variação (o pai pode estar zerado).
+const inStock = computed(() => (faltaVariacao.value
+    ? opcoesVariacao.value.some((variant) => variant.stock > 0)
+    : selecionada.value.stock > 0));
 
 const setQuantity = (value) => {
+    if (exigirVariacao()) return;
     quantity.value = Math.min(Math.max(1, Number(value) || 1), Math.max(1, selecionada.value.stock));
 };
 
@@ -307,6 +327,7 @@ const buyingNow = ref(false);
 // "Comprar": finalização só com este produto, sem colocar no carrinho
 // (pedido 2026-10-11). O carrinho continua com o que já tinha.
 const buyNow = () => {
+    if (exigirVariacao()) return;
     buyingNow.value = true;
     router.post('/comprar-agora', { product_id: selecionada.value.id, quantity: quantity.value }, {
         onFinish: () => { buyingNow.value = false; },
@@ -412,7 +433,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <div v-if="mediaItems.length > 1" class="miniaturas">
                                     <button v-for="(item, index) in mediaItems" :key="index" type="button"
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
-                                        :aria-current="index === activeIndex" :class="{ 'da-variacao': item.variantId === selecionada.id }" @click="activeIndex = index">
+                                        :aria-current="index === activeIndex" :class="{ 'da-variacao': escolhida && item.variantId === escolhida.id }" @click="activeIndex = index">
                                         <template v-if="item.type === 'video'">
                                             <img v-if="videoPoster" :src="videoPoster" alt="">
                                             <video v-else :src="item.src" muted preload="metadata"></video>
@@ -469,12 +490,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </div>
                             </div>
 
-                            <div v-if="variations.length" class="variacoes">
-                                <span class="subtitulo">Escolha a variação</span>
+                            <div v-if="variations.length" ref="variacoesEl" class="variacoes" :class="{ 'com-alerta': alertaVariacao }">
+                                <span class="subtitulo">Escolha a variação
+                                    <span v-if="alertaVariacao" :key="alertaVariacao" class="alerta-variacao" role="alert"><i class="fas fa-circle-exclamation"></i> Escolha a sua variação</span>
+                                </span>
                                 <div class="opcoes">
                                     <button v-for="variant in opcoesVariacao" :key="variant.id" type="button"
-                                        class="opcao" :class="{ atual: variant.id === selecionada.id, esgotada: variant.stock < 1 }"
-                                        :aria-pressed="variant.id === selecionada.id" @click="escolherVariacao(variant)">
+                                        class="opcao" :class="{ atual: variant.id === escolhida?.id, esgotada: variant.stock < 1 }"
+                                        :aria-pressed="variant.id === escolhida?.id" @click="escolherVariacao(variant)">
                                         <img v-if="variantThumbnail(variant)" :src="variantThumbnail(variant)" alt="">
                                         {{ variant.variation || variant.name }}
                                     </button>
@@ -493,13 +516,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
 
                             <template v-if="inStock">
-                                <div class="acao">
+                                <!-- Sem variação escolhida os botões ficam apagados, mas o clique
+                                     mostra o alerta (por isso não usam disabled). -->
+                                <div class="acao" :class="{ 'sem-variacao': faltaVariacao }">
                                     <div class="qtd">
                                         <button type="button" aria-label="Diminuir quantidade" :disabled="quantity <= 1" @click="setQuantity(quantity - 1)">-</button>
-                                        <input :value="quantity" type="number" min="1" :max="selecionada.stock" aria-label="Quantidade" @change="setQuantity($event.target.value)">
-                                        <button type="button" aria-label="Aumentar quantidade" :disabled="quantity >= selecionada.stock" @click="setQuantity(quantity + 1)">+</button>
+                                        <input :value="quantity" type="number" min="1" :max="selecionada.stock" aria-label="Quantidade" :readonly="faltaVariacao" @focus="exigirVariacao" @change="setQuantity($event.target.value)">
+                                        <button type="button" aria-label="Aumentar quantidade" :aria-disabled="faltaVariacao" :disabled="!faltaVariacao && quantity >= selecionada.stock" @click="setQuantity(quantity + 1)">+</button>
                                     </div>
-                                    <button type="button" class="btn" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
+                                    <button type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
                                 <p v-if="quantityDiscounts.length && quantity > 1" class="total">Total: <strong>{{ formatPrice(currentTotal) }}</strong></p>
                             </template>
@@ -868,6 +893,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .opcao:hover { border-color: var(--ink); }
 .pd2 .opcao.atual { border: 2px solid var(--yellow); font-weight: 600; }
 .pd2 .opcao.esgotada { opacity: .5; text-decoration: line-through; }
+/* Variação obrigatória (pedido 2026-10-15): alerta vermelho ao lado do título. */
+.pd2 .alerta-variacao { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 3px 10px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 13px; font-weight: 600; vertical-align: middle; animation: pd2-tremer .35s; }
+.pd2 .variacoes.com-alerta .opcao { border-color: #dc2626; }
+.pd2 .acao.sem-variacao .btn, .pd2 .acao.sem-variacao .qtd button[aria-label="Aumentar quantidade"] { opacity: .5; }
+@keyframes pd2-tremer { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .pd2 .leve-mais ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
 .pd2 .leve-mais li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; }
 .pd2 .leve-mais strong { color: var(--ink); }

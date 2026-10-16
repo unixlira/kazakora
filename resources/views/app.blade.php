@@ -57,6 +57,12 @@
                         'itemCondition' => 'https://schema.org/NewCondition',
                     ],
                 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+                {{-- Vídeo com miniatura (pedido 2026-10-15: Search Console, "Nenhum URL de miniatura enviado"). --}}
+                @php($video = \App\Modules\Catalog\Support\VideoParaGoogle::dados($seoProduto['video_path'] ?? null, $seoProduto['video_duration_seconds'] ?? null, $seoProduto['name'], $seoProduto['description'] ?? null, $seoProduto['images'][0]['media_url'] ?? $imagens[0] ?? null, $seoProduto['created_at'] ?? null))
+                @if ($video)
+                    <meta property="og:video" content="{{ $video['conteudo'] }}">
+                    <script type="application/ld+json">{!! json_encode(\App\Modules\Catalog\Support\VideoParaGoogle::schema($video), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
+                @endif
             @endif
         @endunless
 

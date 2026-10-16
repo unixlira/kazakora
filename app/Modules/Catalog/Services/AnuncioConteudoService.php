@@ -26,6 +26,10 @@ use Throwable;
  * própria monta a estrutura a partir da própria descrição — gerar() nunca
  * lança exceção, a página do produto nunca fica sem conteúdo.
  *
+ * Desde 2026-10-16 (pedido do Lira) a descrição segue desejo → quebra de
+ * objeção → CTA, com um bloco por foto (até 10) e os 3 destaques como
+ * promessas com check abaixo do nome.
+ *
  * Desde 2026-10-14 também roda só com as fotos (até 6) e o nome, sem
  * descrição cadastrada: o Gemini descreve o que vê. O mesmo conteúdo serve
  * às três lojas do grupo (KazaKora, FerraKora pela API do catálogo e Beauty
@@ -34,7 +38,7 @@ use Throwable;
  */
 class AnuncioConteudoService
 {
-    private const MAX_IMAGENS = 6;
+    private const MAX_IMAGENS = 10;
 
     private const MAX_BYTES_IMAGEM = 1_500_000;
 
@@ -280,6 +284,12 @@ class AnuncioConteudoService
         - Use SÓ informações {$fonte}. Não invente medidas, materiais, garantias, prazos, brindes nem números.
         - Sem HTML, sem emojis, sem markdown.
         - Em cada bloco escolha a imagem que melhor ilustra o texto (índice), sem repetir imagem entre blocos quando der; use null se nenhuma servir.
+        - Use todas as imagens: um bloco para cada foto (até 10), na ordem que conta a história de venda, não na ordem das fotos.
+        - "destaques" são as 3 promessas que aparecem com um check logo abaixo do nome do produto: o principal resultado, a principal facilidade e o que acompanha o produto.
+        - Ordem dos blocos (estrutura de venda):
+          1) Desejo: 2 a 3 blocos que mostram o resultado e a cena de uso (antes e depois, o problema resolvido no dia a dia).
+          2) Quebra de objeção: os blocos do meio respondem, cada um, a uma dúvida real de quem está para comprar (funciona mesmo, potência, tamanho, manutenção, durabilidade), com título em forma de pergunta ou de resposta.
+          3) CTA: o último bloco fecha a venda com o que vem na caixa e um convite direto para comprar, sem prometer prazo, brinde, garantia ou desconto que não esteja nas informações acima.
 
         Formato (JSON):
         {{$campoDescricao}
@@ -290,7 +300,7 @@ class AnuncioConteudoService
           "beneficios": [["benefício curto", "explicação em uma linha"]],
           "duvidas": [["pergunta que o cliente faria", "resposta objetiva com base no que se sabe do produto"]]
         }
-        Quantidades: 3 a 5 blocos, 3 a 4 linhas no comparativo, 4 a 6 benefícios, 3 a 4 dúvidas.
+        Quantidades: um bloco por imagem (mínimo 3, máximo 10, o último é o CTA), 3 a 4 linhas no comparativo, 4 a 6 benefícios, 3 a 4 dúvidas.
         TXT;
     }
 
@@ -335,7 +345,7 @@ class AnuncioConteudoService
                     'imagem' => is_numeric($imagem) && (int) $imagem >= 0 && (int) $imagem < $totalImagens ? (int) $imagem : null,
                 ];
             })
-            ->take(6)
+            ->take(10)
             ->values()
             ->all();
 

@@ -107,6 +107,25 @@ class AmazonReportsImportTest extends TestCase
         $this->assertDatabaseHas('marketplace_settlement_details', ['channel' => 'amazon', 'statement_id' => '999', 'transaction_type' => 'Tarifa de serviço', 'external_sku_id' => 'Tarifa de assinatura', 'payout_amount' => -19.00, 'settlement_date' => '2026-10-09']);
     }
 
+    public function test_csv_da_tela_de_transacoes_do_agente_de_hora_em_hora(): void
+    {
+        // Formato que o amazon.mjs monta da tabela de Financeiro › Transações (2026-10-16).
+        $pedido = $this->pedido('701-6299125-3883416');
+        $csv = "\u{FEFF}".implode("\n", [
+            '"data/hora","status","carteira","tipo","id do pedido","descricao","vendas de produtos","descontos promocionais","tarifas de venda","creditos de envio","outro","total"',
+            '"15/10/2026","Diferido","Visa Crédito","Pedido","701-6299125-3883416","Carregador portátil Celular Mini Power B...","55.90","0.00","-12.20","18.02","0","61.72"',
+            '"07/10/2026","Liberado","Visa Crédito","Tarifas de serviço","","Taxa de assinatura:","0.00","0.00","0.00","0","0.00","0.00"',
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer segredo-de-teste')
+            ->post('/api/amazon/reports/import', ['file' => UploadedFile::fake()->createWithContent('amazon_transacoes_30d_2026-10-16.csv', $csv)])
+            ->assertOk()
+            ->assertJsonPath('arquivos.0.importado.formato', 'transacoes_datas')
+            ->assertJsonPath('arquivos.0.importado.taxas_reais', 1);
+
+        $this->assertDatabaseHas('order_channel_fees', ['order_id' => $pedido->id, 'gross_amount' => 73.92, 'payout_amount' => 61.72, 'fee_amount' => 12.20, 'source' => 'report']);
+    }
+
     public function test_relatorio_por_datas_em_ingles(): void
     {
         $pedido = $this->pedido('701-0913603-4733012');

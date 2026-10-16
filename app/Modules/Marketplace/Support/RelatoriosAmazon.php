@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
+use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Notifications\AmazonRelatorioNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -98,5 +99,9 @@ class RelatoriosAmazon
     {
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
         rescue(fn () => Notification::send($admins, new AmazonRelatorioNotification($sucesso, $detalhe)), report: false);
+
+        if (! $sucesso) {
+            rescue(fn () => app(AlertaColetaFinanceira::class)->avisar('Amazon', $detalhe), report: false);
+        }
     }
 }

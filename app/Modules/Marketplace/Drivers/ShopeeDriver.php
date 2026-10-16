@@ -1366,7 +1366,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
      * fallback pra qualquer coisa não reconhecida, pelo menos não quebra
      * o insert mesmo se vier um valor novo/inesperado.
      */
-    private const STATE_NAMES_TO_UF = [
+    public const STATE_NAMES_TO_UF = [
         'ACRE' => 'AC', 'ALAGOAS' => 'AL', 'AMAPA' => 'AP', 'AMAZONAS' => 'AM',
         'BAHIA' => 'BA', 'CEARA' => 'CE', 'DISTRITO FEDERAL' => 'DF',
         'ESPIRITO SANTO' => 'ES', 'GOIAS' => 'GO', 'MARANHAO' => 'MA',

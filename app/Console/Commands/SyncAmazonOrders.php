@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\Amazon\AmazonClient;
@@ -83,7 +84,18 @@ class SyncAmazonOrders extends Command
             $nextToken = $payload['NextToken'] ?? null;
         } while ($nextToken);
 
-        return $this->importAll($importer, $orderIds);
+        // Pedido segurado em "aguardando pagamento" (AmazonDriver::
+        // comPagamentoConferidoNaAmazon()) pode ter sido criado antes da
+        // janela de 2 dias da rodada agendada (Pix/boleto demorado): sem
+        // isto ele nunca seria conferido de novo e não sairia nunca.
+        $aguardando = Order::query()
+            ->where('origin', Order::ORIGIN_AMAZON)
+            ->where('status', Order::STATUS_AWAITING_PAYMENT)
+            ->where('created_at', '>=', now()->subDays(7))
+            ->pluck('external_order_id')
+            ->all();
+
+        return $this->importAll($importer, array_values(array_unique([...$orderIds, ...$aguardando])));
     }
 
     /**

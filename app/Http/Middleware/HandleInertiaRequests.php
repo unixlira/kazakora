@@ -103,6 +103,11 @@ class HandleInertiaRequests extends Middleware
                 return ['count' => count($ids), 'ids' => $ids];
             },
             'notifications' => fn () => $this->notificationsFor($request),
+            // Alertas do painel (2026-10-16): faixa vermelha no topo do admin,
+            // só para admin (ver AlertasAdmin).
+            'alertasAdmin' => fn () => $request->is('admin*') && $request->user()?->isAdmin()
+                ? rescue(fn () => app(\App\Modules\Admin\Support\AlertasAdmin::class)->abertosParaTela(), [], false)
+                : [],
             // Contadores do menu lateral do admin (item com `badgeKey` em
             // adminSidebarItems.js). Só dentro de /admin e só pra equipe; o
             // número vem de cache de 5 min, recalculado quando um alerta muda.
@@ -118,6 +123,7 @@ class HandleInertiaRequests extends Middleware
                     'emailsSiteNaoLidos' => rescue(fn () => \App\Modules\Contato\Models\MensagemContato::query()->naoLidas()->count(), 0, false),
                     // Suporte: chamados abertos esperando a equipe (pedido 2026-10-11).
                     'suporteAbertos' => rescue(fn () => \App\Modules\Suporte\Models\Chamado::query()->whereIn('status', [\App\Modules\Suporte\Models\Chamado::ABERTO, \App\Modules\Suporte\Models\Chamado::EM_ATENDIMENTO])->count(), 0, false),
+                    'alertasAbertos' => $request->user()->isAdmin() ? rescue(fn () => \App\Modules\Admin\Models\AlertaAdmin::query()->abertos()->count(), 0, false) : 0,
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

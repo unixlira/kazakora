@@ -2,6 +2,7 @@
 
 namespace App\Modules\Financeiro\Support;
 
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
@@ -21,6 +22,9 @@ use Throwable;
  * Lira; fora dela vai pelo template aprovado na Meta (corpo com {{1}} = canal
  * e {{2}} = motivo). Sem template, fica gravada no histórico como
  * "fora_da_janela" e o sino do admin continua avisando.
+ *
+ * Toda falha também abre (ou soma) o alerta do painel do admin
+ * (AlertasAdmin, tipo coleta_financeira), sem o intervalo do WhatsApp.
  */
 class AlertaColetaFinanceira
 {
@@ -36,6 +40,16 @@ class AlertaColetaFinanceira
      */
     public function avisar(string $canal, string $motivo, ?string $chave = null, ?int $intervaloMinutos = null): string
     {
+        // Faixa vermelha no painel do admin (2026-10-16): vale mesmo com o
+        // WhatsApp desligado ou fora da janela; some quando a coleta volta.
+        rescue(fn () => app(AlertasAdmin::class)->disparar(
+            AlertasAdmin::COLETA_FINANCEIRA,
+            mb_strtolower($canal),
+            "Falha na coleta financeira {$canal} (Cora Box)",
+            $motivo,
+            mb_strtolower($canal) === 'tiktok' ? '/admin/arquivos-tiktok' : '/admin/alertas',
+        ), report: false);
+
         $config = config('services.whatsapp.alerta_coleta');
         $para = preg_replace('/\D/', '', (string) ($config['para'] ?? ''));
 

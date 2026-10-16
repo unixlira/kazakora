@@ -72,9 +72,9 @@ class CatalogController extends Controller
         $filtraPreco = $faixa !== null || $desconto > 0;
         $passam = null;
         $produtosQuePassam = function () use (&$passam, $catalogo, $faixa, $desconto) {
-            return $passam ??= (clone $catalogo)->get()
-                ->filter(fn (Product $produto) => ($faixa === null || ($produto->final_price >= $faixa[0] && $produto->final_price < $faixa[1]))
-                    && ($desconto <= 0 || self::descontoDoCard($produto) >= $desconto))
+            return $passam ??= (clone $catalogo)->comPrecoDaVariacao()->get()
+                ->filter(fn (Product $produto) => ($faixa === null || ($produto->variacaoMaisBarata()->final_price >= $faixa[0] && $produto->variacaoMaisBarata()->final_price < $faixa[1]))
+                    && ($desconto <= 0 || self::descontoDoCard($produto->variacaoMaisBarata()) >= $desconto))
                 ->values();
         };
         if ($filtraPreco) {
@@ -86,7 +86,7 @@ class CatalogController extends Controller
         // Desde 2026-10-15 pelo preço do card (com oferta e frete embutido),
         // como o filtro de preço: pelo cadastro a ordem saía trocada na tela.
         if (in_array($ordenar, ['menor_preco', 'maior_preco'], true)) {
-            $porPreco = $produtosQuePassam()->sortBy(fn (Product $produto) => $produto->final_price, SORT_REGULAR, $ordenar === 'maior_preco')->pluck('id')->values();
+            $porPreco = $produtosQuePassam()->sortBy(fn (Product $produto) => $produto->variacaoMaisBarata()->final_price, SORT_REGULAR, $ordenar === 'maior_preco')->pluck('id')->values();
             if ($porPreco->isNotEmpty()) {
                 $baseQuery->orderByRaw('CASE id '.$porPreco->map(fn () => 'WHEN ? THEN ?')->implode(' ').' END',
                     $porPreco->flatMap(fn (int $id, int $posicao) => [$id, $posicao])->all());
@@ -177,7 +177,8 @@ class CatalogController extends Controller
 
         $total = (clone $query)->count();
         $produtos = $query
-            ->select(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount'])
+            ->select(['id', 'parent_product_id', 'name', 'slug', 'price', 'discount_percentage', 'discount_amount', 'stock'])
+            ->comPrecoDaVariacao()
             ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(1)])
             ->orderByRaw('CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END', [$search.'%', '%'.$search.'%'])
@@ -188,7 +189,7 @@ class CatalogController extends Controller
                 'nome' => $produto->name,
                 'slug' => $produto->slug,
                 'imagem' => $produto->images->first()?->thumb_url ?? $produto->images->first()?->url,
-                'preco' => $produto->final_price,
+                'preco' => $produto->variacaoMaisBarata()->final_price,
             ]);
 
         return response()->json(['produtos' => $produtos, 'total' => $total]);
@@ -247,17 +248,25 @@ class CatalogController extends Controller
             ->get()
             ->filter(fn (Product $produto) => $produto->emOferta())
             ->each(function (Product $produto) use ($agora) {
-                $preco = (float) $produto->final_price;
-                $de = (float) $produto->preco_sem_oferta;
-                $relampago = $produto->relampagoNoAr();
-                $doDia = $produto->precoOfertaDeHoje();
+                // Anúncio com variação mostra a mais barata (pedido 2026-10-16);
+                // se ela não estiver na oferta, o card fica com a oferta do pai.
+                $card = $produto->variacaoMaisBarata();
+                if (! $card->emOferta()) {
+                    $produto->unsetRelation('variacoesAtivas');
+                    $card = $produto;
+                }
+                $preco = (float) $card->final_price;
+                $de = (float) $card->preco_sem_oferta;
+                $relampago = $card->relampagoNoAr();
+                $doDia = $card->precoOfertaDeHoje();
                 // Termina quando acaba a oferta que dá o preço de agora.
-                $fim = $relampago && ($doDia === null || $produto->precoRelampago() <= $doDia)
+                $fim = $relampago && ($doDia === null || $card->precoRelampago() <= $doDia)
                     ? $relampago->fim_em
                     : $agora->copy()->endOfDay();
 
                 $produto->setAttribute('desconto_oferta', $de > 0 ? (int) round((1 - $preco / $de) * 100) : 0);
                 $produto->setAttribute('oferta_termina_em', $fim->toIso8601String());
+                $produto->setAttribute('preco_card', $preco);
             });
 
         $categoria = (string) $request->query('categoria', '');
@@ -270,7 +279,7 @@ class CatalogController extends Controller
         // considera desconto, preço e "termina em breve".
         $filtradas = $todas
             ->when($desconto > 0, fn ($lista) => $lista->filter(fn (Product $p) => $p->desconto_oferta >= $desconto))
-            ->when($faixa, fn ($lista) => $lista->filter(fn (Product $p) => $p->final_price >= $faixa[0] && $p->final_price < $faixa[1]))
+            ->when($faixa, fn ($lista) => $lista->filter(fn (Product $p) => $p->preco_card >= $faixa[0] && $p->preco_card < $faixa[1]))
             ->when($acabando, fn ($lista) => $lista->filter(fn (Product $p) => Carbon::parse($p->oferta_termina_em)->lte($agora->copy()->addHours(2))));
 
         $departamentos = $filtradas
@@ -284,9 +293,9 @@ class CatalogController extends Controller
             ->when($categoria !== '', fn ($lista) => $lista->filter(fn (Product $p) => $p->category?->slug === $categoria))
             ->sortBy(match ($ordenar) {
                 'termina' => [['oferta_termina_em', 'asc'], ['desconto_oferta', 'desc']],
-                'menor_preco' => [['final_price', 'asc']],
-                'maior_preco' => [['final_price', 'desc']],
-                default => [['desconto_oferta', 'desc'], ['final_price', 'asc']],
+                'menor_preco' => [['preco_card', 'asc']],
+                'maior_preco' => [['preco_card', 'desc']],
+                default => [['desconto_oferta', 'desc'], ['preco_card', 'asc']],
             })
             ->values();
 

@@ -395,8 +395,16 @@ class CatalogController extends Controller
             ->whereIn('id', $product->variantGroupIds())
             ->where('id', '!=', $product->id)
             ->where('is_active', true)
-            ->with(['images' => fn ($query) => $query->where('is_primary', true)->limit(1)])
-            ->get(['id', 'name', 'slug', 'variation', 'price', 'stock']);
+            ->with([
+                'images' => fn ($query) => $query->where(fn ($q) => $q->where('is_primary', true)->orWhere('is_variant', true))->reorder()->orderByDesc('is_variant')->limit(1),
+                'quantityDiscounts',
+            ])
+            ->orderBy('id')
+            ->get()
+            // Trocar de variação é na própria página, sem recarregar (pedido
+            // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
+            // por quantidade. Custo é dado interno.
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price'));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto
@@ -411,21 +419,28 @@ class CatalogController extends Controller
                 : Product::query()->with(['images' => fn ($query) => $query->orderBy('position')])->find($parentId);
 
             if ($pai) {
-                $principalPai = $pai->images->firstWhere('is_primary', true) ?? $pai->images->first();
+                // Foto do modelo: a marcada como da variação (a capa do pai
+                // pode ser a montagem com todos os modelos), senão a principal.
+                $fotoDaVariacao = fn ($images) => $images->firstWhere('is_variant', true)
+                    ?? $images->firstWhere('is_primary', true)
+                    ?? $images->first();
+
+                $fotoDoPai = $fotoDaVariacao($pai->images);
                 $galeria = $pai->images->map(fn ($image) => [
                     'url' => $image->url,
-                    'variant_id' => $principalPai && $image->id === $principalPai->id ? $pai->id : null,
+                    'thumb_url' => $image->thumb_url,
+                    'variant_id' => $fotoDoPai && $image->id === $fotoDoPai->id ? $pai->id : null,
                 ])->all();
 
-                // [id => foto principal] de todas as variações, inclusive a da página.
-                $irmas = $variations->mapWithKeys(fn ($v) => [$v->id => $v->images->firstWhere('is_primary', true) ?? $v->images->first()]);
-                $irmas->put($product->id, $product->images->firstWhere('is_primary', true) ?? $product->images->first());
+                // [id => foto do modelo] de todas as variações, inclusive a da página.
+                $irmas = $variations->mapWithKeys(fn ($v) => [$v->id => $fotoDaVariacao($v->images)]);
+                $irmas->put($product->id, $fotoDaVariacao($product->images));
 
                 foreach ($irmas->sortKeys() as $irmaId => $imagem) {
                     if ($irmaId === $pai->id || ! $imagem || collect($galeria)->contains('url', $imagem->url)) {
                         continue;
                     }
-                    $galeria[] = ['url' => $imagem->url, 'variant_id' => $irmaId];
+                    $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'variant_id' => $irmaId];
                 }
             }
         }

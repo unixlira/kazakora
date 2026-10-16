@@ -4,6 +4,7 @@ namespace Tests\Feature\Financeiro;
 
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
+use App\Modules\Marketplace\Support\RelatoriosAmazon;
 use App\Modules\Marketplace\Support\RelatoriosTikTok;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -103,6 +104,16 @@ class AlertaColetaFinanceiraTest extends TestCase
             ->assertOk();
 
         Http::assertSent(fn (Request $r) => str_contains($r['text']['body'], 'Sessão do TikTok caiu'));
+    }
+
+    public function test_falha_do_agente_da_amazon_avisa_no_whatsapp(): void
+    {
+        Notification::fake();
+        $this->liraFalouHa(1);
+
+        app(RelatoriosAmazon::class)->avisar(false, 'Seller Central pediu login');
+
+        Http::assertSent(fn (Request $r) => str_contains($r['text']['body'], 'Amazon') && str_contains($r['text']['body'], 'pediu login'));
     }
 
     public function test_sucesso_do_tiktok_nao_avisa(): void

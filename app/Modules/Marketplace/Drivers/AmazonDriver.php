@@ -113,7 +113,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function importOrder(string $externalOrderId): array
     {
         if ($this->viaBling()) {
-            return $this->importOrderFromBling($externalOrderId);
+            return $this->comPagamentoConferidoNaAmazon($this->importOrderFromBling($externalOrderId));
         }
 
         $this->ensureConfigured();
@@ -209,6 +209,50 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
+     * BUG REAL 2026-10-03 (#2730, #2748, #2749): pelo Bling, todo pedido
+     * que não está cancelado vira "pago" (ReadsOrdersFromBling::
+     * mapBlingOrderStatus()), inclusive o que ainda está "Pending" na
+     * Amazon (cartão em análise). Os três ganharam NF-e, etiqueta e
+     * impressão em segundos e a Amazon cancelou de 1 a 11 minutos depois.
+     *
+     * Com a SP-API conectada, o status de pagamento vem da Amazon: Pending/
+     * PendingAvailability seguram o pedido em "aguardando pagamento" (sem
+     * nota, sem etiqueta, fora da fila do KoraSync) e Canceled/Unfulfillable
+     * cancelam. Os demais status ficam com o que o Bling disse, de
+     * propósito: "Shipped" na Amazon é a NOSSA confirmação de envio, que sai
+     * logo depois da etiqueta (ConfirmAmazonShipment), e trazer isso pra cá
+     * tiraria da fila do KoraSync um pacote ainda não embalado.
+     *
+     * SP-API fora do ar: segura em "aguardando pagamento" em vez de
+     * expedir sem saber. Quando o pagamento confirmar, a reentrega do
+     * webhook ou o orders:sync-amazon de hora em hora reimporta e
+     * OrderImportService::syncStatus() libera nota e etiqueta.
+     */
+    private function comPagamentoConferidoNaAmazon(array $data): array
+    {
+        if ($data['status'] !== Order::STATUS_PAID || ! $this->isConfigured()) {
+            return $data;
+        }
+
+        try {
+            $status = (string) ($this->client->get("/orders/v0/orders/{$data['external_order_id']}")['payload']['OrderStatus'] ?? '');
+        } catch (AmazonException $exception) {
+            Log::warning('amazon.pagamento_nao_conferido', [
+                'external_order_id' => $data['external_order_id'],
+                'erro' => $exception->getMessage(),
+            ]);
+
+            return ['status' => Order::STATUS_AWAITING_PAYMENT] + $data;
+        }
+
+        return match ($status) {
+            'Pending', 'PendingAvailability', '' => ['status' => Order::STATUS_AWAITING_PAYMENT] + $data,
+            'Canceled', 'Unfulfillable' => ['status' => Order::STATUS_CANCELLED] + $data,
+            default => $data,
+        };
+    }
+
+    /**
      * `getOrderAddress`, dado pessoal — exige RDT com dataElements
      * `shippingAddress`. Nunca lança: um pedido sem endereço liberado (ex:
      * retirada/loja física, ou janela de acesso a PII já expirada) não pode
@@ -290,12 +334,17 @@ class AmazonDriver extends AbstractMarketplaceDriver
         ];
     }
 
+    /**
+     * Teste de 2026-10-16: "São Paulo" virava "Sã" (byte cortado, o MySQL
+     * recusa) e "Paraná" virava "PA" (UF de outro estado). Mesmo mapa de
+     * nome → sigla da Shopee, comparado sem acento.
+     */
     private function extractState(string $state): string
     {
-        $normalized = strtoupper(trim($state));
+        $normalized = strtoupper(trim(Str::ascii($state)));
 
-        if (strlen($normalized) === 2) {
-            return $normalized;
+        if (isset(ShopeeDriver::STATE_NAMES_TO_UF[$normalized])) {
+            return ShopeeDriver::STATE_NAMES_TO_UF[$normalized];
         }
 
         return mb_substr($normalized, 0, 2) ?: 'NA';

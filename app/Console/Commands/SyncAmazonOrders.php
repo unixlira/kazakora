@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\Amazon\AmazonClient;
@@ -46,6 +47,12 @@ class SyncAmazonOrders extends Command
         $from = $this->option('desde') ? Carbon::parse($this->option('desde'))->startOfDay() : now()->startOfMonth();
         $to = $this->option('ate') ? Carbon::parse($this->option('ate'))->endOfDay() : now();
 
+        // A SP-API recusa (HTTP 400 InvalidInput, conferido ao vivo em
+        // 2026-10-16) CreatedBefore a menos de 2 minutos do pedido — e o
+        // padrão aqui era "agora", então toda rodada de hora em hora falharia
+        // assim que a conta fosse reconectada.
+        $to = $to->min(now()->subMinutes(3));
+
         if (! $account?->isConnected()) {
             $this->info("Buscando pedidos da Amazon (via Bling, loja {$blingLojaId}) de {$from->toDateString()} até {$to->toDateString()}...");
 
@@ -77,7 +84,18 @@ class SyncAmazonOrders extends Command
             $nextToken = $payload['NextToken'] ?? null;
         } while ($nextToken);
 
-        return $this->importAll($importer, $orderIds);
+        // Pedido segurado em "aguardando pagamento" (AmazonDriver::
+        // comPagamentoConferidoNaAmazon()) pode ter sido criado antes da
+        // janela de 2 dias da rodada agendada (Pix/boleto demorado): sem
+        // isto ele nunca seria conferido de novo e não sairia nunca.
+        $aguardando = Order::query()
+            ->where('origin', Order::ORIGIN_AMAZON)
+            ->where('status', Order::STATUS_AWAITING_PAYMENT)
+            ->where('created_at', '>=', now()->subDays(7))
+            ->pluck('external_order_id')
+            ->all();
+
+        return $this->importAll($importer, array_values(array_unique([...$orderIds, ...$aguardando])));
     }
 
     /**

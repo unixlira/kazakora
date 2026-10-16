@@ -3,11 +3,11 @@
  * (`Admin/PricingCalculator/Index.vue`). Cada marketplace tem sua própria
  * estrutura de comissão — algumas são um percentual fixo, outras mudam por
  * faixa de preço do item. Os valores abaixo são os praticados publicamente
- * em 2026 (checados em ago/2026 contra a documentação oficial de cada
- * plataforma — Mercado Livre, Amazon e Stripe direto; Shopee e TikTok Shop
- * via cobertura de imprensa/blogs especializados corroborando entre si,
- * já que as páginas oficiais de tarifas dessas duas bloqueiam scraping
- * direto). Comissão por categoria varia MUITO (ex.: Mercado Livre vai de
+ * em 2026. Shopee e Mercado Livre revisados em 16/10/2026 contra o que as
+ * plataformas cobraram de verdade nos pedidos da loja (escrow da Shopee,
+ * `sale_fee` e custo de envio do ML) e contra a API oficial de tarifas do
+ * ML (`sites/MLB/listing_prices`) nas categorias dos anúncios ativos.
+ * Amazon, Stripe e TikTok Shop seguem como checados em ago/2026. Comissão por categoria varia MUITO (ex.: Mercado Livre vai de
  * 10% a 19%) — o valor default aqui é uma média realista para o nicho da
  * loja (eletrônicos, casa e cozinha), sempre editável na tela via "Ajustar
  * taxas". Isso não substitui o simulador oficial de cada marketplace na
@@ -41,8 +41,8 @@ export const MARKETPLACES = [
     },
     {
         key: 'mercado_livre',
-        label: 'Mercado Livre',
-        sublabel: 'Clássico · categoria eletrônicos/casa',
+        label: 'Mercado Livre Clássico',
+        sublabel: 'Sem parcelamento sem juros',
         // A marca real do Mercado Livre é justamente um aperto de mãos
         // (o "handshake" do logo) — usamos o ícone equivalente do
         // FontAwesome em vez de um SVG de terceiro pra essa marca.
@@ -54,25 +54,41 @@ export const MARKETPLACES = [
             chipBg: 'rgba(0,0,0,0.08)',
         },
         estimated: false,
+        // Categorias dos anúncios ativos da loja (out/2026): 11,5% a 13%.
         defaultCommissionPct: 12,
-        defaultFixedFee: 6,
-        commissionLabel: 'Comissão (anúncio Clássico)',
-        // Custo fixo só é cobrado em vendas abaixo de R$79 — acima disso,
-        // frete grátis passa a ser obrigatório mas não há mais taxa fixa.
-        resolveFee: (price, commissionPct) => {
-            let fixed;
-            if (price < 20) fixed = 5.5;
-            else if (price < 79) fixed = 6;
-            else fixed = 0;
-            return { pct: commissionPct, fixed };
+        defaultFixedFee: 0,
+        commissionLabel: 'Comissão (Clássico)',
+        // Desde mar/2026 o ML não cobra mais taxa fixa por venda no
+        // Mercado Envios: abaixo de R$79 o custo virou frete pago pelo
+        // vendedor (por peso), que entra no campo de frete da tela.
+        resolveFee: (price, commissionPct) => ({ pct: commissionPct, fixed: 0 }),
+        note: 'Comissão do Clássico de 10% a 14% conforme a categoria (anúncios ativos da loja: 11,5% a 13%). Sem taxa fixa por venda no Mercado Envios: abaixo de R$79 o vendedor paga o frete (nas vendas da loja em out/2026, R$7 a R$14 conforme o peso) e acima de R$79 paga o frete grátis com desconto. Informe esse valor em "Frete que você paga". No Flex o ML cobra custo por unidade abaixo de R$79 (R$7,75 nas vendas de R$49 a R$78,99). Em algumas categorias a comissão cai em preços mais altos; confira a da sua categoria no simulador do ML.',
+        source: 'API oficial do ML (listing_prices) e vendas reais da loja, checado 16/10/2026',
+    },
+    {
+        key: 'mercado_livre_premium',
+        label: 'Mercado Livre Premium',
+        sublabel: 'Parcelamento sem juros · maioria dos anúncios da loja',
+        icon: 'fas fa-handshake',
+        theme: {
+            cardBg: 'linear-gradient(135deg, #FFE600 0%, #FFC400 100%)',
+            fg: '#2d2600',
+            accent: '#2968C8',
+            chipBg: 'rgba(0,0,0,0.08)',
         },
-        note: 'Comissão varia de 10% a 19% conforme categoria e tipo de anúncio (Clássico é mais barato que Premium). Custo fixo de R$5,50 a R$6,00 só em vendas abaixo de R$79 — acima disso o frete grátis passa a ser obrigatório. Confira o percentual exato da sua categoria no simulador oficial do Mercado Livre.',
-        source: 'mercadolivre.com.br/ajuda (tarifas de venda), checado ago/2026',
+        estimated: false,
+        // Categorias dos anúncios ativos da loja (out/2026): 16,5% a 18%.
+        defaultCommissionPct: 17,
+        defaultFixedFee: 0,
+        commissionLabel: 'Comissão (Premium)',
+        resolveFee: (price, commissionPct) => ({ pct: commissionPct, fixed: 0 }),
+        note: 'Comissão do Premium de 15% a 19% conforme a categoria (anúncios ativos da loja: 16,5% a 18%). Sem taxa fixa por venda no Mercado Envios: abaixo de R$79 o vendedor paga o frete (nas vendas da loja em out/2026, R$7 a R$14 conforme o peso) e acima de R$79 paga o frete grátis com desconto. Informe esse valor em "Frete que você paga". No Flex o ML cobra custo por unidade abaixo de R$79 (R$7,75 nas vendas de R$49 a R$78,99). Em algumas categorias a comissão cai em preços mais altos; confira a da sua categoria no simulador do ML.',
+        source: 'API oficial do ML (listing_prices) e vendas reais da loja, checado 16/10/2026',
     },
     {
         key: 'shopee',
         label: 'Shopee',
-        sublabel: 'Vendedor padrão · tabela mar/2026',
+        sublabel: 'Vendedor CNPJ · tabela out/2026',
         // Logo oficial da Shopee (via biblioteca Simple Icons, que espelha
         // a marca original) — não existe ícone de marca da Shopee no
         // FontAwesome, por isso usamos o path SVG real em vez de um ícone
@@ -88,18 +104,21 @@ export const MARKETPLACES = [
             chipBg: 'rgba(255,255,255,0.14)',
         },
         estimated: false,
-        defaultCommissionPct: 14,
-        defaultFixedFee: 15,
+        defaultCommissionPct: 20,
+        defaultFixedFee: 4.5,
         commissionLabel: 'Comissão + transação',
         // Desde mar/2026 a Shopee cobra por faixa de preço do item, sem o
-        // antigo teto de R$100 na comissão.
+        // antigo teto de R$100 na comissão. Em 01/10/2026 a taxa fixa da
+        // primeira faixa subiu de R$4,00 para R$4,50. Faixas conferidas no
+        // escrow dos pedidos da loja (set e out/2026).
         resolveFee: (price) => {
-            if (price < 80) return { pct: 20, fixed: 4 };
-            if (price < 100) return { pct: 17, fixed: 15 };
+            if (price < 80) return { pct: 20, fixed: 4.5 };
+            if (price < 100) return { pct: 14, fixed: 16 };
+            if (price < 200) return { pct: 14, fixed: 20 };
             return { pct: 14, fixed: 26 };
         },
-        note: 'Desde março/2026 a comissão é por faixa de preço do item (sem teto de R$100): 20%+R$4 até R$79,99, 14%+R$26 acima de R$100. Vendedor pessoa física com mais de 450 pedidos em 90 dias paga +R$3 por item — não incluído aqui, ajuste manualmente se for o seu caso.',
-        source: 'seller.shopee.com.br/edu + cobertura especializada, checado ago/2026',
+        note: 'Comissão por faixa de preço do item, sem teto: 20%+R$4,50 até R$79,99 (era R$4,00 até 30/09/2026), 14%+R$16 de R$80 a R$99,99, 14%+R$20 de R$100 a R$199,99 e 14%+R$26 a partir de R$200. O frete grátis já está incluído. Vendedor pessoa física com mais de 450 pedidos em 90 dias paga +R$3 por item, não incluído aqui.',
+        source: 'Escrow real dos pedidos da loja (set e out/2026), checado 16/10/2026',
     },
     {
         key: 'amazon',

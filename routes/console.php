@@ -100,6 +100,11 @@ Schedule::command('orders:sync-amazon --desde='.now()->subDays(2)->toDateString(
 // conta SP-API ser conectada. Sem conta conectada, não faz nada.
 Schedule::command('amazon:confirmar-envios')->hourly()->withoutOverlapping(30);
 
+// Pagamento pendente na Amazon (boleto, regra do Lira 2026-10-16): cada
+// pedido é conferido de 24 em 24 h; pago libera NF-e e etiqueta, cancelado
+// lá cancela aqui, pendente no 8º dia cancela só no KazaKora.
+Schedule::command('amazon:pagamentos-pendentes')->hourly()->withoutOverlapping(30);
+
 // Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
 // "pedido embalado continua na fila mesmo depois do ponto de coleta
 // escanear o pacote... preferir webhook, mas manter verificação periódica

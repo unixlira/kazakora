@@ -251,7 +251,7 @@ const REDES = [
                         </Transition>
                     </div>
                     <a href="/?todos=1#produtos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Produtos</a>
-                    <Link href="/favoritos" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Favoritos</Link>
+                    <!-- Sem o texto "Favoritos": o coração vermelho no topo já leva à página (pedido 2026-10-15). -->
                     <Link href="/rastreio" class="text-sm font-medium text-store-fg-muted hover:text-store-fg">Rastrear pedido</Link>
                     <div class="relative" @mouseenter="abrirMenu('contato')" @mouseleave="fecharMenu">
                         <button type="button" class="flex items-center gap-1.5 text-sm font-medium hover:text-store-fg"

@@ -237,6 +237,7 @@ class AmazonNotificacoesTest extends TestCase
             && str_ends_with($r->url(), '/notifications/v1/subscriptions/ORDER_CHANGE')
             && $r->hasHeader('x-amz-access-token', 'token-vendedor')
             && $r['payloadVersion'] === '1.0'
-            && $r['destinationId'] === 'dest-1');
+            && $r['destinationId'] === 'dest-1'
+            && $r['processingDirective']['eventFilter']['eventFilterType'] === 'ORDER_CHANGE');
     }
 }

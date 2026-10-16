@@ -85,9 +85,17 @@ class ConfigurarNotificacoesAmazon extends Command
             return self::FAILURE;
         }
 
+        // Sem processingDirective a Amazon recusa o ORDER_CHANGE com 400
+        // ("missing or invalid parameters"), conferido na produção em 16/10.
         $nova = $client->post('/notifications/v1/subscriptions/'.self::EVENTO, [
             'payloadVersion' => '1.0',
             'destinationId' => $destino['destinationId'],
+            'processingDirective' => [
+                'eventFilter' => [
+                    'eventFilterType' => self::EVENTO,
+                    'orderChangeTypes' => ['OrderStatusChange', 'BuyerRequestedChange'],
+                ],
+            ],
         ])['payload'] ?? [];
 
         $this->info('Assinatura '.self::EVENTO." criada: {$nova['subscriptionId']}");

@@ -13,12 +13,13 @@ class ProductImage extends Model
         'product_id',
         'path',
         'thumb_path',
+        'medium_path',
         'position',
         'is_primary',
         'is_variant',
     ];
 
-    protected $appends = ['url', 'thumb_url'];
+    protected $appends = ['url', 'thumb_url', 'media_url'];
 
     /**
      * O front nunca usa o caminho cru — usa `url` e `thumb_url`, que são
@@ -27,7 +28,7 @@ class ProductImage extends Model
      * a serialização pra JSON, o acesso em PHP (OrderImageArchiveService,
      * publicação em canal) continua igual.
      */
-    protected $hidden = ['path', 'thumb_path'];
+    protected $hidden = ['path', 'thumb_path', 'medium_path'];
 
     /**
      * Performance 2026-09-03: toda foto nova nasce com miniatura, venha de
@@ -42,11 +43,17 @@ class ProductImage extends Model
             if ($image->thumb_path === null && $image->path) {
                 $image->thumb_path = ProductImageThumbnailer::generate($image->path);
             }
+            if ($image->medium_path === null && $image->path) {
+                $image->medium_path = ProductImageThumbnailer::generateMedium($image->path);
+            }
         });
 
         static::deleted(function (self $image) {
             if ($image->thumb_path) {
                 Storage::disk('public')->delete($image->thumb_path);
+            }
+            if ($image->medium_path) {
+                Storage::disk('public')->delete($image->medium_path);
             }
         });
     }
@@ -76,6 +83,19 @@ class ProductImage extends Model
         }
 
         return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->thumb_path), '/'));
+    }
+
+    /**
+     * Foto média da página de produto (foto grande e descrição) quando
+     * existe, senão a original. O zoom continua na `url`.
+     */
+    public function getMediaUrlAttribute(): string
+    {
+        if (! $this->medium_path) {
+            return $this->url;
+        }
+
+        return asset('storage/'.ltrim(preg_replace('#^storage/#', '', $this->medium_path), '/'));
     }
 
     public function getUrlAttribute(): string

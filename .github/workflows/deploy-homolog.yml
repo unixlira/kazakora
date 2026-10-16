@@ -68,6 +68,8 @@ jobs:
             # vazia. || true porque miniatura faltando não derruba o site
             # (thumb_url cai pra imagem original sozinho).
             $PHP artisan catalog:generate-thumbnails || true
+            # Foto média da página de produto (2026-10-15), mesma lógica.
+            $PHP artisan catalog:generate-medium-images || true
             $PHP artisan config:cache
             $PHP artisan route:cache
             $PHP artisan view:cache

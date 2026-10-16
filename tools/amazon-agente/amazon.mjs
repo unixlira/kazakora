@@ -3,9 +3,10 @@
 // API da KazaKora, que grava a taxa real de cada pedido.
 //
 //   node amazon.mjs reconhecer   -> abre as telas, salva prints e a lista de botões/links (logs/)
-//   node amazon.mjs diario       -> extratos (Flat File V2) + transações do mês
-//   node amazon.mjs extratos     -> só os Flat File V2 das últimas liquidações
-//   node amazon.mjs transacoes   -> só o relatório de transações do mês (por datas)
+//   node amazon.mjs diario       -> tela de Transações (todas as carteiras, 30 dias); roda de hora em hora
+//   node amazon.mjs tela         -> o mesmo que diario
+//   node amazon.mjs extratos     -> só os Flat File V2 das últimas liquidações (link mudou em out/2026)
+//   node amazon.mjs transacoes   -> relatório de transações por datas no Repositório (não mapeado)
 //   node amazon.mjs mostrar      -> traz o Chrome do agente para a frente (para o Lira logar)
 //
 // Roda em segundo plano: aba nova sem foco e janela minimizada, para não
@@ -20,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 
 const PASTA = path.dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(fs.readFileSync(path.join(PASTA, 'amazon.json'), 'utf8'));
+// Teste contra o homolog sem mexer no amazon.json: AMAZON_API_URL=https://kazakora.devlira.com.br/api/amazon/reports/import
+if (process.env.AMAZON_API_URL) cfg.apiUrl = process.env.AMAZON_API_URL;
 const LOGS = path.join(PASTA, 'logs', 'amazon');
 const TMP = path.join(PASTA, 'tmp', 'amazon');
 for (const p of [LOGS, TMP]) fs.mkdirSync(p, { recursive: true });
@@ -163,6 +166,54 @@ async function transacoes(pagina) {
   throw new Error('o relatório de transações não ficou pronto em 10 minutos');
 }
 
+// Financeiro › Transações (2026-10-16): todas as carteiras, últimos N dias,
+// lidas da própria tabela (a tela é montada no servidor, sem API interna). A
+// tabela vira um CSV com as colunas que o importador da API já conhece; o
+// mesmo CSV de novo (nada mudou na hora) a API ignora.
+async function tela(pagina) {
+  const dias = cfg.diasTransacoes || 30;
+  const linhas = [];
+  let total = 0;
+  for (let n = 1; n <= 30; n++) {
+    await garantirSessao(pagina, `${cfg.urls.transacoes || 'https://sellercentral.amazon.com.br/payments/event/view'}?accountType=ALL&pastNumberOfDays=${dias}&resultsPerPage=50&pageNumber=${n}`);
+    await pagina.waitForSelector('kat-table', { timeout: 30000 });
+    const r = await pagina.evaluate(() => {
+      const t = document.querySelector('kat-table');
+      const cab = [...t.querySelectorAll('kat-table-head kat-table-cell')].map(c => c.innerText.trim());
+      const corpo = [...t.querySelectorAll('kat-table-body kat-table-row')].map(l => [...l.querySelectorAll('kat-table-cell')].map(c => c.innerText.trim().replace(/\s+/g, ' ')));
+      return { cab, corpo, total: Number(document.querySelector('kat-pagination')?.getAttribute('total-items') || 0) };
+    });
+    const esperado = ['Data', 'Status da transação', 'Grupo de Pagamento', 'Tipo de transação', 'ID do pedido', 'Detalhes do produto', 'Custo total do produto', 'Total de descontos promocionais', 'Tarifas da Amazon', 'Outros', '(total)'];
+    if (r.cab.join('|') !== esperado.join('|')) {
+      await registrarTela(pagina, `transacoes-colunas-${Date.now()}`);
+      throw new Error(`colunas da tela de Transações mudaram: ${r.cab.join(' | ')}`);
+    }
+    total = r.total;
+    linhas.push(...r.corpo.filter(c => c.length === esperado.length));
+    if (!r.corpo.length || linhas.length >= total) break;
+  }
+  if (linhas.length < total) throw new Error(`li ${linhas.length} de ${total} transações`);
+
+  const valor = v => {
+    const n = v.replace(/[^\d,-]/g, '').replace(',', '.');
+    return n === '' || n === '-' ? '0' : n;
+  };
+  const csv = c => `"${String(c).replace(/"/g, '""')}"`;
+  const saida = [['data/hora', 'status', 'carteira', 'tipo', 'id do pedido', 'descricao', 'vendas de produtos', 'descontos promocionais', 'tarifas de venda', 'creditos de envio', 'outro', 'total']];
+  for (const [data, status, carteira, tipo, pedido, descricao, produto, desconto, tarifas, outros, liquido] of linhas) {
+    // "Outros" no pagamento do pedido é o frete cobrado do cliente (55,90 + 18,02 = venda de 73,92).
+    const ehPedido = tipo === 'Pagamento do pedido';
+    saida.push([data, status, carteira, ehPedido ? 'Pedido' : tipo, pedido === '---' ? '' : pedido, descricao,
+      valor(produto), valor(desconto), valor(tarifas), ehPedido ? valor(outros) : '0', ehPedido ? '0' : valor(outros), valor(liquido)]);
+  }
+  const nome = `amazon_transacoes_${dias}d_${hoje()}.csv`;
+  const destino = path.join(TMP, nome);
+  fs.writeFileSync(destino, '﻿' + saida.map(l => l.map(csv).join(',')).join('\n'));
+  log(`transações na tela: ${linhas.length} (${dias} dias, todas as carteiras)`);
+  await enviar(destino, nome);
+  fs.renameSync(destino, path.join(LOGS, nome));
+}
+
 async function reconhecer(pagina) {
   for (const [chave, url] of Object.entries(cfg.urls)) {
     await garantirSessao(pagina, url).catch(e => log(`${chave}: ${e.message}`));
@@ -191,8 +242,10 @@ try {
     log(`início: ${tarefa}`);
     if (tarefa === 'reconhecer') await reconhecer(sessao.pagina);
     // Um job falhar não impede o outro: o V2 é o que vale para a taxa real.
-    for (const [nome, job] of [['extratos', extratos], ['transacoes', transacoes]]) {
-      if (tarefa !== nome && tarefa !== 'diario') continue;
+    // diario = só a tela de Transações (de hora em hora); extratos e o
+    // relatório por datas ficam como comando avulso.
+    for (const [nome, job] of [['tela', tela], ['extratos', extratos], ['transacoes', transacoes]]) {
+      if (tarefa !== nome && !(tarefa === 'diario' && nome === 'tela')) continue;
       try {
         await job(sessao.pagina);
       } catch (erro) {

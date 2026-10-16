@@ -3,9 +3,11 @@
   "apiToken": "MESMO_TOKEN_DO_AGENTE_TIKTOK",
   "cdpUrl": "http://127.0.0.1:9222",
   "maxExtratos": 4,
+  "diasTransacoes": 30,
   "urls": {
     "extratos": "https://sellercentral.amazon.com.br/payments/allstatements/index.html",
-    "repositorio": "https://sellercentral.amazon.com.br/payments/reports-repository"
+    "repositorio": "https://sellercentral.amazon.com.br/payments/reports-repository",
+    "transacoes": "https://sellercentral.amazon.com.br/payments/event/view"
   },
   "textos": {
     "flatFileV2": "V2",

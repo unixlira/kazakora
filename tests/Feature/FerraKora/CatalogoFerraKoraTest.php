@@ -3,6 +3,7 @@
 namespace Tests\Feature\FerraKora;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -65,7 +66,10 @@ class CatalogoFerraKoraTest extends TestCase
 
         $this->assertSame('kz-'.$pai->id, $produto['id']);
         $this->assertSame('Trena Emborrachada 5m', $produto['title']);
-        $this->assertSame('<p>Trena de 5 metros.</p><p>Trava automática.</p>', $produto['description']);
+        // A lista sai sem descrição e sem "media"; a página do produto tem tudo.
+        $this->assertArrayNotHasKey('description', $produto);
+        $this->assertArrayNotHasKey('media', $produto);
+        $this->assertArrayHasKey('thumbnail_leve', $produto);
         $this->assertSame('Cor', $produto['options'][0]['title']);
         $this->assertSame('kzv-'.$filho->id, $produto['variants'][1]['id']);
         $this->assertSame(3990, $produto['variants'][0]['prices'][0]['amount']);
@@ -74,9 +78,29 @@ class CatalogoFerraKoraTest extends TestCase
         $this->assertSame(route('produtos.ver', 'trena-emborrachada-5m'), $produto['kazakora_url']);
         $this->assertStringStartsWith('http', $produto['kazakora_url']);
 
-        $this->getJson('/api/ferrakora/produtos/kz-'.$pai->id)->assertOk()->assertJsonPath('product.categoria', 'Trenas');
+        $this->getJson('/api/ferrakora/produtos/kz-'.$pai->id)
+            ->assertOk()
+            ->assertJsonPath('product.categoria', 'Trenas')
+            ->assertJsonPath('product.description', '<p>Trena de 5 metros.</p><p>Trava automática.</p>');
         $this->getJson('/api/ferrakora/produtos/trena-emborrachada-5m')->assertOk()->assertJsonPath('product.id', 'kz-'.$pai->id);
         $this->getJson('/api/ferrakora/produtos/nao-existe')->assertNotFound();
+    }
+
+    public function test_foto_leva_a_miniatura_leve_e_a_media(): void
+    {
+        [$pai] = $this->grupo();
+        ProductImage::query()->create([
+            'product_id' => $pai->id, 'path' => 'products/'.$pai->id.'/foto.jpg', 'position' => 0, 'is_primary' => true,
+            'thumb_path' => 'products/'.$pai->id.'/thumbs/foto.webp', 'medium_path' => 'products/'.$pai->id.'/medias/foto.webp',
+        ]);
+        $this->enviar([['sku' => 'FER-TRE-5M', 'categoria' => 'Trenas']])->assertOk();
+
+        $produto = $this->getJson('/api/ferrakora/produtos')->assertOk()->json('products.0');
+
+        $this->assertStringEndsWith('/storage/products/'.$pai->id.'/foto.jpg', $produto['thumbnail']);
+        $this->assertStringEndsWith('/storage/products/'.$pai->id.'/thumbs/foto.webp', $produto['thumbnail_leve']);
+        $this->assertStringEndsWith('/thumbs/foto.webp', $produto['images'][0]['thumb_url']);
+        $this->assertStringEndsWith('/medias/foto.webp', $produto['images'][0]['media_url']);
     }
 
     public function test_sem_categoria_sai_null_e_nao_aparece_no_beauty_kora(): void

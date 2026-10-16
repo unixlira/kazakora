@@ -222,12 +222,21 @@ abstract class CatalogoOutroSite
             ];
         })->values();
 
-        $imagens = $pai->images->pluck('url')
-            ->merge($grupo->skip(1)->map(fn (Product $produto) => $produto->images->first()?->url))
+        // thumb_url (WebP 512 px) e media_url (WebP média) vão junto da
+        // original (2026-10-15): o card e a miniatura não precisam baixar a
+        // foto cheia. Sem a versão leve gerada, as duas caem na original.
+        $imagens = collect($pai->images->all())
+            ->merge($grupo->skip(1)->map(fn (Product $produto) => $produto->images->first()))
             ->filter()
-            ->unique()
+            ->unique(fn ($imagem) => $imagem->url)
             ->values()
-            ->map(fn (string $url, int $ordem) => ['url' => $url, 'order' => $ordem, 'type' => 'image'])
+            ->map(fn ($imagem, int $ordem) => [
+                'url' => $imagem->url,
+                'thumb_url' => $imagem->thumb_url,
+                'media_url' => $imagem->media_url,
+                'order' => $ordem,
+                'type' => 'image',
+            ])
             ->all();
 
         $titulo = $registro->titulo ?: $this->tituloDoGrupo($pai, $temOpcao);
@@ -239,6 +248,7 @@ abstract class CatalogoOutroSite
             'ribbon_text' => null,
             'description' => $this->descricaoHtml((string) $pai->description),
             'thumbnail' => $imagens[0]['url'] ?? null,
+            'thumbnail_leve' => $imagens[0]['thumb_url'] ?? null,
             'slug' => Str::slug($titulo),
             'order' => $registro->ordem,
             'site_product_selection' => null,

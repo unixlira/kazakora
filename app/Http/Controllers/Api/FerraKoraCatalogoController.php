@@ -7,6 +7,7 @@ use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\FerraKora\Services\CatalogoFerraKora;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
@@ -22,7 +23,13 @@ class FerraKoraCatalogoController extends Controller
     public function index(): JsonResponse
     {
         $this->ligarFreteEmbutido();
-        $produtos = $this->catalogo->produtos();
+        // A lista (cards, menu, busca) não usa a descrição nem "media" (cópia
+        // de "images"): saem para a resposta e o cache do navegador ficarem
+        // leves (2026-10-15). A página do produto (show) continua com tudo.
+        $produtos = array_map(
+            fn (array $produto) => Arr::except($produto, ['description', 'media']),
+            $this->catalogo->produtos(),
+        );
 
         return $this->semCache(response()->json(['count' => count($produtos), 'offset' => 0, 'limit' => count($produtos), 'products' => $produtos]));
     }

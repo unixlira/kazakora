@@ -363,6 +363,17 @@ return [
         // Central (self-testing antes de publicar).
         'auth_base_url' => env('AMAZON_AUTH_BASE_URL', 'https://sellercentral.amazon.com.br'),
         'auth_draft_mode' => (bool) env('AMAZON_AUTH_DRAFT_MODE', true),
+        // Aviso de pedido em tempo real (Notifications API, evento
+        // ORDER_CHANGE): a Amazon publica numa fila SQS da conta AWS da
+        // loja e amazon:notificacoes-ouvir lê de lá. Chave IAM só com
+        // Receive/Delete nessa fila. Sem fila configurada, nada liga.
+        'notificacoes' => [
+            'sqs_url' => env('AMAZON_SQS_URL'),
+            'sqs_arn' => env('AMAZON_SQS_ARN'),
+            'sqs_region' => env('AMAZON_SQS_REGION', 'us-east-1'),
+            'sqs_key' => env('AMAZON_SQS_KEY'),
+            'sqs_secret' => env('AMAZON_SQS_SECRET'),
+        ],
     ],
 
 

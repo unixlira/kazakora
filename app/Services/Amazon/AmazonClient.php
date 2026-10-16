@@ -182,6 +182,23 @@ class AmazonClient
         return $response->body();
     }
 
+    /**
+     * Chamada sem vendedor (token grantless, ver
+     * AmazonAuthService::grantlessToken()) — destinos da Notifications API.
+     *
+     * @return array<string, mixed>
+     */
+    public function grantless(string $method, string $path, array $data = []): array
+    {
+        $token = $this->auth->grantlessToken('sellingpartnerapi::notifications');
+
+        $response = Http::baseUrl($this->baseUrl())
+            ->withHeaders(['x-amz-access-token' => $token])
+            ->send(strtoupper($method), $path, $data === [] ? [] : ['json' => $data]);
+
+        return $this->handleResponse($path, $response);
+    }
+
     private function baseUrl(): string
     {
         return rtrim((string) config('services.amazon.sp_api_base_url'), '/');

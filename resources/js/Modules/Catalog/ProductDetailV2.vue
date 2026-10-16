@@ -96,8 +96,9 @@ const variantIndex = (id) => {
     const index = mediaItems.value.findIndex((item) => item.variantId === id);
     return index >= 0 ? index : 0;
 };
-// A página sempre abre na capa (montagem com todos os modelos).
-const activeIndex = ref(0);
+// A página abre na foto do modelo da própria página (pedido 2026-10-15: a
+// árvore abre no 303, o pai), mas sem marcar nenhuma variação no seletor.
+const activeIndex = ref(variantIndex(props.product.id));
 const escolherVariacao = (variant) => {
     escolhida.value = variant;
     alertaVariacao.value = 0;
@@ -148,7 +149,7 @@ const onKeydown = (event) => {
 
 watch(isLightboxOpen, (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
 // Recarga da mesma página (preço pelo CEP) mantém a variação escolhida com
-// os valores novos; outro produto volta para a capa.
+// os valores novos; outro produto volta para a foto do modelo dele.
 watch(() => [props.product, props.variations], ([novo], [antigo]) => {
     if (novo.id === antigo?.id) {
         if (escolhida.value) escolhida.value = [novo, ...props.variations].find((item) => item.id === escolhida.value.id) ?? novo;
@@ -156,7 +157,7 @@ watch(() => [props.product, props.variations], ([novo], [antigo]) => {
     }
     escolhida.value = props.variations.length ? null : props.product;
     alertaVariacao.value = 0;
-    activeIndex.value = 0;
+    activeIndex.value = variantIndex(props.product.id);
     isLightboxOpen.value = false;
     quantity.value = 1;
 });

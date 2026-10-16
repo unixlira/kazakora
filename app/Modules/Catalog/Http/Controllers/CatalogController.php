@@ -420,6 +420,7 @@ class CatalogController extends Controller
                 $fotoDoPai = $fotoDaVariacao($pai->images);
                 $galeria = $pai->images->map(fn ($image) => [
                     'url' => $image->url,
+                    'thumb_url' => $image->thumb_url,
                     'variant_id' => $fotoDoPai && $image->id === $fotoDoPai->id ? $pai->id : null,
                 ])->all();
 
@@ -431,7 +432,7 @@ class CatalogController extends Controller
                     if ($irmaId === $pai->id || ! $imagem || collect($galeria)->contains('url', $imagem->url)) {
                         continue;
                     }
-                    $galeria[] = ['url' => $imagem->url, 'variant_id' => $irmaId];
+                    $galeria[] = ['url' => $imagem->url, 'thumb_url' => $imagem->thumb_url, 'variant_id' => $irmaId];
                 }
             }
         }

@@ -71,13 +71,25 @@ const mediaItems = computed(() => {
     return items;
 });
 
-// O pai abre na capa (montagem dos modelos); a variação abre na foto dela.
-const variantIndex = () => {
-    if (!props.product.parent_product_id) return 0;
-    const index = mediaItems.value.findIndex((item) => item.variantId === props.product.id);
+// Variação escolhida (pedido 2026-10-15): trocar de modelo é na própria
+// página, sem recarregar e sem mudar a URL. Preço, estoque, SKU e a compra
+// seguem a escolhida; cada uma mantém o próprio SKU.
+const selecionada = ref(props.product);
+const opcoesVariacao = computed(() => (props.variations.length
+    ? [props.product, ...props.variations].sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
+    : []));
+const variantIndex = (id) => {
+    const index = mediaItems.value.findIndex((item) => item.variantId === id);
     return index >= 0 ? index : 0;
 };
-const activeIndex = ref(variantIndex());
+// A página sempre abre na capa (montagem com todos os modelos).
+const activeIndex = ref(0);
+const escolherVariacao = (variant) => {
+    selecionada.value = variant;
+    activeIndex.value = variantIndex(variant.id);
+    quantity.value = 1;
+    prazo.value = null;
+};
 const activeMedia = computed(() => mediaItems.value[activeIndex.value] ?? null);
 const isLightboxOpen = ref(false);
 
@@ -120,8 +132,15 @@ const onKeydown = (event) => {
 };
 
 watch(isLightboxOpen, (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
-watch(() => props.product.id, () => {
-    activeIndex.value = variantIndex();
+// Recarga da mesma página (preço pelo CEP) mantém a variação escolhida com
+// os valores novos; outro produto volta para a capa.
+watch(() => [props.product, props.variations], ([novo], [antigo]) => {
+    if (novo.id === antigo?.id) {
+        selecionada.value = [novo, ...props.variations].find((item) => item.id === selecionada.value.id) ?? novo;
+        return;
+    }
+    selecionada.value = props.product;
+    activeIndex.value = 0;
     isLightboxOpen.value = false;
     quantity.value = 1;
 });
@@ -141,31 +160,31 @@ const variantThumbnail = (item) => {
 
 // Desconto por quantidade: mesma conta do backend (CartManager/CheckoutController).
 const quantityDiscounts = computed(() =>
-    [...(props.product.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)
+    [...(selecionada.value.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)
 );
 const unitPriceForQuantity = (qty) => {
     const tier = [...quantityDiscounts.value].reverse().find((row) => row.min_quantity <= qty);
-    if (!tier) return Number(props.product.final_price);
-    return Math.max(0, Math.round(Number(props.product.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
+    if (!tier) return Number(selecionada.value.final_price);
+    return Math.max(0, Math.round(Number(selecionada.value.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
 };
 
 const quantity = ref(1);
 const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quantity.value);
-const pixPrice = computed(() => Math.round(Number(props.product.final_price) * (1 - DESCONTO_PIX / 100) * 100) / 100);
+const pixPrice = computed(() => Math.round(Number(selecionada.value.final_price) * (1 - DESCONTO_PIX / 100) * 100) / 100);
 // Referência do bloco de preço: "de" = preço cheio (ou o do cartão, quando
 // não há promoção e existe desconto no Pix); "por" = valor no Pix.
-const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(props.product.final_price)));
+const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(selecionada.value.final_price)));
 const precoDe = computed(() => {
-    if (props.product.has_discount) return Number(props.product.preco_de ?? props.product.price);
-    return DESCONTO_PIX > 0 ? Number(props.product.final_price) : null;
+    if (selecionada.value.has_discount) return Number(selecionada.value.preco_de ?? selecionada.value.price);
+    return DESCONTO_PIX > 0 ? Number(selecionada.value.final_price) : null;
 });
 const percentualTotal = computed(() => (precoDe.value ? Math.round((1 - precoPor.value / precoDe.value) * 100) : 0));
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
-const installmentValue = computed(() => Number(props.product.final_price) / PARCELAS);
-const inStock = computed(() => props.product.stock > 0);
+const installmentValue = computed(() => Number(selecionada.value.final_price) / PARCELAS);
+const inStock = computed(() => selecionada.value.stock > 0);
 
 const setQuantity = (value) => {
-    quantity.value = Math.min(Math.max(1, Number(value) || 1), Math.max(1, props.product.stock));
+    quantity.value = Math.min(Math.max(1, Number(value) || 1), Math.max(1, selecionada.value.stock));
 };
 
 // Descrição livre em seções, como os blocos do modelo: linha terminada em
@@ -227,12 +246,12 @@ const highlights = computed(() => {
 const specs = computed(() => {
     const list = [];
     if (props.product.brand) list.push(['Marca', props.product.brand]);
-    if (props.product.model) list.push(['Modelo', props.product.model]);
-    if (props.product.color) list.push(['Cor', props.product.color]);
-    if (props.product.variation) list.push(['Variação', props.product.variation]);
+    if (selecionada.value.model) list.push(['Modelo', selecionada.value.model]);
+    if (selecionada.value.color) list.push(['Cor', selecionada.value.color]);
+    if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
     if (props.product.category) list.push(['Categoria', props.product.category.name]);
-    if (props.product.sku) list.push(['SKU', props.product.sku]);
-    list.push(['Estoque disponível', `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}`]);
+    if (selecionada.value.sku) list.push(['SKU', selecionada.value.sku]);
+    list.push(['Estoque disponível', `${selecionada.value.stock} unidade${selecionada.value.stock === 1 ? '' : 's'}`]);
     return list;
 });
 
@@ -267,13 +286,13 @@ const consultarPrazo = async () => {
     consultandoPrazo.value = true;
     erroPrazo.value = '';
     try {
-        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${props.product.id}`, { headers: { Accept: 'application/json' } });
+        const response = await fetch(`/frete/prazo?cep=${encodeURIComponent(cep.value)}&produto=${selecionada.value.id}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error();
         const data = await response.json();
         prazo.value = { expressa: data.entrega_expressa ?? null, dias: data.prazo_dias ?? null, modalidade: data.modalidade ?? null };
         // Frete embutido (2026-10-12): o CEP mudou o frete que está no preço;
         // recarrega os preços da página para o CEP digitado.
-        if (data.final_price !== undefined && Number(data.final_price) !== Number(props.product.final_price)) {
+        if (data.final_price !== undefined && Number(data.final_price) !== Number(selecionada.value.final_price)) {
             router.reload({ preserveScroll: true, preserveState: true });
         }
     } catch {
@@ -289,7 +308,7 @@ const buyingNow = ref(false);
 // (pedido 2026-10-11). O carrinho continua com o que já tinha.
 const buyNow = () => {
     buyingNow.value = true;
-    router.post('/comprar-agora', { product_id: props.product.id, quantity: quantity.value }, {
+    router.post('/comprar-agora', { product_id: selecionada.value.id, quantity: quantity.value }, {
         onFinish: () => { buyingNow.value = false; },
     });
 };
@@ -393,7 +412,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <div v-if="mediaItems.length > 1" class="miniaturas">
                                     <button v-for="(item, index) in mediaItems" :key="index" type="button"
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
-                                        :aria-current="index === activeIndex" :class="{ 'da-variacao': item.variantId === product.id }" @click="activeIndex = index">
+                                        :aria-current="index === activeIndex" :class="{ 'da-variacao': item.variantId === selecionada.id }" @click="activeIndex = index">
                                         <template v-if="item.type === 'video'">
                                             <img v-if="videoPoster" :src="videoPoster" alt="">
                                             <video v-else :src="item.src" muted preload="metadata"></video>
@@ -408,7 +427,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <!-- BOX DE COMPRA (fica à direita no computador; no celular entra aqui, logo depois da galeria) -->
                         <aside id="comprar" class="card compra">
                             <div class="titulo">
-                                <h1>{{ product.name }}</h1>
+                                <h1>{{ selecionada.name }}</h1>
                                 <!-- Favorito com ou sem login; guardado = laranja com check (2026-10-15). -->
                                 <button type="button" class="fav" :class="{ 'favorito-ativo': ehFavorito(product.id) }" :aria-pressed="ehFavorito(product.id)"
                                     :aria-label="ehFavorito(product.id) ? 'Tirar dos favoritos' : 'Adicionar aos favoritos'" @click="toggleFavorite(product.id)">
@@ -453,15 +472,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="variations.length" class="variacoes">
                                 <span class="subtitulo">Escolha a variação</span>
                                 <div class="opcoes">
-                                    <span class="opcao atual">
-                                        <img v-if="variantThumbnail(product)" :src="variantThumbnail(product)" alt="">
-                                        {{ product.variation || product.name }}
-                                    </span>
-                                    <Link v-for="variant in variations" :key="variant.id" :href="`/produtos/${variant.slug}`" preserve-scroll
-                                        class="opcao" :class="{ esgotada: variant.stock < 1 }">
+                                    <button v-for="variant in opcoesVariacao" :key="variant.id" type="button"
+                                        class="opcao" :class="{ atual: variant.id === selecionada.id, esgotada: variant.stock < 1 }"
+                                        :aria-pressed="variant.id === selecionada.id" @click="escolherVariacao(variant)">
                                         <img v-if="variantThumbnail(variant)" :src="variantThumbnail(variant)" alt="">
                                         {{ variant.variation || variant.name }}
-                                    </Link>
+                                    </button>
                                 </div>
                             </div>
 
@@ -480,8 +496,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 <div class="acao">
                                     <div class="qtd">
                                         <button type="button" aria-label="Diminuir quantidade" :disabled="quantity <= 1" @click="setQuantity(quantity - 1)">-</button>
-                                        <input :value="quantity" type="number" min="1" :max="product.stock" aria-label="Quantidade" @change="setQuantity($event.target.value)">
-                                        <button type="button" aria-label="Aumentar quantidade" :disabled="quantity >= product.stock" @click="setQuantity(quantity + 1)">+</button>
+                                        <input :value="quantity" type="number" min="1" :max="selecionada.stock" aria-label="Quantidade" @change="setQuantity($event.target.value)">
+                                        <button type="button" aria-label="Aumentar quantidade" :disabled="quantity >= selecionada.stock" @click="setQuantity(quantity + 1)">+</button>
                                     </div>
                                     <button type="button" class="btn" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
@@ -847,7 +863,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .subtitulo { display: block; font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 10px; }
 .pd2 .variacoes, .pd2 .leve-mais { margin: 6px 0 16px; }
 .pd2 .opcoes { display: flex; flex-wrap: wrap; gap: 8px; }
-.pd2 .opcao { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #b9b9b9; border-radius: 10px; padding: 6px 12px; font-size: 14px; text-decoration: none; color: var(--ink); }
+.pd2 .opcao { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #b9b9b9; border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 14px; text-align: left; text-decoration: none; color: var(--ink); background: #fff; cursor: pointer; }
 .pd2 .opcao img { width: 34px; height: 34px; border-radius: 2px; object-fit: cover; }
 .pd2 .opcao:hover { border-color: var(--ink); }
 .pd2 .opcao.atual { border: 2px solid var(--yellow); font-weight: 600; }

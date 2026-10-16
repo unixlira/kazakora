@@ -46,6 +46,12 @@ class SyncAmazonOrders extends Command
         $from = $this->option('desde') ? Carbon::parse($this->option('desde'))->startOfDay() : now()->startOfMonth();
         $to = $this->option('ate') ? Carbon::parse($this->option('ate'))->endOfDay() : now();
 
+        // A SP-API recusa (HTTP 400 InvalidInput, conferido ao vivo em
+        // 2026-10-16) CreatedBefore a menos de 2 minutos do pedido — e o
+        // padrão aqui era "agora", então toda rodada de hora em hora falharia
+        // assim que a conta fosse reconectada.
+        $to = $to->min(now()->subMinutes(3));
+
         if (! $account?->isConnected()) {
             $this->info("Buscando pedidos da Amazon (via Bling, loja {$blingLojaId}) de {$from->toDateString()} até {$to->toDateString()}...");
 

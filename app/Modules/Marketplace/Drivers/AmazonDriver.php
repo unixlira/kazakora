@@ -290,12 +290,17 @@ class AmazonDriver extends AbstractMarketplaceDriver
         ];
     }
 
+    /**
+     * Teste de 2026-10-16: "São Paulo" virava "Sã" (byte cortado, o MySQL
+     * recusa) e "Paraná" virava "PA" (UF de outro estado). Mesmo mapa de
+     * nome → sigla da Shopee, comparado sem acento.
+     */
     private function extractState(string $state): string
     {
-        $normalized = strtoupper(trim($state));
+        $normalized = strtoupper(trim(Str::ascii($state)));
 
-        if (strlen($normalized) === 2) {
-            return $normalized;
+        if (isset(ShopeeDriver::STATE_NAMES_TO_UF[$normalized])) {
+            return ShopeeDriver::STATE_NAMES_TO_UF[$normalized];
         }
 
         return mb_substr($normalized, 0, 2) ?: 'NA';

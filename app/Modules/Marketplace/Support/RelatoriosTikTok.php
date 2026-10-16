@@ -3,6 +3,8 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
+use App\Modules\Admin\Support\AlertasAdmin;
+use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Notifications\TikTokRelatorioNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +104,13 @@ class RelatoriosTikTok
         $contagem = rescue(fn () => $this->contarDoDia($sucesso), null, false);
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
         rescue(fn () => Notification::send($admins, new TikTokRelatorioNotification($sucesso, $detalhe, $contagem)), report: false);
+
+        if (! $sucesso) {
+            rescue(fn () => app(AlertaColetaFinanceira::class)->avisar('TikTok', $detalhe), report: false);
+        } else {
+            // Coleta voltou: o alerta do painel do admin some sozinho.
+            rescue(fn () => app(AlertasAdmin::class)->resolver(AlertasAdmin::COLETA_FINANCEIRA, 'tiktok'), report: false);
+        }
     }
 
     /**

@@ -363,6 +363,17 @@ return [
         // Central (self-testing antes de publicar).
         'auth_base_url' => env('AMAZON_AUTH_BASE_URL', 'https://sellercentral.amazon.com.br'),
         'auth_draft_mode' => (bool) env('AMAZON_AUTH_DRAFT_MODE', true),
+        // Aviso de pedido em tempo real (Notifications API, evento
+        // ORDER_CHANGE): a Amazon publica numa fila SQS da conta AWS da
+        // loja e amazon:notificacoes-ouvir lê de lá. Chave IAM só com
+        // Receive/Delete nessa fila. Sem fila configurada, nada liga.
+        'notificacoes' => [
+            'sqs_url' => env('AMAZON_SQS_URL'),
+            'sqs_arn' => env('AMAZON_SQS_ARN'),
+            'sqs_region' => env('AMAZON_SQS_REGION', 'us-east-1'),
+            'sqs_key' => env('AMAZON_SQS_KEY'),
+            'sqs_secret' => env('AMAZON_SQS_SECRET'),
+        ],
     ],
 
 
@@ -380,6 +391,19 @@ return [
         // inicia precisa de template aprovado na Meta; vazio = não envia.
         // Corpo com {{1}} = primeiro nome e {{2}} = número do pedido; botão
         // de URL dinâmica ".../rastreio/{{1}}" recebe o código do rastreio.
+        // Falha na coleta financeira da Amazon/TikTok: a Manuela avisa o Lira
+        // (2026-10-16, ver AlertaColetaFinanceira). Ligado só no kazakora.com:
+        // o homolog também roda com APP_ENV=production e o mesmo WhatsApp, e
+        // não pode mandar aviso repetido. Template opcional para
+        // fora da janela de 24 h: corpo {{1}} = canal, {{2}} = motivo.
+        'alerta_coleta' => [
+            'ativo' => (bool) env('ALERTA_COLETA_WHATSAPP', parse_url((string) env('APP_URL'), PHP_URL_HOST) === 'kazakora.com'),
+            'para' => env('ALERTA_COLETA_WHATSAPP_PARA', '5511990253050'),
+            'template' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE'),
+            'template_idioma' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE_IDIOMA', 'pt_BR'),
+            'intervalo_minutos' => (int) env('ALERTA_COLETA_WHATSAPP_INTERVALO', 60),
+        ],
+
         'templates' => [
             'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
             'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),
@@ -516,6 +540,13 @@ return [
         // Fixo (sem env) de propósito: nem o homolog pode gerar anúncio
         // apontando para devlira ou kazakora.com.br.
         'site_url' => 'https://kazakora.com',
+    ],
+
+    // Relatórios de pagamento da Amazon enviados pelo agente (2026-10-12).
+    // Sem AMAZON_REPORTS_TOKEN usa o mesmo token do agente do TikTok (os dois
+    // rodam no mesmo PC da operação).
+    'amazon_reports' => [
+        'token' => env('AMAZON_REPORTS_TOKEN', env('TIKTOK_REPORTS_TOKEN')),
     ],
 
 ];

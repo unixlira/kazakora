@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AmazonController;
+use App\Http\Controllers\Api\AmazonReportsController;
 use App\Http\Controllers\Api\BlingController;
 use App\Http\Controllers\Api\BeautyKoraCatalogoController;
 use App\Http\Controllers\Api\BeautyKoraCheckoutController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
+use App\Http\Controllers\Api\ColetaFinanceiraController;
 use App\Http\Controllers\Api\TikTokReportsController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Modules\Analytics\Models\SiteVisit;
@@ -203,6 +205,12 @@ Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status']
     ->middleware('throttle:30,1')
     ->name('api.tiktok.reports.status');
 
+// Falha na coleta financeira (TikTok/Amazon): a Manuela avisa o Lira no
+// WhatsApp na hora (2026-10-16). Bearer do agente do TikTok ou da Amazon.
+Route::post('/financeiro/coletas/falha', [ColetaFinanceiraController::class, 'falha'])
+    ->middleware('throttle:30,1')
+    ->name('api.financeiro.coletas.falha');
+
 // Visitas dos outros sites (FerraKora, Beauty Kora; 2026-10-12): o navegador
 // do visitante avisa cada página aberta; só dos domínios em
 // services.{site}.origens. Grava em site_visits com a coluna site.
@@ -314,3 +322,12 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
         });
     });
 });
+
+// Relatórios de pagamento da Amazon (agente no PC da operação, 2026-10-12).
+// Autenticação por Bearer AMAZON_REPORTS_TOKEN (ou o do TikTok).
+Route::post('/amazon/reports/import', [AmazonReportsController::class, 'import'])
+    ->middleware('throttle:60,1')
+    ->name('api.amazon.reports.import');
+Route::post('/amazon/reports/status', [AmazonReportsController::class, 'status'])
+    ->middleware('throttle:30,1')
+    ->name('api.amazon.reports.status');

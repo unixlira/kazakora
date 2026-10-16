@@ -131,6 +131,7 @@ class AmazonItemMatchingAndManualShipmentTest extends TestCase
 
     public function test_order_already_shipped_by_hand_in_bling_gets_no_second_postage(): void
     {
+        $this->amazonComPedidoNoStatus('Unshipped');
         Http::fake([
             '*/pedidos/vendas?*' => Http::response(['data' => []]),
             '*/pedidos/vendas/'.self::BLING_ID => Http::response(['data' => [

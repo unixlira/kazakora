@@ -100,6 +100,48 @@ class ConfirmAmazonShipmentTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_shipment_already_confirmed_by_hand_on_amazon_counts_as_confirmed(): void
+    {
+        $this->conectarAmazon();
+        Http::fake([
+            '*/orders/v0/orders/'.self::NUMERO.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
+                ['OrderItemId' => '111', 'QuantityOrdered' => 1],
+            ]]]),
+            '*/orders/v0/orders/'.self::NUMERO.'/shipmentConfirmation' => Http::response(['errors' => [[
+                'code' => 'InvalidInput',
+                'message' => 'Failed to create package due to not finding a matching package or order already fulfilled.',
+            ]]], 400),
+            '*/orders/v0/orders/'.self::NUMERO => Http::response(['payload' => ['AmazonOrderId' => self::NUMERO, 'OrderStatus' => 'Shipped']]),
+        ]);
+        $order = $this->pedidoComEtiqueta();
+
+        dispatch_sync(new ConfirmAmazonShipment($order->id));
+
+        $this->assertNotNull(CorreiosPrePostagem::first()->amazon_confirmado_em);
+        $this->assertStringContainsString('já estava como enviado', (string) OrderFulfillmentEvent::where('order_id', $order->id)->latest('id')->value('message'));
+    }
+
+    public function test_refused_confirmation_of_an_unshipped_order_still_fails(): void
+    {
+        $this->conectarAmazon();
+        Http::fake([
+            '*/orders/v0/orders/'.self::NUMERO.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
+                ['OrderItemId' => '111', 'QuantityOrdered' => 1],
+            ]]]),
+            '*/orders/v0/orders/'.self::NUMERO.'/shipmentConfirmation' => Http::response(['errors' => [['code' => 'InvalidInput', 'message' => 'Invalid tracking']]], 400),
+            '*/orders/v0/orders/'.self::NUMERO => Http::response(['payload' => ['AmazonOrderId' => self::NUMERO, 'OrderStatus' => 'Unshipped']]),
+        ]);
+        $order = $this->pedidoComEtiqueta();
+
+        try {
+            dispatch_sync(new ConfirmAmazonShipment($order->id));
+            $this->fail('Esperava a recusa da Amazon.');
+        } catch (\App\Services\Amazon\Exceptions\AmazonException) {
+        }
+
+        $this->assertNull(CorreiosPrePostagem::first()->amazon_confirmado_em);
+    }
+
     public function test_without_sp_api_it_says_so_in_the_order_and_sends_nothing(): void
     {
         Http::fake();

@@ -5,14 +5,17 @@ namespace App\Modules\Marketplace\Drivers;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Drivers\Concerns\ReadsOrdersFromBling;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Exceptions\PagamentoAmazonPendenteException;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
+use App\Modules\Marketplace\Support\PagamentoAmazon;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Bling\BlingOrderService;
@@ -198,7 +201,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
      * prontos pra expedir, não "aguardando pagamento" como em outros
      * canais.
      */
-    private function mapOrderStatus(string $status): string
+    public static function mapOrderStatus(string $status): string
     {
         return match ($status) {
             'Unshipped', 'PartiallyShipped' => Order::STATUS_PAID,
@@ -411,6 +414,10 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function confirmShipping(Order $order): array
     {
         if ($this->viaBling()) {
+            if (app(PagamentoAmazon::class)->segurarExpedicao($order, 'Etiqueta', OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED)) {
+                throw new PagamentoAmazonPendenteException("Etiqueta não gerada: pagamento do pedido {$order->external_order_id} ainda não confirmado na Amazon.");
+            }
+
             $correios = app(CorreiosAutoShipping::class);
 
             // Pedido que alguém já despachou pelo Bling (nota e envio
@@ -798,6 +805,19 @@ class AmazonDriver extends AbstractMarketplaceDriver
                 'orderItems' => $itens,
             ],
         ]);
+    }
+
+    /**
+     * O pedido já está "Enviado" (ou entregue) na Amazon? Usado quando a
+     * confirmação de envio é recusada por já ter sido feita à mão.
+     */
+    public function jaEnviado(Order $order): bool
+    {
+        $this->ensureConfigured();
+
+        $status = $this->client->get("/orders/v0/orders/{$order->external_order_id}")['payload']['OrderStatus'] ?? null;
+
+        return in_array($status, ['Shipped', 'InvoiceUnconfirmed'], true);
     }
 
     protected function blingBuyerFallbackName(): string

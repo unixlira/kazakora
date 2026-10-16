@@ -46,7 +46,7 @@ const mediaItems = computed(() => {
 
 const variantThumbnail = (item) => {
     const images = item?.images ?? [];
-    return images.find((image) => image.is_primary)?.url ?? images[0]?.url ?? null;
+    return (images.find((image) => image.is_variant) ?? images.find((image) => image.is_primary) ?? images[0])?.url ?? null;
 };
 
 const currentVariantThumbnail = computed(() => variantThumbnail(props.product));

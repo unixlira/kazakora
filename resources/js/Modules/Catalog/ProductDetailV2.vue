@@ -57,16 +57,17 @@ const reviewsCount = computed(() => Number(props.product.reviews_count ?? props.
 const vendidosLegenda = computed(() => vendidosTexto(props.salesCount));
 const stars = (value) => Math.round(value);
 
-// Galeria: vídeo primeiro, depois as imagens em ordem.
+// Galeria: vídeo primeiro, depois as imagens em ordem. `src` é a foto média
+// (1200px; pedido 2026-10-15, página lenta) e `full` a original, só no zoom.
 const mediaItems = computed(() => {
     const items = [];
     if (props.product.video_url) items.push({ type: 'video', src: props.product.video_url });
     // Variações: galeria única do grupo (mesmas fotos e ordem em toda variação);
     // a foto da variação escolhida só ganha borda, não muda de lugar.
     if (props.galeria?.length) {
-        for (const image of props.galeria) items.push({ type: 'image', src: image.url, thumb: image.thumb_url, variantId: image.variant_id });
+        for (const image of props.galeria) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url, variantId: image.variant_id });
     } else {
-        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.url, thumb: image.thumb_url });
+        for (const image of props.product.images ?? []) items.push({ type: 'image', src: image.media_url ?? image.url, full: image.url, thumb: image.thumb_url });
     }
     return items;
 });
@@ -96,8 +97,9 @@ const variantIndex = (id) => {
     const index = mediaItems.value.findIndex((item) => item.variantId === id);
     return index >= 0 ? index : 0;
 };
-// A página sempre abre na capa (montagem com todos os modelos).
-const activeIndex = ref(0);
+// A página abre na foto do modelo da própria página (pedido 2026-10-15: a
+// árvore abre no 303, o pai), mas sem marcar nenhuma variação no seletor.
+const activeIndex = ref(variantIndex(props.product.id));
 const escolherVariacao = (variant) => {
     escolhida.value = variant;
     alertaVariacao.value = 0;
@@ -110,7 +112,7 @@ const isLightboxOpen = ref(false);
 
 // Vídeo sem autoplay (pedido 2026-10-15): mostra a primeira foto como capa com
 // um botão de play; o vídeo só começa quando o cliente clica.
-const videoPoster = computed(() => props.product.images?.[0]?.url ?? null);
+const videoPoster = computed(() => props.product.images?.[0]?.media_url ?? props.product.images?.[0]?.url ?? null);
 const videoEl = ref(null);
 const isVideoStarted = ref(false);
 const startVideo = async () => {
@@ -148,7 +150,7 @@ const onKeydown = (event) => {
 
 watch(isLightboxOpen, (open) => { document.body.style.overflow = open ? 'hidden' : ''; });
 // Recarga da mesma página (preço pelo CEP) mantém a variação escolhida com
-// os valores novos; outro produto volta para a capa.
+// os valores novos; outro produto volta para a foto do modelo dele.
 watch(() => [props.product, props.variations], ([novo], [antigo]) => {
     if (novo.id === antigo?.id) {
         if (escolhida.value) escolhida.value = [novo, ...props.variations].find((item) => item.id === escolhida.value.id) ?? novo;
@@ -156,7 +158,7 @@ watch(() => [props.product, props.variations], ([novo], [antigo]) => {
     }
     escolhida.value = props.variations.length ? null : props.product;
     alertaVariacao.value = 0;
-    activeIndex.value = 0;
+    activeIndex.value = variantIndex(props.product.id);
     isLightboxOpen.value = false;
     quantity.value = 1;
 });
@@ -252,7 +254,7 @@ const descriptionSections = computed(() => {
 // 2026-10-09. Sem ele, a página usa a descrição como está (nunca fica vazia).
 const anuncio = computed(() => props.product.ad_content ?? null);
 const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
-const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.url ?? null);
+const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.media_url ?? props.product.images?.[indice]?.url ?? null);
 
 const highlights = computed(() => {
     if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
@@ -778,7 +780,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                 </template>
                 <div class="relative z-0 flex max-h-[90vh] max-w-[90vw] items-center justify-center" @touchstart="onTouchStart" @touchend="onTouchEnd">
                     <video v-if="activeMedia?.type === 'video'" :src="activeMedia.src" :poster="videoPoster" controls playsinline preload="metadata" class="max-h-[90vh] max-w-[90vw] rounded-[2px]"></video>
-                    <img v-else-if="activeMedia" :src="activeMedia.src" :alt="product.name" class="max-h-[90vh] max-w-[90vw] rounded-[2px] object-contain shadow-2xl">
+                    <img v-else-if="activeMedia" :src="activeMedia.full ?? activeMedia.src" :alt="product.name" class="max-h-[90vh] max-w-[90vw] rounded-[2px] object-contain shadow-2xl">
                 </div>
             </div>
         </Teleport>

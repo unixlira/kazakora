@@ -29,11 +29,25 @@ class ProductImageThumbnailer
     private const JPEG_QUALITY = 80;
 
     /**
+     * Foto média (pedido 2026-10-15, página da árvore lenta): a foto grande
+     * da página de produto e as fotos da descrição usavam a original de
+     * 2048px (até 1,5 MB cada). 1200px cobre a área da foto (~700px) em tela
+     * 1,5x; a original fica só para o zoom.
+     */
+    private const MEDIUM_DIMENSION = 1200;
+
+    /** @return string|null caminho relativo da foto média (`<pasta>/medias/`) */
+    public static function generateMedium(string $path, string $disk = 'public'): ?string
+    {
+        return self::generate($path, $disk, self::MEDIUM_DIMENSION, 'medias');
+    }
+
+    /**
      * @return string|null caminho relativo da miniatura, ou null quando não
      *                      foi possível gerar (sem GD, formato desconhecido,
      *                      arquivo sumido) — o chamador segue com a original
      */
-    public static function generate(string $path, string $disk = 'public'): ?string
+    public static function generate(string $path, string $disk = 'public', int $maxDimension = self::MAX_DIMENSION, string $folder = 'thumbs'): ?string
     {
         if (! function_exists('imagecreatetruecolor')) {
             return null;
@@ -65,7 +79,7 @@ class ProductImageThumbnailer
             return null;
         }
 
-        $scale = min(1, self::MAX_DIMENSION / max($width, $height));
+        $scale = min(1, $maxDimension / max($width, $height));
         $newWidth = max(1, (int) round($width * $scale));
         $newHeight = max(1, (int) round($height * $scale));
 
@@ -74,7 +88,7 @@ class ProductImageThumbnailer
         imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
 
         $useWebp = function_exists('imagewebp');
-        $thumbPath = self::pathFor($path, $useWebp ? 'webp' : 'jpg');
+        $thumbPath = self::pathFor($path, $useWebp ? 'webp' : 'jpg', $folder);
 
         // Garante a pasta thumbs/ antes de escrever direto pelo GD.
         $storage->makeDirectory(dirname($thumbPath));
@@ -94,11 +108,11 @@ class ProductImageThumbnailer
      * separada pra que um `ls` na pasta do produto continue mostrando só as
      * originais, e pra nunca haver risco de colisão de nome com elas.
      */
-    private static function pathFor(string $path, string $extension): string
+    private static function pathFor(string $path, string $extension, string $folder = 'thumbs'): string
     {
         $directory = dirname($path);
         $name = pathinfo($path, PATHINFO_FILENAME);
 
-        return ($directory === '.' ? '' : $directory.'/')."thumbs/{$name}.{$extension}";
+        return ($directory === '.' ? '' : $directory.'/')."{$folder}/{$name}.{$extension}";
     }
 }

@@ -106,4 +106,40 @@ class ProductImageThumbnailTest extends TestCase
 
         $this->assertNull(ProductImageThumbnailer::generate('products/1/nao-e-imagem.jpg'));
     }
+
+    public function test_a_new_product_image_is_born_with_a_medium_photo_for_the_product_page(): void
+    {
+        $product = Product::factory()->create();
+        $this->putJpeg("products/{$product->id}/foto.jpg", 2048, 2048);
+
+        $image = $product->images()->create([
+            'path' => "products/{$product->id}/foto.jpg",
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $this->assertNotNull($image->medium_path);
+        $this->assertStringContainsString('/medias/', $image->medium_path);
+        [$mediumWidth] = getimagesize(Storage::disk('public')->path($image->medium_path));
+        $this->assertSame(1200, $mediumWidth);
+        $this->assertNotSame($image->url, $image->media_url);
+
+        // A original segue intacta para o zoom.
+        [$width] = getimagesize(Storage::disk('public')->path("products/{$product->id}/foto.jpg"));
+        $this->assertSame(2048, $width);
+    }
+
+    public function test_media_url_falls_back_to_the_original_when_there_is_no_medium_photo(): void
+    {
+        $product = Product::factory()->create();
+
+        $image = $product->images()->create([
+            'path' => "products/{$product->id}/inexistente.jpg",
+            'position' => 0,
+            'is_primary' => true,
+        ]);
+
+        $this->assertNull($image->medium_path);
+        $this->assertSame($image->url, $image->media_url);
+    }
 }

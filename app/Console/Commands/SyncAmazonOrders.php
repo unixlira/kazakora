@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\Amazon\AmazonClient;
@@ -16,15 +17,11 @@ use Throwable;
  * orders:sync-shopee). Idempotente: OrderImportService::import() já detecta
  * pedido existente e só sincroniza status, nunca duplica.
  *
- * `getOrders` (Orders API v0) pagina via NextToken, sem o limite de janela
- * de 15 dias que a Shopee tem — uma chamada por página cobre o período
- * inteiro pedido.
- *
- * Sem SP-API conectada (o caso real desde 2026-09-25: a Amazon está
- * conectada só ao Bling), lista os pedidos da loja Amazon NO BLING — mesmo
- * papel do orders:sync-tiktok: rede de segurança do webhook, que o Bling
- * desliga depois de 3 dias falhando entrega. Recupera o que entrou
- * enquanto o servidor esteve fora.
+ * Direto pela SP-API (AMAZON_DIRETO=true, desde 16/10/2026): searchOrders da Orders
+ * API v2026-01-01 (a v0 sai do ar em 27/03/2027), paginando por
+ * paginationToken. No fluxo via Bling (sem AMAZON_DIRETO, ou SP-API
+ * desconectada), lista os pedidos da loja Amazon NO BLING, como o
+ * orders:sync-tiktok.
  */
 class SyncAmazonOrders extends Command
 {
@@ -52,7 +49,7 @@ class SyncAmazonOrders extends Command
         // assim que a conta fosse reconectada.
         $to = $to->min(now()->subMinutes(3));
 
-        if (! $account?->isConnected()) {
+        if (app(AmazonDriver::class)->viaBling() || ! $account?->isConnected()) {
             $this->info("Buscando pedidos da Amazon (via Bling, loja {$blingLojaId}) de {$from->toDateString()} até {$to->toDateString()}...");
 
             return $this->importAll($importer, $blingOrders->listRecentOrderNumbers($from, $to, $blingLojaId));
@@ -61,27 +58,30 @@ class SyncAmazonOrders extends Command
         $this->info("Buscando pedidos de {$from->toDateString()} até {$to->toDateString()}...");
 
         $orderIds = [];
-        $nextToken = null;
+        $paginationToken = null;
 
         do {
+            // A página seguinte repete os filtros junto com o token (sem eles
+            // a Amazon recusa: "One and only one of createdAfter or
+            // lastUpdatedAfter must be provided", conferido em 16/10/2026).
             $query = array_filter([
-                'MarketplaceIds' => config('services.amazon.marketplace_id'),
-                'CreatedAfter' => $from->toAtomString(),
-                'CreatedBefore' => $to->toAtomString(),
-                'NextToken' => $nextToken,
+                'marketplaceIds' => config('services.amazon.marketplace_id'),
+                'createdAfter' => $from->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
+                'createdBefore' => $to->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
+                'maxResultsPerPage' => 100,
+                'paginationToken' => $paginationToken,
             ]);
 
-            $response = $client->get('/orders/v0/orders', $query);
-            $payload = $response['payload'] ?? [];
+            $response = $client->get('/orders/2026-01-01/orders', $query);
 
-            foreach ($payload['Orders'] ?? [] as $order) {
-                if (isset($order['AmazonOrderId'])) {
-                    $orderIds[] = (string) $order['AmazonOrderId'];
+            foreach ($response['orders'] ?? [] as $order) {
+                if (isset($order['orderId'])) {
+                    $orderIds[] = (string) $order['orderId'];
                 }
             }
 
-            $nextToken = $payload['NextToken'] ?? null;
-        } while ($nextToken);
+            $paginationToken = $response['pagination']['nextToken'] ?? null;
+        } while ($paginationToken);
 
         return $this->importAll($importer, $orderIds);
     }

@@ -163,28 +163,33 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
         // DANFE) e o KazaKora NÃO emite outra. Só sem nota no Bling é que a
         // emissão segue aqui. A autorização da nota importada dispara a
         // pré-postagem dos Correios (ver BlingInvoiceImporter).
-        if ($order->origin === Order::ORIGIN_AMAZON && app(AmazonDriver::class)->viaBling()) {
-            $daBling = app(BlingInvoiceImporter::class)->syncForOrder($order);
+        if ($order->origin === Order::ORIGIN_AMAZON) {
+            $viaBling = app(AmazonDriver::class)->viaBling();
 
-            if ($daBling) {
-                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: NF-e do Bling importada (nº {$daBling->numero}, {$daBling->status}) — o KazaKora não emite outra.");
+            if ($viaBling) {
+                $daBling = app(BlingInvoiceImporter::class)->syncForOrder($order);
 
-                return;
-            }
+                if ($daBling) {
+                    $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: NF-e do Bling importada (nº {$daBling->numero}, {$daBling->status}) — o KazaKora não emite outra.");
 
-            // Pedido que entrou antes do Bling ter o endereço digitado pelo
-            // comprador fica sem número e a nota não sai (ver
-            // ReadsOrdersFromBling::enderecoDeEntregaDoBling()).
-            if (app(AmazonDriver::class)->atualizarEnderecoPeloBling($order)) {
-                $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: endereço sem número atualizado pelo Bling ({$order->shipping_street}, {$order->shipping_number}) antes da NF-e.");
+                    return;
+                }
+
+                // Pedido que entrou antes do Bling ter o endereço digitado pelo
+                // comprador fica sem número e a nota não sai (ver
+                // ReadsOrdersFromBling::enderecoDeEntregaDoBling()).
+                if (app(AmazonDriver::class)->atualizarEnderecoPeloBling($order)) {
+                    $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_SUCCESS, "Amazon: endereço sem número atualizado pelo Bling ({$order->shipping_street}, {$order->shipping_number}) antes da NF-e.");
+                }
             }
 
             // BUG REAL 2026-10-08: a nota (e a pré-postagem, que vem logo
             // atrás dela) saía no mesmo minuto da importação com "S/N", e os
-            // Correios devolveram as encomendas. Sem número, não emite:
-            // espera o Bling receber o endereço digitado pelo comprador.
+            // Correios devolveram as encomendas. Sem número, não emite. Pela
+            // SP-API o número já vem separado (extendedFields): se faltar,
+            // não adianta esperar, vai direto pro aviso de correção manual.
             if ($order->enderecoSemNumero()) {
-                $this->aguardarNumeroDoEndereco($order, $timeline);
+                $this->aguardarNumeroDoEndereco($order, $timeline, esperar: $viaBling);
 
                 return;
             }
@@ -347,11 +352,11 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
      * Por idade do pedido, não por contador: o nfe:retry-stuck também
      * redispara este job e zeraria qualquer contagem.
      */
-    private function aguardarNumeroDoEndereco(Order $order, OrderFulfillmentTimeline $timeline): void
+    private function aguardarNumeroDoEndereco(Order $order, OrderFulfillmentTimeline $timeline, bool $esperar = true): void
     {
         $endereco = trim("{$order->shipping_street}, {$order->shipping_number}");
 
-        if ($order->created_at && $order->created_at->gt(now()->subHours(6))) {
+        if ($esperar && $order->created_at && $order->created_at->gt(now()->subHours(6))) {
             if (Cache::add("nfe:aguardando-numero:{$order->id}", true, now()->addHours(7))) {
                 $timeline->record($order, OrderFulfillmentEvent::STEP_INVOICE_ISSUED, OrderFulfillmentEvent::STATUS_FAILED, "Amazon: endereço sem número ({$endereco}). NF-e e etiqueta aguardando o Bling receber o endereço completo; nova tentativa a cada 10 min.");
             }

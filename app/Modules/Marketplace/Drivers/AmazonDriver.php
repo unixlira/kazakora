@@ -7,17 +7,14 @@ use App\Modules\Marketplace\Drivers\Concerns\ReadsOrdersFromBling;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
-use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Marketplace\Exceptions\PagamentoAmazonPendenteException;
-use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
 use App\Modules\Marketplace\Support\PagamentoAmazon;
 use App\Services\Amazon\AmazonClient;
-use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Bling\BlingOrderService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -29,35 +26,26 @@ use Throwable;
  * Amazon (Selling Partner API / SP-API) — docs:
  * https://developer-docs.amazon.com/sp-api
  *
- * Autenticação: LWA via App\Services\Amazon\AmazonAuthService/AmazonClient
- * (ver comentário lá pra assinatura/RDT). Pedido importado via Orders API
- * (real, confirmado contra o schema oficial). Envio+etiqueta via Merchant
- * Fulfillment API (MFN) — a Amazon devolve a etiqueta já pronta na mesma
- * chamada que compra o frete (síncrono, diferente do Mercado Livre/Shopee
- * que processam a etiqueta de forma assíncrona), por isso confirmShipping()
- * já resolve os dois passos e fetchLabel() só relê o que já foi baixado.
+ * DIRETO PELA SP-API (decisão do Lira em 16/10/2026), igual Shopee e
+ * Mercado Livre: o pedido entra pela Orders API v2026-01-01 (a única que
+ * entrega CPF e endereço com número e bairro sem RDT, conferido ao vivo; a
+ * v0 sai do ar em 27/03/2027), a NF-e é a NOSSA (GenerateInvoiceJob), o
+ * envio é pelos CORREIOS da loja (nota autorizada com chave → pré-postagem
+ * → etiqueta com QR, ver CorreiosAutoShipping) e o rastreio volta pra
+ * Amazon pelo confirmShipment com carrierCode "Correios". Estoque e preço
+ * vão pela Listings Items API (patch em fulfillment_availability e
+ * purchasable_offer do SKU já anunciado).
  *
- * submitInvoice() e publishProduct/updateStock/unpublishProduct ficam como
- * stub. Os dois últimos por estarem fora do escopo pedido (webhook de venda
- * → nota fiscal → envio → etiqueta) e o payload real depender do
- * `productType` de cada categoria (Listings Items API / Product Type
- * Definitions API), sem como confirmar o schema exato sem uma chamada real.
- * `submitInvoice()` por um motivo diferente: **não existe, na documentação
- * pública, um endpoint SP-API pra um vendedor MFN brasileiro enviar NF-e** —
- * ver o comentário do método pra o que foi de fato checado (Feeds API,
- * Invoices API, Shipment Invoicing API) antes de concluir isso.
+ * Anúncio NOVO continua sendo criado no Seller Central: o payload depende
+ * do productType de cada categoria. Depois de criado, basta vincular o SKU.
  *
- * VIA BLING (pedido explícito 2026-09-25): a conta Amazon real (loja
- * "KoraMix Shop") NÃO está conectada por SP-API aqui — ela está conectada
- * ao Bling, que importa os pedidos sozinho e avisa pelo webhook
- * (BlingWebhookController). Enquanto a SP-API não estiver conectada,
- * importOrder()/confirmShipping()/fetchLabel() leem o pedido no Bling,
- * exatamente como o TikTok Shop (ver ReadsOrdersFromBling) — e
- * o envio sai pelos CORREIOS, por conta da loja (pedido explícito
- * 2026-09-25): nota autorizada com chave → pré-postagem com a chave →
- * etiqueta com QR Code → impressão automática. Ver CorreiosAutoShipping.
- * A nota é a do Bling, se ele gerou, ou a nossa (GenerateInvoiceJob).
- * Conectar a SP-API volta tudo pro caminho original sem mexer em código.
+ * Liga com AMAZON_DIRETO=true no .env do servidor (só a produção: o
+ * homolog usa a mesma conta real da Amazon e emite NF-e em produção).
+ *
+ * VIA BLING (fluxo de 25/09/2026, o que vale sem AMAZON_DIRETO, ou com a
+ * SP-API desconectada): pedido e nota vêm do Bling (ReadsOrdersFromBling),
+ * como o TikTok Shop, e estoque/preço não saem daqui. O envio pelos
+ * Correios e a confirmação do rastreio pela SP-API são os mesmos.
  */
 class AmazonDriver extends AbstractMarketplaceDriver
 {
@@ -75,44 +63,122 @@ class AmazonDriver extends AbstractMarketplaceDriver
         return MarketplaceAccount::CHANNEL_AMAZON;
     }
 
+    /**
+     * Sincroniza preço e estoque de um SKU que JÁ está anunciado na Amazon
+     * (external_id = SellerSKU). Criar anúncio novo exige o productType e
+     * os atributos de cada categoria: fica no Seller Central.
+     *
+     * Preço só vai se o canal Amazon tiver preço próprio cadastrado: em
+     * 16/10/2026 a Amazon vendia o power bank a R$ 55,90 e o preço base do
+     * produto era R$ 49,99. Cair no preço base baixaria o preço lá sem
+     * ninguém decidir.
+     */
     public function publishProduct(Product $product, ProductChannelListing $listing): string
     {
-        $this->ensureConfigured();
+        $this->garantirEnvioDeAnuncio();
 
-        // TODO: PUT /listings/2021-08-01/items/{sellerId}/{sku} exige
-        // `productType` (Product Type Definitions API,
-        // searchDefinitionsProductTypes por palavra-chave) + um payload de
-        // `attributes` cujo formato varia por productType — sem uma conta
-        // real conectada pra iterar contra os erros de validação (mesmo
-        // caminho que MercadoLivreDriver::publishProduct() precisou pra
-        // descobrir `family_name`/atributos na prática), não dá pra cravar
-        // o schema aqui sem risco real de anúncio malformado.
-        throw new \RuntimeException('Integração de publicação de produto com a Amazon ainda não implementada.');
+        if (! $listing->external_id) {
+            throw new RuntimeException('Anúncio novo na Amazon é criado no Seller Central. Depois de criado, vincule o SKU da Amazon a este produto e sincronize: preço e estoque passam a ir daqui.');
+        }
+
+        $patches = [$this->patchEstoque(max(0, (int) $product->stock))];
+
+        if ($listing->price !== null) {
+            $patches[] = $this->patchPreco((float) $listing->price);
+        }
+
+        $this->patchListing($listing->external_id, $patches);
+
+        return $listing->external_id;
     }
 
     public function updateStock(Product $product, ProductChannelListing $listing): void
     {
-        $this->ensureConfigured();
+        $this->garantirEnvioDeAnuncio();
 
-        // TODO: PATCH no mesmo endpoint acima, op=replace no atributo
-        // `fulfillment_availability` — mesmo bloqueio de schema do método
-        // acima.
-        throw new \RuntimeException('Integração de publicação de produto com a Amazon ainda não implementada.');
-    }
-
-    public function unpublishProduct(ProductChannelListing $listing): void
-    {
-        $this->ensureConfigured();
-
-        // TODO: DELETE /listings/2021-08-01/items/{sellerId}/{sku}.
-        throw new \RuntimeException('Integração de publicação de produto com a Amazon ainda não implementada.');
+        $this->patchListing($listing->external_id, [$this->patchEstoque(max(0, (int) $product->stock))]);
     }
 
     /**
-     * Orders API v0. `getOrder` devolve status/total/data — endereço e
-     * documento (CPF/CNPJ) do comprador exigem um Restricted Data Token
-     * dedicado (ver AmazonClient::restrictedGet()), a Amazon mascara esses
-     * campos por padrão em qualquer chamada sem RDT.
+     * Zera o estoque em vez de apagar o anúncio (DELETE na Amazon perde o
+     * histórico da oferta). Volta a vender na próxima sincronização.
+     */
+    public function unpublishProduct(ProductChannelListing $listing): void
+    {
+        $this->garantirEnvioDeAnuncio();
+
+        $this->patchListing($listing->external_id, [$this->patchEstoque(0)]);
+    }
+
+    /**
+     * PATCH /listings/2021-08-01/items/{sellerId}/{sku}. O corpo exige o
+     * productType: vem do próprio anúncio (summaries), guardado por 1 dia.
+     *
+     * @param  array<int, array<string, mixed>>  $patches
+     */
+    private function patchListing(string $sku, array $patches): void
+    {
+        $sellerId = (string) $this->ensureConfigured()->seller_id;
+        $marketplaceId = (string) config('services.amazon.marketplace_id');
+
+        if ($sellerId === '') {
+            throw new RuntimeException('Conta da Amazon sem Seller ID: reconecte a SP-API em Integrações.');
+        }
+
+        $path = '/listings/'.self::LISTINGS_API_VERSION.'/items/'.rawurlencode($sellerId).'/'.rawurlencode($sku);
+
+        $productType = Cache::remember("amazon:product-type:{$sku}", now()->addDay(), function () use ($path, $marketplaceId, $sku) {
+            $item = $this->client->get($path, ['marketplaceIds' => $marketplaceId, 'includedData' => 'summaries']);
+
+            return $item['summaries'][0]['productType']
+                ?? throw new RuntimeException("SKU {$sku} não encontrado nos anúncios da Amazon.");
+        });
+
+        $resposta = $this->client->patch($path.'?'.http_build_query(['marketplaceIds' => $marketplaceId]), [
+            'productType' => $productType,
+            'patches' => $patches,
+        ]);
+
+        // A Amazon responde 200 mesmo recusando o patch: o motivo vem em issues.
+        $erros = collect($resposta['issues'] ?? [])->where('severity', 'ERROR');
+
+        if (($resposta['status'] ?? null) === 'INVALID' || $erros->isNotEmpty()) {
+            throw new RuntimeException("Amazon recusou a atualização do SKU {$sku}: ".$erros->pluck('message')->implode('; '));
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function patchEstoque(int $quantidade): array
+    {
+        return [
+            'op' => 'merge',
+            'path' => '/attributes/fulfillment_availability',
+            'value' => [['fulfillment_channel_code' => 'DEFAULT', 'quantity' => $quantidade]],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function patchPreco(float $preco): array
+    {
+        return [
+            'op' => 'merge',
+            'path' => '/attributes/purchasable_offer',
+            'value' => [[
+                'marketplace_id' => config('services.amazon.marketplace_id'),
+                'currency' => 'BRL',
+                'audience' => 'ALL',
+                'our_price' => [['schedule' => [['value_with_tax' => round($preco, 2)]]]],
+            ]],
+        ];
+    }
+
+    /**
+     * Orders API v2026-01-01 (getOrder com includedData). Conferido ao vivo
+     * em 16/10/2026: a v0 recusa o RDT de shippingAddress/buyerInfo pro
+     * nosso app, e a v2026 entrega sem RDT o CPF (tax.taxRegistrations,
+     * BUYER/CPF) e o endereço com rua, número, bairro e complemento
+     * separados (recipient.deliveryAddress.extendedFields). Sem número a
+     * nota e a etiqueta não saem (BUG REAL 2026-10-08, Correios devolveram).
      */
     public function importOrder(string $externalOrderId): array
     {
@@ -120,24 +186,15 @@ class AmazonDriver extends AbstractMarketplaceDriver
             return $this->comPagamentoConferido($this->importOrderFromBling($externalOrderId));
         }
 
-        $this->ensureConfigured();
+        $order = $this->buscarPedido($externalOrderId, 'BUYER,RECIPIENT,TAX,FULFILLMENT,PROCEEDS');
 
-        $order = $this->client->get("/orders/v0/orders/{$externalOrderId}")['payload'] ?? null;
-
-        if (! $order) {
-            throw new RuntimeException("Pedido {$externalOrderId} não encontrado na Amazon.");
-        }
-
-        $itemsResponse = $this->client->get("/orders/v0/orders/{$externalOrderId}/orderItems");
         $itemsSubtotal = 0.0;
         $items = [];
 
-        foreach ($itemsResponse['payload']['OrderItems'] ?? [] as $item) {
-            $sku = (string) ($item['SellerSKU'] ?? '');
-            $quantity = (int) ($item['QuantityOrdered'] ?? 0);
-            $unitPrice = isset($item['ItemPrice']['Amount']) && $quantity > 0
-                ? round((float) $item['ItemPrice']['Amount'] / $quantity, 2)
-                : 0.0;
+        foreach ($order['orderItems'] ?? [] as $item) {
+            $sku = (string) ($item['product']['sellerSku'] ?? '');
+            $quantity = (int) ($item['quantityOrdered'] ?? 0);
+            $unitPrice = round((float) ($item['product']['price']['unitPrice']['amount'] ?? 0), 2);
 
             if ($sku === '' || $quantity < 1) {
                 continue;
@@ -147,49 +204,45 @@ class AmazonDriver extends AbstractMarketplaceDriver
 
             $items[] = [
                 'external_id' => $sku,
-                'external_name' => $item['Title'] ?? null,
+                'external_name' => $item['product']['title'] ?? null,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
             ];
         }
 
-        $address = $this->fetchAddress($externalOrderId);
-        $buyer = $this->fetchBuyerInfo($externalOrderId);
+        $proceeds = collect($order['proceeds']['breakdowns'] ?? []);
+        $shippingCost = round((float) $proceeds->where('type', 'SHIPPING')->sum(fn ($b) => (float) ($b['subtotal']['amount'] ?? 0)), 2);
+        $total = round((float) ($order['proceeds']['grandTotal']['amount'] ?? $itemsSubtotal + $shippingCost), 2);
 
-        $total = (float) ($order['OrderTotal']['Amount'] ?? $itemsSubtotal);
-        $shippingCost = round(max(0, $total - $itemsSubtotal), 2);
+        $address = $order['recipient']['deliveryAddress'] ?? [];
+        $extended = $address['extendedFields'] ?? [];
 
         return [
-            'external_order_id' => (string) ($order['AmazonOrderId'] ?? $externalOrderId),
-            'status' => $this->mapOrderStatus((string) ($order['OrderStatus'] ?? '')),
+            'external_order_id' => (string) ($order['orderId'] ?? $externalOrderId),
+            'status' => self::mapFulfillmentStatus((string) ($order['fulfillment']['fulfillmentStatus'] ?? '')),
             'subtotal' => round($itemsSubtotal, 2),
             'shipping_cost' => $shippingCost,
-            'total' => round($total, 2),
-            'buyer_name' => $buyer['name'] ?? $address['name'] ?? 'Comprador Amazon',
-            'buyer_document' => $buyer['document'] ?? null,
-            'buyer_email' => $buyer['email'] ?? null,
+            'total' => $total,
+            // Promoção da Amazon: o comprador paga menos que itens + frete.
+            // Sem o desconto a SEFAZ recusa a nota (vNF ≠ soma), mesmo caso
+            // do TikTok em ReadsOrdersFromBling.
+            'discount_amount' => round(max(0, $itemsSubtotal + $shippingCost - $total), 2),
+            'buyer_name' => $order['buyer']['buyerName'] ?? $address['name'] ?? 'Comprador Amazon',
+            'buyer_document' => $this->documentoDoComprador($order['tax']['taxRegistrations'] ?? []),
+            'buyer_email' => $order['buyer']['buyerEmail'] ?? null,
             'buyer_phone' => $address['phone'] ?? null,
-            'shipping_zip' => $address['zip'] ?? '00000000',
-            'shipping_street' => $address['street'] ?? 'Não informado',
-            'shipping_number' => 'S/N',
-            'shipping_complement' => $address['complement'] ?? null,
-            'shipping_neighborhood' => 'Não informado',
+            'shipping_zip' => preg_replace('/\D/', '', (string) ($address['postalCode'] ?? '')) ?: '00000000',
+            'shipping_street' => ($extended['streetName'] ?? null) ?: ($address['addressLine1'] ?? null) ?: 'Não informado',
+            'shipping_number' => ($extended['streetNumber'] ?? null) ?: 'S/N',
+            'shipping_complement' => ($extended['complement'] ?? null) ?: ($extended === [] ? ($address['addressLine2'] ?? null) : null),
+            'shipping_neighborhood' => ($extended['neighborhood'] ?? null) ?: ($address['district'] ?? null) ?: 'Não informado',
             'shipping_city' => $address['city'] ?? 'Não informado',
-            'shipping_state' => $address['state'] ?? 'NA',
+            'shipping_state' => $this->extractState((string) ($address['stateOrRegion'] ?? '')),
             'external_shipment_id' => null,
-            // ->setTimezone(): PurchaseDate vem sempre em UTC ("...Z", SP-API
-            // nunca manda outro offset) — 3h à FRENTE de São Paulo
-            // (-03:00). Carbon::parse() de uma string com "Z" fixa o objeto
-            // em UTC e não converte sozinho pro timezone padrão do PHP; sem
-            // ->setTimezone() aqui, OrderImportService::createOrder()
-            // grava os dígitos de UTC direto como se já fossem hora de SP
-            // (Eloquent formata no timezone que o Carbon já tem) —
-            // created_at fica 3h ADIANTADO da hora real de SP. Mesma classe
-            // de bug do MercadoLivreDriver (ver comentário lá), só que na
-            // direção oposta: aqui um pedido feito ontem à noite (hora de
-            // SP) pode virar "hoje de madrugada" no banco e vazar pra fila
-            // "só hoje" do KoraSync (DashboardAgentController::queue()).
-            'placed_at' => isset($order['PurchaseDate']) ? \Illuminate\Support\Carbon::parse($order['PurchaseDate'])->setTimezone(config('app.timezone')) : null,
+            // createdTime vem em UTC ("...Z"): sem ->setTimezone() o pedido
+            // feito à noite em SP vira madrugada do dia seguinte no banco e
+            // vaza pra fila "só hoje" do KoraSync.
+            'placed_at' => isset($order['createdTime']) ? \Illuminate\Support\Carbon::parse($order['createdTime'])->setTimezone(config('app.timezone')) : null,
             'items' => $items,
         ];
     }
@@ -225,6 +278,54 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
+     * GET /orders/2026-01-01/orders/{id}. Lança se a Amazon não achar o
+     * pedido (o AmazonException de 429 sobe pro job tentar de novo).
+     *
+     * @return array<string, mixed>
+     */
+    private function buscarPedido(string $externalOrderId, string $includedData): array
+    {
+        $this->ensureConfigured();
+
+        $resposta = $this->client->get("/orders/2026-01-01/orders/{$externalOrderId}", ['includedData' => $includedData]);
+        $order = $resposta['order'] ?? null;
+
+        if (! $order) {
+            throw new RuntimeException("Pedido {$externalOrderId} não encontrado na Amazon.");
+        }
+
+        return $order;
+    }
+
+    /**
+     * CPF ou CNPJ do comprador: taxRegistrations com entityType BUYER (as
+     * outras entradas são da loja e da própria Amazon).
+     *
+     * @param  array<int, array<string, mixed>>  $registros
+     */
+    private function documentoDoComprador(array $registros): ?string
+    {
+        $documento = collect($registros)
+            ->first(fn ($r) => ($r['entityType'] ?? null) === 'BUYER' && in_array($r['taxRegistrationType'] ?? null, ['CPF', 'CNPJ'], true));
+
+        return preg_replace('/\D/', '', (string) ($documento['taxRegistrationNumber'] ?? '')) ?: null;
+    }
+
+    /**
+     * fulfillment.fulfillmentStatus da Orders API v2026-01-01. Como na v0,
+     * a Amazon só libera o pedido depois do pagamento: UNSHIPPED já é pago.
+     */
+    public static function mapFulfillmentStatus(string $status): string
+    {
+        return match (strtoupper($status)) {
+            'UNSHIPPED', 'PARTIALLY_SHIPPED' => Order::STATUS_PAID,
+            'SHIPPED', 'DELIVERED' => Order::STATUS_SHIPPED,
+            'CANCELLED', 'CANCELED', 'UNFULFILLABLE' => Order::STATUS_CANCELLED,
+            default => Order::STATUS_AWAITING_PAYMENT,
+        };
+    }
+
+    /**
      * Vocabulário real de `OrderStatus`: PendingAvailability, Pending,
      * Unshipped, PartiallyShipped, Shipped, Canceled, Unfulfillable. A
      * Amazon só libera o pedido pro vendedor depois do pagamento
@@ -240,88 +341,6 @@ class AmazonDriver extends AbstractMarketplaceDriver
             'Canceled', 'Unfulfillable' => Order::STATUS_CANCELLED,
             default => Order::STATUS_AWAITING_PAYMENT,
         };
-    }
-
-    /**
-     * `getOrderAddress`, dado pessoal — exige RDT com dataElements
-     * `shippingAddress`. Nunca lança: um pedido sem endereço liberado (ex:
-     * retirada/loja física, ou janela de acesso a PII já expirada) não pode
-     * travar a importação, só cai nos fallbacks "Não informado".
-     *
-     * @return array{name: ?string, zip: ?string, street: ?string, complement: ?string, city: ?string, state: ?string, phone: ?string}
-     */
-    private function fetchAddress(string $orderId): array
-    {
-        try {
-            $response = $this->client->restrictedGet("/orders/v0/orders/{$orderId}/address", ['shippingAddress']);
-            $address = $response['payload']['ShippingAddress'] ?? [];
-        } catch (AmazonException) {
-            return [];
-        }
-
-        if (empty($address)) {
-            return [];
-        }
-
-        $street = trim(($address['AddressLine1'] ?? '').(isset($address['AddressLine2']) ? ' '.$address['AddressLine2'] : ''));
-
-        return [
-            'name' => $address['Name'] ?? null,
-            'zip' => isset($address['PostalCode']) ? preg_replace('/\D/', '', (string) $address['PostalCode']) : null,
-            'street' => $street ?: null,
-            'complement' => $address['AddressLine3'] ?? null,
-            'city' => $address['City'] ?? null,
-            // shipping_state na tabela orders é varchar(2) — mesmo gotcha já
-            // corrigido pro Mercado Livre/Shopee (ver histórico dos
-            // respectivos drivers). Não confirmado ao vivo se StateOrRegion
-            // da Amazon Brasil já vem só a UF ou o nome completo do estado
-            // — normaliza defensivamente pros dois casos.
-            'state' => $this->extractState((string) ($address['StateOrRegion'] ?? '')),
-            'phone' => $address['Phone'] ?? null,
-        ];
-    }
-
-    /**
-     * `getOrderBuyerInfo`, dado pessoal — exige RDT com dataElements
-     * `buyerInfo` (confirmado contra o schema oficial da Orders API: o
-     * dataElement `buyerInfo` já inclui `BuyerTaxInfo` — não existe/não é
-     * preciso um dataElement separado pra isso; `buyerTaxInformation` é
-     * outro campo, específico da Turquia, não relacionado). `TaxClassifications`
-     * é onde a Amazon Brasil expõe CPF/CNPJ do comprador (obrigatório pra
-     * emissão de NF-e) — mesmo princípio do `buyer_cpf_id` que o driver da
-     * Shopee já precisou descobrir na prática. **Ressalva real encontrada
-     * na doc**: `BuyerTaxInfo` só é preenchido "for business orders in the
-     * Brazil, Mexico and India marketplaces" — não confirmado se isso
-     * cobre toda venda B2C brasileira (onde CPF é sempre obrigatório por
-     * lei) ou só compras feitas via Amazon Business; se `document` vier
-     * sempre null na prática, essa é a explicação mais provável, não um
-     * bug de código.
-     *
-     * @return array{name: ?string, email: ?string, document: ?string}
-     */
-    private function fetchBuyerInfo(string $orderId): array
-    {
-        try {
-            $response = $this->client->restrictedGet("/orders/v0/orders/{$orderId}/buyerInfo", ['buyerInfo']);
-            $payload = $response['payload'] ?? [];
-        } catch (AmazonException) {
-            return [];
-        }
-
-        $document = null;
-
-        foreach ($payload['BuyerTaxInfo']['TaxClassifications'] ?? [] as $classification) {
-            if (in_array($classification['Name'] ?? null, ['CPF', 'CNPJ'], true)) {
-                $document = preg_replace('/\D/', '', (string) ($classification['Value'] ?? ''));
-                break;
-            }
-        }
-
-        return [
-            'name' => $payload['BuyerName'] ?? null,
-            'email' => $payload['BuyerEmail'] ?? null,
-            'document' => $document ?: null,
-        ];
     }
 
     /**
@@ -341,72 +360,38 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * CORREÇÃO REAL (2026-08-07): a primeira versão deste método usava um
-     * feedType inventado (`POST_INVOICE_CONFIRMATION`) sem confirmação
-     * contra a doc oficial — verificado agora contra
-     * developer-docs.amazon/sp-api/docs/feed-type-values e
-     * invoicing-feed-type-values e esse feedType **não existe**. O que
-     * existe de fato relacionado a nota fiscal na SP-API:
-     * - `UPLOAD_VAT_INVOICE` (Feeds API) — é só pra "EU store (VAT
-     *   program)", não cobre o Brasil.
-     * - Invoices API (`invoices-v2024-06-19`) — **somente leitura**
-     *   ("This API is only able to retrieve Brazilian FBA invoices"), serve
-     *   pra baixar nota já emitida, não pra enviar uma.
-     * - Shipment Invoicing API (`submitInvoice`) — existe e aceita upload
-     *   (base64+MD5) mas é **exclusiva de "Brazilian FBA Onsite Orders"**
-     *   ("You cannot use this API in other Amazon stores or with other
-     *   fulfillment programs") — pedidos MFN (envio pelo próprio vendedor,
-     *   o caso da Kazakora) ficam de fora.
-     * Não encontrei, na documentação pública disponível, um endpoint SP-API
-     * pra um vendedor MFN brasileiro enviar a NF-e pra Amazon. Fica como
-     * stub explícito (mesmo padrão do TikTok/Shopee quando o endpoint real
-     * não pôde ser confirmado) em vez de manter uma implementação
-     * fabricada. Hipótese mais provável, a confirmar com o usuário: a NF-e
-     * de pedido MFN talvez precise só viajar fisicamente com o pacote
-     * (DANFE impresso junto da etiqueta, igual já acontece pro site
-     * próprio) — se for esse o caso, o pipeline certo não é "enviar pro
-     * canal", é anexar o DANFE ao PDF da etiqueta antes de imprimir (dá pra
-     * reaproveitar App\Modules\Marketplace\Support\LabelProcessingService,
-     * que já sabe fazer overlay em PDF de etiqueta).
+     * Não existe na SP-API endpoint pra vendedor MFN brasileiro enviar NF-e
+     * (UPLOAD_VAT_INVOICE é só Europa; Invoices API e Shipment Invoicing
+     * são só FBA, conferido em 2026-08-07). A nota segue com o objeto, com
+     * a chave na pré-postagem dos Correios. "sent" é o que faz
+     * ChannelInvoiceSubmissionService disparar a pré-postagem na hora.
      */
     public function submitInvoice(Order $order, Invoice $invoice): array
     {
-        // Via Bling não há pra onde mandar a nota: ela segue com o objeto,
-        // com a chave na pré-postagem dos Correios. "sent" é o que faz
-        // ChannelInvoiceSubmissionService disparar a pré-postagem na hora,
-        // sem esperar o backoff do ConfirmChannelShippingJob.
-        if ($this->viaBling()) {
-            return [
-                'status' => 'sent',
-                'external_reference' => null,
-                'response' => ['info' => 'Amazon via Bling: a NF-e vai com o objeto, chave na pré-postagem dos Correios.'],
-            ];
-        }
-
-        $this->ensureConfigured();
-
-        throw new RuntimeException('Envio de nota fiscal pra Amazon ainda não implementado — endpoint SP-API real pra pedido MFN (não-FBA) no Brasil não confirmado na documentação pública. Ver comentário deste método.');
+        return [
+            'status' => 'sent',
+            'external_reference' => null,
+            'response' => ['info' => 'Amazon: a NF-e vai com o objeto, chave na pré-postagem dos Correios.'],
+        ];
     }
 
     /**
-     * Merchant Fulfillment API (MFN): compra o frete e já recebe a etiqueta
-     * pronta na mesma resposta (síncrono — diferente do Mercado
-     * Livre/Shopee). getEligibleShippingServices cota as opções
-     * disponíveis, escolhe a mais barata, createShipment confirma a compra.
-     * Peso/dimensões vêm do cadastro fiscal de cada produto do pedido — sem
-     * inventar valor pra produto sem essa informação (mesmo princípio já
-     * usado em FreightQuoteService::buildProductsPayload()), lança erro
-     * explícito nesse caso em vez de arriscar uma cotação errada.
+     * Envio pelos Correios da loja (pré-postagem com a chave da nota), nos
+     * dois caminhos. Nunca compra frete na Amazon (Merchant Fulfillment):
+     * não é como a loja trabalha. O rastreio vai pra Amazon pelo
+     * ConfirmAmazonShipment assim que a etiqueta fica pronta.
      */
     public function confirmShipping(Order $order): array
     {
+        // Regra do Lira (16/10/2026): etiqueta só com pagamento confirmado
+        // na Amazon, nos dois caminhos.
+        if (app(PagamentoAmazon::class)->segurarExpedicao($order, 'Etiqueta', OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED)) {
+            throw new PagamentoAmazonPendenteException("Etiqueta não gerada: pagamento do pedido {$order->external_order_id} ainda não confirmado na Amazon.");
+        }
+
+        $correios = app(CorreiosAutoShipping::class);
+
         if ($this->viaBling()) {
-            if (app(PagamentoAmazon::class)->segurarExpedicao($order, 'Etiqueta', OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED)) {
-                throw new PagamentoAmazonPendenteException("Etiqueta não gerada: pagamento do pedido {$order->external_order_id} ainda não confirmado na Amazon.");
-            }
-
-            $correios = app(CorreiosAutoShipping::class);
-
             // Pedido que alguém já despachou pelo Bling (nota e envio
             // feitos à mão — caso real de 25/09): o rastreio já está lá.
             // Gerar pré-postagem agora seria um segundo objeto nos Correios
@@ -421,215 +406,41 @@ class AmazonDriver extends AbstractMarketplaceDriver
                     'status' => 'confirmed',
                 ];
             }
+        }
 
-            $prePostagem = $correios->confirm($order);
+        $prePostagem = $correios->confirm($order);
 
-            // Rastreio de volta pra Amazon (via Bling) — o job espera a
-            // etiqueta ficar pronta antes de mexer no pedido lá.
+        if ($this->viaBling()) {
             \App\Jobs\InformAmazonShipmentToBling::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
-            \App\Jobs\ConfirmAmazonShipment::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
-
-            return [
-                'external_shipment_id' => $prePostagem->correios_id,
-                'tracking_code' => $prePostagem->codigo_objeto,
-                'shipping_method' => 'Correios '.$prePostagem->service_label,
-                'status' => 'confirmed',
-            ];
         }
 
-        $this->ensureConfigured();
-
-        $orderItemsResponse = $this->client->get("/orders/v0/orders/{$order->external_order_id}/orderItems");
-        $itemList = [];
-
-        foreach ($orderItemsResponse['payload']['OrderItems'] ?? [] as $item) {
-            if (! isset($item['OrderItemId'])) {
-                continue;
-            }
-
-            $itemList[] = [
-                'OrderItemId' => (string) $item['OrderItemId'],
-                'Quantity' => (int) ($item['QuantityOrdered'] ?? 1),
-            ];
-        }
-
-        if (! $itemList) {
-            throw new RuntimeException("Pedido #{$order->id} não tem itens retornados pela Amazon pra confirmar o envio.");
-        }
-
-        [$weightGrams, $dimensions] = $this->resolvePackageMeasurements($order);
-        $company = Company::query()->first();
-
-        // Address (MFN) exige AddressLine1/City/CountryCode/Email/Name/
-        // Phone/PostalCode — confirmado contra o schema real
-        // (merchantFulfillmentV0.json, "required" do definitions.Address).
-        // Email é fácil de esquecer (nenhum outro canal deste projeto pede
-        // e-mail da empresa pra nada) — sem ele a Amazon rejeita a cotação
-        // inteira.
-        if (! $company?->zip || ! $company->email) {
-            throw new RuntimeException('Endereço/e-mail de origem (dados da empresa) não cadastrado — necessário pra cotar o envio na Amazon.');
-        }
-
-        $shipmentRequestDetails = [
-            'AmazonOrderId' => $order->external_order_id,
-            'SellerOrderId' => (string) $order->id,
-            'ItemList' => $itemList,
-            'ShipFromAddress' => [
-                'Name' => $company->nome_fantasia ?: $company->razao_social,
-                'AddressLine1' => trim("{$company->street}, {$company->number}"),
-                'AddressLine2' => $company->complement,
-                'City' => $company->city,
-                // Confirmado contra o schema real: o campo aqui é
-                // `StateOrProvinceCode`, diferente de `StateOrRegion` da
-                // Orders API (schema distinto, mesmo conceito).
-                'StateOrProvinceCode' => $company->state,
-                'PostalCode' => preg_replace('/\D/', '', (string) $company->zip),
-                'CountryCode' => 'BR',
-                'Email' => $company->email,
-                'Phone' => $company->phone,
-            ],
-            'PackageDimensions' => $dimensions,
-            'Weight' => ['Value' => $weightGrams, 'Unit' => 'g'],
-            'ShippingServiceOptions' => [
-                // Enum real (confirmado no schema, DeliveryExperienceType):
-                // DeliveryConfirmationWithAdultSignature/WithSignature/
-                // WithoutSignature/NoTracking — "NoSignatureRequired" não
-                // existe, era um valor inventado numa versão anterior deste
-                // arquivo.
-                'DeliveryExperience' => 'DeliveryConfirmationWithoutSignature',
-                'CarrierWillPickUp' => false,
-            ],
-        ];
-
-        $eligible = $this->client->post('/mfn/v0/eligibleShippingServices', ['ShipmentRequestDetails' => $shipmentRequestDetails]);
-        $services = $eligible['payload']['ShippingServiceList'] ?? [];
-
-        if (! $services) {
-            throw new RuntimeException("Nenhum serviço de envio elegível retornado pela Amazon pro pedido #{$order->id}.");
-        }
-
-        usort($services, fn ($a, $b) => ($a['Rate']['Amount'] ?? PHP_FLOAT_MAX) <=> ($b['Rate']['Amount'] ?? PHP_FLOAT_MAX));
-        $chosen = $services[0];
-
-        // ShippingServiceOfferId é opcional (CreateShipmentRequest só exige
-        // ShipmentRequestDetails+ShippingServiceId) — só entra no corpo
-        // quando a cotação realmente devolveu um, nunca como null explícito
-        // (schema estrito pode rejeitar um campo opcional mandado como null).
-        $shipment = $this->client->post('/mfn/v0/shipments', array_filter([
-            'ShipmentRequestDetails' => $shipmentRequestDetails,
-            'ShippingServiceId' => $chosen['ShippingServiceId'],
-            'ShippingServiceOfferId' => $chosen['ShippingServiceOfferId'] ?? null,
-        ], fn ($value) => $value !== null));
-
-        $payload = $shipment['payload'] ?? [];
-        $shipmentId = (string) ($payload['ShipmentId'] ?? '');
-
-        // MFN já devolve a etiqueta pronta nessa mesma chamada (diferente
-        // dos outros canais, que processam de forma assíncrona) — guarda em
-        // cache pra fetchLabel() consumir sem precisar de outra chamada.
-        if ($shipmentId !== '' && isset($payload['Label']['FileContents']['Contents'])) {
-            Cache::put(
-                $this->labelCacheKey($shipmentId),
-                [
-                    'contents' => base64_decode((string) $payload['Label']['FileContents']['Contents']),
-                    'content_type' => Str::contains(strtolower((string) ($payload['Label']['FileContents']['FileType'] ?? '')), 'pdf') ? 'application/pdf' : 'application/octet-stream',
-                ],
-                now()->addHours(4),
-            );
-        }
+        // Rastreio pra Amazon — o job espera a etiqueta ficar pronta.
+        \App\Jobs\ConfirmAmazonShipment::dispatch($order->id)->delay(now()->addMinute())->afterCommit();
 
         return [
-            'external_shipment_id' => $shipmentId ?: null,
-            'tracking_code' => $payload['TrackingId'] ?? null,
-            'shipping_method' => $payload['ShippingService']['CarrierName'] ?? 'merchant_fulfillment',
-            'status' => $shipmentId !== '' ? 'confirmed' : 'error',
+            'external_shipment_id' => $prePostagem->correios_id,
+            'tracking_code' => $prePostagem->codigo_objeto,
+            'shipping_method' => 'Correios '.$prePostagem->service_label,
+            'status' => 'confirmed',
         ];
     }
 
-    /**
-     * @return array{0: float, 1: array{Length: float, Width: float, Height: float, Unit: string}}
-     */
-    private function resolvePackageMeasurements(Order $order): array
-    {
-        $order->loadMissing('items.product.fiscalData');
-
-        $weightGrams = 0.0;
-        $maxWidth = 0.0;
-        $maxHeight = 0.0;
-        $sumLength = 0.0;
-
-        foreach ($order->items as $item) {
-            $fiscal = $item->product?->fiscalData;
-
-            if (! $fiscal || ! $fiscal->peso_bruto || ! $fiscal->altura_cm || ! $fiscal->largura_cm || ! $fiscal->profundidade_cm) {
-                throw new RuntimeException("Produto \"{$item->product_name}\" sem peso/dimensões cadastrados — necessário pra cotar o envio na Amazon.");
-            }
-
-            $weightGrams += (float) $fiscal->peso_bruto * 1000 * $item->quantity;
-            $maxWidth = max($maxWidth, (float) $fiscal->largura_cm);
-            $maxHeight = max($maxHeight, (float) $fiscal->altura_cm);
-            // Empilha o comprimento como aproximação de caixa única pro
-            // pacote inteiro (mesma simplificação que outras integrações de
-            // frete deste projeto já assumem, ver
-            // FreightQuoteService::buildProductsPayload() pro equivalente na
-            // cotação do site — lá cada produto vai como item separado pro
-            // Melhor Envio decidir; aqui a Amazon exige uma única caixa por
-            // shipment, então precisa consolidar).
-            $sumLength += (float) $fiscal->profundidade_cm * $item->quantity;
-        }
-
-        return [
-            round($weightGrams),
-            ['Length' => $sumLength, 'Width' => $maxWidth, 'Height' => $maxHeight, 'Unit' => 'centimeters'],
-        ];
-    }
-
-    /**
-     * A etiqueta já foi baixada e cacheada por confirmShipping() (MFN é
-     * síncrono). Se o cache já expirou (retry tardio, ex: depois de um
-     * problema na nota fiscal atrasando o pipeline), rebusca via
-     * getShipment — a Amazon mantém a etiqueta já comprada disponível pra
-     * reconsulta, não precisa comprar de novo.
-     */
+    /** Etiqueta da pré-postagem dos Correios, nos dois caminhos. */
     public function fetchLabel(Order $order): array
     {
-        if ($this->viaBling()) {
-            $correios = app(CorreiosAutoShipping::class);
-            $prePostagem = $correios->geradaPara($order);
+        $correios = app(CorreiosAutoShipping::class);
+        $prePostagem = $correios->geradaPara($order);
 
-            // Etiqueta que não descreve mais o pacote não vai pra impressora.
-            if ($prePostagem && ($problema = $correios->problemaDaEtiqueta($order, $prePostagem))) {
-                \Illuminate\Support\Facades\Log::warning('correios.etiqueta_bloqueada', ['order_id' => $order->id, 'motivo' => $problema]);
+        // Etiqueta que não descreve mais o pacote não vai pra impressora.
+        if ($prePostagem && ($problema = $correios->problemaDaEtiqueta($order, $prePostagem))) {
+            Log::warning('correios.etiqueta_bloqueada', ['order_id' => $order->id, 'motivo' => $problema]);
 
-                return ['ready' => false, 'contents' => null, 'content_type' => null];
-            }
-
-            return $prePostagem
-                ? ['ready' => true, 'contents' => app(CorreiosLabelPdf::class)->render($prePostagem), 'content_type' => 'application/pdf']
-                : ['ready' => false, 'contents' => null, 'content_type' => null];
-        }
-
-        $this->ensureConfigured();
-
-        $shipmentId = $this->resolveShipmentId($order);
-        $cached = Cache::pull($this->labelCacheKey($shipmentId));
-
-        if ($cached) {
-            return ['ready' => true, 'contents' => $cached['contents'], 'content_type' => $cached['content_type']];
-        }
-
-        $shipment = $this->client->get("/mfn/v0/shipments/{$shipmentId}");
-        $label = $shipment['payload']['Label']['FileContents'] ?? null;
-
-        if (! $label || empty($label['Contents'])) {
             return ['ready' => false, 'contents' => null, 'content_type' => null];
         }
 
-        return [
-            'ready' => true,
-            'contents' => base64_decode((string) $label['Contents']),
-            'content_type' => Str::contains(strtolower((string) ($label['FileType'] ?? '')), 'pdf') ? 'application/pdf' : 'application/octet-stream',
-        ];
+        return $prePostagem
+            ? ['ready' => true, 'contents' => app(CorreiosLabelPdf::class)->render($prePostagem), 'content_type' => 'application/pdf']
+            : ['ready' => false, 'contents' => null, 'content_type' => null];
     }
 
     /**
@@ -743,36 +554,58 @@ class AmazonDriver extends AbstractMarketplaceDriver
     }
 
     /**
-     * Pedido, nota e etiqueta pelo Bling + Correios da loja sempre que
-     * houver loja Amazon configurada no Bling — MESMO com a SP-API
-     * conectada. Mudança de 2026-09-25: a SP-API entra só pra confirmar o
-     * envio na Amazon (confirmarEnvio()); antes, conectar a SP-API
-     * trocaria o fluxo inteiro pro caminho MFN (compra de frete na
-     * Amazon), que não é como a loja trabalha.
+     * Pedido e nota pelo Bling (fluxo de 25/09/2026)? Sim enquanto houver
+     * loja Amazon no Bling e o servidor não tiver AMAZON_DIRETO=true; e
+     * também, como rede de segurança, com a SP-API desconectada.
      */
     public function viaBling(): bool
     {
-        return $this->blingOrders->amazonLojaId() !== null;
+        if ($this->blingOrders->amazonLojaId() === null) {
+            return false;
+        }
+
+        return ! $this->direto() || ! $this->isConfigured();
+    }
+
+    /** AMAZON_DIRETO=true: pedido, nota, estoque e preço sem o Bling. */
+    public function direto(): bool
+    {
+        return (bool) config('services.amazon.direto');
     }
 
     /**
-     * Confirma o envio na Amazon pela SP-API — o pedido vira "Enviado" lá
-     * e o comprador recebe o rastreio. Pedido explícito 2026-09-25: o
-     * Bling NÃO repassa rastreio pra Amazon (a integração dele só importa
-     * vendas e taxas), então esta é a única ponte automática.
-     *
-     * POST /orders/v0/orders/{id}/shipmentConfirmation (Orders API v0).
-     * carrierCode "Other" + carrierName "Correios": o nome da
-     * transportadora vai escrito, sem depender de "Correios" estar na
-     * lista fechada de códigos da Amazon.
+     * Estoque e preço só saem daqui no fluxo direto: no fluxo via Bling
+     * quem cuida do anúncio é o Bling, e os dois brigariam.
      */
-    public function confirmarEnvio(Order $order, string $rastreio, string $servico): void
+    private function garantirEnvioDeAnuncio(): void
     {
         $this->ensureConfigured();
 
-        $itens = collect($this->client->get("/orders/v0/orders/{$order->external_order_id}/orderItems")['payload']['OrderItems'] ?? [])
-            ->filter(fn ($item) => isset($item['OrderItemId']))
-            ->map(fn ($item) => ['orderItemId' => (string) $item['OrderItemId'], 'quantity' => (int) ($item['QuantityOrdered'] ?? 1)])
+        if (! $this->direto()) {
+            throw new RuntimeException('Amazon ainda no fluxo via Bling: estoque e preço só vão daqui com AMAZON_DIRETO=true.');
+        }
+    }
+
+    /**
+     * Confirma o envio na Amazon pela SP-API: o pedido vira "Enviado" lá e
+     * o comprador recebe o rastreio dos Correios. Única ponte automática
+     * (o Bling não repassa rastreio pra Amazon).
+     *
+     * POST /orders/v0/orders/{id}/shipmentConfirmation (o confirmShipment
+     * não tem data de remoção, só existe na v0). carrierCode "Correios" é
+     * o valor exato da lista oficial da Amazon (CarrierCode do amzn-base.xsd,
+     * conferido em 16/10/2026). Antes ia "Other" + carrierName: a Amazon
+     * mostrava só o nome escrito, sem link de rastreio pro comprador e sem
+     * contar como rastreio válido (VTR). Reenviar com o mesmo
+     * packageReferenceId corrige um envio já confirmado.
+     */
+    public function confirmarEnvio(Order $order, string $rastreio, string $servico): void
+    {
+        $pedido = $this->buscarPedido((string) $order->external_order_id, 'FULFILLMENT');
+
+        $itens = collect($pedido['orderItems'] ?? [])
+            ->filter(fn ($item) => isset($item['orderItemId']))
+            ->map(fn ($item) => ['orderItemId' => (string) $item['orderItemId'], 'quantity' => (int) ($item['quantityOrdered'] ?? 1)])
             ->values()
             ->all();
 
@@ -784,10 +617,11 @@ class AmazonDriver extends AbstractMarketplaceDriver
             'marketplaceId' => config('services.amazon.marketplace_id'),
             'packageDetail' => [
                 'packageReferenceId' => '1',
-                'carrierCode' => 'Other',
-                'carrierName' => 'Correios',
+                'carrierCode' => 'Correios',
                 'shippingMethod' => $servico,
-                'trackingNumber' => $rastreio,
+                // Código de objeto limpo (AA123456789BR): é com ele que a
+                // Amazon consulta os Correios pro comprador.
+                'trackingNumber' => strtoupper(preg_replace('/\s+/', '', $rastreio)),
                 'shipDate' => now()->utc()->format('Y-m-d\TH:i:s\Z'),
                 'orderItems' => $itens,
             ],
@@ -800,11 +634,9 @@ class AmazonDriver extends AbstractMarketplaceDriver
      */
     public function jaEnviado(Order $order): bool
     {
-        $this->ensureConfigured();
+        $status = $this->buscarPedido((string) $order->external_order_id, 'FULFILLMENT')['fulfillment']['fulfillmentStatus'] ?? '';
 
-        $status = $this->client->get("/orders/v0/orders/{$order->external_order_id}")['payload']['OrderStatus'] ?? null;
-
-        return in_array($status, ['Shipped', 'InvoiceUnconfirmed'], true);
+        return self::mapFulfillmentStatus((string) $status) === Order::STATUS_SHIPPED;
     }
 
     protected function blingBuyerFallbackName(): string
@@ -815,24 +647,5 @@ class AmazonDriver extends AbstractMarketplaceDriver
     protected function blingShippingMethodFallback(): string
     {
         return 'Amazon';
-    }
-
-    private function labelCacheKey(string $shipmentId): string
-    {
-        return "amazon_mfn_label:{$shipmentId}";
-    }
-
-    private function resolveShipmentId(Order $order): string
-    {
-        $shipmentId = ChannelShipment::query()
-            ->where('order_id', $order->id)
-            ->where('channel', $this->channel())
-            ->value('external_shipment_id');
-
-        if (! $shipmentId) {
-            throw new RuntimeException("Pedido #{$order->id} não tem shipment_id da Amazon registrado.");
-        }
-
-        return $shipmentId;
     }
 }

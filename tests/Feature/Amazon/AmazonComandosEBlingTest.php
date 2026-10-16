@@ -77,9 +77,9 @@ class AmazonComandosEBlingTest extends TestCase
     public function test_sync_by_sp_api_follows_next_token_and_imports_every_order(): void
     {
         $this->conectarAmazon();
-        Http::fake([self::BASE.'/orders/v0/orders*' => Http::sequence()
-            ->push(['payload' => ['Orders' => [['AmazonOrderId' => 'A1'], ['AmazonOrderId' => 'A2']], 'NextToken' => 'pag2']])
-            ->push(['payload' => ['Orders' => [['AmazonOrderId' => 'A3']]]]),
+        Http::fake([self::BASE.'/orders/2026-01-01/orders*' => Http::sequence()
+            ->push(['orders' => [['orderId' => 'A1'], ['orderId' => 'A2']], 'pagination' => ['nextToken' => 'pag2']])
+            ->push(['orders' => [['orderId' => 'A3']], 'pagination' => []]),
         ]);
         $importados = [];
         $this->importador($importados, falhar: ['A2']);
@@ -90,7 +90,8 @@ class AmazonComandosEBlingTest extends TestCase
             ->assertSuccessful();
 
         $this->assertSame(['amazon:A1', 'amazon:A3'], $importados);
-        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'NextToken=pag2'));
+        // Página seguinte: token + os mesmos filtros (sem eles a Amazon recusa).
+        Http::assertSent(fn (Request $r) => str_contains($r->url(), 'paginationToken=pag2') && str_contains($r->url(), 'createdAfter='));
     }
 
     public function test_sync_never_asks_amazon_for_orders_newer_than_two_minutes(): void
@@ -100,7 +101,7 @@ class AmazonComandosEBlingTest extends TestCase
         // SP-API exige CreatedBefore pelo menos 2 minutos no passado.
         Carbon::setTestNow('2026-10-16 15:00:00');
         $this->conectarAmazon();
-        Http::fake([self::BASE.'/*' => Http::response(['payload' => ['Orders' => []]])]);
+        Http::fake([self::BASE.'/*' => Http::response(['orders' => []])]);
         $importados = [];
         $this->importador($importados);
 
@@ -109,7 +110,7 @@ class AmazonComandosEBlingTest extends TestCase
         Http::assertSent(function (Request $r) {
             parse_str(parse_url($r->url(), PHP_URL_QUERY), $q);
 
-            return Carbon::parse($q['CreatedBefore'])->lte(now()->subMinutes(2));
+            return Carbon::parse($q['createdBefore'])->lte(now()->subMinutes(2));
         });
     }
 

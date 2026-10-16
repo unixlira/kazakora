@@ -87,8 +87,13 @@ Schedule::command('orders:sync-shopee')->hourly();
 // a venda entra em no máximo 2 min em vez de 1 h. Barato: só o dia de hoje.
 Schedule::command('orders:sync-shopee --desde='.now()->toDateString())->everyTwoMinutes()->withoutOverlapping(5);
 Schedule::command('orders:sync-mercadolivre --desde='.now()->toDateString())->everyTwoMinutes()->withoutOverlapping(5);
-// Amazon via Bling (2026-09-25): o webhook é o caminho principal; isto é
-// só a rede de segurança. Janela de 2 dias, NÃO o mês inteiro como os
+// Amazon direto pela SP-API (AMAZON_DIRETO=true): sem webhook ligado ainda, a
+// varredura de hoje a cada 10 min é o que traz a venda. Não mais que isso:
+// o searchOrders da Amazon aceita 1 chamada a cada 3 min.
+Schedule::command('orders:sync-amazon --desde='.now()->toDateString())->everyTenMinutes()->withoutOverlapping(10)
+    ->when(fn () => (bool) config('services.amazon.direto'));
+// Rede de segurança de 2 dias (também cobre o fluxo via Bling, em que o
+// webhook do Bling é o principal). Janela de 2 dias, NÃO o mês inteiro como os
 // outros canais: pedido Amazon entra como pago e a NF-e dele é NOSSA — um
 // passe do mês inteiro emitiria nota automática pra toda venda antiga que
 // o Bling já tinha antes da integração existir. Carga de período maior só

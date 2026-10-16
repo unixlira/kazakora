@@ -69,6 +69,13 @@ class AmazonPagamentosPendentesTest extends TestCase
                 $caminho === '/orders/v0/orders/'.self::PEDIDO.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
                     ['OrderItemId' => '111', 'SellerSKU' => 'KZ-1', 'Title' => 'Capinha', 'QuantityOrdered' => 1, 'ItemPrice' => ['Amount' => '59.80']],
                 ]]]),
+                // Mesmo pedido na Orders API v2026-01-01 (importação direta).
+                $caminho === '/orders/2026-01-01/orders/'.self::PEDIDO => Http::response(['order' => [
+                    'orderId' => self::PEDIDO, 'createdTime' => now()->utc()->format('Y-m-d\\TH:i:s\\Z'),
+                    'fulfillment' => ['fulfillmentStatus' => strtoupper((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $this->statusAmazon))],
+                    'proceeds' => ['grandTotal' => ['amount' => '75.70'], 'breakdowns' => [['type' => 'SHIPPING', 'subtotal' => ['amount' => '15.90']]]],
+                    'orderItems' => [['orderItemId' => '111', 'quantityOrdered' => 1, 'product' => ['sellerSku' => 'KZ-1', 'title' => 'Capinha', 'price' => ['unitPrice' => ['amount' => '59.80']]]]],
+                ]]),
                 $caminho === '/orders/v0/orders/'.self::PEDIDO => Http::response(['payload' => [
                     'AmazonOrderId' => self::PEDIDO, 'OrderStatus' => $this->statusAmazon, 'OrderTotal' => ['Amount' => '75.70'],
                     'PaymentMethod' => 'Other', 'PurchaseDate' => now()->utc()->format('Y-m-d\\TH:i:s\\Z'),

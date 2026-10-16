@@ -18,7 +18,6 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Jobs\CheckShipmentLabelJob;
-use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Models\ChannelInvoiceSubmission;
@@ -1301,14 +1300,14 @@ class DashboardAgentController extends Controller
     }
 
     /**
-     * Motivo de um pedido Amazon (via Bling) não ter etiqueta dos Correios:
+     * Motivo de um pedido Amazon não ter etiqueta dos Correios:
      * pré-postagem que não bate com o pedido, ou a última tentativa de
      * gerá-la falhou (produto sem peso/medida, sem vínculo, Correios
      * recusou). null = nada travado. Outros canais: sempre null.
      */
     private function bloqueioLogistico(Order $order): ?string
     {
-        if ($order->origin !== Order::ORIGIN_AMAZON || $order->status !== Order::STATUS_PAID || ! app(AmazonDriver::class)->viaBling()) {
+        if ($order->origin !== Order::ORIGIN_AMAZON || $order->status !== Order::STATUS_PAID) {
             return null;
         }
 
@@ -1987,11 +1986,11 @@ class DashboardAgentController extends Controller
 
         $shipment = $order->loadMissing('channelShipment')->channelShipment;
 
-        // Amazon via Bling: a etiqueta é a da pré-postagem dos Correios, e
-        // ela só sai se ainda descreve o pacote (relatório técnico
-        // 2026-09-25: pré-postagem com peso/quantidade errada não
+        // Amazon (direto ou via Bling): a etiqueta é a da pré-postagem dos
+        // Correios, e ela só sai se ainda descreve o pacote (relatório
+        // técnico 2026-09-25: pré-postagem com peso/quantidade errada não
         // reimprime — cancela e gera de novo).
-        if ($order->origin === Order::ORIGIN_AMAZON && app(AmazonDriver::class)->viaBling()) {
+        if ($order->origin === Order::ORIGIN_AMAZON) {
             if ($bloqueio = $this->bloqueioLogistico($order)) {
                 return response()->json(['ok' => false, 'logistics_blocked' => true, 'message' => $bloqueio], 409);
             }

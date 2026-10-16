@@ -70,10 +70,7 @@ class ConfirmAmazonShipmentTest extends TestCase
     private function fakeSpApi(): void
     {
         Http::fake([
-            '*/orders/v0/orders/'.self::NUMERO.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
-                ['OrderItemId' => '111', 'QuantityOrdered' => 4],
-                ['OrderItemId' => '222', 'QuantityOrdered' => 6],
-            ]]]),
+            '*/orders/2026-01-01/orders/'.self::NUMERO.'*' => Http::response(['order' => ['orderId' => self::NUMERO, 'fulfillment' => ['fulfillmentStatus' => 'UNSHIPPED'], 'orderItems' => [['orderItemId' => '111', 'quantityOrdered' => 4], ['orderItemId' => '222', 'quantityOrdered' => 6]]]]),
             '*/orders/v0/orders/'.self::NUMERO.'/shipmentConfirmation' => Http::response(null, 204),
         ]);
     }
@@ -88,7 +85,8 @@ class ConfirmAmazonShipmentTest extends TestCase
 
         Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/shipmentConfirmation')
             && $request['marketplaceId'] === 'A2Q3Y263D00KWC'
-            && $request['packageDetail']['carrierName'] === 'Correios'
+            && $request['packageDetail']['carrierCode'] === 'Correios'
+            && ! isset($request['packageDetail']['carrierName'])
             && $request['packageDetail']['shippingMethod'] === 'PAC'
             && $request['packageDetail']['trackingNumber'] === 'AP539439145BR'
             && count($request['packageDetail']['orderItems']) === 2);
@@ -104,14 +102,11 @@ class ConfirmAmazonShipmentTest extends TestCase
     {
         $this->conectarAmazon();
         Http::fake([
-            '*/orders/v0/orders/'.self::NUMERO.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
-                ['OrderItemId' => '111', 'QuantityOrdered' => 1],
-            ]]]),
+            '*/orders/2026-01-01/orders/'.self::NUMERO.'*' => Http::response(['order' => ['orderId' => self::NUMERO, 'fulfillment' => ['fulfillmentStatus' => 'SHIPPED'], 'orderItems' => [['orderItemId' => '111', 'quantityOrdered' => 1]]]]),
             '*/orders/v0/orders/'.self::NUMERO.'/shipmentConfirmation' => Http::response(['errors' => [[
                 'code' => 'InvalidInput',
                 'message' => 'Failed to create package due to not finding a matching package or order already fulfilled.',
             ]]], 400),
-            '*/orders/v0/orders/'.self::NUMERO => Http::response(['payload' => ['AmazonOrderId' => self::NUMERO, 'OrderStatus' => 'Shipped']]),
         ]);
         $order = $this->pedidoComEtiqueta();
 
@@ -125,11 +120,8 @@ class ConfirmAmazonShipmentTest extends TestCase
     {
         $this->conectarAmazon();
         Http::fake([
-            '*/orders/v0/orders/'.self::NUMERO.'/orderItems' => Http::response(['payload' => ['OrderItems' => [
-                ['OrderItemId' => '111', 'QuantityOrdered' => 1],
-            ]]]),
+            '*/orders/2026-01-01/orders/'.self::NUMERO.'*' => Http::response(['order' => ['orderId' => self::NUMERO, 'fulfillment' => ['fulfillmentStatus' => 'UNSHIPPED'], 'orderItems' => [['orderItemId' => '111', 'quantityOrdered' => 1]]]]),
             '*/orders/v0/orders/'.self::NUMERO.'/shipmentConfirmation' => Http::response(['errors' => [['code' => 'InvalidInput', 'message' => 'Invalid tracking']]], 400),
-            '*/orders/v0/orders/'.self::NUMERO => Http::response(['payload' => ['AmazonOrderId' => self::NUMERO, 'OrderStatus' => 'Unshipped']]),
         ]);
         $order = $this->pedidoComEtiqueta();
 
@@ -140,6 +132,23 @@ class ConfirmAmazonShipmentTest extends TestCase
         }
 
         $this->assertNull(CorreiosPrePostagem::first()->amazon_confirmado_em);
+    }
+
+    public function test_resend_corrects_an_old_other_carrier_confirmation(): void
+    {
+        $this->conectarAmazon();
+        $this->fakeSpApi();
+        $order = $this->pedidoComEtiqueta();
+        CorreiosPrePostagem::first()->update(['amazon_confirmado_em' => now()->subDays(2)]);
+
+        $this->artisan('amazon:confirmar-envios --corrigir-transportadora')
+            ->expectsOutputToContain('1 rastreio(s) mandados reenviar')
+            ->assertSuccessful();
+
+        Http::assertSent(fn (Request $request) => str_ends_with($request->url(), '/shipmentConfirmation')
+            && $request['packageDetail']['carrierCode'] === 'Correios'
+            && $request['packageDetail']['packageReferenceId'] === '1');
+        $this->assertStringContainsString('reenviado', (string) OrderFulfillmentEvent::where('order_id', $order->id)->latest('id')->value('message'));
     }
 
     public function test_without_sp_api_it_says_so_in_the_order_and_sends_nothing(): void

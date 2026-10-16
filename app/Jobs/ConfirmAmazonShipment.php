@@ -30,6 +30,9 @@ use Throwable;
  * a conta for conectada.
  *
  * Idempotente: CorreiosPrePostagem::amazon_confirmado_em marca o que já foi.
+ * $reenviar ignora essa marca: manda de novo o mesmo pacote (mesmo
+ * packageReferenceId), o que a Amazon trata como correção do envio — usado
+ * pra trocar a transportadora "Other" antiga por "Correios".
  */
 class ConfirmAmazonShipment implements ShouldQueue, ShouldBeUnique
 {
@@ -37,11 +40,11 @@ class ConfirmAmazonShipment implements ShouldQueue, ShouldBeUnique
 
     public int $tries = 10;
 
-    public function __construct(public readonly int $orderId) {}
+    public function __construct(public readonly int $orderId, public readonly bool $reenviar = false) {}
 
     public function uniqueId(): string
     {
-        return (string) $this->orderId;
+        return $this->orderId.($this->reenviar ? ':reenviar' : '');
     }
 
     /** @return array<int, int> */
@@ -60,7 +63,7 @@ class ConfirmAmazonShipment implements ShouldQueue, ShouldBeUnique
 
         $prePostagem = $correios->geradaPara($order);
 
-        if (! $prePostagem || $prePostagem->amazon_confirmado_em || ! $prePostagem->codigo_objeto) {
+        if (! $prePostagem || ($prePostagem->amazon_confirmado_em && ! $this->reenviar) || ! $prePostagem->codigo_objeto) {
             return;
         }
 
@@ -83,6 +86,10 @@ class ConfirmAmazonShipment implements ShouldQueue, ShouldBeUnique
         try {
             $driver->confirmarEnvio($order, $prePostagem->codigo_objeto, $servico);
         } catch (AmazonException $exception) {
+            if ($this->reenviar) {
+                throw $exception;
+            }
+
             // Envio já confirmado à mão no Seller Central: a Amazon recusa
             // ("order already fulfilled") e a rotina de hora em hora
             // repetiria a falha pra sempre. Visto em 16/10/2026 nos 9
@@ -99,7 +106,7 @@ class ConfirmAmazonShipment implements ShouldQueue, ShouldBeUnique
 
         $prePostagem->update(['amazon_confirmado_em' => now()]);
 
-        $timeline->record($order, OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER, OrderFulfillmentEvent::STATUS_SUCCESS, "Envio confirmado na Amazon: Correios {$servico}, {$prePostagem->codigo_objeto}.");
+        $timeline->record($order, OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER, OrderFulfillmentEvent::STATUS_SUCCESS, ($this->reenviar ? 'Rastreio reenviado à Amazon com a transportadora Correios: ' : 'Envio confirmado na Amazon: ')."Correios {$servico}, {$prePostagem->codigo_objeto}.");
     }
 
     public function failed(?Throwable $exception): void

@@ -351,6 +351,13 @@ return [
         'marketplace_id' => env('AMAZON_MARKETPLACE_ID', 'A2Q3Y263D00KWC'), // Amazon.com.br
         'region' => env('AMAZON_REGION', 'na'),
         'sandbox' => (bool) env('AMAZON_SANDBOX', true),
+        // true = pedido, nota, estoque e preço direto pela SP-API, sem Bling
+        // (decisão de 16/10/2026). Liga por servidor: o homolog usa a MESMA
+        // conta real da Amazon e emite NF-e em produção, então ligar lá
+        // duplicaria nota e sobrescreveria o estoque real. false = fluxo de
+        // 25/09/2026 (pedido e nota pelo Bling). O rastreio com
+        // carrierCode Correios vale nos dois.
+        'direto' => filter_var(env('AMAZON_DIRETO', false), FILTER_VALIDATE_BOOLEAN),
         'sp_api_base_url' => env(
             'AMAZON_SP_API_BASE_URL',
             (bool) env('AMAZON_SANDBOX', true)

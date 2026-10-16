@@ -4,9 +4,9 @@ namespace App\Services\Amazon;
 
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Services\Amazon\Exceptions\AmazonException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Login with Amazon (LWA) — autenticação da Selling Partner API (SP-API).
@@ -141,6 +141,33 @@ class AmazonAuthService
         }
 
         return $account;
+    }
+
+    /**
+     * Token "grantless" (client_credentials): operações que não agem em
+     * nome de um vendedor — hoje só os destinos da Notifications API
+     * (createDestination/getDestinations/deleteDestination e
+     * deleteSubscriptionById), escopo `sellingpartnerapi::notifications`.
+     * Dura 1h como o normal; guardado no cache com folga de 5 min.
+     */
+    public function grantlessToken(string $scope): string
+    {
+        return Cache::remember('amazon:grantless:'.$scope, now()->addMinutes(55), function () use ($scope) {
+            $response = Http::asForm()->post(self::TOKEN_URL, [
+                'grant_type' => 'client_credentials',
+                'scope' => $scope,
+                'client_id' => config('services.amazon.lwa_client_id'),
+                'client_secret' => config('services.amazon.lwa_client_secret'),
+            ]);
+
+            if ($response->failed() || ! $response->json('access_token')) {
+                Log::channel('amazon')->error('amazon.grantless_token_failed', ['status' => $response->status(), 'body' => $response->json()]);
+
+                throw new AmazonException($response->json('error_description') ?? 'Não foi possível obter o token grantless da Amazon.', $response->status(), ['body' => $response->json()]);
+            }
+
+            return (string) $response->json('access_token');
+        });
     }
 
     /**

@@ -198,7 +198,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
      * prontos pra expedir, não "aguardando pagamento" como em outros
      * canais.
      */
-    private function mapOrderStatus(string $status): string
+    public static function mapOrderStatus(string $status): string
     {
         return match ($status) {
             'Unshipped', 'PartiallyShipped' => Order::STATUS_PAID,

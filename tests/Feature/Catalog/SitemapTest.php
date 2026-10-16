@@ -51,6 +51,34 @@ class SitemapTest extends TestCase
             ->assertSee('"priceCurrency":"BRL"', false);
     }
 
+    public function test_video_do_produto_vai_com_miniatura_na_pagina_e_no_sitemap(): void
+    {
+        Cache::forget('sitemap.xml');
+        $produto = Product::factory()->create([
+            'slug' => 'controle-yihan',
+            'name' => 'Controle Yihan',
+            'description' => '<p>Controle com fio</p>',
+            'is_active' => true,
+            'video_path' => 'products/1/video/demo.mp4',
+            'video_duration_seconds' => 22,
+        ]);
+        $produto->images()->create(['path' => 'products/1/foto.jpg', 'position' => 0, 'is_primary' => true]);
+        Product::factory()->create(['slug' => 'sem-foto', 'is_active' => true, 'video_path' => 'products/2/video/x.mp4']);
+
+        $this->get('/produtos/controle-yihan')->assertOk()
+            ->assertSee('"@type":"VideoObject"', false)
+            ->assertSee('"thumbnailUrl":["'.asset('storage/products/1/foto.jpg').'"]', false)
+            ->assertSee('"duration":"PT22S"', false)
+            ->assertSee('"uploadDate":"', false);
+
+        $corpo = $this->get('/sitemap.xml')->assertOk()->getContent();
+        $this->assertStringContainsString('xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"', $corpo);
+        $this->assertStringContainsString('<video:thumbnail_loc>'.asset('storage/products/1/foto.jpg').'</video:thumbnail_loc>', $corpo);
+        $this->assertStringContainsString('<video:content_loc>'.asset('storage/products/1/video/demo.mp4').'</video:content_loc>', $corpo);
+        $this->assertSame(1, substr_count($corpo, '<video:video>'), 'vídeo sem foto não entra (o Google recusaria sem miniatura)');
+        $this->assertSame(false, simplexml_load_string($corpo) === false);
+    }
+
     public function test_homolog_responde_noindex_e_dominio_oficial_nao(): void
     {
         $this->get('https://kazakora.devlira.com.br/')->assertOk()

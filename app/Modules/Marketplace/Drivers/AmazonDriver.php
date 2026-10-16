@@ -5,14 +5,17 @@ namespace App\Modules\Marketplace\Drivers;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Drivers\Concerns\ReadsOrdersFromBling;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Fiscal\Models\Company;
 use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\Marketplace\Exceptions\PagamentoAmazonPendenteException;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
 use App\Modules\Marketplace\Support\CorreiosLabelPdf;
+use App\Modules\Marketplace\Support\PagamentoAmazon;
 use App\Services\Amazon\AmazonClient;
 use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Bling\BlingOrderService;
@@ -20,6 +23,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 /**
  * Amazon (Selling Partner API / SP-API) — docs:
@@ -113,7 +117,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function importOrder(string $externalOrderId): array
     {
         if ($this->viaBling()) {
-            return $this->importOrderFromBling($externalOrderId);
+            return $this->comPagamentoConferido($this->importOrderFromBling($externalOrderId));
         }
 
         $this->ensureConfigured();
@@ -188,6 +192,36 @@ class AmazonDriver extends AbstractMarketplaceDriver
             'placed_at' => isset($order['PurchaseDate']) ? \Illuminate\Support\Carbon::parse($order['PurchaseDate'])->setTimezone(config('app.timezone')) : null,
             'items' => $items,
         ];
+    }
+
+    /**
+     * O Bling não sabe se a Amazon já aprovou o pagamento: a situação dele
+     * vira "pago" aqui (mapBlingOrderStatus()) mesmo com o pedido "Pending"
+     * na Amazon. Pago só com a Amazon dizendo que está pago (PagamentoAmazon);
+     * sem conseguir perguntar, fica aguardando e a varredura de hora em hora
+     * confere de novo.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function comPagamentoConferido(array $data): array
+    {
+        if ($data['status'] !== Order::STATUS_PAID) {
+            return $data;
+        }
+
+        try {
+            $status = app(PagamentoAmazon::class)->statusNaAmazon((string) $data['external_order_id']);
+        } catch (Throwable $e) {
+            Log::channel('amazon')->warning('amazon.pagamento_nao_conferido', [
+                'amazon_order_id' => $data['external_order_id'],
+                'erro' => $e->getMessage(),
+            ]);
+
+            return ['status' => Order::STATUS_AWAITING_PAYMENT] + $data;
+        }
+
+        return ['status' => PagamentoAmazon::statusDoPedido($status)] + $data;
     }
 
     /**
@@ -367,6 +401,10 @@ class AmazonDriver extends AbstractMarketplaceDriver
     public function confirmShipping(Order $order): array
     {
         if ($this->viaBling()) {
+            if (app(PagamentoAmazon::class)->segurarExpedicao($order, 'Etiqueta', OrderFulfillmentEvent::STEP_SHIPPING_CONFIRMED)) {
+                throw new PagamentoAmazonPendenteException("Etiqueta não gerada: pagamento do pedido {$order->external_order_id} ainda não confirmado na Amazon.");
+            }
+
             $correios = app(CorreiosAutoShipping::class);
 
             // Pedido que alguém já despachou pelo Bling (nota e envio

@@ -15,6 +15,7 @@ use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
 use App\Modules\Marketplace\Support\OrderImportService;
+use App\Modules\Marketplace\Support\PagamentoAmazon;
 use App\Notifications\InvoiceIssuanceFailedNotification;
 use App\Services\Bling\BlingInvoiceImporter;
 use Illuminate\Bus\Queueable;
@@ -128,6 +129,13 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
                 "NF-e não emitida: o pedido está \"{$order->status}\" na hora da emissão (cancelado ou ainda não pago).",
             );
 
+            return;
+        }
+
+        // Regra do Lira (2026-10-16): Amazon só com o pagamento confirmado
+        // LÁ, não pela situação do Bling. Erro ao consultar lança e o job
+        // tenta de novo; nunca emite no escuro.
+        if (! $origemTecnica && app(PagamentoAmazon::class)->segurarExpedicao($order, 'NF-e', OrderFulfillmentEvent::STEP_INVOICE_ISSUED)) {
             return;
         }
 

@@ -380,6 +380,18 @@ return [
         // inicia precisa de template aprovado na Meta; vazio = não envia.
         // Corpo com {{1}} = primeiro nome e {{2}} = número do pedido; botão
         // de URL dinâmica ".../rastreio/{{1}}" recebe o código do rastreio.
+        // Falha na coleta financeira da Amazon/TikTok: a Manuela avisa o Lira
+        // (2026-10-16, ver AlertaColetaFinanceira). Ligado só em produção,
+        // para o homolog não mandar aviso repetido. Template opcional para
+        // fora da janela de 24 h: corpo {{1}} = canal, {{2}} = motivo.
+        'alerta_coleta' => [
+            'ativo' => (bool) env('ALERTA_COLETA_WHATSAPP', env('APP_ENV') === 'production'),
+            'para' => env('ALERTA_COLETA_WHATSAPP_PARA', '5511990253050'),
+            'template' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE'),
+            'template_idioma' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE_IDIOMA', 'pt_BR'),
+            'intervalo_minutos' => (int) env('ALERTA_COLETA_WHATSAPP_INTERVALO', 60),
+        ],
+
         'templates' => [
             'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
             'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),

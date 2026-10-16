@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\KoraFlexController;
 use App\Http\Controllers\Api\PrintAgentController;
 use App\Http\Controllers\Api\ShopeeController;
 use App\Http\Controllers\Api\StripeWebhookController;
+use App\Http\Controllers\Api\ColetaFinanceiraController;
 use App\Http\Controllers\Api\TikTokReportsController;
 use App\Http\Controllers\Api\WhatsAppWebhookController;
 use App\Modules\Analytics\Models\SiteVisit;
@@ -203,6 +204,12 @@ Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import']
 Route::post('/tiktok/reports/status', [TikTokReportsController::class, 'status'])
     ->middleware('throttle:30,1')
     ->name('api.tiktok.reports.status');
+
+// Falha na coleta financeira (TikTok/Amazon): a Manuela avisa o Lira no
+// WhatsApp na hora (2026-10-16). Bearer do agente do TikTok ou da Amazon.
+Route::post('/financeiro/coletas/falha', [ColetaFinanceiraController::class, 'falha'])
+    ->middleware('throttle:30,1')
+    ->name('api.financeiro.coletas.falha');
 
 // Visitas dos outros sites (FerraKora, Beauty Kora; 2026-10-12): o navegador
 // do visitante avisa cada página aberta; só dos domínios em

@@ -289,6 +289,11 @@ Schedule::command('videos:limpar-embalagem')->dailyAt('03:30');
 // devoluções e mediações que fecham depois.
 Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping(60);
 
+// Coleta financeira do TikTok e da Amazon parada: a Manuela avisa o Lira
+// no WhatsApp com o motivo (2026-10-16). Falha que o próprio agente relata
+// já avisa na hora (RelatoriosTikTok::avisar e /api/financeiro/coletas/falha).
+Schedule::command('financeiro:vigiar-coletas')->hourlyAt(15)->withoutOverlapping(10);
+
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.
 Schedule::command('beautykora:conciliar-pagamentos')->everyFiveMinutes()->withoutOverlapping(10);

@@ -133,6 +133,7 @@ class AmazonBlingAddressTest extends TestCase
      */
     public function test_amazon_invoice_waits_for_the_address_number(): void
     {
+        $this->amazonComPedidoNoStatus('Unshipped');
         Queue::fake();
         Notification::fake();
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);

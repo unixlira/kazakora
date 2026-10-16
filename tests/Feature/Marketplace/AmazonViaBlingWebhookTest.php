@@ -118,6 +118,7 @@ class AmazonViaBlingWebhookTest extends TestCase
 
     public function test_amazon_order_from_bling_becomes_an_amazon_order_with_our_own_invoice(): void
     {
+        $this->amazonComPedidoNoStatus('Unshipped');
         Queue::fake([GenerateInvoiceJob::class, \App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob::class]);
         $this->fakeBlingOrder();
 
@@ -165,6 +166,7 @@ class AmazonViaBlingWebhookTest extends TestCase
      */
     public function test_invoice_generated_by_bling_is_imported_and_ours_is_not_issued(): void
     {
+        $this->amazonComPedidoNoStatus('Unshipped');
         Queue::fake([\App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob::class]);
         \Illuminate\Support\Facades\Storage::fake('local');
         $chave = '35260965604590000107550020000017941284524944';

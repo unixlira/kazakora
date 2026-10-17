@@ -143,6 +143,10 @@ const DEFAULT = {
 const CONTEXTS = {
     order: {
         __empty: ['Sem status', 'gray'],
+        // Só no admin (Lira 2026-10-16): rótulo curto cabe numa linha na
+        // listagem. O valor no banco continua awaiting_payment; telas do
+        // cliente (Checkout/MyOrders, OrderDetail) têm mapa próprio.
+        awaiting_payment: ['Pendente', 'yellow'],
     },
     invoice: {
         __empty: ['Sem nota', 'gray'],

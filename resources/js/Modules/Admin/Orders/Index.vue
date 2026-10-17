@@ -193,7 +193,8 @@ const columns = [
     },
     // Status sempre numa linha só (Lira 2026-10-16: "Aguardando pagamento" em
     // duas linhas ficou feio). O espaço vem da tabela compacta (dense) e do
-    // nome do cliente cortado, não de quebrar o selo.
+    // nome do cliente cortado, não de quebrar o selo. Desde então o
+    // awaiting_payment aparece como "Pendente" (contexto order no statusLabels).
     {
         accessorKey: 'status',
         header: 'Status',

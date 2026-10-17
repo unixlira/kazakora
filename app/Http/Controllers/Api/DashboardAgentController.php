@@ -67,7 +67,7 @@ class DashboardAgentController extends Controller
     /** Rótulo pt-BR do status pro payload de queue() — mesmo texto de Admin\DashboardController::STATUS_LABELS, duplicado aqui de propósito (DTO simples do KoraSync, não vale acoplar os dois a um enum/trait compartilhado por 6 valores fixos). */
     private const STATUS_LABELS = [
         Order::STATUS_PENDING => 'Pendente',
-        Order::STATUS_AWAITING_PAYMENT => 'Aguardando pagamento',
+        Order::STATUS_AWAITING_PAYMENT => 'Pendente', // era "Aguardando pagamento"; só o rótulo (Lira 2026-10-16)
         Order::STATUS_PAID => 'Pago',
         Order::STATUS_SHIPPED => 'Enviado',
         Order::STATUS_COMPLETED => 'Concluído',

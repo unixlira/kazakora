@@ -33,7 +33,7 @@
         @include('emails.partials.botao', ['url' => $pdfUrl, 'texto' => 'Abrir boleto PDF', 'cor' => '#F27A2A'])
     @endif
 
-    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora())['meus_pedidos'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])
+    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order))['pedido'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])
 
     <p style="margin: 0; text-align: center; font-size: 12px; color: #9ca3af;">
         O banco leva até 3 dias úteis para confirmar o pagamento do boleto. Assim que cair, você recebe a confirmação por aqui.

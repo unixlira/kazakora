@@ -6,6 +6,7 @@ import { usePermissions } from '@/Shared/usePermissions';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, reactive } from 'vue';
+import { shippingBadge } from './envio';
 
 const { can } = usePermissions();
 
@@ -69,10 +70,6 @@ const customerName = (order) =>
     || order.shipping_phone
     || '—';
 
-const formatPostagePrice = (value) => value == null
-    ? null
-    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
 const columns = [
     {
         accessorKey: 'id',
@@ -125,27 +122,19 @@ const columns = [
             ]);
         },
     },
+    // Envios: só o nome do meio de envio (pedido do Lira 2026-10-16). A
+    // pré-postagem dos Correios (status, código, QR) fica no detalhe do pedido.
     {
-        id: 'correios_qr',
+        id: 'envio',
         header: 'Envios',
         cell: ({ row }) => {
-            const qr = row.original.latest_correios_pre_postagem;
-
-            if (!qr) {
-                return h(StatusBadge, { status: null, context: 'correios' });
-            }
-
-            return h(Link, {
-                href: `/admin/correios/${qr.id}`,
-                class: 'group block text-xs hover:text-primary',
-                title: 'Abrir QR Code dos Correios',
-            }, () => [
-                h(StatusBadge, { status: qr.status, context: 'correios' }),
-                qr.codigo_objeto ? h('span', { class: 'block font-mono text-[11px] text-slate-400 group-hover:text-primary' }, qr.codigo_objeto) : null,
-                qr.service_label || qr.postage_price != null
-                    ? h('span', { class: 'block text-[11px] text-slate-400' }, [qr.service_label, formatPostagePrice(qr.postage_price)].filter(Boolean).join(' · '))
-                    : null,
-            ]);
+            const selo = shippingBadge(row.original);
+            return h(StatusBadge, {
+                status: selo.tone,
+                label: selo.label,
+                wrap: true,
+                title: row.original.shipping_type_label || 'Envio não informado',
+            });
         },
     },
     {

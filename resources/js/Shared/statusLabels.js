@@ -208,7 +208,7 @@ const CONTEXTS = {
     },
     // Pré-postagem dos Correios (QR).
     correios: {
-        __empty: ['Sem QR', 'gray'],
+        __empty: ['Sem pré-postagem', 'gray'],
         gerada: ['QR gerado', 'green'],
         erro: ['Falhou', 'red'],
         cancelada: ['Cancelada', 'red'],

@@ -60,4 +60,19 @@ class EmailsFerraKoraTest extends TestCase
         $this->assertFalse($mail->hasFrom(config('mail.from.address'), 'FerraKora'));
         $this->assertStringEndsWith('- KazaKora', (new OrderConfirmation($order))->build()->subject);
     }
+
+    /** Pedido do Lira 2026-10-16: o botão leva ao detalhe do pedido na área do cliente. */
+    public function test_emails_da_kazakora_levam_ao_detalhe_do_pedido(): void
+    {
+        $order = $this->pedido(null);
+        $link = route('pedidos.ver', $order->id);
+
+        foreach ([
+            new PixAguardandoPagamento($order, 100.0, 'pix-copia'),
+            new BoletoAguardandoPagamento($order, 100.0, '2379', 'https://mp/boleto'),
+            new OrderConfirmation($order),
+        ] as $mail) {
+            $this->assertStringContainsString('href="'.$link.'"', $mail->render());
+        }
+    }
 }

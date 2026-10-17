@@ -4,12 +4,16 @@ namespace App\Console\Commands;
 
 use App\Modules\Marketplace\Models\ShopeeRelampagoItem;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 
 /**
  * Lista da Oferta Relâmpago da Shopee (pedido 2026-10-17): o que o
  * shopee:relampago-agendar põe, às 22h, na Relâmpago de amanhã.
  *
  *   shopee:relampago-itens                       mostra a lista e o último resultado
+ * O Lira escolhe os itens de cada dia: incluir vale só para amanhã, salvo
+ * --dia (outro dia) ou --todo-dia.
+ *
  *   shopee:relampago-itens incluir 58218948968 --preco=59.90 --unidades=40 [--dia=2026-10-19]
  *   shopee:relampago-itens incluir 58218948968 --desconto=10 --unidades=40
  *   shopee:relampago-itens desligar 7            (id da lista; não apaga)
@@ -25,7 +29,8 @@ class ListaRelampagoShopee extends Command
         {--desconto= : Ou desconto % sobre o preço atual do anúncio}
         {--unidades= : Unidades na Relâmpago}
         {--limite=0 : Limite por comprador (0 = sem limite)}
-        {--dia= : Só neste dia (AAAA-MM-DD); vazio = todo dia}
+        {--dia= : Dia da Relâmpago (AAAA-MM-DD); padrão amanhã}
+        {--todo-dia : Entra em toda Relâmpago até ser desligado}
         {--produto= : product_id da KazaKora (referência)}
         {--nome= : Nome para a lista}';
 
@@ -95,11 +100,11 @@ class ListaRelampagoShopee extends Command
             'desconto_pct' => $desconto !== null ? (float) $desconto : null,
             'unidades' => $unidades,
             'limite_comprador' => max(0, (int) $this->option('limite')),
-            'dia' => $this->option('dia') ?: null,
+            'dia' => $this->option('todo-dia') ? null : ($this->option('dia') ?: Carbon::tomorrow()->toDateString()),
             'ativo' => true,
         ]);
 
-        $this->info("Incluído na lista da Relâmpago (id {$novo->id}).");
+        $this->info("Incluído na lista da Relâmpago (id {$novo->id}, ".($novo->dia?->format('d/m/Y') ?? 'todo dia').').');
 
         return self::SUCCESS;
     }

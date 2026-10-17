@@ -205,10 +205,13 @@ class AgendarRelampagoShopeeTest extends TestCase
         $this->artisan('shopee:relampago-itens incluir 58218948968 --preco=59,90 --unidades=40')->assertSuccessful();
         $this->artisan('shopee:relampago-itens incluir 58218948968 --preco=59.90 --desconto=10 --unidades=40')->assertFailed();
 
-        $item = ShopeeRelampagoItem::sole();
+        $item = ShopeeRelampagoItem::query()->where('shopee_item_id', 58218948968)->sole();
         $this->assertSame(59.9, $item->preco);
         $this->assertSame(0, $item->limite_comprador);
-        $this->assertNull($item->dia);
+        $this->assertSame('2026-10-18', $item->dia->toDateString());
+
+        $this->artisan('shopee:relampago-itens incluir 58216811452 --preco=147.90 --unidades=6 --todo-dia')->assertSuccessful();
+        $this->assertNull(ShopeeRelampagoItem::query()->where('shopee_item_id', 58216811452)->sole()->dia);
 
         $this->artisan('shopee:relampago-itens desligar '.$item->id)->assertSuccessful();
         $this->assertFalse($item->fresh()->ativo);

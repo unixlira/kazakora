@@ -327,6 +327,7 @@ class Order extends Model
             'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',
+            'cancelado_em' => 'datetime',
             'packed_at' => 'datetime',
             'auto_print_blocked' => 'boolean',
             'ready_for_pickup_at' => 'datetime',

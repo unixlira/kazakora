@@ -448,6 +448,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::patch('pedidos/{order}', [AdminOrderController::class, 'update'])
         ->name('pedidos.atualizar')
         ->middleware('permission:pedidos.edit');
+    // Botão "Cancelar pedido" com motivo e prévia do que acontece (2026-10-17).
+    Route::post('pedidos/{order}/cancelar', [AdminOrderController::class, 'cancel'])
+        ->name('pedidos.cancelar')
+        ->middleware('permission:pedidos.edit');
     Route::patch('pedidos/{order}/itens', [AdminOrderController::class, 'updateItems'])
         ->name('pedidos.itens.atualizar')
         ->middleware('permission:pedidos.edit');

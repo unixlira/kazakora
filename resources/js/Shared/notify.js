@@ -31,7 +31,7 @@ export async function confirmDelete(options = {}) {
         text: options.text ?? 'Essa ação não pode ser desfeita.',
         showCancelButton: true,
         confirmButtonText: options.confirmButtonText ?? 'Sim, remover',
-        cancelButtonText: 'Cancelar',
+        cancelButtonText: options.cancelButtonText ?? 'Cancelar',
         confirmButtonColor: '#dc2626',
         cancelButtonColor: '#94a3b8',
         reverseButtons: true,

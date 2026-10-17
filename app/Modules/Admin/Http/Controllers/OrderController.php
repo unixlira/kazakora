@@ -8,10 +8,8 @@ use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
-use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Fiscal\Models\Invoice;
-use App\Modules\Fiscal\Services\InvoiceService;
-use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
@@ -155,7 +153,7 @@ class OrderController extends Controller
         }
     }
 
-    public function show(Order $order): Response
+    public function show(Order $order, CancelamentoDoPedido $cancelamento): Response
     {
         $order->load(['items.product:id,sku,name,variation,price,discount_percentage,discount_amount,stock,is_active', 'user:id,name,email,phone,cpf', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
             ->loadSum('items as units_count', 'quantity');
@@ -196,6 +194,7 @@ class OrderController extends Controller
             'packingVideos' => $order->packingVideos()->get()->map->paraTela()->values(),
             'operationStatement' => $this->operationStatement($order),
             'detalhe' => $this->detalheCompleto($order),
+            'cancelamento' => $cancelamento->previa($order),
             'auditLogs' => AuditLog::query()
                 ->where('entity', class_basename(Order::class))
                 ->where('entity_id', $order->id)
@@ -205,7 +204,7 @@ class OrderController extends Controller
         ]);
     }
 
-    public function update(Request $request, Order $order, InvoiceService $invoices, OrderPaymentFinalizer $finalizer): RedirectResponse
+    public function update(Request $request, Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
     {
         // 'origin' opcional (sometimes|nullable) — pedido explícito
         // 2026-08-21 (pedido #559, importado errado como "loja"/site em vez
@@ -256,30 +255,38 @@ class OrderController extends Controller
         $warnings = [];
 
         if ($statusChanged && $validated['status'] === Order::STATUS_CANCELLED) {
-            if ($invoiceWarning = $this->cancelInvoiceIfAuthorized($order, $invoices)) {
-                $warnings[] = $invoiceWarning;
-            }
-
-            // Sem gate por status anterior: refundOrder() só age em Payment
-            // já capturado/autorizado (nunca existe nenhum pra um pedido que
-            // nunca chegou a ser cobrado), então chamar sempre é seguro.
-            foreach ($finalizer->refundOrder($order) as $refundError) {
-                Log::error('stripe.refund.order_cancel_failed', ['order_id' => $order->id, 'message' => $refundError]);
-                $warnings[] = "Reembolso: {$refundError}";
-            }
-
-            // Só devolve estoque se o pedido nunca chegou a ser enviado —
-            // se já saiu (shipped/completed), o produto saiu de verdade e
-            // devolver aqui criaria estoque fantasma.
-            if (! in_array($previousStatus, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true)) {
-                $finalizer->restoreStockIfNeeded($order, 'Pedido cancelado pelo admin');
-            }
+            $warnings = $cancelamento->efeitos($order, $previousStatus);
         }
 
         $message = $originChanged ? 'Status e canal do pedido atualizados.' : 'Status do pedido atualizado.';
         $response = back()->with('success', $message);
 
         return $warnings ? $response->with('warning', implode(' ', $warnings)) : $response;
+    }
+
+    /**
+     * Botão "Cancelar pedido" (2026-10-17): mesmo efeito da troca de status
+     * para cancelado (nota, estorno, estoque), com motivo obrigatório e quem
+     * cancelou. Sem e-mail ao cliente. Ver CancelamentoDoPedido.
+     */
+    public function cancel(Request $request, Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
+    {
+        $validated = $request->validate([
+            'motivo' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'motivo.required' => 'Escreva o motivo do cancelamento.',
+            'motivo.min' => 'Escreva o motivo do cancelamento (mínimo 5 letras).',
+        ]);
+
+        $resultado = $cancelamento->cancelar($order, $validated['motivo'], Auth::id());
+
+        if (! $resultado['ok']) {
+            return back()->with('error', $resultado['erro']);
+        }
+
+        $response = back()->with('success', 'Pedido cancelado.');
+
+        return $resultado['avisos'] ? $response->with('warning', implode(' ', $resultado['avisos'])) : $response;
     }
 
     public function updateItems(Request $request, Order $order, StockManager $stock): RedirectResponse
@@ -904,51 +911,6 @@ class OrderController extends Controller
             ],
             'lines' => [],
         ];
-    }
-
-    /**
-     * Cancela a NF-e do pedido junto (Etapa 5) quando ele tem uma nota
-     * autorizada. Nunca bloqueia a mudança de status do pedido em si — se o
-     * cancelamento na SEFAZ falhar (ex: prazo de 24h expirado), o admin
-     * precisa ser avisado pra tratar manualmente, mas o pedido já foi
-     * marcado como cancelado de qualquer forma.
-     */
-    private function cancelInvoiceIfAuthorized(Order $order, InvoiceService $invoices): ?string
-    {
-        $order->loadMissing('invoice');
-
-        // Carrinho do Mercado Livre: a nota é uma só pro carrinho inteiro.
-        // Cancelar ela junto com UM pedido derrubaria a nota dos itens que
-        // continuam vendidos — avisa e não mexe.
-        if ($avisoDoCarrinho = app(PackDoPedido::class)->avisoDeCancelamento($order)) {
-            return $avisoDoCarrinho;
-        }
-
-        if (! $order->invoice || $order->invoice->status !== Invoice::STATUS_AUTHORIZED) {
-            return null;
-        }
-
-        // Fora das 24h o cancelamento tem multa ou nem é mais possível: a
-        // decisão é de quem está na tela da nota, nunca automática.
-        $janela = $order->invoice->janelaDeCancelamento();
-
-        if ($janela === Invoice::JANELA_EXTEMPORANEA) {
-            return 'Pedido cancelado, mas a NF-e passou das 24h. Se a mercadoria não saiu, cancele pela tela da nota (até 480h, com multa estimada de R$ '.number_format($order->invoice->multaCancelamentoExtemporaneo(), 2, ',', '.').'); se saiu, registre a devolução lá.';
-        }
-
-        if ($janela === Invoice::JANELA_EXPIRADA) {
-            return 'Pedido cancelado, mas a NF-e passou de 480h e não pode mais ser cancelada. Registre a devolução na tela da nota.';
-        }
-
-        try {
-            $invoices->cancel($order, "Cancelamento do pedido #{$order->id}");
-
-            return null;
-        } catch (Throwable $exception) {
-            Log::error('nfe.cancel.failed', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
-
-            return "Pedido cancelado, mas a NF-e não pôde ser cancelada automaticamente na SEFAZ: {$exception->getMessage()}";
-        }
     }
 
     /** Vídeo da embalagem: toca no navegador (com Range) ou baixa com ?baixar=1. */

@@ -92,11 +92,6 @@ const shippingBadge = (order) => {
     }
 };
 
-// "Aguardando pagamento" sempre em duas linhas (pedido do Lira 2026-10-16).
-const statusBadgeLabel = (status) => (status === 'awaiting_payment'
-    ? statusLabel(status, 'order').replace(' ', '\n')
-    : null);
-
 const filterState = reactive({
     marketplace: props.filters.marketplace ?? '',
     status: props.filters.status ?? '',
@@ -169,17 +164,43 @@ const columns = [
             return h(StatusBadge, { status: badge.color, label: badge.label });
         },
     },
-    { id: 'customer', header: 'Cliente', accessorFn: customerName },
-    { accessorKey: 'items_count', header: 'Itens' },
-    { accessorKey: 'total', header: 'Total', cell: ({ row }) => formatPrice(row.original.total) },
+    // Cliente é a coluna elástica (2026-10-16): fica com a sobra da largura e
+    // corta o nome com reticências (nome inteiro no title). Assim a tabela
+    // cabe em 1366px sem rolagem lateral e o Status não precisa quebrar.
+    {
+        id: 'customer',
+        header: 'Cliente',
+        accessorFn: customerName,
+        meta: { cellClass: 'w-full max-w-0 min-w-[7rem]' },
+        cell: ({ row }) => {
+            const nome = customerName(row.original);
+            return h('div', { class: 'truncate', title: nome }, nome);
+        },
+    },
+    // Quantidade de itens embaixo do total (era uma coluna "Itens" só com o
+    // número): libera largura para o Status ficar numa linha.
+    {
+        accessorKey: 'total',
+        header: 'Total',
+        meta: { cellClass: 'whitespace-nowrap' },
+        cell: ({ row }) => {
+            const itens = Number(row.original.items_count ?? 0);
+            return h('div', {}, [
+                h('div', { class: 'tabular-nums' }, formatPrice(row.original.total)),
+                h('div', { class: 'text-xs text-slate-400' }, `${itens} ${itens === 1 ? 'item' : 'itens'}`),
+            ]);
+        },
+    },
+    // Status sempre numa linha só (Lira 2026-10-16: "Aguardando pagamento" em
+    // duas linhas ficou feio). O espaço vem da tabela compacta (dense) e do
+    // nome do cliente cortado, não de quebrar o selo.
     {
         accessorKey: 'status',
         header: 'Status',
+        meta: { cellClass: 'whitespace-nowrap' },
         cell: ({ row }) => h(StatusBadge, {
             status: row.original.status,
             context: 'order',
-            label: statusBadgeLabel(row.original.status),
-            wrap: true,
         }),
     },
     // Nota e e-mail na mesma coluna, um selo embaixo do outro (2026-10-11):
@@ -243,12 +264,14 @@ const columns = [
     {
         accessorKey: 'created_at',
         header: 'Data',
+        meta: { cellClass: 'whitespace-nowrap' },
         cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString('pt-BR'),
     },
     {
         id: 'actions',
         header: 'Ações',
         enableSorting: false,
+        meta: { cellClass: 'w-px' },
         cell: ({ row }) => h('div', { class: 'flex justify-end' }, h(ActionIcon, {
             icon: 'fa-eye',
             label: 'Ver pedido',
@@ -263,10 +286,20 @@ const columns = [
     <Head title="Pedidos" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
+        <!-- "Novo pedido" saiu do card de filtros para o cabeçalho, ao lado do
+             título (2026-10-16): os filtros ficam só com filtro e a busca ganha
+             a linha inteira em telas médias. -->
+        <div class="mb-4 flex items-center justify-between gap-3">
+            <h1 class="text-2xl font-bold">Pedidos</h1>
+            <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
+                class="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
+                <i class="fas fa-plus text-xs" aria-hidden="true"></i>
+                Novo pedido
+            </Link>
+        </div>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[200px_160px_300px_minmax(0,1fr)_auto] lg:items-end">
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[200px_160px_300px_minmax(0,1fr)] lg:items-end">
                 <div>
                     <label for="filtro-marketplace" class="text-xs font-medium text-slate-500">Marketplace</label>
                     <select id="filtro-marketplace" v-model="filterState.marketplace" name="marketplace" @change="applyFilters"
@@ -305,7 +338,7 @@ const columns = [
                     </div>
                 </div>
 
-                <div class="sm:col-span-2 2xl:col-span-1">
+                <div class="sm:col-span-2 lg:col-span-3 2xl:col-span-1">
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
                     <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
                          Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no
@@ -329,18 +362,13 @@ const columns = [
                         </button>
                     </div>
                 </div>
-
-                <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
-                    class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">
-                    <i class="fas fa-plus text-xs"></i>
-                    Novo pedido
-                </Link>
             </div>
 
             <p class="mt-2 text-xs text-slate-400">Ex.: #274, 261016PWVAA8JX, 701-6533441-5387462, Rachel, 123.456.789-09, (11) 98765-4321, rastreio, número da NF-e, SKU ou 13/08/2026. Aperte Enter ou clique em Buscar.</p>
         </form>
 
         <DataTable
+            dense
             :columns="columns"
             :data="orderRows"
             search-placeholder="Filtrar resultados desta página..."

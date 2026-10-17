@@ -23,6 +23,11 @@ const props = defineProps({
     showPagination: { type: Boolean, default: true },
     hideSearch: { type: Boolean, default: false },
     initialActiveTab: { type: String, default: 'all' },
+    // Tabela compacta (px-3 em vez de px-4 nas células): para listagens com
+    // muitas colunas caberem em notebook de 1366px sem rolagem lateral.
+    // Coluna pode ainda pedir classe própria em meta.cellClass (ex.:
+    // 'whitespace-nowrap'), aplicada no th e no td dela.
+    dense: { type: Boolean, default: false },
     // Modo servidor — quando vem um paginator do Laravel (paginate()), a
     // busca, a ordenação e a paginação deixam de ser feitas no navegador
     // sobre a lista inteira e viram query param tratado no backend. Criado
@@ -50,6 +55,8 @@ let searchTimer = null;
 onBeforeUnmount(() => clearTimeout(searchTimer));
 const rowSelection = ref({});
 const activeTab = ref(props.initialActiveTab || 'all');
+const cellPadding = computed(() => (props.dense ? 'px-3 py-3' : 'px-4 py-3'));
+
 const showToolbar = computed(() => !props.hideSearch || Boolean(props.createLabel && props.createHref) || props.filterTabs.length > 0);
 
 const selectionColumn = {
@@ -133,7 +140,7 @@ const setActiveTab = (value) => {
             <table class="w-full text-left text-sm">
                 <thead class="border-b border-[var(--surface-border)]">
                     <tr v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">
-                        <th v-for="header in headerGroup.headers" :key="header.id" class="px-4 py-3">
+                        <th v-for="header in headerGroup.headers" :key="header.id" :class="[cellPadding, header.column.columnDef.meta?.cellClass]">
                             <input v-if="header.column.columnDef.meta?.isSelectionColumn" type="checkbox"
                                 class="h-4 w-4 rounded border-[var(--surface-border)]"
                                 :checked="table.getIsAllPageRowsSelected()"
@@ -160,7 +167,7 @@ const setActiveTab = (value) => {
                     </tr>
                     <tr v-for="row in table.getRowModel().rows" v-else :key="row.original[rowKey] ?? row.id"
                         class="border-b border-[var(--surface-border)] last:border-0 hover:bg-[var(--surface-muted)]">
-                        <td v-for="cell in row.getVisibleCells()" :key="cell.id" class="px-4 py-3">
+                        <td v-for="cell in row.getVisibleCells()" :key="cell.id" :class="[cellPadding, cell.column.columnDef.meta?.cellClass]">
                             <input v-if="cell.column.columnDef.meta?.isSelectionColumn" type="checkbox"
                                 class="h-4 w-4 rounded border-[var(--surface-border)]"
                                 :checked="row.getIsSelected()" @change="row.toggleSelected($event.target.checked)">

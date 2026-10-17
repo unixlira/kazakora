@@ -39,6 +39,7 @@ use App\Modules\Admin\Http\Controllers\ManualOrderController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreFullPrintController;
 use App\Modules\Admin\Http\Controllers\OrderImportController;
 use App\Modules\Admin\Http\Controllers\PaymentSettingsController;
+use App\Modules\Admin\Http\Controllers\PixelMetaController;
 use App\Modules\Admin\Http\Controllers\OrderController as AdminOrderController;
 use App\Modules\Admin\Http\Controllers\PricingCalculatorController;
 use App\Modules\Admin\Http\Controllers\PrintJobController;
@@ -850,6 +851,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // migrations e componentes Vue. Se só o build Vite/manifest for enviado, o menu
         // aponta para /admin/whatsapp, mas o Laravel ativo não encontra a página e a tela quebra.
         // Não remover estas rotas sem remover também o item do menu e os assets relacionados.
+        // Pixel da Meta (2026-10-16): ID editável, sem mexer no .env.
+        Route::get('pixel-meta', [PixelMetaController::class, 'edit'])->name('pixel-meta.editar');
+        Route::put('pixel-meta', [PixelMetaController::class, 'update'])->name('pixel-meta.atualizar');
+
         Route::get('whatsapp', [WhatsAppSettingsController::class, 'edit'])->name('whatsapp.editar');
         Route::put('whatsapp', [WhatsAppSettingsController::class, 'update'])->name('whatsapp.atualizar');
         Route::post('whatsapp/testar-envio', [WhatsAppSettingsController::class, 'testSend'])->name('whatsapp.testar-envio');

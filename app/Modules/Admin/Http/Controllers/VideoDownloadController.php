@@ -22,7 +22,21 @@ class VideoDownloadController extends Controller
             'timeoutSeconds' => config('video-downloads.timeout_seconds'),
             'csrfToken' => csrf_token(),
             'downloadUrl' => route('admin.download-videos.store'),
+            'previewUrl' => route('admin.download-videos.preview'),
         ]);
+    }
+
+    public function preview(VideoDownloadRequest $request, VideoDownloadService $service): JsonResponse
+    {
+        try {
+            return response()->json($service->preview((string) $request->validated('url')));
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        } catch (Throwable) {
+            return response()->json([
+                'message' => 'Falha temporária no servidor. Tente novamente em alguns minutos.',
+            ], 500);
+        }
     }
 
     public function store(VideoDownloadRequest $request, VideoDownloadService $service): BinaryFileResponse|JsonResponse

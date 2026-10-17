@@ -61,17 +61,11 @@ const totalPedidos = computed(() => {
     return Number.isFinite(total) ? total : null;
 });
 
-// Texto do "i" ao lado do total. Tem que bater com OrderController::index:
-// nonPurchaseReturn (tira só notas de devolução), sem filtro de status nem de
-// período por padrão, created_at no período, latest() e paginate(50).
-const explicacaoDaLista = [
-    'Mostra os pedidos de todos os canais: KazaKora, FerraKora, Beauty Kora, Shopee, Mercado Livre, TikTok Shop, Amazon e notas fiscais avulsas.',
-    'Entram todos os status, inclusive cancelados e estornados. Só ficam de fora as notas de devolução.',
-    'Sem período escolhido, vale desde o primeiro pedido. O período usa a data da coluna Data.',
-    'O total segue os filtros e a busca aplicados. Ordem do mais recente para o mais antigo, 50 por página.',
-    // Exemplos da busca (Lira 2026-10-16): saíram de baixo do campo e vieram para cá.
-    'Busca, ex.: #274, 261016PWVAA8JX, 701-6533441-5387462, Rachel, 123.456.789-09, (11) 98765-4321, rastreio, número da NF-e, SKU ou 13/08/2026.',
-    'Aperte Enter ou clique em Buscar.',
+// Texto do "i" ao lado do total (Lira 2026-10-16, segunda versão): só os
+// exemplos da busca, exatamente nesta frase. A explicação anterior do que
+// entra na lista saiu a pedido dele.
+const explicacaoDaBusca = [
+    'Ex.: #274, 261016PWVAA8JX, 701-6533441-5387462, Rachel, 123.456.789-09, (11) 98765-4321, rastreio, número da NF-e, SKU ou 13/08/2026. Aperte Enter ou clique em Buscar.',
 ];
 
 const applyFilters = () => {
@@ -173,26 +167,29 @@ const columns = [
             context: 'order',
         }),
     },
-    // Nota e e-mail na mesma coluna, um selo embaixo do outro (2026-10-11):
-    // em 1440px a tabela passava 42px da tela e cortava a coluna Ações.
+    // Coluna "Nota" (Lira 2026-10-16): só a nota fiscal, para controlar de
+    // olho o status da NF-e. O e-mail saiu daqui (continua no detalhe do
+    // pedido). Selo com os status que já existem em invoices.status, rótulo
+    // e cor do mapa único (statusLabels, contexto invoice): Emitida verde,
+    // Erro/Rejeitada/Denegada/Cancelada vermelho, Pendente amarelo,
+    // Assinada/Enviada à SEFAZ azul, Sem nota cinza. Embaixo, série-número
+    // quando a nota tem número; o motivo da SEFAZ vai no title.
     {
-        id: 'invoice_email',
-        header: 'Nota / e-mail',
+        id: 'invoice',
+        header: 'Nota',
+        meta: { cellClass: 'whitespace-nowrap' },
         cell: ({ row }) => {
-            const log = row.original.latest_email_log;
-            const rotulo = (texto) => h('span', { class: 'w-10 shrink-0 text-[10px] font-semibold uppercase text-[var(--texto-suave)]' }, texto);
-            return h('div', { class: 'flex flex-col items-start gap-1' }, [
-                h('div', { class: 'flex items-center gap-1' }, [
-                    rotulo('Nota'),
-                    h(StatusBadge, { status: row.original.invoice?.status ?? null, context: 'invoice' }),
-                ]),
-                h('div', { class: 'flex items-center gap-1' }, [
-                    rotulo('E-mail'),
-                    h(StatusBadge, { status: log?.status ?? null, context: 'email' }),
-                    log && log.status === 'sent' && !log.invoice_attached
-                        ? h('span', { class: 'text-xs text-amber-600 dark:text-amber-400', title: 'Enviado sem a nota fiscal em anexo' }, 'sem anexo')
-                        : null,
-                ]),
+            const nota = row.original.invoice ?? null;
+            const numero = nota?.numero ? `${nota.serie ? `${nota.serie}-` : ''}${nota.numero}` : null;
+            const titulo = [
+                numero ? `NF-e ${numero}` : null,
+                nota?.motivo_rejeicao || null,
+            ].filter(Boolean).join(' · ') || null;
+            return h('div', { class: 'flex flex-col items-start gap-0.5' }, [
+                h(StatusBadge, { status: nota?.status ?? null, context: 'invoice', title: titulo }),
+                numero
+                    ? h('span', { class: 'pl-1 text-xs tabular-nums text-slate-500' }, `nº ${numero}`)
+                    : null,
             ]);
         },
     },
@@ -233,7 +230,7 @@ const columns = [
 
 // Cartões no lugar da tabela abaixo de 1280px (Lira 2026-10-16): a tabela
 // precisa de ~934px e, com o menu lateral, só cabe a partir de 1280px. Os
-// selos de canal, status, nota/e-mail e envio do cartão usam as MESMAS
+// selos de canal, status, nota e envio do cartão usam as MESMAS
 // funções de célula da tabela, para as duas vistas nunca divergirem.
 const colunaPorId = Object.fromEntries(columns.map((coluna) => [coluna.id ?? coluna.accessorKey, coluna]));
 const CelulaDoPedido = (p) => colunaPorId[p.coluna].cell({ row: { original: p.pedido } });
@@ -256,7 +253,7 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                 <h1 class="text-2xl font-bold">Pedidos</h1>
                 <span v-if="totalPedidos !== null" class="inline-flex items-center gap-1.5 text-sm text-slate-500">
                     <span><span class="font-semibold tabular-nums text-[var(--foreground)]">{{ totalPedidos.toLocaleString('pt-BR') }}</span> {{ totalPedidos === 1 ? 'pedido' : 'pedidos' }}</span>
-                    <InfoTooltip label="O que esta lista mostra" :paragraphs="explicacaoDaLista" />
+                    <InfoTooltip label="Como buscar pedidos" :paragraphs="explicacaoDaBusca" />
                 </span>
             </div>
         </div>
@@ -354,7 +351,7 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
 
         <!-- Celular, tablet e notebook pequeno (< 1280px): um cartão por pedido,
              sem rolagem lateral. Número e status no topo, cliente e valor em
-             destaque, nota/e-mail e envio embaixo, botão Ver pedido inteiro. -->
+             destaque, nota e envio embaixo, botão Ver pedido inteiro. -->
         <div class="xl:hidden">
             <div v-if="orderRows.length === 0"
                 class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-10 text-center text-sm text-slate-400 shadow-sm">
@@ -390,8 +387,8 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
 
                     <div class="mt-3 grid gap-3 border-t border-[var(--surface-border)] pt-3 sm:grid-cols-2">
                         <div class="min-w-0">
-                            <div class="mb-1 text-[10px] font-semibold uppercase text-[var(--texto-suave)]">Nota / e-mail</div>
-                            <CelulaDoPedido coluna="invoice_email" :pedido="order" />
+                            <div class="mb-1 text-[10px] font-semibold uppercase text-[var(--texto-suave)]">Nota</div>
+                            <CelulaDoPedido coluna="invoice" :pedido="order" />
                         </div>
                         <div class="min-w-0">
                             <div class="mb-1 text-[10px] font-semibold uppercase text-[var(--texto-suave)]">Envios</div>

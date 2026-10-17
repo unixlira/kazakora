@@ -14,13 +14,10 @@ const props = defineProps({
         type: [Array, Object],
         default: () => ({ data: [] }),
     },
-    channels: {
+    // Opções do filtro "Marketplace" (fonte única: Order::MARKETPLACES).
+    marketplaces: {
         type: Array,
         default: () => [],
-    },
-    sites: {
-        type: Object,
-        default: () => ({}),
     },
     filters: {
         type: Object,
@@ -44,8 +41,7 @@ const siteBadge = {
 };
 
 const filterState = reactive({
-    site: props.filters.site ?? '',
-    origin: props.filters.origin ?? '',
+    marketplace: props.filters.marketplace ?? '',
     search: props.filters.search ?? '',
 });
 const orderRows = computed(() => Array.isArray(props.orders) ? props.orders : (props.orders?.data ?? []));
@@ -178,32 +174,23 @@ const columns = [
         <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
-            <div class="grid gap-3 lg:grid-cols-[180px_220px_minmax(0,1fr)_auto] lg:items-end">
+            <div class="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto_auto] lg:items-end">
                 <div>
-                    <label class="text-xs font-medium text-slate-500">Site</label>
-                    <select v-model="filterState.site" @change="applyFilters"
+                    <label for="filtro-marketplace" class="text-xs font-medium text-slate-500">Marketplace</label>
+                    <select id="filtro-marketplace" v-model="filterState.marketplace" name="marketplace" @change="applyFilters"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
-                        <option value="">Todos os sites</option>
-                        <option v-for="(label, site) in props.sites" :key="site" :value="site">{{ label }}</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="text-xs font-medium text-slate-500">Marketplace</label>
-                    <select v-model="filterState.origin" @change="applyFilters"
-                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
-                        <option value="">Todos os marketplaces</option>
-                        <option v-for="channel in props.channels" :key="channel" :value="channel">
-                            {{ channelBadge[channel]?.label ?? channel }}
+                        <option value="">Todos</option>
+                        <option v-for="option in props.marketplaces" :key="option.value" :value="option.value">
+                            {{ option.label }}
                         </option>
                     </select>
                 </div>
 
                 <div>
-                    <label class="text-xs font-medium text-slate-500">Buscar pedido</label>
+                    <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
                     <div class="relative mt-1">
-                        <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
-                        <input v-model="filterState.search" type="search" placeholder="ID, número externo, cliente ou data"
+                        <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
+                        <input id="busca-pedido" v-model="filterState.search" type="search" placeholder="ID, número externo, cliente ou data"
                             class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:border-primary focus:outline-none">
                         <button v-if="filterState.search" type="button"
                             class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
@@ -213,6 +200,13 @@ const columns = [
                     </div>
                 </div>
 
+                <!-- Botão de buscar (pedido do Lira 2026-10-16); Enter no campo continua valendo. -->
+                <button type="submit"
+                    class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg border border-primary px-4 text-sm font-medium text-primary hover:bg-primary hover:text-white">
+                    <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
+                    Buscar
+                </button>
+
                 <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
                     class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">
                     <i class="fas fa-plus text-xs"></i>
@@ -220,7 +214,7 @@ const columns = [
                 </Link>
             </div>
 
-            <p class="mt-2 text-xs text-slate-400">Ex.: #274, 701-6533441-5387462, Rachel ou 13/08/2026. Aperte Enter para buscar.</p>
+            <p class="mt-2 text-xs text-slate-400">Ex.: #274, 701-6533441-5387462, Rachel ou 13/08/2026. Aperte Enter ou clique em Buscar.</p>
         </form>
 
         <DataTable

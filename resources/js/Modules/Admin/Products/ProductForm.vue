@@ -177,14 +177,18 @@ const regenerateSku = async () => {
                 <InputError :message="form.errors.color" />
             </div>
             <div>
-                <label for="variation" class="block text-sm font-medium">Variação (tamanho, voltagem, capacidade...)</label>
+                <!-- Rótulo curto como os vizinhos (Cor, Marca): a explicação
+                     longa quebrava a linha e descia o input em relação ao da Cor. -->
+                <label for="variation" class="block text-sm font-medium">Variação</label>
                 <input
                     id="variation"
                     v-model="form.variation"
                     type="text"
                     placeholder="Ex: P, 20W, 12L"
+                    aria-describedby="variation-hint"
                     class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                 >
+                <p id="variation-hint" class="mt-1 text-xs text-gray-500">Tamanho, voltagem, capacidade...</p>
                 <InputError :message="form.errors.variation" />
             </div>
         </div>

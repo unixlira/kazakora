@@ -91,8 +91,8 @@ class HandleInertiaRequests extends Middleware
             // Aviso de cookies (docs/privacidade-e-cookies.md): some depois do OK.
             'cookies' => fn () => $request->is('admin*') ? null : [
                 'aceito' => \App\Support\Privacidade\Cookies::aceitou($request),
-                // Pixel da Meta (2026-10-16): o front só carrega depois do OK.
-                'pixelMeta' => filled(config('services.meta_ads.pixel_id')) ? (string) config('services.meta_ads.pixel_id') : null,
+                // Pixel da Meta (2026-10-16): o front só carrega depois do OK; ID do admin.
+                'pixelMeta' => \App\Support\PixelMeta::id(),
             ],
             'cart' => fn () => [
                 // Ícone do topo: o carrinho de verdade, mesmo durante uma compra direta.

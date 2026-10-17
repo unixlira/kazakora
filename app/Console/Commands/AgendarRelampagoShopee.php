@@ -31,8 +31,8 @@ class AgendarRelampagoShopee extends Command
 
     protected $description = 'Agenda os itens da lista na Oferta Relâmpago da Shopee do dia seguinte (00h a 24h)';
 
-    /** Limite de itens por Relâmpago na Shopee. */
-    private const MAX_ITENS = 50;
+    /** Limite real de itens por Relâmpago da loja (17/10: o 21º volta "exceed the max number of item limit"; variações contam 1). */
+    private const MAX_ITENS = 20;
 
     /** @var array<string, string> "item:modelo" => motivo de ficar de fora antes de enviar */
     private array $deFora = [];

@@ -37,7 +37,7 @@ class DevolucoesController extends Controller
         'shopee' => 'Shopee',
         'tiktok_shop' => 'TikTok Shop',
         'amazon' => 'Amazon',
-        'loja' => 'Site',
+        'loja' => 'KazaKora', // era "Site"; o caso mostra a loja certa (canalNome)
     ];
 
     public function index(Request $request): Response
@@ -47,7 +47,7 @@ class DevolucoesController extends Controller
         $busca = trim((string) $request->string('busca')) ?: null;
 
         $casos = MarketplaceReturn::query()
-            ->with(['order:id,shipping_name,total,stock_restored_at', 'order.items:id,order_id,product_id,product_name,quantity', 'devolucaoOrder.invoice:id,order_id,numero,status', 'events.user:id,name', 'evidencias.user:id,name', 'receivedBy:id,name', 'verdictBy:id,name'])
+            ->with(['order:id,origin,site_origem,shipping_name,total,stock_restored_at', 'order.items:id,order_id,product_id,product_name,quantity', 'devolucaoOrder.invoice:id,order_id,numero,status', 'events.user:id,name', 'evidencias.user:id,name', 'receivedBy:id,name', 'verdictBy:id,name'])
             ->when($canal, fn ($q) => $q->where('channel', $canal))
             ->when($busca, fn ($q) => $q->where(fn ($q) => $q
                 ->where('external_order_id', 'like', "%{$busca}%")
@@ -184,7 +184,7 @@ class DevolucoesController extends Controller
                     return back()->with('warning', 'O estoque desse pedido já tinha voltado em '.$devolucao->order->stock_restored_at->timezone('America/Sao_Paulo')->format('d/m/Y H:i').'.');
                 }
 
-                $finalizer->restoreStockIfNeeded($devolucao->order, 'Devolução '.(self::CANAIS[$devolucao->channel] ?? $devolucao->channel)." — caso #{$devolucao->id}");
+                $finalizer->restoreStockIfNeeded($devolucao->order, 'Devolução '.$this->nomeDoCanal($devolucao)." — caso #{$devolucao->id}");
                 $registrar('Produto devolvido ao estoque');
                 break;
         }
@@ -310,12 +310,23 @@ class DevolucoesController extends Controller
         cache()->forget('devolucoes.contagem_alertas');
     }
 
+    /** Pedido do site sai com o nome da loja (KazaKora, FerraKora ou Beauty Kora). */
+    private function nomeDoCanal(MarketplaceReturn $caso): string
+    {
+        if ($caso->channel === Order::ORIGIN_STORE && $caso->order) {
+            return Order::rotuloDoCanal(Order::ORIGIN_STORE, $caso->order->site_origem);
+        }
+
+        return self::CANAIS[$caso->channel] ?? (string) $caso->channel;
+    }
+
     /** @return array<string, mixed> */
     private function linha(MarketplaceReturn $caso): array
     {
         return [
             'id' => $caso->id,
             'canal' => $caso->channel,
+            'canalNome' => $this->nomeDoCanal($caso),
             'externo' => $caso->external_id,
             'manual' => $caso->manual,
             'pedidoId' => $caso->order_id,

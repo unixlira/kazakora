@@ -34,6 +34,10 @@ class VideosEmbalagemController extends Controller
         Order::ORIGIN_SHOPEE,
         Order::ORIGIN_TIKTOK_SHOP,
         Order::ORIGIN_AMAZON,
+        // Sites do FerraKora e da Beauty Kora (2026-10-16): pedido com origin
+        // "loja" e site_origem preenchido; "loja" sozinho é só o kazakora.com.
+        Order::SITE_FERRAKORA,
+        Order::SITE_BEAUTYKORA,
     ];
 
     public function index(Request $request, RegraVideoEmbalagem $regra): Response
@@ -48,9 +52,9 @@ class VideosEmbalagemController extends Controller
         $busca = trim((string) ($filtros['busca'] ?? ''));
 
         $query = OrderPackingVideo::query()
-            ->with('order:id,origin,external_order_id,shipping_name,shipping_recipient_name,channel_buyer_nickname,status')
+            ->with('order:id,origin,site_origem,external_order_id,shipping_name,shipping_recipient_name,channel_buyer_nickname,status')
             ->when($filtros['status'] ?? null, fn (Builder $q, $status) => $q->where('status', $status))
-            ->when($filtros['canal'] ?? null, fn (Builder $q, $canal) => $q->whereHas('order', fn (Builder $o) => $o->where('origin', $canal)))
+            ->when($filtros['canal'] ?? null, fn (Builder $q, $canal) => $q->whereHas('order', fn (Builder $o) => Order::filtrarCanal($o, $canal)))
             ->when($filtros['de'] ?? null, fn (Builder $q, $de) => $q->where('created_at', '>=', $de.' 00:00:00'))
             ->when($filtros['ate'] ?? null, fn (Builder $q, $ate) => $q->where('created_at', '<=', $ate.' 23:59:59'))
             ->when($busca !== '', function (Builder $q) use ($busca) {
@@ -76,6 +80,7 @@ class VideosEmbalagemController extends Controller
                     'id' => $v->order_id,
                     'numero' => $v->order?->external_order_id,
                     'canal' => $v->order?->origin,
+                    'canalNome' => $v->order ? Order::rotuloDoCanal($v->order->origin, $v->order->site_origem) : null,
                     'cliente' => $v->order?->shipping_recipient_name ?: $v->order?->shipping_name,
                     'apelido' => $v->order?->channel_buyer_nickname,
                 ],

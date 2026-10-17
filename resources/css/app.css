@@ -621,6 +621,49 @@ html.dark:has(.admin-shell) body * { scrollbar-color: #4a4f54 transparent; }
     }
 }
 
+/* Linha "Frete grátis ⚡FULL" + Detalhes (pedido 2026-10-17): no computador a letra e
+   o botão acompanham a largura do card (cqw, descontados os 32px da margem interna),
+   então nas Ofertas do Dia com 5 cards o botão diminui junto e a folga para o FULL
+   continua a mesma. Card estreito demais para os dois na mesma linha (5 por linha
+   entre 1024 e 1180px, 4 por linha no tablet) leva o Detalhes para a última linha. */
+.card-produto {
+    container-type: inline-size;
+}
+
+@media (min-width: 768px) {
+    .frete-card {
+        font-size: clamp(11px, calc(6.9cqw - 2.2px), 14px);
+    }
+
+    .detalhes-card {
+        display: inline-flex;
+        height: clamp(18px, calc(11.8cqw - 3.8px), 24px);
+        padding-inline: clamp(6px, calc(4.93cqw - 1.58px), 10px);
+        font-size: clamp(9px, calc(5.42cqw - 1.73px), 11px);
+    }
+
+    .detalhes-baixo {
+        display: none;
+    }
+
+    @container (max-width: 204px) {
+        .frete-card {
+            font-size: 12px;
+        }
+
+        .detalhes-card {
+            display: none;
+        }
+
+        .detalhes-baixo {
+            display: flex;
+            margin-top: 8px;
+            padding-block: 5px;
+            font-size: 11px;
+        }
+    }
+}
+
 .titulo-ver-mais {
     display: inline-block;
     margin-left: 2px;

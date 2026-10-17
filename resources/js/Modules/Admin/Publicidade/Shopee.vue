@@ -19,7 +19,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import CardStats from '@/Shared/Components/CardStats.vue';
 import AcaoCaue from './AcaoCaue.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -151,8 +151,11 @@ const limpar = () => {
 
 const desde = ref(props.filtro.desde);
 const ate = ref(props.filtro.ate);
-const irPeriodo = (dias) => router.get('/admin/publicidade/shopee', { dias }, { preserveScroll: true });
-const irIntervalo = () => desde.value && ate.value && router.get('/admin/publicidade/shopee', { desde: desde.value, ate: ate.value }, { preserveScroll: true });
+// Dentro de Marketplaces › Shopee › Gerar campanha o filtro fica na aba.
+const pagina = usePage();
+const urlTela = () => pagina.props.marketplaceNav?.url ?? '/admin/publicidade/shopee';
+const irPeriodo = (dias) => router.get(urlTela(), { dias }, { preserveScroll: true });
+const irIntervalo = () => desde.value && ate.value && router.get(urlTela(), { desde: desde.value, ate: ate.value }, { preserveScroll: true });
 
 const corResultado = (v) => (v === null ? 'text-slate-400' : v < 0 ? 'text-error' : 'text-success');
 const abaixo = (c) => c.roas !== null && c.roas_empate && c.roas < c.roas_empate;

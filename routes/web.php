@@ -584,6 +584,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::patch('marketplaces/fotos-anuncio/{brief}/aprovar', [MarketplaceAdPhotoController::class, 'approve'])->name('marketplaces.fotos-anuncio.aprovar');
         Route::patch('marketplaces/fotos-anuncio/{brief}/reprovar', [MarketplaceAdPhotoController::class, 'reject'])->name('marketplaces.fotos-anuncio.reprovar');
         Route::post('marketplaces/fotos-anuncio/{brief}/gerar-criativos', [MarketplaceAdPhotoController::class, 'startGeneration'])->name('marketplaces.fotos-anuncio.gerar-criativos');
+        // Menu Marketplaces (Lira 2026-10-17): lista e abas de cada marketplace.
+        // As abas com tela pronta chamam o controller antigo (que tem a sua
+        // própria checagem de permissão no MarketplacesController). Vem depois
+        // de fotos-anuncio; o whereIn impede conflito com ela.
+        Route::get('marketplaces', [\App\Modules\Admin\Http\Controllers\MarketplacesController::class, 'index'])->name('marketplaces.index');
+        Route::get('marketplaces/{marketplace}/{aba?}', [\App\Modules\Admin\Http\Controllers\MarketplacesController::class, 'show'])
+            ->whereIn('marketplace', \App\Modules\Admin\Support\CatalogoMarketplaces::slugs())
+            ->whereIn('aba', array_keys(\App\Modules\Admin\Support\CatalogoMarketplaces::ABAS))
+            ->middleware('throttle:60,1')
+            ->name('marketplaces.ver');
         Route::get('mkt-digital', [DigitalMarketingController::class, 'index'])->name('mkt-digital');
         Route::post('mkt-digital/atualizar', [DigitalMarketingController::class, 'refresh'])
             ->middleware('throttle:4,1')

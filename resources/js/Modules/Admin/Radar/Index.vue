@@ -6,8 +6,10 @@ import BuscaTabela from './BuscaTabela.vue';
 import Paginacao from './Paginacao.vue';
 import MercadoLivreBloco from './MercadoLivreBloco.vue';
 import { normalizar, useBuscaPaginada } from './useBuscaPaginada';
-import { Deferred, Head, router } from '@inertiajs/vue3';
+import { Deferred, Head, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+
+const pagina = usePage();
 
 // Radar de Oportunidades (pedido do Lira 2026-10-12): o que está vendendo e
 // em alta fora da loja, numa tela só. Fontes: TikTok Shop (Kalodata),
@@ -47,7 +49,8 @@ const formatPercent = (value) => `${value > 0 ? '+' : ''}${value.toLocaleString(
 
 const carregando = ref(false);
 const consultarDeNovo = () => {
-    router.get(props.fonte ? `/admin/radar/${props.fonte}` : '/admin/radar', { atualizar: 1 }, {
+    // Dentro de Marketplaces › TikTok Shop › Oportunidades fica na aba.
+    router.get(pagina.props.marketplaceNav?.url ?? (props.fonte ? `/admin/radar/${props.fonte}` : '/admin/radar'), { atualizar: 1 }, {
         preserveScroll: true,
         onStart: () => { carregando.value = true; },
         onFinish: () => { carregando.value = false; },

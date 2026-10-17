@@ -6,6 +6,7 @@ import { useClickOutside } from '@/Shared/useClickOutside';
 import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { sidebarSections } from '@/Shared/adminSidebarItems';
+import MarketplaceAbas from '@/Shared/Components/MarketplaceAbas.vue';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
 import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
@@ -524,6 +525,9 @@ watch(
             </nav>
 
             <div class="admin-conteudo relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
+                <!-- Marketplaces (Lira, 2026-10-17): logotipo e abas do marketplace
+                em cima de qualquer tela aberta dentro de uma aba. -->
+                <MarketplaceAbas v-if="page.props.marketplaceNav" :nav="page.props.marketplaceNav" />
                 <slot />
 
                 <!-- Loader de troca de tela: só a área de conteúdo, menu e topo

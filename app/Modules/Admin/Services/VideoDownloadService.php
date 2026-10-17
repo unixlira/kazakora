@@ -61,7 +61,7 @@ class VideoDownloadService
     public function preview(string $url): array
     {
         $process = new Process([
-            ...$this->baseCommand(),
+            ...$this->baseCommand($url),
             '--skip-download',
             '--dump-single-json',
             $url,
@@ -98,7 +98,7 @@ class VideoDownloadService
     private function downloadCommand(string $url, string $directory): array
     {
         return [
-            ...$this->baseCommand(),
+            ...$this->baseCommand($url),
             '--merge-output-format',
             'mp4',
             // h264 abre em qualquer player e editor do Windows; h265/AV1 não.
@@ -121,7 +121,7 @@ class VideoDownloadService
         ];
     }
 
-    private function baseCommand(): array
+    private function baseCommand(string $url): array
     {
         $command = [
             ...$this->binaryCommand(),
@@ -143,10 +143,11 @@ class VideoDownloadService
         // YouTube barra download anônimo de servidor ("confirme que não é
         // um robô"): cookies de uma conta logada + o provedor de PO token
         // (bgutil) instalados na hospedagem. Os dois são opcionais — sem
-        // eles, TikTok/Instagram/Facebook continuam funcionando.
+        // eles, TikTok/Instagram/Facebook continuam funcionando. Cookies do
+        // YouTube mandados ao TikTok fazem ele responder 403 (2026-10-17).
         $cookies = config('video-downloads.cookies_path');
 
-        if (is_string($cookies) && $cookies !== '' && is_readable($cookies)) {
+        if ($this->isYouTube($url) && is_string($cookies) && $cookies !== '' && is_readable($cookies)) {
             $command = [...$command, '--cookies', $cookies];
         }
 
@@ -168,6 +169,15 @@ class VideoDownloadService
             '--fragment-retries',
             '2',
         ];
+    }
+
+    private function isYouTube(string $url): bool
+    {
+        $host = Str::lower((string) parse_url($url, PHP_URL_HOST));
+
+        return in_array($host, ['youtube.com', 'youtu.be'], true)
+            || str_ends_with($host, '.youtube.com')
+            || str_ends_with($host, '.youtu.be');
     }
 
     private function isTikTok(string $url): bool

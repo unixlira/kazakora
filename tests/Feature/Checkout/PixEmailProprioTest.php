@@ -47,4 +47,37 @@ class PixEmailProprioTest extends TestCase
         Mail::assertSent(PixAguardandoPagamento::class, fn ($mail) => $mail->hasTo('cliente@exemplo.com')
             && $mail->copiaECola === '00020126PIXCOPIAECOLA' && $mail->order->is($order));
     }
+
+    /** QR Code no meio do e-mail como anexo inline (CID), que o Gmail mostra (pedido 2026-10-16). */
+    public function test_qr_code_vai_inline_no_email_mesmo_sem_o_png_do_mercado_pago(): void
+    {
+        config(['mail.default' => 'array']);
+        $order = new Order(['numero' => '261016TESTE123']);
+        $order->id = 1;
+        $copiaECola = '00020126580014br.gov.bcb.pix0136123e4567-e12b-12d1-a456-4266554400005204000053039865406099.905802BR5908KAZAKORA6009SAO PAULO62070503***6304ABCD';
+
+        $mail = new PixAguardandoPagamento($order, 99.90, $copiaECola, null, now()->addMinutes(30)->toIso8601String());
+        $png = $mail->qrPng();
+        $this->assertNotNull($png);
+        $this->assertStringStartsWith("\x89PNG", $png);
+
+        Mail::to('cliente@exemplo.com')->send($mail);
+        $enviado = app('mailer')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $inline = collect($enviado->getAttachments())->filter(fn ($a) => $a->getDisposition() === 'inline' && $a->getMediaType() === 'image');
+        $this->assertCount(1, $inline);
+        $html = $enviado->getHtmlBody();
+        $this->assertStringContainsString('src="cid:', $html);
+        $this->assertStringNotContainsString('data:image', $html);
+        // Fica entre o valor a pagar e o copia e cola.
+        $this->assertTrue(strpos($html, 'Valor a pagar') < strpos($html, 'cid:') && strpos($html, 'cid:') < strpos($html, '>Pix copia e cola<'));
+    }
+
+    public function test_usa_o_png_do_mercado_pago_quando_vem_valido_e_some_sem_copia_e_cola(): void
+    {
+        $order = new Order(['numero' => '261016TESTE123']);
+        $pngDoMp = "\x89PNG\r\n\x1a\nqualquer";
+
+        $this->assertSame($pngDoMp, (new PixAguardandoPagamento($order, 10, '000201X', base64_encode($pngDoMp)))->qrPng());
+        $this->assertNull((new PixAguardandoPagamento($order, 10, '', null))->qrPng());
+    }
 }

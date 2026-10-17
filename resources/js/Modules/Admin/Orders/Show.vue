@@ -113,7 +113,7 @@ const updateStatus = () => {
 // disparar nenhum pipeline automático (etiqueta/nota não recomeçam
 // sozinhos só por trocar o canal — ver OrderController::update()).
 const CHANNEL_EDIT_OPTIONS = {
-    loja: 'Site (Kazakora)',
+    loja: 'KazaKora',
     mercado_livre: 'Mercado Livre',
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',

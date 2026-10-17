@@ -14,7 +14,7 @@ const props = defineProps({
 });
 
 const channelLabels = {
-    loja: 'Site (venda manual)',
+    loja: 'KazaKora (venda manual)',
     mercado_livre: 'Mercado Livre',
     shopee: 'Shopee',
     tiktok_shop: 'TikTok Shop',

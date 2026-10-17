@@ -66,6 +66,14 @@ valor da nota, e com isso o imposto do Simples.
   (ele não recebe a comissão). 36 de 37 pedidos sem taxa → lucro da Amazon inflado
   (~12–15% da venda). Fonte real: relatório de pagamentos da Amazon (Seller Central)
   ou SP-API Finances (conta SP-API desconectada desde 12/08).
+  **Resolvido (17/10/2026):** a taxa real vem da SP-API, Finances API 2024-06-19
+  (`php artisan amazon:taxas-reais --dias=30`, de hora em hora aos 35 min;
+  `--seco` só simula). Grava como o relatório (`source = report`, linha em
+  `marketplace_settlement_details` com `source_file = sp-api:finances/2024-06-19`):
+  taxa = produto + frete do cliente − líquido. Lançamento diferido e liberado
+  contam uma vez; reembolso não muda a taxa (a venda sai pelo `estornado_em`);
+  taxa manual não é sobrescrita. A coleta pela tela da Seller Central na Cora Box
+  foi desligada. Detalhes em `TaxasAmazonSpApi`.
 - **TikTok:** taxa da maioria dos pedidos desde setembro é **estimada**
   (`orders:estimar-taxas-tiktok`); último extrato real importado vai até 21/09.
   Valor real só com o extrato (Income) do TikTok Seller Center.

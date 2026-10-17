@@ -209,4 +209,16 @@ class BuscaDePedidosTest extends TestCase
         }
         $this->actingAs($this->admin)->get('/admin/pedidos?search[]=x')->assertOk();
     }
+
+    public function test_filtro_pendente_traz_tambem_aguardando_pagamento(): void
+    {
+        $pendente = $this->pedido(['status' => Order::STATUS_PENDING]);
+        $aguardando = $this->pedido(['status' => Order::STATUS_AWAITING_PAYMENT]);
+        $pago = $this->pedido(['status' => Order::STATUS_PAID]);
+
+        $ids = $this->ids('status=pending');
+        sort($ids);
+        $this->assertSame([$pendente->id, $aguardando->id], $ids);
+        $this->assertSame([$pago->id], $this->ids('status=paid'));
+    }
 }

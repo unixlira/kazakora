@@ -305,7 +305,7 @@ const columns = [
                     </div>
                 </div>
 
-                <div>
+                <div class="sm:col-span-2 2xl:col-span-1">
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
                     <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
                          Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no

@@ -281,6 +281,16 @@ const columns = [
         })),
     },
 ];
+
+// Cartões no lugar da tabela abaixo de 1280px (Lira 2026-10-16): a tabela
+// precisa de ~934px e, com o menu lateral, só cabe a partir de 1280px. Os
+// selos de canal, status, nota/e-mail e envio do cartão usam as MESMAS
+// funções de célula da tabela, para as duas vistas nunca divergirem.
+const colunaPorId = Object.fromEntries(columns.map((coluna) => [coluna.id ?? coluna.accessorKey, coluna]));
+const CelulaDoPedido = (p) => colunaPorId[p.coluna].cell({ row: { original: p.pedido } });
+CelulaDoPedido.props = ['coluna', 'pedido'];
+
+const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
 </script>
 
 <template>
@@ -375,7 +385,67 @@ const columns = [
             <p class="mt-2 text-xs text-slate-400">Ex.: #274, 261016PWVAA8JX, 701-6533441-5387462, Rachel, 123.456.789-09, (11) 98765-4321, rastreio, número da NF-e, SKU ou 13/08/2026. Aperte Enter ou clique em Buscar.</p>
         </form>
 
+        <!-- Celular, tablet e notebook pequeno (< 1280px): um cartão por pedido,
+             sem rolagem lateral. Número e status no topo, cliente e valor em
+             destaque, nota/e-mail e envio embaixo, botão Ver pedido inteiro. -->
+        <div class="xl:hidden">
+            <div v-if="orderRows.length === 0"
+                class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-10 text-center text-sm text-slate-400 shadow-sm">
+                <i class="fas fa-inbox mb-2 block text-2xl" aria-hidden="true"></i>
+                Nenhum pedido encontrado.
+            </div>
+            <ul v-else class="grid list-none gap-3 lg:grid-cols-2">
+                <li v-for="order in orderRows" :key="order.id"
+                    class="flex min-w-0 flex-col rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <Link :href="`/admin/pedidos/${order.id}`" class="text-base font-bold hover:text-primary hover:underline">#{{ order.id }}</Link>
+                            <div v-if="order.external_order_id" class="truncate text-xs text-slate-400" :title="order.external_order_id">{{ order.external_order_id }}</div>
+                        </div>
+                        <div class="shrink-0">
+                            <CelulaDoPedido coluna="status" :pedido="order" />
+                        </div>
+                    </div>
+
+                    <div class="mt-3 flex items-end justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="truncate text-sm font-semibold" :title="customerName(order)">{{ customerName(order) }}</div>
+                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                <CelulaDoPedido coluna="origin" :pedido="order" />
+                                <span>{{ formatDate(order.created_at) }}</span>
+                            </div>
+                        </div>
+                        <div class="shrink-0 text-right">
+                            <div class="text-lg font-bold tabular-nums">{{ formatPrice(order.total) }}</div>
+                            <div class="text-xs text-slate-400">{{ Number(order.items_count ?? 0) }} {{ Number(order.items_count ?? 0) === 1 ? 'item' : 'itens' }}</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 grid gap-3 border-t border-[var(--surface-border)] pt-3 sm:grid-cols-2">
+                        <div class="min-w-0">
+                            <div class="mb-1 text-[10px] font-semibold uppercase text-[var(--texto-suave)]">Nota / e-mail</div>
+                            <CelulaDoPedido coluna="invoice_email" :pedido="order" />
+                        </div>
+                        <div class="min-w-0">
+                            <div class="mb-1 text-[10px] font-semibold uppercase text-[var(--texto-suave)]">Envios</div>
+                            <CelulaDoPedido coluna="correios_qr" :pedido="order" />
+                        </div>
+                    </div>
+
+                    <div class="mt-auto pt-4">
+                        <Link :href="`/admin/pedidos/${order.id}`"
+                            class="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[var(--surface-border)] text-sm font-medium text-primary hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                            <i class="fas fa-eye text-xs" aria-hidden="true"></i>
+                            Ver pedido
+                        </Link>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <!-- A partir de 1280px: a tabela de sempre. -->
         <DataTable
+            class="hidden xl:block"
             dense
             :columns="columns"
             :data="orderRows"

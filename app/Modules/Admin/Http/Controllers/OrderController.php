@@ -16,6 +16,7 @@ use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Support\LabelFetchService;
+use App\Modules\Marketplace\Support\TipoDeEnvio;
 use App\Notifications\OrderStatusUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,6 +73,8 @@ class OrderController extends Controller
                 'invoice:id,order_id,status',
                 'latestEmailLog',
                 'latestCorreiosPrePostagem',
+                // Tipo de envio (Flex, Mercado Envios, Full...) na coluna Envios.
+                'channelShipment:id,order_id,channel,shipping_method',
             ])
             ->withCount('items')
             // 'loja' = só kazakora.com; FerraKora/Beauty Kora pelo site_origem;
@@ -114,7 +117,18 @@ class OrderController extends Controller
             })
             ->latest()
             ->paginate(50)
-            ->withQueryString();
+            ->withQueryString()
+            // Mesma tradução do KoraSync (TipoDeEnvio): o selo da listagem
+            // diz como a caixa sai, não só o canal (2026-10-16).
+            ->through(function (Order $order) {
+                $envio = TipoDeEnvio::doPedido($order);
+                $order->setAttribute('shipping_type', $envio['tipo']);
+                $order->setAttribute('shipping_type_label', $envio['label']);
+                $order->setAttribute('shipping_type_short', $envio['curto']);
+                $order->unsetRelation('channelShipment');
+
+                return $order;
+            });
 
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,

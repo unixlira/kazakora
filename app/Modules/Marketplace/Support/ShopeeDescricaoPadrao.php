@@ -55,7 +55,7 @@ class ShopeeDescricaoPadrao
         $original = trim((string) $product->description);
 
         if ($this->conforme($original)) {
-            return $original;
+            return $this->espacarSecoes($original);
         }
 
         if ($this->gemini->isConfigured()) {
@@ -146,10 +146,58 @@ Cadastro atual:
 TXT;
     }
 
+    /**
+     * Linha em branco antes de cada título de seção (emoji + caixa alta, ou o
+     * fecho 🛒) e depois do título do anúncio. Sem ela a Shopee mostra as
+     * seções coladas ("...transporte.\n🔩 FERRAMENTAS E ACESSÓRIOS").
+     * Itens de lista (✅ ✔ ☑ •) ficam como estão, mesmo em caixa alta.
+     */
+    public function espacarSecoes(string $texto): string
+    {
+        $linhas = explode("\n", $texto);
+        $saida = [];
+
+        foreach ($linhas as $i => $linha) {
+            if ($i > 0 && $saida !== [] && trim(end($saida)) !== '' && $this->tituloDeSecao($linha)) {
+                $saida[] = '';
+            }
+
+            $saida[] = $linha;
+
+            if ($i === 0 && $this->tituloDeSecao($linha) && trim($linhas[1] ?? '') !== '') {
+                $saida[] = '';
+            }
+        }
+
+        return implode("\n", $saida);
+    }
+
+    private function tituloDeSecao(string $linha): bool
+    {
+        $linha = trim($linha);
+
+        if (! preg_match('/^[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{2300}-\x{23FF}][\x{FE0F}\x{200D}\x{2640}\x{2642}\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]*\s*/u', $linha, $m)) {
+            return false;
+        }
+
+        if (preg_match('/^(✅|✔|☑|✓|❌|✖|👉|➡|▶|•|🔸|🔹)/u', $linha)) {
+            return false;
+        }
+
+        if (str_starts_with($linha, '🛒')) {
+            return true;
+        }
+
+        $resto = mb_substr($linha, mb_strlen($m[0]));
+        $letras = (string) preg_replace('/[^\p{L}]/u', '', $resto);
+
+        return $letras !== '' && mb_strtoupper($letras) === $letras && mb_strlen($resto) <= 70;
+    }
+
     private function limpar(string $texto): string
     {
         $texto = str_replace(['**', '__', '```', '—', '–'], ['', '', '', ', ', ', '], strip_tags($texto));
-        $texto = trim((string) preg_replace("/\n{3,}/", "\n\n", str_replace("\r", '', $texto)));
+        $texto = trim((string) preg_replace("/\n{3,}/", "\n\n", $this->espacarSecoes(str_replace("\r", '', $texto))));
 
         return mb_strlen($texto) > self::LIMITE_SHOPEE ? rtrim(mb_substr($texto, 0, self::LIMITE_SHOPEE)) : $texto;
     }

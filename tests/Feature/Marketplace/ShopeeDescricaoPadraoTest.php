@@ -34,6 +34,22 @@ class ShopeeDescricaoPadraoTest extends TestCase
         $this->assertSame(self::NO_PADRAO, $this->servico(null)->padronizar($this->produto(self::NO_PADRAO)));
     }
 
+    public function test_titulo_de_secao_colado_ganha_linha_em_branco(): void
+    {
+        $colado = "🧰 CAIXA 168 PEÇAS\nMais organização.\n🔥 PRINCIPAIS BENEFÍCIOS\n✅ 168 Peças: variedade.\n✅ ALÇA REFORÇADA\n🔩 FERRAMENTAS E ACESSÓRIOS\nSoquetes\n🔩 61 Peças: item de lista\n🛒 Garanta a sua!";
+        $esperado = "🧰 CAIXA 168 PEÇAS\n\nMais organização.\n\n🔥 PRINCIPAIS BENEFÍCIOS\n✅ 168 Peças: variedade.\n✅ ALÇA REFORÇADA\n\n🔩 FERRAMENTAS E ACESSÓRIOS\nSoquetes\n🔩 61 Peças: item de lista\n\n🛒 Garanta a sua!";
+
+        $this->assertSame($esperado, $this->servico(null)->espacarSecoes($colado));
+        $this->assertSame($esperado, $this->servico(null)->espacarSecoes($esperado));
+    }
+
+    public function test_descricao_no_padrao_com_secao_colada_sai_espacada(): void
+    {
+        $colado = str_replace("\n\n📋", "\n📋", self::NO_PADRAO);
+
+        $this->assertSame(self::NO_PADRAO, $this->servico(null)->padronizar($this->produto($colado)));
+    }
+
     public function test_texto_sem_emoji_nao_e_conforme(): void
     {
         $this->assertFalse($this->servico(null)->conforme("LIXEIRA\nPRINCIPAIS VANTAGENS\nESPECIFICAÇÕES TÉCNICAS\nCONTEÚDO DA EMBALAGEM"));

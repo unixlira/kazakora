@@ -246,10 +246,8 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
     <Head title="Pedidos" />
 
     <AdminLayout>
-        <!-- "Novo pedido" saiu do card de filtros para o cabeçalho, ao lado do
-             título (2026-10-16): os filtros ficam só com filtro e a busca ganha
-             a linha inteira em telas médias. Depois (Lira, 16/10) ficou menor e
-             com o texto "+ pedido"; o nome completo fica no aria-label/title. -->
+        <!-- O "+ pedido" morou no cabeçalho por um tempo; desde 16/10 (Lira)
+             fica à direita da busca, na mesma linha. Ver o bloco "Buscar pedido". -->
         <div class="mb-4 flex items-center justify-between gap-3">
             <!-- Total ao lado do título com o "i" explicando o que entra na
                  lista (2026-10-16). O total vem do paginador, então segue os
@@ -261,12 +259,6 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                     <InfoTooltip label="O que esta lista mostra" :paragraphs="explicacaoDaLista" />
                 </span>
             </div>
-            <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
-                aria-label="Novo pedido" title="Novo pedido"
-                class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
-                <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
-                pedido
-            </Link>
         </div>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
@@ -316,33 +308,44 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                     </div>
                 </div>
 
-                <div class="w-full min-w-0 sm:w-auto sm:min-w-[16rem] sm:max-w-md sm:flex-1">
+                <div class="w-full min-w-0 sm:w-auto sm:min-w-[16rem] sm:max-w-xl sm:flex-1">
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
-                    <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
-                         Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no
-                         campo continua valendo.
-                         Foco do grupo (Lira 2026-10-16): o anel de foco fica em volta
-                         do conjunto campo + botão (focus-within), no mesmo estilo do
-                         foco global do admin (2px var(--foco), afastado 2px). O anel
-                         isolado do campo e do botão sai (com !, porque a regra global
-                         em app.css não está em camada e ganharia do utilitário). -->
-                    <div class="mt-1 flex rounded-lg focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--foco)] focus-within:outline-solid">
-                        <div class="relative min-w-0 flex-1">
-                            <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
-                            <input id="busca-pedido" v-model="filterState.search" type="search" autocomplete="off" @search="onNativeSearch"
-                                placeholder="Pedido, marketplace, cliente, CPF, telefone, rastreio, NF-e…"
-                                class="relative w-full rounded-l-lg rounded-r-none border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:z-10 focus:border-primary focus:outline-none!">
-                            <button v-if="filterState.search" type="button"
-                                class="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
-                                aria-label="Limpar busca" @click="clearSearch">
-                                <i class="fas fa-xmark"></i>
+                    <!-- "+ pedido" à direita da busca, na mesma linha (Lira 2026-10-16),
+                         com o ícone de mais dentro do círculo. No celular continua ao
+                         lado: o campo encolhe (min-w-0), o botão não (shrink-0). -->
+                        <div class="mt-1 flex min-w-0 items-center gap-2">
+                        <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
+                             Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no
+                             campo continua valendo.
+                             Foco do grupo (Lira 2026-10-16): o anel de foco fica em volta
+                             do conjunto campo + botão (focus-within), no mesmo estilo do
+                             foco global do admin (2px var(--foco), afastado 2px). O anel
+                             isolado do campo e do botão sai (com !, porque a regra global
+                             em app.css não está em camada e ganharia do utilitário). -->
+                        <div class="flex min-w-0 flex-1 rounded-lg focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--foco)] focus-within:outline-solid">
+                            <div class="relative min-w-0 flex-1">
+                                <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
+                                <input id="busca-pedido" v-model="filterState.search" type="search" autocomplete="off" @search="onNativeSearch"
+                                    placeholder="Pedido, marketplace, cliente, CPF, telefone, rastreio, NF-e…"
+                                    class="relative w-full rounded-l-lg rounded-r-none border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:z-10 focus:border-primary focus:outline-none!">
+                                <button v-if="filterState.search" type="button"
+                                    class="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
+                                    aria-label="Limpar busca" @click="clearSearch">
+                                    <i class="fas fa-xmark"></i>
+                                </button>
+                            </div>
+                            <button type="submit"
+                                class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none!">
+                                <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
+                                Buscar
                             </button>
                         </div>
-                        <button type="submit"
-                            class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none!">
-                            <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
-                            Buscar
-                        </button>
+                        <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
+                            aria-label="Novo pedido" title="Novo pedido"
+                            class="inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
+                            <i class="fas fa-circle-plus" aria-hidden="true"></i>
+                            pedido
+                        </Link>
                     </div>
                 </div>
             </div>

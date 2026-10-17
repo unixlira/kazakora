@@ -16,6 +16,9 @@ import { TONE_CLASSES, resolveTone, statusLabel, statusTone } from '@/Shared/sta
 //   wrap    — opcional; deixa o rótulo quebrar em até duas linhas, centralizado,
 //             pra coluna não alargar (pedido do Lira 2026-10-16: "Aguardando
 //             pagamento" na listagem de pedidos). Rótulo curto continua igual.
+//             Um "\n" no label força a quebra naquele ponto (ex.:
+//             "Aguardando\npagamento", "Mercado\nEnvios"), sem depender da
+//             largura da coluna.
 const props = defineProps({
     status: { type: [String, Number, Boolean], default: null },
     label: { type: String, default: null },
@@ -51,14 +54,12 @@ const hexStyle = computed(() => (isHexColor.value
     : null));
 
 const layout = computed(() => (props.wrap
-    ? 'max-w-[6rem] whitespace-normal rounded-xl text-center leading-tight'
+    ? 'max-w-[6rem] whitespace-pre-line rounded-xl text-center leading-tight'
     : 'whitespace-nowrap rounded-full'));
 
 const text = computed(() => props.label ?? statusLabel(props.status, props.context));
 </script>
 
 <template>
-    <span class="inline-block px-2.5 py-1 text-xs font-medium" :class="[layout, classes]" :style="hexStyle">
-        {{ text }}
-    </span>
+    <span class="inline-block px-2.5 py-1 text-xs font-medium" :class="[layout, classes]" :style="hexStyle">{{ text }}</span>
 </template>

@@ -8,6 +8,8 @@ use App\Modules\Checkout\Mail\CupomPromocional;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Checkout\Models\CouponDisparo;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Operacional\Models\ShippingMethod;
+use App\Services\Stripe\StripePaymentService;
 use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -74,6 +76,62 @@ class CupomCompletoTest extends TestCase
         $this->postJson('/finalizacao/cupom', ['code' => 'vencido'])->assertStatus(422)->assertJsonFragment(['message' => 'Este cupom expirou em '.now()->subDay()->format('d/m/Y').'.']);
         $this->postJson('/finalizacao/cupom', ['code' => 'minimo'])->assertStatus(422)->assertJsonFragment(['message' => 'Este cupom vale para compras a partir de R$ 150,00.']);
         $this->postJson('/finalizacao/cupom', ['code' => 'esgotado'])->assertStatus(422)->assertJsonFragment(['message' => 'Este cupom já atingiu o limite de usos.']);
+    }
+
+    public function test_pedido_aguardando_pagamento_segura_vaga_e_cancelado_devolve(): void
+    {
+        $this->carrinho(100);
+        Coupon::create(['code' => 'TESTE98PAG', 'discount_type' => 'percentage', 'discount_value' => 98, 'is_active' => true, 'max_uses' => 2]);
+        $this->pedidoPago('TESTE98PAG');
+        $aberto = $this->pedidoPago('TESTE98PAG', ['status' => Order::STATUS_AWAITING_PAYMENT]);
+
+        $this->postJson('/finalizacao/cupom', ['code' => 'teste98pag'])->assertStatus(422)->assertJsonFragment(['message' => 'Este cupom já atingiu o limite de usos.']);
+
+        $aberto->update(['status' => Order::STATUS_CANCELLED]);
+        $this->postJson('/finalizacao/cupom', ['code' => 'teste98pag'])->assertOk();
+    }
+
+    public function test_outro_pedido_aberto_no_meio_do_checkout_nao_cria_pedido_nem_cobra(): void
+    {
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $product = Product::factory()->create(['price' => 100, 'stock' => 10, 'is_active' => true]);
+        $metodo = ShippingMethod::factory()->create(['price' => 10, 'is_active' => true]);
+        Coupon::create(['code' => 'UMSO', 'discount_type' => 'percentage', 'discount_value' => 98, 'is_active' => true, 'max_uses' => 1]);
+
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $product->id, 'quantity' => 1]);
+        $this->actingAs($user)->post('/finalizacao/entrega', [
+            'shipping_method_id' => $metodo->id,
+            'new_address' => ['recipient_name' => 'Cliente Teste', 'phone' => '11999999999', 'zip' => '01000-000', 'street' => 'Rua Teste',
+                'number' => '100', 'neighborhood' => 'Centro', 'city' => 'São Paulo', 'state' => 'SP'],
+        ]);
+        $this->actingAs($user)->postJson('/finalizacao/cupom', ['code' => 'umso'])->assertOk();
+
+        // Outro cliente abre pedido com o cupom enquanto este está na tela de pagamento.
+        PaymentGateway::setActive(PaymentGateway::STRIPE);
+        $this->mock(StripePaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturnUsing(function () {
+                $this->pedidoPago('UMSO', ['status' => Order::STATUS_AWAITING_PAYMENT]);
+
+                return true;
+            });
+            $mock->shouldNotReceive('createIntent');
+        });
+
+        $this->actingAs($user)->post('/finalizacao/pagamento', ['payment_method' => 'card', 'terms_accepted' => true])
+            ->assertSessionHasErrors('code');
+
+        $this->assertSame(1, Order::where('coupon_code', 'UMSO')->count());
+        $this->assertNull(session('checkout_draft.coupon_code'));
+    }
+
+    public function test_travar_relê_o_cupom(): void
+    {
+        Coupon::create(['code' => 'UMSO', 'discount_type' => 'fixed', 'discount_value' => 10, 'is_active' => true, 'max_uses' => 1]);
+        $this->pedidoPago('UMSO', ['status' => Order::STATUS_PENDING]);
+
+        $this->assertTrue(Coupon::travar(' umso ')->esgotado());
+        $this->assertNull(Coupon::travar('naoexiste'));
+        $this->assertNull(Coupon::travar(null));
     }
 
     public function test_um_por_cliente(): void

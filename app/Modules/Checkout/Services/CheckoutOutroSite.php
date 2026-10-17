@@ -368,6 +368,8 @@ abstract class CheckoutOutroSite
 
         return DB::transaction(function () use ($dados, $metodo, $endereco, $localizacao) {
             $itens = $this->itens($dados['itens'], $endereco['zip'], travar: true);
+            // Trava a linha do cupom antes de conferir o limite de usos.
+            Coupon::travar($dados['cupom'] ?? null);
             // Cupom que deixou de valer entre a tela e o pagamento: avisa, não cobra diferente.
             [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email']);
             if ($cupomErro) {

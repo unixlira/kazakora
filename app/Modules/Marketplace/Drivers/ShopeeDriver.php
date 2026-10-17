@@ -779,7 +779,7 @@ class ShopeeDriver extends AbstractMarketplaceDriver
         return [
             'category_id' => $categoryId,
             'item_name' => mb_substr($product->name, 0, 120),
-            'description' => (string) $product->description,
+            'description' => app(\App\Modules\Marketplace\Support\ShopeeDescricaoPadrao::class)->padronizar($product),
             'item_sku' => (string) $product->sku,
             'brand' => ['brand_id' => 0, 'original_brand_name' => 'NoBrand'],
             'condition' => 'NEW',

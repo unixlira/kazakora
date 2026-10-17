@@ -3,6 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import QrCodeSvg from '@/Shared/Components/QrCodeSvg.vue';
+import { confirmDelete } from '@/Shared/notify';
 import { statusOptions } from '@/Shared/statusLabels';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref } from 'vue';
@@ -188,7 +189,20 @@ const fecharCancelamento = () => {
     cancelOrderForm.reset();
     cancelOrderForm.clearErrors();
 };
-const cancelOrder = () => {
+const cancelOrder = async () => {
+    // Pedido do Lira (2026-10-17): confirmação do SweetAlert antes de cancelar.
+    const confirmado = await confirmDelete({
+        title: 'Poxa, você tem certeza que quer fazer isso?',
+        text: `O pedido ${d.value.canal?.numero ?? props.order.id} será cancelado. Isso não tem volta.`,
+        confirmButtonText: 'Sim, cancelar pedido',
+        cancelButtonText: 'Não, voltar',
+        focusCancel: true,
+    });
+
+    if (!confirmado) {
+        return;
+    }
+
     cancelOrderForm.post(`/admin/pedidos/${props.order.id}/cancelar`, {
         preserveScroll: true,
         onSuccess: () => fecharCancelamento(),
@@ -843,7 +857,7 @@ const cancelInvoice = () => {
                                 :disabled="cancelOrderForm.processing || cancelOrderForm.motivo.trim().length < 5"
                                 class="flex-1 rounded-lg bg-error py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                {{ cancelOrderForm.processing ? 'Cancelando…' : 'Confirmar cancelamento' }}
+                                {{ cancelOrderForm.processing ? 'Cancelando…' : 'Cancelar pedido' }}
                             </button>
                             <button
                                 type="button"

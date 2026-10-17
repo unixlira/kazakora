@@ -335,10 +335,12 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                                     <i class="fas fa-xmark"></i>
                                 </button>
                             </div>
-                            <button type="submit"
-                                class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none!">
+                            <!-- No celular (< 640px) o Buscar fica só com a lupa, para o campo
+                                 não sumir ao lado do "+ pedido" (Lira 2026-10-16). -->
+                            <button type="submit" aria-label="Buscar" title="Buscar"
+                                class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-3 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none! sm:px-4">
                                 <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
-                                Buscar
+                                <span class="hidden sm:inline">Buscar</span>
                             </button>
                         </div>
                         <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"

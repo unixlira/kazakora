@@ -89,10 +89,13 @@ class OrderController extends Controller
             // havia sido confirmado em latestEmailLog e se repetiu em
             // latestCorreiosPrePostagem depois da coluna Correios entrar na
             // listagem.
+            // Coluna "Nota" (Lira 2026-10-16): só a nota fiscal, com status,
+            // série/número e o motivo quando a SEFAZ rejeita. O e-mail saiu
+            // da listagem (continua no detalhe do pedido), então o
+            // latestEmailLog não é mais carregado aqui.
             ->with([
                 'user:id,name,email',
-                'invoice:id,order_id,status',
-                'latestEmailLog',
+                'invoice:id,order_id,status,serie,numero,motivo_rejeicao',
                 'latestCorreiosPrePostagem',
                 // Tipo de envio (Flex, Mercado Envios, Full...) na coluna Envios.
                 'channelShipment:id,order_id,channel,shipping_method',

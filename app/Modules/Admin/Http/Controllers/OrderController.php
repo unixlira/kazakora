@@ -154,7 +154,7 @@ class OrderController extends Controller
 
     public function show(Order $order): Response
     {
-        $order->load(['items.product:id,sku,name,price,discount_percentage,discount_amount,stock,is_active', 'user:id,name,email', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
+        $order->load(['items.product:id,sku,name,variation,price,discount_percentage,discount_amount,stock,is_active', 'user:id,name,email,phone,cpf', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
             ->loadSum('items as units_count', 'quantity');
 
         $selectedProductIds = $order->items
@@ -192,6 +192,7 @@ class OrderController extends Controller
             'fulfillmentEvents' => OrderFulfillmentEvent::compactar($order->fulfillmentEvents)[0]->values(),
             'packingVideos' => $order->packingVideos()->get()->map->paraTela()->values(),
             'operationStatement' => $this->operationStatement($order),
+            'detalhe' => $this->detalheCompleto($order),
             'auditLogs' => AuditLog::query()
                 ->where('entity', class_basename(Order::class))
                 ->where('entity_id', $order->id)
@@ -573,6 +574,227 @@ class OrderController extends Controller
      * enquanto), cai para a visão parcial do pedido local + taxa real/manual se
      * ela existir, sem inventar valor liquidado.
      */
+    /**
+     * Tudo o que o pedido tem, para a tela de detalhe do admin (pedido do
+     * Lira 2026-10-16: o detalhe é o ponto central de validação e
+     * atendimento). Só dado que já existe no banco; o que não foi gravado
+     * (ex.: parcelas do cartão) não aparece.
+     *
+     * @return array<string, mixed>
+     */
+    private function detalheCompleto(Order $order): array
+    {
+        $order->loadMissing(['payments', 'marketplaceClaims', 'correiosPrePostagens', 'ferrakoraCliente']);
+
+        $envio = TipoDeEnvio::doPedido($order);
+        $invoice = $order->invoice;
+        $shipment = $order->channelShipment;
+        $pre = $order->latestCorreiosPrePostagem;
+        $cliente = $order->user ?? $order->ferrakoraCliente;
+        $rastreio = $order->trackingCode();
+
+        $devolucoes = $invoice?->chave_acesso
+            ? Invoice::query()
+                ->whereHas('order', fn ($query) => $query->where('origin', Order::ORIGIN_SALES_RETURN_INVOICE)->where('fiscal_referenced_nfe_key', $invoice->chave_acesso))
+                ->orderBy('id')
+                ->get(['id', 'numero', 'serie', 'status', 'valor_total', 'autorizada_em'])
+                ->map(fn (Invoice $nota) => [
+                    'id' => $nota->id,
+                    'numero' => $nota->numero,
+                    'serie' => $nota->serie,
+                    'status' => $nota->status,
+                    'valor_total' => $nota->valor_total,
+                    'autorizada_em' => $nota->autorizada_em,
+                ])
+                ->values()
+            : collect();
+
+        $mercadoPago = Schema::hasTable('mercado_pago_pagamentos')
+            ? \App\Modules\Financeiro\Models\MercadoPagoPagamento::query()
+                ->where('order_id', $order->id)
+                ->orderBy('data_criacao')
+                ->get(['mp_payment_id', 'data_criacao', 'data_aprovacao', 'data_liberacao', 'status', 'status_detalhe', 'tipo_operacao', 'canal', 'meio_pagamento', 'valor', 'liquido', 'reembolsado'])
+            : collect();
+
+        $pack = $order->channel_pack_id
+            ? Order::query()
+                ->where('origin', $order->origin)
+                ->where('channel_pack_id', $order->channel_pack_id)
+                ->whereKeyNot($order->id)
+                ->orderBy('id')
+                ->get(['id', 'external_order_id', 'status', 'total'])
+            : collect();
+
+        return [
+            'cliente' => [
+                'nome' => $cliente?->name ?? $order->shipping_name,
+                'documento' => $order->buyer_document ?: $cliente?->cpf,
+                'inscricao_estadual' => $order->buyer_state_registration,
+                'email' => $order->shipping_email ?: $cliente?->email,
+                'telefone' => $order->shipping_phone ?: $cliente?->phone,
+                'whatsapp' => $order->shipping_whatsapp,
+                'apelido_no_canal' => $order->channel_buyer_nickname,
+                'conta' => $order->user ? 'KazaKora' : ($order->ferrakoraCliente ? 'FerraKora' : null),
+            ],
+            'endereco' => [
+                'destinatario' => $order->shipping_recipient_name ?: $order->shipping_name,
+                'rua' => $order->shipping_street,
+                'numero' => $order->shipping_number,
+                'complemento' => $order->shipping_complement,
+                'bairro' => $order->shipping_neighborhood,
+                'cidade' => $order->shipping_city,
+                'uf' => $order->shipping_state,
+                'cep' => $order->shipping_zip,
+            ],
+            'canal' => [
+                'origin' => $order->origin,
+                'site' => Order::ROTULOS_SITE[$order->site_origem] ?? null,
+                'numero' => $order->numero,
+                'pedido_no_canal' => $order->external_order_id,
+                'pack' => $order->channel_pack_id,
+                'pedidos_do_pack' => $pack,
+                'criado_em' => $order->created_at,
+                'atualizado_em' => $order->updated_at,
+                'embalado_em' => $order->packed_at,
+                'pronto_para_coleta_em' => $order->ready_for_pickup_at,
+                'coletado_em' => $order->collected_at,
+                'em_disputa_desde' => $order->disputed_at,
+            ],
+            'itens' => $order->items->map(fn ($item) => [
+                'id' => $item->id,
+                'nome' => $item->product_name,
+                'sku' => $item->product?->sku,
+                'variacao' => $item->product?->variation,
+                'anuncio_no_canal' => $item->external_item_id,
+                'variacao_no_canal' => $item->external_model_id,
+                'quantidade' => (int) $item->quantity,
+                'preco' => (float) $item->product_price,
+                'subtotal' => (float) $item->subtotal,
+                'tipo' => $item->item_type,
+            ])->values(),
+            'valores' => [
+                'subtotal' => (float) $order->subtotal,
+                'frete' => (float) $order->shipping_cost,
+                'cupom' => $order->coupon_code,
+                // discount_amount já soma Pix e desconto da plataforma (mesma
+                // conta da área do cliente, CheckoutController::showOrder).
+                'desconto_cupom' => round((float) $order->discount_amount - (float) $order->pix_discount_amount - (float) $order->desconto_plataforma_amount, 2),
+                'desconto_pix' => (float) $order->pix_discount_amount,
+                'desconto_plataforma' => (float) $order->desconto_plataforma_amount,
+                'desconto_total' => (float) $order->discount_amount,
+                'total' => (float) $order->total,
+            ],
+            'pagamentos' => $order->payments->sortBy('id')->map(fn ($pagamento) => [
+                'id' => $pagamento->id,
+                'provedor' => $pagamento->provider,
+                'meio' => $pagamento->method_type,
+                'status' => $pagamento->status,
+                'valor' => (float) $pagamento->amount,
+                'transacao' => $pagamento->mercadopago_payment_id ?? $pagamento->stripe_payment_intent_id,
+                'pedido_no_provedor' => $pagamento->mercadopago_order_id,
+                'boleto_url' => $pagamento->boleto_url,
+                'expira_em' => $pagamento->expira_em,
+                'criado_em' => $pagamento->created_at,
+                'atualizado_em' => $pagamento->updated_at,
+            ])->values(),
+            'mercado_pago' => $mercadoPago->map(fn ($mp) => [
+                'transacao' => $mp->mp_payment_id,
+                'status' => $mp->status,
+                'status_detalhe' => $mp->status_detalhe,
+                'tipo_operacao' => $mp->tipo_operacao,
+                'meio' => $mp->meio_pagamento,
+                'valor' => (float) $mp->valor,
+                'liquido' => (float) $mp->liquido,
+                'reembolsado' => (float) $mp->reembolsado,
+                'criado_em' => $mp->data_criacao,
+                'aprovado_em' => $mp->data_aprovacao,
+                'liberado_em' => $mp->data_liberacao,
+            ])->values(),
+            'nota' => $invoice ? [
+                'id' => $invoice->id,
+                'status' => $invoice->status,
+                'numero' => $invoice->numero,
+                'serie' => $invoice->serie,
+                'chave' => $invoice->chave_acesso,
+                'valor_total' => $invoice->valor_total,
+                'protocolo' => $invoice->protocolo_autorizacao,
+                'autorizada_em' => $invoice->autorizada_em,
+                'motivo_rejeicao' => $invoice->motivo_rejeicao,
+                'cancelada_em' => $invoice->cancelada_em,
+                'motivo_cancelamento' => $invoice->motivo_cancelamento,
+                'tem_danfe' => (bool) $invoice->danfe_path,
+                'tem_xml' => (bool) $invoice->xml_path,
+            ] : null,
+            'devolucao' => [
+                'estornado_em' => $order->estornado_em,
+                'estorno_origem' => $order->estorno_origem,
+                'estoque_devolvido_em' => $order->stock_restored_at,
+                'notas_de_devolucao' => $devolucoes,
+                'reclamacoes' => $order->marketplaceClaims->map(fn ($claim) => [
+                    'id' => $claim->id,
+                    'numero' => $claim->external_claim_id,
+                    'tipo' => $claim->type,
+                    'etapa' => $claim->stage,
+                    'status' => $claim->status,
+                    'resolucao' => $claim->resolution,
+                    'aberta_em' => $claim->claim_created_at,
+                    'atualizada_em' => $claim->claim_updated_at,
+                ])->values(),
+                'devolvido_pelo_canal_em' => $shipment?->channel_returned_at,
+                'resolucao' => $shipment?->return_resolution,
+                'resolvida_em' => $shipment?->return_resolved_at,
+                'observacao' => $shipment?->return_note,
+            ],
+            'envio' => [
+                'tipo' => $envio['tipo'],
+                'label' => $envio['label'],
+                'curto' => $envio['curto'],
+                'transportadora' => $order->shipping_carrier_name,
+                'servico' => $pre?->service_label,
+                'metodo_no_canal' => $shipment?->shipping_method,
+                'rastreio' => $rastreio,
+                'rastreio_url' => $rastreio && preg_match('/^[A-Z]{2}\d{9}[A-Z]{2}$/', $rastreio)
+                    ? 'https://rastreamento.correios.com.br/app/index.php?objetos='.$rastreio
+                    : null,
+                'rastreio_cliente_url' => route('rastreio.ver', $order->trackingRef()),
+                'canal' => $shipment ? [
+                    'id_no_canal' => $shipment->external_shipment_id,
+                    'status' => $shipment->status,
+                    'status_no_canal' => $shipment->channel_status,
+                    'substatus_no_canal' => $shipment->channel_substatus,
+                    'confirmado_em' => $shipment->confirmed_at,
+                    'etiqueta_pronta_em' => $shipment->label_ready_at,
+                    'agendado_para' => $shipment->scheduled_for,
+                    'entrega_prometida' => $shipment->promised_delivery_on,
+                    'enviado_em' => $shipment->channel_shipped_at,
+                    'primeira_tentativa_em' => $shipment->channel_first_visit_at,
+                    'entregue_em' => $shipment->channel_delivered_at,
+                    'nao_entregue_em' => $shipment->channel_not_delivered_at,
+                    'cancelado_em' => $shipment->channel_cancelled_at,
+                    'consultado_em' => $shipment->channel_status_checked_at,
+                ] : null,
+                'pre_postagens' => $order->correiosPrePostagens->map(fn ($item) => [
+                    'id' => $item->id,
+                    'status' => $item->status,
+                    'servico' => $item->service_label,
+                    'codigo_servico' => $item->service_code,
+                    'codigo_objeto' => $item->codigo_objeto,
+                    'id_correios' => $item->correios_id,
+                    'qr_payload' => $item->qr_payload,
+                    'valor_postagem' => $item->postage_price !== null ? (float) $item->postage_price : null,
+                    'peso_gramas' => $item->weight_grams,
+                    'formato' => $item->dimension_format,
+                    'altura' => $item->dimension_height,
+                    'largura' => $item->dimension_width,
+                    'comprimento' => $item->dimension_length,
+                    'diametro' => $item->dimension_diameter,
+                    'erro' => $item->error_message,
+                    'criada_em' => $item->created_at,
+                ])->values(),
+            ],
+        ];
+    }
+
     private function operationStatement(Order $order): array
     {
         $cost = DB::table('order_items as oi')

@@ -196,10 +196,13 @@ const columns = [
                     Buscar
                 </button>
 
+                <!-- "+ pedido" (Lira 2026-10-16): botão menor para sobrar espaço;
+                     o nome completo fica no aria-label/title. -->
                 <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
-                    class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">
-                    <i class="fas fa-plus text-xs"></i>
-                    Novo pedido
+                    aria-label="Novo pedido" title="Novo pedido"
+                    class="inline-flex h-[38px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-2.5 text-xs font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
+                    <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                    pedido
                 </Link>
             </div>
 

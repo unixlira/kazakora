@@ -28,6 +28,20 @@ export const sidebarSections = [
         ],
     },
     {
+        // Marketplaces (pedido do Lira 2026-10-17): um lugar por marketplace
+        // integrado, com as abas Oportunidades, Promoção, Imagens,
+        // Videoclipes, Cupom de desconto e Gerar campanha. As telas antigas
+        // continuam nos seus menus e também abrem dentro das abas.
+        heading: 'Marketplaces',
+        items: [
+            { label: 'Todos os marketplaces', href: '/admin/marketplaces', icon: 'fas fa-shop', cor: 'violeta', permission: 'relatorios.view' },
+            { label: 'Mercado Livre', href: '/admin/marketplaces/mercado-livre', icon: 'fas fa-handshake', marca: 'mercado-livre', permission: 'relatorios.view' },
+            { label: 'Shopee', href: '/admin/marketplaces/shopee', icon: 'fas fa-bag-shopping', marca: 'shopee', permission: 'relatorios.view' },
+            { label: 'TikTok Shop', href: '/admin/marketplaces/tiktok-shop', icon: 'fab fa-tiktok', marca: 'tiktok', permission: 'relatorios.view' },
+            { label: 'Amazon', href: '/admin/marketplaces/amazon', icon: 'fab fa-amazon', marca: 'amazon', permission: 'relatorios.view' },
+        ],
+    },
+    {
         heading: 'Vender',
         items: [
             { label: 'Produtos', href: '/admin/produtos', icon: 'fas fa-boxes-stacked', cor: 'laranja', permission: 'cadastros.view' },

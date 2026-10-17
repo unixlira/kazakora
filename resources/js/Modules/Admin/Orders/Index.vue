@@ -7,6 +7,7 @@ import ServerPagination from '@/Shared/Components/ServerPagination.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, reactive } from 'vue';
 import { statusLabel } from '@/Shared/statusLabels';
+import { shippingBadge } from './envio';
 
 const { can } = usePermissions();
 
@@ -43,53 +44,6 @@ const channelBadge = {
 const siteBadge = {
     ferrakora: { color: '#F27A2A', label: 'FerraKora' },
     beautykora: { color: '#D63384', label: 'Beauty Kora' },
-};
-
-// Cor do selo de tipo de envio (texto e slug vêm de TipoDeEnvio no backend).
-// Flex e Mercado Envios com cores diferentes de propósito: no Mercado Livre
-// é essa a diferença que importa na bancada.
-const shippingTypeTone = {
-    flex: 'yellow',
-    full: 'purple',
-    mercado_envios: 'blue',
-    express_coleta: 'blue',
-    retirada: 'green',
-    correios: 'green',
-    correios_pac: 'green',
-    correios_sedex: 'green',
-    proprio: 'gray',
-    outro: 'gray',
-    desconhecido: 'gray',
-};
-
-// Selo de envio só nesta listagem (pedido do Lira em 2026-10-16, ajustado
-// no mesmo dia): o nome segue o canal, não o nome cru da transportadora.
-//   site (KazaKora, FerraKora, Beauty Kora) -> Correios (o serviço PAC/SEDEX
-//     continua embaixo, na pré-postagem);
-//   Mercado Livre -> Flex ou Mercado Envios (em duas linhas); Full fica Full;
-//   Shopee -> Express (Retirada pelo comprador continua Retirada: esse pacote
-//     não vai para a transportadora);
-//   TikTok -> Ponto de Coleta.
-// Amazon e o resto ficam como vêm de TipoDeEnvio. O KoraSync não muda: ele
-// usa o nome de TipoDeEnvio, que é o que a bancada usa.
-const shippingBadge = (order) => {
-    const tipo = order.shipping_type ?? 'desconhecido';
-    const padrao = { tone: shippingTypeTone[tipo] ?? 'gray', label: order.shipping_type_short || '—' };
-
-    switch (order.origin) {
-        case 'loja':
-            return { tone: 'green', label: 'Correios' };
-        case 'mercado_livre':
-            if (tipo === 'flex') return { tone: shippingTypeTone.flex, label: 'Flex' };
-            if (tipo === 'mercado_envios') return { tone: shippingTypeTone.mercado_envios, label: 'Mercado\nEnvios' };
-            return padrao;
-        case 'shopee':
-            return tipo === 'retirada' ? padrao : { tone: shippingTypeTone.express_coleta, label: 'Express' };
-        case 'tiktok_shop':
-            return { tone: shippingTypeTone.express_coleta, label: 'Ponto de\nColeta' };
-        default:
-            return padrao;
-    }
 };
 
 const filterState = reactive({
@@ -138,10 +92,6 @@ const customerName = (order) =>
     || order.shipping_email
     || order.shipping_phone
     || '—';
-
-const formatPostagePrice = (value) => value == null
-    ? null
-    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const columns = [
     {
@@ -227,39 +177,19 @@ const columns = [
             ]);
         },
     },
+    // Envios: só o nome do meio de envio (pedido do Lira 2026-10-16). A
+    // pré-postagem dos Correios (status, código, QR) fica no detalhe do pedido.
     {
-        id: 'correios_qr',
+        id: 'envio',
         header: 'Envios',
         cell: ({ row }) => {
-            const qr = row.original.latest_correios_pre_postagem;
-            const tipo = row.original.shipping_type ?? 'desconhecido';
             const selo = shippingBadge(row.original);
-            const envio = h(StatusBadge, {
+            return h(StatusBadge, {
                 status: selo.tone,
                 label: selo.label,
                 wrap: true,
                 title: row.original.shipping_type_label || 'Envio não informado',
             });
-
-            if (!qr) {
-                // "Sem QR" só faz sentido onde a loja gera a pré-postagem dos Correios.
-                return h('div', { class: 'flex flex-col items-start gap-1' }, [
-                    envio,
-                    tipo.startsWith('correios') || row.original.origin === 'loja' ? h(StatusBadge, { status: null, context: 'correios' }) : null,
-                ]);
-            }
-
-            return h('div', { class: 'flex flex-col items-start gap-1' }, [envio, h(Link, {
-                href: `/admin/correios/${qr.id}`,
-                class: 'group block text-xs hover:text-primary',
-                title: 'Abrir QR Code dos Correios',
-            }, () => [
-                h(StatusBadge, { status: qr.status, context: 'correios' }),
-                qr.codigo_objeto ? h('span', { class: 'block font-mono text-[11px] text-slate-400 group-hover:text-primary' }, qr.codigo_objeto) : null,
-                qr.service_label || qr.postage_price != null
-                    ? h('span', { class: 'block text-[11px] text-slate-400' }, [qr.service_label, formatPostagePrice(qr.postage_price)].filter(Boolean).join(' · '))
-                    : null,
-            ])]);
         },
     },
     {
@@ -428,7 +358,7 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                         </div>
                         <div class="min-w-0">
                             <div class="mb-1 text-[10px] font-semibold uppercase text-[var(--texto-suave)]">Envios</div>
-                            <CelulaDoPedido coluna="correios_qr" :pedido="order" />
+                            <CelulaDoPedido coluna="envio" :pedido="order" />
                         </div>
                     </div>
 

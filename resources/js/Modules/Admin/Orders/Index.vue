@@ -57,6 +57,13 @@ const shippingTypeTone = {
     desconhecido: 'gray',
 };
 
+// Nome do selo só nesta listagem (pedido do Lira em 2026-10-16): Shopee e
+// TikTok aparecem como "Express", não "Ponto Coleta". O KoraSync continua
+// com o nome de TipoDeEnvio, que é o que a bancada usa.
+const shippingTypeShortLabel = {
+    express_coleta: 'Express',
+};
+
 const filterState = reactive({
     marketplace: props.filters.marketplace ?? '',
     search: props.filters.search ?? '',
@@ -150,7 +157,7 @@ const columns = [
             const tipo = row.original.shipping_type ?? 'desconhecido';
             const envio = h(StatusBadge, {
                 status: shippingTypeTone[tipo] ?? 'gray',
-                label: row.original.shipping_type_short || '—',
+                label: shippingTypeShortLabel[tipo] || row.original.shipping_type_short || '—',
                 title: row.original.shipping_type_label || 'Envio não informado',
             });
 

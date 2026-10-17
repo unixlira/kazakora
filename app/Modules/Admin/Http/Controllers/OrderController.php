@@ -3,6 +3,7 @@
 namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Admin\Support\BuscaDePedidos;
 use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
@@ -60,6 +61,10 @@ class OrderController extends Controller
             $marketplace = '';
         }
 
+        $de = $this->dataDoFiltro($request->query('de'));
+        $ate = $this->dataDoFiltro($request->query('ate'));
+        $busca = BuscaDePedidos::normalizar(is_string($request->query('search')) ? $request->query('search') : '');
+
         $orders = Order::query()
             ->nonPurchaseReturn()
             // Relações latestOfMany não podem usar seleção parcial de colunas
@@ -80,42 +85,14 @@ class OrderController extends Controller
             // 'loja' = só kazakora.com; FerraKora/Beauty Kora pelo site_origem;
             // marketplaces pelo origin (TikTok Shop e Amazon via Bling inclusive).
             ->when($marketplace !== '', fn ($query) => Order::filtrarCanal($query, $marketplace))
-            ->when($request->filled('search'), function ($query) use ($request) {
-                $search = trim($request->string('search')->toString());
-                $digits = preg_replace('/\D+/', '', $search);
-                $parsedDate = $this->parseOrderSearchDate($search);
-
-                if ($digits !== '' && strlen($digits) <= 10) {
-                    $query->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [(int) $digits]);
-                }
-
-                $query->where(function ($inner) use ($search, $digits, $parsedDate) {
-                    $inner->where('external_order_id', 'like', "%{$search}%")
-                        ->orWhere('shipping_name', 'like', "%{$search}%")
-                        ->orWhere('shipping_email', 'like', "%{$search}%")
-                        ->orWhere('shipping_phone', 'like', "%{$search}%")
-                        ->orWhereHas('user', fn ($userQuery) => $userQuery
-                            ->where('name', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%"))
-                        ->orWhereHas('invoice', fn ($invoiceQuery) => $invoiceQuery
-                            ->where('numero', 'like', "%{$search}%")
-                            ->orWhere('chave_acesso', 'like', "%{$search}%"));
-
-                    if ($digits !== '') {
-                        if (strlen($digits) <= 10) {
-                            $inner->orWhere('id', (int) $digits);
-                        }
-
-                        $inner->orWhere('external_order_id', 'like', "%{$digits}%")
-                            ->orWhere('shipping_phone', 'like', "%{$digits}%");
-                    }
-
-                    if ($parsedDate) {
-                        $inner->orWhereDate('created_at', $parsedDate->toDateString());
-                    }
-                });
-            })
+            ->when(in_array($request->query('status'), self::STATUSES, true), fn ($query) => $query->where('status', $request->query('status')))
+            ->when($de, fn ($query) => $query->where('created_at', '>=', $de->copy()->startOfDay()))
+            ->when($ate, fn ($query) => $query->where('created_at', '<=', $ate->copy()->endOfDay()))
+            // Busca (2026-10-16): regras em BuscaDePedidos. Fica num where
+            // agrupado, então não anula marketplace, status e período.
+            ->when($busca !== '', fn ($query) => BuscaDePedidos::aplicar($query, $busca))
             ->latest()
+            ->latest('id')
             ->paginate(50)
             ->withQueryString()
             // Mesma tradução do KoraSync (TipoDeEnvio): o selo da listagem
@@ -138,37 +115,25 @@ class OrderController extends Controller
                 ->values(),
             'filters' => [
                 'marketplace' => $marketplace,
-                'search' => $request->query('search'),
+                'status' => in_array($request->query('status'), self::STATUSES, true) ? $request->query('status') : '',
+                'search' => $busca,
+                'de' => $de?->toDateString(),
+                'ate' => $ate?->toDateString(),
             ],
         ]);
     }
 
-    private function parseOrderSearchDate(string $value): ?Carbon
+    private function dataDoFiltro(mixed $valor): ?Carbon
     {
-        $value = trim($value);
-
-        foreach (['d/m/Y', 'd-m-Y', 'Y-m-d'] as $format) {
-            try {
-                $date = Carbon::createFromFormat($format, $value);
-                if ($date && $date->format($format) === $value) {
-                    return $date;
-                }
-            } catch (Throwable) {
-                // continua tentando os outros formatos
-            }
+        if (! is_string($valor) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)) {
+            return null;
         }
 
-        if (preg_match('/^\d{1,2}\/\d{1,2}$/', $value)) {
-            [$day, $month] = array_map('intval', explode('/', $value));
-
-            try {
-                return Carbon::createFromDate(now()->year, $month, $day);
-            } catch (Throwable) {
-                return null;
-            }
+        try {
+            return Carbon::createFromFormat('Y-m-d', $valor);
+        } catch (Throwable) {
+            return null;
         }
-
-        return null;
     }
 
     public function show(Order $order): Response

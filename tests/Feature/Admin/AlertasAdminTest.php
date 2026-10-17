@@ -8,6 +8,7 @@ use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Modules\Marketplace\Support\RelatoriosAmazon;
 use App\Modules\Marketplace\Support\RelatoriosTikTok;
+use App\Notifications\AlertaAdminNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -91,36 +92,54 @@ class AlertasAdminTest extends TestCase
         $this->assertSame(1, AlertaAdmin::query()->abertos()->count());
     }
 
-    public function test_alerta_aberto_vai_para_todas_as_telas_do_admin_so_para_admin(): void
+    public function test_alerta_vai_para_o_sino_do_admin_e_nao_para_faixa_no_meio_da_tela(): void
     {
-        app(AlertaColetaFinanceira::class)->avisar('Amazon', 'Seller Central pediu login de novo.');
+        $admin = $this->admin();
+        $gerente = User::factory()->create(['role' => User::ROLE_MANAGER]);
+        $alerta = app(AlertaColetaFinanceira::class);
+        $alerta->avisar('Amazon', 'Seller Central pediu login de novo.');
+        $alerta->avisar('Amazon', 'Seller Central pediu login de novo.');
 
-        $this->actingAs($this->admin())->get('/admin/alertas')
+        // Uma notificação só por alerta aberto, mesmo com a falha repetindo.
+        $this->assertSame(1, $admin->notifications()->where('type', AlertaAdminNotification::class)->count());
+        $this->assertSame(0, $gerente->notifications()->count());
+
+        $this->actingAs($admin)->get('/admin/alertas')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Admin/Alertas/Index', false)
-                ->has('alertasAdmin', 1)
-                ->where('alertasAdmin.0.titulo', 'Falha na coleta financeira Amazon (Cora Box)')
-                ->where('sidebarBadges.alertasAbertos', 1)
+                ->missing('alertasAdmin')
+                ->missing('sidebarBadges.alertasAbertos')
+                ->where('notifications.unreadCount', 1)
+                ->where('notifications.items.0.message', 'Falha na coleta financeira Amazon (Cora Box)')
+                ->where('notifications.items.0.body', 'Seller Central pediu login de novo.')
+                ->where('notifications.items.0.nivel', 'erro')
                 ->has('abertos', 1));
 
-        $gerente = User::factory()->create(['role' => User::ROLE_MANAGER]);
+        // Na loja o sino não mostra alerta interno.
+        $this->actingAs($admin)->get('/')
+            ->assertInertia(fn (Assert $page) => $page->where('notifications.unreadCount', 0));
+
         $this->actingAs($gerente)->get('/admin/alertas')->assertForbidden();
-        $this->actingAs($gerente)->getJson('/admin/alertas/abertos')->assertForbidden();
+        $this->actingAs($admin)->getJson('/admin/alertas/abertos')->assertNotFound();
     }
 
-    public function test_faixa_busca_os_abertos_e_admin_marca_resolvido(): void
+    public function test_alerta_resolvido_sai_do_sino(): void
     {
-        app(AlertaColetaFinanceira::class)->avisar('TikTok', 'Sessão caiu');
         $admin = $this->admin();
-        $alerta = AlertaAdmin::query()->sole();
-
-        $this->actingAs($admin)->getJson('/admin/alertas/abertos')
-            ->assertOk()->assertJsonCount(1, 'alertas')->assertJsonPath('alertas.0.mensagem', 'Sessão caiu');
+        app(AlertaColetaFinanceira::class)->avisar('TikTok', 'Sessão caiu');
+        app(AlertaColetaFinanceira::class)->avisar('Amazon', 'Download falhou');
+        $alerta = AlertaAdmin::query()->where('chave', 'tiktok')->sole();
 
         $this->actingAs($admin)->post("/admin/alertas/{$alerta->id}/resolver")->assertRedirect();
 
         $this->assertSame($admin->name, $alerta->fresh()->resolvido_por);
-        $this->actingAs($admin)->getJson('/admin/alertas/abertos')->assertJsonCount(0, 'alertas');
+        $naoLidas = $admin->unreadNotifications()->where('type', AlertaAdminNotification::class)->get();
+        $this->assertCount(1, $naoLidas);
+        $this->assertSame('Falha na coleta financeira Amazon (Cora Box)', $naoLidas->first()->data['message']);
+
+        // O sistema resolvendo sozinho (relatório entrou) também tira do sino.
+        app(RelatoriosAmazon::class)->avisar(true, 'ok');
+        $this->assertSame(0, $admin->unreadNotifications()->where('type', AlertaAdminNotification::class)->count());
     }
 
     public function test_tipo_desligado_nao_abre_alerta_e_fecha_os_abertos(): void

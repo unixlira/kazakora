@@ -1,6 +1,7 @@
 <script setup>
 // Sistema › Alertas (pedido 2026-10-16): o que precisa de ação do Lira.
-// Os abertos também aparecem na faixa vermelha do topo de todo o admin.
+// O aviso vai para o sino de notificações do topo (2026-10-17), sem faixa
+// no meio das telas; aqui ficam os abertos e o histórico.
 // Cada tipo de alerta pode ser ligado ou desligado aqui.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';

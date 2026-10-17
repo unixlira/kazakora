@@ -69,6 +69,9 @@ const explicacaoDaLista = [
     'Entram todos os status, inclusive cancelados e estornados. Só ficam de fora as notas de devolução.',
     'Sem período escolhido, vale desde o primeiro pedido. O período usa a data da coluna Data.',
     'O total segue os filtros e a busca aplicados. Ordem do mais recente para o mais antigo, 50 por página.',
+    // Exemplos da busca (Lira 2026-10-16): saíram de baixo do campo e vieram para cá.
+    'Busca, ex.: #274, 261016PWVAA8JX, 701-6533441-5387462, Rachel, 123.456.789-09, (11) 98765-4321, rastreio, número da NF-e, SKU ou 13/08/2026.',
+    'Aperte Enter ou clique em Buscar.',
 ];
 
 const applyFilters = () => {
@@ -346,8 +349,6 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                     </div>
                 </div>
             </div>
-
-            <p class="mt-2 text-xs text-slate-400">Ex.: #274, 261016PWVAA8JX, 701-6533441-5387462, Rachel, 123.456.789-09, (11) 98765-4321, rastreio, número da NF-e, SKU ou 13/08/2026. Aperte Enter ou clique em Buscar.</p>
         </form>
 
         <!-- Celular, tablet e notebook pequeno (< 1280px): um cartão por pedido,

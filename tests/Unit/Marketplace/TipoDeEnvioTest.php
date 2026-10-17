@@ -95,9 +95,18 @@ class TipoDeEnvioTest extends TestCase
 
     public function test_loja_usa_a_transportadora_do_pedido(): void
     {
+        // Desde 2026-10-16 o frete dos Correios do site vira o mesmo selo
+        // da Amazon (Correios - PAC / Correios - SEDEX), inclusive o TURBO.
         $envio = TipoDeEnvio::montar('loja', null, 'PAC — Correios');
+        $this->assertSame(TipoDeEnvio::CORREIOS_PAC, $envio['tipo']);
+        $this->assertSame('Correios - PAC', $envio['curto']);
 
-        $this->assertSame(TipoDeEnvio::OUTRO, $envio['tipo']);
-        $this->assertSame('PAC — Correios', $envio['label']);
+        $turbo = TipoDeEnvio::montar('loja', null, 'SEDEX (TURBO)');
+        $this->assertSame(TipoDeEnvio::CORREIOS_SEDEX, $turbo['tipo']);
+
+        // Frete que não é dos Correios continua com o nome do checkout.
+        $outro = TipoDeEnvio::montar('loja', null, 'Jadlog .Package');
+        $this->assertSame(TipoDeEnvio::OUTRO, $outro['tipo']);
+        $this->assertSame('Jadlog .Package', $outro['label']);
     }
 }

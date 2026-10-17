@@ -40,6 +40,23 @@ const siteBadge = {
     beautykora: { color: '#D63384', label: 'Beauty Kora' },
 };
 
+// Cor do selo de tipo de envio (texto e slug vêm de TipoDeEnvio no backend).
+// Flex e Mercado Envios com cores diferentes de propósito: no Mercado Livre
+// é essa a diferença que importa na bancada.
+const shippingTypeTone = {
+    flex: 'yellow',
+    full: 'purple',
+    mercado_envios: 'blue',
+    express_coleta: 'blue',
+    retirada: 'green',
+    correios: 'green',
+    correios_pac: 'green',
+    correios_sedex: 'green',
+    proprio: 'gray',
+    outro: 'gray',
+    desconhecido: 'gray',
+};
+
 const filterState = reactive({
     marketplace: props.filters.marketplace ?? '',
     search: props.filters.search ?? '',
@@ -130,12 +147,22 @@ const columns = [
         header: 'Envios',
         cell: ({ row }) => {
             const qr = row.original.latest_correios_pre_postagem;
+            const tipo = row.original.shipping_type ?? 'desconhecido';
+            const envio = h(StatusBadge, {
+                status: shippingTypeTone[tipo] ?? 'gray',
+                label: row.original.shipping_type_short || '—',
+                title: row.original.shipping_type_label || 'Envio não informado',
+            });
 
             if (!qr) {
-                return h(StatusBadge, { status: null, context: 'correios' });
+                // "Sem QR" só faz sentido onde a loja gera a pré-postagem dos Correios.
+                return h('div', { class: 'flex flex-col items-start gap-1' }, [
+                    envio,
+                    tipo.startsWith('correios') ? h(StatusBadge, { status: null, context: 'correios' }) : null,
+                ]);
             }
 
-            return h(Link, {
+            return h('div', { class: 'flex flex-col items-start gap-1' }, [envio, h(Link, {
                 href: `/admin/correios/${qr.id}`,
                 class: 'group block text-xs hover:text-primary',
                 title: 'Abrir QR Code dos Correios',
@@ -145,7 +172,7 @@ const columns = [
                 qr.service_label || qr.postage_price != null
                     ? h('span', { class: 'block text-[11px] text-slate-400' }, [qr.service_label, formatPostagePrice(qr.postage_price)].filter(Boolean).join(' · '))
                     : null,
-            ]);
+            ])]);
         },
     },
     {

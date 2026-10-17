@@ -59,6 +59,7 @@ class PedidosPorMarketplaceTest extends TestCase
             Order::ORIGIN_TIKTOK_SHOP => $this->pedido(Order::ORIGIN_TIKTOK_SHOP),
             Order::ORIGIN_AMAZON => $this->pedido(Order::ORIGIN_AMAZON),
             Order::SITE_BEAUTYKORA => $this->pedido(Order::ORIGIN_STORE, ['site_origem' => Order::SITE_BEAUTYKORA]),
+            Order::ORIGIN_MANUAL_INVOICE => $this->pedido(Order::ORIGIN_MANUAL_INVOICE),
         ];
 
         foreach ($pedidos as $canal => $pedido) {

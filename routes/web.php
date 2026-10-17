@@ -677,6 +677,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('download-videos', [VideoDownloadController::class, 'store'])
         ->middleware(['permission:operacional.create', 'throttle:5,1'])
         ->name('download-videos.store');
+    Route::post('download-videos/preview', [VideoDownloadController::class, 'preview'])
+        ->middleware(['permission:operacional.create', 'throttle:20,1'])
+        ->name('download-videos.preview');
 
     Route::resource('pedidos-de-compra', PurchaseOrderController::class)->except(['edit', 'update'])
         ->parameters(['pedidos-de-compra' => 'purchase_order'])

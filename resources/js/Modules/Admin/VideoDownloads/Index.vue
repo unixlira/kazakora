@@ -2,7 +2,7 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import { Head, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
     platforms: { type: Array, default: () => ['YouTube', 'TikTok', 'Facebook', 'Instagram'] },
@@ -10,6 +10,7 @@ const props = defineProps({
     timeoutSeconds: { type: Number, default: 180 },
     csrfToken: { type: String, default: '' },
     downloadUrl: { type: String, default: '/admin/download-videos' },
+    previewUrl: { type: String, default: '/admin/download-videos/preview' },
 });
 
 const page = usePage();
@@ -66,10 +67,6 @@ const detectedPlatform = computed(() => supportedPlatforms.find((platform) => (
     platform.hosts.some((host) => normalizedHost.value === host || normalizedHost.value.endsWith(`.${host}`))
 )) ?? null);
 
-const canSubmit = computed(() => Boolean(
-    videoUrl.value.trim().length > 8 && detectedPlatform.value && !isProcessing.value,
-));
-
 const helperText = computed(() => {
     if (!videoUrl.value.trim()) {
         return 'Cole uma URL de vídeo para começar.';
@@ -98,72 +95,253 @@ const filenameFromDisposition = (disposition) => {
     return filename ? decodeURIComponent(filename) : 'kazakora-video.mp4';
 };
 
-const submitDownload = async () => {
-    if (!canSubmit.value) {
-        return;
+// Prévia (miniatura, título, duração) assim que a URL é colada; em seguida
+// o servidor já começa a preparar o arquivo, sem esperar clique.
+const preview = ref(null);
+const previewLoading = ref(false);
+const videoReady = ref(false);
+let preparedFor = null;
+let videoJob = null;
+let previewTimer = null;
+
+const postJson = (url, body, accept) => fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+        Accept: accept,
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': props.csrfToken,
+        'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify(body),
+});
+
+const errorFrom = async (response, fallback) => {
+    let payload = {};
+
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = {};
     }
 
-    const url = videoUrl.value.trim();
+    return new Error(payload.message || payload.errors?.url?.[0] || fallback);
+};
+
+const formatDuration = (seconds) => {
+    if (!seconds && seconds !== 0) {
+        return null;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+
+    return `${minutes}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
+const suggestedName = computed(() => {
+    const base = (preview.value?.title || 'kazakora-video')
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/#\S+/g, '')
+        .replace(/[^A-Za-z0-9 _-]+/g, ' ')
+        .trim().replace(/\s+/g, '-')
+        .slice(0, 80);
+
+    return `${base || 'kazakora-video'}.mp4`;
+});
+
+const fetchVideo = async (url, historyItem) => {
+    const response = await postJson(props.downloadUrl, { url }, 'application/json, video/*, application/octet-stream');
+
+    if (!response.ok) {
+        throw await errorFrom(response, 'Não foi possível baixar este vídeo.');
+    }
+
+    return {
+        blob: await response.blob(),
+        filename: filenameFromDisposition(response.headers.get('Content-Disposition')),
+        historyItem,
+    };
+};
+
+const startPreparing = (url) => {
+    if (preparedFor === url && videoJob) {
+        return videoJob;
+    }
+
     const historyItem = {
         id: Date.now(),
-        platform: detectedPlatform.value.label,
+        platform: detectedPlatform.value?.label ?? 'Vídeo',
         url,
         status: 'Processando',
     };
 
+    preparedFor = url;
+    videoReady.value = false;
     isProcessing.value = true;
-    message.value = 'Preparando o vídeo. Mantenha esta tela aberta até o download iniciar.';
-    messageType.value = 'info';
     recentDownloads.value = [historyItem, ...recentDownloads.value].slice(0, 5);
 
-    try {
-        const response = await fetch(props.downloadUrl, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                Accept: 'application/json, video/*, application/octet-stream',
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': props.csrfToken,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: JSON.stringify({ url }),
-        });
+    const job = fetchVideo(url, historyItem);
 
-        if (!response.ok) {
-            let payload = {};
-
-            try {
-                payload = await response.json();
-            } catch (error) {
-                payload = {};
-            }
-
-            throw new Error(payload.message || payload.errors?.url?.[0] || 'Não foi possível baixar este vídeo.');
+    videoJob = job;
+    job.then(() => {
+        if (videoJob !== job) {
+            return;
         }
 
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const disposition = response.headers.get('Content-Disposition');
+        videoReady.value = true;
+        message.value = 'Vídeo pronto. Escolha onde salvar no seu computador.';
+        messageType.value = 'success';
+        // Tenta abrir a janela "Salvar como" sozinha. O navegador só deixa
+        // logo depois de um clique ou de colar; se não deixar, fica o botão.
+        saveVideo({ automatic: true });
+    }).catch((error) => {
+        historyItem.status = 'Erro';
 
-        link.href = downloadUrl;
-        link.download = filenameFromDisposition(disposition);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(downloadUrl);
+        if (videoJob !== job) {
+            return;
+        }
+
+        videoJob = null;
+        preparedFor = null;
+        message.value = error.message || 'Falha temporária no servidor. Tente novamente em alguns minutos.';
+        messageType.value = 'error';
+    }).finally(() => {
+        if (videoJob === job || videoJob === null) {
+            isProcessing.value = false;
+        }
+    });
+
+    return job;
+};
+
+const loadPreview = async (url) => {
+    previewLoading.value = true;
+    preview.value = null;
+    message.value = 'Buscando o vídeo...';
+    messageType.value = 'info';
+
+    try {
+        const response = await postJson(props.previewUrl, { url }, 'application/json');
+
+        if (!response.ok) {
+            throw await errorFrom(response, 'Não foi possível ler este vídeo.');
+        }
+
+        const data = await response.json();
+
+        if (videoUrl.value.trim() !== url) {
+            return;
+        }
+
+        preview.value = data;
+        message.value = 'Preparando o arquivo. Mantenha esta tela aberta.';
+        startPreparing(url);
+    } catch (error) {
+        if (videoUrl.value.trim() === url) {
+            message.value = error.message;
+            messageType.value = 'error';
+        }
+    } finally {
+        previewLoading.value = false;
+    }
+};
+
+watch(videoUrl, (value) => {
+    clearTimeout(previewTimer);
+
+    const url = value.trim();
+
+    if (url === preparedFor) {
+        return;
+    }
+
+    preview.value = null;
+    videoReady.value = false;
+    videoJob = null;
+    preparedFor = null;
+    isProcessing.value = false;
+
+    if (!detectedPlatform.value || url.length <= 8) {
+        message.value = null;
+        return;
+    }
+
+    previewTimer = setTimeout(() => loadPreview(url), 500);
+});
+
+const saveBlobWithLink = (blob, filename) => {
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(objectUrl), 10000);
+};
+
+let saving = false;
+
+const saveVideo = async ({ automatic = false } = {}) => {
+    const url = videoUrl.value.trim();
+
+    if (saving || !url || !detectedPlatform.value) {
+        return;
+    }
+
+    saving = true;
+
+    try {
+        const job = startPreparing(url);
+        let handle = null;
+
+        // "Salvar como" do Chrome/Edge: abre já no clique (antes do arquivo
+        // ficar pronto, senão o navegador recusa) e grava quando chegar.
+        if (window.showSaveFilePicker) {
+            try {
+                handle = await window.showSaveFilePicker({
+                    suggestedName: suggestedName.value,
+                    types: [{ description: 'Vídeo MP4', accept: { 'video/mp4': ['.mp4'] } }],
+                });
+            } catch (error) {
+                if (error.name === 'AbortError' || automatic) {
+                    return;
+                }
+
+                handle = null;
+            }
+        } else if (automatic) {
+            return;
+        }
+
+        const { blob, filename, historyItem } = await job;
+
+        if (handle) {
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            message.value = `Vídeo salvo como ${handle.name}.`;
+        } else {
+            saveBlobWithLink(blob, filename);
+            message.value = 'Download iniciado. Confira a pasta Downloads do navegador.';
+        }
 
         historyItem.status = 'Concluído';
-        message.value = 'Download iniciado. Confira a pasta Downloads do navegador.';
         messageType.value = 'success';
     } catch (error) {
-        historyItem.status = 'Erro';
         message.value = error.message || 'Falha temporária no servidor. Tente novamente em alguns minutos.';
         messageType.value = 'error';
     } finally {
-        isProcessing.value = false;
+        saving = false;
     }
 };
+
+const submitDownload = () => saveVideo();
+
+const canSave = computed(() => Boolean(
+    videoUrl.value.trim().length > 8 && detectedPlatform.value && !previewLoading.value,
+));
 </script>
 
 <template>
@@ -195,7 +373,7 @@ const submitDownload = async () => {
                         Baixar vídeo para uso interno
                     </h2>
                     <p class="mt-2 max-w-2xl text-sm text-slate-300">
-                        Quando o processamento terminar, o navegador vai salvar o arquivo normalmente na pasta Downloads do seu computador.
+                        Cole o link: a prévia aparece, o download começa sozinho e, quando terminar, abre a janela para escolher onde salvar. Vídeos do TikTok vêm sem marca d'água.
                     </p>
 
                     <form class="mt-6 space-y-3" @submit.prevent="submitDownload">
@@ -215,11 +393,19 @@ const submitDownload = async () => {
                             <button
                                 type="submit"
                                 class="h-14 rounded-2xl bg-primary px-6 text-sm font-bold text-white shadow-lg shadow-primary/20 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:min-w-44"
-                                :disabled="!canSubmit"
+                                :disabled="!canSave"
                             >
-                                <span v-if="isProcessing">
+                                <span v-if="previewLoading">
+                                    <i class="fas fa-spinner mr-2 animate-spin"></i>
+                                    Buscando
+                                </span>
+                                <span v-else-if="isProcessing">
                                     <i class="fas fa-spinner mr-2 animate-spin"></i>
                                     Preparando
+                                </span>
+                                <span v-else-if="videoReady">
+                                    <i class="fas fa-floppy-disk mr-2"></i>
+                                    Salvar no computador
                                 </span>
                                 <span v-else>
                                     <i class="fas fa-download mr-2"></i>
@@ -244,7 +430,48 @@ const submitDownload = async () => {
                     </div>
                 </div>
 
-                <div class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                <div v-if="preview || previewLoading" class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                    <div class="relative mx-auto aspect-video w-full overflow-hidden rounded-xl bg-black/40">
+                        <img
+                            v-if="preview?.thumbnail"
+                            :src="preview.thumbnail"
+                            :alt="preview.title"
+                            class="h-full w-full object-contain"
+                        >
+                        <div v-else class="flex h-full w-full items-center justify-center text-3xl text-white/40">
+                            <i :class="previewLoading ? 'fas fa-spinner animate-spin' : 'fas fa-film'"></i>
+                        </div>
+                        <span
+                            v-if="formatDuration(preview?.duration)"
+                            class="absolute bottom-2 right-2 rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold"
+                        >
+                            {{ formatDuration(preview.duration) }}
+                        </span>
+                    </div>
+
+                    <template v-if="preview">
+                        <p class="mt-3 line-clamp-2 text-sm font-semibold">{{ preview.title }}</p>
+                        <p v-if="preview.uploader" class="mt-1 truncate text-xs text-slate-300">{{ preview.uploader }}</p>
+
+                        <div class="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                            <span v-if="preview.semMarcaDagua" class="rounded-full bg-emerald-400/15 px-3 py-1 text-emerald-200 ring-1 ring-emerald-300/30">
+                                <i class="fas fa-check mr-1"></i>
+                                Sem marca d'água
+                            </span>
+                            <span v-if="isProcessing" class="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+                                <i class="fas fa-spinner mr-1 animate-spin"></i>
+                                Preparando arquivo
+                            </span>
+                            <span v-else-if="videoReady" class="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+                                <i class="fas fa-circle-check mr-1"></i>
+                                Pronto para salvar
+                            </span>
+                        </div>
+                    </template>
+                    <p v-else class="mt-3 text-sm text-slate-300">Buscando a prévia do vídeo...</p>
+                </div>
+
+                <div v-else class="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
                     <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-300">
                         Plataformas suportadas
                     </h3>
@@ -277,9 +504,8 @@ const submitDownload = async () => {
                 <ol class="mt-4 space-y-3 text-sm text-slate-500">
                     <li class="flex gap-3"><span class="font-bold text-primary">1.</span> Copie o link público ou autorizado do vídeo.</li>
                     <li class="flex gap-3"><span class="font-bold text-primary">2.</span> Cole no campo principal desta tela.</li>
-                    <li class="flex gap-3"><span class="font-bold text-primary">3.</span> Clique em “Baixar vídeo”.</li>
-                    <li class="flex gap-3"><span class="font-bold text-primary">4.</span> Aguarde o servidor preparar o arquivo.</li>
-                    <li class="flex gap-3"><span class="font-bold text-primary">5.</span> Confira a pasta Downloads do navegador.</li>
+                    <li class="flex gap-3"><span class="font-bold text-primary">3.</span> Confira a prévia; o download começa sozinho.</li>
+                    <li class="flex gap-3"><span class="font-bold text-primary">4.</span> Escolha a pasta na janela "Salvar como" (ou clique em “Salvar no computador”).</li>
                 </ol>
 
                 <div class="mt-5 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)]/50 p-4 text-xs text-slate-500">

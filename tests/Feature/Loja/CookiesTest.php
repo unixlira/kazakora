@@ -34,6 +34,15 @@ class CookiesTest extends TestCase
         $this->assertSame('celular', $visita->dispositivo);
     }
 
+    public function test_pixel_da_meta_vai_nas_props_para_o_front_so_carregar_apos_o_ok(): void
+    {
+        config(['services.meta_ads.pixel_id' => '2186107885537817']);
+
+        $this->get('/politica-de-entrega')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('cookies.aceito', false)
+            ->where('cookies.pixelMeta', '2186107885537817'));
+    }
+
     public function test_ok_grava_prova_e_cria_cookies(): void
     {
         $this->from('/politica-de-entrega')->post('/cookies/aceitar')

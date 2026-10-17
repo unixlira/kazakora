@@ -122,6 +122,23 @@ class Order extends Model
 
     public const ORIGIN_SHEIN = MarketplaceAccount::CHANNEL_SHEIN;
 
+    /**
+     * Filtro "Marketplace" da lista de pedidos do admin (pedido do Lira
+     * 2026-10-16): fonte única das opções, na chave de canal de métrica de
+     * filtrarCanal(). TikTok Shop e Amazon entram pelo Bling mas são gravados
+     * com o origin do próprio canal; 'loja' é só o kazakora.com e os sites do
+     * FerraKora/Beauty Kora aparecem separados (site_origem).
+     */
+    public const MARKETPLACES = [
+        self::ORIGIN_STORE => 'Site',
+        self::ORIGIN_SHOPEE => 'Shopee',
+        self::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
+        self::ORIGIN_TIKTOK_SHOP => 'TikTok Shop',
+        self::ORIGIN_AMAZON => 'Amazon',
+        self::SITE_FERRAKORA => 'FerraKora',
+        self::SITE_BEAUTYKORA => 'Beauty Kora',
+    ];
+
     // Pedido explícito 2026-08-09: emissão manual de nota fiscal (produto
     // ou serviço avulso) pelo novo menu /admin/notas-fiscais/emitir — não é
     // uma venda de canal nem do site, é só um jeito de ter um Order pra

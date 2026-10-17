@@ -65,8 +65,21 @@ const shippingTypeTone = {
 // Nome do selo só nesta listagem (pedido do Lira em 2026-10-16): Shopee e
 // TikTok aparecem como "Express", não "Ponto Coleta". O KoraSync continua
 // com o nome de TipoDeEnvio, que é o que a bancada usa.
+//
+// Correios (2026-10-16): o selo diz só "Correios"; PAC/SEDEX vai na linha
+// de baixo (ou no bloco da pré-postagem, quando ela já existe).
+// Tipo novo (integração registrada em TipoDeEnvio::INTEGRACOES_DE_FRETE,
+// ex.: Melhor Envio) não precisa de nada aqui: o nome vem pronto do
+// backend e a cor cai no cinza.
 const shippingTypeShortLabel = {
     express_coleta: 'Express',
+    correios_pac: 'Correios',
+    correios_sedex: 'Correios',
+};
+
+const correiosService = {
+    correios_pac: 'PAC',
+    correios_sedex: 'SEDEX',
 };
 
 const filterState = reactive({
@@ -182,12 +195,14 @@ const columns = [
                 status: shippingTypeTone[tipo] ?? 'gray',
                 label: shippingTypeShortLabel[tipo] || row.original.shipping_type_short || '—',
                 title: row.original.shipping_type_label || 'Envio não informado',
+                wrap: true,
             });
 
             if (!qr) {
                 // "Sem QR" só faz sentido onde a loja gera a pré-postagem dos Correios.
                 return h('div', { class: 'flex flex-col items-start gap-1' }, [
                     envio,
+                    correiosService[tipo] ? h('span', { class: 'text-[11px] text-slate-400' }, correiosService[tipo]) : null,
                     tipo.startsWith('correios') ? h(StatusBadge, { status: null, context: 'correios' }) : null,
                 ]);
             }

@@ -62,6 +62,20 @@ final class TipoDeEnvio
 
     public const PROPRIO = 'proprio';
 
+    /**
+     * Integrações de frete da loja (2026-10-16, pedido do Lira: a coluna
+     * Envios dos pedidos diz o meio de envio de cada pedido). Para ligar uma
+     * integração nova (Melhor Envio, Jadlog, Loggi...) basta uma linha aqui:
+     * slug do tipo => [nome que aparece, termos que identificam o nome da
+     * transportadora/serviço gravado no pedido ou no envio]. A listagem do
+     * admin e o KoraSync mostram o nome sem mudar tela nenhuma (tipo sem cor
+     * própria sai cinza). Correios fica fora porque tem regra própria
+     * (PAC/SEDEX e pré-postagem), em correios().
+     */
+    private const INTEGRACOES_DE_FRETE = [
+        'melhor_envio' => ['Melhor Envio', ['melhor envio', 'melhorenvio', 'melhor_envio']],
+    ];
+
     public const OUTRO = 'outro';
 
     public const DESCONHECIDO = 'desconhecido';
@@ -138,7 +152,9 @@ final class TipoDeEnvio
             'tiktok_shop' => self::tiktok($metodo),
             'amazon' => self::amazon($metodo),
             'loja' => self::loja($metodo ?: (string) $transportadora),
-            default => self::generico($metodo),
+            // Canal sem regra própria (nota avulsa, devolução...): usa a
+            // transportadora do pedido quando o envio não diz nada.
+            default => self::generico($metodo !== '' ? $metodo : trim((string) $transportadora)),
         };
 
         return ['tipo' => $tipo, 'label' => $label, 'curto' => $curto];
@@ -215,6 +231,10 @@ final class TipoDeEnvio
             return [self::PROPRIO, 'Amazon — enviado pelo vendedor', 'Vendedor'];
         }
 
+        if ($integracao = self::integracao($metodo)) {
+            return $integracao;
+        }
+
         return [self::OUTRO, "Amazon — {$metodo}", $metodo];
     }
 
@@ -241,6 +261,12 @@ final class TipoDeEnvio
             return self::naoInformado($transportadora);
         }
 
+        // Integração antes dos Correios: "Melhor Envio - Correios SEDEX" é
+        // um envio do Melhor Envio (é lá que a etiqueta é comprada).
+        if ($integracao = self::integracao($transportadora)) {
+            return $integracao;
+        }
+
         if ($correios = self::correios($transportadora)) {
             return $correios;
         }
@@ -257,12 +283,41 @@ final class TipoDeEnvio
         return [self::OUTRO, $transportadora, $transportadora];
     }
 
+    /**
+     * Integração de frete registrada em INTEGRACOES_DE_FRETE cujo termo
+     * aparece no nome gravado. O texto original fica no label completo
+     * (ex.: "Melhor Envio — Jadlog .Package") pra dar pra rastrear.
+     *
+     * @return array{0: string, 1: string, 2: string}|null
+     */
+    private static function integracao(string $texto): ?array
+    {
+        $normalizado = mb_strtolower($texto);
+
+        foreach (self::INTEGRACOES_DE_FRETE as $tipo => [$nome, $termos]) {
+            foreach ($termos as $termo) {
+                if (str_contains($normalizado, $termo)) {
+                    // Nome já no começo ("Melhor Envio - Jadlog") fica como veio.
+                    $label = str_starts_with($normalizado, $termo) ? trim($texto) : "{$nome} — {$texto}";
+
+                    return [$tipo, $label, $nome];
+                }
+            }
+        }
+
+        return null;
+    }
+
     /** @return array{0: string, 1: string, 2: string} */
     private static function generico(string $metodo): array
     {
-        return $metodo === ''
-            ? self::naoInformado($metodo)
-            : [self::OUTRO, $metodo, $metodo];
+        if ($metodo === '') {
+            return self::naoInformado($metodo);
+        }
+
+        return self::integracao($metodo)
+            ?? self::correios($metodo)
+            ?? [self::OUTRO, $metodo, $metodo];
     }
 
     /**

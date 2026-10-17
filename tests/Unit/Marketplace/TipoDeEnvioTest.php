@@ -109,4 +109,37 @@ class TipoDeEnvioTest extends TestCase
         $this->assertSame(TipoDeEnvio::OUTRO, $outro['tipo']);
         $this->assertSame('Jadlog .Package', $outro['label']);
     }
+
+    /**
+     * 2026-10-16: integração de frete nova só registra o nome em
+     * TipoDeEnvio::INTEGRACOES_DE_FRETE e já aparece na coluna Envios.
+     */
+    public function test_integracao_de_frete_registrada_aparece_pelo_nome(): void
+    {
+        $melhor = TipoDeEnvio::montar('loja', null, 'Melhor Envio - Jadlog .Package');
+        $this->assertSame('melhor_envio', $melhor['tipo']);
+        $this->assertSame('Melhor Envio', $melhor['curto']);
+        $this->assertStringContainsString('Jadlog .Package', $melhor['label']);
+
+        // Melhor Envio comprando etiqueta dos Correios continua Melhor Envio.
+        $viaCorreios = TipoDeEnvio::montar('loja', null, 'Melhor Envio Correios SEDEX');
+        $this->assertSame('melhor_envio', $viaCorreios['tipo']);
+
+        $soNome = TipoDeEnvio::montar('loja', null, 'Melhor Envio');
+        $this->assertSame('Melhor Envio', $soNome['label']);
+    }
+
+    public function test_canal_sem_regra_usa_a_transportadora_do_pedido(): void
+    {
+        // Valor real de produção: nota de devolução de compra com
+        // transportadora e sem envio de canal.
+        $nota = TipoDeEnvio::montar('nota_devolucao_compra', null, 'J NOBREGA TRANSPORTES LTDA');
+        $this->assertSame(TipoDeEnvio::OUTRO, $nota['tipo']);
+        $this->assertSame('J NOBREGA TRANSPORTES LTDA', $nota['curto']);
+
+        $correios = TipoDeEnvio::montar('nota_fiscal_avulsa', null, 'Correios PAC');
+        $this->assertSame(TipoDeEnvio::CORREIOS_PAC, $correios['tipo']);
+
+        $this->assertSame(TipoDeEnvio::DESCONHECIDO, TipoDeEnvio::montar('nota_devolucao_venda', null, null)['tipo']);
+    }
 }

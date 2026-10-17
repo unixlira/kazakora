@@ -203,6 +203,10 @@ Schedule::command('ads:sync-spend')->dailyAt('06:00');
 // Estratégia Shopee (2026-10-14): campanhas de ADS por dia, só leitura.
 // De hora em hora porque o dia corrente muda; 3 dias corrige o anterior.
 Schedule::command('shopee:ads-campanhas')->hourlyAt(35)->withoutOverlapping(30);
+// Oferta Relâmpago diária da Shopee (2026-10-17): cria a de amanhã com a
+// lista do Lira. Duas vezes por dia: a da noite completa o que a Shopee
+// recusou ou não respondeu de manhã. Só cria com SHOPEE_RELAMPAGO_ATIVA=true.
+Schedule::command('shopee:relampago-diaria')->twiceDailyAt(9, 21, 15)->withoutOverlapping(30);
 
 // Saldo disponível pra saque do Mercado Pago — pedido explícito
 // 2026-08-09/10. Roda de hora em hora (não diário como o de cima): o

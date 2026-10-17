@@ -300,8 +300,15 @@ const columns = [
         </div>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[200px_160px_300px_minmax(0,1fr)] lg:items-end">
-                <div>
+            <!-- Filtros numa linha que quebra (flex-wrap), não mais em grid
+                 (2026-10-16, Lira de novo: busca grande demais e rolagem lateral).
+                 O grid de uma coluna no celular media a coluna pelo texto mais
+                 largo dos selects e passava da tela (381px numa tela de 360px),
+                 fazendo a página inteira rolar de lado. Agora cada campo tem
+                 min-w-0 e largura própria; a busca cresce até max-w-md e desce
+                 para a linha de baixo quando não cabe. -->
+            <div class="flex min-w-0 flex-wrap items-end gap-3">
+                <div class="w-full min-w-0 sm:w-44">
                     <label for="filtro-marketplace" class="text-xs font-medium text-slate-500">Marketplace</label>
                     <select id="filtro-marketplace" v-model="filterState.marketplace" name="marketplace" @change="applyFilters"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
@@ -312,7 +319,7 @@ const columns = [
                     </select>
                 </div>
 
-                <div>
+                <div class="w-full min-w-0 sm:w-40">
                     <label for="filtro-status" class="text-xs font-medium text-slate-500">Status</label>
                     <select id="filtro-status" v-model="filterState.status" name="status" @change="applyFilters"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
@@ -323,7 +330,7 @@ const columns = [
                     </select>
                 </div>
 
-                <div>
+                <div class="w-full min-w-0 sm:w-[19rem]">
                     <span class="text-xs font-medium text-slate-500">Período</span>
                     <div class="mt-1 flex items-center gap-1">
                         <input v-model="filterState.de" type="date" name="de" aria-label="Data inicial" @change="applyFilters"
@@ -339,7 +346,7 @@ const columns = [
                     </div>
                 </div>
 
-                <div class="sm:col-span-2 lg:col-span-3 2xl:col-span-1">
+                <div class="w-full min-w-0 sm:w-auto sm:min-w-[16rem] sm:max-w-md sm:flex-1">
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
                     <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
                          Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no

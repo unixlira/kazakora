@@ -46,8 +46,10 @@ class PedidosPorSiteTest extends TestCase
         $lista = fn (string $url, array $ids) => $this->actingAs($admin)->get($url)->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('orders.data', fn ($pedidos) => collect($pedidos)->pluck('id')->sort()->values()->all() === $ids));
 
+        // Filtro único "Marketplace" (2026-10-16); ?site=ferrakora antigo segue valendo.
+        $lista('/admin/pedidos?marketplace=ferrakora', [$ferrakora->id]);
         $lista('/admin/pedidos?site=ferrakora', [$ferrakora->id]);
-        $lista('/admin/pedidos?site=kazakora', [$kazakora->id]);
+        $lista('/admin/pedidos?marketplace=loja', [$kazakora->id]);
         $lista('/admin/pedidos', [$kazakora->id, $ferrakora->id]);
         $lista('/admin/pedidos?site=qualquer', [$kazakora->id, $ferrakora->id]);
     }

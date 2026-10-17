@@ -14,13 +14,10 @@ const props = defineProps({
         type: [Array, Object],
         default: () => ({ data: [] }),
     },
-    channels: {
+    // Opções do filtro "Marketplace" (fonte única: Order::MARKETPLACES).
+    marketplaces: {
         type: Array,
         default: () => [],
-    },
-    sites: {
-        type: Object,
-        default: () => ({}),
     },
     filters: {
         type: Object,
@@ -44,8 +41,7 @@ const siteBadge = {
 };
 
 const filterState = reactive({
-    site: props.filters.site ?? '',
-    origin: props.filters.origin ?? '',
+    marketplace: props.filters.marketplace ?? '',
     search: props.filters.search ?? '',
 });
 const orderRows = computed(() => Array.isArray(props.orders) ? props.orders : (props.orders?.data ?? []));
@@ -178,23 +174,14 @@ const columns = [
         <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
-            <div class="grid gap-3 lg:grid-cols-[180px_220px_minmax(0,1fr)_auto] lg:items-end">
+            <div class="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
                 <div>
-                    <label class="text-xs font-medium text-slate-500">Site</label>
-                    <select v-model="filterState.site" @change="applyFilters"
+                    <label for="filtro-marketplace" class="text-xs font-medium text-slate-500">Marketplace</label>
+                    <select id="filtro-marketplace" v-model="filterState.marketplace" name="marketplace" @change="applyFilters"
                         class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
-                        <option value="">Todos os sites</option>
-                        <option v-for="(label, site) in props.sites" :key="site" :value="site">{{ label }}</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="text-xs font-medium text-slate-500">Marketplace</label>
-                    <select v-model="filterState.origin" @change="applyFilters"
-                        class="mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-2 py-2 text-sm focus:border-primary focus:outline-none">
-                        <option value="">Todos os marketplaces</option>
-                        <option v-for="channel in props.channels" :key="channel" :value="channel">
-                            {{ channelBadge[channel]?.label ?? channel }}
+                        <option value="">Todos</option>
+                        <option v-for="option in props.marketplaces" :key="option.value" :value="option.value">
+                            {{ option.label }}
                         </option>
                     </select>
                 </div>

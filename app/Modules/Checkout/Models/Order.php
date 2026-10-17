@@ -130,7 +130,7 @@ class Order extends Model
      * FerraKora/Beauty Kora aparecem separados (site_origem).
      */
     public const MARKETPLACES = [
-        self::ORIGIN_STORE => 'Site',
+        self::ORIGIN_STORE => 'KazaKora', // era "Site"; só o rótulo mudou (2026-10-16)
         self::ORIGIN_SHOPEE => 'Shopee',
         self::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
         self::ORIGIN_TIKTOK_SHOP => 'TikTok Shop',

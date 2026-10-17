@@ -39,4 +39,24 @@ return [
     'queue' => env('ML_QUEUE', 'default'),
 
     'token_refresh_threshold_minutes' => (int) env('ML_TOKEN_REFRESH_THRESHOLD_MINUTES', 5),
+
+    /*
+    | Cupom do vendedor (SELLER_COUPON_CAMPAIGN), tela Integrações › Mercado
+    | Livre › Criar cupom. Modelo validado pelo Lira em 16/10/2026: 50% de
+    | desconto, teto de R$ 6 e compra mínima de 2% do ticket médio do ML.
+    | Os valores só pré-preenchem a tela; tudo é editável antes de enviar.
+    |
+    | envio_habilitado: o homolog usa a MESMA conta do ML que a produção
+    | (KORAMIX), então criar cupom lá seria cupom de verdade. Sem a variável
+    | ML_CUPOM_ENVIO, o envio só fica ligado quando APP_URL é kazakora.com.
+    */
+    'cupom' => [
+        'percentual' => 50,
+        'desconto_maximo' => 6.00,
+        'compra_minima_pct_ticket' => 2,
+        'ticket_dias' => 30,
+        'orcamento' => 60.00,
+        'duracao_dias' => 30,
+        'envio_habilitado' => env('ML_CUPOM_ENVIO'),
+    ],
 ];

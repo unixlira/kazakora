@@ -297,9 +297,10 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
                          computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL
                          (margem negativa: o botão é mais alto que a linha e não muda a altura
-                         do card); no celular vira a última linha do card. -->
+                         do card); no celular vira a última linha do card. Menor no computador
+                         (pedido 2026-10-17): era 30px de altura e ficava grande no card. -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="-my-[5px] hidden h-[30px] shrink-0 items-center rounded-lg bg-[#f27a2a] px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        class="-my-[2px] hidden h-6 shrink-0 items-center rounded-md bg-[#f27a2a] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
                         Detalhes
                     </Link>
                 </div>

@@ -93,6 +93,18 @@ const exigirVariacao = () => {
 const opcoesVariacao = computed(() => (props.variations.length
     ? [props.product, ...props.variations].sort((a, b) => String(a.variation || a.name).localeCompare(String(b.variation || b.name), 'pt-BR', { numeric: true }))
     : []));
+// Antes de escolher, o preço é o da variação mais barata (pedido 2026-10-16,
+// ex.: Árvore de Natal), contando só as com estoque quando houver alguma.
+// Ficha, estoque e SKU continuam do produto da página.
+const maisBarata = computed(() => {
+    if (!opcoesVariacao.value.length) return props.product;
+    const comEstoque = opcoesVariacao.value.filter((variant) => variant.stock > 0);
+    return (comEstoque.length ? comEstoque : opcoesVariacao.value)
+        .reduce((menor, variant) => (Number(variant.final_price) < Number(menor.final_price) ? variant : menor));
+});
+const precoBase = computed(() => escolhida.value ?? maisBarata.value);
+const aPartirDe = computed(() => !escolhida.value && opcoesVariacao.value.length > 0
+    && new Set(opcoesVariacao.value.map((variant) => Number(variant.final_price))).size > 1);
 const variantIndex = (id) => {
     const index = mediaItems.value.findIndex((item) => item.variantId === id);
     return index >= 0 ? index : 0;
@@ -178,27 +190,27 @@ const variantThumbnail = (item) => {
 
 // Desconto por quantidade: mesma conta do backend (CartManager/CheckoutController).
 const quantityDiscounts = computed(() =>
-    [...(selecionada.value.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)
+    [...(precoBase.value.quantity_discounts ?? [])].sort((a, b) => a.min_quantity - b.min_quantity)
 );
 const unitPriceForQuantity = (qty) => {
     const tier = [...quantityDiscounts.value].reverse().find((row) => row.min_quantity <= qty);
-    if (!tier) return Number(selecionada.value.final_price);
-    return Math.max(0, Math.round(Number(selecionada.value.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
+    if (!tier) return Number(precoBase.value.final_price);
+    return Math.max(0, Math.round(Number(precoBase.value.final_price) * (1 - Number(tier.discount_percentage) / 100) * 100) / 100);
 };
 
 const quantity = ref(1);
 const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quantity.value);
-const pixPrice = computed(() => Math.round(Number(selecionada.value.final_price) * (1 - DESCONTO_PIX / 100) * 100) / 100);
+const pixPrice = computed(() => Math.round(Number(precoBase.value.final_price) * (1 - DESCONTO_PIX / 100) * 100) / 100);
 // Referência do bloco de preço: "de" = preço cheio (ou o do cartão, quando
 // não há promoção e existe desconto no Pix); "por" = valor no Pix.
-const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(selecionada.value.final_price)));
+const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(precoBase.value.final_price)));
 const precoDe = computed(() => {
-    if (selecionada.value.has_discount) return Number(selecionada.value.preco_de ?? selecionada.value.price);
-    return DESCONTO_PIX > 0 ? Number(selecionada.value.final_price) : null;
+    if (precoBase.value.has_discount) return Number(precoBase.value.preco_de ?? precoBase.value.price);
+    return DESCONTO_PIX > 0 ? Number(precoBase.value.final_price) : null;
 });
 const percentualTotal = computed(() => (precoDe.value ? Math.round((1 - precoPor.value / precoDe.value) * 100) : 0));
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
-const installmentValue = computed(() => Number(selecionada.value.final_price) / PARCELAS);
+const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
 // Antes de escolher, vale o estoque de qualquer variação (o pai pode estar zerado).
 const inStock = computed(() => (faltaVariacao.value
     ? opcoesVariacao.value.some((variant) => variant.stock > 0)
@@ -480,7 +492,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                  vista (Pix) em destaque, 12x no cartão e "R$ X de desconto" — tudo
                                  com os valores reais (preço de cartão = final_price). -->
                             <div class="preco">
-                                <span class="rot">Preço:</span>
+                                <span class="rot">{{ aPartirDe ? 'A partir de:' : 'Preço:' }}</span>
                                 <div class="valores">
                                     <div v-if="precoDe" class="linha-de">
                                         <span class="de">{{ formatPrice(precoDe) }}</span>

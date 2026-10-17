@@ -167,6 +167,7 @@ export const sidebarSections = [
             { label: 'Pagamentos do site', href: '/admin/pagamentos', icon: 'fas fa-credit-card', cor: 'verde', permission: null },
             { label: 'Fretes do site', href: '/admin/logistica', icon: 'fas fa-truck', cor: 'laranja', permission: 'operacional.view' },
             { label: 'Integrações', href: '/admin/integracoes', icon: 'fas fa-plug', cor: 'violeta', permission: 'configuracoes.integracoes' },
+            { label: 'Pixel da Meta', href: '/admin/pixel-meta', icon: 'fab fa-meta', cor: 'azul', permission: 'configuracoes.integracoes' },
             { label: 'Conexão do WhatsApp', href: '/admin/whatsapp', icon: 'fab fa-whatsapp', marca: 'whatsapp', permission: 'configuracoes.integracoes' },
             { label: 'Usuários e permissões', href: '/admin/usuarios-permissoes', icon: 'fas fa-user-shield', cor: 'indigo', permission: 'configuracoes.usuarios' },
             { label: 'API de parceiros', href: '/admin/api-parceiros', icon: 'fas fa-key', cor: 'ambar', permission: 'configuracoes.usuarios' },

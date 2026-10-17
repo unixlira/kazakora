@@ -308,11 +308,12 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                     </div>
                 </div>
 
-                <div class="w-full min-w-0 sm:w-auto sm:min-w-[16rem] sm:max-w-xl sm:flex-1">
+                <div class="w-full min-w-0 sm:w-auto sm:min-w-[28rem] sm:max-w-xl sm:flex-1">
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
                     <!-- "+ pedido" à direita da busca, na mesma linha (Lira 2026-10-16),
                          com o ícone de mais dentro do círculo. No celular continua ao
-                         lado: o campo encolhe (min-w-0), o botão não (shrink-0). -->
+                         lado: o campo encolhe (min-w-0), o botão não (shrink-0). O min-w de
+                         28rem faz o bloco descer de linha antes de o campo ficar espremido. -->
                         <div class="mt-1 flex min-w-0 items-center gap-2">
                         <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
                              Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no

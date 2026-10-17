@@ -37,6 +37,21 @@ class AlertarCanceladosSeparados extends Command
             ->where('orders.status', 'cancelled')
             ->whereNotNull('orders.packed_at')
             ->where('orders.updated_at', '>=', now()->subDays(7)->startOfDay())
+            // BUG REAL 2026-10-17: TO_RETURN e cancelamento depois da coleta
+            // também viram status cancelled (ShopeeDriver::mapOrderStatus()),
+            // e o e-mail mandava "não envie" de pacote que já tinha saído dias
+            // antes (68 dos 87 avisos até aqui). Só avisa o que ainda está na
+            // expedição: sem coleta, sem rota, sem devolução e sem a saída da
+            // fila confirmada pelo canal (OrderImportService::syncStatus()).
+            ->whereNull('orders.collected_at')
+            ->whereNull('channel_shipments.channel_shipped_at')
+            ->whereNull('channel_shipments.channel_delivered_at')
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('marketplace_claims')
+                ->whereColumn('marketplace_claims.order_id', 'orders.id')
+                ->whereIn('marketplace_claims.type', ['return', 'returns']))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('order_fulfillment_events')
+                ->whereColumn('order_fulfillment_events.order_id', 'orders.id')
+                ->where('order_fulfillment_events.message', 'like', 'Pedido saiu da fila de preparação%'))
             ->orderBy('orders.updated_at')
             ->get(['orders.id', 'orders.origin', 'orders.external_order_id', 'orders.packed_at',
                 'order_items.product_name', 'order_items.quantity', 'channel_shipments.external_shipment_id']);

@@ -31,7 +31,10 @@ const customerRows = computed(() => props.customers?.data ?? []);
 // Mesmas cores já usadas em Admin/Orders/Index.vue pra canal — reaproveitar
 // aqui deixa "Shopee" com a mesma cor em qualquer tela do admin.
 const channelBadge = {
-    loja: { color: 'shipped', label: 'Site' },
+    loja: { color: 'shipped', label: 'KazaKora' },
+    // Pedido do site da Beauty Kora ou do FerraKora: origin "loja", selo com o nome da loja.
+    ferrakora: { color: '#F27A2A', label: 'FerraKora' },
+    beautykora: { color: '#D63384', label: 'Beauty Kora' },
     mercado_livre: { color: 'pending', label: 'Mercado Livre' },
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
@@ -65,7 +68,7 @@ const columns = [
         id: 'origins',
         header: 'Canais',
         enableSorting: false,
-        cell: ({ row }) => h('div', { class: 'flex flex-wrap gap-1' }, row.original.origins.map((origin) => {
+        cell: ({ row }) => h('div', { class: 'flex flex-wrap gap-1' }, (row.original.canais ?? row.original.origins).map((origin) => {
             const badge = channelBadge[origin] ?? { color: origin, label: origin };
             return h(StatusBadge, { key: origin, status: badge.color, label: badge.label });
         })),

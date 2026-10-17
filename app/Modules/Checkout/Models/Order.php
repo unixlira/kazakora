@@ -142,6 +142,21 @@ class Order extends Model
         self::ORIGIN_MANUAL_INVOICE => 'Nota fiscal avulsa',
     ];
 
+    /**
+     * Nome do canal para mostrar na tela (2026-10-16): pedido do site sai
+     * com o nome da loja (KazaKora, FerraKora ou Beauty Kora, pelo
+     * site_origem); marketplace sai com o nome do canal. Só rótulo: o
+     * origin gravado continua "loja".
+     */
+    public static function rotuloDoCanal(?string $origin, ?string $siteOrigem = null): string
+    {
+        if ($origin === self::ORIGIN_STORE && $siteOrigem !== null && isset(self::ROTULOS_SITE[$siteOrigem])) {
+            return self::ROTULOS_SITE[$siteOrigem];
+        }
+
+        return self::MARKETPLACES[$origin] ?? (string) $origin;
+    }
+
     // Pedido explícito 2026-08-09: emissão manual de nota fiscal (produto
     // ou serviço avulso) pelo novo menu /admin/notas-fiscais/emitir — não é
     // uma venda de canal nem do site, é só um jeito de ter um Order pra

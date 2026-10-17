@@ -20,7 +20,7 @@ const channelBadge = {
     amazon: { color: 'shipped', label: 'Amazon' },
 };
 
-const originLabel = props.review.channel ? (channelBadge[props.review.channel]?.label ?? props.review.channel) : 'Site';
+const originLabel = props.review.channel ? (channelBadge[props.review.channel]?.label ?? props.review.channel) : 'KazaKora';
 const originColor = props.review.channel ? (channelBadge[props.review.channel]?.color ?? props.review.channel) : 'active';
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') : '—');

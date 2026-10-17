@@ -115,7 +115,7 @@ class PrintJobController extends Controller
             ->map(fn (Order $order) => [
                 'id' => $order->id,
                 'externalOrderId' => $order->external_order_id,
-                'channel' => self::CHANNEL_LABELS[$order->origin] ?? ($order->origin === Order::ORIGIN_STORE ? 'Site' : $order->origin),
+                'channel' => $this->nomeDoCanal($order),
                 'channelIcon' => self::CHANNEL_ICONS[$order->origin] ?? 'fas fa-shop',
                 'customer' => $order->shipping_name,
                 'unitsCount' => (int) $order->units_count,
@@ -152,7 +152,7 @@ class PrintJobController extends Controller
         ]);
 
         $jobs = PrintJob::query()
-            ->with('order:id,origin,external_order_id,shipping_name')
+            ->with('order:id,origin,site_origem,external_order_id,shipping_name')
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->latest('id')
             ->paginate(25)
@@ -162,7 +162,7 @@ class PrintJobController extends Controller
                 'status' => $job->status,
                 'statusLabel' => self::STATUS_META[$job->status]['label'] ?? $job->status,
                 'statusColor' => self::STATUS_META[$job->status]['color'] ?? 'slate',
-                'channel' => self::CHANNEL_LABELS[$job->order?->origin] ?? $job->order?->origin,
+                'channel' => $this->nomeDoCanal($job->order),
                 'channelIcon' => self::CHANNEL_ICONS[$job->order?->origin] ?? 'fas fa-shop',
                 'orderId' => $job->order_id,
                 'saleId' => $job->order?->external_order_id,
@@ -183,7 +183,7 @@ class PrintJobController extends Controller
 
     public function show(PrintJob $printJob): Response
     {
-        $printJob->load('order:id,origin,external_order_id,shipping_name');
+        $printJob->load('order:id,origin,site_origem,external_order_id,shipping_name');
 
         return Inertia::render('Admin/Impressoes/Show', [
             'job' => [
@@ -191,7 +191,7 @@ class PrintJobController extends Controller
                 'orderId' => $printJob->order_id,
                 'saleId' => $printJob->order?->external_order_id,
                 'shippingName' => $printJob->order?->shipping_name,
-                'channel' => self::CHANNEL_LABELS[$printJob->order?->origin] ?? $printJob->order?->origin,
+                'channel' => $this->nomeDoCanal($printJob->order),
                 'channelIcon' => self::CHANNEL_ICONS[$printJob->order?->origin] ?? 'fas fa-shop',
                 'status' => $printJob->status,
                 'statusLabel' => self::STATUS_META[$printJob->status]['label'] ?? $printJob->status,
@@ -229,5 +229,22 @@ class PrintJobController extends Controller
         $printJob->delete();
 
         return back()->with('success', "Impressão #{$printJob->id} removida.");
+    }
+
+    /**
+     * Nome do canal na fila e nas impressões (2026-10-16): pedido do site sai
+     * com o nome da loja (KazaKora, FerraKora ou Beauty Kora), não "Site".
+     */
+    private function nomeDoCanal(?Order $order): ?string
+    {
+        if (! $order) {
+            return null;
+        }
+
+        if ($order->origin === Order::ORIGIN_STORE) {
+            return Order::rotuloDoCanal($order->origin, $order->site_origem);
+        }
+
+        return self::CHANNEL_LABELS[$order->origin] ?? $order->origin;
     }
 }

@@ -4,7 +4,7 @@ import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import { statusOptions } from '@/Shared/statusLabels';
 import { Head, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     order: {
@@ -51,12 +51,22 @@ const formatDateTime = (value) => new Date(value).toLocaleString('pt-BR');
 const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
 
 const channelBadge = {
-    loja: { color: 'shipped', label: 'Site' },
+    loja: { color: 'shipped', label: 'KazaKora' },
     mercado_livre: { color: 'pending', label: 'Mercado Livre' },
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
     amazon: { color: '#146EB4', label: 'Amazon' },
 };
+
+// Pedido do site do FerraKora ou da Beauty Kora (2026-10-16): origin continua
+// "loja", o selo mostra a loja pelo site_origem (igual à listagem).
+const siteBadge = {
+    ferrakora: { color: '#F27A2A', label: 'FerraKora' },
+    beautykora: { color: '#D63384', label: 'Beauty Kora' },
+};
+const originBadge = computed(() => (props.order.origin === 'loja' ? siteBadge[props.order.site_origem] : null)
+    ?? channelBadge[props.order.origin]
+    ?? { color: props.order.origin, label: props.order.origin });
 
 // Venda AGENDADA pelo canal (pedido explícito 2026-08-14, achado no
 // pedido #278 — Coleta/Places do Mercado Livre com etiqueta liberada só
@@ -163,7 +173,7 @@ const cancelInvoice = () => {
     <AdminLayout>
         <div class="flex flex-wrap items-center gap-3">
             <h1 class="text-2xl font-bold">Pedido #{{ order.id }}</h1>
-            <StatusBadge :status="channelBadge[order.origin]?.color ?? order.origin" :label="channelBadge[order.origin]?.label ?? order.origin" />
+            <StatusBadge :status="originBadge.color" :label="originBadge.label" />
             <StatusBadge :status="order.status" context="order" />
             <span v-if="order.external_order_id" class="text-sm text-slate-400">Ref. no canal: {{ order.external_order_id }}</span>
         </div>

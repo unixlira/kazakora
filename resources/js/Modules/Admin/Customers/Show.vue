@@ -21,7 +21,10 @@ const props = defineProps({
 });
 
 const channelBadge = {
-    loja: { color: 'shipped', label: 'Site' },
+    loja: { color: 'shipped', label: 'KazaKora' },
+    // Pedido do site da Beauty Kora ou do FerraKora: origin "loja", selo com o nome da loja.
+    ferrakora: { color: '#F27A2A', label: 'FerraKora' },
+    beautykora: { color: '#D63384', label: 'Beauty Kora' },
     mercado_livre: { color: 'pending', label: 'Mercado Livre' },
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
@@ -65,7 +68,7 @@ const ticketMedio = props.customer.orders_count > 0
                 <div>
                     <p class="text-xs font-medium uppercase text-slate-400">Canais de compra</p>
                     <div class="mt-1 flex flex-wrap gap-1">
-                        <StatusBadge v-for="origin in customer.origins" :key="origin"
+                        <StatusBadge v-for="origin in (customer.canais ?? customer.origins)" :key="origin"
                             :status="(channelBadge[origin] ?? { color: origin }).color"
                             :label="(channelBadge[origin] ?? { label: origin }).label" />
                     </div>
@@ -124,8 +127,8 @@ const ticketMedio = props.customer.orders_count > 0
                             <Link :href="`/admin/pedidos/${order.id}`" class="font-medium hover:text-primary hover:underline">
                                 #{{ order.id }}
                             </Link>
-                            <StatusBadge :status="(channelBadge[order.origin] ?? { color: order.origin }).color"
-                                :label="(channelBadge[order.origin] ?? { label: order.origin }).label" />
+                            <StatusBadge :status="(channelBadge[order.canal ?? order.origin] ?? { color: order.origin }).color"
+                                :label="(channelBadge[order.canal ?? order.origin] ?? { label: order.origin }).label" />
                             <StatusBadge :status="order.status" context="order" />
                         </div>
                         <div class="text-right text-sm">

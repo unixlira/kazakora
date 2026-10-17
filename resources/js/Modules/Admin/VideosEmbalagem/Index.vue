@@ -24,7 +24,7 @@ const CORES = {
     pronto: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
     erro: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 };
-const CANAIS = { loja: 'Site', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', amazon: 'Amazon' };
+const CANAIS = { loja: 'KazaKora', ferrakora: 'FerraKora', beautykora: 'Beauty Kora', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok Shop', amazon: 'Amazon' };
 
 const filtros = reactive({
     status: props.filtros.status ?? '',
@@ -224,7 +224,7 @@ const duracao = (s) => (s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, 
                                 <td class="whitespace-nowrap px-4 py-2.5">
                                     <Link v-if="video.pedido" :href="`/admin/pedidos/${video.pedido.id}`" class="font-medium text-primary" @click.stop>#{{ video.pedido.id }}</Link>
                                     <div v-if="video.pedido" class="text-xs text-slate-500">
-                                        {{ CANAIS[video.pedido.canal] ?? video.pedido.canal }}<span v-if="video.pedido.numero"> · {{ video.pedido.numero }}</span>
+                                        {{ video.pedido.canalNome ?? CANAIS[video.pedido.canal] ?? video.pedido.canal }}<span v-if="video.pedido.numero"> · {{ video.pedido.numero }}</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-2.5">

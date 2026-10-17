@@ -137,6 +137,9 @@ class Order extends Model
         self::ORIGIN_AMAZON => 'Amazon',
         self::SITE_FERRAKORA => 'FerraKora',
         self::SITE_BEAUTYKORA => 'Beauty Kora',
+        // Origem real no banco (nota emitida à mão em Notas fiscais > Emitir):
+        // sem ela, esses pedidos não tinham filtro na lista (2026-10-16).
+        self::ORIGIN_MANUAL_INVOICE => 'Nota fiscal avulsa',
     ];
 
     // Pedido explícito 2026-08-09: emissão manual de nota fiscal (produto

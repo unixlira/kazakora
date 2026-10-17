@@ -41,12 +41,6 @@ class OrderController extends Controller
         Order::STATUS_CANCELLED,
     ];
 
-    private const SITES = [
-        'kazakora' => 'KazaKora',
-        Order::SITE_FERRAKORA => 'FerraKora',
-        Order::SITE_BEAUTYKORA => 'Beauty Kora',
-    ];
-
     private const CHANNELS = [
         Order::ORIGIN_STORE,
         Order::ORIGIN_MERCADO_LIVRE,
@@ -57,6 +51,14 @@ class OrderController extends Controller
 
     public function index(Request $request): Response
     {
+        // Filtro "Marketplace" (2026-10-16): um select só, no lugar dos antigos
+        // "Site" e "Marketplace". Links antigos (?origin= e ?site=ferrakora)
+        // continuam caindo no canal certo.
+        $marketplace = (string) ($request->query('marketplace') ?? $request->query('origin') ?? $request->query('site') ?? '');
+        if (! array_key_exists($marketplace, Order::MARKETPLACES)) {
+            $marketplace = '';
+        }
+
         $orders = Order::query()
             ->nonPurchaseReturn()
             // Relações latestOfMany não podem usar seleção parcial de colunas
@@ -72,12 +74,9 @@ class OrderController extends Controller
                 'latestCorreiosPrePostagem',
             ])
             ->withCount('items')
-            ->when($request->filled('origin'), fn ($query) => $query->where('origin', $request->string('origin')))
-            // Site do pedido (2026-10-15): pedidos do FerraKora e da Beauty Kora
-            // separados dos da KazaKora (site_origem nulo).
-            ->when(array_key_exists((string) $request->query('site'), self::SITES), fn ($query) => $request->query('site') === 'kazakora'
-                ? $query->whereNull('site_origem')
-                : $query->where('site_origem', $request->query('site')))
+            // 'loja' = só kazakora.com; FerraKora/Beauty Kora pelo site_origem;
+            // marketplaces pelo origin (TikTok Shop e Amazon via Bling inclusive).
+            ->when($marketplace !== '', fn ($query) => Order::filtrarCanal($query, $marketplace))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = trim($request->string('search')->toString());
                 $digits = preg_replace('/\D+/', '', $search);
@@ -120,9 +119,13 @@ class OrderController extends Controller
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,
             'statuses' => self::STATUSES,
-            'channels' => self::CHANNELS,
-            'sites' => self::SITES,
-            'filters' => $request->only('origin', 'search', 'site'),
+            'marketplaces' => collect(Order::MARKETPLACES)
+                ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                ->values(),
+            'filters' => [
+                'marketplace' => $marketplace,
+                'search' => $request->query('search'),
+            ],
         ]);
     }
 

@@ -182,7 +182,7 @@ export const sidebarSections = [
             // Visitas por site (2026-10-12), só admin igual a Logs. Nomes e ordem
             // definidos pelo Lira em 12/10: BeautyKora, Ferrakora, Kazakora.
             // Pedidos do site FerraKora (2026-10-15): a lista de pedidos filtrada pelo site.
-            { label: 'Pedidos Ferrakora', href: '/admin/pedidos?site=ferrakora', icon: 'fas fa-box', marca: 'ferrakora', permission: 'pedidos.view' },
+            { label: 'Pedidos Ferrakora', href: '/admin/pedidos?marketplace=ferrakora', icon: 'fas fa-box', marca: 'ferrakora', permission: 'pedidos.view' },
             { label: 'Produtos Ferrakora', href: '/admin/produtos-ferrakora', icon: 'fas fa-screwdriver-wrench', marca: 'ferrakora', permission: 'configuracoes.auditoria' },
             { label: 'Visitas BeautyKora', href: '/admin/visitas-beautykora', icon: 'fas fa-shoe-prints', marca: 'beautykora', permission: 'configuracoes.auditoria' },
             { label: 'Visitas Ferrakora', href: '/admin/visitas-ferrakora', icon: 'fas fa-shoe-prints', marca: 'ferrakora', permission: 'configuracoes.auditoria' },

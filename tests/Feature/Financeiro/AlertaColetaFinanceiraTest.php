@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Financeiro;
 
+use App\Console\Commands\TaxasReaisAmazon;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Modules\Marketplace\Support\RelatoriosAmazon;
@@ -9,6 +10,7 @@ use App\Modules\Marketplace\Support\RelatoriosTikTok;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -181,6 +183,28 @@ class AlertaColetaFinanceiraTest extends TestCase
         $this->artisan('financeiro:vigiar-coletas')->assertSuccessful();
 
         Http::assertSentCount(1);
-        Http::assertSent(fn (Request $r) => str_contains($r['text']['body'], "1 venda(s) da Amazon com mais de 4 dias sem taxa real (#{$semTaxa->id})"));
+        Http::assertSent(fn (Request $r) => str_contains($r['text']['body'], "1 venda(s) da Amazon com mais de 4 dias sem taxa real (#{$semTaxa->id})")
+            && str_contains($r['text']['body'], 'API da Amazon') && ! str_contains($r['text']['body'], 'Seller Central'));
+    }
+
+    public function test_vigia_da_amazon_conta_a_falha_da_ultima_coleta_pela_api(): void
+    {
+        $this->liraFalouHa(1);
+        DB::table('tiktok_report_uploads')->insert([
+            'nome_original' => 'Income.xlsx', 'sha256' => str_repeat('c', 64), 'caminho' => 'x', 'tamanho' => 1,
+            'status' => 'importado', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        Order::create([
+            'status' => Order::STATUS_PAID, 'origin' => Order::ORIGIN_AMAZON,
+            'shipping_name' => 'Cliente', 'shipping_phone' => '11999999999', 'shipping_zip' => '01000-000',
+            'shipping_street' => 'Rua X', 'shipping_number' => '1', 'shipping_neighborhood' => 'Centro',
+            'shipping_city' => 'São Paulo', 'shipping_state' => 'SP', 'subtotal' => 100, 'total' => 100,
+        ])->forceFill(['created_at' => now()->subDays(6)])->save();
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => false, 'em' => now()->toIso8601String(), 'erro' => 'Access to requested resource is denied.', 'ultimo_ok' => null]);
+
+        $this->artisan('financeiro:vigiar-coletas')->assertSuccessful();
+
+        Http::assertSent(fn (Request $r) => str_contains($r['text']['body'], 'falhou: Access to requested resource is denied.')
+            && str_contains($r['text']['body'], 'Último sucesso: nunca'));
     }
 }

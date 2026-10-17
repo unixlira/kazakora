@@ -13,11 +13,15 @@ import { TONE_CLASSES, resolveTone, statusLabel, statusTone } from '@/Shared/sta
 //   context — opcional; entidade ('invoice', 'shipment', 'payment'...) pra
 //             quando o mesmo valor tem outro significado/concordância.
 //   tone    — opcional; força a cor (green/yellow/blue/red/purple/gray).
+//   wrap    — opcional; deixa o rótulo quebrar em até duas linhas, centralizado,
+//             pra coluna não alargar (pedido do Lira 2026-10-16: "Aguardando
+//             pagamento" na listagem de pedidos). Rótulo curto continua igual.
 const props = defineProps({
     status: { type: [String, Number, Boolean], default: null },
     label: { type: String, default: null },
     context: { type: String, default: null },
     tone: { type: String, default: null },
+    wrap: { type: Boolean, default: false },
 });
 
 // Além da paleta fixa, aceita uma cor de marca em hex (ex: '#146EB4') pra
@@ -46,11 +50,15 @@ const hexStyle = computed(() => (isHexColor.value
     ? { color: props.status, backgroundColor: hexToRgba(props.status, 0.15) }
     : null));
 
+const layout = computed(() => (props.wrap
+    ? 'max-w-[6rem] whitespace-normal rounded-xl text-center leading-tight'
+    : 'whitespace-nowrap rounded-full'));
+
 const text = computed(() => props.label ?? statusLabel(props.status, props.context));
 </script>
 
 <template>
-    <span class="inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium" :class="classes" :style="hexStyle">
+    <span class="inline-block px-2.5 py-1 text-xs font-medium" :class="[layout, classes]" :style="hexStyle">
         {{ text }}
     </span>
 </template>

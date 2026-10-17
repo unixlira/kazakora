@@ -32,7 +32,7 @@
     <div style="padding: 12px 14px; border: 1px dashed #9ca3af; border-radius: 10px; background-color: #f9fafb; font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.5; color: #111827; word-break: break-all;">{{ $copiaECola }}</div>
     <p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Copie o código acima e cole na opção "Pix copia e cola" do seu banco.</p>
 
-    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora())['meus_pedidos'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])
+    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order))['pedido'], 'texto' => 'Ver meu pedido', 'cor' => '#0FB930'])
 
     <p style="margin: 0; text-align: center; font-size: 12px; color: #9ca3af;">
         Assim que o pagamento cair, você recebe a confirmação por aqui. Se já pagou, pode ignorar este e-mail.

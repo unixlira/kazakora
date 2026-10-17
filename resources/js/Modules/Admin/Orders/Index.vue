@@ -4,6 +4,7 @@ import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import ServerPagination from '@/Shared/Components/ServerPagination.vue';
+import InfoTooltip from '@/Shared/Components/InfoTooltip.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, reactive } from 'vue';
 import { statusLabel } from '@/Shared/statusLabels';
@@ -54,6 +55,21 @@ const filterState = reactive({
     search: props.filters.search ?? '',
 });
 const orderRows = computed(() => Array.isArray(props.orders) ? props.orders : (props.orders?.data ?? []));
+const totalPedidos = computed(() => {
+    if (Array.isArray(props.orders)) return props.orders.length;
+    const total = Number(props.orders?.total);
+    return Number.isFinite(total) ? total : null;
+});
+
+// Texto do "i" ao lado do total. Tem que bater com OrderController::index:
+// nonPurchaseReturn (tira só notas de devolução), sem filtro de status nem de
+// período por padrão, created_at no período, latest() e paginate(50).
+const explicacaoDaLista = [
+    'Mostra os pedidos de todos os canais: KazaKora, FerraKora, Beauty Kora, Shopee, Mercado Livre, TikTok Shop, Amazon e notas fiscais avulsas.',
+    'Entram todos os status, inclusive cancelados e estornados. Só ficam de fora as notas de devolução.',
+    'Sem período escolhido, vale desde o primeiro pedido. O período usa a data da coluna Data.',
+    'O total segue os filtros e a busca aplicados. Ordem do mais recente para o mais antigo, 50 por página.',
+];
 
 const applyFilters = () => {
     // Trocar filtro volta para a página 1 (o page não vai junto); a
@@ -232,7 +248,16 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
              a linha inteira em telas médias. Depois (Lira, 16/10) ficou menor e
              com o texto "+ pedido"; o nome completo fica no aria-label/title. -->
         <div class="mb-4 flex items-center justify-between gap-3">
-            <h1 class="text-2xl font-bold">Pedidos</h1>
+            <!-- Total ao lado do título com o "i" explicando o que entra na
+                 lista (2026-10-16). O total vem do paginador, então segue os
+                 filtros e a busca. -->
+            <div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                <h1 class="text-2xl font-bold">Pedidos</h1>
+                <span v-if="totalPedidos !== null" class="inline-flex items-center gap-1.5 text-sm text-slate-500">
+                    <span><span class="font-semibold tabular-nums text-[var(--foreground)]">{{ totalPedidos.toLocaleString('pt-BR') }}</span> {{ totalPedidos === 1 ? 'pedido' : 'pedidos' }}</span>
+                    <InfoTooltip label="O que esta lista mostra" :paragraphs="explicacaoDaLista" />
+                </span>
+            </div>
             <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
                 aria-label="Novo pedido" title="Novo pedido"
                 class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
@@ -292,13 +317,18 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
                     <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
                          Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no
-                         campo continua valendo. -->
-                    <div class="mt-1 flex">
+                         campo continua valendo.
+                         Foco do grupo (Lira 2026-10-16): o anel de foco fica em volta
+                         do conjunto campo + botão (focus-within), no mesmo estilo do
+                         foco global do admin (2px var(--foco), afastado 2px). O anel
+                         isolado do campo e do botão sai (com !, porque a regra global
+                         em app.css não está em camada e ganharia do utilitário). -->
+                    <div class="mt-1 flex rounded-lg focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--foco)] focus-within:outline-solid">
                         <div class="relative min-w-0 flex-1">
                             <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
                             <input id="busca-pedido" v-model="filterState.search" type="search" autocomplete="off" @search="onNativeSearch"
                                 placeholder="Pedido, marketplace, cliente, CPF, telefone, rastreio, NF-e…"
-                                class="relative w-full rounded-l-lg rounded-r-none border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:z-10 focus:border-primary focus:outline-none">
+                                class="relative w-full rounded-l-lg rounded-r-none border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:z-10 focus:border-primary focus:outline-none!">
                             <button v-if="filterState.search" type="button"
                                 class="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
                                 aria-label="Limpar busca" @click="clearSearch">
@@ -306,7 +336,7 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
                             </button>
                         </div>
                         <button type="submit"
-                            class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">
+                            class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none!">
                             <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
                             Buscar
                         </button>

@@ -6,14 +6,17 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Vigia de hora em hora da coleta financeira (2026-10-16). Pega o que o
  * agente não conseguiu avisar sozinho (agente parado, PC desligado):
  * - TikTok: nenhum relatório chegou há mais de 26 h (o agente roda às 23h30);
- * - Amazon: venda de mais de 4 dias sem taxa real (a coleta das transações
- *   da Seller Central não consolidou).
+ * - Amazon: venda de mais de 4 dias sem taxa real (a coleta pela SP-API,
+ *   amazon:taxas-reais, não trouxe a taxa; desde 2026-10-17 não é mais a
+ *   tela da Seller Central na Cora Box).
  * Falha vira WhatsApp da Manuela ao Lira; o mesmo problema repete a cada 6 h.
  */
 class VigiarColetasFinanceiras extends Command
@@ -77,6 +80,24 @@ class VigiarColetasFinanceiras extends Command
 
         $lista = $pedidos->take(8)->map(fn ($id) => "#{$id}")->implode(', ').($pedidos->count() > 8 ? '...' : '');
 
-        return "{$pedidos->count()} venda(s) da Amazon com mais de {$dias} dias sem taxa real ({$lista}). A coleta das transações na Seller Central não está consolidando.";
+        return "{$pedidos->count()} venda(s) da Amazon com mais de {$dias} dias sem taxa real ({$lista}). A coleta pela API da Amazon (Finances, amazon:taxas-reais) não trouxe a taxa: {$this->situacaoColetaAmazon()}";
+    }
+
+    /** O que a última execução de amazon:taxas-reais deixou registrado. */
+    private function situacaoColetaAmazon(): string
+    {
+        $ultima = Cache::get(TaxasReaisAmazon::CACHE_ULTIMA);
+
+        if (! is_array($ultima)) {
+            return 'o comando não rodou nos últimos 30 dias, confira o agendador.';
+        }
+
+        $quando = fn (?string $iso) => $iso ? Carbon::parse($iso)->setTimezone('America/Sao_Paulo')->format('d/m H:i') : 'nunca';
+
+        if (! ($ultima['ok'] ?? false)) {
+            return "a última execução ({$quando($ultima['em'] ?? null)}) falhou: ".Str::limit((string) ($ultima['erro'] ?? 'sem detalhe'), 120).". Último sucesso: {$quando($ultima['ultimo_ok'] ?? null)}.";
+        }
+
+        return "a API respondeu ({$quando($ultima['em'] ?? null)}), mas ainda sem transação desses pedidos (envio não confirmado na Amazon ou pedido com outro número).";
     }
 }

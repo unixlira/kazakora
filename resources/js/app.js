@@ -1,6 +1,7 @@
 import '../css/app.css';
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
+import { rastrearPagina } from '@/Shared/pixelMeta';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
 const appName = import.meta.env.VITE_APP_NAME || 'KazaKora';
@@ -16,6 +17,20 @@ createInertiaApp({
         createApp({ render: () => h(App, props) })
             .use(plugin)
             .mount(el);
+
+        // Pixel da Meta: só roda depois do OK de cookies (Shared/pixelMeta.js).
+        // `navigate` cobre a primeira página e cada troca de página; o OK chega
+        // por recarga parcial de `cookies` e dispara a página atual em seguida.
+        let pixelOk = false;
+        router.on('navigate', (e) => {
+            pixelOk = !!e.detail.page.props.cookies?.aceito;
+            rastrearPagina(e.detail.page);
+        });
+        router.on('success', (e) => {
+            const aceito = !!e.detail.page.props.cookies?.aceito;
+            if (aceito && !pixelOk) rastrearPagina(e.detail.page);
+            pixelOk = aceito;
+        });
 
         // Tela de abertura (resources/views/app.blade.php): some quando a loja montou.
         const abertura = document.getElementById('tela-abertura');

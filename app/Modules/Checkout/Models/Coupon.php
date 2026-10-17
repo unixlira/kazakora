@@ -17,6 +17,15 @@ class Coupon extends Model
     /** Pedidos que contam como "cupom usado" (pagamento confirmado). */
     public const STATUS_USO = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
+    /**
+     * Pedidos que seguram uma vaga do limite de usos (trava de 2026-10-16,
+     * cupom TESTE98PAG de 98%): os pagos e os que ainda aguardam pagamento.
+     * Antes só o pago contava, então vários pedidos abertos ao mesmo tempo
+     * passavam do limite quando todos pagavam. O pedido abandonado é
+     * cancelado pelo orders:expire-abandoned e devolve a vaga.
+     */
+    public const STATUS_RESERVA = [Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT, ...self::STATUS_USO];
+
     protected $fillable = [
         'code',
         'name',
@@ -83,6 +92,28 @@ class Coupon extends Model
             : $this->pedidos()->whereIn('status', self::STATUS_USO)->count();
     }
 
+    public function totalReservas(): int
+    {
+        return $this->pedidos()->whereIn('status', self::STATUS_RESERVA)->count();
+    }
+
+    public function esgotado(): bool
+    {
+        return $this->max_uses && $this->totalReservas() >= $this->max_uses;
+    }
+
+    /**
+     * Relê o cupom com SELECT ... FOR UPDATE: dois checkouts com o mesmo
+     * cupom esperam um pelo outro no banco e o segundo já conta o pedido do
+     * primeiro. Só vale dentro da transação que cria o pedido.
+     */
+    public static function travar(?string $codigo): ?self
+    {
+        $codigo = self::normalizar($codigo);
+
+        return $codigo === '' ? null : static::query()->where('code', $codigo)->lockForUpdate()->first();
+    }
+
     /**
      * Por que o cupom não vale para esta compra — null quando vale.
      * Mensagens já no tom de quem lê no checkout.
@@ -101,7 +132,7 @@ class Coupon extends Model
         if ($this->min_order_value && $subtotal < (float) $this->min_order_value) {
             return 'Este cupom vale para compras a partir de R$ '.number_format((float) $this->min_order_value, 2, ',', '.').'.';
         }
-        if ($this->max_uses && $this->totalUsos() >= $this->max_uses) {
+        if ($this->esgotado()) {
             return 'Este cupom já atingiu o limite de usos.';
         }
         if ($this->one_per_customer && ($user || $email)) {

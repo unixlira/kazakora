@@ -16,6 +16,7 @@ use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\CartStockChangedException;
+use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
@@ -682,6 +683,13 @@ class CheckoutController extends Controller
                 // lockProductsForCart().
                 $lockedProducts = $this->lockProductsForCart($cartItems);
 
+                // Limite de usos do cupom conferido de novo sob trava da linha
+                // (2026-10-16): sem isso, dois pagamentos ao mesmo tempo
+                // passavam juntos pelo limite.
+                if ($coupon && Coupon::travar($coupon->code)?->esgotado()) {
+                    throw new CupomEsgotadoException();
+                }
+
                 $user = $request->user() ?? $this->createGuestAccount($draft['guest']);
 
                 $address = ! empty($draft['address_id'])
@@ -807,6 +815,13 @@ class CheckoutController extends Controller
 
                 return [$order, $intent];
             });
+        } catch (CupomEsgotadoException $exception) {
+            // Rollback: nenhum pedido nem cobrança criados.
+            unset($draft['coupon_code']);
+            $request->session()->put(self::SESSION_KEY, $draft);
+
+            return redirect()->route($this->usesCheckoutV2($request) ? 'finalizacao.entrega' : 'finalizacao.pagamento')
+                ->withErrors(['code' => $exception->getMessage().' O desconto foi removido — confira o total e finalize de novo.']);
         } catch (CartStockChangedException $exception) {
             // BUG REAL 2026-09-29: transação já fez rollback — nenhum
             // pedido/cobrança criado. Cliente revisa o carrinho (que já

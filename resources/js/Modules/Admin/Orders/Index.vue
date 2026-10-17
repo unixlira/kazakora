@@ -147,7 +147,7 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order' }),
+        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order', wrap: true }),
     },
     // Nota e e-mail na mesma coluna, um selo embaixo do outro (2026-10-11):
     // em 1440px a tabela passava 42px da tela e cortava a coluna Ações.

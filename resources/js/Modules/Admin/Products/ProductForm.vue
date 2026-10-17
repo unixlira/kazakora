@@ -116,35 +116,39 @@ const regenerateSku = async () => {
 </script>
 
 <template>
-    <form class="max-w-xl space-y-4" @submit.prevent="emit('submit')">
-        <div>
-            <label for="name" class="block text-sm font-medium">Nome</label>
-            <input
-                id="name"
-                v-model="form.name"
-                type="text"
-                required
-                class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-            >
-            <InputError :message="form.errors.name" />
+    <!-- Pedido 2026-10-17: grid em linhas (Nome | Categoria; Marca | Modelo | Cor;
+         Variação em destaque) e formulário mais largo, pra não quebrar rótulo. -->
+    <form class="max-w-4xl space-y-5" @submit.prevent="emit('submit')">
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+                <label for="name" class="block text-sm font-medium">Nome</label>
+                <input
+                    id="name"
+                    v-model="form.name"
+                    type="text"
+                    required
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                <InputError :message="form.errors.name" />
+            </div>
+
+            <div>
+                <label for="category_id" class="block text-sm font-medium">Categoria</label>
+                <select
+                    id="category_id"
+                    v-model="form.category_id"
+                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+                >
+                    <option :value="null">Sem categoria</option>
+                    <option v-for="category in categories" :key="category.id" :value="category.id">
+                        {{ category.name }}
+                    </option>
+                </select>
+                <InputError :message="form.errors.category_id" />
+            </div>
         </div>
 
-        <div>
-            <label for="category_id" class="block text-sm font-medium">Categoria</label>
-            <select
-                id="category_id"
-                v-model="form.category_id"
-                class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-            >
-                <option :value="null">Sem categoria</option>
-                <option v-for="category in categories" :key="category.id" :value="category.id">
-                    {{ category.name }}
-                </option>
-            </select>
-            <InputError :message="form.errors.category_id" />
-        </div>
-
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid gap-4 sm:grid-cols-3">
             <div>
                 <label for="brand" class="block text-sm font-medium">Marca</label>
                 <input
@@ -176,21 +180,20 @@ const regenerateSku = async () => {
                 >
                 <InputError :message="form.errors.color" />
             </div>
-            <div>
-                <!-- Rótulo curto como os vizinhos (Cor, Marca): a explicação
-                     longa quebrava a linha e descia o input em relação ao da Cor. -->
-                <label for="variation" class="block text-sm font-medium">Variação</label>
-                <input
-                    id="variation"
-                    v-model="form.variation"
-                    type="text"
-                    placeholder="Ex: P, 20W, 12L"
-                    aria-describedby="variation-hint"
-                    class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
-                >
-                <p id="variation-hint" class="mt-1 text-xs text-gray-500">Tamanho, voltagem, capacidade...</p>
-                <InputError :message="form.errors.variation" />
-            </div>
+        </div>
+
+        <div class="rounded-lg border border-primary/40 bg-lightprimary p-4">
+            <label for="variation" class="block text-sm font-semibold">Variação</label>
+            <p id="variation-hint" class="text-xs text-gray-500">Tamanho, voltagem, capacidade... É o que diferencia este item dos irmãos e entra no SKU.</p>
+            <input
+                id="variation"
+                v-model="form.variation"
+                type="text"
+                placeholder="Ex: P, 20W, 12L"
+                aria-describedby="variation-hint"
+                class="mt-2 w-full rounded border border-gray-300 bg-white px-3 py-2 sm:max-w-md"
+            >
+            <InputError :message="form.errors.variation" />
         </div>
 
         <div v-if="form.sku !== undefined">
@@ -252,7 +255,7 @@ const regenerateSku = async () => {
             <InputError :message="form.errors.description" />
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid items-start gap-4 sm:grid-cols-3">
             <div>
                 <label for="price" class="block text-sm font-medium">Preço (R$){{ descontoPix > 0 ? ' — valor no Pix' : '' }}</label>
                 <input
@@ -338,20 +341,22 @@ const regenerateSku = async () => {
             </div>
         </div>
 
-        <label class="flex items-center gap-2 text-sm">
-            <input v-model="form.is_active" type="checkbox">
-            Produto ativo (visível no catálogo)
-        </label>
+        <div class="flex flex-wrap gap-x-6 gap-y-2">
+            <label class="flex items-center gap-2 text-sm">
+                <input v-model="form.is_active" type="checkbox">
+                Produto ativo (visível no catálogo)
+            </label>
 
-        <label class="flex items-center gap-2 text-sm">
-            <input v-model="form.is_featured" type="checkbox">
-            Destaque (aparece na seção "Destaques" da home)
-        </label>
+            <label class="flex items-center gap-2 text-sm">
+                <input v-model="form.is_featured" type="checkbox">
+                Destaque (aparece na seção "Destaques" da home)
+            </label>
 
-        <label class="flex items-center gap-2 text-sm">
-            <input v-model="form.is_new_release" type="checkbox">
-            Lançamento (aparece como novidade)
-        </label>
+            <label class="flex items-center gap-2 text-sm">
+                <input v-model="form.is_new_release" type="checkbox">
+                Lançamento (aparece como novidade)
+            </label>
+        </div>
 
         <button
             type="submit"

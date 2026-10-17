@@ -31,7 +31,7 @@ const props = defineProps({
 });
 
 const channelBadge = {
-    loja: { color: 'shipped', label: 'Site' },
+    loja: { color: 'shipped', label: 'KazaKora' },
     mercado_livre: { color: 'pending', label: 'Mercado Livre' },
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },

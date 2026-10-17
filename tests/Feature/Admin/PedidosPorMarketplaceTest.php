@@ -82,7 +82,7 @@ class PedidosPorMarketplaceTest extends TestCase
         $this->actingAs($admin)->get('/admin/pedidos?marketplace=tiktok_shop&search=Cliente')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('marketplaces', collect(Order::MARKETPLACES)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values()->all())
-                ->where('marketplaces.0', ['value' => 'loja', 'label' => 'Site'])
+                ->where('marketplaces.0', ['value' => 'loja', 'label' => 'KazaKora'])
                 ->where('filters.marketplace', 'tiktok_shop')
                 ->where('filters.search', 'Cliente'));
     }

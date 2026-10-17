@@ -54,11 +54,16 @@ const hexStyle = computed(() => (isHexColor.value
     ? { color: props.status, backgroundColor: hexToRgba(props.status, 0.15) }
     : null));
 
-const layout = computed(() => (props.wrap
-    ? 'max-w-[6rem] whitespace-pre-line rounded-xl text-center leading-tight'
-    : 'whitespace-nowrap rounded-full'));
-
 const text = computed(() => props.label ?? statusLabel(props.status, props.context));
+
+// Com "\n" no rótulo a quebra é só ali (whitespace-pre): coluna apertada não
+// pode virar "Ponto / de / Coleta". Sem "\n", quebra pela largura como antes.
+const layout = computed(() => {
+    if (!props.wrap) return 'whitespace-nowrap rounded-full';
+    return String(text.value ?? '').includes('\n')
+        ? 'whitespace-pre rounded-xl text-center leading-tight'
+        : 'max-w-[6rem] whitespace-normal rounded-xl text-center leading-tight';
+});
 </script>
 
 <template>

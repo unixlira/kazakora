@@ -5,7 +5,6 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Models\AlertaAdmin;
 use App\Modules\Admin\Support\AlertasAdmin;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,16 +28,11 @@ class AlertasAdminController extends Controller
         ]);
     }
 
-    /** A faixa do topo se atualiza sozinha (AdminLayout.vue, a cada 60 s). */
-    public function abertos(AlertasAdmin $alertas): JsonResponse
-    {
-        return response()->json(['alertas' => $alertas->abertosParaTela()]);
-    }
-
-    public function resolver(Request $request, AlertaAdmin $alerta): RedirectResponse
+    public function resolver(Request $request, AlertasAdmin $alertas, AlertaAdmin $alerta): RedirectResponse
     {
         if ($alerta->resolvido_em === null) {
             $alerta->forceFill(['resolvido_em' => now(), 'resolvido_por' => $request->user()->name])->save();
+            $alertas->tirarDoSino([$alerta->id]);
         }
 
         return back()->with('success', 'Alerta marcado como resolvido. Se o problema voltar, ele abre de novo.');
@@ -51,8 +45,9 @@ class AlertasAdminController extends Controller
         $alertas->definirAtivo($tipo, $ativo);
 
         if (! $ativo) {
-            AlertaAdmin::query()->abertos()->where('tipo', $tipo)
-                ->update(['resolvido_em' => now(), 'resolvido_por' => $request->user()->name.' (desligou o alerta)', 'updated_at' => now()]);
+            $abertos = AlertaAdmin::query()->abertos()->where('tipo', $tipo);
+            $alertas->tirarDoSino($abertos->pluck('id')->all());
+            $abertos->update(['resolvido_em' => now(), 'resolvido_por' => $request->user()->name.' (desligou o alerta)', 'updated_at' => now()]);
         }
 
         return back()->with('success', $ativo ? 'Alerta ligado.' : 'Alerta desligado.');

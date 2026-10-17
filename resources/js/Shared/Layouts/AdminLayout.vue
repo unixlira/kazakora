@@ -258,47 +258,6 @@ onBeforeUnmount(() => window.removeEventListener('scroll', medirRolagem));
 // há "tela anterior" que faça sentido voltar a partir dali.
 const goBack = () => window.history.back();
 
-// Alertas do painel (pedido 2026-10-16): problema que precisa de ação do
-// Lira (ex.: coleta financeira da Cora Box falhou) fica numa faixa vermelha
-// no topo de todas as telas do admin até ser resolvido. Atualiza sozinha a
-// cada 60 s; alerta novo também sobe um aviso no canto.
-const alertasPainel = ref(page.props.alertasAdmin ?? []);
-const ehAdmin = computed(() => user.value?.role === 'admin');
-watch(() => page.props.alertasAdmin, (lista) => { alertasPainel.value = lista ?? []; });
-const resolvendoAlerta = ref(null);
-const resolverAlerta = (alerta) => {
-    resolvendoAlerta.value = alerta.id;
-    router.post(`/admin/alertas/${alerta.id}/resolver`, {}, {
-        preserveScroll: true,
-        onFinish: () => { resolvendoAlerta.value = null; },
-    });
-};
-let timerAlertas = null;
-const buscarAlertas = async () => {
-    clearTimeout(timerAlertas);
-    try {
-        const resposta = await fetch('/admin/alertas/abertos', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-        if (resposta.ok) {
-            const { alertas } = await resposta.json();
-            const conhecidos = new Set(alertasPainel.value.map((a) => `${a.id}-${a.ocorrencias}`));
-            alertas.filter((a) => !conhecidos.has(`${a.id}-${a.ocorrencias}`)).forEach((a) => notifyError(a.titulo));
-            alertasPainel.value = alertas;
-            if (page.props.sidebarBadges) page.props.sidebarBadges.alertasAbertos = alertas.length;
-        }
-    } catch { /* rede caiu: tenta no próximo ciclo */ }
-    if (document.visibilityState === 'visible') timerAlertas = setTimeout(buscarAlertas, 60000);
-};
-const aoVoltarParaAba = () => { if (document.visibilityState === 'visible' && ehAdmin.value) buscarAlertas(); };
-onMounted(() => {
-    if (!ehAdmin.value) return;
-    timerAlertas = setTimeout(buscarAlertas, 60000);
-    document.addEventListener('visibilitychange', aoVoltarParaAba);
-});
-onBeforeUnmount(() => {
-    clearTimeout(timerAlertas);
-    document.removeEventListener('visibilitychange', aoVoltarParaAba);
-});
-
 watch(
     () => page.props.flash,
     (flash) => {
@@ -565,27 +524,6 @@ watch(
             </nav>
 
             <div class="admin-conteudo relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
-                <div v-if="alertasPainel.length" class="mb-4 space-y-2" role="alert" aria-live="assertive">
-                    <div v-for="alerta in alertasPainel" :key="alerta.id"
-                        class="flex flex-col gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/60 dark:text-red-100 sm:flex-row sm:items-start">
-                        <i class="fas fa-triangle-exclamation mt-0.5 text-xl text-red-600 dark:text-red-400" aria-hidden="true"></i>
-                        <div class="min-w-0 flex-1">
-                            <p class="font-semibold">{{ alerta.titulo }}</p>
-                            <p class="mt-1 whitespace-pre-line break-words text-sm">{{ alerta.mensagem }}</p>
-                            <p class="mt-1 text-xs opacity-75">
-                                {{ alerta.ocorrencias > 1 ? `${alerta.ocorrencias} vezes, desde ${alerta.primeiraEm}; última ${alerta.ultimaEm}` : `Em ${alerta.ultimaEm}` }}
-                            </p>
-                        </div>
-                        <div class="flex shrink-0 gap-2">
-                            <Link v-if="alerta.link" :href="alerta.link" class="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium hover:bg-red-100 dark:border-red-700 dark:hover:bg-red-900">Ver</Link>
-                            <button type="button" class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
-                                :disabled="resolvendoAlerta === alerta.id" @click="resolverAlerta(alerta)">
-                                {{ resolvendoAlerta === alerta.id ? 'Salvando…' : 'Resolvido' }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
                 <slot />
 
                 <!-- Loader de troca de tela: só a área de conteúdo, menu e topo

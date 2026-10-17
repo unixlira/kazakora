@@ -301,6 +301,11 @@ return [
         // mandaria. Ligar só com OK do Lira (ADS é dinheiro). Vale também
         // para os botões do diagnóstico no Dashboard (AcoesShopee, inclui preço).
         'ads_escrita' => (bool) env('SHOPEE_ADS_ESCRITA', false),
+        // Oferta Relâmpago automática (pedido 2026-10-17): às 22h o
+        // shopee:relampago-agendar põe os itens da lista (shopee_relampago_itens)
+        // na Relâmpago do dia seguinte (00h a 24h). Desligado = o agendamento
+        // das 22h não roda (homolog nunca mexe na loja real). Ligar só com OK do Lira.
+        'relampago_automatico' => (bool) env('SHOPEE_RELAMPAGO_AUTOMATICO', false),
         // Host do LINK de autorização (o vendedor clica e é levado pra lá) —
         // achado real 2026-08-06: a Shopee usa um host REGIONAL específico
         // pra esse link em PRODUÇÃO, diferente do api_base_url usado nas

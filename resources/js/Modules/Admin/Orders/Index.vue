@@ -131,7 +131,7 @@ const columns = [
     },
     {
         id: 'correios_qr',
-        header: 'Correios',
+        header: 'Envios',
         cell: ({ row }) => {
             const qr = row.original.latest_correios_pre_postagem;
 

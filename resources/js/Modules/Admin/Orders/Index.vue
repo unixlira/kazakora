@@ -62,12 +62,40 @@ const shippingTypeTone = {
     desconhecido: 'gray',
 };
 
-// Nome do selo só nesta listagem (pedido do Lira em 2026-10-16): Shopee e
-// TikTok aparecem como "Express", não "Ponto Coleta". O KoraSync continua
-// com o nome de TipoDeEnvio, que é o que a bancada usa.
-const shippingTypeShortLabel = {
-    express_coleta: 'Express',
+// Selo de envio só nesta listagem (pedido do Lira em 2026-10-16, ajustado
+// no mesmo dia): o nome segue o canal, não o nome cru da transportadora.
+//   site (KazaKora, FerraKora, Beauty Kora) -> Correios (o serviço PAC/SEDEX
+//     continua embaixo, na pré-postagem);
+//   Mercado Livre -> Flex ou Mercado Envios (em duas linhas); Full fica Full;
+//   Shopee -> Express (Retirada pelo comprador continua Retirada: esse pacote
+//     não vai para a transportadora);
+//   TikTok -> Ponto de Coleta.
+// Amazon e o resto ficam como vêm de TipoDeEnvio. O KoraSync não muda: ele
+// usa o nome de TipoDeEnvio, que é o que a bancada usa.
+const shippingBadge = (order) => {
+    const tipo = order.shipping_type ?? 'desconhecido';
+    const padrao = { tone: shippingTypeTone[tipo] ?? 'gray', label: order.shipping_type_short || '—' };
+
+    switch (order.origin) {
+        case 'loja':
+            return { tone: 'green', label: 'Correios' };
+        case 'mercado_livre':
+            if (tipo === 'flex') return { tone: shippingTypeTone.flex, label: 'Flex' };
+            if (tipo === 'mercado_envios') return { tone: shippingTypeTone.mercado_envios, label: 'Mercado\nEnvios' };
+            return padrao;
+        case 'shopee':
+            return tipo === 'retirada' ? padrao : { tone: shippingTypeTone.express_coleta, label: 'Express' };
+        case 'tiktok_shop':
+            return { tone: shippingTypeTone.express_coleta, label: 'Ponto de\nColeta' };
+        default:
+            return padrao;
+    }
 };
+
+// "Aguardando pagamento" sempre em duas linhas (pedido do Lira 2026-10-16).
+const statusBadgeLabel = (status) => (status === 'awaiting_payment'
+    ? statusLabel(status, 'order').replace(' ', '\n')
+    : null);
 
 const filterState = reactive({
     marketplace: props.filters.marketplace ?? '',
@@ -147,7 +175,12 @@ const columns = [
     {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.status, context: 'order', wrap: true }),
+        cell: ({ row }) => h(StatusBadge, {
+            status: row.original.status,
+            context: 'order',
+            label: statusBadgeLabel(row.original.status),
+            wrap: true,
+        }),
     },
     // Nota e e-mail na mesma coluna, um selo embaixo do outro (2026-10-11):
     // em 1440px a tabela passava 42px da tela e cortava a coluna Ações.
@@ -178,9 +211,11 @@ const columns = [
         cell: ({ row }) => {
             const qr = row.original.latest_correios_pre_postagem;
             const tipo = row.original.shipping_type ?? 'desconhecido';
+            const selo = shippingBadge(row.original);
             const envio = h(StatusBadge, {
-                status: shippingTypeTone[tipo] ?? 'gray',
-                label: shippingTypeShortLabel[tipo] || row.original.shipping_type_short || '—',
+                status: selo.tone,
+                label: selo.label,
+                wrap: true,
                 title: row.original.shipping_type_label || 'Envio não informado',
             });
 
@@ -188,7 +223,7 @@ const columns = [
                 // "Sem QR" só faz sentido onde a loja gera a pré-postagem dos Correios.
                 return h('div', { class: 'flex flex-col items-start gap-1' }, [
                     envio,
-                    tipo.startsWith('correios') ? h(StatusBadge, { status: null, context: 'correios' }) : null,
+                    tipo.startsWith('correios') || row.original.origin === 'loja' ? h(StatusBadge, { status: null, context: 'correios' }) : null,
                 ]);
             }
 
@@ -231,7 +266,7 @@ const columns = [
         <h1 class="mb-4 text-2xl font-bold">Pedidos</h1>
 
         <form class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm" @submit.prevent="applyFilters">
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[200px_160px_300px_minmax(0,1fr)_auto_auto] lg:items-end">
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-[200px_160px_300px_minmax(0,1fr)_auto] lg:items-end">
                 <div>
                     <label for="filtro-marketplace" class="text-xs font-medium text-slate-500">Marketplace</label>
                     <select id="filtro-marketplace" v-model="filterState.marketplace" name="marketplace" @change="applyFilters"
@@ -272,25 +307,28 @@ const columns = [
 
                 <div>
                     <label for="busca-pedido" class="text-xs font-medium text-slate-500">Buscar pedido</label>
-                    <div class="relative mt-1">
-                        <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
-                        <input id="busca-pedido" v-model="filterState.search" type="search" autocomplete="off" @search="onNativeSearch"
-                            placeholder="Pedido, marketplace, cliente, CPF, telefone, rastreio, NF-e…"
-                            class="w-full rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:border-primary focus:outline-none">
-                        <button v-if="filterState.search" type="button"
-                            class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
-                            aria-label="Limpar busca" @click="clearSearch">
-                            <i class="fas fa-xmark"></i>
+                    <!-- Campo e botão colados, como o input-group do Bootstrap (pedido do
+                         Lira 2026-10-16): canto arredondado só nas pontas de fora. Enter no
+                         campo continua valendo. -->
+                    <div class="mt-1 flex">
+                        <div class="relative min-w-0 flex-1">
+                            <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" aria-hidden="true"></i>
+                            <input id="busca-pedido" v-model="filterState.search" type="search" autocomplete="off" @search="onNativeSearch"
+                                placeholder="Pedido, marketplace, cliente, CPF, telefone, rastreio, NF-e…"
+                                class="relative w-full rounded-l-lg rounded-r-none border border-[var(--surface-border)] bg-[var(--surface-muted)] py-2 pl-9 pr-10 text-sm focus:z-10 focus:border-primary focus:outline-none">
+                            <button v-if="filterState.search" type="button"
+                                class="absolute right-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-xs text-slate-400 hover:bg-[var(--surface-border)] hover:text-slate-600"
+                                aria-label="Limpar busca" @click="clearSearch">
+                                <i class="fas fa-xmark"></i>
+                            </button>
+                        </div>
+                        <button type="submit"
+                            class="-ml-px inline-flex h-[38px] shrink-0 items-center justify-center gap-2 rounded-l-none rounded-r-lg border border-primary bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">
+                            <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
+                            Buscar
                         </button>
                     </div>
                 </div>
-
-                <!-- Botão de buscar (pedido do Lira 2026-10-16); Enter no campo continua valendo. -->
-                <button type="submit"
-                    class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg border border-primary px-4 text-sm font-medium text-primary hover:bg-primary hover:text-white">
-                    <i class="fas fa-magnifying-glass text-xs" aria-hidden="true"></i>
-                    Buscar
-                </button>
 
                 <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
                     class="inline-flex h-[38px] items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-white hover:bg-primary-emphasis">

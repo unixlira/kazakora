@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
  */
 class Cookies
 {
-    public const VERSAO = '2026-10-10';
+    public const VERSAO = '2026-10-16';
 
     /** Guarda que o cliente deu OK (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';

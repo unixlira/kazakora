@@ -4,6 +4,7 @@ namespace App\Services\Meta;
 
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
+use App\Support\PixelMeta;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -66,7 +67,7 @@ class MetaAdsService
 
     public function pixelConfigurado(): bool
     {
-        return filled(config('services.meta_ads.pixel_id'));
+        return filled(PixelMeta::id());
     }
 
     /**
@@ -83,7 +84,7 @@ class MetaAdsService
         }
 
         if ($campanha->objetivo === 'OUTCOME_SALES' && ! $this->pixelConfigurado()) {
-            $problemas[] = 'Objetivo Vendas precisa do pixel da Meta (META_ADS_PIXEL_ID).';
+            $problemas[] = 'Objetivo Vendas precisa do pixel da Meta (Configurações › Pixel da Meta).';
         }
 
         if (! isset(self::OTIMIZACAO[$campanha->objetivo])) {
@@ -372,7 +373,7 @@ class MetaAdsService
 
         if ($campanha->objetivo === 'OUTCOME_SALES') {
             $payload['promoted_object'] = json_encode([
-                'pixel_id' => (string) config('services.meta_ads.pixel_id'),
+                'pixel_id' => (string) PixelMeta::id(),
                 'custom_event_type' => 'PURCHASE',
             ]);
         }

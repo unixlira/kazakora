@@ -163,6 +163,7 @@ class CustomerAggregator
             ->map(fn (array $order) => [
                 'id' => $order['id'],
                 'origin' => $order['origin'],
+                'canal' => $order['canal'],
                 'status' => $order['status'],
                 'total' => $order['total'],
                 'payment_method' => $order['payment_method'],
@@ -197,7 +198,7 @@ class CustomerAggregator
             // não entra na lista de clientes da KazaKora.
             ->where(fn ($query) => $query->whereNull('orders.site_origem')->orWhere('orders.site_origem', '!=', Order::SITE_FERRAKORA))
             ->select([
-                'orders.id', 'orders.origin', 'orders.status', 'orders.total', 'orders.created_at',
+                'orders.id', 'orders.origin', 'orders.site_origem', 'orders.status', 'orders.total', 'orders.created_at',
                 'orders.buyer_document', 'orders.shipping_name', 'orders.shipping_email', 'orders.shipping_phone',
                 'users.cpf as user_cpf', 'users.name as user_name', 'users.email as user_email', 'users.phone as user_phone',
             ])
@@ -213,6 +214,7 @@ class CustomerAggregator
                     'document' => $document,
                     'id' => $order->id,
                     'origin' => $order->origin,
+                    'canal' => self::canal($order->origin, $order->site_origem),
                     'status' => $order->status,
                     'total' => (float) $order->total,
                     // String 'Y-m-d H:i:s' — ordena/compara igual a data, e
@@ -264,6 +266,7 @@ class CustomerAggregator
                     'document' => $document,
                     'id' => $order->id,
                     'origin' => $order->origin,
+                    'canal' => self::canal($order->origin, $order->site_origem),
                     'status' => $order->status,
                     'total' => (float) $order->total,
                     'created_at' => $order->created_at,
@@ -334,6 +337,9 @@ class CustomerAggregator
             'email' => $latestWithField('email'),
             'phone' => $latestWithField('phone'),
             'origins' => $orders->pluck('origin')->unique()->values()->all(),
+            // Para o selo: pedido do site com o nome da loja (Beauty Kora
+            // separado de KazaKora); origins continua com o valor gravado.
+            'canais' => $orders->pluck('canal')->unique()->values()->all(),
             'orders_count' => $purchases->count(),
             'total_spent' => round((float) $purchases->sum('total'), 2),
             'first_purchase_at' => $this->asDate($purchases->min('created_at')),
@@ -353,5 +359,11 @@ class CustomerAggregator
         }
 
         return $value instanceof Carbon ? $value : Carbon::parse($value);
+    }
+
+    /** Chave do selo: 'loja' vira o site (ferrakora/beautykora) quando houver. */
+    private static function canal(?string $origin, ?string $siteOrigem): ?string
+    {
+        return $origin === Order::ORIGIN_STORE && $siteOrigem ? $siteOrigem : $origin;
     }
 }

@@ -37,7 +37,7 @@ const channelBadge = {
     amazon: { color: 'shipped', label: 'Amazon' },
 };
 
-const originLabel = (review) => (review.channel ? (channelBadge[review.channel]?.label ?? review.channel) : 'Site');
+const originLabel = (review) => (review.channel ? (channelBadge[review.channel]?.label ?? review.channel) : 'KazaKora');
 const originColor = (review) => (review.channel ? (channelBadge[review.channel]?.color ?? review.channel) : 'active');
 
 const destroy = async (review) => {

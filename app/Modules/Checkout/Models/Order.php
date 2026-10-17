@@ -130,7 +130,7 @@ class Order extends Model
      * FerraKora/Beauty Kora aparecem separados (site_origem).
      */
     public const MARKETPLACES = [
-        self::ORIGIN_STORE => 'Site',
+        self::ORIGIN_STORE => 'KazaKora', // era "Site"; só o rótulo mudou (2026-10-16)
         self::ORIGIN_SHOPEE => 'Shopee',
         self::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
         self::ORIGIN_TIKTOK_SHOP => 'TikTok Shop',
@@ -141,6 +141,21 @@ class Order extends Model
         // sem ela, esses pedidos não tinham filtro na lista (2026-10-16).
         self::ORIGIN_MANUAL_INVOICE => 'Nota fiscal avulsa',
     ];
+
+    /**
+     * Nome do canal para mostrar na tela (2026-10-16): pedido do site sai
+     * com o nome da loja (KazaKora, FerraKora ou Beauty Kora, pelo
+     * site_origem); marketplace sai com o nome do canal. Só rótulo: o
+     * origin gravado continua "loja".
+     */
+    public static function rotuloDoCanal(?string $origin, ?string $siteOrigem = null): string
+    {
+        if ($origin === self::ORIGIN_STORE && $siteOrigem !== null && isset(self::ROTULOS_SITE[$siteOrigem])) {
+            return self::ROTULOS_SITE[$siteOrigem];
+        }
+
+        return self::MARKETPLACES[$origin] ?? (string) $origin;
+    }
 
     // Pedido explícito 2026-08-09: emissão manual de nota fiscal (produto
     // ou serviço avulso) pelo novo menu /admin/notas-fiscais/emitir — não é

@@ -207,7 +207,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
                             <div class="flex flex-wrap items-center gap-2 text-sm">
                                 <span class="inline-flex items-center gap-1.5 font-semibold">
                                     <span class="h-2.5 w-2.5 rounded-full" :style="{ background: CANAL_CORES[caso.canal] ?? '#999' }"></span>
-                                    {{ canais[caso.canal] ?? caso.canal }}
+                                    {{ caso.canalNome ?? canais[caso.canal] ?? caso.canal }}
                                 </span>
                                 <span class="text-slate-400">·</span>
                                 <span>{{ caso.pedidoId ? `Pedido #${caso.pedidoId}` : `Pedido ${caso.pedidoExterno ?? '—'}` }}</span>
@@ -245,7 +245,7 @@ const registrar = () => router.post('/admin/devolucoes', form.value, { onSuccess
             <aside class="h-full w-full max-w-xl overflow-y-auto bg-[var(--surface)] p-5 shadow-xl">
                 <div class="flex items-start justify-between gap-3">
                     <div>
-                        <p class="text-xs uppercase tracking-wide text-slate-400">{{ canais[aberto.canal] }} · {{ aberto.tipo === 'reclamacao' ? 'Reclamação' : 'Devolução' }} {{ aberto.manual ? '(registrada à mão)' : aberto.externo }}</p>
+                        <p class="text-xs uppercase tracking-wide text-slate-400">{{ aberto.canalNome ?? canais[aberto.canal] }} · {{ aberto.tipo === 'reclamacao' ? 'Reclamação' : 'Devolução' }} {{ aberto.manual ? '(registrada à mão)' : aberto.externo }}</p>
                         <h2 class="text-lg font-bold">{{ aberto.motivo ?? 'Motivo não informado' }}</h2>
                         <StatusBadge class="mt-1" :status="aberto.situacao" context="return" :label="situacoes[aberto.situacao] ?? null" />
                     </div>

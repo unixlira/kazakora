@@ -43,6 +43,13 @@ const cookies = [
         duracao: '12 meses',
         base: 'Consentimento (art. 7º, I)',
     },
+    {
+        nome: '_fbp, _fbc',
+        tipo: 'Publicidade',
+        finalidade: 'Pixel da Meta (Facebook e Instagram): mede as visitas e compras vindas dos nossos anúncios e nos ajuda a mostrar anúncios a quem tem interesse. Só é criado depois do seu OK.',
+        duracao: 'até 90 dias',
+        base: 'Consentimento (art. 7º, I)',
+    },
 ];
 </script>
 
@@ -67,7 +74,7 @@ const cookies = [
                     </p>
                     <p class="flex items-start gap-2.5 font-medium text-store-fg">
                         <i class="fas fa-check mt-0.5 shrink-0 text-green-600"></i>
-                        A KazaKora não usa cookies de publicidade nem de redes sociais, e não vende dados.
+                        Usamos o Pixel da Meta (Facebook e Instagram) para medir nossos anúncios, e só depois do seu OK. A KazaKora não vende dados.
                     </p>
                 </LegalCard>
 

@@ -37,6 +37,7 @@ visita a loja.
 | `kazakora_cookies` | Necessário | lembra o OK | 12 meses | art. 8º § 2º |
 | `kazakora_cep` | Necessário | CEP que o cliente digitou, para o preço já sair com o frete dele (frete embutido, 2026-10-12) | 12 meses | art. 7º V |
 | `kazakora_visitor` | Estatística | contar visitante único | 12 meses | art. 7º I (consentimento) |
+| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, InitiateCheckout, Purchase. Só carrega depois do OK (`resources/js/Shared/pixelMeta.js`); ID vem de `META_ADS_PIXEL_ID` | até 90 dias | art. 7º I (consentimento) |
 
 Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 `SameSite=Lax`. A sessão só trafega em https quando o `APP_URL` é https
@@ -64,8 +65,8 @@ só com o OK, e só os da lista permitida `Cookies::COOKIES_REGISTRAVEIS`
 `_gcl_au`, `_gcl_aw`, `_ttp`, `ttclid`), valor cortado em 200 caracteres.
 Sessão (`kazakora-session`), `XSRF-TOKEN`, `remember_*` e qualquer cookie fora
 da lista **nunca** são gravados. Cookie novo? Entrar na lista é decisão
-consciente (e política atualizada). A loja hoje não carrega pixel nenhum; os de
-terceiros só aparecem se o navegador já os tiver. Apagados junto com o IP aos 6
+consciente (e política atualizada). Desde 16/10/2026 a loja carrega o Pixel da Meta (só após o OK);
+os outros de terceiros só aparecem se o navegador já os tiver. Apagados junto com o IP aos 6
 meses. Visitas anteriores a 12/10/2026 não têm cookies.
 
 Não registra: admin, robôs, arquivos, recarga parcial do Inertia, nada que não

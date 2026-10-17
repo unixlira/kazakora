@@ -28,8 +28,17 @@ class CorreiosLabelPdf
 
     private const MARGEM = 4.0;
 
-    /** Logo 287x89 px → 18 x 5,6 mm. */
-    private const LOGO_LARGURA = 18.0;
+    /**
+     * Logo do canal no canto do destinatário, versão só preto (a térmica
+     * imprime limpo), largura em mm. Amazon 287x89 px → 18 x 5,6 mm.
+     * KazaKora (pedido do Lira 2026-10-16: pedido do site sai com a MESMA
+     * etiqueta da Amazon, só trocando o logo) 505x84 px → 28 x 4,7 mm:
+     * o logo é mais comprido, então ganha largura pra ter altura parecida.
+     */
+    private const LOGOS = [
+        'amazon' => ['arquivo' => 'etiquetas/amazon.png', 'largura' => 18.0],
+        'kazakora' => ['arquivo' => 'etiquetas/kazakora.png', 'largura' => 28.0],
+    ];
 
     public function render(CorreiosPrePostagem $pp): string
     {
@@ -72,14 +81,14 @@ class CorreiosLabelPdf
         $y = self::MARGEM + $qrLado + 2;
         $pdf->Line(self::MARGEM, $y, self::LARGURA - self::MARGEM, $y);
 
-        // 2. Destinatário. Pedido da Amazon leva o logo (versão só preto,
-        // que a térmica imprime limpo) no canto; o nome encolhe pra não
-        // passar por baixo dele.
+        // 2. Destinatário. Pedido da Amazon leva o logo da Amazon e pedido
+        // do kazakora.com o da KazaKora, no mesmo canto; o nome encolhe pra
+        // não passar por baixo dele.
         $larguraNome = $util;
 
-        if ($this->ehAmazon($pp) && is_file($logo = resource_path('etiquetas/amazon.png'))) {
-            $pdf->Image($logo, self::LARGURA - self::MARGEM - self::LOGO_LARGURA, $y + 1.5, self::LOGO_LARGURA);
-            $larguraNome = $util - self::LOGO_LARGURA - 2;
+        if ($logo = $this->logoDoCanal($pp)) {
+            $pdf->Image(resource_path($logo['arquivo']), self::LARGURA - self::MARGEM - $logo['largura'], $y + 1.5, $logo['largura']);
+            $larguraNome = $util - $logo['largura'] - 2;
         }
 
         $this->kicker($pdf, self::MARGEM, $y + 1, $larguraNome, 'Destinatário', 'L');
@@ -134,7 +143,7 @@ class CorreiosLabelPdf
 
         $pdf->SetFont('Helvetica', '', 6.5);
         $pdf->SetXY(self::MARGEM, self::ALTURA - self::MARGEM - 2.5);
-        $pdf->Cell($util, 3, $this->t(trim(($pp->origin ? ucfirst(str_replace('_', ' ', $pp->origin)).' ' : '').($pp->external_order_id ?? '').' · Pedido #'.$pp->order_id)), 0, 0, 'C');
+        $pdf->Cell($util, 3, $this->t(trim(trim($this->nomeDoCanal($pp).' '.($pp->external_order_id ?? '')).' · Pedido #'.$pp->order_id)), 0, 0, 'C');
 
         return $pdf->Output('S');
     }
@@ -197,9 +206,35 @@ class CorreiosLabelPdf
         }
     }
 
-    private function ehAmazon(CorreiosPrePostagem $pp): bool
+    /** Rodapé: "Amazon 701-..." / "KazaKora" (site) / "Mercado livre ...". */
+    private function nomeDoCanal(CorreiosPrePostagem $pp): string
     {
-        return ($pp->origin ?: $pp->order?->origin) === Order::ORIGIN_AMAZON;
+        if ($this->logoDoCanal($pp) === self::LOGOS['kazakora']) {
+            return 'KazaKora';
+        }
+
+        return $pp->origin ? ucfirst(str_replace('_', ' ', $pp->origin)) : '';
+    }
+
+    /**
+     * Amazon → logo da Amazon. Site kazakora.com (origin "loja" SEM
+     * site_origem; FerraKora e Beauty Kora também chegam como "loja", mas
+     * com site_origem preenchido, e não levam o logo da KazaKora) → logo
+     * da KazaKora. Demais canais: sem logo, como antes.
+     *
+     * @return array{arquivo: string, largura: float}|null
+     */
+    private function logoDoCanal(CorreiosPrePostagem $pp): ?array
+    {
+        $chave = match ($pp->origin ?: $pp->order?->origin) {
+            Order::ORIGIN_AMAZON => 'amazon',
+            Order::ORIGIN_STORE => blank($pp->order?->site_origem) ? 'kazakora' : null,
+            default => null,
+        };
+
+        $logo = $chave ? self::LOGOS[$chave] : null;
+
+        return $logo && is_file(resource_path($logo['arquivo'])) ? $logo : null;
     }
 
     /** Corta com reticências o que não cabe numa linha da largura dada. */

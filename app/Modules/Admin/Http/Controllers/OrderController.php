@@ -43,6 +43,22 @@ class OrderController extends Controller
         Order::STATUS_CANCELLED,
     ];
 
+    /**
+     * Status do banco que cada opção do filtro traz. "Pendente" (pending)
+     * inclui awaiting_payment, que no admin também aparece como "Pendente"
+     * (statusLabels.js, Lira 2026-10-16). Só o filtro da listagem; o banco e
+     * a validação da troca de status continuam com os valores originais.
+     */
+    private const STATUS_DO_FILTRO = [
+        Order::STATUS_PENDING => [Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT],
+    ];
+
+    /** @return list<string> */
+    private static function statusDoFiltro(string $status): array
+    {
+        return self::STATUS_DO_FILTRO[$status] ?? [$status];
+    }
+
     private const CHANNELS = [
         Order::ORIGIN_STORE,
         Order::ORIGIN_MERCADO_LIVRE,
@@ -85,7 +101,7 @@ class OrderController extends Controller
             // 'loja' = só kazakora.com; FerraKora/Beauty Kora pelo site_origem;
             // marketplaces pelo origin (TikTok Shop e Amazon via Bling inclusive).
             ->when($marketplace !== '', fn ($query) => Order::filtrarCanal($query, $marketplace))
-            ->when(in_array($request->query('status'), self::STATUSES, true), fn ($query) => $query->where('status', $request->query('status')))
+            ->when(in_array($request->query('status'), self::STATUSES, true), fn ($query) => $query->whereIn('status', self::statusDoFiltro($request->query('status'))))
             ->when($de, fn ($query) => $query->where('created_at', '>=', $de->copy()->startOfDay()))
             ->when($ate, fn ($query) => $query->where('created_at', '<=', $ate->copy()->endOfDay()))
             // Busca (2026-10-16): regras em BuscaDePedidos. Fica num where

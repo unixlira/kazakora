@@ -882,6 +882,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('integracoes/mercado-livre/flex', [MercadoLivreFlexController::class, 'index'])->name('integracoes.mercado-livre.flex');
         Route::put('integracoes/mercado-livre/flex', [MercadoLivreFlexController::class, 'update'])->name('integracoes.mercado-livre.flex.atualizar');
 
+        Route::get('integracoes/mercado-livre/cupom', [\App\Modules\Admin\Http\Controllers\MercadoLivreCupomController::class, 'index'])->name('integracoes.mercado-livre.cupom');
+        Route::post('integracoes/mercado-livre/cupom', [\App\Modules\Admin\Http\Controllers\MercadoLivreCupomController::class, 'store'])->middleware('admin')->name('integracoes.mercado-livre.cupom.enviar');
+
         Route::get('integracoes/teste-impressao', [PrintTestController::class, 'index'])->name('integracoes.teste-impressao');
         Route::post('integracoes/teste-impressao', [PrintTestController::class, 'store'])->name('integracoes.teste-impressao.armazenar');
 

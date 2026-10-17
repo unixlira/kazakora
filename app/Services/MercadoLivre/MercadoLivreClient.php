@@ -37,6 +37,29 @@ class MercadoLivreClient
     }
 
     /**
+     * POST sem nova tentativa automática: para chamadas que criam algo com
+     * dinheiro envolvido (cupom do vendedor). Repetir depois de um 5xx pode
+     * criar a mesma campanha duas vezes; quem chama decide.
+     *
+     * @return array<string, mixed>
+     */
+    public function postOnce(string $uri, array $data = []): array
+    {
+        $token = $this->auth->ensureValidToken($this->auth->currentToken());
+
+        $response = Http::baseUrl(config('services.mercadolivre.api_base_url'))
+            ->withToken($token->access_token)
+            ->timeout((int) config('mercadolivre.timeout'))
+            ->connectTimeout((int) config('mercadolivre.connect_timeout'))
+            ->acceptJson()
+            ->post(ltrim($uri, '/'), $data);
+
+        $this->log('POST', $uri, $response);
+
+        return $this->handleResponse($response);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function put(string $uri, array $data = []): array

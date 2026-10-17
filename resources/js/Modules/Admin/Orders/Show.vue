@@ -2,9 +2,11 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
+import QrCodeSvg from '@/Shared/Components/QrCodeSvg.vue';
 import { statusOptions } from '@/Shared/statusLabels';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { shippingBadge } from './envio';
 
 const props = defineProps({
     order: {
@@ -28,6 +30,8 @@ const props = defineProps({
         default: () => [],
     },
     packingVideos: { type: Array, default: () => [] },
+    // Tudo o que o pedido tem (OrderController::detalheCompleto, 2026-10-16).
+    detalhe: { type: Object, default: () => ({}) },
     fulfillmentEvents: {
         type: Array,
         default: () => [],
@@ -47,8 +51,70 @@ const FULFILLMENT_STEP_LABELS = {
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-const formatDateTime = (value) => new Date(value).toLocaleString('pt-BR');
-const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
+const formatDateTime = (value) => (value ? new Date(value).toLocaleString('pt-BR') : '—');
+const formatDate = (value) => (value ? new Date(value).toLocaleDateString('pt-BR') : '—');
+
+const d = computed(() => props.detalhe ?? {});
+
+// Mesmo nome de envio da listagem (envio.js).
+const envioSelo = computed(() => shippingBadge({
+    origin: props.order.origin,
+    shipping_type: d.value.envio?.tipo,
+    shipping_type_short: d.value.envio?.curto,
+}));
+
+const PAYMENT_METHOD_LABELS = {
+    pix: 'Pix',
+    card: 'Cartão',
+    credit_card: 'Cartão de crédito',
+    debit_card: 'Cartão de débito',
+    boleto: 'Boleto',
+    account_money: 'Saldo Mercado Pago',
+    ticket: 'Boleto',
+    bank_transfer: 'Pix / transferência',
+};
+const paymentMethodLabel = (value) => PAYMENT_METHOD_LABELS[value] ?? value ?? '—';
+
+const formatDocument = (value) => {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    if (digits.length === 14) return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    return value || '—';
+};
+
+const formatWeight = (grams) => (grams == null ? null : `${Number(grams).toLocaleString('pt-BR')} g`);
+const dimensions = (pre) => [pre.comprimento, pre.largura, pre.altura].every((v) => v != null && Number(v) > 0)
+    ? `${pre.comprimento} × ${pre.largura} × ${pre.altura} cm`
+    : (pre.diametro ? `diâmetro ${pre.diametro} cm` : null);
+
+const copiedKey = ref(null);
+const copy = async (text, key) => {
+    try {
+        await navigator.clipboard.writeText(String(text));
+        copiedKey.value = key;
+        setTimeout(() => { if (copiedKey.value === key) copiedKey.value = null; }, 1500);
+    } catch {
+        // Navegador sem permissão de área de transferência: o texto continua visível para copiar à mão.
+    }
+};
+
+const SHIPMENT_DATES = [
+    ['confirmado_em', 'Confirmado no canal'],
+    ['etiqueta_pronta_em', 'Etiqueta pronta'],
+    ['agendado_para', 'Agendado para'],
+    ['entrega_prometida', 'Entrega prometida'],
+    ['enviado_em', 'Enviado'],
+    ['primeira_tentativa_em', 'Primeira tentativa'],
+    ['entregue_em', 'Entregue'],
+    ['nao_entregue_em', 'Não entregue'],
+    ['cancelado_em', 'Cancelado no canal'],
+    ['consultado_em', 'Última consulta ao canal'],
+];
+
+const temDevolucao = computed(() => {
+    const dev = d.value.devolucao ?? {};
+    return Boolean(dev.estornado_em || dev.devolvido_pelo_canal_em || dev.resolucao || dev.notas_de_devolucao?.length || dev.reclamacoes?.length);
+});
 
 const channelBadge = {
     loja: { color: 'shipped', label: 'KazaKora' },
@@ -88,15 +154,6 @@ const shipmentDisplay = () => {
     return isOverdue
         ? { color: 'red', label: `Agendada pra ${formatDate(shipment.scheduled_for)} — já passou e não liberou` }
         : { color: 'yellow', label: `Venda agendada — etiqueta só sai perto de ${formatDate(shipment.scheduled_for)}` };
-};
-
-const LOGISTIC_TYPE_LABELS = {
-    self_service: 'Flex',
-    drop_off: 'Agência / Correios',
-    xd_drop_off: 'Coleta (Places)',
-    cross_docking: 'Coleta',
-    fulfillment: 'Full',
-    turbo: 'Turbo',
 };
 
 const form = useForm({
@@ -175,53 +232,153 @@ const cancelInvoice = () => {
             <h1 class="text-2xl font-bold">Pedido #{{ order.id }}</h1>
             <StatusBadge :status="originBadge.color" :label="originBadge.label" />
             <StatusBadge :status="order.status" context="order" />
+            <StatusBadge :status="envioSelo.tone" :label="envioSelo.label.replace('\n', ' ')" :title="d.envio?.label" />
             <span v-if="order.external_order_id" class="text-sm text-slate-400">Ref. no canal: {{ order.external_order_id }}</span>
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div class="lg:col-span-2">
-                <div class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                <!-- Itens e valores -->
+                <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                     <div class="flex items-center justify-between">
                         <h2 class="font-semibold">Itens</h2>
                         <span class="text-sm text-slate-500">{{ order.units_count ?? 0 }} unidade(s)</span>
                     </div>
 
-                    <ul class="mt-4 space-y-2 text-sm">
-                        <li v-for="item in order.items" :key="item.id" class="flex justify-between">
-                            <span>{{ item.product_name }} × {{ item.quantity }}</span>
-                            <span>{{ formatPrice(item.subtotal) }}</span>
+                    <div class="mt-3 overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-[var(--surface-border)] text-left text-xs uppercase text-slate-400">
+                                    <th class="py-2 pr-3 font-medium">Produto</th>
+                                    <th class="py-2 pr-3 font-medium">SKU</th>
+                                    <th class="py-2 pr-3 text-right font-medium">Qtd</th>
+                                    <th class="py-2 pr-3 text-right font-medium">Preço</th>
+                                    <th class="py-2 text-right font-medium">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="item in d.itens ?? []" :key="item.id" class="border-b border-[var(--surface-border)] align-top last:border-0">
+                                    <td class="py-2 pr-3">
+                                        <div class="font-medium">{{ item.nome }}</div>
+                                        <div v-if="item.variacao" class="text-xs text-slate-500">Variação: {{ item.variacao }}</div>
+                                        <div v-if="item.anuncio_no_canal || item.variacao_no_canal" class="text-xs text-slate-400">
+                                            Anúncio no canal: <span class="font-mono">{{ item.anuncio_no_canal ?? '—' }}</span>
+                                            <span v-if="item.variacao_no_canal"> · variação <span class="font-mono">{{ item.variacao_no_canal }}</span></span>
+                                        </div>
+                                    </td>
+                                    <td class="py-2 pr-3 font-mono text-xs">{{ item.sku ?? '—' }}</td>
+                                    <td class="py-2 pr-3 text-right tabular-nums">{{ item.quantidade }}</td>
+                                    <td class="py-2 pr-3 text-right tabular-nums">{{ formatPrice(item.preco) }}</td>
+                                    <td class="py-2 text-right tabular-nums">{{ formatPrice(item.subtotal) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <dl class="mt-4 space-y-1 border-t border-[var(--surface-border)] pt-3 text-sm">
+                        <div class="flex justify-between"><dt class="text-slate-500">Subtotal</dt><dd class="tabular-nums">{{ formatPrice(d.valores?.subtotal ?? 0) }}</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Frete</dt><dd class="tabular-nums">{{ (d.valores?.frete ?? 0) > 0 ? formatPrice(d.valores.frete) : 'Grátis / pago pelo canal' }}</dd></div>
+                        <div v-if="d.valores?.cupom || d.valores?.desconto_cupom > 0" class="flex justify-between">
+                            <dt class="text-slate-500">Cupom <span v-if="d.valores?.cupom" class="font-mono text-xs">{{ d.valores.cupom }}</span></dt>
+                            <dd class="tabular-nums text-success">− {{ formatPrice(Math.max(d.valores?.desconto_cupom ?? 0, 0)) }}</dd>
+                        </div>
+                        <div v-if="d.valores?.desconto_pix > 0" class="flex justify-between"><dt class="text-slate-500">Desconto Pix</dt><dd class="tabular-nums text-success">− {{ formatPrice(d.valores.desconto_pix) }}</dd></div>
+                        <div v-if="d.valores?.desconto_plataforma > 0" class="flex justify-between"><dt class="text-slate-500">Desconto da plataforma</dt><dd class="tabular-nums text-success">− {{ formatPrice(d.valores.desconto_plataforma) }}</dd></div>
+                        <div class="flex justify-between border-t border-[var(--surface-border)] pt-2 font-bold"><dt>Total pago</dt><dd class="tabular-nums">{{ formatPrice(order.total) }}</dd></div>
+                    </dl>
+                </section>
+
+                <!-- Pagamento -->
+                <section class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Pagamento</h2>
+                    <ul v-if="d.pagamentos?.length" class="mt-3 space-y-3 text-sm">
+                        <li v-for="pagamento in d.pagamentos" :key="pagamento.id" class="rounded-lg border border-[var(--surface-border)] p-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <StatusBadge :status="pagamento.status" context="payment" />
+                                <span class="font-medium">{{ paymentMethodLabel(pagamento.meio) }}</span>
+                                <span class="text-slate-400">· {{ pagamento.provedor ?? '—' }}</span>
+                                <span class="ml-auto font-semibold tabular-nums">{{ formatPrice(pagamento.valor) }}</span>
+                            </div>
+                            <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                                <span v-if="pagamento.transacao">Transação: <span class="font-mono">{{ pagamento.transacao }}</span>
+                                    <button type="button" class="ml-1 text-primary" :aria-label="`Copiar transação ${pagamento.transacao}`" @click="copy(pagamento.transacao, `tx-${pagamento.id}`)">
+                                        <i class="fas" :class="copiedKey === `tx-${pagamento.id}` ? 'fa-check' : 'fa-copy'" aria-hidden="true"></i>
+                                    </button>
+                                </span>
+                                <span v-if="pagamento.pedido_no_provedor">Pedido no provedor: <span class="font-mono">{{ pagamento.pedido_no_provedor }}</span></span>
+                                <span>Criado {{ formatDateTime(pagamento.criado_em) }}</span>
+                                <span>Atualizado {{ formatDateTime(pagamento.atualizado_em) }}</span>
+                                <span v-if="pagamento.expira_em">Vence {{ formatDateTime(pagamento.expira_em) }}</span>
+                                <a v-if="pagamento.boleto_url" :href="pagamento.boleto_url" target="_blank" rel="noopener" class="text-primary">Abrir boleto</a>
+                            </div>
                         </li>
                     </ul>
-
-                    <div class="mt-4 flex justify-between border-t border-[var(--surface-border)] pt-4 font-bold">
-                        <span>Total</span>
-                        <span>{{ formatPrice(order.total) }}</span>
-                    </div>
-                </div>
-
-                <div class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h2 class="font-semibold">Entrega</h2>
-                        <span v-if="order.channel_shipment?.shipping_method" class="text-sm text-slate-500">
-                            Tipo de envio: <strong>{{ LOGISTIC_TYPE_LABELS[order.channel_shipment.shipping_method] ?? order.channel_shipment.shipping_method }}</strong>
-                        </span>
-                    </div>
-                    <p class="mt-2 text-sm text-slate-500">
-                        {{ order.shipping_name }} — {{ order.shipping_phone }}<br>
-                        <span v-if="order.shipping_whatsapp">WhatsApp: {{ order.shipping_whatsapp }}<br></span>
-                        <span v-if="order.shipping_email">E-mail: {{ order.shipping_email }}<br></span>
-                        {{ order.shipping_street }}, {{ order.shipping_number }}
-                        <span v-if="order.shipping_complement">- {{ order.shipping_complement }}</span><br>
-                        {{ order.shipping_neighborhood }} - {{ order.shipping_city }}/{{ order.shipping_state }}<br>
-                        CEP {{ order.shipping_zip }}
+                    <p v-else class="mt-2 text-sm text-slate-400">
+                        {{ order.origin === 'loja' ? 'Nenhum pagamento registrado.' : 'Pagamento feito no próprio canal (o canal repassa o valor).' }}
                     </p>
 
-                    <!-- Status da ETIQUETA no canal (pedido explícito
-                         2026-08-13) — antes disso não tinha jeito de ver
-                         nem forçar isso pelo painel, só via intervenção
-                         manual direto no servidor. Só aparece pra pedido de
-                         marketplace de verdade (channel_shipment só existe
-                         pra Shopee/ML, nunca pra venda direta no site). -->
+                    <template v-if="d.mercado_pago?.length">
+                        <h3 class="mt-4 text-sm font-semibold text-slate-500">Mercado Pago (conciliação)</h3>
+                        <ul class="mt-2 space-y-2 text-xs text-slate-500">
+                            <li v-for="mp in d.mercado_pago" :key="mp.transacao" class="flex flex-wrap gap-x-4 gap-y-1 border-b border-[var(--surface-border)] pb-2 last:border-0">
+                                <span>Transação <span class="font-mono">{{ mp.transacao }}</span></span>
+                                <span>{{ mp.status }}<span v-if="mp.status_detalhe"> ({{ mp.status_detalhe }})</span></span>
+                                <span>{{ paymentMethodLabel(mp.meio) }}</span>
+                                <span>Valor {{ formatPrice(mp.valor) }}</span>
+                                <span>Líquido {{ formatPrice(mp.liquido) }}</span>
+                                <span v-if="mp.reembolsado > 0" class="text-error">Reembolsado {{ formatPrice(mp.reembolsado) }}</span>
+                                <span v-if="mp.aprovado_em">Aprovado {{ formatDateTime(mp.aprovado_em) }}</span>
+                                <span v-if="mp.liberado_em">Liberado {{ formatDateTime(mp.liberado_em) }}</span>
+                            </li>
+                        </ul>
+                    </template>
+                </section>
+
+                <!-- Envio -->
+                <section class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h2 class="font-semibold">Envio</h2>
+                        <StatusBadge :status="envioSelo.tone" :label="envioSelo.label.replace('\n', ' ')" />
+                    </div>
+
+                    <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                        <div><dt class="text-xs text-slate-400">Meio de envio</dt><dd>{{ d.envio?.label ?? '—' }}</dd></div>
+                        <div v-if="d.envio?.servico"><dt class="text-xs text-slate-400">Serviço</dt><dd>{{ d.envio.servico }}</dd></div>
+                        <div v-if="d.envio?.metodo_no_canal"><dt class="text-xs text-slate-400">Método informado pelo canal</dt><dd class="font-mono text-xs">{{ d.envio.metodo_no_canal }}</dd></div>
+                        <div v-if="d.envio?.transportadora"><dt class="text-xs text-slate-400">Frete escolhido / transportadora</dt><dd>{{ d.envio.transportadora }}</dd></div>
+                        <div>
+                            <dt class="text-xs text-slate-400">Código de rastreio</dt>
+                            <dd v-if="d.envio?.rastreio" class="flex flex-wrap items-center gap-2">
+                                <a v-if="d.envio.rastreio_url" :href="d.envio.rastreio_url" target="_blank" rel="noopener" class="font-mono text-primary hover:underline">{{ d.envio.rastreio }}</a>
+                                <span v-else class="font-mono">{{ d.envio.rastreio }}</span>
+                                <button type="button" class="text-primary" aria-label="Copiar código de rastreio" @click="copy(d.envio.rastreio, 'rastreio')">
+                                    <i class="fas" :class="copiedKey === 'rastreio' ? 'fa-check' : 'fa-copy'" aria-hidden="true"></i>
+                                </button>
+                            </dd>
+                            <dd v-else>—</dd>
+                        </div>
+                        <div v-if="d.envio?.rastreio_cliente_url" class="sm:col-span-2">
+                            <dt class="text-xs text-slate-400">Página de rastreio do cliente</dt>
+                            <dd class="flex flex-wrap items-center gap-2">
+                                <a :href="d.envio.rastreio_cliente_url" target="_blank" rel="noopener" class="break-all text-primary hover:underline">{{ d.envio.rastreio_cliente_url }}</a>
+                                <button type="button" class="text-primary" aria-label="Copiar link de rastreio do cliente" @click="copy(d.envio.rastreio_cliente_url, 'rastreio-cliente')">
+                                    <i class="fas" :class="copiedKey === 'rastreio-cliente' ? 'fa-check' : 'fa-copy'" aria-hidden="true"></i>
+                                </button>
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <template v-if="d.envio?.canal && (d.envio.canal.id_no_canal || d.envio.canal.status_no_canal || SHIPMENT_DATES.some(([key]) => d.envio.canal[key]))">
+                        <h3 class="mt-4 text-sm font-semibold text-slate-500">No canal</h3>
+                        <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                            <div v-if="d.envio.canal.id_no_canal"><dt class="text-xs text-slate-400">Envio no canal</dt><dd class="font-mono text-xs">{{ d.envio.canal.id_no_canal }}</dd></div>
+                            <div v-if="d.envio.canal.status_no_canal"><dt class="text-xs text-slate-400">Status no canal</dt><dd>{{ d.envio.canal.status_no_canal }}<span v-if="d.envio.canal.substatus_no_canal" class="text-slate-400"> / {{ d.envio.canal.substatus_no_canal }}</span></dd></div>
+                            <template v-for="[key, rotulo] in SHIPMENT_DATES" :key="key">
+                                <div v-if="d.envio.canal[key]"><dt class="text-xs text-slate-400">{{ rotulo }}</dt><dd>{{ formatDateTime(d.envio.canal[key]) }}</dd></div>
+                            </template>
+                        </dl>
+                    </template>
+
                     <div v-if="order.channel_shipment" class="mt-4 border-t border-[var(--surface-border)] pt-3">
                         <div class="flex flex-wrap items-center gap-3 text-sm">
                             <span class="text-slate-500">Etiqueta:</span>
@@ -267,28 +424,105 @@ const cancelInvoice = () => {
                             </a>
                         </div>
                     </div>
-                </div>
 
-                <div class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <!-- Pré-postagem dos Correios com o QR Code (saiu da listagem
+                         de pedidos em 2026-10-16 e veio para cá). -->
+                    <template v-if="d.envio?.pre_postagens?.length">
+                        <h3 class="mt-4 border-t border-[var(--surface-border)] pt-3 text-sm font-semibold text-slate-500">Pré-postagem dos Correios</h3>
+                        <div v-for="pre in d.envio.pre_postagens" :key="pre.id" class="mt-2 flex flex-wrap gap-4 rounded-lg border border-[var(--surface-border)] p-3 text-sm">
+                            <div v-if="pre.qr_payload" class="w-32 shrink-0 rounded bg-white p-1" :aria-label="`QR Code da pré-postagem ${pre.codigo_objeto ?? pre.id}`">
+                                <QrCodeSvg :value="pre.qr_payload" />
+                            </div>
+                            <dl class="grid min-w-0 flex-1 grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                                <div><dt class="text-xs text-slate-400">Status</dt><dd><StatusBadge :status="pre.status" context="correios" /></dd></div>
+                                <div><dt class="text-xs text-slate-400">Serviço</dt><dd>{{ pre.servico ?? '—' }}<span v-if="pre.codigo_servico" class="text-xs text-slate-400"> ({{ pre.codigo_servico }})</span></dd></div>
+                                <div><dt class="text-xs text-slate-400">Código do objeto</dt><dd class="font-mono">{{ pre.codigo_objeto ?? '—' }}</dd></div>
+                                <div><dt class="text-xs text-slate-400">ID da pré-postagem</dt><dd class="font-mono text-xs">{{ pre.id_correios ?? '—' }}</dd></div>
+                                <div v-if="pre.valor_postagem != null"><dt class="text-xs text-slate-400">Valor da postagem</dt><dd class="tabular-nums">{{ formatPrice(pre.valor_postagem) }}</dd></div>
+                                <div v-if="pre.peso_gramas || dimensions(pre)"><dt class="text-xs text-slate-400">Peso / dimensões</dt><dd>{{ [formatWeight(pre.peso_gramas), dimensions(pre)].filter(Boolean).join(' · ') }}</dd></div>
+                                <div><dt class="text-xs text-slate-400">Criada em</dt><dd>{{ formatDateTime(pre.criada_em) }}</dd></div>
+                                <div class="flex items-end">
+                                    <Link :href="`/admin/correios/${pre.id}`" class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary">
+                                        <i class="fas fa-qrcode" aria-hidden="true"></i> Ver / imprimir etiqueta
+                                    </Link>
+                                </div>
+                                <p v-if="pre.erro" class="text-xs text-error sm:col-span-2">{{ pre.erro }}</p>
+                            </dl>
+                        </div>
+                    </template>
+                </section>
+
+                <!-- Devolução / estorno -->
+                <section v-if="temDevolucao" class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Devolução e estorno</h2>
+                    <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                        <div v-if="d.devolucao.estornado_em"><dt class="text-xs text-slate-400">Estornado em</dt><dd class="text-error">{{ formatDateTime(d.devolucao.estornado_em) }}<span v-if="d.devolucao.estorno_origem" class="text-slate-400"> · {{ d.devolucao.estorno_origem }}</span></dd></div>
+                        <div v-if="d.devolucao.estoque_devolvido_em"><dt class="text-xs text-slate-400">Estoque devolvido em</dt><dd>{{ formatDateTime(d.devolucao.estoque_devolvido_em) }}</dd></div>
+                        <div v-if="d.devolucao.devolvido_pelo_canal_em"><dt class="text-xs text-slate-400">Devolvido pelo canal em</dt><dd>{{ formatDateTime(d.devolucao.devolvido_pelo_canal_em) }}</dd></div>
+                        <div v-if="d.devolucao.resolucao"><dt class="text-xs text-slate-400">Resolução da devolução</dt><dd>{{ d.devolucao.resolucao }}<span v-if="d.devolucao.resolvida_em" class="text-slate-400"> · {{ formatDateTime(d.devolucao.resolvida_em) }}</span></dd></div>
+                        <div v-if="d.devolucao.observacao" class="sm:col-span-2"><dt class="text-xs text-slate-400">Observação</dt><dd>{{ d.devolucao.observacao }}</dd></div>
+                    </dl>
+                    <template v-if="d.devolucao.notas_de_devolucao?.length">
+                        <h3 class="mt-4 text-sm font-semibold text-slate-500">Notas de devolução</h3>
+                        <ul class="mt-2 space-y-1 text-sm">
+                            <li v-for="nota in d.devolucao.notas_de_devolucao" :key="nota.id" class="flex flex-wrap items-center gap-2">
+                                <Link :href="`/admin/notas-fiscais/${nota.id}`" class="text-primary hover:underline">NF {{ nota.numero ?? '—' }} série {{ nota.serie ?? '—' }}</Link>
+                                <StatusBadge :status="nota.status" context="invoice" />
+                                <span v-if="nota.valor_total != null" class="tabular-nums text-slate-500">{{ formatPrice(nota.valor_total) }}</span>
+                            </li>
+                        </ul>
+                    </template>
+                    <template v-if="d.devolucao.reclamacoes?.length">
+                        <h3 class="mt-4 text-sm font-semibold text-slate-500">Reclamações no canal</h3>
+                        <ul class="mt-2 space-y-1 text-xs text-slate-500">
+                            <li v-for="claim in d.devolucao.reclamacoes" :key="claim.id" class="flex flex-wrap gap-x-3">
+                                <span class="font-mono">{{ claim.numero }}</span>
+                                <span>{{ claim.tipo }}</span>
+                                <span v-if="claim.etapa">{{ claim.etapa }}</span>
+                                <span>{{ claim.status }}</span>
+                                <span v-if="claim.resolucao">{{ claim.resolucao }}</span>
+                                <span>aberta {{ formatDateTime(claim.aberta_em) }}</span>
+                            </li>
+                        </ul>
+                    </template>
+                </section>
+
+                <!-- Nota fiscal, vídeo e históricos -->
+                <section class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
                     <h2 class="font-semibold">Nota fiscal e e-mail</h2>
 
-                    <div class="mt-3 flex flex-wrap items-center gap-6 text-sm">
-                        <div>
-                            <span class="text-slate-500">Nota fiscal:</span>
-                            <StatusBadge :status="order.invoice?.status ?? null" context="invoice" :label="order.invoice ? null : 'Ainda não emitida'" />
-                        </div>
-                        <div v-if="order.invoice?.chave_acesso" class="font-mono text-xs text-slate-500">
-                            Chave: {{ order.invoice.chave_acesso }}
-                        </div>
-                        <a v-if="order.invoice?.status === 'authorized'" :href="`/admin/pedidos/${order.id}/nota/danfe`"
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                        <StatusBadge :status="order.invoice?.status ?? null" context="invoice" :label="order.invoice ? null : 'Ainda não emitida'" />
+                        <Link v-if="d.nota" :href="`/admin/notas-fiscais/${d.nota.id}`" class="text-primary hover:underline">Abrir a nota</Link>
+                        <a v-if="d.nota?.tem_danfe" :href="`/admin/pedidos/${order.id}/nota/danfe`"
                             class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary">
-                            <i class="fas fa-file-pdf"></i> Baixar DANFE
+                            <i class="fas fa-file-pdf" aria-hidden="true"></i> Baixar DANFE
                         </a>
-                        <a v-if="order.invoice?.status === 'authorized'" :href="`/admin/pedidos/${order.id}/nota/xml`"
+                        <a v-if="d.nota?.tem_xml" :href="`/admin/pedidos/${order.id}/nota/xml`"
                             class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-sm font-medium hover:bg-lightprimary">
-                            <i class="fas fa-file-code"></i> Baixar XML
+                            <i class="fas fa-file-code" aria-hidden="true"></i> Baixar XML
                         </a>
                     </div>
+
+                    <dl v-if="d.nota" class="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                        <div><dt class="text-xs text-slate-400">Número / série</dt><dd>{{ d.nota.numero ?? '—' }} / {{ d.nota.serie ?? '—' }}</dd></div>
+                        <div v-if="d.nota.valor_total != null"><dt class="text-xs text-slate-400">Valor da nota</dt><dd class="tabular-nums">{{ formatPrice(d.nota.valor_total) }}</dd></div>
+                        <div class="sm:col-span-2">
+                            <dt class="text-xs text-slate-400">Chave de acesso</dt>
+                            <dd v-if="d.nota.chave" class="flex flex-wrap items-center gap-2">
+                                <span class="break-all font-mono text-xs">{{ d.nota.chave }}</span>
+                                <button type="button" class="text-primary" aria-label="Copiar chave de acesso" @click="copy(d.nota.chave, 'chave')">
+                                    <i class="fas" :class="copiedKey === 'chave' ? 'fa-check' : 'fa-copy'" aria-hidden="true"></i>
+                                </button>
+                            </dd>
+                            <dd v-else>—</dd>
+                        </div>
+                        <div v-if="d.nota.protocolo"><dt class="text-xs text-slate-400">Protocolo</dt><dd class="font-mono text-xs">{{ d.nota.protocolo }}</dd></div>
+                        <div v-if="d.nota.autorizada_em"><dt class="text-xs text-slate-400">Autorizada em</dt><dd>{{ formatDateTime(d.nota.autorizada_em) }}</dd></div>
+                        <div v-if="d.nota.cancelada_em"><dt class="text-xs text-slate-400">Cancelada em</dt><dd class="text-error">{{ formatDateTime(d.nota.cancelada_em) }}</dd></div>
+                        <div v-if="d.nota.motivo_cancelamento" class="sm:col-span-2"><dt class="text-xs text-slate-400">Motivo do cancelamento</dt><dd>{{ d.nota.motivo_cancelamento }}</dd></div>
+                        <div v-if="d.nota.motivo_rejeicao" class="sm:col-span-2"><dt class="text-xs text-slate-400">Motivo da rejeição</dt><dd class="text-error">{{ d.nota.motivo_rejeicao }}</dd></div>
+                    </dl>
 
                     <Can permission="pedidos.edit">
                         <div class="mt-3 flex flex-wrap items-center gap-3">
@@ -432,18 +666,66 @@ const cancelInvoice = () => {
                         </li>
                     </ul>
                     <p v-else class="mt-2 text-sm text-slate-400">Nenhuma alteração registrada ainda.</p>
-                </div>
+                </section>
             </div>
 
-            <div class="h-fit rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-                <h2 class="font-semibold">Cliente</h2>
-                <p class="mt-2 text-sm text-slate-500">
-                    {{ order.user?.name }}<br>
-                    {{ order.user?.email }}
-                </p>
+            <div class="h-fit space-y-6">
+                <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Cliente</h2>
+                    <dl class="mt-2 space-y-2 text-sm">
+                        <div><dt class="text-xs text-slate-400">Nome</dt><dd>{{ d.cliente?.nome ?? '—' }}</dd></div>
+                        <div><dt class="text-xs text-slate-400">CPF/CNPJ</dt><dd class="font-mono">{{ formatDocument(d.cliente?.documento) }}</dd></div>
+                        <div v-if="d.cliente?.inscricao_estadual"><dt class="text-xs text-slate-400">Inscrição estadual</dt><dd class="font-mono">{{ d.cliente.inscricao_estadual }}</dd></div>
+                        <div><dt class="text-xs text-slate-400">E-mail</dt><dd class="break-all">
+                            <a v-if="d.cliente?.email" :href="`mailto:${d.cliente.email}`" class="text-primary hover:underline">{{ d.cliente.email }}</a><span v-else>—</span>
+                        </dd></div>
+                        <div><dt class="text-xs text-slate-400">Telefone</dt><dd>{{ d.cliente?.telefone || '—' }}</dd></div>
+                        <div v-if="d.cliente?.whatsapp"><dt class="text-xs text-slate-400">WhatsApp</dt><dd>{{ d.cliente.whatsapp }}</dd></div>
+                        <div v-if="d.cliente?.apelido_no_canal"><dt class="text-xs text-slate-400">Apelido no canal</dt><dd>{{ d.cliente.apelido_no_canal }}</dd></div>
+                        <div v-if="d.cliente?.conta"><dt class="text-xs text-slate-400">Conta no site</dt><dd>{{ d.cliente.conta }}</dd></div>
+                    </dl>
+                </section>
+
+                <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Endereço de entrega</h2>
+                    <p class="mt-2 text-sm">
+                        <span class="font-medium">{{ d.endereco?.destinatario ?? '—' }}</span><br>
+                        {{ d.endereco?.rua }}, {{ d.endereco?.numero || 'S/N' }}<span v-if="d.endereco?.complemento"> - {{ d.endereco.complemento }}</span><br>
+                        {{ d.endereco?.bairro }} - {{ d.endereco?.cidade }}/{{ d.endereco?.uf }}<br>
+                        CEP {{ d.endereco?.cep }}
+                    </p>
+                </section>
+
+                <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Canal e datas</h2>
+                    <dl class="mt-2 space-y-2 text-sm">
+                        <div><dt class="text-xs text-slate-400">Canal</dt><dd>{{ originBadge.label }}</dd></div>
+                        <div><dt class="text-xs text-slate-400">Número do pedido</dt><dd class="font-mono">{{ d.canal?.numero ?? order.id }}</dd></div>
+                        <div v-if="d.canal?.pedido_no_canal"><dt class="text-xs text-slate-400">Pedido no marketplace</dt><dd class="flex items-center gap-2">
+                            <span class="font-mono">{{ d.canal.pedido_no_canal }}</span>
+                            <button type="button" class="text-primary" aria-label="Copiar número do pedido no marketplace" @click="copy(d.canal.pedido_no_canal, 'externo')">
+                                <i class="fas" :class="copiedKey === 'externo' ? 'fa-check' : 'fa-copy'" aria-hidden="true"></i>
+                            </button>
+                        </dd></div>
+                        <div v-if="d.canal?.pack"><dt class="text-xs text-slate-400">Carrinho (pack)</dt><dd class="font-mono">{{ d.canal.pack }}</dd>
+                            <dd v-if="d.canal.pedidos_do_pack?.length" class="mt-1 text-xs text-slate-500">
+                                Outros pedidos do carrinho:
+                                <Link v-for="outro in d.canal.pedidos_do_pack" :key="outro.id" :href="`/admin/pedidos/${outro.id}`" class="ml-1 text-primary hover:underline">#{{ outro.id }}</Link>
+                            </dd>
+                        </div>
+                        <div><dt class="text-xs text-slate-400">Criado em</dt><dd>{{ formatDateTime(d.canal?.criado_em ?? order.created_at) }}</dd></div>
+                        <div v-if="d.canal?.embalado_em"><dt class="text-xs text-slate-400">Embalado em</dt><dd>{{ formatDateTime(d.canal.embalado_em) }}</dd></div>
+                        <div v-if="d.canal?.pronto_para_coleta_em"><dt class="text-xs text-slate-400">Pronto para coleta</dt><dd>{{ formatDateTime(d.canal.pronto_para_coleta_em) }}</dd></div>
+                        <div v-if="d.canal?.coletado_em"><dt class="text-xs text-slate-400">Coletado em</dt><dd>{{ formatDateTime(d.canal.coletado_em) }}</dd></div>
+                        <div v-if="d.canal?.em_disputa_desde"><dt class="text-xs text-slate-400">Em disputa desde</dt><dd class="text-error">{{ formatDateTime(d.canal.em_disputa_desde) }}</dd></div>
+                        <div><dt class="text-xs text-slate-400">Última atualização</dt><dd>{{ formatDateTime(d.canal?.atualizado_em ?? order.updated_at) }}</dd></div>
+                    </dl>
+                </section>
 
                 <Can permission="pedidos.edit">
-                    <form class="mt-6 space-y-2" @submit.prevent="updateStatus">
+                <section class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
+                    <h2 class="font-semibold">Status do pedido</h2>
+                    <form class="mt-2 space-y-2" @submit.prevent="updateStatus">
                         <label for="status" class="block text-sm font-medium">Status</label>
                         <select
                             id="status"
@@ -471,6 +753,7 @@ const cancelInvoice = () => {
                             Atualizar status
                         </button>
                     </form>
+                </section>
                 </Can>
             </div>
         </div>

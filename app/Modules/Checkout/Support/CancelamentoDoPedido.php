@@ -2,9 +2,7 @@
 
 namespace App\Modules\Checkout\Support;
 
-use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
-use App\Modules\Checkout\Models\OrderEmailLog;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
@@ -12,7 +10,6 @@ use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Notifications\OrderStatusUpdated;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /**
@@ -20,8 +17,9 @@ use Throwable;
  *
  * Junta num lugar só o que antes vivia em OrderController::update() quando
  * o status virava "cancelado": NF-e na SEFAZ, estorno no Mercado Pago ou
- * Stripe e devolução do estoque. O botão soma motivo, quem cancelou, e-mail
- * ao cliente do site e uma prévia do que vai acontecer antes do clique.
+ * Stripe e devolução do estoque. O botão soma motivo, quem cancelou e uma
+ * prévia do que vai acontecer antes do clique. Sem e-mail ao cliente (Lira,
+ * 2026-10-17): ele só vê o status novo no sino e em Meus pedidos.
  */
 class CancelamentoDoPedido
 {
@@ -35,14 +33,13 @@ class CancelamentoDoPedido
     /**
      * O que acontece se cancelar agora, em frases curtas para a tela.
      *
-     * @return array{pode: bool, bloqueio: ?string, nota: string, pagamentos: list<string>, estoque: string, cliente: string, canal: ?string, pode_avisar_cliente: bool}
+     * @return array{pode: bool, bloqueio: ?string, nota: string, pagamentos: list<string>, estoque: string, cliente: string, canal: ?string}
      */
     public function previa(Order $order): array
     {
         $order->loadMissing(['invoice', 'payments', 'items', 'user']);
         $canal = Order::rotuloDoCanal($order->origin, $order->site_origem);
         $doSite = $order->origin === Order::ORIGIN_STORE;
-        $destinatario = $this->destinatario($order);
 
         return [
             'pode' => $order->status !== Order::STATUS_CANCELLED,
@@ -50,13 +47,10 @@ class CancelamentoDoPedido
             'nota' => $this->previaDaNota($order),
             'pagamentos' => $this->previaDosPagamentos($order),
             'estoque' => $this->previaDoEstoque($order),
-            'cliente' => match (true) {
-                ! $doSite => "O comprador é avisado pelo próprio {$canal}, não por nós.",
-                $destinatario === null => 'O cliente não tem e-mail cadastrado: não dá para avisar por e-mail.',
-                default => "O cliente recebe um e-mail avisando do cancelamento ({$destinatario}) e vê o status novo em Meus pedidos.",
-            },
+            'cliente' => $doSite
+                ? 'Nenhum e-mail sai para o cliente: ele vê o status novo em Meus pedidos.'
+                : "O comprador é avisado pelo próprio {$canal}, não por nós.",
             'canal' => $doSite ? null : "Pedido do {$canal}: aqui o cancelamento é só no nosso sistema. Cancele também no painel do {$canal}, senão o canal segue esperando o envio.",
-            'pode_avisar_cliente' => $doSite && $destinatario !== null,
         ];
     }
 
@@ -65,7 +59,7 @@ class CancelamentoDoPedido
      *
      * @return array{ok: bool, erro: ?string, avisos: list<string>}
      */
-    public function cancelar(Order $order, string $motivo, ?int $usuarioId, bool $avisarCliente = true): array
+    public function cancelar(Order $order, string $motivo, ?int $usuarioId): array
     {
         // Trava: dois cliques (ou o webhook do canal chegando junto) não
         // podem rodar estorno e devolução de estoque duas vezes.
@@ -98,20 +92,7 @@ class CancelamentoDoPedido
             $order->user->notify(new OrderStatusUpdated($order));
         }
 
-        $capturados = $order->payments()->where('status', Payment::STATUS_CAPTURED)->pluck('id');
-
         $avisos = $this->efeitos($order, $statusAnterior);
-
-        if ($avisarCliente && $order->origin === Order::ORIGIN_STORE) {
-            $valorEstornado = (float) $order->payments()
-                ->whereIn('id', $capturados)
-                ->where('status', Payment::STATUS_REFUNDED)
-                ->sum('amount');
-
-            if ($erroDoEmail = $this->avisarCliente($order, $valorEstornado)) {
-                $avisos[] = $erroDoEmail;
-            }
-        }
 
         return ['ok' => true, 'erro' => null, 'avisos' => $avisos];
     }
@@ -254,47 +235,5 @@ class CancelamentoDoPedido
     private function jaSaiu(string $status): bool
     {
         return in_array($status, [Order::STATUS_SHIPPED, Order::STATUS_COMPLETED], true);
-    }
-
-    private function destinatario(Order $order): ?string
-    {
-        return $order->user?->email ?: ($order->shipping_email ?: null);
-    }
-
-    /** Manda o e-mail e registra em order_email_logs; devolve o aviso se falhar. */
-    private function avisarCliente(Order $order, float $valorEstornado): ?string
-    {
-        $destinatario = $this->destinatario($order);
-
-        if ($destinatario === null) {
-            return null;
-        }
-
-        try {
-            Mail::to($destinatario)->send(new PedidoCancelado($order, $valorEstornado));
-
-            OrderEmailLog::create([
-                'order_id' => $order->id,
-                'mailable' => PedidoCancelado::class,
-                'attempt' => 1,
-                'status' => OrderEmailLog::STATUS_SENT,
-                'invoice_attached' => false,
-            ]);
-
-            return null;
-        } catch (Throwable $exception) {
-            Log::error('pedido.cancelado.email_failed', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
-
-            OrderEmailLog::create([
-                'order_id' => $order->id,
-                'mailable' => PedidoCancelado::class,
-                'attempt' => 1,
-                'status' => OrderEmailLog::STATUS_FAILED,
-                'invoice_attached' => false,
-                'error_message' => mb_substr($exception->getMessage(), 0, 500),
-            ]);
-
-            return 'O e-mail de cancelamento para o cliente não saiu: avise por outro meio.';
-        }
     }
 }

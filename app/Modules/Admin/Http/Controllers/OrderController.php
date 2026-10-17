@@ -266,20 +266,19 @@ class OrderController extends Controller
 
     /**
      * Botão "Cancelar pedido" (2026-10-17): mesmo efeito da troca de status
-     * para cancelado (nota, estorno, estoque), com motivo obrigatório, quem
-     * cancelou e e-mail ao cliente do site. Ver CancelamentoDoPedido.
+     * para cancelado (nota, estorno, estoque), com motivo obrigatório e quem
+     * cancelou. Sem e-mail ao cliente. Ver CancelamentoDoPedido.
      */
     public function cancel(Request $request, Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
     {
         $validated = $request->validate([
             'motivo' => ['required', 'string', 'min:5', 'max:500'],
-            'avisar_cliente' => ['sometimes', 'boolean'],
         ], [
             'motivo.required' => 'Escreva o motivo do cancelamento.',
             'motivo.min' => 'Escreva o motivo do cancelamento (mínimo 5 letras).',
         ]);
 
-        $resultado = $cancelamento->cancelar($order, $validated['motivo'], Auth::id(), $request->boolean('avisar_cliente', true));
+        $resultado = $cancelamento->cancelar($order, $validated['motivo'], Auth::id());
 
         if (! $resultado['ok']) {
             return back()->with('error', $resultado['erro']);

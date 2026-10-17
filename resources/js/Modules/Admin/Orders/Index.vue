@@ -229,13 +229,15 @@ const formatDate = (value) => new Date(value).toLocaleDateString('pt-BR');
     <AdminLayout>
         <!-- "Novo pedido" saiu do card de filtros para o cabeçalho, ao lado do
              título (2026-10-16): os filtros ficam só com filtro e a busca ganha
-             a linha inteira em telas médias. -->
+             a linha inteira em telas médias. Depois (Lira, 16/10) ficou menor e
+             com o texto "+ pedido"; o nome completo fica no aria-label/title. -->
         <div class="mb-4 flex items-center justify-between gap-3">
             <h1 class="text-2xl font-bold">Pedidos</h1>
             <Link v-if="can('pedidos.edit')" href="/admin/pedidos/criar"
-                class="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3.5 text-sm font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
-                <i class="fas fa-plus text-xs" aria-hidden="true"></i>
-                Novo pedido
+                aria-label="Novo pedido" title="Novo pedido"
+                class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-white hover:bg-primary-emphasis focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2">
+                <i class="fas fa-plus text-[10px]" aria-hidden="true"></i>
+                pedido
             </Link>
         </div>
 

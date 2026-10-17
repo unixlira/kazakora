@@ -90,17 +90,39 @@ final class TipoDeEnvio
         // Amazon com pré-postagem feita pela tela do menu Correios (não pelo
         // fluxo automático): o serviço está só na pré-postagem, o envio do
         // canal ficou sem método — caso real do pedido #2451 em 25/09.
-        if ($order->origin === 'amazon' && ! $metodo) {
-            $servico = CorreiosPrePostagem::query()
-                ->where('order_id', $order->id)
-                ->where('status', CorreiosPrePostagem::STATUS_GERADA)
-                ->latest('id')
-                ->value('service_label');
+        // Pedido do site (2026-10-16): a pré-postagem diz o serviço real
+        // (PAC/SEDEX), mais certo que o nome do frete escolhido no checkout.
+        if (($order->origin === 'amazon' && ! $metodo) || $order->origin === 'loja') {
+            $servico = self::servicoDaPrePostagem($order);
 
-            $metodo = $servico ? "Correios {$servico}" : null;
+            if ($servico) {
+                $metodo = "Correios {$servico}";
+            }
         }
 
         return self::montar($order->origin, $metodo, $order->shipping_carrier_name);
+    }
+
+    /**
+     * Serviço da pré-postagem gerada. A listagem do admin já carrega
+     * `latestCorreiosPrePostagem` para 50 pedidos de uma vez: usa o que veio
+     * carregado em vez de uma consulta por linha.
+     */
+    private static function servicoDaPrePostagem(Order $order): ?string
+    {
+        if ($order->relationLoaded('latestCorreiosPrePostagem')) {
+            $pre = $order->latestCorreiosPrePostagem;
+
+            return $pre && $pre->status === CorreiosPrePostagem::STATUS_GERADA
+                ? ($pre->service_label ?: null)
+                : null;
+        }
+
+        return CorreiosPrePostagem::query()
+            ->where('order_id', $order->id)
+            ->where('status', CorreiosPrePostagem::STATUS_GERADA)
+            ->latest('id')
+            ->value('service_label');
     }
 
     /**
@@ -217,6 +239,19 @@ final class TipoDeEnvio
     {
         if ($transportadora === '') {
             return self::naoInformado($transportadora);
+        }
+
+        if ($correios = self::correios($transportadora)) {
+            return $correios;
+        }
+
+        // Frete embutido grava "SEDEX (TURBO)" sem a palavra Correios.
+        $normalizado = mb_strtolower($transportadora);
+        if (str_contains($normalizado, 'sedex')) {
+            return [self::CORREIOS_SEDEX, "Correios - {$transportadora}", 'Correios - SEDEX'];
+        }
+        if (preg_match('/\bpac\b/', $normalizado)) {
+            return [self::CORREIOS_PAC, "Correios - {$transportadora}", 'Correios - PAC'];
         }
 
         return [self::OUTRO, $transportadora, $transportadora];

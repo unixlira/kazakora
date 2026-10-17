@@ -105,6 +105,12 @@ Schedule::command('amazon:confirmar-envios')->hourly()->withoutOverlapping(30);
 // lá cancela aqui, pendente no 8º dia cancela só no KazaKora.
 Schedule::command('amazon:pagamentos-pendentes')->hourly()->withoutOverlapping(30);
 
+// Taxa real das vendas da Amazon pela SP-API (Finances), no lugar da coleta
+// pela tela da Seller Central na Cora Box, desligada em 2026-10-17. De hora
+// em hora aos 35 min: a última do dia (23:35) entra antes do resultado das
+// 23:50, e a vigia (aos 15) já vê a execução anterior. Idempotente.
+Schedule::command('amazon:taxas-reais --dias=30')->hourlyAt(35)->withoutOverlapping(30);
+
 // Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
 // "pedido embalado continua na fila mesmo depois do ponto de coleta
 // escanear o pacote... preferir webhook, mas manter verificação periódica

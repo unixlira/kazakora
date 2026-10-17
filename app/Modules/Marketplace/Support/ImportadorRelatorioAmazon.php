@@ -121,9 +121,26 @@ class ImportadorRelatorioAmazon
      * cliente) − líquido recebido. Entra comissão, tarifas de envio/DBA,
      * promoção paga pela loja e imposto retido. Sem ids, refaz para tudo.
      *
+     * Taxa digitada à mão (`manual`) nunca é sobrescrita, como na conciliação
+     * do Mercado Pago; taxa igual à já gravada não é regravada (2026-10-17).
+     *
      * @param  list<string>|null  $ids
      */
     public function aplicarTaxasReais(?array $ids = null): int
+    {
+        $r = $this->aplicarTaxasReaisDetalhado($ids);
+
+        return $r['novas'] + $r['alteradas'] + $r['iguais'];
+    }
+
+    /**
+     * Mesmo que aplicarTaxasReais(), devolvendo o que mudou (para o log da
+     * coleta pela SP-API, amazon:taxas-reais).
+     *
+     * @param  list<string>|null  $ids
+     * @return array{novas: int, alteradas: int, iguais: int, manuais: int, mudancas: list<array{order_id: int, pedido: string, antes: ?float, fonte_antes: ?string, depois: float}>}
+     */
+    public function aplicarTaxasReaisDetalhado(?array $ids = null): array
     {
         $porPedido = DB::table('marketplace_settlement_details')
             ->where('channel', Order::ORIGIN_AMAZON)
@@ -138,31 +155,63 @@ class ImportadorRelatorioAmazon
             ->whereIn('external_order_id', $porPedido->pluck('external_order_id'))
             ->pluck('id', 'external_order_id');
 
-        $gravadas = 0;
+        $atuais = OrderChannelFee::query()->where('channel', Order::ORIGIN_AMAZON)
+            ->whereIn('order_id', $pedidos->values())->get()->keyBy('order_id');
+
+        $r = ['novas' => 0, 'alteradas' => 0, 'iguais' => 0, 'manuais' => 0, 'mudancas' => []];
         foreach ($porPedido as $l) {
-            if (! isset($pedidos[$l->external_order_id])) {
+            $orderId = $pedidos[$l->external_order_id] ?? null;
+            if ($orderId === null) {
                 continue;
             }
-            $venda = (float) $l->produto + (float) $l->frete_cliente;
+            $taxa = self::taxaDoPedido($l);
+            $atual = $atuais[$orderId] ?? null;
+
+            if ($atual?->source === OrderChannelFee::SOURCE_MANUAL) {
+                $r['manuais']++;
+
+                continue;
+            }
+            if ($atual?->source === OrderChannelFee::SOURCE_REPORT
+                && abs((float) $atual->fee_amount - $taxa['fee_amount']) < 0.005
+                && abs((float) $atual->payout_amount - $taxa['payout_amount']) < 0.005) {
+                $r['iguais']++;
+
+                continue;
+            }
+
             OrderChannelFee::query()->updateOrCreate(
-                ['order_id' => $pedidos[$l->external_order_id], 'channel' => Order::ORIGIN_AMAZON],
-                [
-                    'gross_amount' => round($venda, 2),
-                    'fee_amount' => round($venda - (float) $l->liquido, 2),
-                    'commission_fee' => round(abs((float) $l->comissao), 2),
-                    'service_fee' => round(abs((float) $l->servico), 2),
-                    'shipping_fee' => round(abs((float) $l->frete), 2),
-                    'seller_discount' => round(abs((float) $l->desconto), 2),
-                    'payout_amount' => round((float) $l->liquido, 2),
-                    'breakdown' => ['produto' => round((float) $l->produto, 2), 'frete_cliente' => round((float) $l->frete_cliente, 2), 'impostos' => round((float) $l->impostos, 2)],
-                    'source' => OrderChannelFee::SOURCE_REPORT,
-                    'computed_at' => now(),
-                ],
+                ['order_id' => $orderId, 'channel' => Order::ORIGIN_AMAZON],
+                $taxa + ['source' => OrderChannelFee::SOURCE_REPORT, 'computed_at' => now()],
             );
-            $gravadas++;
+            $r[$atual ? 'alteradas' : 'novas']++;
+            $r['mudancas'][] = ['order_id' => $orderId, 'pedido' => $l->external_order_id, 'antes' => $atual ? (float) $atual->fee_amount : null, 'fonte_antes' => $atual?->source, 'depois' => $taxa['fee_amount']];
         }
 
-        return $gravadas;
+        return $r;
+    }
+
+    /**
+     * Taxa de um pedido a partir das somas das linhas "Order" dele:
+     * venda (produto + frete do cliente) − líquido recebido.
+     *
+     * @param  object{produto: mixed, frete_cliente: mixed, liquido: mixed, comissao: mixed, servico: mixed, frete: mixed, desconto: mixed, impostos: mixed}  $l
+     * @return array<string, mixed>
+     */
+    public static function taxaDoPedido(object $l): array
+    {
+        $venda = (float) $l->produto + (float) $l->frete_cliente;
+
+        return [
+            'gross_amount' => round($venda, 2),
+            'fee_amount' => round($venda - (float) $l->liquido, 2),
+            'commission_fee' => round(abs((float) $l->comissao), 2),
+            'service_fee' => round(abs((float) $l->servico), 2),
+            'shipping_fee' => round(abs((float) $l->frete), 2),
+            'seller_discount' => round(abs((float) $l->desconto), 2),
+            'payout_amount' => round((float) $l->liquido, 2),
+            'breakdown' => ['produto' => round((float) $l->produto, 2), 'frete_cliente' => round((float) $l->frete_cliente, 2), 'impostos' => round((float) $l->impostos, 2)],
+        ];
     }
 
     /**

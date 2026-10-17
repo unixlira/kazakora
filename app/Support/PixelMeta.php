@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Setting;
+use Throwable;
 
 /**
  * Pixel da Meta do site (pedido do Lira 2026-10-16): o ID é editado pelo
@@ -47,7 +48,12 @@ class PixelMeta
 
     private static function doAdmin(): ?string
     {
-        $id = Setting::get(self::SETTING_KEY);
+        // Vai em toda página da loja: banco fora do ar não pode derrubar o site.
+        try {
+            $id = Setting::get(self::SETTING_KEY);
+        } catch (Throwable) {
+            return null;
+        }
 
         return filled($id) ? $id : null;
     }

@@ -4,9 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
-use App\Modules\Checkout\Models\OrderEmailLog;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -18,8 +16,8 @@ use Tests\TestCase;
 
 /**
  * Botão "Cancelar pedido" do admin (2026-10-17): motivo obrigatório,
- * estorno, estoque de volta, e-mail ao cliente do site e trava contra
- * cancelar duas vezes. Ver CancelamentoDoPedido.
+ * estorno, estoque de volta e trava contra cancelar duas vezes. Sem e-mail
+ * ao cliente (Lira, 2026-10-17). Ver CancelamentoDoPedido.
  */
 class CancelarPedidoTest extends TestCase
 {
@@ -77,7 +75,7 @@ class CancelarPedidoTest extends TestCase
         return User::factory()->create(['role' => User::ROLE_ADMIN]);
     }
 
-    public function test_cancela_pedido_do_site_estorna_devolve_estoque_e_avisa_o_cliente(): void
+    public function test_cancela_pedido_do_site_estorna_e_devolve_estoque_sem_mandar_email(): void
     {
         Mail::fake();
         [$order, $product] = $this->pedidoPago();
@@ -99,8 +97,8 @@ class CancelarPedidoTest extends TestCase
         $this->assertSame(Payment::STATUS_REFUNDED, $payment->fresh()->status);
         $this->assertSame(10, (int) $product->fresh()->stock);
 
-        Mail::assertSent(PedidoCancelado::class, fn (PedidoCancelado $mail) => $mail->hasTo('cliente@example.com') && $mail->valorEstornado === 20.0);
-        $this->assertDatabaseHas('order_email_logs', ['order_id' => $order->id, 'mailable' => PedidoCancelado::class, 'status' => OrderEmailLog::STATUS_SENT]);
+        Mail::assertNothingSent();
+        $this->assertDatabaseMissing('order_email_logs', ['order_id' => $order->id]);
     }
 
     public function test_segundo_clique_nao_estorna_nem_devolve_estoque_de_novo(): void
@@ -115,7 +113,6 @@ class CancelarPedidoTest extends TestCase
         $this->actingAs($admin)->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Sem estoque'])->assertSessionHas('error');
 
         $this->assertSame(10, (int) $product->fresh()->stock);
-        Mail::assertSentCount(1);
     }
 
     public function test_motivo_e_obrigatorio(): void
@@ -127,19 +124,6 @@ class CancelarPedidoTest extends TestCase
             ->assertSessionHasErrors('motivo');
 
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
-    }
-
-    public function test_sem_avisar_cliente_nao_manda_email(): void
-    {
-        Mail::fake();
-        [$order] = $this->pedidoPago();
-
-        $this->actingAs($this->admin())
-            ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Pedido de teste', 'avisar_cliente' => false])
-            ->assertSessionHas('success');
-
-        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
-        Mail::assertNothingSent();
     }
 
     public function test_pedido_enviado_nao_devolve_estoque(): void
@@ -164,7 +148,6 @@ class CancelarPedidoTest extends TestCase
             ->get("/admin/pedidos/{$order->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('cancelamento.pode', true)
-                ->where('cancelamento.pode_avisar_cliente', false)
                 ->where('cancelamento.canal', fn ($texto) => str_contains((string) $texto, 'Shopee'))
                 ->etc());
 
@@ -185,7 +168,7 @@ class CancelarPedidoTest extends TestCase
             ->get("/admin/pedidos/{$order->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('cancelamento.pode', true)
-                ->where('cancelamento.pode_avisar_cliente', true)
+                ->where('cancelamento.cliente', 'Nenhum e-mail sai para o cliente: ele vê o status novo em Meus pedidos.')
                 ->where('cancelamento.canal', null)
                 ->where('cancelamento.pagamentos.0', 'R$ 20,00 pagos: estorno total pedido ao Mercado Pago.')
                 ->where('cancelamento.estoque', '2 unidades voltam para o estoque.')

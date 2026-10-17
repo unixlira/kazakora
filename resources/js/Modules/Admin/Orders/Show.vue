@@ -179,7 +179,7 @@ const updateStatus = () => {
 // estorno, estoque, cliente, canal) e pede o motivo antes de confirmar.
 const showCancelOrder = ref(false);
 const cancelOrderPanel = ref(null);
-const cancelOrderForm = useForm({ motivo: '', avisar_cliente: true });
+const cancelOrderForm = useForm({ motivo: '' });
 const abrirCancelamento = () => {
     showCancelOrder.value = true;
     nextTick(() => cancelOrderPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
@@ -846,10 +846,6 @@ const cancelInvoice = () => {
                             <p v-if="cancelOrderForm.errors.motivo" class="text-xs text-error">{{ cancelOrderForm.errors.motivo }}</p>
                         </div>
 
-                        <label v-if="cancelamento.pode_avisar_cliente" class="flex items-center gap-2 text-sm">
-                            <input v-model="cancelOrderForm.avisar_cliente" type="checkbox" class="rounded">
-                            Avisar o cliente por e-mail
-                        </label>
 
                         <div class="flex gap-2">
                             <button

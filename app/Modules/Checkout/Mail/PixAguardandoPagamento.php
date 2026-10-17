@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Mail;
 
 use App\Modules\Checkout\Models\Order;
 use App\Support\MarcaDoEmail;
+use Com\Tecnick\Barcode\Barcode;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Carbon;
 
@@ -33,8 +34,33 @@ class PixAguardandoPagamento extends Mailable
             ->subject("Seu Pix do pedido {$this->order->numero} está pronto")
             ->view('emails.pix-aguardando-pagamento', [
                 'marcaEmail' => $marca,
-                'qrPng' => $this->qrCodeBase64 ? base64_decode($this->qrCodeBase64) : null,
+                'qrPng' => $this->qrPng(),
                 'validade' => $this->expiraEm ? Carbon::parse($this->expiraEm)->timezone('America/Sao_Paulo') : null,
             ]);
+    }
+
+    /**
+     * PNG do QR Code que vai no meio do e-mail, anexado inline (CID) pela view:
+     * o Gmail bloqueia imagem em data URI base64, mas mostra anexo inline.
+     * Usa o QR que o Mercado Pago devolveu; se não veio (ou veio inválido),
+     * desenha o QR a partir do próprio Pix copia e cola. Sem nenhum dos dois,
+     * o e-mail sai como antes, só com o copia e cola (pedido 2026-10-16).
+     */
+    public function qrPng(): ?string
+    {
+        $png = $this->qrCodeBase64 ? base64_decode($this->qrCodeBase64, true) : false;
+
+        if (is_string($png) && str_starts_with($png, "\x89PNG")) {
+            return $png;
+        }
+
+        if (trim($this->copiaECola) === '') {
+            return null;
+        }
+
+        return rescue(fn () => (new Barcode)
+            ->getBarcodeObj('QRCODE,M', $this->copiaECola, -8, -8, 'black', [-4, -4, -4, -4])
+            ->setBackgroundColor('white')
+            ->getPngData(false), null, false) ?: null;
     }
 }

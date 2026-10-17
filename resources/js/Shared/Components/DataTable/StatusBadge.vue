@@ -15,9 +15,10 @@ import { TONE_CLASSES, resolveTone, statusLabel, statusTone } from '@/Shared/sta
 //   tone    — opcional; força a cor (green/yellow/blue/red/purple/gray).
 //   wrap    — opcional; deixa o rótulo quebrar em até duas linhas, centralizado,
 //             pra coluna não alargar (pedido do Lira 2026-10-16: "Aguardando
-//             pagamento" na listagem de pedidos). Rótulo curto continua igual.
+//             pagamento" na listagem de pedidos; o Status voltou a uma linha no
+//             mesmo dia e hoje só o selo de Envios usa). Rótulo curto continua igual.
 //             Um "\n" no label força a quebra naquele ponto (ex.:
-//             "Aguardando\npagamento", "Mercado\nEnvios"), sem depender da
+//             "Mercado\nEnvios", "Ponto de\nColeta"), sem depender da
 //             largura da coluna.
 const props = defineProps({
     status: { type: [String, Number, Boolean], default: null },

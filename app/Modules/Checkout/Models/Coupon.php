@@ -33,6 +33,7 @@ class Coupon extends Model
         'discount_value',
         'min_order_value',
         'max_uses',
+        'max_uses_per_customer',
         'one_per_customer',
         'starts_at',
         'expires_at',
@@ -45,6 +46,7 @@ class Coupon extends Model
             'discount_value' => 'decimal:2',
             'min_order_value' => 'decimal:2',
             'max_uses' => 'integer',
+            'max_uses_per_customer' => 'integer',
             'one_per_customer' => 'boolean',
             'starts_at' => 'datetime',
             'expires_at' => 'datetime',
@@ -118,7 +120,7 @@ class Coupon extends Model
      * Por que o cupom não vale para esta compra — null quando vale.
      * Mensagens já no tom de quem lê no checkout.
      */
-    public function motivoInvalido(float $subtotal, ?User $user = null, ?string $email = null): ?string
+    public function motivoInvalido(float $subtotal, ?User $user = null, ?string $email = null, ?string $cpf = null): ?string
     {
         if (! $this->is_active) {
             return 'Este cupom não está mais ativo.';
@@ -135,19 +137,48 @@ class Coupon extends Model
         if ($this->esgotado()) {
             return 'Este cupom já atingiu o limite de usos.';
         }
-        if ($this->one_per_customer && ($user || $email)) {
-            $jaUsou = $this->pedidos()
-                ->whereIn('status', self::STATUS_USO)
-                ->where(fn ($pedidos) => $pedidos
-                    ->when($user, fn ($q) => $q->orWhere('user_id', $user->id))
-                    ->when($email, fn ($q) => $q->orWhere('shipping_email', $email)))
-                ->exists();
-            if ($jaUsou) {
-                return 'Você já usou este cupom em outra compra.';
-            }
+        $limite = $this->limitePorCliente();
+        if ($limite && $this->usosDoCliente($user, $email, $cpf) >= $limite) {
+            return $limite === 1
+                ? 'Você já usou este cupom em outra compra.'
+                : "Você já usou este cupom {$limite} vezes, o limite por pessoa.";
         }
 
         return null;
+    }
+
+    /** Usos permitidos por pessoa; null = sem limite. Cupom antigo com "1 por cliente" vale 1. */
+    public function limitePorCliente(): ?int
+    {
+        return $this->max_uses_per_customer ?: ($this->one_per_customer ? 1 : null);
+    }
+
+    /**
+     * Pedidos pagos com este cupom da mesma pessoa: mesma conta, mesmo e-mail
+     * ou mesmo CPF (no pedido ou na conta que fez o pedido). O banco guarda o
+     * CPF com máscara ou só números, então confere os dois formatos.
+     */
+    public function usosDoCliente(?User $user = null, ?string $email = null, ?string $cpf = null): int
+    {
+        $email = filled($email) ? trim($email) : null;
+        $cpf = preg_replace('/\D/', '', (string) ($cpf ?: $user?->cpf));
+        $cpfs = strlen($cpf) === 11
+            ? [$cpf, substr($cpf, 0, 3).'.'.substr($cpf, 3, 3).'.'.substr($cpf, 6, 3).'-'.substr($cpf, 9, 2)]
+            : null;
+
+        if (! $user && ! $email && ! $cpfs) {
+            return 0;
+        }
+
+        return $this->pedidos()
+            ->whereIn('status', self::STATUS_USO)
+            ->where(fn ($pedidos) => $pedidos
+                ->when($user, fn ($q) => $q->orWhere('user_id', $user->id))
+                ->when($email, fn ($q) => $q->orWhere('shipping_email', $email))
+                ->when($cpfs, fn ($q) => $q
+                    ->orWhereIn('buyer_document', $cpfs)
+                    ->orWhereIn('user_id', User::withTrashed()->whereIn('cpf', $cpfs)->select('id'))))
+            ->count();
     }
 
     public function discountFor(float $subtotal): float

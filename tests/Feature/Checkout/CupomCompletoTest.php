@@ -87,6 +87,45 @@ class CupomCompletoTest extends TestCase
         $this->postJson('/finalizacao/cupom', ['code' => 'primeira'])->assertStatus(422)->assertJsonFragment(['message' => 'Você já usou este cupom em outra compra.']);
     }
 
+    public function test_usos_por_pessoa_conta_pelo_cpf(): void
+    {
+        $coupon = Coupon::create(['code' => 'DUAS', 'discount_type' => 'fixed', 'discount_value' => 10, 'is_active' => true, 'max_uses_per_customer' => 2]);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '529.982.247-25']);
+        $outraConta = User::factory()->create(['role' => User::ROLE_CUSTOMER, 'cpf' => '11144477735']);
+
+        // Um uso pela conta e outro com o mesmo CPF no pedido, de outro e-mail.
+        $this->pedidoPago('DUAS', ['user_id' => $user->id]);
+        $this->assertNull($coupon->motivoInvalido(100, $user));
+        $this->pedidoPago('DUAS', ['shipping_email' => 'outro@exemplo.com', 'buyer_document' => '52998224725']);
+        // Pedido não pago não conta.
+        $this->pedidoPago('DUAS', ['user_id' => $user->id, 'status' => Order::STATUS_AWAITING_PAYMENT]);
+
+        $this->assertSame('Você já usou este cupom 2 vezes, o limite por pessoa.', $coupon->motivoInvalido(100, $user));
+        $this->assertNotNull($coupon->motivoInvalido(100, null, 'novo@exemplo.com', '529.982.247-25'));
+        $this->assertNull($coupon->motivoInvalido(100, $outraConta));
+
+        $this->actingAs($user);
+        $this->carrinho(100);
+        $this->postJson('/finalizacao/cupom', ['code' => 'duas'])->assertStatus(422)->assertJsonFragment(['message' => 'Você já usou este cupom 2 vezes, o limite por pessoa.']);
+    }
+
+    public function test_admin_salva_usos_por_pessoa(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->post('/admin/cupons', [
+            'code' => 'TRES', 'discount_type' => 'percentage', 'discount_value' => 10, 'max_uses_per_customer' => 3, 'is_active' => true,
+        ])->assertSessionHasNoErrors();
+        $coupon = Coupon::query()->where('code', 'TRES')->firstOrFail();
+        $this->assertSame(3, $coupon->limitePorCliente());
+        $this->assertTrue($coupon->one_per_customer);
+
+        $this->put("/admin/cupons/{$coupon->id}", [
+            'code' => 'TRES', 'discount_type' => 'percentage', 'discount_value' => 10, 'max_uses_per_customer' => null, 'is_active' => true,
+        ])->assertSessionHasNoErrors();
+        $this->assertNull($coupon->fresh()->limitePorCliente());
+        $this->assertFalse($coupon->fresh()->one_per_customer);
+    }
+
     public function test_link_com_cupom_guarda_no_checkout(): void
     {
         Coupon::create(['code' => 'LINK15', 'discount_type' => 'percentage', 'discount_value' => 15, 'is_active' => true]);

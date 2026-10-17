@@ -16,7 +16,7 @@ use Inertia\Response;
 
 /**
  * Cupons de desconto (pedido 2026-10-10): cadastro com regras (validade,
- * pedido mínimo, limite de usos, 1 por cliente) e disparo em lote por e-mail
+ * pedido mínimo, limite de usos, usos por pessoa) e disparo em lote por e-mail
  * e notificação no site.
  */
 class CouponController extends Controller
@@ -137,6 +137,7 @@ class CouponController extends Controller
             'discount_value' => ['required', 'numeric', 'gt:0', Rule::when($request->input('discount_type') === Coupon::TYPE_PERCENTAGE, ['max:100'])],
             'min_order_value' => ['nullable', 'numeric', 'min:0'],
             'max_uses' => ['nullable', 'integer', 'min:1'],
+            'max_uses_per_customer' => ['nullable', 'integer', 'min:1', 'max:1000'],
             'one_per_customer' => ['boolean'],
             'starts_at' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
@@ -147,6 +148,13 @@ class CouponController extends Controller
             'discount_value.max' => 'Porcentagem vai até 100.',
             'expires_at.after_or_equal' => 'O fim tem que ser depois do início.',
         ]);
+
+        // Usos por pessoa (pedido 2026-10-16) substitui o "1 por cliente";
+        // quem ainda manda só o booleano ganha limite 1. Os dois ficam iguais.
+        if (! array_key_exists('max_uses_per_customer', $data)) {
+            $data['max_uses_per_customer'] = ! empty($data['one_per_customer']) ? 1 : null;
+        }
+        $data['one_per_customer'] = $data['max_uses_per_customer'] !== null;
 
         // Data final vale o dia inteiro.
         if (! empty($data['expires_at'])) {
@@ -167,6 +175,7 @@ class CouponController extends Controller
             'descricao' => $coupon->descricaoDesconto(),
             'min_order_value' => $coupon->min_order_value !== null ? (float) $coupon->min_order_value : null,
             'max_uses' => $coupon->max_uses,
+            'max_uses_per_customer' => $coupon->limitePorCliente(),
             'one_per_customer' => $coupon->one_per_customer,
             'starts_at' => $coupon->starts_at?->format('Y-m-d'),
             'expires_at' => $coupon->expires_at?->format('Y-m-d'),

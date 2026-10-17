@@ -269,11 +269,11 @@ abstract class CheckoutOutroSite
 
     /**
      * Cupom pedido pelo site, conferido com as regras da KazaKora (ativo,
-     * validade, mínimo, limite de usos, um por cliente pelo e-mail).
+     * validade, mínimo, limite de usos, usos por pessoa pelo e-mail e CPF).
      *
      * @return array{0: ?Coupon, 1: ?string} [cupom que vale, motivo de não valer]
      */
-    public function cupom(?string $codigo, Collection $itens, ?string $email = null): array
+    public function cupom(?string $codigo, Collection $itens, ?string $email = null, ?string $cpf = null): array
     {
         if (blank($codigo)) {
             return [null, null];
@@ -286,7 +286,7 @@ abstract class CheckoutOutroSite
 
         $email = filled($email) ? trim($email) : null;
         $conta = $email ? User::query()->where('email', $email)->first() : null;
-        if ($motivo = $cupom->motivoInvalido(round($itens->sum('subtotal'), 2), $conta, $email)) {
+        if ($motivo = $cupom->motivoInvalido(round($itens->sum('subtotal'), 2), $conta, $email, $cpf)) {
             return [null, $motivo];
         }
         if ($itens->isNotEmpty() && self::subtotalParaCupom($itens) <= 0) {
@@ -369,7 +369,7 @@ abstract class CheckoutOutroSite
         return DB::transaction(function () use ($dados, $metodo, $endereco, $localizacao) {
             $itens = $this->itens($dados['itens'], $endereco['zip'], travar: true);
             // Cupom que deixou de valer entre a tela e o pagamento: avisa, não cobra diferente.
-            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email']);
+            [$cupom, $cupomErro] = $this->cupom($dados['cupom'] ?? null, $itens, $dados['cliente']['email'], $dados['cliente']['cpf'] ?? null);
             if ($cupomErro) {
                 throw ValidationException::withMessages(['cupom' => $cupomErro.' O desconto foi removido: confira o total e finalize de novo.']);
             }

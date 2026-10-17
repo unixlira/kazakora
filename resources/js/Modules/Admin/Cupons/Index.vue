@@ -24,7 +24,7 @@ const vazio = () => ({
     discount_value: '',
     min_order_value: '',
     max_uses: '',
-    one_per_customer: false,
+    max_uses_per_customer: '',
     starts_at: '',
     expires_at: '',
     is_active: true,
@@ -47,7 +47,7 @@ const editar = (cupom) => {
         discount_value: cupom.discount_value,
         min_order_value: cupom.min_order_value ?? '',
         max_uses: cupom.max_uses ?? '',
-        one_per_customer: cupom.one_per_customer,
+        max_uses_per_customer: cupom.max_uses_per_customer ?? '',
         starts_at: cupom.starts_at ?? '',
         expires_at: cupom.expires_at ?? '',
         is_active: cupom.is_active,
@@ -70,6 +70,7 @@ const salvar = () => {
         ...data,
         min_order_value: data.min_order_value === '' ? null : data.min_order_value,
         max_uses: data.max_uses === '' ? null : data.max_uses,
+        max_uses_per_customer: data.max_uses_per_customer === '' ? null : data.max_uses_per_customer,
         starts_at: data.starts_at || null,
         expires_at: data.expires_at || null,
     });
@@ -187,9 +188,12 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
                     </div>
                 </div>
 
-                <label class="mb-2 flex items-center gap-2 text-sm">
-                    <input v-model="form.one_per_customer" type="checkbox" class="h-4 w-4"> Cada cliente usa só 1 vez
-                </label>
+                <div class="mb-4">
+                    <label class="mb-1 block text-sm font-medium">Número de utilização de cupom por pessoa</label>
+                    <input v-model="form.max_uses_per_customer" type="number" min="1" max="1000" :class="campo" placeholder="Ilimitado" />
+                    <p class="mt-1 text-xs text-slate-400">Conta pelo CPF, pela conta e pelo e-mail do comprador. Só pedidos pagos contam.</p>
+                    <InputError :message="form.errors.max_uses_per_customer" />
+                </div>
                 <label class="mb-5 flex items-center gap-2 text-sm">
                     <input v-model="form.is_active" type="checkbox" class="h-4 w-4"> Cupom ativo
                 </label>
@@ -234,8 +238,8 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
                                         {{ cupom.starts_at ? `De ${formatDate(cupom.starts_at)}` : '' }}
                                         {{ cupom.expires_at ? `até ${formatDate(cupom.expires_at)}` : '' }}
                                     </div>
-                                    <div v-if="cupom.one_per_customer">1 por cliente</div>
-                                    <div v-if="!cupom.min_order_value && !cupom.starts_at && !cupom.expires_at && !cupom.one_per_customer">Sem restrições</div>
+                                    <div v-if="cupom.max_uses_per_customer">{{ cupom.max_uses_per_customer }} por pessoa</div>
+                                    <div v-if="!cupom.min_order_value && !cupom.starts_at && !cupom.expires_at && !cupom.max_uses_per_customer">Sem restrições</div>
                                 </td>
                                 <td class="py-3 pr-4">{{ cupom.usos }}<span v-if="cupom.max_uses" class="text-slate-400"> / {{ cupom.max_uses }}</span></td>
                                 <td class="py-3 pr-4">

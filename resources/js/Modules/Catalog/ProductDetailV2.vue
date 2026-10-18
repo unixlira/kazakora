@@ -733,7 +733,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div v-if="reviews.length" class="aval-grade">
                         <div v-for="review in reviewsNaTela" :key="review.id" class="aval-item">
                             <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}</div>
-                            <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
+                            <div class="nota-data">
+                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <small>{{ formatDate(review.created_at) }}</small>
+                            </div>
                             <p v-if="review.comment">{{ review.comment }}</p>
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
@@ -741,7 +744,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <img :src="image.image_url" alt="" loading="lazy" decoding="async">
                                 </button>
                             </div>
-                            <small>{{ formatDate(review.created_at) }}</small>
                         </div>
                     </div>
                     <div v-if="avaliacoesRestantes > 0" class="aval-mais">
@@ -1059,7 +1061,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item .autor { font-weight: 700; color: var(--ink); }
 .pd2 .aval-item .autor i { margin-right: 5px; font-size: 12px; }
 .pd2 .aval-item p { margin: 6px 0; font-weight: 300; line-height: 1.5; }
-.pd2 .aval-item small { color: var(--muted); font-size: 12px; }
+.pd2 .aval-item .nota-data { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
+.pd2 .aval-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; }
 .pd2 .foto-btn { padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }

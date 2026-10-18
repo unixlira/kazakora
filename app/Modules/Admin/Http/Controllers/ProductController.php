@@ -65,7 +65,7 @@ class ProductController extends Controller
         // marca, modelo e descrição costumam ser idênticos entre
         // variações; cor/preço/estoque não (ficam em branco de propósito).
         $parent = $request->integer('parent_product_id')
-            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage'])
+            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage', 'checkout_discount_amount'])
             : null;
 
         return Inertia::render('Admin/Products/Create', [
@@ -381,6 +381,8 @@ class ProductController extends Controller
             // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // "Desconto Checkout" em valor fixo (R$ por unidade), no lugar do %.
+            'checkout_discount_amount' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
@@ -393,7 +395,14 @@ class ProductController extends Controller
 
         // Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
         // o antigo desconto em R$ sai ao salvar.
-        return [...$request->validate($rules), 'discount_amount' => null];
+        $dados = $request->validate($rules);
+
+        // Desconto Checkout é em % OU em R$: com o % preenchido, o valor sai.
+        if (filled($dados['checkout_discount_percentage'] ?? null)) {
+            $dados['checkout_discount_amount'] = null;
+        }
+
+        return [...$dados, 'discount_amount' => null];
     }
 
     /**

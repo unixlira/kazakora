@@ -3,6 +3,12 @@
 // Quem decide o que disparar em cada página é `rastrearPagina`, chamada pelo
 // app.js a cada navegação; as páginas não precisam saber do pixel.
 let iniciado = false;
+// Pixel liberado na página atual (OK de cookies + ID). Os eventos de clique
+// (AddToCart) e do modal de pagamento (Purchase) só disparam com ele.
+let liberado = false;
+// Última página rastreada: POST que volta para a mesma página (carrinho pelo
+// card, CEP) não repete PageView/ViewContent.
+let ultimaUrl = null;
 
 function carregar(id) {
     if (iniciado) return;
@@ -25,9 +31,13 @@ function itens(lista) {
 
 export function rastrearPagina(page) {
     const cookies = page?.props?.cookies;
+    liberado = false;
     if (!cookies?.aceito || !cookies.pixelMeta) return;
     if (page.url.startsWith('/admin')) return;
     carregar(cookies.pixelMeta);
+    liberado = true;
+    if (page.url === ultimaUrl) return;
+    ultimaUrl = page.url;
 
     window.fbq('track', 'PageView');
 
@@ -48,18 +58,43 @@ export function rastrearPagina(page) {
             value: numero(props.subtotal),
             currency: 'BRL',
         });
-    } else if (component === 'Checkout/Confirmation' && props.order) {
-        // Uma vez por pedido, mesmo se o cliente recarregar a página.
-        const chave = `kz_purchase_${props.order.id}`;
-        try {
-            if (localStorage.getItem(chave)) return;
-            localStorage.setItem(chave, '1');
-        } catch (e) { /* sem localStorage: dispara mesmo assim */ }
-        window.fbq('track', 'Purchase', {
-            content_type: 'product',
-            contents: itens(props.order.items),
-            value: numero(props.order.total),
-            currency: 'BRL',
-        }, { eventID: `order-${props.order.id}` });
+    } else if (component === 'Checkout/Confirmation' && props.metaPurchase) {
+        rastrearPurchase(props.metaPurchase);
     }
+}
+
+// event_id dos eventos de clique: o mesmo vai ao Pixel e ao servidor (API de
+// Conversões, pedido 2026-10-18), e a Meta conta uma vez só.
+export function novoEventId() {
+    try {
+        if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    } catch (e) { /* navegador antigo */ }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+// "Comprar" do card e da página do produto. O servidor manda o AddToCart com
+// o mesmo eventId (CartController), só com o OK de cookies, como aqui.
+export function rastrearAddToCart({ id, preco, quantidade = 1 }, eventId) {
+    if (!liberado || !window.fbq || id == null) return;
+    const qtd = Math.max(1, Number(quantidade) || 1);
+    window.fbq('track', 'AddToCart', {
+        content_type: 'product',
+        content_ids: [String(id)],
+        contents: [{ id: String(id), quantity: qtd, item_price: numero(preco) }],
+        value: numero(Number(preco ?? 0) * qtd),
+        currency: 'BRL',
+    }, { eventID: eventId });
+}
+
+// Purchase só com o pagamento APROVADO (modal do checkout ou página de
+// confirmação). eventID "purchase-{pedido}" vem do servidor, o mesmo do
+// EnviarPurchaseMetaJob. Uma vez por pedido, mesmo recarregando a página.
+export function rastrearPurchase(metaPurchase) {
+    if (!liberado || !window.fbq || !metaPurchase?.event_id) return;
+    const chave = `kz_${metaPurchase.event_id}`;
+    try {
+        if (localStorage.getItem(chave)) return;
+        localStorage.setItem(chave, '1');
+    } catch (e) { /* sem localStorage: dispara mesmo assim */ }
+    window.fbq('track', 'Purchase', metaPurchase.dados, { eventID: metaPurchase.event_id });
 }

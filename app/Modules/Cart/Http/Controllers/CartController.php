@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Modules\Cart\Models\CartSnapshot;
 use App\Modules\Cart\Support\CartManager;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Jobs\EnviarEventoMetaJob;
+use App\Services\Meta\ConversoesMeta;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,7 +44,9 @@ class CartController extends Controller
             return back()->withErrors(['product_id' => 'Produto indisponível.']);
         }
 
-        $this->cart->add($product->id, min($data['quantity'], $product->stock));
+        $quantidade = min($data['quantity'], $product->stock);
+        $this->cart->add($product->id, $quantidade);
+        $this->addToCartNaMeta($request, $product, $quantidade);
 
         return back()->with('success', 'Produto adicionado ao carrinho.');
     }
@@ -103,8 +108,28 @@ class CartController extends Controller
             return back()->withErrors(['cart' => 'Produto esgotado.']);
         }
 
-        $this->cart->iniciarCompraDireta($product->id, min($data['quantity'], $product->stock));
+        $quantidade = min($data['quantity'], $product->stock);
+        $this->cart->iniciarCompraDireta($product->id, $quantidade);
+        $this->addToCartNaMeta($request, $product, $quantidade);
 
         return redirect()->route('finalizacao.entrega');
+    }
+
+    /**
+     * AddToCart na API de Conversões da Meta (pedido 2026-10-18), com o
+     * event_id que o front mandou ao Pixel (meta_event_id), para a Meta
+     * desduplicar. Só com o OK de cookies; na fila, sem atrasar a resposta.
+     */
+    private function addToCartNaMeta(Request $request, Product $product, int $quantidade): void
+    {
+        ConversoesMeta::semQuebrar(function () use ($request, $product, $quantidade) {
+            $conversoes = app(ConversoesMeta::class);
+            if (! $conversoes->consentiu($request)) {
+                return;
+            }
+
+            $eventId = ConversoesMeta::eventIdValido($request->input('meta_event_id')) ?? (string) Str::uuid();
+            EnviarEventoMetaJob::dispatch($conversoes->eventoAddToCart($request, $product, $quantidade, $eventId));
+        });
     }
 }

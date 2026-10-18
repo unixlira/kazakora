@@ -565,6 +565,18 @@ return [
         'site_url' => 'https://kazakora.com',
     ],
 
+    // API de Conversões da Meta (pedido 2026-10-18, App\Services\Meta\ConversoesMeta):
+    // AddToCart e Purchase saem também do servidor, com o mesmo event_id do
+    // Pixel (a Meta desduplica). Desligado por padrão: o homolog usa o mesmo
+    // pixel da loja e não pode mandar evento de verdade. Token: o gerado no
+    // Gerenciador de Eventos (Configurações do pixel); vazio = usa o
+    // META_ADS_ACCESS_TOKEN. test_event_code manda só para "Eventos de teste".
+    'meta_capi' => [
+        'enabled' => filter_var(env('META_CAPI_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'access_token' => env('META_CAPI_ACCESS_TOKEN') ?: env('META_ADS_ACCESS_TOKEN'),
+        'test_event_code' => env('META_CAPI_TEST_EVENT_CODE'),
+    ],
+
     // Relatórios de pagamento da Amazon enviados pelo agente (2026-10-12).
     // Sem AMAZON_REPORTS_TOKEN usa o mesmo token do agente do TikTok (os dois
     // rodam no mesmo PC da operação).

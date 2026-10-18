@@ -37,11 +37,38 @@ visita a loja.
 | `kazakora_cookies` | Necessário | lembra o OK | 12 meses | art. 8º § 2º |
 | `kazakora_cep` | Necessário | CEP que o cliente digitou, para o preço já sair com o frete dele (frete embutido, 2026-10-12) | 12 meses | art. 7º V |
 | `kazakora_visitor` | Estatística | contar visitante único | 12 meses | art. 7º I (consentimento) |
-| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, InitiateCheckout, Purchase. Só carrega depois do OK (`resources/js/Shared/pixelMeta.js`); ID vem de `META_ADS_PIXEL_ID` | até 90 dias | art. 7º I (consentimento) |
+| `_fbp`, `_fbc` | Publicidade (Meta) | Pixel da Meta (pixel_kazakora, 2186107885537817): PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Só carrega depois do OK (`resources/js/Shared/pixelMeta.js`); ID do admin (/admin/pixel-meta) ou `META_ADS_PIXEL_ID`. Também lidos pelo servidor para a API de Conversões (abaixo) | até 90 dias | art. 7º I (consentimento) |
 
 Todos são do próprio site, criptografados pelo Laravel, `HttpOnly` e
 `SameSite=Lax`. A sessão só trafega em https quando o `APP_URL` é https
 (`config/session.php`). Login expira em 8 h (`ExpireStaleSession`).
+
+### API de Conversões da Meta (pedido 2026-10-18)
+O servidor manda à Meta os mesmos **AddToCart** e **Purchase** do Pixel, com o
+mesmo `event_id` (a Meta desduplica). Código: `App\Services\Meta\ConversoesMeta`,
+jobs `EnviarEventoMetaJob` (AddToCart) e `EnviarPurchaseMetaJob` (pagamento aprovado).
+
+- **Consentimento:** é o mesmo OK do Pixel (`Cookies::aceitou`, versão atual).
+  Sem OK, nada sai do servidor. AddToCart: OK na hora do clique. Purchase: OK
+  no momento do pagamento (o checkout grava `orders.meta_rastreio`; sem OK fica
+  nulo e o Purchase do servidor não sai). Escolha documentada: o aviso é "só
+  OK", então o OK cobre Pixel e API de Conversões juntos (mesma finalidade:
+  medir anúncios); a política foi atualizada e a `VERSAO` trocada para
+  2026-10-18, para o aviso voltar a todos.
+- **O que vai:** e-mail, telefone (com 55), primeiro e último nome, cidade, UF,
+  CEP, país e id do cliente, todos com hash SHA-256 do texto normalizado; IP,
+  navegador, `_fbp`, `_fbc` e a página, sem hash (a Meta exige assim).
+  Pedido: valor, BRL, ids dos produtos e número do pedido.
+- **Só kazakora.com:** pedido com `origin = loja` e `site_origem` nulo.
+  Marketplace, FerraKora, Beauty Kora e app nativo (sem aviso de cookies) não mandam.
+- **Uma vez por pedido:** `orders.meta_purchase_enviado_em` é a trava; event_id
+  `purchase-{id do pedido}` (o Pixel do modal de pagamento aprovado usa o mesmo).
+- **Guarda:** `orders.meta_rastreio` (IP, navegador, `_fbp`, `_fbc`, página) é
+  apagado assim que o Purchase sai, ou aos 30 dias (`privacidade:limpar`).
+- **Liga/desliga (.env):** `META_CAPI_ENABLED` (padrão desligado),
+  `META_CAPI_ACCESS_TOKEN` (vazio = usa `META_ADS_ACCESS_TOKEN`),
+  `META_CAPI_TEST_EVENT_CODE` (manda só para "Eventos de teste" do Gerenciador).
+  Desligado ou sem token: não manda nada, só registra `meta_capi.pulado` no log.
 
 ### O que é registrado das visitas (`site_visits`, middleware `TrackSiteVisit`)
 

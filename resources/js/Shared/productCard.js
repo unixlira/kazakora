@@ -1,11 +1,17 @@
 import { router } from '@inertiajs/vue3';
 import { alternarFavorito } from '@/Shared/favoritos';
+import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 
 export const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-export const addToCart = (productId) => {
-    router.post('/carrinho', { product_id: productId, quantity: 1 }, { preserveScroll: true });
+// AddToCart da Meta (2026-10-18): o mesmo event_id vai ao Pixel e ao servidor.
+export const addToCart = (productId, preco = null) => {
+    const eventId = novoEventId();
+    router.post('/carrinho', { product_id: productId, quantity: 1, meta_event_id: eventId }, {
+        preserveScroll: true,
+        onSuccess: () => rastrearAddToCart({ id: productId, preco, quantidade: 1 }, eventId),
+    });
 };
 
 // Favorito com ou sem login, aviso laranja (Shared/favoritos.js, 2026-10-15).

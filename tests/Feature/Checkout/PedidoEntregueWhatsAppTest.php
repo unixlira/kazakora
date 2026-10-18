@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\WhatsApp\Jobs\ResponderNaoRecebi;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
+use App\Notifications\EntregaForaDoDestinoNotification;
 use App\Notifications\NaoRecebiPedidoWhatsAppNotification;
 use App\Services\Correios\CorreiosTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -115,6 +116,34 @@ class PedidoEntregueWhatsAppTest extends TestCase
         $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
         $this->assertCount(0, $this->enviados());
         $this->assertSame('não informado pelos Correios', SendOrderDeliveredWhatsAppJob::recebidoPor(null, null));
+    }
+
+    public function test_entregue_em_outra_cidade_e_devolucao_nao_conclui_nem_avisa_cliente(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        // AP475425146BR: destino Petrópolis/RJ, voltou e saiu "entregue ao destinatário" em São Paulo.
+        $order = $this->comObjeto($this->pedido(['shipping_city' => 'Petrópolis', 'shipping_state' => 'RJ']));
+        $this->rastro(['dtHrCriado' => now()->subHour()->format('Y-m-d\TH:i:s'), 'unidade' => ['endereco' => ['cidade' => 'SAO PAULO']]]);
+
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+
+        $this->assertSame(Order::STATUS_SHIPPED, $order->fresh()->status);
+        $this->assertNull($order->fresh()->whatsapp_entregue_em);
+        $this->assertCount(0, $this->enviados());
+        Notification::assertSentToTimes($admin, EntregaForaDoDestinoNotification::class, 1);
+    }
+
+    public function test_cidade_da_entrega_ignora_acento_e_caixa(): void
+    {
+        $order = $this->comObjeto($this->pedido());
+        $this->rastro(['dtHrCriado' => now()->subHour()->format('Y-m-d\TH:i:s'), 'unidade' => ['endereco' => ['cidade' => 'SAO PAULO']]]);
+
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+
+        $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
+        $this->assertFalse(\App\Console\Commands\AcompanharRastreioLoja::foraDoDestino(null, 'Petrópolis'));
     }
 
     public function test_botao_nao_recebi_marca_pedido_chama_humano_e_avisa_admins(): void

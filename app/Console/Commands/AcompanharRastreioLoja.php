@@ -6,9 +6,14 @@ use App\Modules\Checkout\Jobs\SendOrderDeliveredWhatsAppJob;
 use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Support\OrderImportService;
+use App\Models\User;
+use App\Notifications\EntregaForaDoDestinoNotification;
 use App\Services\Correios\CorreiosRastroService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -18,6 +23,9 @@ use Throwable;
  * pré-postagem: primeiro evento físico (postagem) vira "enviado" e manda o
  * WhatsApp "Seu pedido saiu para entrega"; entregue vira "concluído" e
  * manda o WhatsApp "Seu pedido foi entregue" (SendOrderDeliveredWhatsAppJob).
+ * Entrega numa cidade diferente da do pedido é devolução ao remetente (os
+ * Correios marcam como BDE/01): não conclui, não avisa o cliente e chama
+ * os admins uma vez.
  */
 class AcompanharRastreioLoja extends Command
 {
@@ -31,7 +39,7 @@ class AcompanharRastreioLoja extends Command
     public function handle(CorreiosRastroService $rastro, OrderImportService $pedidos): int
     {
         $simular = (bool) $this->option('simular');
-        $contagem = ['consultados' => 0, 'enviados' => 0, 'entregues' => 0, 'falhas' => 0];
+        $contagem = ['consultados' => 0, 'enviados' => 0, 'entregues' => 0, 'fora_do_destino' => 0, 'falhas' => 0];
 
         Order::query()
             ->with('latestCorreiosPrePostagem')
@@ -56,6 +64,13 @@ class AcompanharRastreioLoja extends Command
                     $this->line("#{$order->id} {$order->status}: ".($r['ultimo'] ?? 'sem evento'));
 
                     if ($simular || ! $r['postado']) {
+                        continue;
+                    }
+
+                    if ($r['entregue'] && self::foraDoDestino($r['entregue_cidade'], $order->shipping_city)) {
+                        $contagem['fora_do_destino']++;
+                        $this->avisarForaDoDestino($order, $r['entregue_cidade']);
+
                         continue;
                     }
 
@@ -86,5 +101,31 @@ class AcompanharRastreioLoja extends Command
         $this->info(json_encode($contagem));
 
         return self::SUCCESS;
+    }
+
+    /** Cidade da entrega conhecida e diferente da cidade do pedido. */
+    public static function foraDoDestino(?string $entregueEm, ?string $destino): bool
+    {
+        if (! filled($entregueEm) || ! filled($destino)) {
+            return false;
+        }
+
+        $normaliza = fn (string $c) => (string) Str::of($c)->ascii()->upper()->replaceMatches('/[^A-Z]/', '');
+
+        return $normaliza($entregueEm) !== $normaliza($destino);
+    }
+
+    private function avisarForaDoDestino(Order $order, string $cidade): void
+    {
+        Log::warning('loja.rastreio_entrega_fora_do_destino', ['order_id' => $order->id, 'entregue_em' => $cidade, 'destino' => $order->shipping_city]);
+
+        if (! Cache::add("loja:rastreio:fora-do-destino:{$order->id}", true, now()->addDays(60))) {
+            return;
+        }
+
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+        if ($admins->isNotEmpty()) {
+            Notification::send($admins, new EntregaForaDoDestinoNotification($order, $cidade));
+        }
     }
 }

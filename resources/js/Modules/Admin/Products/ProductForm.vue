@@ -125,14 +125,19 @@ const resumo = computed(() => {
     const custo = Math.max(0, Number(props.form.cost_price) || 0);
     const descontoSite = limitarPct(props.form.discount_percentage);
     const descontoCheckout = limitarPct(props.form.checkout_discount_percentage);
+    // Desconto Checkout em R$ (por unidade), quando o tipo é valor fixo.
+    const checkoutFixo = Math.max(0, Number(props.form.checkout_discount_amount) || 0);
     const precoSite = centavos(cheio * (1 - descontoSite / 100));
-    const precoFinal = centavos(precoSite - centavos(precoSite * descontoCheckout / 100));
+    const precoFinal = checkoutFixo > 0
+        ? centavos(Math.max(0, precoSite - checkoutFixo))
+        : centavos(precoSite - centavos(precoSite * descontoCheckout / 100));
 
     return {
         cheio,
         custo,
         descontoSite,
         descontoCheckout,
+        checkoutFixo,
         precoFinal,
         lucro: centavos(precoFinal - custo - FRETE_ESTIMADO),
     };
@@ -404,7 +409,7 @@ const resumo = computed(() => {
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Desconto do Checkout</dt>
-                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ percentual(resumo.descontoCheckout) }}</dd>
+                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ resumo.checkoutFixo > 0 ? moeda(resumo.checkoutFixo) : percentual(resumo.descontoCheckout) }}</dd>
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Estimativa de Frete</dt>

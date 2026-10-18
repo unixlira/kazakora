@@ -1,7 +1,10 @@
 <?php
 
+use App\Console\Commands\TaxasReaisAmazon;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -42,9 +45,12 @@ Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(6
 // por fora do Laravel — sem ele a impressão automática para. Agora fica aqui.
 Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoMinutes()->withoutOverlapping(5);
 // Relatórios por e-mail (pedido 2026-10-10; antes eram rotinas da Naia por
-// fora, no homolog): resultado do dia às 23:50 e pedidos separados que foram
+// fora, no homolog): resultado do dia e pedidos separados que foram
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
-Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
+// Resultado às 23:55 (regra do Lira 2026-10-12): depois da coleta financeira
+// das 23:30 (TikTok na Cora Box), da Amazon pela SP-API às 23:35 e da
+// retomada das 23:50. Ordem completa em docs/financeiro-email-resultado-diario.md.
+Schedule::command('loja:resultado-diario')->dailyAt('23:55')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
 Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 
@@ -116,8 +122,17 @@ Schedule::command('amazon:pagamentos-pendentes')->hourly()->withoutOverlapping(3
 // Taxa real das vendas da Amazon pela SP-API (Finances), no lugar da coleta
 // pela tela da Seller Central na Cora Box, desligada em 2026-10-17. De hora
 // em hora aos 35 min: a última do dia (23:35) entra antes do resultado das
-// 23:50, e a vigia (aos 15) já vê a execução anterior. Idempotente.
+// 23:55, e a vigia (aos 15) já vê a execução anterior. Idempotente.
 Schedule::command('amazon:taxas-reais --dias=30')->hourlyAt(35)->withoutOverlapping(30);
+// Retomada das 23:50: se a das 23:35 falhou (ex.: limite da API) ou não
+// terminou, roda de novo antes do e-mail das 23:55. Deu certo, não repete.
+Schedule::command('amazon:taxas-reais --dias=30')->dailyAt('23:50')->withoutOverlapping(30)
+    ->when(function () {
+        $ultima = Cache::get(TaxasReaisAmazon::CACHE_ULTIMA, []);
+
+        return ! ($ultima['ok'] ?? false) || ! isset($ultima['em'])
+            || Carbon::parse($ultima['em'])->lt(today()->setTime(23, 30));
+    });
 
 // Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
 // "pedido embalado continua na fila mesmo depois do ponto de coleta

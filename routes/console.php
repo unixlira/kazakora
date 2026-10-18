@@ -22,6 +22,10 @@ Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlap
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
+// Limpeza do banco (pedido 2026-10-18): failed_jobs e notifications eram
+// metade do banco e deixavam o backup horário lento. Jobs falhos ficam 15 dias.
+Schedule::command('queue:prune-failed --hours=360')->dailyAt('03:55');
+Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(60);
 // marketplace:poll-labels NÃO roda mais agendado (removido 2026-08-05,
 // pedido explícito do usuário — "cron nem precisa ter"). O pipeline de
 // etiqueta agora é orientado a evento: CheckShipmentLabelJob dispara na

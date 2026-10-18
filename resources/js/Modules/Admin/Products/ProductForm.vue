@@ -4,11 +4,11 @@ import { usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { useSkuPreview } from '@/Shared/useSkuPreview';
 
-// Pedido 2026-10-09: o preço digitado é o do Pix; a loja grava +5%.
-const descontoPix = computed(() => Number(usePage().props.descontoPix ?? 0));
-const precoLojaComPix = computed(() => {
+// Pedido 2026-10-09: a loja grava o preço digitado + acréscimo (marketplaces usam o digitado).
+const acrescimo = computed(() => Number(usePage().props.acrescimoPrecoLoja ?? 0));
+const precoNaLoja = computed(() => {
     const valor = Number(props.form.price);
-    return valor > 0 && descontoPix.value > 0 ? (Math.round(valor * (1 + descontoPix.value / 100) * 100) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null;
+    return valor > 0 && acrescimo.value > 0 ? (Math.round(valor * (1 + acrescimo.value / 100) * 100) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null;
 });
 
 const props = defineProps({
@@ -41,14 +41,6 @@ const props = defineProps({
 
 const emit = defineEmits(['submit']);
 
-const discountType = ref(
-    props.form.discount_percentage ? 'percentage' : (props.form.discount_amount ? 'amount' : ''),
-);
-
-watch(discountType, (type) => {
-    if (type !== 'percentage') props.form.discount_percentage = null;
-    if (type !== 'amount') props.form.discount_amount = null;
-});
 
 // Prévia automática do SKU: dispara depois que o usuário para de digitar
 // (debounce) em qualquer campo que alimenta o gerador (categoria, nome,
@@ -257,7 +249,7 @@ const regenerateSku = async () => {
 
         <div class="grid items-start gap-4 sm:grid-cols-3">
             <div>
-                <label for="price" class="block text-sm font-medium">Preço (R$){{ descontoPix > 0 ? ' — valor no Pix' : '' }}</label>
+                <label for="price" class="block text-sm font-medium">Preço (R$)</label>
                 <input
                     id="price"
                     v-model="form.price"
@@ -267,9 +259,9 @@ const regenerateSku = async () => {
                     required
                     class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                 >
-                <p v-if="descontoPix > 0" class="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                    Será inserido +{{ descontoPix }}% por causa do Pix<template v-if="precoLojaComPix">: preço na loja {{ precoLojaComPix }}</template>.
-                    No Pix o cliente tem {{ descontoPix }}% de desconto. Marketplaces usam o valor digitado.
+                <p v-if="acrescimo > 0" class="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                    A loja grava +{{ acrescimo }}% sobre este valor<template v-if="precoNaLoja">: preço na loja {{ precoNaLoja }}</template>.
+                    Marketplaces usam o valor digitado.
                 </p>
                 <InputError :message="form.errors.price" />
             </div>
@@ -321,23 +313,20 @@ const regenerateSku = async () => {
             </div>
         </div>
 
-        <div>
-            <label for="discount_type" class="block text-sm font-medium">Desconto (opcional)</label>
-            <select id="discount_type" v-model="discountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                <option value="">Sem desconto</option>
-                <option value="percentage">Percentual (%)</option>
-                <option value="amount">Valor fixo (R$)</option>
-            </select>
-
-            <div v-if="discountType === 'percentage'" class="mt-2">
-                <input v-model="form.discount_percentage" type="number" step="0.01" min="0" max="100"
-                    placeholder="Ex: 10" class="w-full rounded border border-gray-300 px-3 py-2">
+        <div class="grid items-start gap-4 sm:grid-cols-2">
+            <div>
+                <label for="discount_percentage" class="block text-sm font-medium">Desconto Site (%)</label>
+                <input id="discount_percentage" v-model="form.discount_percentage" type="number" step="any" min="0" max="100"
+                    placeholder="0" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                <p class="mt-1 text-xs text-gray-400">Desconto direto no produto: o card e a página mostram o preço riscado e o preço com desconto.</p>
                 <InputError :message="form.errors.discount_percentage" />
             </div>
-            <div v-if="discountType === 'amount'" class="mt-2">
-                <input v-model="form.discount_amount" type="number" step="0.01" min="0"
-                    placeholder="Ex: 20.00" class="w-full rounded border border-gray-300 px-3 py-2">
-                <InputError :message="form.errors.discount_amount" />
+            <div>
+                <label for="checkout_discount_percentage" class="block text-sm font-medium">Desconto Checkout (%)</label>
+                <input id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
+                    placeholder="0" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                <p class="mt-1 text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Vazio = sem desconto no Pix.</p>
+                <InputError :message="form.errors.checkout_discount_percentage" />
             </div>
         </div>
 

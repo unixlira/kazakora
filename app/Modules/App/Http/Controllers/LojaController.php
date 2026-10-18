@@ -24,7 +24,7 @@ class LojaController extends Controller
     {
         $site = rtrim((string) config('app.url'), '/');
         $whatsapp = (string) config('app_mobile.whatsapp_numero');
-        $pix = DescontoPix::percentual();
+        $pix = DescontoPix::maiorPercentual();
 
         return response()->json([
             'loja' => [

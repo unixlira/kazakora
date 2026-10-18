@@ -151,7 +151,7 @@ class CatalogoApp
                 'atributos' => $temOpcao ? [$opcao => $nome] : (object) [],
                 'preco' => $preco,
                 'preco_de' => $de,
-                'preco_pix' => $this->comPix($preco),
+                'preco_pix' => $this->comPix($preco, $produto),
                 'estoque' => max(0, (int) $produto->stock),
                 'imagem' => $this->fotoDaVariacao($produto)?->url ?? $pai->images->first()?->url,
             ];
@@ -226,7 +226,7 @@ class CatalogoApp
             'imagem' => $imagem?->thumb_url ?? $imagem?->url,
             'preco' => $preco,
             'preco_de' => $de,
-            'preco_pix' => $this->comPix($preco),
+            'preco_pix' => $this->comPix($preco, $card),
             'desconto_percentual' => $de ? CatalogController::descontoDoCard($card) : 0,
             'relampago' => $relampago ? ['termina_em' => $relampago->fim_em->toIso8601String()] : null,
             'disponivel' => $produto->stock > 0 || $produto->variacoesAtivas->contains(fn (Product $v) => $v->stock > 0),
@@ -268,10 +268,10 @@ class CatalogoApp
         return [$preco, $de !== null && $de > $preco ? $de : null];
     }
 
-    /** Preço de 1 unidade pagando no Pix (DescontoPix, o mesmo do checkout). */
-    private function comPix(int $centavos): int
+    /** Preço de 1 unidade pagando no Pix ("Desconto Checkout" do produto, o mesmo do checkout). */
+    private function comPix(int $centavos, Product $produto): int
     {
-        return CheckoutOutroSite::centavos(round($centavos / 100 - DescontoPix::desconto($centavos / 100), 2));
+        return CheckoutOutroSite::centavos(round($centavos / 100 - DescontoPix::desconto($centavos / 100, DescontoPix::percentualDo($produto)), 2));
     }
 
     private function fotoDaVariacao(Product $produto)

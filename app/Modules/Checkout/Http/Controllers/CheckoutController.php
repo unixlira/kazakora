@@ -671,8 +671,9 @@ class CheckoutController extends Controller
 
         // Desconto no Pix (pedido 2026-10-09): só pagando 100% no Pix, sobre os
         // produtos (já com cupom e desconto por quantidade), nunca no frete.
+        // Percentual = "Desconto Checkout (%)" de cada produto (2026-10-18).
         $pixDiscount = $methods === [Payment::METHOD_PIX]
-            ? DescontoPix::desconto(max(0, $subtotal - $discount - $descontoPlataforma))
+            ? DescontoPix::desconto(max(0, $subtotal - $discount - $descontoPlataforma), DescontoPix::percentualDosItens($cartItems))
             : 0.0;
         $total = round($subtotal - $discount - $descontoPlataforma - $pixDiscount + $shipping['cost'], 2);
 
@@ -1443,9 +1444,9 @@ class CheckoutController extends Controller
             'total' => round($subtotal - $discount + $shippingCost, 2),
             'originalTotal' => round($subtotal + $shippingCost, 2),
             // Pagando 100% no Pix (pedido 2026-10-09).
-            'pixDiscountPercentage' => DescontoPix::percentual(),
+            'pixDiscountPercentage' => $pixPercentual = DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
-            'pixDiscountAmount' => DescontoPix::desconto(max(0, $subtotal - $discount)),
+            'pixDiscountAmount' => DescontoPix::desconto(max(0, $subtotal - $discount), $pixPercentual),
             'paymentGateway' => PaymentGateway::active(),
             'mercadoPagoPublicKey' => PaymentGateway::active() === PaymentGateway::MERCADOPAGO
                 ? \App\Services\MercadoPago\CredenciaisCheckout::publicKey()
@@ -1700,7 +1701,7 @@ class CheckoutController extends Controller
             'productsDiscount' => $this->productsDiscount(),
             'couponCode' => $coupon?->code,
             'discountAmount' => $coupon ? $coupon->discountFor($this->subtotalParaCupom($cartItems)) : 0,
-            'pixDiscountPercentage' => DescontoPix::percentual(),
+            'pixDiscountPercentage' => DescontoPix::percentualDosItens($cartItems),
             'boletoDiasVencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             'addresses' => $user ? $user->addresses : [],
             'shippingMethods' => [ShippingMethod::freteGratis()->only(['id', 'name', 'estimated_days', 'price'])],

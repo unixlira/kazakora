@@ -58,7 +58,7 @@ class CatalogoFerraKora extends CatalogoOutroSite
             'categoria' => $registro->categoria,
             'kazakora_url' => filled($pai->slug) ? route('produtos.ver', $pai->slug) : null,
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
-            'desconto_pix' => DescontoPix::percentual(),
+            'desconto_pix' => DescontoPix::percentualDo($pai),
         ];
     }
 

@@ -66,7 +66,7 @@ class ProductController extends Controller
         // marca, modelo e descrição costumam ser idênticos entre
         // variações; cor/preço/estoque não (ficam em branco de propósito).
         $parent = $request->integer('parent_product_id')
-            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description'])
+            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage'])
             : null;
 
         return Inertia::render('Admin/Products/Create', [
@@ -188,7 +188,6 @@ class ProductController extends Controller
             'adContent' => $product->adContent()->first(['id', 'fonte', 'gerado_em', 'destaques', 'blocos']),
             'precoPix' => [
                 'price' => DescontoPix::semAcrescimo((float) $product->price),
-                'discount_amount' => $product->discount_amount !== null ? DescontoPix::semAcrescimo((float) $product->discount_amount) : null,
             ],
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'fiscalData' => $product->fiscalData,
@@ -408,8 +407,9 @@ class ProductController extends Controller
             'variation' => ['nullable', 'string', 'max:100'],
             'price' => ['required', 'numeric', 'min:0'],
             'cost_price' => ['nullable', 'numeric', 'min:0'],
+            // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
@@ -470,9 +470,10 @@ class ProductController extends Controller
     }
 
     /**
-     * Pedido 2026-10-09: quem cadastra digita o valor do Pix e o preço da loja
-     * é gravado com +5% (o desconto do Pix devolve o cliente ao valor
-     * digitado). Desconto em R$ acompanha, pra o preço final bater.
+     * Pedido 2026-10-09: o preço da loja é gravado com o acréscimo de
+     * config('loja.acrescimo_preco_loja'); marketplaces usam o digitado.
+     * Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
+     * o antigo desconto em R$ sai ao salvar.
      */
     private function comAcrescimoPix(array $validated): array
     {
@@ -480,9 +481,7 @@ class ProductController extends Controller
             $validated['price'] = DescontoPix::comAcrescimo((float) $validated['price']);
         }
 
-        if (! empty($validated['discount_amount'])) {
-            $validated['discount_amount'] = DescontoPix::comAcrescimo((float) $validated['discount_amount']);
-        }
+        $validated['discount_amount'] = null;
 
         return $validated;
     }

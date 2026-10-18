@@ -87,8 +87,10 @@ class CancelarPedidoTest extends TestCase
         $this->actingAs($admin)
             ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Cliente pediu para cancelar'])
             ->assertRedirect()
-            ->assertSessionHas('success')
-            ->assertSessionMissing('warning');
+            ->assertSessionHas('cancelamento', fn (array $resultado) => $resultado['ok'] === true
+                && collect($resultado['etapas'])->pluck('texto')->contains('Estorno de R$ 20,00 feito no Mercado Pago.')
+                && collect($resultado['etapas'])->pluck('texto')->contains('Estoque devolvido.')
+                && collect($resultado['etapas'])->pluck('texto')->contains('Pedido cancelado no KazaKora.'));
 
         $order->refresh();
         $this->assertSame(Order::STATUS_CANCELLED, $order->status);
@@ -110,7 +112,7 @@ class CancelarPedidoTest extends TestCase
         $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldReceive('refundPayment')->once()->andReturn([]));
         $admin = $this->admin();
 
-        $this->actingAs($admin)->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Sem estoque'])->assertSessionHas('success');
+        $this->actingAs($admin)->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Sem estoque'])->assertSessionHas('cancelamento');
         $this->actingAs($admin)->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Sem estoque'])->assertSessionHas('error');
 
         $this->assertSame(10, (int) $product->fresh()->stock);
@@ -134,7 +136,7 @@ class CancelarPedidoTest extends TestCase
 
         $this->actingAs($this->admin())
             ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Extraviado'])
-            ->assertSessionHas('success');
+            ->assertSessionHas('cancelamento.ok', true);
 
         $this->assertSame(8, (int) $product->fresh()->stock);
     }
@@ -154,7 +156,7 @@ class CancelarPedidoTest extends TestCase
 
         $this->actingAs($admin)
             ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Comprador desistiu'])
-            ->assertSessionHas('success');
+            ->assertSessionHas('cancelamento.ok', true);
 
         $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
         Mail::assertNothingSent();
@@ -196,7 +198,7 @@ class CancelarPedidoTest extends TestCase
 
         $this->actingAs($this->admin())
             ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Pedido de teste'])
-            ->assertSessionHas('success');
+            ->assertSessionHas('cancelamento.ok', true);
 
         $this->assertSame(PrintJob::STATUS_FAILED, $naFila->fresh()->status);
         $this->assertSame(PrintJob::MOTIVO_PEDIDO_CANCELADO, $naFila->fresh()->error_message);
@@ -213,5 +215,20 @@ class CancelarPedidoTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('cancelamento.etiqueta', fn ($texto) => str_contains((string) $texto, 'já foi impressa em 17/10 22:45'))
                 ->etc());
+    }
+
+    public function test_falha_no_estorno_aparece_no_modal_e_pedido_fica_cancelado(): void
+    {
+        Mail::fake();
+        [$order] = $this->pedidoPago();
+        $this->pagamentoPix($order);
+        $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldReceive('refundPayment')->once()->andThrow(new \RuntimeException('MP fora do ar')));
+
+        $this->actingAs($this->admin())
+            ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Cliente desistiu'])
+            ->assertSessionHas('cancelamento', fn (array $resultado) => $resultado['ok'] === false
+                && collect($resultado['etapas'])->contains(fn ($etapa) => $etapa['etapa'] === 'Estorno' && ! $etapa['ok'] && str_contains($etapa['texto'], 'MP fora do ar')));
+
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
     }
 }

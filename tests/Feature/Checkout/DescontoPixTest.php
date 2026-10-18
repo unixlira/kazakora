@@ -90,6 +90,32 @@ class DescontoPixTest extends TestCase
         $this->assertSame(10.0, DescontoPix::percentualDo($dez));
     }
 
+    public function test_desconto_checkout_em_valor_fixo_sai_no_centavo(): void
+    {
+        PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $fixo = Product::factory()->create(['price' => 89.90, 'stock' => 5, 'is_active' => true,
+            'checkout_discount_type' => DescontoPix::FIXO, 'checkout_discount_amount' => 10, 'checkout_discount_percentage' => null]);
+        $cinco = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true]);
+        $this->chegarNoPagamento($user, $fixo);
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $cinco->id, 'quantity' => 1]);
+
+        // R$ 10 do fixo + 5% de R$ 100 = R$ 15.
+        $this->actingAs($user)->get('/finalizacao/pagamento?v=1')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('pixDiscountAmount', 15));
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()
+                ->andReturn(['id' => 123, 'status' => 'pending', 'point_of_interaction' => ['transaction_data' => ['qr_code' => 'x']]]);
+        });
+        $this->actingAs($user)->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'terms_accepted' => true]);
+
+        $this->assertEquals(15.0, (float) Order::firstOrFail()->pix_discount_amount);
+        $this->assertSame(20.0, DescontoPix::descontoDo($fixo, 89.90, 2));
+        $this->assertSame(11.12, DescontoPix::percentualDo($fixo, 89.90));
+    }
+
     public function test_tela_de_pagamento_recebe_o_desconto_do_pix(): void
     {
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
@@ -129,6 +155,26 @@ class DescontoPixTest extends TestCase
         ])->assertRedirect();
 
         $this->assertEquals(100, (float) $product->fresh()->price);
+        $this->assertEquals(7, (float) $product->fresh()->checkout_discount_percentage);
+
+        // Desconto Checkout em Valor fixo: grava o R$ e limpa o %.
+        $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
+            'name' => 'Cesto de Bambu', 'category_id' => null, 'sku' => $product->sku, 'price' => 100,
+            'checkout_discount_type' => DescontoPix::FIXO, 'checkout_discount_amount' => 12.5, 'checkout_discount_percentage' => 7,
+            'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $product->refresh();
+        $this->assertSame(DescontoPix::FIXO, $product->checkout_discount_type);
+        $this->assertEquals(12.5, (float) $product->checkout_discount_amount);
+        $this->assertNull($product->checkout_discount_percentage);
+
+        // Valor fixo maior que o preço é recusado.
+        $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
+            'name' => 'Cesto de Bambu', 'category_id' => null, 'sku' => $product->sku, 'price' => 100,
+            'checkout_discount_type' => DescontoPix::FIXO, 'checkout_discount_amount' => 150,
+            'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
+        ])->assertSessionHasErrors('checkout_discount_amount');
     }
 
     public function test_marketplace_sem_preco_proprio_recebe_o_preco_da_loja(): void

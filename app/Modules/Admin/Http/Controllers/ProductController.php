@@ -13,6 +13,7 @@ use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\WhatsApp\Services\GeminiUnavailableException;
 use App\Services\SkuGeneratorService;
+use App\Support\DescontoPix;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -65,7 +66,7 @@ class ProductController extends Controller
         // marca, modelo e descrição costumam ser idênticos entre
         // variações; cor/preço/estoque não (ficam em branco de propósito).
         $parent = $request->integer('parent_product_id')
-            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage'])
+            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage', 'checkout_discount_type', 'checkout_discount_amount'])
             : null;
 
         return Inertia::render('Admin/Products/Create', [
@@ -381,6 +382,9 @@ class ProductController extends Controller
             // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // Desconto Checkout: Percentual ou Valor fixo (R$ por unidade).
+            'checkout_discount_type' => ['nullable', Rule::in([DescontoPix::PERCENTUAL, DescontoPix::FIXO])],
+            'checkout_discount_amount' => ['nullable', 'numeric', 'min:0', 'lte:price'],
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
@@ -393,7 +397,14 @@ class ProductController extends Controller
 
         // Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
         // o antigo desconto em R$ sai ao salvar.
-        return [...$request->validate($rules), 'discount_amount' => null];
+        $dados = [...$request->validate($rules), 'discount_amount' => null];
+
+        // Só um dos dois valores do Desconto Checkout fica gravado: o do tipo escolhido.
+        if (isset($dados['checkout_discount_type'])) {
+            $dados[$dados['checkout_discount_type'] === DescontoPix::FIXO ? 'checkout_discount_percentage' : 'checkout_discount_amount'] = null;
+        }
+
+        return $dados;
     }
 
     /**

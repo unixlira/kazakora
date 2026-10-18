@@ -40,6 +40,9 @@ const props = defineProps({
     boletoDiasVencimento: { type: Number, default: 3 },
 });
 
+// % do Pix só para mostrar (com Valor fixo no produto pode ter 4 casas).
+const pixPercentualTexto = computed(() => Number(Number(props.pixDiscountPercentage).toFixed(2)).toLocaleString('pt-BR'));
+
 const formatPrice = (value) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
@@ -445,7 +448,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                                         <p class="text-sm font-medium">{{ METHOD_LABELS[method] }}</p>
                                         <p class="text-xs text-store-fg-muted">
                                             {{ method === 'pix' ? 'Aprovação imediata' : method === 'card' ? 'Em até 12x' : `Vence em ${boletoDiasVencimento} dias · confirmação em até 3 dias úteis` }}
-                                            <span v-if="method === 'pix' && pixDiscountPercentage > 0" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ pixDiscountPercentage }}% de desconto</span>
+                                            <span v-if="method === 'pix' && pixDiscountPercentage > 0" class="ml-1 rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ pixPercentualTexto }}% de desconto</span>
                                         </p>
                                     </div>
                                 </label>
@@ -564,7 +567,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
 
                     <div class="mt-4 border-t border-store-border pt-4">
                         <div v-if="pixSaving > 0" class="mb-2 flex justify-between text-sm">
-                            <span class="text-store-fg-muted">Desconto Pix ({{ pixDiscountPercentage }}%)</span>
+                            <span class="text-store-fg-muted">Desconto Pix ({{ pixPercentualTexto }}%)</span>
                             <span class="font-store-mono text-emerald-600 dark:text-emerald-400">-{{ formatPrice(pixSaving) }}</span>
                         </div>
                         <template v-if="savings > 0">

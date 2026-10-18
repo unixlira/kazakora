@@ -315,11 +315,26 @@ const regenerateSku = async () => {
                 <InputError :message="form.errors.discount_percentage" />
             </div>
             <div>
-                <label for="checkout_discount_percentage" class="block text-sm font-medium">Desconto Checkout (%)</label>
-                <input id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
-                    placeholder="0" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                <p class="mt-1 text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Vazio = sem desconto no Pix.</p>
+                <label for="checkout_discount_type" class="block text-sm font-medium">Desconto Checkout</label>
+                <div class="mt-1 flex gap-2">
+                    <select id="checkout_discount_type" v-model="form.checkout_discount_type" aria-label="Tipo do Desconto Checkout"
+                        class="w-40 shrink-0 rounded border border-gray-300 px-3 py-2">
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="amount">Valor fixo (R$)</option>
+                    </select>
+                    <input v-if="form.checkout_discount_type === 'amount'" id="checkout_discount_amount" v-model="form.checkout_discount_amount"
+                        type="number" step="0.01" min="0" placeholder="0,00" aria-label="Desconto Checkout em reais"
+                        class="w-full rounded border border-gray-300 px-3 py-2">
+                    <input v-else id="checkout_discount_percentage" v-model="form.checkout_discount_percentage"
+                        type="number" step="0.01" min="0" max="100" placeholder="0" aria-label="Desconto Checkout em porcentagem"
+                        class="w-full rounded border border-gray-300 px-3 py-2">
+                </div>
+                <p class="mt-1 text-xs text-gray-400">
+                    Desconto no Pix: sai no checkout só pagando 100% no Pix{{ form.checkout_discount_type === 'amount' ? ', em R$ por unidade' : '' }}. Vazio = sem desconto no Pix.
+                </p>
+                <InputError :message="form.errors.checkout_discount_type" />
                 <InputError :message="form.errors.checkout_discount_percentage" />
+                <InputError :message="form.errors.checkout_discount_amount" />
             </div>
         </div>
 

@@ -271,7 +271,7 @@ class CatalogoApp
     /** Preço de 1 unidade pagando no Pix ("Desconto Checkout" do produto, o mesmo do checkout). */
     private function comPix(int $centavos, Product $produto): int
     {
-        return CheckoutOutroSite::centavos(round($centavos / 100 - DescontoPix::desconto($centavos / 100, DescontoPix::percentualDo($produto)), 2));
+        return CheckoutOutroSite::centavos(round($centavos / 100 - DescontoPix::descontoDo($produto, $centavos / 100), 2));
     }
 
     private function fotoDaVariacao(Product $produto)

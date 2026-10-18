@@ -391,7 +391,7 @@ abstract class CheckoutOutroSite
             'cupom_erro' => $cupomErro,
             'desconto_cupom' => self::centavos($valores['desconto_cupom']),
             'desconto_pix' => self::centavos($valores['desconto_pix']),
-            'desconto_pix_percentual' => $valores['desconto_pix_percentual'],
+            'desconto_pix_percentual' => round($valores['desconto_pix_percentual'], 2),
             'boleto_dias_vencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             'frete' => self::centavos($valores['frete']),
             'prazo_dias' => $valores['prazo'],

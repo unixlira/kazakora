@@ -36,6 +36,9 @@ const props = defineProps({
     boletoDiasVencimento: { type: Number, default: 3 },
 });
 
+// % do Pix só para mostrar (com Valor fixo no produto pode ter 4 casas).
+const pixPercentualTexto = computed(() => Number(Number(props.pixDiscountPercentage).toFixed(2)).toLocaleString('pt-BR'));
+
 const page = usePage();
 const serverErrors = computed(() => page.props.errors ?? {});
 const isLoggedIn = computed(() => !!props.customer);
@@ -733,7 +736,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                             <button type="button" class="relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 transition"
                                 :class="metodo === 'pix' ? 'border-emerald-500 bg-emerald-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'"
                                 @click="metodo = 'pix'">
-                                <span v-if="pixDiscountPercentage > 0" class="absolute -top-2.5 right-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white shadow">-{{ pixDiscountPercentage }}%</span>
+                                <span v-if="pixDiscountPercentage > 0" class="absolute -top-2.5 right-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-bold text-white shadow">-{{ pixPercentualTexto }}%</span>
                                 <i class="fa-brands fa-pix text-2xl text-[#32BCAD]"></i>
                                 <span class="text-sm font-semibold text-slate-900">Pix</span>
                                 <span class="text-xs text-slate-500">Aprovação na hora</span>
@@ -756,7 +759,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
 
                         <div v-if="metodo === 'pix'" class="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
                             <p v-if="descontoPix > 0" class="flex items-center gap-2 font-bold text-emerald-700">
-                                <i class="fa-solid fa-circle-check"></i> Desconto de {{ pixDiscountPercentage }}% ativado: você economiza {{ formatPrice(descontoPix) }}
+                                <i class="fa-solid fa-circle-check"></i> Desconto de {{ pixPercentualTexto }}% ativado: você economiza {{ formatPrice(descontoPix) }}
                             </p>
                             <ul class="mt-2 space-y-1 text-emerald-800">
                                 <li><i class="fa-solid fa-qrcode mr-2 w-4"></i>O QR Code aparece assim que você finalizar.</li>
@@ -771,7 +774,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <li><i class="fa-solid fa-calendar-day mr-2 w-4"></i>Vence em {{ boletoDiasVencimento }} dias. Pague pelo app do banco ou na lotérica.</li>
                                 <li><i class="fa-solid fa-clock mr-2 w-4"></i>O banco leva até 3 dias úteis para confirmar; o envio começa depois disso.</li>
                             </ul>
-                            <p v-if="pixDiscountPercentage > 0" class="mt-2 text-xs text-slate-500">O desconto de {{ pixDiscountPercentage }}% vale só no Pix.</p>
+                            <p v-if="pixDiscountPercentage > 0" class="mt-2 text-xs text-slate-500">O desconto de {{ pixPercentualTexto }}% vale só no Pix.</p>
                         </div>
 
                         <div v-else class="mt-4">
@@ -841,7 +844,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div class="flex justify-between"><dt>Subtotal</dt><dd>{{ formatPrice(subtotalAtual) }}</dd></div>
                         <div v-if="descontoCupom > 0" class="flex justify-between text-[#24ae4e]"><dt>Cupom {{ cupomAplicado }}</dt><dd>-{{ formatPrice(descontoCupom) }}</dd></div>
                         <div v-if="descontoPlataforma > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto da plataforma</dt><dd>-{{ formatPrice(descontoPlataforma) }}</dd></div>
-                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixDiscountPercentage }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
+                        <div v-if="descontoPix > 0 && !order" class="flex justify-between text-[#24ae4e]"><dt>Desconto Pix ({{ pixPercentualTexto }}%)</dt><dd>-{{ formatPrice(descontoPix) }}</dd></div>
                         <div class="flex justify-between"><dt>Entrega<span v-if="turboEscolhido && turbo" class="ml-1 text-xs font-semibold text-[#F44D00]"><i class="fa-solid fa-bolt"></i> TURBO</span></dt><dd :class="valorFrete === 0 ? 'font-semibold text-[#24ae4e]' : ''">{{ entregaEscolhida ? (valorFrete === 0 ? 'Grátis' : formatPrice(valorFrete)) : '—' }}<!-- Sempre Grátis; ⚡FULL só quando o CEP está na área da entrega expressa. -->
                             <span v-if="entregaEscolhida && valorFrete === 0 && entregaExpressa" class="selo-full ml-1"><i class="fa-solid fa-bolt"></i>FULL</span></dd></div>
                         <div class="flex items-baseline justify-between border-t border-slate-100 pt-3 text-base font-semibold text-slate-900">

@@ -2,11 +2,10 @@
 
 return [
     /*
-    | Desconto no Pix da loja KazaKora (pedido 2026-10-09). Só no checkout,
-    | pagando 100% no Pix. Desde 2026-10-18 o preço da loja (products.price) é
-    | exatamente o valor digitado no cadastro, sem acréscimo do Pix.
+    | Desconto no Pix: desde 2026-10-18 é por produto ("Desconto Checkout (%)"
+    | no cadastro, products.checkout_discount_percentage), sem % fixo aqui.
+    | O preço da loja (products.price) é o valor digitado no cadastro.
     */
-    'desconto_pix' => (float) env('LOJA_DESCONTO_PIX', 5),
 
     /*
     | Selo "Verificada por Reclame AQUI" (2026-10-11). Verificação aprovada:

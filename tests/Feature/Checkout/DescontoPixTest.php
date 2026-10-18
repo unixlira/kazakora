@@ -41,8 +41,8 @@ class DescontoPixTest extends TestCase
 
     public function test_helper_calcula_o_desconto_do_pix(): void
     {
-        $this->assertSame(5.25, DescontoPix::desconto(105.0));
-        $this->assertSame(1.05, DescontoPix::fator());
+        $this->assertSame(5.25, DescontoPix::desconto(105.0, 5));
+        $this->assertSame(0.0, DescontoPix::desconto(105.0, 0));
     }
 
     public function test_pagando_no_pix_o_pedido_sai_com_5_por_cento_de_desconto(): void
@@ -71,6 +71,25 @@ class DescontoPixTest extends TestCase
         $this->assertEquals((float) $order->total, $cobrado);
     }
 
+    public function test_desconto_checkout_e_o_do_produto_e_vazio_nao_da_desconto(): void
+    {
+        PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $dez = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true, 'checkout_discount_percentage' => 10]);
+        $sem = Product::factory()->create(['price' => 100, 'stock' => 5, 'is_active' => true, 'checkout_discount_percentage' => null]);
+        $this->chegarNoPagamento($user, $dez);
+        $this->actingAs($user)->post('/carrinho', ['product_id' => $sem->id, 'quantity' => 1]);
+
+        // Média pesada pelo subtotal: (100 x 10% + 100 x 0%) / 200 = 5%.
+        $this->actingAs($user)->get('/finalizacao/pagamento?v=1')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('pixDiscountPercentage', 5)
+                ->where('pixDiscountAmount', 10));
+
+        $this->assertSame(0.0, DescontoPix::percentualDo($sem));
+        $this->assertSame(10.0, DescontoPix::percentualDo($dez));
+    }
+
     public function test_tela_de_pagamento_recebe_o_desconto_do_pix(): void
     {
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
@@ -89,20 +108,23 @@ class DescontoPixTest extends TestCase
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
         $this->actingAs($admin)->post('/admin/produtos', [
-            'name' => 'Cesto de Bambu', 'category_id' => null, 'price' => 100, 'stock' => 3, 'discount_amount' => 10,
-            'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
+            'name' => 'Cesto de Bambu', 'category_id' => null, 'price' => 100, 'stock' => 3,
+            'discount_percentage' => 10, 'checkout_discount_percentage' => 7, 'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
         ])->assertRedirect();
 
         $product = Product::where('name', 'Cesto de Bambu')->firstOrFail();
         $this->assertEquals(100, (float) $product->price);
-        $this->assertEquals(10, (float) $product->discount_amount);
+        $this->assertEquals(10, (float) $product->discount_percentage);
+        $this->assertEquals(7, (float) $product->checkout_discount_percentage);
+        $this->assertNull($product->discount_amount);
+        $this->assertEquals(90.0, $product->precoSemOferta());
 
         // A edição mostra o preço gravado e salvar de novo não muda nada.
         $this->actingAs($admin)->get("/admin/produtos/{$product->id}/editar")
             ->assertInertia(fn (AssertableInertia $page) => $page->where('product.price', '100.00')->missing('precoPix')->etc());
 
         $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
-            'name' => 'Cesto de Bambu', 'category_id' => null, 'sku' => $product->sku, 'price' => 100, 'discount_amount' => 10,
+            'name' => 'Cesto de Bambu', 'category_id' => null, 'sku' => $product->sku, 'price' => 100, 'discount_percentage' => 10,
             'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
         ])->assertRedirect();
 

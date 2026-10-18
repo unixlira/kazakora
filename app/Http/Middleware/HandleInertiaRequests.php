@@ -9,7 +9,6 @@ use App\Notifications\LabelUnavailableNotification;
 use App\Notifications\LowStockNotification;
 use App\Notifications\OversellDetectedNotification;
 use App\Notifications\PrintJobFailedNotification;
-use App\Support\DescontoPix;
 use App\Support\Rbac\Permissions;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -74,8 +73,6 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user()?->only('id', 'name', 'email', 'role', 'avatar_url', 'initials', 'deve_trocar_senha'),
             ],
             'permissions' => fn () => $request->user() ? Permissions::allFor($request->user()) : [],
-            // Desconto no Pix da loja (pedido 2026-10-09), em %.
-            'descontoPix' => DescontoPix::percentual(),
             // Selo do Reclame Aqui no rodapé (config/loja.php).
             'reclameAqui' => fn () => ['verificada' => (bool) config('loja.selo_ra_verificada'), 'url' => (string) config('loja.reclame_aqui_url')],
             // Logos e favicon (Admin > Banners > Logos e favicon).

@@ -23,7 +23,7 @@ class CalculadoraOferta
     {
         $custo = (float) $product->cost_price + (float) config('ofertas.frete_estimado');
         $cartao = $preco * (1 - config('ofertas.taxa_cartao') / 100);
-        $pix = ($preco - DescontoPix::desconto($preco)) * (1 - config('ofertas.taxa_pix') / 100);
+        $pix = ($preco - DescontoPix::desconto($preco, DescontoPix::percentualDo($product))) * (1 - config('ofertas.taxa_pix') / 100);
 
         return round(min($cartao, $pix) - $custo, 2);
     }

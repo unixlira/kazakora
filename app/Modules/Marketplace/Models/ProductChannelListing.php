@@ -3,7 +3,6 @@
 namespace App\Modules\Marketplace\Models;
 
 use App\Modules\Catalog\Models\Product;
-use App\Support\DescontoPix;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -44,15 +43,15 @@ class ProductChannelListing extends Model
      * Preço de venda NESTE canal — pedido do usuário 2026-10-07: cada canal
      * tem seu preço (comissão e frete mudam de um pra outro, e o preço do
      * site mandado pro Mercado Livre já deu anúncio vendendo no prejuízo).
-     * Sem preço próprio, vale o do produto SEM o acréscimo do Pix (pedido
-     * 2026-10-09: o +5% do Pix vale só pra loja KazaKora, não pros canais).
+     * Sem preço próprio, vale o do produto (pedido 2026-10-18: o preço da
+     * loja não leva mais o +5% do Pix, é o valor digitado no cadastro).
      */
     public function precoDeVenda(Product $product): float
     {
         return $this->price !== null
             ? (float) $this->price
             // Sem a oferta do dia: ela vale só na loja KazaKora.
-            : (float) DescontoPix::semAcrescimo($product->precoSemOferta());
+            : $product->precoSemOferta();
     }
 
     public function product(): BelongsTo

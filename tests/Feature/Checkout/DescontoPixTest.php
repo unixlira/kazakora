@@ -17,9 +17,9 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
- * Desconto de 5% no Pix da loja (pedido 2026-10-09): o preço da loja leva
- * +5% embutido (cadastro, importação de marketplace e atualização em massa),
- * o Pix devolve o desconto e os marketplaces recebem o preço sem o +5%.
+ * Desconto de 5% no Pix da loja (pedido 2026-10-09), só no checkout. Desde
+ * 2026-10-18 o preço da loja é o valor digitado no cadastro, sem +5%, e os
+ * marketplaces sem preço próprio recebem esse mesmo valor.
  */
 class DescontoPixTest extends TestCase
 {
@@ -39,12 +39,10 @@ class DescontoPixTest extends TestCase
         ])->assertRedirect(route('finalizacao.pagamento'));
     }
 
-    public function test_helper_soma_e_tira_o_acrescimo_sem_perder_centavos(): void
+    public function test_helper_calcula_o_desconto_do_pix(): void
     {
-        $this->assertSame(105.0, DescontoPix::comAcrescimo(100.0));
-        $this->assertSame(100.0, DescontoPix::semAcrescimo(105.0));
-        $this->assertSame(99.99, DescontoPix::semAcrescimo(DescontoPix::comAcrescimo(99.99)));
         $this->assertSame(5.25, DescontoPix::desconto(105.0, 5));
+        $this->assertSame(0.0, DescontoPix::desconto(105.0, 0));
     }
 
     public function test_pagando_no_pix_o_pedido_sai_com_5_por_cento_de_desconto(): void
@@ -105,67 +103,69 @@ class DescontoPixTest extends TestCase
                 ->where('pixDiscountAmount', 5.25));
     }
 
-    public function test_cadastro_no_admin_grava_o_preco_com_mais_5_por_cento(): void
+    public function test_cadastro_no_admin_grava_o_preco_digitado(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
         $this->actingAs($admin)->post('/admin/produtos', [
             'name' => 'Cesto de Bambu', 'category_id' => null, 'price' => 100, 'stock' => 3,
-            'discount_percentage' => 10, 'checkout_discount_percentage' => 7,
-            'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
+            'discount_percentage' => 10, 'checkout_discount_percentage' => 7, 'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
         ])->assertRedirect();
 
         $product = Product::where('name', 'Cesto de Bambu')->firstOrFail();
-        $this->assertEquals(105, (float) $product->price);
+        $this->assertEquals(100, (float) $product->price);
         $this->assertEquals(10, (float) $product->discount_percentage);
         $this->assertEquals(7, (float) $product->checkout_discount_percentage);
         $this->assertNull($product->discount_amount);
-        $this->assertEquals(94.5, $product->precoSemOferta());
+        $this->assertEquals(90.0, $product->precoSemOferta());
 
-        // A edição mostra o valor do Pix (sem o +5%) e salvar de novo não acumula.
+        // A edição mostra o preço gravado e salvar de novo não muda nada.
         $this->actingAs($admin)->get("/admin/produtos/{$product->id}/editar")
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('precoPix.price', 100)->etc());
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('product.price', '100.00')->missing('precoPix')->etc());
 
         $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [
             'name' => 'Cesto de Bambu', 'category_id' => null, 'sku' => $product->sku, 'price' => 100, 'discount_percentage' => 10,
             'is_active' => true, 'is_featured' => false, 'is_new_release' => false,
         ])->assertRedirect();
 
-        $this->assertEquals(105, (float) $product->fresh()->price);
+        $this->assertEquals(100, (float) $product->fresh()->price);
     }
 
-    public function test_marketplace_sem_preco_proprio_recebe_o_preco_sem_o_acrescimo(): void
+    public function test_marketplace_sem_preco_proprio_recebe_o_preco_da_loja(): void
     {
         $product = Product::factory()->create(['price' => 105]);
         $semPreco = new ProductChannelListing(['price' => null]);
         $comPreco = new ProductChannelListing(['price' => 120]);
 
-        $this->assertSame(100.0, $semPreco->precoDeVenda($product));
+        $this->assertSame(105.0, $semPreco->precoDeVenda($product));
         $this->assertSame(120.0, $comPreco->precoDeVenda($product));
     }
 
-    public function test_comando_sobe_os_precos_uma_vez_com_backup_e_desfaz(): void
+    public function test_comando_tira_o_acrescimo_so_dos_ids_com_backup_e_desfaz(): void
     {
         Storage::fake('local');
-        $a = Product::factory()->create(['price' => 100, 'discount_amount' => null]);
-        $b = Product::factory()->create(['price' => 39.93, 'discount_amount' => 7, 'is_active' => false]);
+        $a = Product::factory()->create(['price' => 105, 'discount_amount' => null]);
+        $b = Product::factory()->create(['price' => 41.93, 'discount_amount' => 7.35, 'is_active' => false]);
+        $direto = Product::factory()->create(['price' => 57.90, 'discount_amount' => null]);
 
-        $this->artisan('produtos:acrescimo-pix')->assertSuccessful();
-        $this->assertEquals(100, (float) $a->fresh()->price);
-
-        $this->artisan('produtos:acrescimo-pix --executar')->assertSuccessful();
+        $this->artisan('produtos:remover-acrescimo-pix')->assertFailed();
+        $this->artisan("produtos:remover-acrescimo-pix --ids={$a->id},{$b->id}")->assertSuccessful();
         $this->assertEquals(105, (float) $a->fresh()->price);
-        $this->assertEquals(41.93, (float) $b->fresh()->price);
-        $this->assertEquals(7.35, (float) $b->fresh()->discount_amount);
-        $this->assertNotNull(Setting::get('loja.acrescimo_pix_aplicado_em'));
+
+        $this->artisan("produtos:remover-acrescimo-pix --ids={$a->id},{$b->id} --executar")->assertSuccessful();
+        $this->assertEquals(100, (float) $a->fresh()->price);
+        $this->assertEquals(39.93, (float) $b->fresh()->price);
+        $this->assertEquals(7, (float) $b->fresh()->discount_amount);
+        $this->assertEquals(57.90, (float) $direto->fresh()->price);
+        $this->assertNotNull(Setting::get('loja.acrescimo_pix_removido_em'));
 
         // Não roda duas vezes.
-        $this->artisan('produtos:acrescimo-pix --executar')->assertFailed();
-        $this->assertEquals(105, (float) $a->fresh()->price);
+        $this->artisan("produtos:remover-acrescimo-pix --ids={$a->id} --executar")->assertFailed();
+        $this->assertEquals(100, (float) $a->fresh()->price);
 
         $backup = collect(Storage::disk('local')->files('backups'))->first();
-        $this->artisan("produtos:acrescimo-pix --restaurar={$backup}")->assertSuccessful();
-        $this->assertEquals(100, (float) $a->fresh()->price);
-        $this->assertEquals(7, (float) $b->fresh()->discount_amount);
+        $this->artisan("produtos:remover-acrescimo-pix --restaurar={$backup}")->assertSuccessful();
+        $this->assertEquals(105, (float) $a->fresh()->price);
+        $this->assertEquals(7.35, (float) $b->fresh()->discount_amount);
     }
 }

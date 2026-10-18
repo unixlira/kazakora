@@ -22,11 +22,6 @@ const props = defineProps({
         type: Object,
         default: null,
     },
-    // Valores do Pix (preço da loja sem o +5%) — pedido 2026-10-09.
-    precoPix: {
-        type: Object,
-        default: null,
-    },
     categories: {
         type: Array,
         default: () => [],
@@ -74,7 +69,7 @@ const form = useForm({
     color: props.product.color ?? '',
     variation: props.product.variation ?? '',
     description: props.product.description ?? '',
-    price: props.precoPix?.price ?? props.product.price,
+    price: props.product.price,
     cost_price: props.product.cost_price ?? '',
     discount_percentage: props.product.discount_percentage,
     checkout_discount_percentage: props.product.checkout_discount_percentage,

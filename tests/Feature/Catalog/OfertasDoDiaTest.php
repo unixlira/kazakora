@@ -48,7 +48,7 @@ class OfertasDoDiaTest extends TestCase
         $this->assertSame(130.0, $boa->fresh()->final_price);
         $this->assertTrue($boa->fresh()->oferta_do_dia);
         $listing = new ProductChannelListing(['product_id' => $boa->id, 'channel' => 'mercado_livre']);
-        $this->assertSame(round(140 / 1.05, 2), round($listing->precoDeVenda($boa->fresh()), 2));
+        $this->assertSame(140.0, round($listing->precoDeVenda($boa->fresh()), 2));
         $this->assertSame(140.0, $prejuizo->fresh()->final_price);
     }
 
@@ -138,23 +138,11 @@ class OfertasDoDiaTest extends TestCase
         $this->assertSame([$comDesconto->id], OfertaDoDia::query()->whereDate('data', now()->toDateString())->pluck('product_id')->all());
     }
 
-    public function test_marcar_no_cadastro_poe_o_produto_na_secao_da_home(): void
+    public function test_marcado_no_cadastro_nao_entra_na_secao_da_home(): void
     {
-        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
-        $produto = $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20]);
-        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('vitrine.ofertas', []));
+        // Pedido 2026-10-18: a seção mostra só Oferta Relâmpago da KazaKora no ar.
+        $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20, 'is_daily_offer' => true]);
 
-        $this->actingAs($admin)->put("/admin/produtos/{$produto->id}", [
-            'name' => $produto->name, 'price' => 100, 'cost_price' => 20, 'is_active' => true, 'is_daily_offer' => true,
-        ])->assertRedirect()->assertSessionHas('success', fn ($msg) => str_contains($msg, 'Já aparece nas Ofertas do Dia'));
-
-        $this->assertTrue($produto->fresh()->is_daily_offer);
-        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('vitrine.ofertas.0.id', $produto->id));
-        $this->assertFalse(OfertaDoDia::query()->exists(), 'marcar não pode criar desconto escondido em outros produtos');
-
-        $this->actingAs($admin)->put("/admin/produtos/{$produto->id}", [
-            'name' => $produto->name, 'price' => 100, 'cost_price' => 20, 'is_active' => true, 'is_daily_offer' => false,
-        ])->assertSessionHas('success', fn ($msg) => str_contains($msg, 'Saiu das Ofertas do Dia'));
         $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('vitrine.ofertas', []));
     }
 }

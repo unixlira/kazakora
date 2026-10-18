@@ -6,39 +6,13 @@ use App\Modules\Catalog\Models\Product;
 use Illuminate\Support\Collection;
 
 /**
- * Desconto no Pix da loja. Desde 2026-10-18 é por produto: campo
- * "Desconto Checkout (%)" (products.checkout_discount_percentage), sem
- * percentual fixo no código. Vazio = sem desconto no Pix.
- *
- * O acréscimo no preço gravado (pedido 2026-10-09: cadastra-se o valor do
- * Pix e a loja grava +5%; marketplaces usam o preço sem o acréscimo)
- * continua, em config('loja.acrescimo_preco_loja').
+ * Desconto no Pix da loja, só no checkout. Desde 2026-10-18 é por produto:
+ * campo "Desconto Checkout (%)" (products.checkout_discount_percentage), sem
+ * percentual fixo no código. Vazio = sem desconto no Pix. O preço da loja é
+ * o valor do cadastro, sem acréscimo.
  */
 class DescontoPix
 {
-    /** % do acréscimo gravado no preço da loja (não é desconto). */
-    public static function acrescimo(): float
-    {
-        return max(0.0, (float) config('loja.acrescimo_preco_loja', 0));
-    }
-
-    public static function fator(): float
-    {
-        return 1 + self::acrescimo() / 100;
-    }
-
-    /** Valor digitado no cadastro → preço gravado na loja (com o acréscimo). */
-    public static function comAcrescimo(?float $valor): ?float
-    {
-        return $valor === null ? null : round($valor * self::fator(), 2);
-    }
-
-    /** Preço da loja → valor sem o acréscimo (o que foi digitado / vai pros marketplaces). */
-    public static function semAcrescimo(?float $valor): ?float
-    {
-        return $valor === null ? null : round($valor / self::fator(), 2);
-    }
-
     /** "Desconto Checkout (%)" do produto. */
     public static function percentualDo(?Product $produto): float
     {

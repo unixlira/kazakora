@@ -1,15 +1,9 @@
 <script setup>
 import InputError from '@/Shared/Components/InputError.vue';
-import { usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { useSkuPreview } from '@/Shared/useSkuPreview';
 
-// Pedido 2026-10-09: a loja grava o preço digitado + acréscimo (marketplaces usam o digitado).
-const acrescimo = computed(() => Number(usePage().props.acrescimoPrecoLoja ?? 0));
-const precoNaLoja = computed(() => {
-    const valor = Number(props.form.price);
-    return valor > 0 && acrescimo.value > 0 ? (Math.round(valor * (1 + acrescimo.value / 100) * 100) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null;
-});
+// Pedido 2026-10-18: o preço digitado é o preço da loja; o Pix desconta só no checkout ("Desconto Checkout").
 
 const props = defineProps({
     form: {
@@ -259,9 +253,8 @@ const regenerateSku = async () => {
                     required
                     class="mt-1 w-full rounded border border-gray-300 px-3 py-2"
                 >
-                <p v-if="acrescimo > 0" class="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                    A loja grava +{{ acrescimo }}% sobre este valor<template v-if="precoNaLoja">: preço na loja {{ precoNaLoja }}</template>.
-                    Marketplaces usam o valor digitado.
+                <p class="mt-1 text-xs text-gray-500">
+                    Preço cheio da loja. Os descontos do site e do Pix ficam nos campos abaixo.
                 </p>
                 <InputError :message="form.errors.price" />
             </div>
@@ -344,11 +337,6 @@ const regenerateSku = async () => {
             <label class="flex items-center gap-2 text-sm">
                 <input v-model="form.is_new_release" type="checkbox">
                 Lançamento (aparece como novidade)
-            </label>
-
-            <label class="flex items-center gap-2 text-sm">
-                <input v-model="form.is_daily_offer" type="checkbox">
-                Oferta do Dia (aparece na seção "Ofertas do Dia" da home, depois das Ofertas Relâmpago, se tiver estoque)
             </label>
         </div>
 

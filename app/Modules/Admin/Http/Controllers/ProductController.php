@@ -13,7 +13,6 @@ use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\WhatsApp\Services\GeminiUnavailableException;
 use App\Services\SkuGeneratorService;
-use App\Support\DescontoPix;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -129,7 +128,6 @@ class ProductController extends Controller
         }
 
         $validated['slug'] = $this->uniqueSlug($validated['name']);
-        $validated = $this->comAcrescimoPix($validated);
 
         // Sem categoria no envio (cadastro pela API/teste) vale como nenhuma.
         $category = ! empty($validated['category_id'])
@@ -139,11 +137,10 @@ class ProductController extends Controller
         $product = $this->createWithGeneratedSku($validated, $category?->name);
 
         $this->gerarConteudoAnuncioDepois($product);
-        $aviso = $product->is_daily_offer ? ' '.$this->avisoOfertaDoDia($product) : '';
 
         return redirect()
             ->route('admin.produtos.editar', $product)
-            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.'.$aviso);
+            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.');
     }
 
     public function edit(Product $product): Response
@@ -183,12 +180,7 @@ class ProductController extends Controller
 
         return Inertia::render('Admin/Products/Edit', [
             'product' => $product,
-            // Pedido 2026-10-09: o formulário mostra o valor do Pix (sem o
-            // +5% que fica gravado no preço da loja) — ao salvar, soma de novo.
             'adContent' => $product->adContent()->first(['id', 'fonte', 'gerado_em', 'destaques', 'blocos']),
-            'precoPix' => [
-                'price' => DescontoPix::semAcrescimo((float) $product->price),
-            ],
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'fiscalData' => $product->fiscalData,
             'images' => $product->images,
@@ -271,9 +263,8 @@ class ProductController extends Controller
             $validated['sku'] = strtoupper(trim($validated['sku']));
         }
 
-        $product->update($this->comAcrescimoPix($validated));
+        $product->update($validated);
         $this->gerarConteudoAnuncioDepois($product);
-        $mudouOferta = $product->wasChanged('is_daily_offer');
 
         // $product->stock aqui já é o valor ATUAL do banco (route model
         // binding busca fresco no início desta requisição, e $validated
@@ -283,27 +274,7 @@ class ProductController extends Controller
             $this->stock->adjust($product, $adjustment, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
         }
 
-        $aviso = $mudouOferta ? ' '.$this->avisoOfertaDoDia($product) : '';
-
-        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.'.$aviso);
-    }
-
-    /**
-     * Checkbox "Oferta do Dia" mudou (pedido 2026-10-18): a home lê o
-     * checkbox na hora (VitrineHome), depois das Ofertas Relâmpago. Só
-     * avisa se o produto vai aparecer.
-     */
-    private function avisoOfertaDoDia(Product $product): string
-    {
-        if (! $product->is_daily_offer) {
-            return 'Saiu das Ofertas do Dia da home.';
-        }
-
-        $aparece = Product::query()->whereKey($product->id)->where('is_active', true)->whereNull('parent_product_id')->comEstoque()->exists();
-
-        return $aparece
-            ? 'Já aparece nas Ofertas do Dia da home, depois das Ofertas Relâmpago.'
-            : 'Marcado como Oferta do Dia, mas só aparece na home quando estiver ativo, com estoque e não for variação.';
+        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.');
     }
 
     public function destroy(Product $product): RedirectResponse
@@ -420,7 +391,9 @@ class ProductController extends Controller
             $rules['stock'] = ['required', 'integer', 'min:0'];
         }
 
-        return $request->validate($rules);
+        // Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
+        // o antigo desconto em R$ sai ao salvar.
+        return [...$request->validate($rules), 'discount_amount' => null];
     }
 
     /**
@@ -467,23 +440,6 @@ class ProductController extends Controller
 
             return response()->json(['message' => Str::limit($exception->getMessage(), 300)], 422);
         }
-    }
-
-    /**
-     * Pedido 2026-10-09: o preço da loja é gravado com o acréscimo de
-     * config('loja.acrescimo_preco_loja'); marketplaces usam o digitado.
-     * Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
-     * o antigo desconto em R$ sai ao salvar.
-     */
-    private function comAcrescimoPix(array $validated): array
-    {
-        if (array_key_exists('price', $validated) && $validated['price'] !== null) {
-            $validated['price'] = DescontoPix::comAcrescimo((float) $validated['price']);
-        }
-
-        $validated['discount_amount'] = null;
-
-        return $validated;
     }
 
     private function uniqueSlug(string $name, ?int $ignoreId = null): string

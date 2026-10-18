@@ -2,12 +2,10 @@
 
 return [
     /*
-    | Acréscimo gravado no preço da loja (pedido 2026-10-09): quem cadastra
-    | digita o valor do Pix e o sistema grava +5% em products.price; os
-    | marketplaces recebem o preço SEM o acréscimo. O DESCONTO do Pix não mora
-    | mais aqui: desde 2026-10-18 é por produto ("Desconto Checkout (%)").
+    | Desconto no Pix: desde 2026-10-18 é por produto ("Desconto Checkout (%)"
+    | no cadastro, products.checkout_discount_percentage), sem % fixo aqui.
+    | O preço da loja (products.price) é o valor digitado no cadastro.
     */
-    'acrescimo_preco_loja' => (float) env('LOJA_ACRESCIMO_PRECO', 5),
 
     /*
     | Selo "Verificada por Reclame AQUI" (2026-10-11). Verificação aprovada:

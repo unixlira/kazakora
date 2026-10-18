@@ -83,7 +83,7 @@ class CancelarPedidoTest extends TestCase
         Mail::fake();
         [$order, $product] = $this->pedidoPago();
         $payment = $this->pagamentoPix($order);
-        $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldReceive('refundPayment')->once()->with('777')->andReturn([]));
+        $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldReceive('refundPayment')->once()->with('777', "estorno-pagamento-{$payment->id}")->andReturn([]));
         $admin = $this->admin();
 
         $this->actingAs($admin)

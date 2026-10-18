@@ -64,10 +64,13 @@ class MercadoPagoPaymentService
         return $this->request('POST', "v1/orders/{$orderId}/cancel");
     }
 
-    /** Só funciona com a order em status "processed". Sem $amount, estorna o valor total. */
-    public function refundOrder(string $orderId, ?float $amount = null): array
+    /**
+     * Só funciona com a order em status "processed". Sem $amount, estorna o valor total.
+     * $idempotencyKey: a mesma chave numa nova tentativa não estorna duas vezes.
+     */
+    public function refundOrder(string $orderId, ?float $amount = null, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : []);
+        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : [], $idempotencyKey);
     }
 
     /**
@@ -196,9 +199,10 @@ class MercadoPagoPaymentService
         return $this->request('PUT', "v1/payments/{$paymentId}", ['status' => 'cancelled']);
     }
 
-    public function refundPayment(string $paymentId): array
+    /** $idempotencyKey: a mesma chave numa nova tentativa não estorna duas vezes. */
+    public function refundPayment(string $paymentId, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/payments/{$paymentId}/refunds");
+        return $this->request('POST', "v1/payments/{$paymentId}/refunds", [], $idempotencyKey);
     }
 
     private function request(

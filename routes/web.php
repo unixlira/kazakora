@@ -185,7 +185,6 @@ Route::prefix('carrinho')->name('carrinho.')->group(function () {
     Route::delete('/{product}', [CartController::class, 'destroy'])->name('remover');
 });
 
-// Rastrear pedido (pedido 2026-10-10) — página pública.
 // Sair das promoções por e-mail (link assinado do rodapé do cupom).
 Route::get('/promocoes/sair/{user}', function (\App\Models\User $user) {
     $user->forceFill(['recebe_promocoes' => false])->save();
@@ -197,9 +196,13 @@ Route::get('/promocoes/sair/{user}', function (\App\Models\User $user) {
 Route::get('/fale-conosco', [ContatoController::class, 'index'])->name('contato');
 Route::post('/fale-conosco', [ContatoController::class, 'store'])->middleware('throttle:5,10')->name('contato.enviar');
 
-Route::get('/rastreio', [TrackingController::class, 'index'])->name('rastreio');
-Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
-Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
+// Rastreio só com login (pedido 2026-10-17): o dono do pedido ou um admin.
+// Visitante cai no login e volta para o mesmo link depois de entrar.
+Route::middleware('auth')->group(function () {
+    Route::get('/rastreio', [TrackingController::class, 'index'])->name('rastreio');
+    Route::post('/rastreio', [TrackingController::class, 'search'])->middleware('throttle:20,1')->name('rastreio.buscar');
+    Route::get('/rastreio/{ref}', [TrackingController::class, 'show'])->name('rastreio.ver');
+});
 
 Route::get('/frete/prazo', [CheckoutController::class, 'deliveryEstimate'])->middleware('throttle:30,1')->name('frete.prazo');
 // Frete grátis com o frete embutido (2026-10-12): itens, subtotal e TURBO pelo CEP.

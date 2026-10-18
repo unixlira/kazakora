@@ -11,8 +11,8 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
- * Rastrear pedido (pedido 2026-10-10): página pública por número + e-mail/CPF
- * ou pelo link assinado /rastreio/{id}-{assinatura}.
+ * Rastrear pedido (pedido 2026-10-10) pelo número ou pelo link assinado
+ * /rastreio/{id}-{assinatura}; só com login, do dono ou de admin (2026-10-17).
  */
 class RastreioTest extends TestCase
 {
@@ -34,31 +34,54 @@ class RastreioTest extends TestCase
         return $order;
     }
 
-    public function test_busca_por_email_ou_cpf_leva_ao_link_assinado(): void
+    public function test_visitante_vai_para_o_login_e_volta_ao_link(): void
     {
         $order = $this->pedido();
+        $link = route('rastreio.ver', $order->trackingRef());
 
-        $this->post('/rastreio', ['pedido' => '#'.$order->id, 'documento' => 'MARIA@exemplo.com'])
-            ->assertRedirect(route('rastreio.ver', $order->trackingRef()));
-        $this->post('/rastreio', ['pedido' => (string) $order->id, 'documento' => '123.456.789-09'])
-            ->assertRedirect(route('rastreio.ver', $order->trackingRef()));
+        $this->get('/rastreio')->assertRedirect(route('entrar'));
+        $this->post('/rastreio', ['pedido' => (string) $order->id])->assertRedirect(route('entrar'));
+        $this->get($link)->assertRedirect(route('entrar'));
+
+        $this->post('/entrar', ['email' => 'maria@exemplo.com', 'password' => 'password'])->assertRedirect($link);
     }
 
-    public function test_dados_que_nao_conferem_nao_mostram_o_pedido(): void
+    public function test_dono_busca_pelo_numero_e_ve_o_pedido(): void
     {
         $order = $this->pedido();
 
-        $this->from('/rastreio')->post('/rastreio', ['pedido' => (string) $order->id, 'documento' => 'outra@pessoa.com'])
+        $this->actingAs($order->user)->post('/rastreio', ['pedido' => '#'.$order->id])
+            ->assertRedirect(route('rastreio.ver', $order->trackingRef()));
+        $this->actingAs($order->user)->get('/rastreio/'.$order->trackingRef())->assertOk();
+    }
+
+    public function test_outro_cliente_nao_ve_o_pedido(): void
+    {
+        $order = $this->pedido();
+        $outro = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+
+        $this->actingAs($outro)->get('/rastreio/'.$order->trackingRef())->assertForbidden();
+        $this->actingAs($outro)->from('/rastreio')->post('/rastreio', ['pedido' => (string) $order->id])
             ->assertRedirect('/rastreio')
             ->assertSessionHasErrors('pedido');
+    }
+
+    public function test_admin_ve_qualquer_pedido(): void
+    {
+        $order = $this->pedido();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/rastreio/'.$order->trackingRef())->assertOk();
+        $this->actingAs($admin)->post('/rastreio', ['pedido' => (string) $order->id])
+            ->assertRedirect(route('rastreio.ver', $order->trackingRef()));
     }
 
     public function test_link_com_assinatura_errada_da_404(): void
     {
         $order = $this->pedido();
 
-        $this->get('/rastreio/'.$order->id.'-0000000000')->assertNotFound();
-        $this->get('/rastreio/'.$order->id)->assertNotFound();
+        $this->actingAs($order->user)->get('/rastreio/'.$order->id.'-0000000000')->assertNotFound();
+        $this->actingAs($order->user)->get('/rastreio/'.$order->id)->assertNotFound();
     }
 
     public function test_pagina_mostra_etapas_e_codigo_dos_correios(): void
@@ -70,7 +93,7 @@ class RastreioTest extends TestCase
             'state' => 'SP', 'service_code' => '03298', 'weight_grams' => 300, 'content_items' => json_encode([]),
         ]);
 
-        $this->get('/rastreio/'.$order->trackingRef())
+        $this->actingAs($order->user)->get('/rastreio/'.$order->trackingRef())
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Checkout/Rastreio', false)

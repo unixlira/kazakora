@@ -2,6 +2,7 @@
 
 namespace App\Modules\BeautyKora\Models;
 
+use App\Support\NomeCapitalizado;
 use App\Modules\Checkout\Models\Order;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +14,7 @@ use Laravel\Sanctum\HasApiTokens;
  */
 class BeautyKoraCliente extends Model
 {
-    use HasApiTokens;
+    use HasApiTokens, NomeCapitalizado;
 
     protected $table = 'beautykora_clientes';
 

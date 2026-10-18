@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\NomeCapitalizado;
 use App\Modules\Auth\Mail\PasswordResetMail;
 use App\Modules\Checkout\Models\Address;
 use App\Modules\Checkout\Models\Order;
@@ -22,7 +23,7 @@ use Illuminate\Support\Facades\Mail;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use Auditable, HasFactory, Notifiable, SoftDeletes;
+    use Auditable, HasFactory, NomeCapitalizado, Notifiable, SoftDeletes;
 
     public const ROLE_ADMIN = 'admin';
 

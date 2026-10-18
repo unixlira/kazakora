@@ -36,6 +36,16 @@ const props = defineProps({
 
 const emit = defineEmits(['submit']);
 
+// Desconto Site em % ou em valor fixo (R$), opcional (pedido 2026-10-18).
+const siteDiscountType = ref(
+    Number(props.form.discount_percentage) > 0 ? 'percentage' : (Number(props.form.discount_amount) > 0 ? 'amount' : ''),
+);
+
+watch(siteDiscountType, (type) => {
+    if (type !== 'percentage') props.form.discount_percentage = null;
+    if (type !== 'amount') props.form.discount_amount = null;
+});
+
 // Desconto Checkout (Pix) em % ou em valor fixo, opcional (pedido 2026-10-18).
 const checkoutDiscountType = ref(
     Number(props.form.checkout_discount_percentage) > 0 ? 'percentage' : (Number(props.form.checkout_discount_amount) > 0 ? 'amount' : ''),
@@ -127,8 +137,10 @@ const centavos = (valor) => Math.round(valor * 100) / 100;
 const resumo = computed(() => {
     const cheio = Math.max(0, Number(props.form.price) || 0);
     const custo = Math.max(0, Number(props.form.cost_price) || 0);
-    const descontoSite = limitarPct(props.form.discount_percentage);
-    const precoSite = centavos(cheio * (1 - descontoSite / 100));
+    const valorSite = siteDiscountType.value === 'amount'
+        ? Math.min(cheio, Math.max(0, Number(props.form.discount_amount) || 0))
+        : centavos(cheio * limitarPct(props.form.discount_percentage) / 100);
+    const precoSite = centavos(cheio - valorSite);
     const valorCheckout = checkoutDiscountType.value === 'amount'
         ? Math.min(precoSite, Math.max(0, Number(props.form.checkout_discount_amount) || 0))
         : centavos(precoSite * limitarPct(props.form.checkout_discount_percentage) / 100);
@@ -140,7 +152,8 @@ const resumo = computed(() => {
     return {
         cheio,
         custo,
-        descontoSite,
+        descontoSite: cheio > 0 ? valorSite * 100 / cheio : 0,
+        valorSite,
         descontoCheckout: precoSite > 0 ? valorCheckout * 100 / precoSite : 0,
         valorCheckout,
         precoFinal,
@@ -357,15 +370,32 @@ const resumo = computed(() => {
             </div>
         </div>
 
+        <!-- Pedido 2026-10-18: Desconto Site e Desconto Checkout com o seletor
+             % ou R$ em cima do campo, um bloco ao lado do outro (empilha no celular). -->
         <div class="grid items-start gap-4 sm:grid-cols-2">
-            <div>
-                <label for="discount_percentage" class="block text-sm font-medium">Desconto Site (%)</label>
-                <input id="discount_percentage" v-model="form.discount_percentage" type="number" step="any" min="0" max="100"
-                    placeholder="0" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                <p class="mt-1 text-xs text-gray-400">Desconto direto no produto: o card e a página mostram o preço riscado e o preço com desconto.</p>
-                <InputError :message="form.errors.discount_percentage" />
+            <div class="space-y-2">
+                <div>
+                    <label for="site_discount_type" class="block text-sm font-medium">Tipo do Desconto Site</label>
+                    <select id="site_discount_type" v-model="siteDiscountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                        <option value="">Sem desconto</option>
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="amount">Valor fixo (R$)</option>
+                    </select>
+                </div>
+                <div>
+                    <label :for="siteDiscountType === 'amount' ? 'discount_amount' : 'discount_percentage'" class="block text-sm font-medium">
+                        Desconto Site {{ siteDiscountType === 'amount' ? '(R$)' : '(%)' }}
+                    </label>
+                    <input v-if="siteDiscountType === 'amount'" id="discount_amount" v-model="form.discount_amount" type="number" step="0.01" min="0"
+                        placeholder="Ex: 10,00" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                    <input v-else id="discount_percentage" v-model="form.discount_percentage" type="number" step="any" min="0" max="100"
+                        placeholder="Ex: 5" :disabled="siteDiscountType === ''"
+                        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
+                    <InputError :message="form.errors.discount_percentage || form.errors.discount_amount" />
+                </div>
+                <p class="text-xs text-gray-400">Desconto direto no produto: o card e a página mostram o preço riscado e o preço com desconto. Valor fixo é por unidade.</p>
             </div>
-            <div class="grid items-start gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
                 <div>
                     <label for="checkout_discount_type" class="block text-sm font-medium">Tipo do Desconto Checkout</label>
                     <select id="checkout_discount_type" v-model="checkoutDiscountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
@@ -385,7 +415,7 @@ const resumo = computed(() => {
                         class="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
                     <InputError :message="form.errors.checkout_discount_percentage || form.errors.checkout_discount_amount" />
                 </div>
-                <p class="text-xs text-gray-400 sm:col-span-2">Desconto no Pix: sai no checkout só pagando 100% no Pix. Valor fixo é por unidade. Sem desconto = preço cheio no Pix.</p>
+                <p class="text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Valor fixo é por unidade. Sem desconto = preço cheio no Pix.</p>
             </div>
         </div>
 
@@ -413,7 +443,7 @@ const resumo = computed(() => {
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Desconto Opcional</dt>
-                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ percentual(resumo.descontoSite) }}</dd>
+                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ siteDiscountType === 'amount' ? moeda(resumo.valorSite) : percentual(resumo.descontoSite) }}</dd>
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Desconto do Checkout</dt>

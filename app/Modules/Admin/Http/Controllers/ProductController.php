@@ -383,6 +383,8 @@ class ProductController extends Controller
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // "Desconto Site" em valor fixo (R$), no lugar do % (pedido 2026-10-18).
+            'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // "Desconto Checkout" em valor fixo (R$ por unidade), no lugar do %.
             'checkout_discount_amount' => ['nullable', 'numeric', 'min:0'],
@@ -396,16 +398,19 @@ class ProductController extends Controller
             $rules['stock'] = ['required', 'integer', 'min:0'];
         }
 
-        // Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
-        // o antigo desconto em R$ sai ao salvar.
         $dados = $request->validate($rules);
+
+        // Desconto Site é em % OU em R$: com o % preenchido, o valor sai.
+        if (filled($dados['discount_percentage'] ?? null)) {
+            $dados['discount_amount'] = null;
+        }
 
         // Desconto Checkout é em % OU em R$: com o % preenchido, o valor sai.
         if (filled($dados['checkout_discount_percentage'] ?? null)) {
             $dados['checkout_discount_amount'] = null;
         }
 
-        return [...$dados, 'discount_amount' => null];
+        return $dados;
     }
 
     /**

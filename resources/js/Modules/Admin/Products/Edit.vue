@@ -72,6 +72,7 @@ const form = useForm({
     price: props.product.price,
     cost_price: props.product.cost_price ?? '',
     discount_percentage: props.product.discount_percentage,
+    discount_amount: props.product.discount_amount,
     checkout_discount_percentage: props.product.checkout_discount_percentage,
     checkout_discount_amount: props.product.checkout_discount_amount,
     // stock aqui é só EXIBIÇÃO ("Estoque atual: X" no ProductForm) — quem

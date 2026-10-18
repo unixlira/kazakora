@@ -15,7 +15,6 @@ use App\Services\MercadoLivre\MercadoLivreClient;
 use App\Services\MercadoLivre\Services\OrderService;
 use App\Services\MercadoLivre\Services\ProductService;
 use App\Services\MercadoLivre\Services\ShipmentService;
-use App\Support\DescontoPix;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -539,9 +538,8 @@ class MercadoLivreDriver extends AbstractMarketplaceDriver
                     'sku' => $sku.$suffix,
                     'name' => $item['name'],
                     'slug' => $slugBase.$suffix,
-                    // Preço da loja = preço do canal +5% do Pix (pedido 2026-10-09);
-                    // o canal continua com o preço dele (precoDeVenda tira o +5%).
-                    'price' => DescontoPix::comAcrescimo((float) $item['price']),
+                    // Preço da loja = preço do canal (pedido 2026-10-18: sem o +5% do Pix).
+                    'price' => (float) $item['price'],
                     'stock' => $initialStock,
                     'color' => $item['color'],
                     'is_active' => false,

@@ -2,10 +2,9 @@
 
 return [
     /*
-    | Desconto no Pix da loja KazaKora (pedido 2026-10-09). O preço da loja
-    | (products.price) já leva esse acréscimo embutido: quem cadastra digita o
-    | valor do Pix e o sistema grava +5%. No checkout, pagando 100% no Pix,
-    | sai o desconto. Os marketplaces recebem o preço SEM o acréscimo.
+    | Desconto no Pix da loja KazaKora (pedido 2026-10-09). Só no checkout,
+    | pagando 100% no Pix. Desde 2026-10-18 o preço da loja (products.price) é
+    | exatamente o valor digitado no cadastro, sem acréscimo do Pix.
     */
     'desconto_pix' => (float) env('LOJA_DESCONTO_PIX', 5),
 

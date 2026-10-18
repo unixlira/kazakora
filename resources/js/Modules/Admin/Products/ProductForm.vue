@@ -114,9 +114,8 @@ const regenerateSku = async () => {
 // (Product::precoSemOferta() e DescontoPix): Desconto Site sobre o preço
 // cheio, Pix sobre o preço já com o Desconto Site. Frete fixo estimado em
 // R$ 30,00. Imposto padrão (Simples) e taxa do Pix sobre o preço final.
-// Lucro (o do Lucro Mínimo, mesma conta do servidor em LucroProduto) =
-// preço final - imposto - taxa - custo; o Lucro Líquido Estimado tira
-// também o frete.
+// Lucro sem frete = preço final - imposto - taxa - custo; o Lucro Líquido
+// Estimado tira também o frete. Sem Lucro Mínimo nem trava (pedido do Lira).
 const FRETE_ESTIMADO = 30;
 const taxas = computed(() => usePage().props.taxasLucro ?? { imposto: 4.5, taxa_pix: 0.99, taxa_cartao: 4.98 });
 
@@ -137,9 +136,6 @@ const resumo = computed(() => {
     const imposto = centavos(precoFinal * taxas.value.imposto / 100);
     const taxa = centavos(precoFinal * taxas.value.taxa_pix / 100);
     const lucroSemFrete = centavos(precoFinal - imposto - taxa - custo);
-    const minimoDigitado = props.form.min_profit !== null && props.form.min_profit !== undefined && props.form.min_profit !== '';
-    const minimo = minimoDigitado ? Number(props.form.min_profit) : (precoSite > 30 ? 10 : 8);
-    const fatorPix = 1 - (taxas.value.imposto + taxas.value.taxa_pix) / 100;
 
     return {
         cheio,
@@ -151,11 +147,6 @@ const resumo = computed(() => {
         imposto,
         taxa,
         lucroSemFrete,
-        minimo,
-        minimoDigitado,
-        // Sem custo não há conta: o servidor também não confere.
-        abaixoDoMinimo: custo > 0 && precoSite > 0 && lucroSemFrete < minimo,
-        maximoCheckout: Math.max(0, Math.floor((precoSite - (minimo + custo) / fatorPix) * 100 + 1e-6) / 100),
         lucro: centavos(lucroSemFrete - FRETE_ESTIMADO),
     };
 });
@@ -398,15 +389,6 @@ const resumo = computed(() => {
             </div>
         </div>
 
-        <div class="sm:max-w-xs">
-            <label for="min_profit" class="block text-sm font-medium">Lucro Mínimo (R$)</label>
-            <input id="min_profit" v-model="form.min_profit" type="number" step="0.01" min="0"
-                :placeholder="resumo.cheio > 0 ? `Padrão: ${moeda(resumo.minimo)}` : 'Padrão'"
-                class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-            <p class="mt-1 text-xs text-gray-400">Vazio = R$ 10 para preço acima de R$ 30, R$ 8 até R$ 30. O Pix nunca desconta abaixo disso.</p>
-            <InputError :message="form.errors.min_profit" />
-        </div>
-
         <!-- Pedido 2026-10-18: resumo financeiro num alerta de sucesso verde.
              Texto branco, descontos em vermelho e Preço Final em verde destacado.
              Claro: verde forte; escuro: verde fechado com borda. -->
@@ -449,11 +431,7 @@ const resumo = computed(() => {
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Lucro sem frete</dt>
-                    <dd class="font-semibold tabular-nums" :class="{ 'resumo-negativo': resumo.abaixoDoMinimo }">{{ moeda(resumo.lucroSemFrete) }}</dd>
-                </div>
-                <div class="flex justify-between gap-3">
-                    <dt>Lucro Mínimo{{ resumo.minimoDigitado ? '' : ' (padrão)' }}</dt>
-                    <dd class="font-medium tabular-nums">{{ moeda(resumo.minimo) }}</dd>
+                    <dd class="font-semibold tabular-nums" :class="{ 'resumo-negativo': resumo.lucroSemFrete < 0 }">{{ moeda(resumo.lucroSemFrete) }}</dd>
                 </div>
                 <div class="flex justify-between gap-3">
                     <dt>Estimativa de Frete</dt>
@@ -464,15 +442,6 @@ const resumo = computed(() => {
                     <dd class="font-semibold tabular-nums" :class="{ 'resumo-negativo': resumo.lucro < 0 }">{{ moeda(resumo.lucro) }}</dd>
                 </div>
             </dl>
-
-            <p v-if="resumo.abaixoDoMinimo" class="mt-3 rounded-md bg-black/25 px-3 py-2 text-sm font-semibold">
-                <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
-                Lucro abaixo do mínimo.
-                <template v-if="resumo.valorCheckout > 0">
-                    Desconto Checkout máximo: {{ moeda(resumo.maximoCheckout) }} por unidade; com mais que isso o produto não salva.
-                </template>
-                <template v-else>Confira o preço ou o custo.</template>
-            </p>
 
             <div class="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-black/20 px-3 py-2">
                 <span class="text-sm font-semibold">Preço Final</span>

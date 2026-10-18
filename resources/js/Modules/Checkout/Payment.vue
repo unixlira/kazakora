@@ -4,7 +4,7 @@ import InputError from '@/Shared/Components/InputError.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { loadStripe } from '@stripe/stripe-js';
-import { loadMercadoPagoSdk } from '@/Shared/useMercadoPagoSdk';
+import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps({
@@ -115,7 +115,7 @@ const mountMpCardBrick = async () => {
             callbacks: {
                 onReady: () => { mpCardReady.value = true; },
                 onError: (error) => {
-                    mpCardError.value = error?.message ?? 'Não foi possível carregar o formulário de cartão.';
+                    mpCardError.value = mensagemErroCartao(error, 'Não foi possível carregar o formulário de cartão.');
                 },
                 onSubmit: (formData) => new Promise((resolve, reject) => {
                     chooseForm.transform((data) => ({
@@ -135,7 +135,7 @@ const mountMpCardBrick = async () => {
             },
         });
     } catch (error) {
-        mpCardError.value = error?.message ?? 'Não foi possível carregar o formulário de cartão.';
+        mpCardError.value = mensagemErroCartao(error, 'Não foi possível carregar o formulário de cartão.');
     }
 };
 
@@ -388,7 +388,7 @@ watch(() => props.mercadoPagoCardConfirmed, (confirmed) => {
                         <div class="rounded-2xl border border-store-border bg-store-bg-raised p-5">
                             <h2 class="mb-4 text-sm font-semibold uppercase text-store-fg-muted">Dados do cartão</h2>
                             <div id="mpCardBrick-container"></div>
-                            <p v-if="mpCardError" class="mt-3 text-sm text-red-600">{{ mpCardError }}</p>
+                            <p v-if="mpCardError" role="alert" class="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ mpCardError }}</p>
                         </div>
 
                         <div class="mt-6 flex justify-start">

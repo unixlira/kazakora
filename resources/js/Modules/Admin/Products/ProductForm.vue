@@ -1,6 +1,6 @@
 <script setup>
 import InputError from '@/Shared/Components/InputError.vue';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useSkuPreview } from '@/Shared/useSkuPreview';
 
 // Pedido 2026-10-18: o preço digitado é o preço da loja; o Pix desconta só no checkout ("Desconto Checkout").
@@ -99,6 +99,24 @@ const regenerateSku = async () => {
 
     regeneratingSku.value = false;
 };
+
+// "Desconto Checkout" em % ou em valor fixo R$ (pedido 2026-10-18): um campo
+// só na tela, gravado em checkout_discount_percentage ou checkout_discount_amount.
+const tipoDescontoCheckout = ref(Number(props.form.checkout_discount_amount) > 0 ? 'fixed' : 'percentage');
+
+const valorDescontoCheckout = computed({
+    get: () => (tipoDescontoCheckout.value === 'fixed'
+        ? props.form.checkout_discount_amount
+        : props.form.checkout_discount_percentage),
+    set: (valor) => {
+        props.form.checkout_discount_percentage = tipoDescontoCheckout.value === 'fixed' ? null : valor;
+        props.form.checkout_discount_amount = tipoDescontoCheckout.value === 'fixed' ? valor : null;
+    },
+});
+
+watch(tipoDescontoCheckout, () => {
+    valorDescontoCheckout.value = props.form.checkout_discount_percentage ?? props.form.checkout_discount_amount;
+});
 </script>
 
 <template>
@@ -315,11 +333,23 @@ const regenerateSku = async () => {
                 <InputError :message="form.errors.discount_percentage" />
             </div>
             <div>
-                <label for="checkout_discount_percentage" class="block text-sm font-medium">Desconto Checkout (%)</label>
-                <input id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
-                    placeholder="0" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                <p class="mt-1 text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Vazio = sem desconto no Pix.</p>
-                <InputError :message="form.errors.checkout_discount_percentage" />
+                <label for="checkout_discount_value" class="block text-sm font-medium">
+                    Desconto Checkout ({{ tipoDescontoCheckout === 'fixed' ? 'R$' : '%' }})
+                </label>
+                <div class="mt-1 flex gap-2">
+                    <select v-model="tipoDescontoCheckout" aria-label="Tipo do Desconto Checkout"
+                        class="rounded border border-gray-300 px-3 py-2">
+                        <option value="percentage">%</option>
+                        <option value="fixed">R$</option>
+                    </select>
+                    <input id="checkout_discount_value" v-model="valorDescontoCheckout" type="number" step="0.01" min="0"
+                        :max="tipoDescontoCheckout === 'fixed' ? (form.price || undefined) : 100"
+                        :placeholder="tipoDescontoCheckout === 'fixed' ? '0,00' : '0'" class="w-full rounded border border-gray-300 px-3 py-2">
+                </div>
+                <p class="mt-1 text-xs text-gray-400">
+                    Desconto no Pix: sai no checkout só pagando 100% no Pix, em % ou em R$ por unidade. Vazio = sem desconto no Pix.
+                </p>
+                <InputError :message="form.errors.checkout_discount_percentage || form.errors.checkout_discount_amount" />
             </div>
         </div>
 

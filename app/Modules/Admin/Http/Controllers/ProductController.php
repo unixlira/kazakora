@@ -65,7 +65,7 @@ class ProductController extends Controller
         // marca, modelo e descrição costumam ser idênticos entre
         // variações; cor/preço/estoque não (ficam em branco de propósito).
         $parent = $request->integer('parent_product_id')
-            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage'])
+            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage', 'checkout_discount_amount'])
             : null;
 
         return Inertia::render('Admin/Products/Create', [
@@ -381,6 +381,8 @@ class ProductController extends Controller
             // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // Ou em valor fixo (R$ por unidade), pedido 2026-10-18.
+            'checkout_discount_amount' => ['nullable', 'numeric', 'min:0', 'lte:price'],
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
@@ -393,7 +395,16 @@ class ProductController extends Controller
 
         // Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
         // o antigo desconto em R$ sai ao salvar.
-        return [...$request->validate($rules), 'discount_amount' => null];
+        $dados = [...$request->validate($rules), 'discount_amount' => null];
+
+        // "Desconto Checkout" é em % ou em R$, nunca os dois.
+        if ((float) ($dados['checkout_discount_amount'] ?? 0) > 0) {
+            $dados['checkout_discount_percentage'] = null;
+        } elseif (array_key_exists('checkout_discount_amount', $dados)) {
+            $dados['checkout_discount_amount'] = null;
+        }
+
+        return $dados;
     }
 
     /**

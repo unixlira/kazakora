@@ -131,6 +131,55 @@ class DescontoPixTest extends TestCase
         $this->assertEquals(100, (float) $product->fresh()->price);
     }
 
+    public function test_desconto_checkout_em_valor_fixo_tira_o_valor_por_unidade(): void
+    {
+        PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
+        $user = User::factory()->create(['role' => User::ROLE_CUSTOMER]);
+        $product = Product::factory()->create([
+            'price' => 289, 'stock' => 5, 'is_active' => true,
+            'checkout_discount_percentage' => null, 'checkout_discount_amount' => 10,
+        ]);
+        $this->chegarNoPagamento($user, $product);
+
+        $this->actingAs($user)->get('/finalizacao/pagamento?v=1')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('pixDiscountAmount', 10));
+
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('createPixPayment')->once()
+                ->andReturn(['id' => 123, 'status' => 'pending', 'point_of_interaction' => ['transaction_data' => ['qr_code' => 'x']]]);
+        });
+
+        $this->actingAs($user)->post('/finalizacao/pagamento', ['payment_method' => 'pix', 'terms_accepted' => true]);
+
+        $this->assertEquals(10, Order::firstOrFail()->pix_discount_amount);
+        $this->assertSame(3.46, DescontoPix::maiorPercentual());
+    }
+
+    public function test_cadastro_no_admin_grava_desconto_checkout_em_valor_ou_em_percentual(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $campos = ['name' => 'Cesto de Palha', 'category_id' => null, 'price' => 100, 'stock' => 3,
+            'is_active' => true, 'is_featured' => false, 'is_new_release' => false];
+
+        $this->actingAs($admin)->post('/admin/produtos', [...$campos, 'checkout_discount_percentage' => 5, 'checkout_discount_amount' => 12.5])
+            ->assertRedirect();
+
+        $product = Product::where('name', 'Cesto de Palha')->firstOrFail();
+        $this->assertEquals(12.5, (float) $product->checkout_discount_amount);
+        $this->assertNull($product->checkout_discount_percentage);
+
+        // Voltar para %: o valor fixo sai.
+        $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [...$campos, 'sku' => $product->sku,
+            'checkout_discount_percentage' => 7, 'checkout_discount_amount' => null])->assertRedirect();
+        $this->assertNull($product->fresh()->checkout_discount_amount);
+        $this->assertEquals(7, (float) $product->fresh()->checkout_discount_percentage);
+
+        // Valor fixo maior que o preço é recusado.
+        $this->actingAs($admin)->put("/admin/produtos/{$product->id}", [...$campos, 'sku' => $product->sku,
+            'checkout_discount_amount' => 150])->assertSessionHasErrors('checkout_discount_amount');
+    }
+
     public function test_marketplace_sem_preco_proprio_recebe_o_preco_da_loja(): void
     {
         $product = Product::factory()->create(['price' => 105]);

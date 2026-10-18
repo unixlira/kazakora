@@ -7,7 +7,9 @@ use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Marketplace\Models\PrintJob;
 use App\Notifications\OrderStatusUpdated;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -33,7 +35,7 @@ class CancelamentoDoPedido
     /**
      * O que acontece se cancelar agora, em frases curtas para a tela.
      *
-     * @return array{pode: bool, bloqueio: ?string, nota: string, pagamentos: list<string>, estoque: string, cliente: string, canal: ?string}
+     * @return array{pode: bool, bloqueio: ?string, nota: string, pagamentos: list<string>, estoque: string, cliente: string, canal: ?string, etiqueta: ?string}
      */
     public function previa(Order $order): array
     {
@@ -51,6 +53,7 @@ class CancelamentoDoPedido
                 ? 'Nenhum e-mail sai para o cliente: ele vê o status novo em Meus pedidos.'
                 : "O comprador é avisado pelo próprio {$canal}, não por nós.",
             'canal' => $doSite ? null : "Pedido do {$canal}: aqui o cancelamento é só no nosso sistema. Cancele também no painel do {$canal}, senão o canal segue esperando o envio.",
+            'etiqueta' => $this->previaDaEtiqueta($order),
         ];
     }
 
@@ -107,6 +110,8 @@ class CancelamentoDoPedido
     public function efeitos(Order $order, string $statusAnterior): array
     {
         $avisos = [];
+
+        $this->tirarEtiquetasDaFila($order);
 
         if ($avisoDaNota = $this->cancelarNotaSeAutorizada($order)) {
             $avisos[] = $avisoDaNota;
@@ -172,6 +177,42 @@ class CancelamentoDoPedido
 
             return "Pedido cancelado, mas a NF-e não pôde ser cancelada automaticamente na SEFAZ: {$exception->getMessage()}";
         }
+    }
+
+    /**
+     * Etiqueta ainda na fila não sai mais (Lira, 2026-10-17). A que o
+     * KoraSync já pegou não dá para segurar daqui; o PrintAgentController
+     * recusa o download dela se o pedido estiver cancelado.
+     */
+    private function tirarEtiquetasDaFila(Order $order): void
+    {
+        PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('status', PrintJob::STATUS_QUEUED)
+            ->update([
+                'status' => PrintJob::STATUS_FAILED,
+                'error_message' => PrintJob::MOTIVO_PEDIDO_CANCELADO,
+            ]);
+    }
+
+    private function previaDaEtiqueta(Order $order): ?string
+    {
+        $impressaEm = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('is_thank_you', false)
+            ->where('status', PrintJob::STATUS_PRINTED)
+            ->max('printed_at');
+
+        if ($impressaEm) {
+            return 'A etiqueta já foi impressa em '.Carbon::parse($impressaEm)->format('d/m H:i').': tire o pacote da bancada. A postagem nos Correios não é cancelada sozinha.';
+        }
+
+        $naFila = PrintJob::query()
+            ->where('order_id', $order->id)
+            ->where('status', PrintJob::STATUS_QUEUED)
+            ->exists();
+
+        return $naFila ? 'A etiqueta que está na fila da impressora sai da fila e não é impressa.' : null;
     }
 
     private function previaDaNota(Order $order): string

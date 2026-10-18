@@ -18,7 +18,7 @@ Schedule::command('loja:ofertas-do-dia')->dailyAt('00:05');
 // 1 por dia por 7 dias (manhã, tarde e noite) — ver LembreteCarrinho.
 Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlapping(10);
 // Pedido do site: rastreio dos Correios (sem webhook) marca enviado/entregue
-// e manda o WhatsApp "saiu para entrega" (AcompanharRastreioLoja).
+// e manda o WhatsApp "saiu para entrega" e "foi entregue" (AcompanharRastreioLoja).
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');

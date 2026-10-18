@@ -25,7 +25,7 @@ class CorreiosRastroService
     }
 
     /**
-     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, previsao: ?Carbon, ultimo: ?string}
+     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, entregue_em: ?Carbon, recebedor: ?string, previsao: ?Carbon, ultimo: ?string}
      */
     public function consultar(string $codigo): array
     {
@@ -44,12 +44,16 @@ class CorreiosRastroService
         // A API devolve do mais recente para o mais antigo.
         $primeiro = end($movimento) ?: null;
 
-        $entregue = collect($eventos)->contains(fn ($e) => in_array($e['codigo'] ?? '', self::ENTREGUE, true) && ($e['tipo'] ?? '') === '01');
+        $entrega = collect($eventos)->first(fn ($e) => in_array($e['codigo'] ?? '', self::ENTREGUE, true) && ($e['tipo'] ?? '') === '01');
 
         return [
             'postado' => $movimento !== [],
             'postado_em' => isset($primeiro['dtHrCriado']) ? Carbon::parse($primeiro['dtHrCriado'], 'America/Sao_Paulo') : null,
-            'entregue' => $entregue,
+            'entregue' => $entrega !== null,
+            'entregue_em' => isset($entrega['dtHrCriado']) ? Carbon::parse($entrega['dtHrCriado'], 'America/Sao_Paulo') : null,
+            // O SRO do nosso contrato não traz o nome de quem recebeu (conferido
+            // em 17/10/2026); fica pronto caso passe a vir.
+            'recebedor' => filled($entrega['recebedor']['nome'] ?? null) ? trim($entrega['recebedor']['nome']) : null,
             'previsao' => filled($objeto['dtPrevista'] ?? null) ? Carbon::parse($objeto['dtPrevista'], 'America/Sao_Paulo') : null,
             'ultimo' => $eventos[0]['descricao'] ?? null,
         ];

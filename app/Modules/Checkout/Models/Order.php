@@ -326,6 +326,8 @@ class Order extends Model
             'fiscal_finality' => 'integer',
             'whatsapp_confirmacao_em' => 'datetime',
             'whatsapp_enviado_em' => 'datetime',
+            'whatsapp_entregue_em' => 'datetime',
+            'whatsapp_nao_recebi_em' => 'datetime',
             'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Modules\WhatsApp\Jobs\ChamarAtendentePedido;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
+use App\Modules\WhatsApp\Jobs\ResponderNaoRecebi;
 use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
@@ -72,6 +73,15 @@ class WhatsAppWebhookController extends Controller
                     if (ChamarAtendentePedido::interpretar($message['button']['payload'] ?? null)) {
                         if ($stored->wasRecentlyCreated) {
                             ChamarAtendentePedido::dispatch($conversation->id, $message['button']['payload'])->afterResponse();
+                        }
+
+                        continue;
+                    }
+
+                    // Botão "Não Recebi" do aviso de pedido entregue.
+                    if (ResponderNaoRecebi::interpretar($message['button']['payload'] ?? null)) {
+                        if ($stored->wasRecentlyCreated) {
+                            ResponderNaoRecebi::dispatch($conversation->id, $message['button']['payload'])->afterResponse();
                         }
 
                         continue;

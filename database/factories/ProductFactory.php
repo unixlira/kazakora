@@ -23,6 +23,8 @@ class ProductFactory extends Factory
             'description' => fake()->paragraph(),
             'price' => fake()->randomFloat(2, 19.9, 1999.9),
             'stock' => fake()->numberBetween(1, 200),
+            // Desconto Checkout (Pix) que todo produto já cadastrado recebeu em 2026-10-18.
+            'checkout_discount_percentage' => 5,
             'is_active' => fake()->boolean(90),
         ];
     }

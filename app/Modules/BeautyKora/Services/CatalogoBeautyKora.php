@@ -58,7 +58,7 @@ class CatalogoBeautyKora extends CatalogoOutroSite
         return [
             'clonado' => (bool) $registro->clonado,
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
-            'desconto_pix' => DescontoPix::percentual(),
+            'desconto_pix' => DescontoPix::percentualDo($pai),
         ];
     }
 }

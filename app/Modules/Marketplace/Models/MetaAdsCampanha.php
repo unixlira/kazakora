@@ -9,11 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Meta ADS (2026-10-13): campanha de vídeo montada no admin e enviada pela
- * Marketing API da Meta (App\Services\Meta\MetaAdsService). Cada vídeo
- * (MetaAdsVideo) vira um conjunto de anúncios com a sua parte do orçamento
- * diário. Tudo nasce PAUSADO na Meta; ativar é um passo separado, com
- * confirmação do gasto na tela.
+ * Meta ADS (2026-10-13): campanha montada no admin e enviada pela
+ * Marketing API da Meta (App\Services\Meta\MetaAdsService). Cada anúncio
+ * (MetaAdsVideo: vídeo ou imagem, com produto e texto próprios) entra num
+ * conjunto conforme a estrutura (2026-10-18): todos no mesmo conjunto, como
+ * no Gerenciador da Meta, ou um conjunto por anúncio com o orçamento
+ * dividido igual. Tudo nasce PAUSADO na Meta; ativar é um passo separado,
+ * com confirmação do gasto na tela.
  *
  * Os ids meta_* são gravados a cada passo do envio: se a Meta recusar no
  * meio, o reenvio continua do passo que faltou em vez de duplicar campanha.
@@ -47,6 +49,17 @@ class MetaAdsCampanha extends Model
         'OUTCOME_AWARENESS' => 'Reconhecimento',
     ];
 
+    /** Um conjunto com todos os anúncios: a Meta leva a verba para o que rende mais. */
+    public const ESTRUTURA_CONJUNTO_UNICO = 'conjunto_unico';
+
+    /** Um conjunto por anúncio, orçamento dividido igual (teste justo entre eles). */
+    public const ESTRUTURA_POR_ANUNCIO = 'por_anuncio';
+
+    public const ESTRUTURAS = [
+        self::ESTRUTURA_CONJUNTO_UNICO => 'Um conjunto com todos os anúncios',
+        self::ESTRUTURA_POR_ANUNCIO => 'Um conjunto por anúncio (orçamento dividido igual)',
+    ];
+
     public const GENEROS = [
         'todos' => 'Todos',
         'masculino' => 'Masculino',
@@ -66,6 +79,7 @@ class MetaAdsCampanha extends Model
     protected $fillable = [
         'nome',
         'objetivo',
+        'estrutura',
         'orcamento_diario',
         'inicio',
         'fim',
@@ -81,6 +95,7 @@ class MetaAdsCampanha extends Model
         'chamada',
         'status',
         'meta_campaign_id',
+        'meta_adset_id',
         'ultimo_erro',
         'enviada_em',
         'ativada_em',
@@ -103,11 +118,41 @@ class MetaAdsCampanha extends Model
         ];
     }
 
-    /** Teto de vídeos por campanha (cada um vira um conjunto de anúncios). */
+    /** Teto de anúncios (vídeos ou imagens) por campanha. */
     public const MAX_VIDEOS = 10;
 
-    /** Menor parte do orçamento diário por vídeo que a tela aceita (R$). */
+    /** Menor orçamento diário por conjunto de anúncios que a tela aceita (R$). */
     public const MINIMO_POR_VIDEO = 6.0;
+
+    public function conjuntoUnico(): bool
+    {
+        return $this->estrutura === self::ESTRUTURA_CONJUNTO_UNICO;
+    }
+
+    /** Quantos conjuntos a campanha terá na Meta (o orçamento se divide entre eles). */
+    public function quantidadeDeConjuntos(): int
+    {
+        $anuncios = $this->videos->count();
+
+        return $this->conjuntoUnico() ? min($anuncios, 1) : $anuncios;
+    }
+
+    /**
+     * Orçamento diário de cada anúncio em centavos: no conjunto único todos
+     * dividem a mesma verba (a Meta distribui), então cada um mostra o total.
+     *
+     * @return list<int>
+     */
+    public function orcamentoPorAnuncio(): array
+    {
+        $quantidade = $this->videos->count();
+
+        if ($this->conjuntoUnico()) {
+            return array_fill(0, $quantidade, (int) round((float) $this->orcamento_diario * 100));
+        }
+
+        return self::dividirOrcamento((float) $this->orcamento_diario, $quantidade);
+    }
 
     public function videos(): HasMany
     {
@@ -157,14 +202,14 @@ class MetaAdsCampanha extends Model
     /** Já existe algum objeto criado na Meta para esta campanha? */
     public function temObjetoNoMeta(): bool
     {
-        if (filled($this->meta_campaign_id)) {
+        if (filled($this->meta_campaign_id) || filled($this->meta_adset_id)) {
             return true;
         }
 
         return $this->videos->contains(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta());
     }
 
-    /** Campanha e todos os vídeos com conjunto, criativo e anúncio na Meta. */
+    /** Campanha e todos os anúncios com conjunto, criativo e anúncio na Meta. */
     public function envioCompleto(): bool
     {
         return filled($this->meta_campaign_id)

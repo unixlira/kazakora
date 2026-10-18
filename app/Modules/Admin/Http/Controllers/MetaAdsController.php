@@ -22,16 +22,21 @@ use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * Meta ADS (2026-10-13): campanhas de vídeo montadas no admin e enviadas
- * pela Marketing API da Meta (MetaAdsService). Lira sobe os vídeos aqui; a
- * campanha vai para a Meta com um conjunto de anúncios por vídeo e o
- * orçamento diário dividido igualmente entre eles. Envio cria tudo
- * PAUSADO; ativar é outro botão, com confirmação explícita do gasto.
+ * Meta ADS (2026-10-13): campanhas montadas no admin e enviadas pela
+ * Marketing API da Meta (MetaAdsService). Lira sobe vídeos e imagens aqui,
+ * cada um vira um anúncio com produto e texto próprios (2026-10-18), todos
+ * no mesmo conjunto (como no Gerenciador) ou um conjunto por anúncio com o
+ * orçamento dividido igual. Envio cria tudo PAUSADO; ativar é outro botão,
+ * com confirmação explícita do gasto.
  */
 class MetaAdsController extends Controller
 {
     /** 60 MB: o servidor aceita até 64 MB por requisição (nginx e PHP). */
     private const MAX_KILOBYTES = 61440;
+
+    private const TIPOS_VIDEO = ['video/mp4', 'video/quicktime'];
+
+    private const TIPOS_IMAGEM = ['image/jpeg', 'image/png'];
 
     public function index(MetaAdsService $meta): Response
     {
@@ -97,7 +102,7 @@ class MetaAdsController extends Controller
             }
         }
 
-        $partes = MetaAdsCampanha::dividirOrcamento((float) $campanha->orcamento_diario, $campanha->videos->count());
+        $partes = $campanha->orcamentoPorAnuncio();
 
         return Inertia::render('Admin/MetaAds/Show', [
             'campanha' => $campanha->makeHidden('videos'),
@@ -120,6 +125,7 @@ class MetaAdsController extends Controller
             'linkGerenciador' => $campanha->meta_campaign_id ? $meta->linkGerenciador($campanha) : null,
             'chamadas' => MetaAdsCampanha::CHAMADAS,
             'generos' => MetaAdsCampanha::GENEROS,
+            'estruturas' => MetaAdsCampanha::ESTRUTURAS,
         ]);
     }
 
@@ -182,7 +188,7 @@ class MetaAdsController extends Controller
         $campanha->videos()->update(['ultimo_erro' => null]);
         EnviarCampanhaMetaAds::dispatch($campanha->id);
 
-        return back()->with('success', 'Enviando para a Meta. Os vídeos sobem um por um e a Meta leva alguns minutos para processar. Tudo fica PAUSADO até você ativar.');
+        return back()->with('success', 'Enviando para a Meta. Os vídeos e imagens sobem um por um e a Meta leva alguns minutos para processar os vídeos. Tudo fica PAUSADO até você ativar.');
     }
 
     public function ativar(Request $request, MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse
@@ -240,41 +246,64 @@ class MetaAdsController extends Controller
         return back()->with('success', 'Campanha pausada na Meta.');
     }
 
-    /** Recebe UM vídeo por requisição (o servidor aceita até 64 MB por envio). */
+    /**
+     * Recebe UM anúncio por requisição: o arquivo (vídeo ou imagem, até
+     * 64 MB por envio no servidor) e, opcional, o produto e o texto dele.
+     */
     public function videoStore(Request $request, MetaAdsCampanha $campanha, DuracaoDeVideo $duracao): JsonResponse
     {
         if (! $campanha->podeMexerNosVideos()) {
-            return response()->json(['message' => 'Campanha já enviada à Meta: os vídeos não mudam mais por aqui.'], 409);
+            return response()->json(['message' => 'Campanha já enviada à Meta: os anúncios não mudam mais por aqui.'], 409);
         }
 
-        $this->comErrosEmJson($request, fn () => $request->validate([
-            'video' => ['required', 'file', 'mimetypes:video/mp4,video/quicktime', 'max:'.self::MAX_KILOBYTES],
-        ], [
-            'video.mimetypes' => 'Use vídeo MP4 ou MOV.',
-            'video.max' => 'O vídeo passa de 60 MB. Comprima antes de enviar.',
-            'video.uploaded' => 'O vídeo não chegou inteiro (limite de 60 MB). Comprima antes de enviar.',
-        ]));
+        $textos = $this->comErrosEmJson($request, function () use ($request) {
+            $request->validate([
+                'video' => ['required', 'file', 'mimetypes:'.implode(',', [...self::TIPOS_VIDEO, ...self::TIPOS_IMAGEM]), 'max:'.self::MAX_KILOBYTES],
+            ], [
+                'video.mimetypes' => 'Use vídeo MP4 ou MOV, ou imagem JPG ou PNG.',
+                'video.max' => 'O arquivo passa de 60 MB. Comprima antes de enviar.',
+                'video.uploaded' => 'O arquivo não chegou inteiro (limite de 60 MB). Comprima antes de enviar.',
+            ]);
+
+            return $this->validarAnuncio($request);
+        });
 
         if ($campanha->videos()->count() >= MetaAdsCampanha::MAX_VIDEOS) {
-            return response()->json(['message' => 'Máximo de '.MetaAdsCampanha::MAX_VIDEOS.' vídeos por campanha.'], 422);
+            return response()->json(['message' => 'Máximo de '.MetaAdsCampanha::MAX_VIDEOS.' anúncios por campanha.'], 422);
         }
 
         $arquivo = $request->file('video');
+        $imagem = in_array($arquivo->getMimeType(), self::TIPOS_IMAGEM, true);
         $path = $arquivo->store(self::pastaDosVideos($campanha), 'local');
 
         if ($path === false) {
-            return response()->json(['message' => 'Não consegui guardar o vídeo no servidor.'], 500);
+            return response()->json(['message' => 'Não consegui guardar o arquivo no servidor.'], 500);
         }
 
-        $video = $campanha->videos()->create([
+        $video = $campanha->videos()->create($textos + [
             'ordem' => (int) $campanha->videos()->max('ordem') + ($campanha->videos()->exists() ? 1 : 0),
-            'nome_original' => mb_substr($arquivo->getClientOriginalName() ?: 'video.mp4', 0, 250),
+            'tipo' => $imagem ? MetaAdsVideo::TIPO_IMAGEM : MetaAdsVideo::TIPO_VIDEO,
+            'nome_original' => mb_substr($arquivo->getClientOriginalName() ?: ($imagem ? 'imagem.jpg' : 'video.mp4'), 0, 250),
             'path' => $path,
             'tamanho' => (int) $arquivo->getSize(),
-            'duracao_segundos' => $duracao->segundos(Storage::disk('local')->path($path)),
+            'duracao_segundos' => $imagem ? null : $duracao->segundos(Storage::disk('local')->path($path)),
         ]);
 
         return response()->json(['video' => $this->dadosDoVideo($campanha, $video)], 201);
+    }
+
+    /** Produto e texto próprios de um anúncio já guardado (vazio = padrão da campanha). */
+    public function videoUpdate(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video): JsonResponse
+    {
+        abort_unless($video->campanha_id === $campanha->id, 404);
+
+        if (! $campanha->podeMexerNosVideos() || $video->temObjetoNoMeta()) {
+            return response()->json(['message' => 'Anúncio já enviado à Meta: edite pelo Gerenciador de Anúncios.'], 409);
+        }
+
+        $video->update($this->comErrosEmJson($request, fn () => $this->validarAnuncio($request)));
+
+        return response()->json(['video' => $this->dadosDoVideo($campanha, $video)]);
     }
 
     public function videoDestroy(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video): JsonResponse|RedirectResponse
@@ -282,7 +311,7 @@ class MetaAdsController extends Controller
         abort_unless($video->campanha_id === $campanha->id, 404);
 
         if (! $campanha->podeMexerNosVideos() || $video->temObjetoNoMeta()) {
-            $mensagem = 'Vídeo já enviado à Meta: tire pelo Gerenciador de Anúncios.';
+            $mensagem = 'Anúncio já enviado à Meta: tire pelo Gerenciador de Anúncios.';
 
             return $request->wantsJson() ? response()->json(['message' => $mensagem], 409) : back()->with('error', $mensagem);
         }
@@ -290,7 +319,7 @@ class MetaAdsController extends Controller
         Storage::disk('local')->delete($video->path);
         $video->delete();
 
-        return $request->wantsJson() ? response()->json(['ok' => true]) : back()->with('success', 'Vídeo removido.');
+        return $request->wantsJson() ? response()->json(['ok' => true]) : back()->with('success', 'Anúncio removido.');
     }
 
     /** Toca o vídeo guardado no servidor (prévia na tela). */
@@ -350,6 +379,7 @@ class MetaAdsController extends Controller
         $dados = $request->validate([
             'nome' => ['required', 'string', 'max:200'],
             'objetivo' => ['required', Rule::in(array_keys(MetaAdsCampanha::OBJETIVOS))],
+            'estrutura' => ['sometimes', Rule::in(array_keys(MetaAdsCampanha::ESTRUTURAS))],
             'orcamento_diario' => ['required', 'numeric', 'min:1', 'max:10000'],
             'inicio' => ['required', 'date'],
             'fim' => ['nullable', 'date', 'after_or_equal:inicio'],
@@ -366,8 +396,10 @@ class MetaAdsController extends Controller
             'localizacoes.cidades.*.raio_km' => ['nullable', 'integer', 'min:10', 'max:80'],
             'produto_id' => ['nullable', 'integer', Rule::exists('products', 'id')],
             'link_destino' => ['nullable', 'url:https', 'max:500'],
-            'texto_principal' => ['required', 'string', 'max:2000'],
-            'titulo' => ['required', 'string', 'max:255'],
+            // Padrão dos anúncios: cada anúncio pode ter o seu (o envio
+            // confere que todo anúncio termina com texto e título).
+            'texto_principal' => ['nullable', 'string', 'max:2000'],
+            'titulo' => ['nullable', 'string', 'max:255'],
             'descricao' => ['nullable', 'string', 'max:255'],
             'chamada' => ['required', Rule::in(array_keys(MetaAdsCampanha::CHAMADAS))],
         ], [
@@ -381,11 +413,7 @@ class MetaAdsController extends Controller
             $dados['link_destino'] = $produto ? self::linkDoProduto($produto) : self::siteUrl().'/';
         }
 
-        // Anúncio aponta só para a loja de verdade (nunca homolog/.com.br).
-        $host = parse_url($dados['link_destino'], PHP_URL_HOST);
-        if (! in_array($host, ['kazakora.com', 'www.kazakora.com'], true)) {
-            throw ValidationException::withMessages(['link_destino' => 'O link tem que ser da loja: https://kazakora.com/...']);
-        }
+        self::exigirLinkDaLoja($dados['link_destino']);
 
         $dados['localizacoes'] = [
             'regioes' => array_values($dados['localizacoes']['regioes'] ?? []),
@@ -393,6 +421,49 @@ class MetaAdsController extends Controller
         ];
 
         return $dados;
+    }
+
+    /**
+     * Produto e texto de um anúncio. Tudo opcional: vazio usa o padrão da
+     * campanha. Com produto e sem link, o link vira a página do produto.
+     *
+     * @return array<string, mixed>
+     */
+    private function validarAnuncio(Request $request): array
+    {
+        $dados = $request->validate([
+            'produto_id' => ['nullable', 'integer', Rule::exists('products', 'id')],
+            'link_destino' => ['nullable', 'url:https', 'max:500'],
+            'texto_principal' => ['nullable', 'string', 'max:2000'],
+            'titulo' => ['nullable', 'string', 'max:255'],
+            'descricao' => ['nullable', 'string', 'max:255'],
+            'chamada' => ['nullable', Rule::in(array_keys(MetaAdsCampanha::CHAMADAS))],
+        ], [
+            'link_destino.url' => 'Use um link https da loja.',
+        ]);
+
+        $dados = array_map(fn ($valor) => $valor === '' ? null : $valor, $dados + array_fill_keys(
+            ['produto_id', 'link_destino', 'texto_principal', 'titulo', 'descricao', 'chamada'], null,
+        ));
+
+        if (blank($dados['link_destino']) && filled($dados['produto_id'])) {
+            $dados['link_destino'] = self::linkDoProduto(Product::query()->findOrFail($dados['produto_id']));
+        }
+
+        if (filled($dados['link_destino'])) {
+            self::exigirLinkDaLoja($dados['link_destino']);
+        }
+
+        return $dados;
+    }
+
+    /** Anúncio aponta só para a loja de verdade (nunca homolog/.com.br). */
+    private static function exigirLinkDaLoja(string $link): void
+    {
+        $host = parse_url($link, PHP_URL_HOST);
+        if (! in_array($host, ['kazakora.com', 'www.kazakora.com'], true)) {
+            throw ValidationException::withMessages(['link_destino' => 'O link tem que ser da loja: https://kazakora.com/...']);
+        }
     }
 
     /** @return array<string, mixed> */
@@ -422,6 +493,7 @@ class MetaAdsController extends Controller
             'objetivos' => MetaAdsCampanha::OBJETIVOS,
             'generos' => MetaAdsCampanha::GENEROS,
             'chamadas' => MetaAdsCampanha::CHAMADAS,
+            'estruturas' => MetaAdsCampanha::ESTRUTURAS,
             'siteUrl' => self::siteUrl(),
         ];
     }
@@ -457,6 +529,7 @@ class MetaAdsController extends Controller
         return [
             'id' => $video->id,
             'ordem' => $video->ordem,
+            'tipo' => $video->tipo,
             'nome' => $video->nome_original,
             'tamanho_mb' => round($video->tamanho / 1048576, 1),
             'duracao_segundos' => $video->duracao_segundos !== null ? (float) $video->duracao_segundos : null,
@@ -465,6 +538,14 @@ class MetaAdsController extends Controller
             'etapa' => $video->etapa(),
             'enviado' => $video->envioCompleto(),
             'ultimo_erro' => $video->ultimo_erro,
+            'produto_id' => $video->produto_id,
+            'link_destino' => $video->link_destino,
+            'texto_principal' => $video->texto_principal,
+            'titulo' => $video->titulo,
+            'descricao' => $video->descricao,
+            'chamada' => $video->chamada,
+            // O que de fato vai no criativo (próprio ou padrão da campanha).
+            'criativo' => $video->criativo($campanha),
         ];
     }
 }

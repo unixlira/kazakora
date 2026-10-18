@@ -138,19 +138,23 @@ class OfertasDoDiaTest extends TestCase
         $this->assertSame([$comDesconto->id], OfertaDoDia::query()->whereDate('data', now()->toDateString())->pluck('product_id')->all());
     }
 
-    public function test_marcar_no_cadastro_poe_o_produto_nas_ofertas_de_hoje(): void
+    public function test_marcar_no_cadastro_poe_o_produto_na_secao_da_home(): void
     {
-        config(['ofertas.completar_com_margem' => false, 'ofertas.fixas' => []]);
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $produto = $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20]);
-        $this->artisan('loja:ofertas-do-dia')->assertSuccessful();
-        $this->assertFalse(OfertaDoDia::query()->where('product_id', $produto->id)->exists());
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('vitrine.ofertas', []));
 
         $this->actingAs($admin)->put("/admin/produtos/{$produto->id}", [
             'name' => $produto->name, 'price' => 100, 'cost_price' => 20, 'is_active' => true, 'is_daily_offer' => true,
-        ])->assertRedirect()->assertSessionHas('success', fn ($msg) => str_contains($msg, 'Já está nas Ofertas do Dia'));
+        ])->assertRedirect()->assertSessionHas('success', fn ($msg) => str_contains($msg, 'Já aparece nas Ofertas do Dia'));
 
         $this->assertTrue($produto->fresh()->is_daily_offer);
-        $this->assertTrue(OfertaDoDia::query()->whereDate('data', now()->toDateString())->where('product_id', $produto->id)->exists());
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('vitrine.ofertas.0.id', $produto->id));
+        $this->assertFalse(OfertaDoDia::query()->exists(), 'marcar não pode criar desconto escondido em outros produtos');
+
+        $this->actingAs($admin)->put("/admin/produtos/{$produto->id}", [
+            'name' => $produto->name, 'price' => 100, 'cost_price' => 20, 'is_active' => true, 'is_daily_offer' => false,
+        ])->assertSessionHas('success', fn ($msg) => str_contains($msg, 'Saiu das Ofertas do Dia'));
+        $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('vitrine.ofertas', []));
     }
 }

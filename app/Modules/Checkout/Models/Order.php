@@ -327,6 +327,8 @@ class Order extends Model
             'whatsapp_confirmacao_em' => 'datetime',
             'whatsapp_enviado_em' => 'datetime',
             'whatsapp_entregue_em' => 'datetime',
+            'whatsapp_saiu_entrega_em' => 'datetime',
+            'whatsapp_retirada_em' => 'datetime',
             'whatsapp_nao_recebi_em' => 'datetime',
             'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',

@@ -23,12 +23,18 @@ class CorreiosRastroService
     /** Entregue ao destinatário (BDE/BDI/BDR tipo 01). */
     private const ENTREGUE = ['BDE', 'BDI', 'BDR'];
 
+    /** Saiu para entrega ao destinatário (OEC/01). */
+    private const SAIU_PARA_ENTREGA = 'OEC';
+
+    /** Aguardando retirada no endereço indicado (LDI/01). */
+    private const AGUARDANDO_RETIRADA = 'LDI';
+
     public function __construct(private readonly CorreiosTokenService $tokens)
     {
     }
 
     /**
-     * @return array{postado: bool, postado_em: ?Carbon, entregue: bool, entregue_em: ?Carbon, entregue_cidade: ?string, recebedor: ?string, previsao: ?Carbon, ultimo: ?string}
+     * @return array{postado: bool, postado_em: ?Carbon, em_entrega: bool, saiu_em: ?Carbon, aguardando_retirada: bool, retirada_em: ?Carbon, retirada_local: ?string, entregue: bool, entregue_em: ?Carbon, entregue_cidade: ?string, recebedor: ?string, previsao: ?Carbon, ultimo: ?string}
      */
     public function consultar(string $codigo): array
     {
@@ -49,10 +55,23 @@ class CorreiosRastroService
         $postagem = collect($movimento)->last(fn ($e) => ($e['codigo'] ?? '') === self::POSTADO) ?? (end($movimento) ?: null);
 
         $entrega = collect($eventos)->first(fn ($e) => in_array($e['codigo'] ?? '', self::ENTREGUE, true) && ($e['tipo'] ?? '') === '01');
+        // Saiu para entrega e aguardando retirada só valem enquanto são o
+        // último evento: uma tentativa sem sucesso (BDE/20) ou a entrega
+        // depois encerram a etapa.
+        $atual = $movimento[0] ?? null;
+        $etapaAtual = fn (string $codigo) => $entrega === null && ($atual['codigo'] ?? '') === $codigo && ($atual['tipo'] ?? '') === '01';
+        $emEntrega = $etapaAtual(self::SAIU_PARA_ENTREGA);
+        $retirada = $etapaAtual(self::AGUARDANDO_RETIRADA);
+        $local = $retirada ? trim(implode(', ', array_filter([$atual['unidade']['nome'] ?? null, $atual['unidade']['endereco']['cidade'] ?? null]))) : '';
 
         return [
             'postado' => $movimento !== [],
             'postado_em' => isset($postagem['dtHrCriado']) ? Carbon::parse($postagem['dtHrCriado'], 'America/Sao_Paulo') : null,
+            'em_entrega' => $emEntrega,
+            'saiu_em' => $emEntrega && isset($atual['dtHrCriado']) ? Carbon::parse($atual['dtHrCriado'], 'America/Sao_Paulo') : null,
+            'aguardando_retirada' => $retirada,
+            'retirada_em' => $retirada && isset($atual['dtHrCriado']) ? Carbon::parse($atual['dtHrCriado'], 'America/Sao_Paulo') : null,
+            'retirada_local' => $local !== '' ? $local : null,
             'entregue' => $entrega !== null,
             'entregue_em' => isset($entrega['dtHrCriado']) ? Carbon::parse($entrega['dtHrCriado'], 'America/Sao_Paulo') : null,
             // Cidade da unidade que entregou: devolução ao remetente também

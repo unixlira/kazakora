@@ -30,6 +30,15 @@ class FinancialDashboardNetProfitTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Cada teste daqui olha uma parte da conta; o imposto do Simples tem
+        // teste próprio (test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue
+        // e ContributionMarginImpostoTest).
+        config(['loja.simples.aliquota' => 0]);
+    }
+
     private function admin(): User
     {
         return User::factory()->create(['role' => User::ROLE_ADMIN]);
@@ -70,6 +79,7 @@ class FinancialDashboardNetProfitTest extends TestCase
 
     public function test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue(): void
     {
+        config(['loja.simples.aliquota' => 4.5, 'loja.simples.desde' => '2026-01-01']);
         $product = Product::factory()->create(['price' => 60.375, 'cost_price' => 40.25]);
 
         $order = $this->makeOrder(['subtotal' => 120.75, 'total' => 120.75]);
@@ -102,16 +112,21 @@ class FinancialDashboardNetProfitTest extends TestCase
             // na conta do lucro líquido.
             ->where('netProfit.marketplaceFeeMonth', 15.3)
             ->where('netProfit.adSpendMonth', 15.3)
-            ->where('netProfit.netProfitMonth', 9.65) // 120.75 - 80.50 - 15.30 (taxa) - 15.30 (ads)
+            // 120.75 - 80.50 - 15.30 (taxa) - 15.30 (ads) = 9.65 de margem;
+            // - 5.43 de Simples (4,5% de 120.75) = 4.22 de lucro líquido.
+            ->where('netProfit.marginBeforeTaxMonth', 9.65)
+            ->where('netProfit.taxMonth', 5.43)
+            ->where('netProfit.netProfitMonth', 4.22)
             // Pedido explícito 2026-08-09: "lucro no mês sendo só o
             // líquido" — o card de resumo usa o mesmo valor calculado
             // aqui, não mais o saldo de fluxo de caixa manual.
-            ->where('summary.profitMonth', 9.65)
+            ->where('summary.profitMonth', 4.22)
+            ->where('summary.taxMonth', 5.43)
             // Cards invertidos (pedido explícito 2026-08-09): bruto/líquido
             // desde o primeiro dia — só há esse 1 pedido no teste, então
             // "desde o início" bate com "no mês".
             ->where('summary.grossRevenueAllTime', 120.75)
-            ->where('summary.netProfitAllTime', 9.65)
+            ->where('summary.netProfitAllTime', 4.22)
             ->where('summary.grossRevenueMonth', 120.75)
             // Contrato com o Dashboard.vue atual: esses campos também ficam
             // em summary porque os cards do topo não podem receber undefined
@@ -123,7 +138,7 @@ class FinancialDashboardNetProfitTest extends TestCase
             ->where('summary.adSpendMonth', 15.3)
             ->where('summary.grossProfitMonth', 40.25)
             ->where('summary.platformCostsMonth', 15.3)
-            ->where('summary.netProfitMarginMonth', 7.99)
+            ->where('summary.netProfitMarginMonth', 3.49)
             // Pedido explícito 2026-08-10: faturamento líquido = bruto -
             // ads (sem abater custo do material) — vai no card "Entradas
             // no Mês".

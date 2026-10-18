@@ -121,6 +121,7 @@ class DashboardAgentControllerTest extends TestCase
         CartSnapshot::create(['session_id' => 'sess-1', 'items_count' => 3, 'total' => 200]);
         CartSnapshot::create(['session_id' => 'sess-2', 'items_count' => 2, 'total' => 90]);
 
+        config(['loja.simples.aliquota' => 4.5, 'loja.simples.desde' => '2026-01-01']);
         $response = $this->withHeaders($this->authHeaders())->getJson('/api/print-agent/dashboard/metrics');
 
         $response->assertOk();
@@ -136,8 +137,9 @@ class DashboardAgentControllerTest extends TestCase
             'cart_items_count' => 5,
             // 280 de bruto - 20 de taxa real (só o pedido do ML tem taxa
             // capturada) - os outros dois pedidos pagos hoje não têm
-            // OrderChannelFee, então entram sem desconto nenhum.
-            'net_profit_today' => 260.0,
+            // OrderChannelFee, então entram sem desconto nenhum. Desde
+            // 2026-10-18 sai também o Simples: 4,5% de 280 = 12,60.
+            'net_profit_today' => 247.4,
             // 1 cancelado + 1 devolvido (Payment estornado) neste mês —
             // card "Cancelamentos e devoluções do mês" do KoraSync v2.0.
             'cancellations_and_returns_month' => 2,

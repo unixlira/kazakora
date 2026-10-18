@@ -21,7 +21,10 @@ use Illuminate\Support\Facades\Schema;
  *   − taxa da plataforma (comissão)
  *   − frete pago pela loja (pré-postagem dos Correios menos o TURBO que o
  *     cliente do site pagou, Flex)
- *   − ADS
+ *   − ADS (Shopee/ML Ads e o GMV Max do TikTok, cobrado no extrato)
+ *   = margem
+ *   − imposto (Simples Nacional sobre o valor da nota)
+ *   = lucro (lucro líquido: é o número que o painel e o Financeiro mostram)
  *
  * Antes cada tela fazia a sua conta: o painel inicial subtraía o frete que
  * o COMPRADOR paga, o KoraSync só tirava a taxa, e o Financeiro deixava a
@@ -134,7 +137,7 @@ class ContributionMargin
      * A conta inteira pra um intervalo [desde, ate) — usada no painel
      * inicial (hoje) e no KoraSync.
      *
-     * @return array{receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float}
+     * @return array{receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float, imposto: float, lucro: float}
      */
     public function periodo(Carbon $desde, Carbon $ate): array
     {
@@ -170,7 +173,10 @@ class ContributionMargin
         $ads = round((float) ChannelAdSpend::query()
             ->where('date', '>=', $desde->toDateString())
             ->where('date', '<', $ate->toDateString())
-            ->sum('spend'), 2);
+            ->sum('spend') + array_sum(self::adsDoExtrato($desde, $ate)), 2);
+
+        $margem = round($receita - $custo - $taxas - $frete - $ads + $bonificacoes, 2);
+        $imposto = round(array_sum(self::imposto($desde, $ate)), 2);
 
         return [
             'receita' => $receita,
@@ -179,7 +185,9 @@ class ContributionMargin
             'frete' => $frete,
             'ads' => $ads,
             'bonificacoes' => $bonificacoes,
-            'margem' => round($receita - $custo - $taxas - $frete - $ads + $bonificacoes, 2),
+            'margem' => $margem,
+            'imposto' => $imposto,
+            'lucro' => round($margem - $imposto, 2),
         ];
     }
 
@@ -188,7 +196,7 @@ class ContributionMargin
      * o Financeiro fazia uma conta própria por canal e não batia com o
      * painel nem com o e-mail). Flex e bônus do Flex ficam no Mercado Livre.
      *
-     * @return array<string, array{pedidos: int, receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float}>
+     * @return array<string, array{pedidos: int, receita: float, custo_produtos: float, taxas: float, frete: float, ads: float, bonificacoes: float, margem: float, imposto: float, lucro: float}>
      */
     public function porCanal(Carbon $desde, Carbon $ate): array
     {
@@ -213,6 +221,10 @@ class ContributionMargin
             ->where('date', '<', $ate->toDateString())
             ->selectRaw('channel, COALESCE(SUM(spend), 0) as total')
             ->groupBy('channel')->pluck('total', 'channel');
+        foreach (self::adsDoExtrato($desde, $ate) as $canal => $valor) {
+            $ads[$canal] = (float) ($ads[$canal] ?? 0) + $valor;
+        }
+        $imposto = self::imposto($desde, $ate);
         $flex = app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'];
         $bonus = self::bonificacoes($desde, $ate);
 
@@ -222,7 +234,7 @@ class ContributionMargin
             $canais->push(Order::ORIGIN_MERCADO_LIVRE);
         }
 
-        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $correios, $ads, $flex, $bonus) {
+        return $canais->unique()->mapWithKeys(function ($canal) use ($receita, $custo, $taxas, $correios, $ads, $imposto, $flex, $bonus) {
             $ml = $canal === Order::ORIGIN_MERCADO_LIVRE;
             $linha = [
                 'pedidos' => (int) ($receita->get($canal)?->pedidos ?? 0),
@@ -234,6 +246,8 @@ class ContributionMargin
                 'bonificacoes' => $ml ? $bonus : 0.0,
             ];
             $linha['margem'] = round($linha['receita'] - $linha['custo_produtos'] - $linha['taxas'] - $linha['frete'] - $linha['ads'] + $linha['bonificacoes'], 2);
+            $linha['imposto'] = round((float) ($imposto[$canal] ?? 0), 2);
+            $linha['lucro'] = round($linha['margem'] - $linha['imposto'], 2);
 
             return [$canal => $linha];
         })->all();
@@ -321,11 +335,82 @@ class ContributionMargin
                     ->where('date', '>=', $desde->toDateString())
                     ->where('date', '<', $ate->toDateString())
                     ->when($canal, fn ($q) => $q->where('channel', $canal))
-                    ->sum('spend'), 2),
+                    ->sum('spend') + ($canal === null ? array_sum(self::adsDoExtrato($desde, $ate)) : (self::adsDoExtrato($desde, $ate)[$canal] ?? 0)), 2),
                 'flex' => $ml ? (float) app(FlexDeliveryService::class)->summaryForPeriod($desde, $ate->copy()->subSecond())['total'] : 0.0,
                 'bonificacoes' => $ml ? self::bonificacoes($desde, $ate) : 0.0,
             ],
         ];
+    }
+
+    /**
+     * Anúncio cobrado dentro do extrato do canal, por canal (auditoria
+     * 2026-10-18): o GMV Max do TikTok vem como linha própria "Pagamento de
+     * GMV para anúncios do TikTok", sem pedido, e ficava fora do ADS (R$ 209
+     * em out/2026). Pela data do demonstrativo, que é o dia da cobrança. A
+     * taxa real do pedido (vendas líquidas − liquidado) não inclui essa
+     * linha, então não há dupla contagem. Uma linha por demonstrativo: o
+     * mesmo lançamento já chegou com o SKU vazio, nulo ou "/".
+     *
+     * @return array<string, float>
+     */
+    public static function adsDoExtrato(Carbon $desde, Carbon $ate): array
+    {
+        if (! Schema::hasTable('marketplace_settlement_details')) {
+            return [];
+        }
+
+        $linhas = DB::table('marketplace_settlement_details')
+            ->where('transaction_type', 'like', 'Pagamento de GMV%')
+            ->where('settlement_date', '>=', $desde->toDateString())
+            ->where('settlement_date', '<', $ate->toDateString())
+            ->selectRaw('channel, statement_id, external_order_id, MIN(payout_amount) as valor')
+            ->groupBy('channel', 'statement_id', 'external_order_id');
+
+        return DB::query()->fromSub($linhas, 'gmv')
+            ->selectRaw('channel, COALESCE(SUM(-valor), 0) as total')
+            ->groupBy('channel')
+            ->pluck('total', 'channel')
+            ->map(fn ($total) => round(max(0.0, (float) $total), 2))
+            ->all();
+    }
+
+    /** Alíquota efetiva do Simples (%), informada pelo contador. */
+    public static function aliquotaSimples(): float
+    {
+        return (float) config('loja.simples.aliquota', 4.5);
+    }
+
+    /**
+     * Imposto do Simples por canal (auditoria 2026-10-11, entrou na conta de
+     * todas as telas em 2026-10-18): alíquota × valor da NOTA de venda
+     * autorizada (o que o cliente pagou, frete incluso quando vai na nota);
+     * pedido sem nota importada ainda usa a receita. Só pedidos a partir de
+     * LOJA_SIMPLES_DESDE (antes a empresa era MEI). Estimativa do DAS: o
+     * oficial é a guia, que vence dia 20 do mês seguinte.
+     *
+     * @return array<string, float>
+     */
+    public static function imposto(Carbon $desde, Carbon $ate): array
+    {
+        $inicio = Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay();
+        $desde = $desde->copy()->max($inicio);
+        if ($desde->gte($ate) || self::aliquotaSimples() <= 0) {
+            return [];
+        }
+
+        $nota = 'SELECT i.valor_total FROM invoices i WHERE i.order_id = orders.id AND i.status = \'authorized\''
+            ." AND i.operation_type = 'saida' AND i.cancelada_em IS NULL LIMIT 1";
+
+        return DB::table('orders')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(COALESCE(('.$nota.'), '.self::receitaSql().')), 0) as base')
+            ->groupBy('canal')
+            ->pluck('base', 'canal')
+            ->map(fn ($base) => round((float) $base * self::aliquotaSimples() / 100, 2))
+            ->all();
     }
 
     /**

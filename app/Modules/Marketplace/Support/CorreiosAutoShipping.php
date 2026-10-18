@@ -87,9 +87,11 @@ class CorreiosAutoShipping
         $input = [
             'customer' => [
                 'name' => Str::limit((string) $order->shipping_name, 50, ''),
-                'document' => $order->buyer_document,
+                // Pedido do site grava o CPF/e-mail no cadastro do cliente,
+                // não no pedido (#3205) — mesmo fallback do CustomerAggregator.
+                'document' => $order->buyer_document ?: $order->user?->cpf,
                 'phone' => $order->shipping_phone,
-                'email' => $order->shipping_email,
+                'email' => $order->shipping_email ?: $order->user?->email,
             ],
             'address' => [
                 'zip' => $order->shipping_zip,

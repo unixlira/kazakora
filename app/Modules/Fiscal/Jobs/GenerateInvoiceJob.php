@@ -12,6 +12,7 @@ use App\Modules\Fiscal\Models\InvoiceGenerationLog;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
+use App\Modules\Marketplace\Jobs\ConfirmChannelShippingJob;
 use App\Modules\Marketplace\Jobs\SubmitInvoiceToChannelJob;
 use App\Modules\Marketplace\Support\MercadoLivrePackInvoiceGate;
 use App\Modules\Marketplace\Support\OrderImportService;
@@ -293,6 +294,16 @@ class GenerateInvoiceJob implements ShouldQueue, ShouldBeUnique
             if ($invoice->status === Invoice::STATUS_AUTHORIZED
                 && ! in_array($order->origin, [Order::ORIGIN_STORE, Order::ORIGIN_MANUAL_INVOICE, Order::ORIGIN_PURCHASE_RETURN_INVOICE, Order::ORIGIN_SALES_RETURN_INVOICE], true)) {
                 SubmitInvoiceToChannelJob::dispatch($order->id)->afterCommit();
+            }
+
+            // Pedido do site: a etiqueta dos Correios precisa da chave da
+            // nota, então o envio nasce aqui (ver LojaShippingDriver).
+            // Achado real 2026-10-17, #3205: sem isto o pedido pago do site
+            // nunca chegava à fila do KoraSync.
+            if ($invoice->status === Invoice::STATUS_AUTHORIZED
+                && $order->origin === Order::ORIGIN_STORE
+                && $order->status === Order::STATUS_PAID) {
+                ConfirmChannelShippingJob::dispatch($order->id)->afterCommit();
             }
         } catch (ValidatorException $exception) {
             // XML inválido localmente (barrado pelo validador do sped-nfe

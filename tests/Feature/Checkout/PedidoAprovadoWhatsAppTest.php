@@ -8,6 +8,7 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\WhatsApp\Jobs\FaturarPedidoSemResposta;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
@@ -80,5 +81,38 @@ class PedidoAprovadoWhatsAppTest extends TestCase
         SendOrderApprovedWhatsAppJob::dispatchSync($this->pedido()->id);
 
         Http::assertNothingSent();
+    }
+
+    public function test_template_nao_aprovado_desiste_na_hora_e_emite_a_nota(): void
+    {
+        Http::swap(new HttpFactory);
+        Http::fake(['graph.facebook.com/*' => Http::response(['error' => [
+            'message' => '(#132001) Template name does not exist in the translation', 'code' => 132001,
+        ]], 404)]);
+        $order = $this->pedido();
+
+        SendOrderApprovedWhatsAppJob::dispatchSync($order->id);
+
+        Http::assertSentCount(1);
+        Bus::assertDispatched(GenerateInvoiceJob::class);
+        Bus::assertNotDispatched(FaturarPedidoSemResposta::class);
+        $this->assertNull($order->fresh()->whatsapp_aprovado_enviado_em);
+    }
+
+    public function test_falha_passageira_continua_tentando(): void
+    {
+        Http::swap(new HttpFactory);
+        Http::swap(new HttpFactory);
+        Http::fake(['graph.facebook.com/*' => Http::response(['error' => ['message' => 'Service temporarily unavailable', 'code' => 2]], 503)]);
+        $order = $this->pedido();
+
+        try {
+            SendOrderApprovedWhatsAppJob::dispatchSync($order->id);
+            $this->fail('Falha passageira deveria voltar para a fila.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Falha ao enviar WhatsApp', $e->getMessage());
+        }
+
+        $this->assertFalse(SendOrderApprovedWhatsAppJob::erroDefinitivo($e));
     }
 }

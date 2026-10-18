@@ -22,6 +22,8 @@ use Illuminate\Support\Str;
  * pedido (SendOrderApprovedWhatsAppJob). Grava a resposta no pedido e a
  * Manuela responde. Correção: conversa vai para "precisa de humano" e os
  * admins recebem aviso no sino, para ajustar antes da etiqueta.
+ * "Tudo Certo" libera a NF-e na hora; "Corrigir" segura a nota até alguém
+ * emitir pelo pedido (FaturarPedidoSemResposta).
  */
 class ResponderConfirmacaoPedido implements ShouldQueue
 {
@@ -78,12 +80,13 @@ class ResponderConfirmacaoPedido implements ShouldQueue
         $saudacao = $nome !== '' ? ", {$nome}" : '';
 
         if ($resposta === 'ok') {
+            FaturarPedidoSemResposta::emitir($order->id);
             $outbox->sendText($conversation, "Perfeito{$saudacao}! Seu pedido #{$order->numero} já segue para a separação. Qualquer dúvida, é só me chamar por aqui.", 'manuela', null, ['confirmacao_pedido' => 'ok', 'order_id' => $order->id]);
 
             return;
         }
 
-        $outbox->sendText($conversation, "Claro{$saudacao}! Me conta aqui o que precisa corrigir no pedido #{$order->numero} (nome, e-mail ou endereço) que o nosso time ajusta antes do envio.", 'manuela', null, ['confirmacao_pedido' => 'corrigir', 'order_id' => $order->id]);
+        $outbox->sendText($conversation, "Claro{$saudacao}! Me conta aqui o que precisa corrigir no pedido #{$order->numero} (nome, e-mail ou endereço) que o nosso time ajusta antes do faturamento e do envio.", 'manuela', null, ['confirmacao_pedido' => 'corrigir', 'order_id' => $order->id]);
         $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
 
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();

@@ -4,6 +4,7 @@ namespace Tests\Feature\WhatsApp;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
@@ -58,6 +59,7 @@ class ConfirmacaoPedidoBotoesTest extends TestCase
 
     public function test_tudo_certo_grava_no_pedido_e_responde_uma_vez(): void
     {
+        Bus::fake([GenerateInvoiceJob::class]);
         $order = $this->pedido();
 
         $this->toque('5511988887777', "confirmacao_pedido:ok:{$order->id}", 'Tudo Certo', 'wamid.A');
@@ -66,12 +68,13 @@ class ConfirmacaoPedidoBotoesTest extends TestCase
         $this->assertSame('ok', $order->fresh()->whatsapp_confirmacao);
         Http::assertSentCount(1);
         Http::assertSent(fn ($r) => str_contains($r['text']['body'], "Perfeito, Maria! Seu pedido #{$order->numero}"));
+        Bus::assertDispatchedTimes(GenerateInvoiceJob::class, 1);
     }
 
     public function test_corrigir_chama_humano_e_avisa_admin_sem_passar_pela_ia(): void
     {
         Notification::fake();
-        Bus::fake([ReplyWithManuela::class]);
+        Bus::fake([ReplyWithManuela::class, GenerateInvoiceJob::class]);
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $order = $this->pedido();
 
@@ -83,6 +86,7 @@ class ConfirmacaoPedidoBotoesTest extends TestCase
         Http::assertSent(fn ($r) => str_contains($r['text']['body'], 'o que precisa corrigir'));
         Notification::assertSentTo($admin, CorrecaoPedidoWhatsAppNotification::class);
         Bus::assertNotDispatched(ReplyWithManuela::class);
+        Bus::assertNotDispatched(GenerateInvoiceJob::class);
     }
 
     public function test_botao_de_outro_numero_e_ignorado(): void

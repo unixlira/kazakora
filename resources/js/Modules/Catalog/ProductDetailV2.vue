@@ -109,9 +109,10 @@ const variantIndex = (id) => {
     const index = mediaItems.value.findIndex((item) => item.variantId === id);
     return index >= 0 ? index : 0;
 };
-// A página abre na foto do modelo da própria página (pedido 2026-10-15: a
-// árvore abre no 303, o pai), mas sem marcar nenhuma variação no seletor.
-const activeIndex = ref(variantIndex(props.product.id));
+// A página abre sempre na primeira foto do carrossel (pedido 2026-10-18,
+// Árvore de Natal; antes abria na foto do modelo da página, o 303). Escolher
+// a variação troca a foto principal pela dela, sem recarregar.
+const activeIndex = ref(0);
 const escolherVariacao = (variant) => {
     escolhida.value = variant;
     alertaVariacao.value = 0;
@@ -133,6 +134,20 @@ const startVideo = async () => {
     videoEl.value?.play().catch(() => {});
 };
 watch(activeIndex, () => { isVideoStarted.value = false; });
+
+// A miniatura da foto ativa fica à vista na faixa (as fotos das variações
+// estão no fim). Rola só a faixa, nunca a página.
+const miniaturasEl = ref(null);
+watch(activeIndex, async (index) => {
+    await nextTick();
+    const faixa = miniaturasEl.value;
+    const botao = faixa?.children[index];
+    if (!botao) return;
+    const f = faixa.getBoundingClientRect();
+    const b = botao.getBoundingClientRect();
+    if (b.top < f.top || b.bottom > f.bottom) faixa.scrollBy({ top: b.top - f.top - (f.height - b.height) / 2, behavior: 'smooth' });
+    if (b.left < f.left || b.right > f.right) faixa.scrollBy({ left: b.left - f.left - (f.width - b.width) / 2, behavior: 'smooth' });
+});
 
 const goPrev = () => {
     if (mediaItems.value.length < 2) return;
@@ -170,7 +185,7 @@ watch(() => [props.product, props.variations], ([novo], [antigo]) => {
     }
     escolhida.value = props.variations.length ? null : props.product;
     alertaVariacao.value = 0;
-    activeIndex.value = variantIndex(props.product.id);
+    activeIndex.value = 0;
     isLightboxOpen.value = false;
     quantity.value = 1;
 });
@@ -444,7 +459,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <button type="button" class="seta dir" aria-label="Próxima mídia" @click.stop="goNext"><i class="fas fa-chevron-right"></i></button>
                                     </template>
                                 </div>
-                                <div v-if="mediaItems.length > 1" class="miniaturas">
+                                <div v-if="mediaItems.length > 1" ref="miniaturasEl" class="miniaturas">
                                     <button v-for="(item, index) in mediaItems" :key="index" type="button"
                                         :aria-label="`Ver ${item.type === 'video' ? 'vídeo' : 'foto ' + (index + 1)}`"
                                         :aria-current="index === activeIndex" :class="{ 'da-variacao': escolhida && item.variantId === escolhida.id }" @click="activeIndex = index">

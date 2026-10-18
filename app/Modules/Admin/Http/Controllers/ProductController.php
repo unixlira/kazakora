@@ -8,11 +8,13 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\Catalog\Support\DuplicateProductGuard;
+use App\Modules\Catalog\Support\LucroProduto;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
 use App\Modules\WhatsApp\Services\GeminiUnavailableException;
 use App\Services\SkuGeneratorService;
+use App\Support\DescontoPix;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -65,12 +67,13 @@ class ProductController extends Controller
         // marca, modelo e descrição costumam ser idênticos entre
         // variações; cor/preço/estoque não (ficam em branco de propósito).
         $parent = $request->integer('parent_product_id')
-            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage', 'checkout_discount_amount'])
+            ? Product::query()->find($request->integer('parent_product_id'), ['id', 'name', 'category_id', 'brand', 'model', 'description', 'checkout_discount_percentage', 'checkout_discount_amount', 'min_profit'])
             : null;
 
         return Inertia::render('Admin/Products/Create', [
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'parent' => $parent,
+            'taxasLucro' => LucroProduto::taxas(),
         ]);
     }
 
@@ -190,6 +193,7 @@ class ProductController extends Controller
             'quantityDiscounts' => $product->quantityDiscounts,
             'variations' => $variationsPayload,
             'linkableOrphans' => $orphans,
+            'taxasLucro' => LucroProduto::taxas(),
         ]);
     }
 
@@ -383,6 +387,8 @@ class ProductController extends Controller
             'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // "Desconto Checkout" em valor fixo (R$ por unidade), no lugar do %.
             'checkout_discount_amount' => ['nullable', 'numeric', 'min:0'],
+            // "Lucro Mínimo" (R$), pedido 2026-10-18. Vazio = padrão (LucroProduto).
+            'min_profit' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
@@ -402,7 +408,49 @@ class ProductController extends Controller
             $dados['checkout_discount_amount'] = null;
         }
 
-        return [...$dados, 'discount_amount' => null];
+        $dados = [...$dados, 'discount_amount' => null];
+        $this->conferirLucroMinimo($dados);
+
+        return $dados;
+    }
+
+    /**
+     * Pedido 2026-10-18: o Desconto Checkout (Pix) não pode deixar o lucro da
+     * unidade abaixo do Lucro Mínimo (vazio = R$ 10 acima de R$ 30, R$ 8 até
+     * R$ 30). Conta: preço com Desconto Site − Pix − imposto − taxa do Pix −
+     * custo. Sem custo cadastrado não dá para conferir.
+     */
+    private function conferirLucroMinimo(array $dados): void
+    {
+        $produto = new Product(array_intersect_key($dados, array_flip([
+            'price', 'cost_price', 'min_profit', 'discount_percentage', 'discount_amount',
+            'checkout_discount_percentage', 'checkout_discount_amount',
+        ])));
+        $preco = $produto->precoSemOferta();
+        $maximo = LucroProduto::descontoPixMaximo($produto, $preco);
+
+        if ($maximo === null || $preco <= 0) {
+            return;
+        }
+
+        $porValor = (float) $produto->checkout_discount_percentage <= 0 && (float) $produto->checkout_discount_amount > 0;
+        $configurado = $porValor
+            ? min($preco, (float) $produto->checkout_discount_amount)
+            : DescontoPix::desconto($preco, (float) $produto->checkout_discount_percentage);
+
+        if ($configurado <= $maximo) {
+            return;
+        }
+
+        $reais = fn (float $valor) => 'R$ '.number_format($valor, 2, ',', '.');
+
+        throw ValidationException::withMessages([($porValor ? 'checkout_discount_amount' : 'checkout_discount_percentage') => sprintf(
+            'Com esse desconto o lucro no Pix fica %s, abaixo do Lucro Mínimo de %s. Desconto Checkout máximo: %s (%s%%).',
+            $reais(LucroProduto::lucro($produto, $preco - $configurado, LucroProduto::taxas()['taxa_pix'])),
+            $reais(LucroProduto::lucroMinimo($produto, $preco)),
+            $reais($maximo),
+            number_format(floor($maximo * 10000 / $preco) / 100, 2, ',', '.'),
+        )]);
     }
 
     /**

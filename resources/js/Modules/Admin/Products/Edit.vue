@@ -74,6 +74,7 @@ const form = useForm({
     discount_percentage: props.product.discount_percentage,
     checkout_discount_percentage: props.product.checkout_discount_percentage,
     checkout_discount_amount: props.product.checkout_discount_amount,
+    min_profit: props.product.min_profit,
     // stock aqui é só EXIBIÇÃO ("Estoque atual: X" no ProductForm) — quem
     // muda o estoque de verdade é stock_adjustment (0 = não mexe), ver
     // BUG REAL 2026-08-17 no ProductController::update().

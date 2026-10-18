@@ -4,9 +4,12 @@ namespace Tests\Feature\Checkout;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Jobs\EnviarEmailDeCancelamentoJob;
+use App\Modules\Checkout\Jobs\EstornarPedidoCanceladoJob;
 use App\Modules\Checkout\Jobs\ProcessarCancelamentoDoPedidoJob;
 use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderEmailLog;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -80,7 +83,7 @@ class ClienteCancelaPedidoTest extends TestCase
             'amount' => 20,
             'status' => Payment::STATUS_CAPTURED,
         ]);
-        $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldReceive('refundPayment')->once()->with('777')->andReturn([]));
+        $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldReceive('refundPayment')->once()->with('777', "estorno-pagamento-{$payment->id}")->andReturn([]));
 
         $this->actingAs($cliente)
             ->get("/pedidos/{$order->id}")
@@ -141,6 +144,98 @@ class ClienteCancelaPedidoTest extends TestCase
             ->post("/pedidos/{$order->id}/cancelar", ['motivo' => 'Desisti da compra'])
             ->assertSessionHas('error');
         Queue::assertPushed(ProcessarCancelamentoDoPedidoJob::class, 1);
+        Queue::assertPushedWithChain(EstornarPedidoCanceladoJob::class, [EnviarEmailDeCancelamentoJob::class]);
+        Queue::assertPushed(EstornarPedidoCanceladoJob::class, 1);
+    }
+
+    private function pagamentoPix(Order $order, string $id = '779'): Payment
+    {
+        return Payment::create([
+            'order_id' => $order->id,
+            'provider' => Payment::PROVIDER_MERCADOPAGO,
+            'mercadopago_payment_id' => $id,
+            'method_type' => Payment::METHOD_PIX,
+            'amount' => 20,
+            'status' => Payment::STATUS_CAPTURED,
+        ]);
+    }
+
+    public function test_estorno_que_falha_lanca_para_a_fila_tentar_de_novo_com_a_mesma_chave(): void
+    {
+        [$order] = $this->compra(['status' => Order::STATUS_CANCELLED, 'cancelado_em' => now()]);
+        $payment = $this->pagamentoPix($order);
+        $chave = "estorno-pagamento-{$payment->id}";
+        $this->mock(MercadoPagoPaymentService::class, function ($mock) use ($chave) {
+            $mock->shouldReceive('refundPayment')->once()->with('779', $chave)->andThrow(new \RuntimeException('MP fora do ar'));
+            $mock->shouldReceive('refundPayment')->once()->with('779', $chave)->andReturn([]);
+        });
+
+        try {
+            app()->call([new EstornarPedidoCanceladoJob($order->id), 'handle']);
+            $this->fail('A primeira tentativa deveria lançar para a fila tentar de novo.');
+        } catch (\RuntimeException $erro) {
+            $this->assertStringContainsString('MP fora do ar', $erro->getMessage());
+        }
+
+        $this->assertSame(Payment::STATUS_CAPTURED, $payment->fresh()->status);
+
+        app()->call([new EstornarPedidoCanceladoJob($order->id), 'handle']);
+        $this->assertSame(Payment::STATUS_REFUNDED, $payment->fresh()->status);
+
+        // Terceira rodada (ex.: job repetido): já estornado, não chama o MP de novo.
+        app()->call([new EstornarPedidoCanceladoJob($order->id), 'handle']);
+    }
+
+    public function test_estorno_que_esgota_as_tentativas_avisa_admin_e_manda_o_email_mesmo_assim(): void
+    {
+        Queue::fake();
+        Notification::fake();
+        [$order] = $this->compra(['status' => Order::STATUS_CANCELLED, 'cancelado_em' => now()]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        (new EstornarPedidoCanceladoJob($order->id))->failed(new \RuntimeException('MP fora do ar'));
+
+        Notification::assertSentTo($admin, PedidoCanceladoPeloClienteNotification::class,
+            fn (PedidoCanceladoPeloClienteNotification $aviso) => str_contains($aviso->toArray($admin)['body'], 'estorno não saiu'));
+        Queue::assertPushed(EnviarEmailDeCancelamentoJob::class, fn ($job) => $job->orderId === $order->id);
+    }
+
+    public function test_email_que_falha_lanca_para_tentar_de_novo_e_nao_repete_depois_de_enviado(): void
+    {
+        [$order] = $this->compra(['status' => Order::STATUS_CANCELLED, 'cancelado_em' => now()->subMinute()]);
+        $payment = $this->pagamentoPix($order);
+        $payment->update(['status' => Payment::STATUS_REFUNDED]);
+
+        // Primeira tentativa com o envio quebrado (mailer inexistente).
+        config(['mail.default' => 'fora-do-ar']);
+
+        try {
+            app()->call([new EnviarEmailDeCancelamentoJob($order->id), 'handle']);
+            $this->fail('A primeira tentativa deveria lançar para a fila tentar de novo.');
+        } catch (\RuntimeException $erro) {
+            $this->assertStringContainsString('não saiu', $erro->getMessage());
+        }
+
+        $this->assertDatabaseHas('order_email_logs', ['order_id' => $order->id, 'mailable' => PedidoCancelado::class, 'status' => OrderEmailLog::STATUS_FAILED]);
+
+        Mail::fake();
+        app()->call([new EnviarEmailDeCancelamentoJob($order->id), 'handle']);
+        app()->call([new EnviarEmailDeCancelamentoJob($order->id), 'handle']);
+
+        Mail::assertSent(PedidoCancelado::class, 1);
+        Mail::assertSent(PedidoCancelado::class, fn (PedidoCancelado $mail) => $mail->hasTo('cliente@example.com') && $mail->valorEstornado === 20.0);
+    }
+
+    public function test_email_que_esgota_as_tentativas_avisa_admin(): void
+    {
+        Notification::fake();
+        [$order] = $this->compra(['status' => Order::STATUS_CANCELLED]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        (new EnviarEmailDeCancelamentoJob($order->id))->failed(new \RuntimeException('SMTP fora do ar'));
+
+        Notification::assertSentTo($admin, PedidoCanceladoPeloClienteNotification::class,
+            fn (PedidoCanceladoPeloClienteNotification $aviso) => str_contains($aviso->toArray($admin)['body'], 'avise por outro meio'));
     }
 
     public function test_falha_no_job_avisa_os_admins(): void

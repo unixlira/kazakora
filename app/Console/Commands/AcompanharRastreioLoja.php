@@ -98,6 +98,9 @@ class AcompanharRastreioLoja extends Command
                     }
 
                     if ($r['entregue']) {
+                        if ($order->entregue_em === null) {
+                            $order->forceFill(['entregue_em' => $r['entregue_em'] ?? now()]);
+                        }
                         $pedidos->syncStatus($order, Order::STATUS_COMPLETED, 'correios:entregue');
                         $contagem['entregues']++;
 

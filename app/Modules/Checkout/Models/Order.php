@@ -62,6 +62,13 @@ class Order extends Model
     {
         static::saving(function (Order $order) {
             $order->projeto_origem = self::projetoDoSite($order->site_origem);
+
+            // Quando chegou ao cliente: base do pedido de avaliação
+            // (avaliacoes:solicitar). O rastreio grava a hora dos Correios
+            // antes; troca manual para "concluído" fica com a hora da troca.
+            if ($order->isDirty('status') && $order->status === self::STATUS_COMPLETED && $order->entregue_em === null) {
+                $order->entregue_em = now();
+            }
         });
     }
 
@@ -338,6 +345,7 @@ class Order extends Model
             'whatsapp_confirmacao_em' => 'datetime',
             'whatsapp_enviado_em' => 'datetime',
             'whatsapp_entregue_em' => 'datetime',
+            'entregue_em' => 'datetime',
             'whatsapp_saiu_entrega_em' => 'datetime',
             'whatsapp_retirada_em' => 'datetime',
             'whatsapp_nao_recebi_em' => 'datetime',
@@ -362,6 +370,12 @@ class Order extends Model
     public function ferrakoraCliente(): BelongsTo
     {
         return $this->belongsTo(FerraKoraCliente::class, 'ferrakora_cliente_id');
+    }
+
+    /** E-mail "Avalie sua compra" deste pedido (avaliacoes:solicitar). */
+    public function avaliacaoSolicitacao(): HasOne
+    {
+        return $this->hasOne(\App\Modules\Catalog\Models\AvaliacaoSolicitacao::class);
     }
 
     public function items(): HasMany

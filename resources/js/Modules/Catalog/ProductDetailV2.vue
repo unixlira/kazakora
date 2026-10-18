@@ -408,6 +408,12 @@ onMounted(() => window.addEventListener('keydown', teclaFoto));
 onUnmounted(() => window.removeEventListener('keydown', teclaFoto));
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
+// Link "Avaliar" do e-mail pós-compra (/avaliar/{slug} → ?avaliar=1): já abre a janela.
+onMounted(() => {
+    if (new URLSearchParams(window.location.search).get('avaliar') === '1' && props.canReview && !props.hasReviewed) {
+        showReviewModal.value = true;
+    }
+});
 const submitReview = () => {
     reviewForm.post(`/produtos/${props.product.id}/avaliacoes`, {
         preserveScroll: true,

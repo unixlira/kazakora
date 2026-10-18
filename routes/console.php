@@ -24,6 +24,9 @@ Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlap
 // e avisa cada etapa no WhatsApp (AcompanharRastreioLoja). De 5 em 5 minutos
 // desde 2026-10-18: só quem saiu para entrega é consultado em toda rodada.
 Schedule::command('loja:acompanhar-rastreio')->everyFiveMinutes()->withoutOverlapping(10);
+// Pedido de avaliação com cupom N dias depois da entrega (pedido 2026-10-18):
+// liga/desliga e texto na tela de Avaliações; só envia das 9h às 20h.
+Schedule::command('avaliacoes:solicitar')->hourlyAt(20)->withoutOverlapping(30);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // Limpeza do banco (pedido 2026-10-18): failed_jobs e notifications eram

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\WhatsApp\Jobs\ChamarAtendentePedido;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
@@ -65,6 +66,15 @@ class WhatsAppWebhookController extends Controller
 
                     [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
                     $handled++;
+
+                    // Botão "Falar com Atendente" do aviso de pedido enviado.
+                    if (ChamarAtendentePedido::interpretar($message['button']['payload'] ?? null)) {
+                        if ($stored->wasRecentlyCreated) {
+                            ChamarAtendentePedido::dispatch($conversation->id, $message['button']['payload'])->afterResponse();
+                        }
+
+                        continue;
+                    }
 
                     // A chave da conversa é quem manda (pedido 2026-10-08: "a Manu
                     // não está respondendo depois de ticar a chave"). Reentrega

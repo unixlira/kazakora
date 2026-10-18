@@ -178,6 +178,9 @@ return [
         'api_base_url' => env('CORREIOS_API_BASE_URL', 'https://api.correios.com.br/prepostagem'),
         'preco_base_url' => env('CORREIOS_PRECO_BASE_URL', 'https://api.correios.com.br/preco'),
         'prazo_base_url' => env('CORREIOS_PRAZO_BASE_URL', 'https://api.correios.com.br/prazo'),
+        // Rastreio (SRO): usa o mesmo token do Preço/Prazo; o da pré-postagem
+        // é recusado (GTW-012, API 87).
+        'rastro_base_url' => env('CORREIOS_RASTRO_BASE_URL', 'https://api.correios.com.br/srorastro'),
     ],
 
     // Ponte pro TikTok Shop via Bling (pedido explícito 2026-08-31 — integração
@@ -412,6 +415,10 @@ return [
         'templates' => [
             'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
             'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),
+            // Pedido postado nos Correios (loja:acompanhar-rastreio).
+            'pedido_enviado' => env('WHATSAPP_TEMPLATE_PEDIDO_ENVIADO'),
+            'pedido_enviado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_ENVIADO_IDIOMA', 'pt_BR'),
+            'pedido_enviado_imagem' => env('WHATSAPP_TEMPLATE_PEDIDO_ENVIADO_IMAGEM'),
         ],
 
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).

@@ -29,6 +29,8 @@ class WhatsAppCloudApiClient
     /**
      * @param  list<string>  $bodyParams  valores de {{1}}, {{2}}... do corpo
      * @param  array<int, string>  $urlButtonParams  índice do botão => sufixo da URL dinâmica
+     * @param  array<int, string>  $quickReplyPayloads  índice do botão de resposta rápida => payload que volta no webhook
+     * @param  string|null  $headerMediaLink  mídia do cabeçalho por URL pública (alternativa ao ID)
      */
     public function sendTemplate(
         string $to,
@@ -38,6 +40,8 @@ class WhatsAppCloudApiClient
         ?string $headerMediaId = null,
         array $bodyParams = [],
         array $urlButtonParams = [],
+        array $quickReplyPayloads = [],
+        ?string $headerMediaLink = null,
     ): array {
         $template = [
             'name' => $templateName,
@@ -46,12 +50,12 @@ class WhatsAppCloudApiClient
 
         $components = [];
 
-        if ($headerMediaType && $headerMediaId) {
+        if ($headerMediaType && ($headerMediaId || $headerMediaLink)) {
             $components[] = [
                 'type' => 'header',
                 'parameters' => [[
                     'type' => $headerMediaType,
-                    $headerMediaType => ['id' => $headerMediaId],
+                    $headerMediaType => $headerMediaId ? ['id' => $headerMediaId] : ['link' => $headerMediaLink],
                 ]],
             ];
         }
@@ -69,6 +73,15 @@ class WhatsAppCloudApiClient
                 'sub_type' => 'url',
                 'index' => (string) $index,
                 'parameters' => [['type' => 'text', 'text' => (string) $value]],
+            ];
+        }
+
+        foreach ($quickReplyPayloads as $index => $payload) {
+            $components[] = [
+                'type' => 'button',
+                'sub_type' => 'quick_reply',
+                'index' => (string) $index,
+                'parameters' => [['type' => 'payload', 'payload' => (string) $payload]],
             ];
         }
 

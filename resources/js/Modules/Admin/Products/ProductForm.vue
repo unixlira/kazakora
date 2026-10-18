@@ -1,6 +1,6 @@
 <script setup>
 import InputError from '@/Shared/Components/InputError.vue';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useSkuPreview } from '@/Shared/useSkuPreview';
 
 // Pedido 2026-10-18: o preço digitado é o preço da loja; o Pix desconta só no checkout ("Desconto Checkout").
@@ -99,6 +99,35 @@ const regenerateSku = async () => {
 
     regeneratingSku.value = false;
 };
+
+// Pedido 2026-10-18: resumo financeiro no cadastro. Mesma conta da loja
+// (Product::precoSemOferta() e DescontoPix): Desconto Site sobre o preço
+// cheio, Pix sobre o preço já com o Desconto Site. Frete fixo estimado em
+// R$ 30,00. Lucro = preço final - custo - frete.
+const FRETE_ESTIMADO = 30;
+
+const moeda = (valor) => Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const percentual = (valor) => `${Number(valor || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+const limitarPct = (valor) => Math.min(100, Math.max(0, Number(valor) || 0));
+const centavos = (valor) => Math.round(valor * 100) / 100;
+
+const resumo = computed(() => {
+    const cheio = Math.max(0, Number(props.form.price) || 0);
+    const custo = Math.max(0, Number(props.form.cost_price) || 0);
+    const descontoSite = limitarPct(props.form.discount_percentage);
+    const descontoCheckout = limitarPct(props.form.checkout_discount_percentage);
+    const precoSite = centavos(cheio * (1 - descontoSite / 100));
+    const precoFinal = centavos(precoSite - centavos(precoSite * descontoCheckout / 100));
+
+    return {
+        cheio,
+        custo,
+        descontoSite,
+        descontoCheckout,
+        precoFinal,
+        lucro: centavos(precoFinal - custo - FRETE_ESTIMADO),
+    };
+});
 </script>
 
 <template>
@@ -323,6 +352,52 @@ const regenerateSku = async () => {
             </div>
         </div>
 
+        <!-- Pedido 2026-10-18: resumo financeiro num alerta de sucesso verde.
+             Texto branco, descontos em vermelho e Preço Final em verde destacado.
+             Claro: verde forte; escuro: verde fechado com borda. -->
+        <div
+            role="status"
+            aria-live="polite"
+            class="rounded-lg border border-success-emphasis bg-success-emphasis p-4 text-white dark:border-success/60 dark:bg-[#0b2a20]"
+        >
+            <p class="flex items-center gap-2 text-sm font-semibold">
+                <i class="fas fa-circle-check" aria-hidden="true"></i>
+                Resumo financeiro
+            </p>
+
+            <dl class="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+                <div class="flex justify-between gap-3">
+                    <dt>Preço de custo</dt>
+                    <dd class="font-medium tabular-nums">{{ moeda(resumo.custo) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt>Valor do Produto Cheio</dt>
+                    <dd class="font-medium tabular-nums">{{ moeda(resumo.cheio) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt>Desconto Opcional</dt>
+                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ percentual(resumo.descontoSite) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt>Desconto do Checkout</dt>
+                    <dd class="resumo-negativo font-semibold tabular-nums">-{{ percentual(resumo.descontoCheckout) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt>Estimativa de Frete</dt>
+                    <dd class="font-medium tabular-nums">-{{ moeda(FRETE_ESTIMADO) }}</dd>
+                </div>
+                <div class="flex justify-between gap-3">
+                    <dt>Lucro Líquido Estimado</dt>
+                    <dd class="font-semibold tabular-nums" :class="{ 'resumo-negativo': resumo.lucro < 0 }">{{ moeda(resumo.lucro) }}</dd>
+                </div>
+            </dl>
+
+            <div class="mt-3 flex flex-wrap items-baseline justify-between gap-2 rounded-md bg-black/20 px-3 py-2">
+                <span class="text-sm font-semibold">Preço Final</span>
+                <span class="resumo-preco-final text-2xl font-extrabold tabular-nums">{{ moeda(resumo.precoFinal) }}</span>
+            </div>
+        </div>
+
         <div class="flex flex-wrap gap-x-6 gap-y-2">
             <label class="flex items-center gap-2 text-sm">
                 <input v-model="form.is_active" type="checkbox">
@@ -349,3 +424,11 @@ const regenerateSku = async () => {
         </button>
     </form>
 </template>
+
+<style scoped>
+/* Vermelho e verde claros o bastante para ler sobre o fundo verde, nos dois temas. */
+.resumo-negativo { color: #fecaca; }
+.resumo-preco-final { color: #86efac; }
+:global(.dark .resumo-negativo) { color: #fca5a5; }
+:global(.dark .resumo-preco-final) { color: #4ade80; }
+</style>

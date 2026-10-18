@@ -4,9 +4,9 @@ namespace App\Modules\Catalog\Support;
 
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Category;
-use App\Modules\Catalog\Models\OfertaDoDia;
+use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
-use Illuminate\Support\Facades\Artisan;
+use App\Support\SiteAtual;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -35,7 +35,7 @@ class VitrineHome
 
         return [
             'ofertas' => $montar($ids['ofertas']),
-            'ofertasTerminamEm' => now()->endOfDay()->toIso8601String(),
+            'ofertasTerminamEm' => $this->ofertasTerminamEm($ids['ofertas']),
             'maisBuscados' => $montar($ids['maisBuscados']),
             'utilidades' => $montar($ids['utilidades']),
             'utilidadesLink' => Cache::remember('home:utilidades-link', now()->addHour(), fn () => $this->categoriasCasa()->first()?->slug),
@@ -44,17 +44,29 @@ class VitrineHome
         ];
     }
 
-    /** @return list<int> */
+    /**
+     * Ofertas do Dia = só as Ofertas Relâmpago da KazaKora no ar agora
+     * (pedido 2026-10-18), a que acaba primeiro na frente. Agendada entra
+     * sozinha quando começa; pausada ou encerrada sai na hora. A escolha
+     * automática diária (loja:ofertas-do-dia) não alimenta mais a seção.
+     *
+     * @return list<int>
+     */
     private function ofertas(): array
     {
-        $hoje = now()->toDateString();
+        $noAr = collect(OfertaRelampago::ativasAgora(SiteAtual::KAZAKORA))->sortBy('fim_em');
+        $validos = $this->ativos()->whereIn('id', $noAr->keys())->pluck('id')->all();
 
-        // Rede de segurança: se o cron das 00:05 não rodou, escolhe agora (uma vez só).
-        if (! OfertaDoDia::query()->whereDate('data', $hoje)->exists()) {
-            Cache::lock('ofertas-do-dia:escolher', 60)->get(fn () => Artisan::call('loja:ofertas-do-dia'));
-        }
+        return $noAr->keys()->filter(fn ($id) => in_array($id, $validos))->values()->all();
+    }
 
-        return OfertaDoDia::query()->whereDate('data', $hoje)->orderBy('posicao')->pluck('product_id')->all();
+    /** Fim da Relâmpago que acaba primeiro na seção (relógio "Termina em"). */
+    private function ofertasTerminamEm(array $ids): ?string
+    {
+        return collect(OfertaRelampago::ativasAgora(SiteAtual::KAZAKORA))
+            ->only($ids)
+            ->min('fim_em')
+            ?->toIso8601String();
     }
 
     /** Produtos mais vistos nos últimos 7 dias (visitas em /produtos/{slug}). */

@@ -99,14 +99,15 @@ class StripePaymentService
     /**
      * Reembolsa um PaymentIntent já capturado (dinheiro já saiu — devolve
      * de verdade via API, não é o mesmo que cancel(), que só funciona antes
-     * da captura).
+     * da captura). $idempotencyKey: a mesma chave numa nova tentativa não
+     * reembolsa duas vezes.
      */
-    public function refund(string $paymentIntentId): Refund
+    public function refund(string $paymentIntentId, ?string $idempotencyKey = null): Refund
     {
         Log::channel('stripe')->info('stripe.refund.creating', ['payment_intent_id' => $paymentIntentId]);
 
         try {
-            $refund = $this->client()->refunds->create(['payment_intent' => $paymentIntentId]);
+            $refund = $this->client()->refunds->create(['payment_intent' => $paymentIntentId], $idempotencyKey ? ['idempotency_key' => $idempotencyKey] : null);
         } catch (ApiErrorException $exception) {
             Log::channel('stripe')->warning('stripe.refund.failed', [
                 'payment_intent_id' => $paymentIntentId,

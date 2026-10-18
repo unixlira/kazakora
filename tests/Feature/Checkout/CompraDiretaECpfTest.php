@@ -30,7 +30,7 @@ class CompraDiretaECpfTest extends TestCase
 
         // …e o carrinho de verdade continua com o que tinha.
         $this->assertSame([$noCarrinho->id => 1], session('cart'));
-        $this->get('/rastreio')->assertInertia(fn (AssertableInertia $page) => $page->where('cart.count', 1));
+        $this->get('/fale-conosco')->assertInertia(fn (AssertableInertia $page) => $page->where('cart.count', 1));
 
         // Pedido feito pela compra direta: só ela some.
         app(CartManager::class)->clear();

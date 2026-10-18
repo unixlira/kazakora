@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Checkout\Jobs\SendOrderDeliveredWhatsAppJob;
 use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Support\OrderImportService;
@@ -15,15 +16,16 @@ use Throwable;
  * Correios nem o KoraSync avisam o despacho (sem webhook), e até hoje pedido
  * da loja ficava "pago" para sempre. A cada 30 minutos consulta o objeto da
  * pré-postagem: primeiro evento físico (postagem) vira "enviado" e manda o
- * WhatsApp "Seu pedido saiu para entrega"; entregue vira "concluído".
+ * WhatsApp "Seu pedido saiu para entrega"; entregue vira "concluído" e
+ * manda o WhatsApp "Seu pedido foi entregue" (SendOrderDeliveredWhatsAppJob).
  */
 class AcompanharRastreioLoja extends Command
 {
     protected $signature = 'loja:acompanhar-rastreio {--dias=45 : pedidos criados nos últimos N dias} {--simular : só mostra, não grava nem envia}';
 
-    protected $description = 'Atualiza pedidos do site pelo rastreio dos Correios e avisa o envio no WhatsApp';
+    protected $description = 'Atualiza pedidos do site pelo rastreio dos Correios e avisa envio e entrega no WhatsApp';
 
-    /** Postagem mais antiga que isso não gera aviso (primeira rodada, atrasos). */
+    /** Postagem ou entrega mais antiga que isso não gera aviso (primeira rodada, atrasos). */
     private const AVISO_ATE_HORAS = 72;
 
     public function handle(CorreiosRastroService $rastro, OrderImportService $pedidos): int
@@ -60,6 +62,11 @@ class AcompanharRastreioLoja extends Command
                     if ($r['entregue']) {
                         $pedidos->syncStatus($order, Order::STATUS_COMPLETED, 'correios:entregue');
                         $contagem['entregues']++;
+
+                        $recente = ! $r['entregue_em'] || $r['entregue_em']->gt(now()->subHours(self::AVISO_ATE_HORAS));
+                        if ($order->whatsapp_entregue_em === null && $recente) {
+                            SendOrderDeliveredWhatsAppJob::dispatch($order->id, $r['entregue_em']?->toIso8601String(), $r['recebedor']);
+                        }
 
                         continue;
                     }

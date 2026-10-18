@@ -415,6 +415,10 @@ return [
             'pedido_enviado' => env('WHATSAPP_TEMPLATE_PEDIDO_ENVIADO'),
             'pedido_enviado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_ENVIADO_IDIOMA', 'pt_BR'),
             'pedido_enviado_imagem' => env('WHATSAPP_TEMPLATE_PEDIDO_ENVIADO_IMAGEM'),
+            // Pedido entregue pelos Correios (loja:acompanhar-rastreio).
+            'pedido_entregue' => env('WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE'),
+            'pedido_entregue_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE_IDIOMA', 'pt_BR'),
+            'pedido_entregue_imagem' => env('WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE_IMAGEM'),
         ],
 
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).

@@ -730,6 +730,10 @@ const cancelInvoice = () => {
                             <span v-else class="font-medium text-red-600">Cliente pediu correção</span>
                             <span class="text-xs text-slate-400"> · {{ d.cliente.whatsapp_confirmacao_em }}</span>
                         </dd></div>
+                        <div v-if="d.cliente?.whatsapp_nao_recebi_em"><dt class="text-xs text-slate-400">Entrega no WhatsApp</dt><dd>
+                            <span class="font-medium text-red-600">Cliente disse que não recebeu</span>
+                            <span class="text-xs text-slate-400"> · {{ d.cliente.whatsapp_nao_recebi_em }}</span>
+                        </dd></div>
                         <div v-if="d.cliente?.apelido_no_canal"><dt class="text-xs text-slate-400">Apelido no canal</dt><dd>{{ d.cliente.apelido_no_canal }}</dd></div>
                         <div v-if="d.cliente?.conta"><dt class="text-xs text-slate-400">Conta no site</dt><dd>{{ d.cliente.conta }}</dd></div>
                     </dl>

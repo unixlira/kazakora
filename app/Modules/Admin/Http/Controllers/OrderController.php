@@ -646,6 +646,8 @@ class OrderController extends Controller
                 // Resposta aos botões da confirmação do pedido no WhatsApp.
                 'whatsapp_confirmacao' => $order->whatsapp_confirmacao,
                 'whatsapp_confirmacao_em' => $order->whatsapp_confirmacao_em?->format('d/m/Y H:i'),
+                // Botão "Não Recebi" do aviso de pedido entregue.
+                'whatsapp_nao_recebi_em' => $order->whatsapp_nao_recebi_em?->format('d/m/Y H:i'),
                 'apelido_no_canal' => $order->channel_buyer_nickname,
                 'conta' => $order->user ? 'KazaKora' : ($order->ferrakoraCliente ? 'FerraKora' : null),
             ],

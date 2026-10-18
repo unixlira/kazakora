@@ -35,6 +35,15 @@ const props = defineProps({
 
 const emit = defineEmits(['submit']);
 
+// Desconto Checkout (Pix) em % ou em valor fixo, opcional (pedido 2026-10-18).
+const checkoutDiscountType = ref(
+    Number(props.form.checkout_discount_percentage) > 0 ? 'percentage' : (Number(props.form.checkout_discount_amount) > 0 ? 'amount' : ''),
+);
+
+watch(checkoutDiscountType, (type) => {
+    if (type !== 'percentage') props.form.checkout_discount_percentage = null;
+    if (type !== 'amount') props.form.checkout_discount_amount = null;
+});
 
 // Prévia automática do SKU: dispara depois que o usuário para de digitar
 // (debounce) em qualquer campo que alimenta o gerador (categoria, nome,
@@ -336,12 +345,27 @@ const resumo = computed(() => {
                 <p class="mt-1 text-xs text-gray-400">Desconto direto no produto: o card e a página mostram o preço riscado e o preço com desconto.</p>
                 <InputError :message="form.errors.discount_percentage" />
             </div>
-            <div>
-                <label for="checkout_discount_percentage" class="block text-sm font-medium">Desconto Checkout (%)</label>
-                <input id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
-                    placeholder="0" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                <p class="mt-1 text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Vazio = sem desconto no Pix.</p>
-                <InputError :message="form.errors.checkout_discount_percentage" />
+            <div class="grid items-start gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="checkout_discount_type" class="block text-sm font-medium">Tipo do Desconto Checkout</label>
+                    <select id="checkout_discount_type" v-model="checkoutDiscountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                        <option value="">Sem desconto</option>
+                        <option value="percentage">Percentual (%)</option>
+                        <option value="amount">Valor fixo (R$)</option>
+                    </select>
+                </div>
+                <div>
+                    <label :for="checkoutDiscountType === 'amount' ? 'checkout_discount_amount' : 'checkout_discount_percentage'" class="block text-sm font-medium">
+                        Desconto Checkout {{ checkoutDiscountType === 'amount' ? '(R$)' : '(%)' }}
+                    </label>
+                    <input v-if="checkoutDiscountType === 'amount'" id="checkout_discount_amount" v-model="form.checkout_discount_amount" type="number" step="0.01" min="0"
+                        placeholder="Ex: 10,00" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
+                    <input v-else id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
+                        placeholder="Ex: 5" :disabled="checkoutDiscountType === ''"
+                        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
+                    <InputError :message="form.errors.checkout_discount_percentage || form.errors.checkout_discount_amount" />
+                </div>
+                <p class="text-xs text-gray-400 sm:col-span-2">Desconto no Pix: sai no checkout só pagando 100% no Pix. Valor fixo é por unidade. Sem desconto = preço cheio no Pix.</p>
             </div>
         </div>
 

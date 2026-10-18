@@ -15,16 +15,7 @@ export const STATUS_ESTILOS = {
     enviada_pausada: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
     ativa: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
     erro: 'bg-red-500/15 text-red-700 dark:text-red-300',
-};
-
-// Mesma conta do servidor (MetaAdsCampanha::dividirOrcamento): divisão
-// igual em centavos, o centavo que sobra vai para os primeiros vídeos.
-export const dividirOrcamento = (total, quantidade) => {
-    if (!quantidade) return [];
-    const centavos = Math.round(Number(total || 0) * 100);
-    const parte = Math.floor(centavos / quantidade);
-    const sobra = centavos - parte * quantidade;
-    return Array.from({ length: quantidade }, (_, i) => (parte + (i < sobra ? 1 : 0)) / 100);
+    gerenciador: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
 };
 
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
@@ -56,9 +47,10 @@ export const pedirJson = async (metodo, url, dados = null) => {
 };
 
 /** Sobe um arquivo com barra de progresso (fetch não mostra progresso de envio). */
-export const enviarArquivo = (url, campo, arquivo, aoProgredir) => new Promise((resolve, reject) => {
+export const enviarArquivo = (url, campo, arquivo, aoProgredir, extras = {}) => new Promise((resolve, reject) => {
     const dados = new FormData();
     dados.append(campo, arquivo);
+    Object.entries(extras).forEach(([chave, valor]) => dados.append(chave, valor ?? ''));
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);

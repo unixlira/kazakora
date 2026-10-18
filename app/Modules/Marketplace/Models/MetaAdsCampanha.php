@@ -9,11 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Meta ADS (2026-10-13): campanha de vídeo montada no admin e enviada pela
- * Marketing API da Meta (App\Services\Meta\MetaAdsService). Cada vídeo
- * (MetaAdsVideo) vira um conjunto de anúncios com a sua parte do orçamento
- * diário. Tudo nasce PAUSADO na Meta; ativar é um passo separado, com
- * confirmação do gasto na tela.
+ * Meta ADS (2026-10-13): campanha montada no admin e enviada pela
+ * Marketing API da Meta (App\Services\Meta\MetaAdsService). Desde
+ * 2026-10-18 segue a estrutura do Gerenciador: Campanha > vários conjuntos
+ * (MetaAdsConjunto, cada um com nome e, opcional, público próprio) > vários
+ * anúncios em cada (MetaAdsVideo: vídeo ou imagem, com produto e texto
+ * próprios). O orçamento é da campanha (a Meta distribui entre os
+ * conjuntos) ou de cada conjunto. Tudo nasce PAUSADO na Meta; ativar é um
+ * passo separado, com confirmação do gasto na tela.
  *
  * Os ids meta_* são gravados a cada passo do envio: se a Meta recusar no
  * meio, o reenvio continua do passo que faltou em vez de duplicar campanha.
@@ -32,19 +35,41 @@ class MetaAdsCampanha extends Model
 
     public const STATUS_ERRO = 'erro';
 
+    /**
+     * O Lira terminou ou mexeu na campanha direto no Gerenciador da Meta
+     * (2026-10-18, Árvore de Natal). O KazaKora não envia, ativa nem pausa
+     * mais nada dela: só mostra o resultado e o link do Gerenciador.
+     */
+    public const STATUS_GERENCIADOR = 'gerenciador';
+
     public const STATUS_ROTULOS = [
         self::STATUS_RASCUNHO => 'Rascunho',
         self::STATUS_ENVIANDO => 'Enviando',
         self::STATUS_ENVIADA_PAUSADA => 'Enviada (pausada)',
         self::STATUS_ATIVA => 'Ativa',
         self::STATUS_ERRO => 'Erro no envio',
+        self::STATUS_GERENCIADOR => 'Assumida no Gerenciador',
     ];
+
+    /** Opções além do texto, título e descrição principais (a Meta aceita 5 de cada no total). */
+    public const MAX_TEXTOS_ALTERNATIVOS = 4;
 
     public const OBJETIVOS = [
         'OUTCOME_SALES' => 'Vendas',
         'OUTCOME_TRAFFIC' => 'Tráfego para o site',
         'OUTCOME_ENGAGEMENT' => 'Engajamento',
         'OUTCOME_AWARENESS' => 'Reconhecimento',
+    ];
+
+    /** Orçamento da campanha (Advantage): a Meta leva a verba para o conjunto que rende mais. */
+    public const ORCAMENTO_CAMPANHA = 'campanha';
+
+    /** Orçamento por conjunto: cada conjunto gasta o seu valor. */
+    public const ORCAMENTO_CONJUNTO = 'conjunto';
+
+    public const ORCAMENTO_TIPOS = [
+        self::ORCAMENTO_CAMPANHA => 'Orçamento da campanha (recomendado)',
+        self::ORCAMENTO_CONJUNTO => 'Orçamento por conjunto',
     ];
 
     public const GENEROS = [
@@ -66,6 +91,7 @@ class MetaAdsCampanha extends Model
     protected $fillable = [
         'nome',
         'objetivo',
+        'orcamento_tipo',
         'orcamento_diario',
         'inicio',
         'fim',
@@ -78,6 +104,7 @@ class MetaAdsCampanha extends Model
         'texto_principal',
         'titulo',
         'descricao',
+        'textos_alternativos',
         'chamada',
         'status',
         'meta_campaign_id',
@@ -98,16 +125,33 @@ class MetaAdsCampanha extends Model
             'idade_min' => 'integer',
             'idade_max' => 'integer',
             'localizacoes' => 'array',
+            'textos_alternativos' => 'array',
             'enviada_em' => 'datetime',
             'ativada_em' => 'datetime',
         ];
     }
 
-    /** Teto de vídeos por campanha (cada um vira um conjunto de anúncios). */
-    public const MAX_VIDEOS = 10;
+    /** Teto de conjuntos por campanha (a Meta aceita 200; acima disso a tela vira bagunça). */
+    public const MAX_CONJUNTOS = 10;
 
-    /** Menor parte do orçamento diário por vídeo que a tela aceita (R$). */
-    public const MINIMO_POR_VIDEO = 6.0;
+    /** Teto de anúncios (vídeos ou imagens) por campanha, somando os conjuntos. */
+    public const MAX_VIDEOS = 50;
+
+    /** Acima disso no mesmo conjunto a Meta divide demais a entrega (só aviso). */
+    public const RECOMENDADO_POR_CONJUNTO = 6;
+
+    /** Menor orçamento diário por conjunto de anúncios que a tela aceita (R$). */
+    public const MINIMO_POR_CONJUNTO = 6.0;
+
+    public function orcamentoDaCampanha(): bool
+    {
+        return $this->orcamento_tipo !== self::ORCAMENTO_CONJUNTO;
+    }
+
+    public function conjuntos(): HasMany
+    {
+        return $this->hasMany(MetaAdsConjunto::class, 'campanha_id')->orderBy('ordem')->orderBy('id');
+    }
 
     public function videos(): HasMany
     {
@@ -135,7 +179,7 @@ class MetaAdsCampanha extends Model
     }
 
     /**
-     * Orçamento diário dividido igualmente entre os vídeos, em centavos
+     * Orçamento diário dividido igualmente entre N partes, em centavos
      * (o que a Meta pede). Centavo que sobra da divisão vai para os
      * primeiros, para a soma bater exatamente com o total.
      *
@@ -157,18 +201,19 @@ class MetaAdsCampanha extends Model
     /** Já existe algum objeto criado na Meta para esta campanha? */
     public function temObjetoNoMeta(): bool
     {
-        if (filled($this->meta_campaign_id)) {
+        if (filled($this->meta_campaign_id) || $this->conjuntos->contains(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))) {
             return true;
         }
 
         return $this->videos->contains(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta());
     }
 
-    /** Campanha e todos os vídeos com conjunto, criativo e anúncio na Meta. */
+    /** Campanha e todos os anúncios com conjunto, criativo e anúncio na Meta. */
     public function envioCompleto(): bool
     {
         return filled($this->meta_campaign_id)
             && $this->videos->isNotEmpty()
+            && $this->conjuntos->every(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))
             && $this->videos->every(fn (MetaAdsVideo $v) => $v->envioCompleto());
     }
 
@@ -201,5 +246,32 @@ class MetaAdsCampanha extends Model
     public function podePausar(): bool
     {
         return $this->status === self::STATUS_ATIVA && $this->envioCompleto();
+    }
+
+    /** Já tem algo na Meta e o envio não está rodando: dá para passar para o Gerenciador. */
+    public function podeAssumirNoGerenciador(): bool
+    {
+        return in_array($this->status, [self::STATUS_ERRO, self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA], true)
+            && filled($this->meta_campaign_id);
+    }
+
+    /**
+     * Opções extras de texto, sem vazio nem repetida.
+     *
+     * @return array{textos: list<string>, titulos: list<string>, descricoes: list<string>}
+     */
+    public function textosAlternativos(): array
+    {
+        $guardado = $this->textos_alternativos ?? [];
+        $limpar = fn ($lista) => array_values(array_slice(array_unique(array_filter(
+            array_map(fn ($t) => trim((string) $t), (array) $lista),
+            fn (string $t) => $t !== '',
+        )), 0, self::MAX_TEXTOS_ALTERNATIVOS));
+
+        return [
+            'textos' => $limpar($guardado['textos'] ?? []),
+            'titulos' => $limpar($guardado['titulos'] ?? []),
+            'descricoes' => $limpar($guardado['descricoes'] ?? []),
+        ];
     }
 }

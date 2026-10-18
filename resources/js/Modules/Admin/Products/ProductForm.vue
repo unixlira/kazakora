@@ -356,11 +356,6 @@ const regenerateSku = async () => {
                 <input v-model="form.is_new_release" type="checkbox">
                 Lançamento (aparece como novidade)
             </label>
-
-            <label class="flex items-center gap-2 text-sm">
-                <input v-model="form.is_daily_offer" type="checkbox">
-                Oferta do Dia (aparece na seção "Ofertas do Dia" da home, depois das Ofertas Relâmpago, se tiver estoque)
-            </label>
         </div>
 
         <button

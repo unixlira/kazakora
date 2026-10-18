@@ -140,7 +140,7 @@ watch(() => props.products, (novos) => {
 
 const temMais = computed(() => !!props.products && props.products.current_page < props.products.last_page);
 
-// Ofertas do dia: contagem até o fim da Relâmpago que acaba primeiro (sem Relâmpago, sem relógio).
+// Ofertas do dia: contagem até o fim da Relâmpago que acaba primeiro.
 const restanteOfertas = ref('');
 let relogioOfertas = null;
 const atualizarRelogio = () => {
@@ -222,7 +222,7 @@ onBeforeUnmount(() => observador?.disconnect());
             <!-- Âncora da faixa promocional do topo. -->
             <span id="ofertas" class="block scroll-mt-28"></span>
             <SecaoProdutos titulo="Ofertas do Dia" :produtos="vitrine.ofertas" cinco slider
-                subtitulo="Ofertas Relâmpago por tempo limitado e produtos escolhidos a dedo."
+                subtitulo="Oferta Relâmpago: preço baixo por tempo limitado."
                 :favorite-ids="favoriteIds" :reviewable-product-ids="reviewableProductIds" :reviewed-product-ids="reviewedProductIds">
                 <template #acao>
                     <!-- Celular: largura toda, texto no centro e relógio pulsando (pedido 2026-10-10). -->

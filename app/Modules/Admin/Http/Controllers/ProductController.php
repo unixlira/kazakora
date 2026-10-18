@@ -139,11 +139,10 @@ class ProductController extends Controller
         $product = $this->createWithGeneratedSku($validated, $category?->name);
 
         $this->gerarConteudoAnuncioDepois($product);
-        $aviso = $product->is_daily_offer ? ' '.$this->avisoOfertaDoDia($product) : '';
 
         return redirect()
             ->route('admin.produtos.editar', $product)
-            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.'.$aviso);
+            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.');
     }
 
     public function edit(Product $product): Response
@@ -274,7 +273,6 @@ class ProductController extends Controller
 
         $product->update($this->comAcrescimoPix($validated));
         $this->gerarConteudoAnuncioDepois($product);
-        $mudouOferta = $product->wasChanged('is_daily_offer');
 
         // $product->stock aqui já é o valor ATUAL do banco (route model
         // binding busca fresco no início desta requisição, e $validated
@@ -284,27 +282,7 @@ class ProductController extends Controller
             $this->stock->adjust($product, $adjustment, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
         }
 
-        $aviso = $mudouOferta ? ' '.$this->avisoOfertaDoDia($product) : '';
-
-        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.'.$aviso);
-    }
-
-    /**
-     * Checkbox "Oferta do Dia" mudou (pedido 2026-10-18): a home lê o
-     * checkbox na hora (VitrineHome), depois das Ofertas Relâmpago. Só
-     * avisa se o produto vai aparecer.
-     */
-    private function avisoOfertaDoDia(Product $product): string
-    {
-        if (! $product->is_daily_offer) {
-            return 'Saiu das Ofertas do Dia da home.';
-        }
-
-        $aparece = Product::query()->whereKey($product->id)->where('is_active', true)->whereNull('parent_product_id')->comEstoque()->exists();
-
-        return $aparece
-            ? 'Já aparece nas Ofertas do Dia da home, depois das Ofertas Relâmpago.'
-            : 'Marcado como Oferta do Dia, mas só aparece na home quando estiver ativo, com estoque e não for variação.';
+        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.');
     }
 
     public function destroy(Product $product): RedirectResponse

@@ -45,11 +45,10 @@ class VitrineHome
     }
 
     /**
-     * Ofertas do Dia (pedido 2026-10-18): primeiro as Ofertas Relâmpago da
-     * KazaKora no ar agora, a que acaba primeiro na frente; depois os
-     * produtos marcados "Oferta do Dia" no cadastro (is_daily_offer), por id.
-     * Agendada entra sozinha quando começa; pausada ou encerrada sai na hora.
-     * A escolha automática diária (loja:ofertas-do-dia) não alimenta a seção.
+     * Ofertas do Dia = só as Ofertas Relâmpago da KazaKora no ar agora
+     * (pedido 2026-10-18), a que acaba primeiro na frente. Agendada entra
+     * sozinha quando começa; pausada ou encerrada sai na hora. A escolha
+     * automática diária (loja:ofertas-do-dia) não alimenta mais a seção.
      *
      * @return list<int>
      */
@@ -57,10 +56,8 @@ class VitrineHome
     {
         $noAr = collect(OfertaRelampago::ativasAgora(SiteAtual::KAZAKORA))->sortBy('fim_em');
         $validos = $this->ativos()->whereIn('id', $noAr->keys())->pluck('id')->all();
-        $relampago = $noAr->keys()->filter(fn ($id) => in_array($id, $validos))->values();
-        $marcados = $this->ativos()->where('is_daily_offer', true)->orderBy('id')->pluck('id');
 
-        return $relampago->concat($marcados->diff($relampago))->values()->all();
+        return $noAr->keys()->filter(fn ($id) => in_array($id, $validos))->values()->all();
     }
 
     /** Fim da Relâmpago que acaba primeiro na seção (relógio "Termina em"). */

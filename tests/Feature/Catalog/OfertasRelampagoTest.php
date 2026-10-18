@@ -208,28 +208,4 @@ class OfertasRelampagoTest extends TestCase
             ->where('vitrine.ofertas.0.id', $agendado->id)
             ->where('vitrine.ofertas.1.id', $this->pai->id));
     }
-
-    public function test_ofertas_do_dia_poe_relampago_na_frente_e_depois_os_marcados_no_cadastro(): void
-    {
-        $marcado = Product::factory()->create(['price' => 50, 'stock' => 10, 'is_active' => true, 'is_daily_offer' => true]);
-        $marcadoSemEstoque = Product::factory()->create(['price' => 50, 'stock' => 0, 'is_active' => true, 'is_daily_offer' => true]);
-        $marcadoInativo = Product::factory()->create(['price' => 50, 'stock' => 10, 'is_active' => false, 'is_daily_offer' => true]);
-        $this->oferta(SiteAtual::KAZAKORA, 20, -1, 3);
-        $this->pai->update(['is_daily_offer' => true]);
-
-        $this->get('/')->assertInertia(fn ($page) => $page
-            ->has('vitrine.ofertas', 2)
-            ->where('vitrine.ofertas.0.id', $this->pai->id)
-            ->where('vitrine.ofertas.1.id', $marcado->id)
-            ->where('vitrine.ofertasTerminamEm', now()->addHours(3)->toIso8601String()));
-
-        // Sem Relâmpago no ar, ficam só os marcados, sem relógio.
-        $this->travel(4)->hours();
-        OfertaRelampago::esquecer();
-        $this->get('/')->assertInertia(fn ($page) => $page
-            ->where('vitrine.ofertas.0.id', $this->pai->id)
-            ->where('vitrine.ofertas.1.id', $marcado->id)
-            ->has('vitrine.ofertas', 2)
-            ->where('vitrine.ofertasTerminamEm', null));
-    }
 }

@@ -36,8 +36,12 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const PARCELAS = 12;
-// Desconto no Pix: "Desconto Checkout (%)" do produto (2026-10-18).
-const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0);
+// Desconto no Pix: "Desconto Checkout" do produto, em % ou R$ (2026-10-18).
+const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0) > 0
+    ? `${Number(props.product.checkout_discount_percentage)}%`
+    : (Number(props.product.checkout_discount_amount ?? 0) > 0
+        ? Number(props.product.checkout_discount_amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : '');
 // Mesmas bandeiras e imagens do rodapé, com o boleto (pedido 2026-10-14).
 const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 
@@ -47,8 +51,8 @@ const FAQ = [
     ['Qual é o prazo de entrega?', 'O prazo é calculado pelo seu CEP e aparece no checkout antes de você finalizar a compra.'],
     ['O frete é grátis?', 'Sim. O envio é grátis para a sua residência.'],
     ['Posso trocar ou devolver?', 'Sim. Você tem 7 dias após o recebimento para desistir da compra e 30 dias para trocar um produto com defeito.'],
-    ['Quais são as formas de pagamento?', DESCONTO_PIX > 0
-        ? `Pix, com aprovação imediata e ${DESCONTO_PIX}% de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
+    ['Quais são as formas de pagamento?', DESCONTO_PIX
+        ? `Pix, com aprovação imediata e ${DESCONTO_PIX} de desconto, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`
         : `Pix, com aprovação imediata, cartão de crédito em até ${PARCELAS}x sem juros ou boleto bancário.`],
 ];
 
@@ -685,7 +689,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="bandeiras esquerda">
                                 <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
                             </div>
-                            <p v-if="DESCONTO_PIX > 0">No Pix você tem {{ DESCONTO_PIX }}% de desconto, com aprovação imediata.</p>
+                            <p v-if="DESCONTO_PIX">No Pix você tem {{ DESCONTO_PIX }} de desconto, com aprovação imediata.</p>
                             <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
                         </section>
 

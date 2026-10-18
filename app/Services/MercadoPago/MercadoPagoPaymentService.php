@@ -52,16 +52,24 @@ class MercadoPagoPaymentService
         return $this->request('GET', "v1/orders/{$orderId}");
     }
 
+    /*
+     * A API de Orders exige X-Idempotency-Key em todo POST (capture, cancel,
+     * refund) e recusa com HTTP 400 sem ela ("empty_required_header").
+     * Conferido na API em 2026-10-18, depois do estorno recusado do #3219.
+     * Sem chave do chamador, vale uma fixa pela order: repetir a mesma ação
+     * na mesma order nunca executa duas vezes.
+     */
+
     /** Só captura o valor total — a API de Orders não suporta captura parcial. */
-    public function captureOrder(string $orderId): array
+    public function captureOrder(string $orderId, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/orders/{$orderId}/capture");
+        return $this->request('POST', "v1/orders/{$orderId}/capture", [], $idempotencyKey ?? "captura-{$orderId}");
     }
 
     /** Só funciona com a order ainda em status "created" (antes de processar). */
-    public function cancelOrder(string $orderId): array
+    public function cancelOrder(string $orderId, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/orders/{$orderId}/cancel");
+        return $this->request('POST', "v1/orders/{$orderId}/cancel", [], $idempotencyKey ?? "cancelamento-{$orderId}");
     }
 
     /**
@@ -70,7 +78,7 @@ class MercadoPagoPaymentService
      */
     public function refundOrder(string $orderId, ?float $amount = null, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : [], $idempotencyKey);
+        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : [], $idempotencyKey ?? "estorno-{$orderId}");
     }
 
     /**
@@ -240,9 +248,12 @@ class MercadoPagoPaymentService
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
+                // Corpo vazio vai como {} e não []: a API de Orders recusa
+                // array com HTTP 400 ("expected object, but got array"), e
+                // era isso que barrava o estorno do #3219 mesmo com a chave.
                 $response = $method === 'GET'
                     ? $request->get($uri)
-                    : $request->send($method, $uri, ['json' => $data]);
+                    : $request->send($method, $uri, ['json' => $data === [] ? new \stdClass : $data]);
             } catch (ConnectionException $exception) {
                 if ($attempt >= $maxAttempts) {
                     throw new MercadoPagoException("Falha de conexão com a API do Mercado Pago: {$exception->getMessage()}");

@@ -238,9 +238,19 @@ class DashboardAgentController extends Controller
      */
     public function pulse(): JsonResponse
     {
+        // Só venda paga toca o som de pedido novo (2026-10-17): o pedido do
+        // site nasce "aguardando pagamento" no clique do Pix/cartão e tocava
+        // antes de o Mercado Pago confirmar. E o Pix pago depois de 15 min
+        // conta pela hora do pagamento, senão nunca tocaria.
+        $desde = now()->subMinutes(15);
         $recentes = Order::query()
             ->nonPurchaseReturn()
-            ->where('created_at', '>=', now()->subMinutes(15))
+            ->whereNotIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING, Order::STATUS_CANCELLED])
+            ->where(fn ($query) => $query
+                ->where('created_at', '>=', $desde)
+                ->orWhereHas('payments', fn ($pagamento) => $pagamento
+                    ->whereIn('status', [Payment::STATUS_AUTHORIZED, Payment::STATUS_CAPTURED])
+                    ->where('updated_at', '>=', $desde)))
             ->orderByDesc('id')
             ->limit(30)
             ->get(['id', 'origin', 'created_at']);
@@ -330,6 +340,7 @@ class DashboardAgentController extends Controller
 
         $cancelledToday = Order::query()
             ->nonPurchaseReturn()
+            ->semCheckoutAbandonado()
             ->where('status', Order::STATUS_CANCELLED)
             ->where('updated_at', '>=', $today)
             ->count();
@@ -385,6 +396,7 @@ class DashboardAgentController extends Controller
         // novo), não reaproveita $cancelledToday (que é só HOJE).
         $cancelledMonth = Order::query()
             ->nonPurchaseReturn()
+            ->semCheckoutAbandonado()
             ->where('status', Order::STATUS_CANCELLED)
             ->where('updated_at', '>=', $monthStart)
             ->count();
@@ -459,6 +471,7 @@ class DashboardAgentController extends Controller
             ->doCanal($channel)
             // Só venda paga ou que já foi paga (pedido 2026-10-11).
             ->whereNotIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
+            ->semCheckoutAbandonado()
             ->with(['items:id,order_id,product_name,quantity'])
             ->latest('id')
             ->limit(100)
@@ -863,8 +876,12 @@ class DashboardAgentController extends Controller
         // toda essa função) agora entra também, especificamente pra isso —
         // sem essa visibilidade, ninguém percebe que precisa TIRAR um
         // pedido já separado/em mãos da remessa.
+        // Pix/cartão/boleto do site que nunca foi pago e a varredura cancelou
+        // não entra (2026-10-17): nunca esteve na fila, e o alerta de
+        // cancelado mandava a expedição procurar um pacote que não existe.
         $recentlyCancelledOrders = Order::query()
             ->nonPurchaseReturn()
+            ->semCheckoutAbandonado()
             ->where('status', Order::STATUS_CANCELLED)
             ->whereBetween('updated_at', [$yesterday, $tomorrow])
             ->with($relations)
@@ -1670,6 +1687,10 @@ class DashboardAgentController extends Controller
         $pedidos = Order::query()
             ->nonPurchaseReturn()
             ->where('created_at', '>=', now()->subDays(self::HISTORICO_DIAS))
+            // Pedido do site ainda sem pagamento, ou abandonado, não é da
+            // expedição (2026-10-17).
+            ->whereNotIn('status', [Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PENDING])
+            ->semCheckoutAbandonado()
             ->where(function ($query) use ($palavras) {
                 // Cada palavra casa em algum campo, em qualquer ordem — o
                 // mesmo "like" da busca local da tela. Sem acento de graça:

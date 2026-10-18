@@ -381,12 +381,13 @@ class DashboardAgentController extends Controller
             ->where('updated_at', '>=', now()->subMinutes((int) config('session.lifetime')))
             ->sum('items_count');
 
-        // Margem de contribuição de hoje — a MESMA conta do painel e do
-        // Financeiro (ver ContributionMargin): receita − custo dos produtos
-        // − taxa da plataforma − frete pago pela loja − ADS. Até 25/09 isto
-        // era receita − taxa só, sem custo de produto nenhum.
+        // Lucro líquido de hoje — a MESMA conta do painel e do Financeiro
+        // (ver ContributionMargin): receita − custo dos produtos − taxa da
+        // plataforma − frete pago pela loja − ADS − imposto do Simples
+        // (imposto incluído em 2026-10-18). Até 25/09 isto era receita −
+        // taxa só, sem custo de produto nenhum.
         $margemHoje = app(ContributionMargin::class)->periodo($today, $today->copy()->addDay());
-        $netProfitToday = $margemHoje['margem'];
+        $netProfitToday = $margemHoje['lucro'];
 
         // "Cancelamentos e devoluções do mês" do KoraSync v2.0 (pedido
         // explícito 2026-08-29) — soma cancelamento (canal cancelou o

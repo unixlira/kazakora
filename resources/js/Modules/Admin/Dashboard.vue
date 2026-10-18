@@ -569,9 +569,9 @@ const quandoGerado = (iso) => {
                     stat-icon-name="fas fa-calendar-days" variant="primary" vivid compact />
             </component>
             <component :is="can('financeiro.view') ? Link : 'div'" v-bind="can('financeiro.view') ? { href: '/admin/dashboard-financeiro' } : {}" class="block">
-                <CardStats stat-subtitle="Margem de contribuição do mês" :stat-title="formatPrice(stats.contributionMarginMonth)"
-                    :stat-note="kpis.margemPercentual === null || kpis.margemPercentual === undefined ? '' : `${formatPercent(kpis.margemPercentual)} do faturamento`"
-                    stat-icon-name="fas fa-wallet" :variant="stats.contributionMarginMonth >= 0 ? 'success' : 'error'" vivid compact />
+                <CardStats stat-subtitle="Lucro líquido do mês" :stat-title="formatPrice(stats.netProfitMonth)"
+                    :stat-note="kpis.margemPercentual === null || kpis.margemPercentual === undefined ? '' : `${formatPercent(kpis.margemPercentual)} do faturamento · já tirado o imposto de ${formatPrice(stats.taxMonth)}`"
+                    stat-icon-name="fas fa-wallet" :variant="stats.netProfitMonth >= 0 ? 'success' : 'error'" vivid compact />
             </component>
             <CardStats stat-subtitle="Faturamento desde a abertura" :stat-title="formatPrice(stats.revenueTotal)"
                 stat-icon-name="fas fa-sack-dollar" variant="neutral" vivid compact />

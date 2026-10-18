@@ -137,12 +137,12 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
         </div>
 
         <div class="mb-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-sm text-slate-500 shadow-sm dark:text-slate-400">
-            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }} e taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> para chegar no lucro líquido.
+            Base do mês: vendas líquidas {{ formatPrice(summary.grossRevenueMonth) }} – custo produto {{ formatPrice(summary.productCostMonth) }} = lucro bruto {{ formatPrice(grossProfitMonth) }}. Depois abate ADS/campanhas {{ formatPrice(summary.adSpendMonth) }}, taxas/frete/plataformas {{ formatPrice(platformCostsMonth) }}<template v-if="summary.correiosCostMonth"> (inclui frete dos Correios pago pela loja {{ formatPrice(summary.correiosCostMonth) }})</template> e o imposto do Simples ({{ formatPercent(summary.taxRate ?? 0) }} sobre a nota) {{ formatPrice(summary.taxMonth ?? 0) }} para chegar no lucro líquido.
         </div>
 
         <h2 class="mb-3 text-xl font-bold">Lucro líquido por Marketplace · Mês Atual</h2>
         <p class="mb-3 text-sm text-slate-500 dark:text-slate-400">
-            Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma e custo dos itens vendidos.
+            Conta de bolso: vendas líquidas do canal menos ADS/campanhas, taxas/frete/plataforma, custo dos itens vendidos e imposto do Simples.
         </p>
         <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
             <div v-for="market in marketplaceMetricsRows" :key="market.channel" class="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" :class="market.isEmpty ? 'opacity-70' : ''">
@@ -166,6 +166,7 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">Vendas líquidas</span><span class="font-semibold">{{ formatPrice(market.grossRevenue) }}</span></div>
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) ADS/campanhas</span><span class="font-semibold text-error">{{ formatPrice(market.adSpend) }}</span></div>
                     <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Taxas/frete/plataforma</span><span class="font-semibold text-error">{{ formatPrice(market.platformCosts) }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-slate-500 dark:text-slate-400">(–) Imposto (Simples)</span><span class="font-semibold text-error">{{ formatPrice(market.tax ?? 0) }}</span></div>
                     <div v-if="market.feeBreakdown?.pedidosComQuebra" class="space-y-1 border-l-2 border-[var(--surface-border)] pl-3 text-xs">
                         <div class="flex justify-between gap-3"><span class="text-slate-400">comissão + serviço</span><span>{{ formatPrice(market.feeBreakdown.comissao) }}</span></div>
                         <div class="flex justify-between gap-3"><span class="text-slate-400">frete pago pela loja</span><span>{{ formatPrice(market.feeBreakdown.freteLoja) }}</span></div>
@@ -304,6 +305,14 @@ const metricProfitClass = (value) => value >= 0 ? 'text-lucro' : 'text-error';
             <div class="flex items-center justify-between py-1.5 text-sm">
                 <span class="text-slate-500 dark:text-slate-400">(–) Taxas + frete + plataformas</span>
                 <span class="font-semibold text-error">{{ formatPrice(platformCostsMonth) }}</span>
+            </div>
+            <div class="flex items-center justify-between border-t border-[var(--surface-border)] py-2 text-sm">
+                <span class="font-medium">(=) Margem antes do imposto</span>
+                <span class="font-semibold">{{ formatPrice(netProfit.marginBeforeTaxMonth ?? 0) }}</span>
+            </div>
+            <div class="flex items-center justify-between py-1.5 text-sm">
+                <span class="text-slate-500 dark:text-slate-400">(–) Imposto do Simples ({{ formatPercent(netProfit.taxRate ?? 0) }} sobre a nota)</span>
+                <span class="font-semibold text-error">{{ formatPrice(netProfit.taxMonth ?? 0) }}</span>
             </div>
             <div class="flex items-center justify-between border-t-2 border-[var(--surface-border)] py-2">
                 <span class="font-bold">(=) Lucro Líquido do Mês</span>

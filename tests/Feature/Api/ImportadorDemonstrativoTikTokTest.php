@@ -55,4 +55,62 @@ class ImportadorDemonstrativoTikTokTest extends TestCase
 
         $this->assertDatabaseHas('tiktok_report_uploads', ['status' => 'importado', 'tipo' => 'liquidacao']);
     }
+
+    private function linha(array $dados): int
+    {
+        return DB::table('marketplace_settlement_details')->insertGetId([
+            'channel' => 'tiktok_shop', 'transaction_type' => 'Pedido', 'external_order_id' => '585581559103849979',
+            'external_sku_id' => '1736780989365585230', 'settlement_date' => '2026-08-27', 'status' => 'Pagamento pendente',
+            'product_net_sales' => 37.99, 'payout_amount' => 31.71, 'source_file' => 'a.xlsx',
+            'created_at' => '2026-08-31 11:46:30', 'updated_at' => now(), ...$dados,
+        ]);
+    }
+
+    /**
+     * Produção 2026-10-18: o TikTok troca o ID provisório do demonstrativo
+     * quando paga, e o mesmo pedido entrava duas vezes (receita e taxa em
+     * dobro em 116 pedidos). Fica uma linha por lançamento.
+     */
+    public function test_linha_pendente_repetida_em_outra_importacao_sai_e_a_taxa_e_refeita(): void
+    {
+        $pedido = \App\Modules\Checkout\Models\Order::create([
+            'status' => 'paid', 'origin' => 'tiktok_shop', 'external_order_id' => '585581559103849979',
+            'shipping_name' => 'C', 'shipping_phone' => '1', 'shipping_zip' => '01001000', 'shipping_street' => 'R', 'shipping_number' => '1',
+            'shipping_neighborhood' => 'B', 'shipping_city' => 'SP', 'shipping_state' => 'SP', 'subtotal' => 37.99, 'total' => 32.99,
+        ]);
+        $pendente = $this->linha(['statement_id' => '3689299302187107662']);
+        $pago = $this->linha(['statement_id' => '7678349834398566151', 'status' => 'Pagos', 'source_file' => 'b.xlsx']);
+        // Pendente que só trocou de ID provisório no download seguinte (mesmo nome de arquivo, outro horário).
+        $velha = $this->linha(['external_order_id' => '586202002709513953', 'statement_id' => '3725403326006854990', 'created_at' => '2026-10-12 00:53:57']);
+        $nova = $this->linha(['external_order_id' => '586202002709513953', 'statement_id' => '7695197615289403142', 'created_at' => '2026-10-12 23:30:59']);
+        // Duas cobranças de GMV iguais no MESMO arquivo são reais e ficam.
+        $gmv = ['transaction_type' => 'Pagamento de GMV para anúncios do TikTok', 'external_order_id' => '7639742860367250197', 'external_sku_id' => '', 'settlement_date' => '2026-10-06', 'product_net_sales' => 0, 'payout_amount' => -27];
+        $gmv1 = $this->linha([...$gmv, 'statement_id' => '3720583572082165070']);
+        $gmv2 = $this->linha([...$gmv, 'statement_id' => '7693398376039941895']);
+        // Mesmo demonstrativo com SKU nulo e "/" (formatos antigos): uma só.
+        $skuNulo = $this->linha([...$gmv, 'statement_id' => '7673325528123737872', 'external_sku_id' => null, 'status' => 'Pagos', 'settlement_date' => '2026-08-13']);
+        $skuBarra = $this->linha([...$gmv, 'statement_id' => '7673325528123737872', 'external_sku_id' => '/', 'status' => 'Pagos', 'settlement_date' => '2026-08-12', 'source_file' => 'c.xlsx']);
+        // Dois lançamentos pagos do mesmo pedido em demonstrativos diferentes são reais.
+        $pagoA = $this->linha(['external_order_id' => '585565655613277279', 'statement_id' => '7679247885233391361', 'status' => 'Pagos', 'product_net_sales' => 0, 'payout_amount' => -10.48]);
+        $pagoB = $this->linha(['external_order_id' => '585565655613277279', 'statement_id' => '7680365486621787922', 'status' => 'Pagos', 'product_net_sales' => 0, 'payout_amount' => -10.86, 'source_file' => 'b.xlsx']);
+
+        $this->artisan('tiktok:limpar-extrato --seco')->assertSuccessful();
+        $this->assertSame(10, DB::table('marketplace_settlement_details')->count(), 'simulação não apaga nada');
+
+        Storage::fake('local');
+        $this->artisan('tiktok:limpar-extrato')->assertSuccessful();
+
+        $ficaram = DB::table('marketplace_settlement_details')->pluck('id')->all();
+        sort($ficaram);
+        $esperado = [$pago, $nova, $gmv1, $gmv2, $skuBarra, $pagoA, $pagoB];
+        sort($esperado);
+        $this->assertSame($esperado, $ficaram);
+        $this->assertNotContains($pendente, $ficaram);
+        $this->assertNotContains($velha, $ficaram);
+        $this->assertNotContains($skuNulo, $ficaram);
+
+        // Taxa real refeita com a linha única: 37,99 − 31,71 = 6,28 (antes 12,56).
+        $this->assertDatabaseHas('order_channel_fees', ['order_id' => $pedido->id, 'source' => 'report', 'gross_amount' => 37.99, 'fee_amount' => 6.28, 'payout_amount' => 31.71]);
+        $this->assertSame(37.99, (float) DB::table('orders')->where('id', $pedido->id)->value(DB::raw(\App\Modules\Marketplace\Support\ContributionMargin::receitaSql())));
+    }
 }

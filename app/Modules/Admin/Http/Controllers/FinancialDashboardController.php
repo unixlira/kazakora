@@ -308,7 +308,10 @@ class FinancialDashboardController extends Controller
         $settlementAffiliateCostMonth = 0.0;
         $platformCostsMonth = round($contaMes['taxas'] + $contaMes['frete'] - $contaMes['bonificacoes'], 2);
         $grossProfitMonth = round($salesRevenueMonth - $productCostMonth, 2);
-        $netProfitMonth = $contaMes['margem'];
+        // Validação 2026-10-18: lucro líquido = margem − imposto do Simples
+        // (antes o imposto só saía no e-mail das 23h50).
+        $taxMonth = $contaMes['imposto'];
+        $netProfitMonth = $contaMes['lucro'];
         $netProfitMarginMonth = $salesRevenueMonth > 0 ? round(($netProfitMonth / $salesRevenueMonth) * 100, 2) : 0.0;
         $netRevenueMonth = round($salesRevenueMonth - $adSpendMonth, 2);
         $netRevenueAfterDeductionsMonth = round($salesRevenueMonth - $platformCostsMonth - $adSpendMonth, 2);
@@ -317,7 +320,7 @@ class FinancialDashboardController extends Controller
         $productCostAllTime = $contaTotal['custo_produtos'];
         $marketplaceFeeAllTime = $contaTotal['taxas'];
         $adSpendAllTime = $contaTotal['ads'];
-        $netProfitAllTime = $contaTotal['margem'];
+        $netProfitAllTime = $contaTotal['lucro'];
         $netRevenueAfterDeductionsAllTime = round($contaTotal['receita'] - $contaTotal['taxas'] - $contaTotal['frete'] + $contaTotal['bonificacoes'] - $contaTotal['ads'], 2);
 
         $settlementSummary = $this->settlementSummary($startOfMonth);
@@ -361,6 +364,9 @@ class FinancialDashboardController extends Controller
                 'baseAdSpendMonth' => $baseAdSpendMonth,
                 'settlementAdSpendMonth' => $settlementAdSpendMonth,
                 'netProfitMarginMonth' => $netProfitMarginMonth,
+                'taxMonth' => $taxMonth,
+                'taxAllTime' => $contaTotal['imposto'],
+                'taxRate' => ContributionMargin::aliquotaSimples(),
                 'marketplaceFeesAllTime' => $marketplaceFeeAllTime,
                 'marketplaceFeesMonth' => $marketplaceFeeMonth,
                 'adSpendAllTime' => $adSpendAllTime,
@@ -401,6 +407,9 @@ class FinancialDashboardController extends Controller
                 'correiosCostAllTime' => $correiosCostAllTime,
                 'correiosCostMonth' => $correiosCostMonth,
                 'netProfitMonth' => $netProfitMonth,
+                'marginBeforeTaxMonth' => $contaMes['margem'],
+                'taxMonth' => $taxMonth,
+                'taxRate' => ContributionMargin::aliquotaSimples(),
                 // Informativo — pedido explícito 2026-08-15. NÃO entra em
                 // nenhuma soma/subtração do extrato (nem custo, nem
                 // receita): é o frete que o comprador/canal pagou à
@@ -791,16 +800,18 @@ class FinancialDashboardController extends Controller
 
             // Conta oficial por canal (ver porCanal): substitui a soma local acima.
             $oficial = $porCanal[$channel] ?? null;
+            $tax = 0.0;
             if ($oficial) {
                 $revenue = $oficial['receita'];
                 $ordersCount = $oficial['pedidos'];
                 $productCost = $oficial['custo_produtos'];
                 $adSpend = $oficial['ads'];
                 $platformCosts = round($oficial['taxas'] + $oficial['frete'] - $oficial['bonificacoes'], 2);
+                $tax = $oficial['imposto'];
             }
 
             $grossProfit = round($revenue - $productCost, 2);
-            $netProfit = round($grossProfit - $adSpend - $platformCosts, 2);
+            $netProfit = round($grossProfit - $adSpend - $platformCosts - $tax, 2);
             $margin = $revenue > 0 ? round(($netProfit / $revenue) * 100, 2) : 0.0;
 
             $isEmpty = $ordersCount === 0
@@ -819,6 +830,7 @@ class FinancialDashboardController extends Controller
                 'adSpend' => $adSpend,
                 'platformCosts' => $platformCosts,
                 'productCost' => $productCost,
+                'tax' => $tax,
                 'grossProfit' => $grossProfit,
                 'netProfit' => $netProfit,
                 'netMargin' => $margin,

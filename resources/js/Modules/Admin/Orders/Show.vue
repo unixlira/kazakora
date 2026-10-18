@@ -4,7 +4,7 @@ import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import QrCodeSvg from '@/Shared/Components/QrCodeSvg.vue';
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
-import Swal from 'sweetalert2';
+import CancelamentoProgressoModal from './CancelamentoProgressoModal.vue';
 import { statusOptions } from '@/Shared/statusLabels';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -210,26 +210,15 @@ const cancelOrder = () => {
 };
 
 // Pedido #3205 (2026-10-17): o resultado vinha num aviso solto. Agora o
-// modal lista cada etapa (nota, estorno, estoque, pedido) com o que deu certo
-// e o que ficou para tratar.
-const escapar = (texto) => String(texto ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+// modal lista cada etapa (nota, estorno, estoque, pedido, e-mail) com o que
+// deu certo e o que ficou para tratar, uma por vez (CancelamentoProgressoModal).
+const resultadoDoCancelamento = ref(null);
 const mostrarResultadoDoCancelamento = (resultado) => {
     if (!resultado?.etapas) {
         return;
     }
 
-    const linhas = resultado.etapas.map((etapa) => `
-        <li style="display:flex;gap:.5rem;align-items:flex-start;margin:.4rem 0">
-            <span style="color:${etapa.ok ? '#16a34a' : '#dc2626'};font-weight:700">${etapa.ok ? '✓' : '✗'}</span>
-            <span><strong>${escapar(etapa.etapa)}</strong><br>${escapar(etapa.texto)}</span>
-        </li>`).join('');
-
-    Swal.fire({
-        icon: resultado.ok ? 'success' : 'warning',
-        title: resultado.ok ? 'Pedido cancelado com sucesso' : 'Pedido cancelado, mas falta uma etapa',
-        html: `<ul style="text-align:left;list-style:none;padding:0;margin:0">${linhas}</ul>`,
-        confirmButtonText: 'Ok',
-    });
+    resultadoDoCancelamento.value = resultado;
 };
 
 // Pedido explícito 2026-08-21 (pedido #559, importado errado como "loja"
@@ -893,4 +882,10 @@ const cancelInvoice = () => {
             </div>
         </form>
     </ConfirmModal>
+
+    <CancelamentoProgressoModal
+        :open="!!resultadoDoCancelamento"
+        :resultado="resultadoDoCancelamento"
+        @close="resultadoDoCancelamento = null"
+    />
 </template>

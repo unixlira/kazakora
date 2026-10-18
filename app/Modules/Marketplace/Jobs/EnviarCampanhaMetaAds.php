@@ -22,8 +22,8 @@ class EnviarCampanhaMetaAds implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable;
 
-    /** Rodadas: uma por vídeo enviado mais as esperas de 30 s (~30 min). */
-    public int $tries = 80;
+    /** Rodadas: uma por mídia enviada (até 50) mais as esperas de 30 s (~30 min). */
+    public int $tries = 120;
 
     public int $timeout = 280;
 
@@ -31,7 +31,7 @@ class EnviarCampanhaMetaAds implements ShouldQueue
 
     public function handle(MetaAdsService $meta): void
     {
-        $campanha = MetaAdsCampanha::query()->with('videos')->find($this->campanhaId);
+        $campanha = MetaAdsCampanha::query()->with(['conjuntos', 'videos'])->find($this->campanhaId);
 
         if (! $campanha || $campanha->status !== MetaAdsCampanha::STATUS_ENVIANDO) {
             return;

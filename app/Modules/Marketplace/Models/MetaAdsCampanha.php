@@ -10,12 +10,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Meta ADS (2026-10-13): campanha montada no admin e enviada pela
- * Marketing API da Meta (App\Services\Meta\MetaAdsService). Cada anúncio
- * (MetaAdsVideo: vídeo ou imagem, com produto e texto próprios) entra num
- * conjunto conforme a estrutura (2026-10-18): todos no mesmo conjunto, como
- * no Gerenciador da Meta, ou um conjunto por anúncio com o orçamento
- * dividido igual. Tudo nasce PAUSADO na Meta; ativar é um passo separado,
- * com confirmação do gasto na tela.
+ * Marketing API da Meta (App\Services\Meta\MetaAdsService). Desde
+ * 2026-10-18 segue a estrutura do Gerenciador: Campanha > vários conjuntos
+ * (MetaAdsConjunto, cada um com nome e, opcional, público próprio) > vários
+ * anúncios em cada (MetaAdsVideo: vídeo ou imagem, com produto e texto
+ * próprios). O orçamento é da campanha (a Meta distribui entre os
+ * conjuntos) ou de cada conjunto. Tudo nasce PAUSADO na Meta; ativar é um
+ * passo separado, com confirmação do gasto na tela.
  *
  * Os ids meta_* são gravados a cada passo do envio: se a Meta recusar no
  * meio, o reenvio continua do passo que faltou em vez de duplicar campanha.
@@ -49,15 +50,15 @@ class MetaAdsCampanha extends Model
         'OUTCOME_AWARENESS' => 'Reconhecimento',
     ];
 
-    /** Um conjunto com todos os anúncios: a Meta leva a verba para o que rende mais. */
-    public const ESTRUTURA_CONJUNTO_UNICO = 'conjunto_unico';
+    /** Orçamento da campanha (Advantage): a Meta leva a verba para o conjunto que rende mais. */
+    public const ORCAMENTO_CAMPANHA = 'campanha';
 
-    /** Um conjunto por anúncio, orçamento dividido igual (teste justo entre eles). */
-    public const ESTRUTURA_POR_ANUNCIO = 'por_anuncio';
+    /** Orçamento por conjunto: cada conjunto gasta o seu valor. */
+    public const ORCAMENTO_CONJUNTO = 'conjunto';
 
-    public const ESTRUTURAS = [
-        self::ESTRUTURA_CONJUNTO_UNICO => 'Um conjunto com todos os anúncios',
-        self::ESTRUTURA_POR_ANUNCIO => 'Um conjunto por anúncio (orçamento dividido igual)',
+    public const ORCAMENTO_TIPOS = [
+        self::ORCAMENTO_CAMPANHA => 'Orçamento da campanha (recomendado)',
+        self::ORCAMENTO_CONJUNTO => 'Orçamento por conjunto',
     ];
 
     public const GENEROS = [
@@ -79,7 +80,7 @@ class MetaAdsCampanha extends Model
     protected $fillable = [
         'nome',
         'objetivo',
-        'estrutura',
+        'orcamento_tipo',
         'orcamento_diario',
         'inicio',
         'fim',
@@ -95,7 +96,6 @@ class MetaAdsCampanha extends Model
         'chamada',
         'status',
         'meta_campaign_id',
-        'meta_adset_id',
         'ultimo_erro',
         'enviada_em',
         'ativada_em',
@@ -118,40 +118,26 @@ class MetaAdsCampanha extends Model
         ];
     }
 
-    /** Teto de anúncios (vídeos ou imagens) por campanha. */
-    public const MAX_VIDEOS = 10;
+    /** Teto de conjuntos por campanha (a Meta aceita 200; acima disso a tela vira bagunça). */
+    public const MAX_CONJUNTOS = 10;
+
+    /** Teto de anúncios (vídeos ou imagens) por campanha, somando os conjuntos. */
+    public const MAX_VIDEOS = 50;
+
+    /** Acima disso no mesmo conjunto a Meta divide demais a entrega (só aviso). */
+    public const RECOMENDADO_POR_CONJUNTO = 6;
 
     /** Menor orçamento diário por conjunto de anúncios que a tela aceita (R$). */
-    public const MINIMO_POR_VIDEO = 6.0;
+    public const MINIMO_POR_CONJUNTO = 6.0;
 
-    public function conjuntoUnico(): bool
+    public function orcamentoDaCampanha(): bool
     {
-        return $this->estrutura === self::ESTRUTURA_CONJUNTO_UNICO;
+        return $this->orcamento_tipo !== self::ORCAMENTO_CONJUNTO;
     }
 
-    /** Quantos conjuntos a campanha terá na Meta (o orçamento se divide entre eles). */
-    public function quantidadeDeConjuntos(): int
+    public function conjuntos(): HasMany
     {
-        $anuncios = $this->videos->count();
-
-        return $this->conjuntoUnico() ? min($anuncios, 1) : $anuncios;
-    }
-
-    /**
-     * Orçamento diário de cada anúncio em centavos: no conjunto único todos
-     * dividem a mesma verba (a Meta distribui), então cada um mostra o total.
-     *
-     * @return list<int>
-     */
-    public function orcamentoPorAnuncio(): array
-    {
-        $quantidade = $this->videos->count();
-
-        if ($this->conjuntoUnico()) {
-            return array_fill(0, $quantidade, (int) round((float) $this->orcamento_diario * 100));
-        }
-
-        return self::dividirOrcamento((float) $this->orcamento_diario, $quantidade);
+        return $this->hasMany(MetaAdsConjunto::class, 'campanha_id')->orderBy('ordem')->orderBy('id');
     }
 
     public function videos(): HasMany
@@ -180,7 +166,7 @@ class MetaAdsCampanha extends Model
     }
 
     /**
-     * Orçamento diário dividido igualmente entre os vídeos, em centavos
+     * Orçamento diário dividido igualmente entre N partes, em centavos
      * (o que a Meta pede). Centavo que sobra da divisão vai para os
      * primeiros, para a soma bater exatamente com o total.
      *
@@ -202,7 +188,7 @@ class MetaAdsCampanha extends Model
     /** Já existe algum objeto criado na Meta para esta campanha? */
     public function temObjetoNoMeta(): bool
     {
-        if (filled($this->meta_campaign_id) || filled($this->meta_adset_id)) {
+        if (filled($this->meta_campaign_id) || $this->conjuntos->contains(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))) {
             return true;
         }
 
@@ -214,6 +200,7 @@ class MetaAdsCampanha extends Model
     {
         return filled($this->meta_campaign_id)
             && $this->videos->isNotEmpty()
+            && $this->conjuntos->every(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))
             && $this->videos->every(fn (MetaAdsVideo $v) => $v->envioCompleto());
     }
 

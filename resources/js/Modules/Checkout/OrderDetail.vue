@@ -4,7 +4,7 @@
 // suporte), nota fiscal, entrega e o chat "Falar com suporte" com a Manuela.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import SuporteChat from '@/Shared/Components/SuporteChat.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 const props = defineProps({
@@ -42,6 +42,20 @@ const METODO = { pix: 'Pix', card: 'Cartão de crédito', boleto: 'Boleto' };
 const dataCurta = (valor) => (valor ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' }).format(new Date(valor)) : null);
 const PAGAMENTO_STATUS = { captured: 'Aprovado', authorized: 'Aprovado', succeeded: 'Aprovado', refunded: 'Estornado', requires_confirmation: 'Aguardando', failed: 'Recusado', cancelled: 'Cancelado' };
 const chatAberto = ref(false);
+
+// Botão "Cancelar pedido" (2026-10-17): o cliente escolhe o motivo e confirma;
+// o servidor cancela nota, estorna, devolve o estoque e manda o e-mail.
+const MOTIVOS = ['Desisti da compra', 'Comprei errado', 'Achei mais barato em outro lugar', 'O prazo de entrega ficou longo', 'Outro motivo'];
+const cancelarAberto = ref(false);
+const cancelarForm = useForm({ motivo: '', detalhe: '' });
+const confirmarCancelamento = () => {
+    cancelarForm
+        .transform((dados) => ({ motivo: [dados.motivo, dados.detalhe.trim()].filter(Boolean).join(': ') }))
+        .post(`/pedidos/${props.pedido.id}/cancelar`, {
+            preserveScroll: true,
+            onSuccess: () => { cancelarAberto.value = false; cancelarForm.reset(); },
+        });
+};
 </script>
 
 <template>
@@ -128,6 +142,38 @@ const chatAberto = ref(false);
                             </button>
                         </div>
                         <SuporteChat v-else :order-id="pedido.id" />
+                    </section>
+
+                    <!-- Cancelar pedido -->
+                    <section v-if="pedido.cancelamento" class="rounded-2xl border border-store-border bg-store-bg-raised p-5 shadow-sm">
+                        <h2 class="flex items-center gap-2 font-bold"><i class="fas fa-circle-xmark text-red-600"></i> Cancelar pedido</h2>
+                        <p v-if="!pedido.cancelamento.pode" class="mt-2 text-sm text-store-fg-muted">{{ pedido.cancelamento.bloqueio }}</p>
+                        <template v-else>
+                            <p class="mt-2 text-sm text-store-fg-muted">
+                                Mudou de ideia? Dá para cancelar enquanto a compra não sai para envio.
+                                <template v-if="pedido.cancelamento.estorno"> O valor pago volta pela mesma forma de pagamento.</template>
+                            </p>
+                            <button v-if="!cancelarAberto" type="button" class="mt-3 rounded-full border border-red-600 px-5 py-2 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40" @click="cancelarAberto = true">
+                                Cancelar pedido
+                            </button>
+                            <form v-else class="mt-3 flex flex-col gap-3" @submit.prevent="confirmarCancelamento">
+                                <fieldset class="flex flex-col gap-1.5">
+                                    <legend class="mb-1 text-sm font-semibold">Por que você quer cancelar?</legend>
+                                    <label v-for="opcao in MOTIVOS" :key="opcao" class="flex items-center gap-2 text-sm">
+                                        <input v-model="cancelarForm.motivo" type="radio" name="motivo" :value="opcao" class="accent-red-600">
+                                        {{ opcao }}
+                                    </label>
+                                </fieldset>
+                                <textarea v-model="cancelarForm.detalhe" rows="2" maxlength="200" placeholder="Quer contar mais? (opcional)" aria-label="Detalhe do motivo" class="rounded-xl border border-store-border bg-store-bg px-3 py-2 text-sm"></textarea>
+                                <p v-if="cancelarForm.errors.motivo" class="text-xs text-red-600">{{ cancelarForm.errors.motivo }}</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="submit" :disabled="!cancelarForm.motivo || cancelarForm.processing" class="rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50">
+                                        <i v-if="cancelarForm.processing" class="fas fa-spinner fa-spin mr-1"></i> Confirmar cancelamento
+                                    </button>
+                                    <button type="button" class="rounded-full px-5 py-2 text-sm font-semibold text-store-fg-muted hover:text-store-fg" @click="cancelarAberto = false">Voltar</button>
+                                </div>
+                            </form>
+                        </template>
                     </section>
                 </div>
 

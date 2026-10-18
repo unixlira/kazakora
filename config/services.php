@@ -392,10 +392,15 @@ return [
         'graph_url' => env('WHATSAPP_GRAPH_URL', 'https://graph.facebook.com/v20.0'),
         'webhook_url' => env('WHATSAPP_WEBHOOK_URL', rtrim((string) env('APP_URL', ''), '/').'/api/webhooks/whatsapp'),
 
-        // Mensagem de pedido aprovado (pedido 2026-10-10). Mensagem que a loja
-        // inicia precisa de template aprovado na Meta; vazio = não envia.
-        // Corpo com {{1}} = primeiro nome e {{2}} = número do pedido; botão
-        // de URL dinâmica ".../rastreio/{{1}}" recebe o código do rastreio.
+        // Confirmação dos dados do pedido do site (2026-10-17, modelo Always
+        // Fit). Mensagem que a loja inicia precisa de template aprovado na
+        // Meta; vazio = não envia. Cabeçalho de imagem; corpo {{1}} = primeiro
+        // nome, {{2}} = número do pedido, {{3}} = nome, {{4}} = e-mail,
+        // {{5}} = endereço; botões de resposta rápida 0 "Tudo Certo" e
+        // 1 "Corrigir Informações" (ver SendOrderApprovedWhatsAppJob).
+        // Com o template preenchido, a NF-e do pedido do site espera o "Tudo
+        // Certo" ou 30 min sem resposta (FaturarPedidoSemResposta). O template
+        // confirmacao_pedido_kazakora_v3 traz a frase dos 30 minutos.
         // Falha na coleta financeira da Amazon/TikTok: a Manuela avisa o Lira
         // (2026-10-16, ver AlertaColetaFinanceira). Ligado só no kazakora.com:
         // o homolog também roda com APP_ENV=production e o mesmo WhatsApp, e
@@ -412,6 +417,8 @@ return [
         'templates' => [
             'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
             'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),
+            // Vazio = imagem da própria loja (public/images/whatsapp).
+            'pedido_aprovado_imagem' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IMAGEM'),
         ],
 
         // Opcional e desligado (decisão 2026-10-08: a Manuela fica no Gemini).

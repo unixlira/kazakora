@@ -465,6 +465,26 @@ class Order extends Model
             ->whereNull($this->qualifyColumn('estornado_em'));
     }
 
+    /**
+     * Tira o checkout abandonado do site (KazaKora, FerraKora, Beauty Kora):
+     * pedido com pagamento local em que NENHUM chegou a ser pago (Pix gerado
+     * e não pago, cartão recusado, boleto vencido). Ele nasce "aguardando
+     * pagamento" só para reservar estoque e ter número no Mercado Pago, e
+     * depois a varredura o cancela: nunca foi venda e não é trabalho da
+     * expedição (2026-10-17, apareciam na aba Cancelados do KoraSync).
+     * Pedido de marketplace não tem pagamento local e continua passando.
+     */
+    public function scopeSemCheckoutAbandonado($query)
+    {
+        return $query->where(fn ($q) => $q
+            ->whereDoesntHave('payments')
+            ->orWhereHas('payments', fn ($pagamento) => $pagamento->whereIn('status', [
+                Payment::STATUS_AUTHORIZED,
+                Payment::STATUS_CAPTURED,
+                Payment::STATUS_REFUNDED,
+            ])));
+    }
+
     /** Canal de métrica (ver canalSql/filtrarCanal). */
     public function scopeDoCanal($query, string $canal)
     {

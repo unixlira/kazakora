@@ -65,6 +65,12 @@ class DescontoPix
     /** Maior "Desconto Checkout" entre os produtos ativos (chamada "até X% no Pix"). */
     public static function maiorPercentual(): float
     {
-        return (float) Product::query()->where('is_active', true)->max('checkout_discount_percentage');
+        $percentual = (float) Product::query()->where('is_active', true)->max('checkout_discount_percentage');
+        // Valor fixo entra pelo % equivalente sobre o preço do cadastro.
+        $fixo = (float) Product::query()->where('is_active', true)
+            ->where('checkout_discount_amount', '>', 0)->where('price', '>', 0)
+            ->selectRaw('MAX(checkout_discount_amount * 100 / price) as maior')->value('maior');
+
+        return round(max($percentual, min(100.0, $fixo)), 2);
     }
 }

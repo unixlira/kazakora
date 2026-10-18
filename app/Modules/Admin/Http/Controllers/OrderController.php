@@ -643,6 +643,9 @@ class OrderController extends Controller
                 'email' => $order->shipping_email ?: $cliente?->email,
                 'telefone' => $order->shipping_phone ?: $cliente?->phone,
                 'whatsapp' => $order->shipping_whatsapp,
+                // Resposta aos botões da confirmação do pedido no WhatsApp.
+                'whatsapp_confirmacao' => $order->whatsapp_confirmacao,
+                'whatsapp_confirmacao_em' => $order->whatsapp_confirmacao_em?->format('d/m/Y H:i'),
                 'apelido_no_canal' => $order->channel_buyer_nickname,
                 'conta' => $order->user ? 'KazaKora' : ($order->ferrakoraCliente ? 'FerraKora' : null),
             ],

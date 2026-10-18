@@ -29,3 +29,18 @@ export function loadMercadoPagoSdk() {
 
     return loadPromise;
 }
+
+/**
+ * Erro do Card Payment Brick em português para o cliente. Abaixo de R$ 0,50
+ * o Mercado Pago recusa o cartão com "There is no valid payment type for
+ * this amount, try sending a larger amount.".
+ */
+export function mensagemErroCartao(error, padrao = 'Não foi possível carregar o formulário do cartão.') {
+    const mensagem = String(error?.message ?? '');
+
+    if (/no valid payment type|larger amount/i.test(mensagem)) {
+        return 'O valor mínimo para pagar no cartão de crédito é R$ 0,50. Escolha o Pix ou adicione mais itens ao carrinho.';
+    }
+
+    return mensagem || padrao;
+}

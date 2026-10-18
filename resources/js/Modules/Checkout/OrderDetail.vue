@@ -170,18 +170,12 @@ onUnmounted(limparTimers);
                     </div>
                 </div>
 
-                <!-- Cancelar Pedido no topo (Lira, 2026-10-18): visível no
-                     computador e no celular, abre o modal e cancela na hora. -->
+                <!-- O botão de cancelar saiu do topo (Lira, 2026-10-18): fica
+                     discreto embaixo do suporte; aqui só o aviso de cancelada. -->
                 <div v-if="cancelado" class="mt-5">
                     <p class="rounded-xl bg-red-500/20 px-4 py-3 text-sm font-medium text-red-100"><i class="fas fa-circle-xmark mr-1"></i> Esta compra foi cancelada.</p>
                     <p v-if="pedido.cancelamento?.bloqueio" class="mt-2 text-xs text-white/60">{{ pedido.cancelamento.bloqueio }}</p>
                 </div>
-                <button v-else-if="pedido.cancelamento?.pode" type="button"
-                    class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white shadow hover:bg-red-700 md:w-auto"
-                    @click="abrirCancelamento">
-                    <i class="fas fa-circle-xmark"></i> Cancelar Pedido
-                </button>
-                <p v-else-if="pedido.cancelamento?.bloqueio" class="mt-4 text-xs text-white/60">{{ pedido.cancelamento.bloqueio }}</p>
 
                 <!-- Etapas -->
                 <ol v-if="!cancelado" class="mt-6 grid grid-cols-6 gap-1">
@@ -237,6 +231,17 @@ onUnmounted(limparTimers);
                         </div>
                         <SuporteChat v-else :order-id="pedido.id" />
                     </section>
+
+                    <!-- Cancelar discreto (Lira, 2026-10-18): vermelho translúcido,
+                         pequeno, fora do card principal da compra. -->
+                    <div v-if="!cancelado && (pedido.cancelamento?.pode || pedido.cancelamento?.bloqueio)" class="-mt-2 flex flex-wrap items-center justify-end gap-2">
+                        <button v-if="pedido.cancelamento?.pode" type="button"
+                            class="inline-flex items-center gap-1.5 rounded-full border border-red-600/25 bg-red-600/10 px-4 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-600/15 dark:text-red-400"
+                            @click="abrirCancelamento">
+                            <i class="fas fa-xmark"></i> Cancelar pedido
+                        </button>
+                        <p v-else class="text-xs text-store-fg-muted">{{ pedido.cancelamento.bloqueio }}</p>
+                    </div>
 
                     <Modal :open="cancelarAberto" max-width="max-w-[480px]" @close="fecharCancelamento">
                         <div v-if="cancelarFase === 'etapas'" class="flex min-h-[180px] flex-col items-center justify-center gap-5 py-4 text-center" role="status" aria-live="polite">

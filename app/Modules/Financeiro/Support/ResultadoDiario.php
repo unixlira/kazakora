@@ -8,8 +8,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Resultado do dia e do mês (pedido 2026-10-10), com a MESMA conta do painel
- * e do KoraSync — ContributionMargin::periodo() — mais o imposto do Simples:
+ * Resultado do dia e do mês (pedido 2026-10-10), com a MESMA conta do painel,
+ * do Financeiro e do KoraSync — ContributionMargin::periodo(), que desde
+ * 2026-10-18 já traz o imposto do Simples (ContributionMargin::imposto()):
  *
  *   lucro líquido = receita − custo dos produtos − taxas dos canais
  *                   − frete pago pela loja (Correios/Flex) − anúncios − imposto
@@ -66,7 +67,7 @@ class ResultadoDiario
 
     public function aliquota(): float
     {
-        return (float) config('loja.simples.aliquota', 4.5);
+        return ContributionMargin::aliquotaSimples();
     }
 
     private function dia(Carbon $dia): array
@@ -88,9 +89,6 @@ class ResultadoDiario
             ->where('order_channel_fees.source', 'estimate')
             ->sum('order_channel_fees.fee_amount'), 2);
 
-        $inicioSimples = Carbon::parse((string) config('loja.simples.desde', '2026-09-01'))->startOfDay();
-        $impostos = $dia->gte($inicioSimples) ? round($this->baseDoImposto($inicio, $fim) * $this->aliquota() / 100, 2) : 0.0;
-
         return [
             'data' => $dia->copy(),
             'pedidos' => $pedidos,
@@ -101,26 +99,8 @@ class ResultadoDiario
             'frete' => $conta['frete'],
             'anuncios' => $conta['ads'],
             'bonificacoes' => $conta['bonificacoes'],
-            'impostos' => $impostos,
-            'lucro' => round($conta['margem'] - $impostos, 2),
+            'impostos' => $conta['imposto'],
+            'lucro' => $conta['lucro'],
         ];
-    }
-
-    /**
-     * Base do Simples (auditoria 2026-10-11): o Simples incide sobre o valor
-     * da NOTA (o que o cliente pagou, frete incluso quando vai na nota), não
-     * sobre a receita interna. Pedido com NF-e de venda autorizada usa o
-     * valor dela; sem nota importada ainda (ex.: TikTok emitido no Bling),
-     * fica a receita do pedido.
-     */
-    private function baseDoImposto(Carbon $inicio, Carbon $fim): float
-    {
-        $nota = 'SELECT i.valor_total FROM invoices i WHERE i.order_id = orders.id AND i.status = \'authorized\''
-            ." AND i.operation_type = 'saida' AND i.cancelada_em IS NULL LIMIT 1";
-
-        return round((float) Order::query()->vendaEfetiva()
-            ->whereIn('status', ContributionMargin::REVENUE_STATUSES)
-            ->where('created_at', '>=', $inicio)->where('created_at', '<', $fim)
-            ->sum(DB::raw("COALESCE(({$nota}), ".ContributionMargin::receitaSql().')')), 2);
     }
 }

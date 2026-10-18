@@ -12,7 +12,7 @@ lucro líquido = receita
               − taxas dos canais
               − frete pago pela loja
               − anúncios (consumo)
-              − imposto (Simples Nacional)      ← só no e-mail de resultado
+              − imposto (Simples Nacional)      ← em todas as telas desde 18/10/2026
 ```
 
 ## Cada linha, de onde vem
@@ -43,9 +43,11 @@ que **nunca** podem ser somadas entre si:
    lançado também em `channel_ad_spends`, o GMV Max **não** pode ser contado de novo.
 
 **Buracos conhecidos (10/10/2026):**
-- **TikTok Ads não é registrado em lugar nenhum** — `ads:sync-spend` só lê Shopee e ML,
-  e o extrato importado veio com GMV Max zerado. Se há anúncio pago no TikTok, o lucro
-  do TikTok está inflado.
+- ~~TikTok Ads não é registrado em lugar nenhum~~ **Resolvido (18/10/2026):** o GMV Max
+  vem no extrato como linha própria "Pagamento de GMV para anúncios do TikTok" (sem
+  pedido) e entra no ADS do TikTok pela data do demonstrativo
+  (`ContributionMargin::adsDoExtrato`). A coluna `gmv_max_ad_fee` do pedido continua
+  zerada e não é somada.
 - **Amazon Ads** idem (sem integração).
 
 ## Valor da nota fiscal = valor que o cliente pagou (regra fixa, 11/10/2026)
@@ -103,3 +105,28 @@ Shopee (API, jul–out; os não pagos ficam de fora de propósito), TikTok e Ama
   - essa taxa nunca é sobrescrita pela API nem pelo Bling.
 - **Bônus do Flex:** entra somando na margem (`bonificacoes`).
 - **Imposto (Simples):** a base é o valor da NF-e de venda autorizada. Se o pedido ainda não tem nota importada, usa a receita.
+
+## Validação de 2026-10-18
+
+- **Imposto na conta oficial:** `ContributionMargin::periodo()`/`porCanal()` devolvem
+  `imposto` e `lucro` (= `margem` − imposto). O card do painel ("Lucro líquido do mês"),
+  o Financeiro (topo, por canal e "Como o lucro é calculado"), o KoraSync
+  (`net_profit_today`) e o e-mail das 23h50 mostram o `lucro`. `margem` continua
+  existindo (antes do imposto) para Indicadores e alertas.
+- **Extrato do TikTok em dobro:** o TikTok dá ID provisório ao demonstrativo
+  "Pagamento pendente" e troca pelo definitivo quando paga; como o ID entra na chave
+  única, o mesmo pedido era gravado de novo a cada download (116 pedidos de ago a
+  out/2026: receita e taxa em dobro, margem do TikTok inflada em R$ 2.035 em agosto,
+  R$ 1.153 em setembro e R$ 1.044 em outubro). O importador agora remove a linha
+  superada (`ImportadorDemonstrativoTikTok::removerLinhasSuperadas`) e
+  `php artisan tiktok:limpar-extrato [--seco]` limpa o que já entrou (cópia em
+  `storage/app/private/backups/`) e refaz a taxa real.
+- **Taxa estimada do TikTok** (pedido sem extrato) é conservadora: nos pedidos já
+  liquidados de ago a out/2026 ela previu de 7% a 25% MENOS de repasse do que o real.
+  Não foi mudada; some quando o extrato chega.
+- **Notas de devolução** sem estorno no Mercado Pago (12 vendas de ago/set): o
+  dinheiro ficou na conta, então a venda continua na receita. O DAS oficial abate
+  devoluções; a estimativa daqui não abate (fica um pouco maior que a guia).
+- **Reembolso de logística/da plataforma do TikTok** (R$ 560 em set, R$ 291 em out):
+  dinheiro que entra por pedido perdido/cancelado; não entra no lucro (conservador).
+

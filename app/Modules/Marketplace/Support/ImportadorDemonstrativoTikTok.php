@@ -118,7 +118,9 @@ class ImportadorDemonstrativoTikTok
             DB::table('marketplace_settlement_details')->upsert($lote, ['channel', 'statement_id', 'external_order_id', 'external_sku_id', 'transaction_type'], $atualizar);
         }
 
-        $taxas = $this->aplicarTaxasReais(array_values(array_unique(array_column($linhas, 'external_order_id'))));
+        $ids = array_values(array_unique(array_column($linhas, 'external_order_id')));
+        $superadas = $this->removerLinhasSuperadas($ids);
+        $taxas = $this->aplicarTaxasReais($ids);
         $datas = array_filter(array_column($linhas, 'settlement_date'));
 
         return [
@@ -130,6 +132,75 @@ class ImportadorDemonstrativoTikTok
             'ate' => $datas ? max($datas) : null,
             'divergencias' => $this->conferir($linhas, $abas['Extratos'] ?? []),
             'taxas_reais' => $taxas,
+            'linhas_superadas' => count($superadas['ids']),
+        ];
+    }
+
+    /**
+     * Linhas repetidas do extrato (validação financeira 2026-10-18). O
+     * TikTok dá um ID de demonstrativo PROVISÓRIO ao que está "Pagamento
+     * pendente" e troca pelo definitivo quando paga; como o ID entra na
+     * chave única, cada download novo gravava o mesmo pedido de novo, e a
+     * receita e a taxa do pedido dobravam (138 pedidos de ago a out/2026).
+     * Também o mesmo lançamento chegou com o SKU nulo, vazio ou "/".
+     *
+     * Fica uma linha só:
+     *  1. mesmo demonstrativo + pedido + tipo + SKU (vazio = nulo = "/"): a mais nova;
+     *  2. linha não paga com outra igual em outro demonstrativo, vinda de
+     *     OUTRA importação (outro arquivo ou outro horário), que já está paga
+     *     ou foi importada depois: sai a não paga. Igual = mesmo pedido, tipo
+     *     e SKU; em Pedido, mesmas vendas líquidas; nos outros tipos, mesma
+     *     data e valor. Linha "Pagos" nunca sai pela regra 2, e duas linhas
+     *     do mesmo arquivo nunca são cópia uma da outra (o GMV Max cobrou
+     *     R$ 27 duas vezes no mesmo dia, em demonstrativos diferentes).
+     *
+     * @param  list<string>|null  $ids  pedidos/ajustes a olhar; null = extrato inteiro
+     * @return array{ids: list<int>, pedidos: list<string>}
+     */
+    public function removerLinhasSuperadas(?array $ids = null, bool $seco = false): array
+    {
+        $linhas = DB::table('marketplace_settlement_details')
+            ->where('channel', Order::ORIGIN_TIKTOK_SHOP)
+            ->when($ids !== null, fn ($q) => $q->whereIn('external_order_id', $ids))
+            ->orderBy('id')
+            ->get(['id', 'statement_id', 'status', 'transaction_type', 'external_order_id', 'external_sku_id', 'settlement_date', 'product_net_sales', 'payout_amount', 'source_file', 'created_at']);
+
+        $sku = fn ($l) => in_array(trim((string) $l->external_sku_id), ['', '/'], true) ? '' : trim((string) $l->external_sku_id);
+        $remover = [];
+
+        foreach ($linhas->groupBy(fn ($l) => $l->statement_id.'|'.$l->external_order_id.'|'.$l->transaction_type.'|'.$sku($l)) as $iguais) {
+            foreach ($iguais->slice(0, -1) as $l) {
+                $remover[$l->id] = $l;
+            }
+        }
+
+        $restantes = $linhas->reject(fn ($l) => isset($remover[$l->id]));
+        $chave = fn ($l) => $l->transaction_type === 'Pedido'
+            ? $l->external_order_id.'|Pedido|'.$sku($l).'|'.round((float) $l->product_net_sales, 2)
+            : $l->external_order_id.'|'.$l->transaction_type.'|'.$sku($l).'|'.$l->settlement_date.'|'.round((float) $l->payout_amount, 2);
+
+        foreach ($restantes->groupBy($chave) as $iguais) {
+            foreach ($iguais as $l) {
+                if ($l->status === 'Pagos') {
+                    continue;
+                }
+                $superada = $iguais->contains(fn ($o) => $o->id !== $l->id && $o->statement_id !== $l->statement_id
+                    && ($o->source_file !== $l->source_file || (string) $o->created_at !== (string) $l->created_at)
+                    && ($o->status === 'Pagos' || $o->id > $l->id));
+                if ($superada) {
+                    $remover[$l->id] = $l;
+                }
+            }
+        }
+
+        $remover = collect($remover)->values();
+        if (! $seco && $remover->isNotEmpty()) {
+            DB::table('marketplace_settlement_details')->whereIn('id', $remover->pluck('id'))->delete();
+        }
+
+        return [
+            'ids' => $remover->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all(),
+            'pedidos' => $remover->where('transaction_type', 'Pedido')->pluck('external_order_id')->unique()->values()->all(),
         ];
     }
 

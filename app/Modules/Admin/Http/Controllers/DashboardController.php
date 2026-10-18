@@ -32,11 +32,14 @@ class DashboardController extends Controller
         // Gerenciador (Lira 2026-10-14, "funcionamento ruim"): cada prop é
         // uma closure, então trocar o mês dos acessos ou aplicar uma ação do
         // Cauê (recarga parcial com `only`) calcula só o bloco pedido, e não
-        // a tela inteira de novo. A margem do mês é usada por dois blocos e
-        // calculada uma vez só.
-        $margemMes = null;
-        $margem = function () use (&$margemMes, $startOfMonth, $today): float {
-            return $margemMes ??= (float) app(ContributionMargin::class)->periodo($startOfMonth, $today->copy()->addDay())['margem'];
+        // a tela inteira de novo. O lucro do mês é usado por dois blocos e
+        // calculado uma vez só. Validação financeira 2026-10-18: o card
+        // mostra o LUCRO LÍQUIDO (margem − imposto do Simples), o mesmo
+        // número do Financeiro e do e-mail das 23h50; antes mostrava a
+        // margem antes do imposto.
+        $contaMes = null;
+        $conta = function () use (&$contaMes, $startOfMonth, $today): array {
+            return $contaMes ??= app(ContributionMargin::class)->periodo($startOfMonth, $today->copy()->addDay());
         };
 
         return Inertia::render('Admin/Dashboard', [
@@ -79,7 +82,9 @@ class DashboardController extends Controller
                 'revenueTotal' => (float) Order::query()->vendaEfetiva()
                     ->whereIn('status', self::PAID_STATUSES)
                     ->sum(DB::raw(ContributionMargin::receitaSql())),
-                'contributionMarginMonth' => $margem(),
+                'contributionMarginMonth' => (float) $conta()['margem'],
+                'netProfitMonth' => (float) $conta()['lucro'],
+                'taxMonth' => (float) $conta()['imposto'],
                 'returnsMonth' => StockMovement::query()
                     ->where('type', StockMovement::TYPE_RETURN)
                     ->where('created_at', '>=', $startOfMonth)
@@ -95,7 +100,7 @@ class DashboardController extends Controller
                 ->all(),
             'abcCurve' => fn () => $this->curvaAbc(Carbon::today()->subDays(89)),
             'revenueByChannel' => fn () => $this->revenueByChannel($startOfMonth),
-            'analytics' => fn () => $this->analytics($today, $margem()),
+            'analytics' => fn () => $this->analytics($today, (float) $conta()['lucro']),
             'visitantes' => fn () => $this->visitantes((string) $request->query('mes', '')),
             'diagnosticos' => fn () => $this->diagnosticos(),
         ]);
@@ -203,7 +208,7 @@ class DashboardController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function analytics(Carbon $today, float $margem): array
+    private function analytics(Carbon $today, float $lucro): array
     {
         $inicioMes = $today->copy()->startOfMonth();
         $inicioMesAnterior = $inicioMes->copy()->subMonthNoOverflow();
@@ -263,7 +268,7 @@ class DashboardController extends Controller
                 'receitaPeriodoAnterior' => $receitaPeriodoAnterior,
                 'projecaoMes' => $diaHoje > 0 ? round($receitaMes / $diaHoje * $diasNoMes, 2) : 0.0,
                 'receitaMesAnterior' => round($mesAnterior->sum('receita'), 2),
-                'margemPercentual' => $receitaMes > 0 ? round($margem / $receitaMes * 100, 1) : null,
+                'margemPercentual' => $receitaMes > 0 ? round($lucro / $receitaMes * 100, 1) : null,
                 'itensPorPedido' => $doMes->count() > 0 ? round($itensMes / $doMes->count(), 2) : 0.0,
                 'itensPorPedidoAnterior' => $mesmoPeriodo->count() > 0 ? round($itensAnterior / $mesmoPeriodo->count(), 2) : 0.0,
                 'pedidosMes' => $doMes->count(),

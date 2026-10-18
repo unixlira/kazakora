@@ -284,9 +284,12 @@ class OrderController extends Controller
             return back()->with('error', $resultado['erro']);
         }
 
-        $response = back()->with('success', 'Pedido cancelado.');
-
-        return $resultado['avisos'] ? $response->with('warning', implode(' ', $resultado['avisos'])) : $response;
+        // O modal da tela mostra cada etapa (nota, estorno, estoque, pedido);
+        // o que falhou aparece lá, não num aviso solto (pedido #3205).
+        return back()->with('cancelamento', [
+            'ok' => $resultado['avisos'] === [],
+            'etapas' => $resultado['etapas'],
+        ]);
     }
 
     public function updateItems(Request $request, Order $order, StockManager $stock): RedirectResponse

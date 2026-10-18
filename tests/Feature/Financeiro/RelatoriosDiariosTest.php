@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Financeiro;
 
+use App\Console\Commands\TaxasReaisAmazon;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
@@ -12,13 +13,16 @@ use App\Modules\Financeiro\Support\ResultadoDiario;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Models\MarketplaceClaim;
 use App\Modules\Operacional\Mail\CanceladosSeparados;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-/** Resultado do dia (23:50) e alerta de separados cancelados (pedido 2026-10-10). */
+/** Resultado do dia (23:55) e alerta de separados cancelados (pedido 2026-10-10). */
 class RelatoriosDiariosTest extends TestCase
 {
     use RefreshDatabase;
@@ -28,7 +32,7 @@ class RelatoriosDiariosTest extends TestCase
         parent::setUp();
         Storage::fake('local');
         config(['loja.email_relatorios' => 'dono@exemplo.com', 'loja.simples.aliquota' => 4.5, 'loja.simples.desde' => '2026-09-01']);
-        Carbon::setTestNow('2026-10-10 23:50:00');
+        Carbon::setTestNow('2026-10-10 23:55:00');
     }
 
     private function pedido(array $extra = [], float $custo = 40): Order
@@ -119,5 +123,40 @@ class RelatoriosDiariosTest extends TestCase
     public function test_estao_na_agenda(): void
     {
         $this->artisan('schedule:list')->expectsOutputToContain('loja:resultado-diario')->expectsOutputToContain('loja:cancelados-separados');
+    }
+
+    /** @return list<Event> */
+    private function agendados(string $comando): array
+    {
+        return array_values(array_filter(app(Schedule::class)->events(), fn (Event $e) => str_contains((string) $e->command, $comando)));
+    }
+
+    /** Regra do Lira (2026-10-12): coleta 23:30, Amazon 23:35, retomada 23:50, e-mail 23:55. */
+    public function test_ordem_da_noite_coleta_retomada_e_email(): void
+    {
+        $email = $this->agendados('loja:resultado-diario');
+        $this->assertCount(1, $email);
+        $this->assertSame('55 23 * * *', $email[0]->expression);
+
+        $amazon = array_column(array_map(fn (Event $e) => ['expr' => $e->expression], $this->agendados('amazon:taxas-reais')), 'expr');
+        $this->assertEqualsCanonicalizing(['35 * * * *', '50 23 * * *'], $amazon);
+    }
+
+    public function test_retomada_da_amazon_so_roda_se_a_das_23_35_nao_deu_certo(): void
+    {
+        $retomada = collect($this->agendados('amazon:taxas-reais'))->firstWhere('expression', '50 23 * * *');
+        Carbon::setTestNow('2026-10-10 23:50:00');
+
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => true, 'em' => '2026-10-10T23:35:04-03:00']);
+        $this->assertFalse($retomada->filtersPass(app()));
+
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => false, 'em' => '2026-10-10T23:35:04-03:00']);
+        $this->assertTrue($retomada->filtersPass(app()));
+
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => true, 'em' => '2026-10-10T22:35:04-03:00']);
+        $this->assertTrue($retomada->filtersPass(app()));
+
+        Cache::forget(TaxasReaisAmazon::CACHE_ULTIMA);
+        $this->assertTrue($retomada->filtersPass(app()));
     }
 }

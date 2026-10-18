@@ -272,7 +272,7 @@ class AmazonTaxasSpApiTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_agendado_de_hora_em_hora_antes_do_resultado_das_23h50(): void
+    public function test_agendado_de_hora_em_hora_antes_do_resultado_das_23h55(): void
     {
         $evento = collect(app(Schedule::class)->events())
             ->first(fn ($e) => str_contains((string) $e->command, 'amazon:taxas-reais'));

@@ -53,8 +53,21 @@ const form = useForm({
     texto_principal: c.texto_principal ?? '',
     titulo: c.titulo ?? '',
     descricao: c.descricao ?? '',
+    // Outras opções que a Meta testa junto com a principal (até 4 de cada).
+    textos_alternativos: {
+        textos: [...(c.textos_alternativos?.textos ?? [])],
+        titulos: [...(c.textos_alternativos?.titulos ?? [])],
+        descricoes: [...(c.textos_alternativos?.descricoes ?? [])],
+    },
     chamada: c.chamada ?? 'SHOP_NOW',
 });
+
+const MAX_ALTERNATIVOS = 4;
+const ALTERNATIVOS = [
+    { chave: 'textos', rotulo: 'Outros textos principais', area: true, max: 2000 },
+    { chave: 'titulos', rotulo: 'Outros títulos', max: 255 },
+    { chave: 'descricoes', rotulo: 'Outras descrições', max: 255 },
+];
 
 const porConjunto = computed(() => form.orcamento_tipo === 'conjunto');
 
@@ -621,6 +634,25 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                                     <select id="chamada" v-model="form.chamada" :class="campo">
                                         <option v-for="(rotulo, valor) in props.chamadas" :key="valor" :value="valor">{{ rotulo }}</option>
                                     </select>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <p class="text-xs text-slate-500">Opções extras (até {{ MAX_ALTERNATIVOS }} de cada): valem para todos os anúncios e a Meta testa as combinações com o texto do anúncio. Pode deixar vazio.</p>
+                                <div v-for="alt in ALTERNATIVOS" :key="alt.chave">
+                                    <span class="block text-sm font-medium">{{ alt.rotulo }}</span>
+                                    <div v-for="(_, i) in form.textos_alternativos[alt.chave]" :key="i" class="mt-1 flex items-start gap-2">
+                                        <textarea v-if="alt.area" v-model="form.textos_alternativos[alt.chave][i]" rows="2" :maxlength="alt.max" :class="campo" :aria-label="`${alt.rotulo} ${i + 1}`" />
+                                        <input v-else v-model="form.textos_alternativos[alt.chave][i]" type="text" :maxlength="alt.max" :class="campo" :aria-label="`${alt.rotulo} ${i + 1}`">
+                                        <button type="button" class="mt-1 rounded p-2 text-slate-500 hover:text-red-600" :aria-label="`Tirar ${alt.rotulo.toLowerCase()} ${i + 1}`"
+                                            @click="form.textos_alternativos[alt.chave].splice(i, 1)">
+                                            <i class="fas fa-times" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                    <button v-if="form.textos_alternativos[alt.chave].length < MAX_ALTERNATIVOS" type="button"
+                                        class="mt-1 text-sm font-medium text-primary hover:underline" @click="form.textos_alternativos[alt.chave].push('')">
+                                        + Adicionar opção
+                                    </button>
+                                    <InputError :message="form.errors[`textos_alternativos.${alt.chave}`]" />
                                 </div>
                             </div>
                         </div>

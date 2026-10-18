@@ -1,6 +1,7 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
+import SolicitacaoPosCompra from './Partials/SolicitacaoPosCompra.vue';
 import { DataTable } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
@@ -248,6 +249,9 @@ const columns = [
                 </button>
             </div>
         </form>
+
+        <!-- E-mail pedindo avaliação depois da entrega, com cupom (pedido do Lira 2026-10-18). -->
+        <SolicitacaoPosCompra class="mb-8" />
 
         <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div>

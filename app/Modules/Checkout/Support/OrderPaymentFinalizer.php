@@ -78,7 +78,13 @@ class OrderPaymentFinalizer
         // deste método) precisa responder rápido, sem esperar SEFAZ/SMTP.
         // GenerateInvoiceJob dispara o e-mail sozinho ao final (sucesso,
         // rejeição definitiva ou falha esgotada) — ver App\Modules\Fiscal\Jobs.
-        GenerateInvoiceJob::dispatch($order->id);
+        //
+        // Pedido do site com a confirmação pelo WhatsApp ligada (2026-10-17):
+        // a nota espera o "Tudo Certo" ou 30 min sem resposta, e quem dispara
+        // é o SendOrderApprovedWhatsAppJob (ver FaturarPedidoSemResposta).
+        if (! SendOrderApprovedWhatsAppJob::seguraNota($order)) {
+            GenerateInvoiceJob::dispatch($order->id);
+        }
 
         // WhatsApp de pedido aprovado com o link de rastreio (pedido
         // 2026-10-10) — o job ignora pedido de marketplace e template vazio.

@@ -4,9 +4,12 @@ namespace Tests\Feature\Checkout;
 
 use App\Modules\Checkout\Jobs\SendOrderApprovedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\WhatsApp\Jobs\FaturarPedidoSemResposta;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -28,6 +31,7 @@ class PedidoAprovadoWhatsAppTest extends TestCase
             'services.whatsapp.templates.pedido_aprovado' => 'pedido_aprovado',
         ]);
         Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.APROVADO']]])]);
+        Bus::fake([GenerateInvoiceJob::class, FaturarPedidoSemResposta::class]);
     }
 
     private function pedido(array $extra = []): Order

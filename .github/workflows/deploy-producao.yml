@@ -110,6 +110,15 @@ jobs:
           ln -sfn \$BASE/shared/storage/app/public public/storage
           ANTERIOR=\$(readlink -f \$BASE/current || true)
 
+          # Arquivos do Vite da versão anterior continuam no ar por 2 dias: quem
+          # estava com a página aberta pede o arquivo antigo e levava 404 (em
+          # 18/10/2026 o admin no celular ficou sem estilo, ícones e menu).
+          # Link físico com a data original, então sai sozinho depois de 2 dias.
+          if [ -n "\$ANTERIOR" ] && [ -d "\$ANTERIOR/public/build/assets" ]; then
+            find \$ANTERIOR/public/build/assets -maxdepth 1 -type f -mtime -2 \
+              -exec cp -pln {} public/build/assets/ \; || echo "aviso: não copiou os arquivos antigos do Vite"
+          fi
+
           \$PHP artisan migrate --force
           \$PHP artisan optimize
 

@@ -6,6 +6,16 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 
 const appName = import.meta.env.VITE_APP_NAME || 'KazaKora';
 
+// Depois de um deploy, a aba aberta pede pedaços do Vite que não existem
+// mais: recarrega uma vez para pegar a versão nova em vez de ficar quebrada.
+window.addEventListener('vite:preloadError', (event) => {
+    const ultima = Number(sessionStorage.getItem('kz-recarga-vite') || 0);
+    if (Date.now() - ultima < 30000) return;
+    sessionStorage.setItem('kz-recarga-vite', String(Date.now()));
+    event.preventDefault();
+    window.location.reload();
+});
+
 createInertiaApp({
     title: (title) => (title ? `${appName} - ${title}` : appName),
     resolve: (name) =>

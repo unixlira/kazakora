@@ -47,9 +47,20 @@ jobs:
       - name: Add server to known_hosts
         run: ssh-keyscan -p ${{ secrets.HOMOLOG_SSH_PORT }} ${{ secrets.HOMOLOG_SSH_HOST }} >> ~/.ssh/known_hosts
 
+      # Arquivos do Vite da versão que sai ficam 2 dias (mesma regra da
+      # produção): a data marca quando saíram do ar, o rsync não apaga
+      # public/build/assets e a limpeza depois tira só os de mais de 2 dias.
+      - name: Mark outgoing Vite assets
+        run: |
+          ssh -p ${{ secrets.HOMOLOG_SSH_PORT }} ${{ secrets.HOMOLOG_SSH_USER }}@${{ secrets.HOMOLOG_SSH_HOST }} '
+            cd ${{ secrets.HOMOLOG_DEPLOY_PATH }}/public/build 2>/dev/null || exit 0
+            cat *manifest.json 2>/dev/null | grep -oE "\"assets/[^\"]+\"" | tr -d "\"" | sort -u | xargs -r touch -c --
+          ' || echo "aviso: não marcou os arquivos antigos do Vite"
+
       - name: Deploy via rsync
         run: |
           rsync -avz --delete \
+            --filter='P /public/build/assets/**' \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.env' \
@@ -80,4 +91,5 @@ jobs:
             $PHP artisan config:cache
             $PHP artisan route:cache
             $PHP artisan view:cache
+            find public/build/assets -maxdepth 1 -type f -mmin +2880 -delete || true
           '

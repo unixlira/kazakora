@@ -8,10 +8,17 @@ const appName = import.meta.env.VITE_APP_NAME || 'KazaKora';
 
 // Depois de um deploy, a aba aberta pede pedaços do Vite que não existem
 // mais: recarrega uma vez para pegar a versão nova em vez de ficar quebrada.
+// Uma vez a cada 30 s: se a versão nova também falhar, o erro aparece em vez
+// de a página ficar recarregando sem parar.
 window.addEventListener('vite:preloadError', (event) => {
-    const ultima = Number(sessionStorage.getItem('kz-recarga-vite') || 0);
-    if (Date.now() - ultima < 30000) return;
-    sessionStorage.setItem('kz-recarga-vite', String(Date.now()));
+    try {
+        const ultima = Number(sessionStorage.getItem('kz-recarga-vite') || 0);
+        if (Date.now() - ultima < 30000) return;
+        sessionStorage.setItem('kz-recarga-vite', String(Date.now()));
+    } catch {
+        // Sem sessionStorage não dá para limitar: melhor não arriscar recarga em loop.
+        return;
+    }
     event.preventDefault();
     window.location.reload();
 });

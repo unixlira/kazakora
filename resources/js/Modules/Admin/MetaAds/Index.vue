@@ -2,13 +2,27 @@
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { h } from 'vue';
+import { Deferred, Head, Link, router } from '@inertiajs/vue3';
+import { h, ref } from 'vue';
+import EspelhoMeta from './EspelhoMeta.vue';
 import { formatarData, formatarReais, STATUS_ESTILOS } from './metaAds';
 
 const props = defineProps({
     campanhas: { type: Array, default: () => [] },
     config: { type: Object, required: true },
+    periodo: { type: String, default: 'maximum' },
+    periodos: { type: Object, default: () => ({}) },
+    // Prop adiada: estrutura e métricas lidas ao vivo da Meta.
+    espelho: { type: Object, default: null },
+});
+
+const carregando = ref(false);
+const trocarPeriodo = (periodo) => router.get('/admin/publicidade/meta-ads/campanhas', periodo === 'maximum' ? {} : { periodo }, {
+    only: ['espelho', 'periodo'],
+    preserveScroll: true,
+    preserveState: true,
+    onStart: () => { carregando.value = true; },
+    onFinish: () => { carregando.value = false; },
 });
 
 const { can } = usePermissions();
@@ -70,6 +84,36 @@ const columns = [
             {{ props.config.faltando.join(', ') }}.
         </div>
 
+        <section v-if="props.config.configurado" class="mb-8" aria-labelledby="na-meta-titulo">
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 id="na-meta-titulo" class="text-lg font-bold">Na Meta agora</h2>
+                    <p class="text-sm text-slate-500">Campanhas, conjuntos e anúncios como estão no Gerenciador, com os números da própria Meta.</p>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <span class="text-slate-500">Período</span>
+                    <select :value="props.periodo" :disabled="carregando"
+                        class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+                        @change="trocarPeriodo($event.target.value)">
+                        <option v-for="(rotulo, chave) in props.periodos" :key="chave" :value="chave">{{ rotulo }}</option>
+                    </select>
+                    <i v-if="carregando" class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i>
+                </label>
+            </div>
+            <Deferred data="espelho">
+                <template #fallback>
+                    <div class="flex items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 text-sm text-slate-500" role="status" aria-live="polite">
+                        <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i> Consultando a Meta…
+                    </div>
+                </template>
+                <p v-if="props.espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+                    Não deu para ler a Meta agora: {{ props.espelho.erro }}
+                </p>
+                <EspelhoMeta v-else :campanhas="props.espelho?.campanhas ?? []" :class="{ 'opacity-60': carregando }" />
+            </Deferred>
+        </section>
+
+        <h2 class="mb-1 text-lg font-bold">Montadas no KazaKora</h2>
         <p class="mb-4 text-sm text-slate-500">
             Monte a campanha como no Gerenciador da Meta: vários conjuntos e vários anúncios em cada, de uma vez.
             Tudo vai para a Meta <strong>pausado</strong>; só começa a gastar quando você clicar em Ativar.

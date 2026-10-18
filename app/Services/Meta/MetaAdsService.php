@@ -11,6 +11,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -380,6 +381,139 @@ class MetaAdsService
         }
 
         return $resultado;
+    }
+
+    /** Períodos da tela (date_preset da Meta => rótulo). */
+    public const PERIODOS = [
+        'today' => 'Hoje',
+        'yesterday' => 'Ontem',
+        'last_7d' => 'Últimos 7 dias',
+        'last_30d' => 'Últimos 30 dias',
+        'maximum' => 'Desde o início',
+    ];
+
+    /**
+     * Espelho do Gerenciador (pedido do Lira 2026-10-18): a estrutura real
+     * da conta, Campanha > Conjuntos > Anúncios, lida AO VIVO da Meta, com
+     * as métricas de cada nível. Anúncio criado direto no Gerenciador
+     * aparece também (a Árvore de Natal tinha 3 criativos e o banco só
+     * conhecia o 1º). Cada nível tem a própria consulta de insights porque
+     * alcance não se soma (a mesma pessoa vê vários anúncios).
+     * Guardado 2 minutos para não bater na Meta a cada clique.
+     *
+     * @return list<array<string, mixed>>
+     *
+     * @throws MetaAdsException
+     */
+    public function espelho(string $periodo = 'maximum', ?string $campaignId = null): array
+    {
+        $periodo = array_key_exists($periodo, self::PERIODOS) ? $periodo : 'maximum';
+
+        return Cache::remember(
+            'meta-ads:espelho:'.md5($this->conta().'|'.$periodo.'|'.$campaignId),
+            now()->addMinutes(2),
+            fn () => $this->montarEspelho($periodo, $campaignId),
+        );
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function montarEspelho(string $periodo, ?string $campaignId): array
+    {
+        $filtro = $campaignId ? ['filtering' => json_encode([['field' => 'campaign.id', 'operator' => 'EQUAL', 'value' => $campaignId]])] : [];
+
+        $campanhas = $campaignId
+            ? [$this->get($campaignId, ['fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time'])]
+            : $this->getPaginado($this->conta().'/campaigns', ['fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time', 'limit' => 100]);
+        $conjuntos = $this->getPaginado($this->conta().'/adsets', $filtro + ['fields' => 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget', 'limit' => 200]);
+        $anuncios = $this->getPaginado($this->conta().'/ads', $filtro + ['fields' => 'id,name,adset_id,campaign_id,effective_status,creative{thumbnail_url}', 'limit' => 200]);
+
+        $metricas = [];
+        foreach (['campaign', 'adset', 'ad'] as $nivel) {
+            $linhas = $this->getPaginado($this->conta().'/insights', $filtro + [
+                'level' => $nivel,
+                'date_preset' => $periodo,
+                'fields' => $nivel.'_id,spend,impressions,reach,clicks,actions,action_values',
+                'limit' => 500,
+            ]);
+            foreach ($linhas as $linha) {
+                $metricas[$nivel][(string) $linha[$nivel.'_id']] = $this->metricas($linha);
+            }
+        }
+
+        $anunciosPorConjunto = collect($anuncios)->groupBy(fn ($a) => (string) $a['adset_id']);
+
+        $conjuntosPorCampanha = collect($conjuntos)->groupBy(fn ($c) => (string) $c['campaign_id'])
+            ->map(fn ($lista) => $lista->map(fn (array $c) => [
+                'id' => (string) $c['id'],
+                'nome' => (string) $c['name'],
+                'status' => (string) ($c['effective_status'] ?? ''),
+                'orcamento_diario' => $this->centavosEmReais($c['daily_budget'] ?? null),
+                'orcamento_total' => $this->centavosEmReais($c['lifetime_budget'] ?? null),
+                'metricas' => $metricas['adset'][(string) $c['id']] ?? $this->metricas([]),
+                'anuncios' => $anunciosPorConjunto->get((string) $c['id'], collect())->map(fn (array $a) => [
+                    'id' => (string) $a['id'],
+                    'nome' => (string) $a['name'],
+                    'status' => (string) ($a['effective_status'] ?? ''),
+                    'miniatura' => $a['creative']['thumbnail_url'] ?? null,
+                    'metricas' => $metricas['ad'][(string) $a['id']] ?? $this->metricas([]),
+                ])->sortBy('nome', SORT_NATURAL)->values()->all(),
+            ])->sortBy('nome', SORT_NATURAL)->values()->all());
+
+        return collect($campanhas)
+            ->map(function (array $c) use ($conjuntosPorCampanha, $metricas) {
+                $sets = $conjuntosPorCampanha->get((string) $c['id'], []);
+                $daCampanha = $this->centavosEmReais($c['daily_budget'] ?? null);
+
+                return [
+                    'id' => (string) $c['id'],
+                    'nome' => (string) $c['name'],
+                    'status' => (string) ($c['effective_status'] ?? ''),
+                    'objetivo' => MetaAdsCampanha::OBJETIVOS[$c['objective'] ?? ''] ?? (string) ($c['objective'] ?? ''),
+                    'orcamento_nivel' => $daCampanha !== null ? 'campanha' : 'conjunto',
+                    // Orçamento por conjunto: o diário da campanha é a soma dos conjuntos ativos.
+                    'orcamento_diario' => $daCampanha ?? round(collect($sets)
+                        ->filter(fn ($s) => $s['status'] === 'ACTIVE')
+                        ->sum(fn ($s) => (float) $s['orcamento_diario']), 2),
+                    'inicio' => isset($c['start_time']) ? Carbon::parse($c['start_time'])->setTimezone(self::FUSO)->toDateString() : null,
+                    'fim' => isset($c['stop_time']) ? Carbon::parse($c['stop_time'])->setTimezone(self::FUSO)->toDateString() : null,
+                    'metricas' => $metricas['campaign'][(string) $c['id']] ?? $this->metricas([]),
+                    'conjuntos' => $sets,
+                ];
+            })
+            ->sortBy(fn ($c) => [$c['status'] === 'ACTIVE' ? 0 : 1, -$c['metricas']['gasto']])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Métricas de uma linha de insights. CPC = gasto ÷ cliques (todos os
+     * cliques, a coluna "CPC (todos)" do Gerenciador); ROAS = valor das
+     * compras ÷ gasto.
+     *
+     * @param  array<string, mixed>  $linha
+     * @return array{gasto: float, impressoes: int, alcance: int, cliques: int, cpc: ?float, compras: int, vendas: float, roas: ?float}
+     */
+    private function metricas(array $linha): array
+    {
+        $gasto = round((float) ($linha['spend'] ?? 0), 2);
+        $cliques = (int) ($linha['clicks'] ?? 0);
+        $vendas = round($this->valorDeCompra($linha['action_values'] ?? []), 2);
+
+        return [
+            'gasto' => $gasto,
+            'impressoes' => (int) ($linha['impressions'] ?? 0),
+            'alcance' => (int) ($linha['reach'] ?? 0),
+            'cliques' => $cliques,
+            'cpc' => $cliques > 0 ? round($gasto / $cliques, 2) : null,
+            'compras' => (int) round($this->valorDeCompra($linha['actions'] ?? [])),
+            'vendas' => $vendas,
+            'roas' => $gasto > 0 ? round($vendas / $gasto, 2) : null,
+        ];
+    }
+
+    private function centavosEmReais(mixed $centavos): ?float
+    {
+        return is_numeric($centavos) && (int) $centavos > 0 ? round((int) $centavos / 100, 2) : null;
     }
 
     /**

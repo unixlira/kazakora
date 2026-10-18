@@ -947,4 +947,106 @@ class MetaAdsCampanhasTest extends TestCase
         array_map('unlink', glob("{$pasta}/*"));
         rmdir($pasta);
     }
+
+    /**
+     * Árvore de Natal (2026-10-18): na Meta a campanha tem 1 conjunto e 3
+     * criativos (2 feitos no Gerenciador), e a tela mostrava só o que o
+     * banco conhecia. O espelho lê a estrutura e as métricas da Meta.
+     */
+    public function test_espelho_mostra_os_tres_criativos_da_meta_com_as_metricas(): void
+    {
+        config(['inertia.testing.ensure_pages_exist' => false]);
+        $local = MetaAdsCampanha::create($this->dados([
+            'nome' => 'Vendas | Árvores Natal | Out26',
+            'objetivo' => 'OUTCOME_SALES',
+            'status' => MetaAdsCampanha::STATUS_ATIVA,
+            'meta_campaign_id' => 'c1',
+            'user_id' => $this->admin()->id,
+        ]));
+
+        Http::fake(function (HttpRequest $request) {
+            $url = $request->url();
+            $nivel = $request->data()['level'] ?? null;
+
+            return match (true) {
+                str_contains($url, '/act_123/campaigns') => Http::response(['data' => [
+                    ['id' => 'c1', 'name' => 'Vendas | Árvores Natal | Out26', 'effective_status' => 'ACTIVE', 'objective' => 'OUTCOME_SALES', 'start_time' => '2026-10-18T06:46:27-0300'],
+                    ['id' => 'c2', 'name' => 'Cozedor de ovo', 'effective_status' => 'PAUSED', 'objective' => 'OUTCOME_SALES', 'daily_budget' => '1000'],
+                ]]),
+                str_contains($url, '/act_123/adsets') => Http::response(['data' => [
+                    ['id' => 's1', 'name' => 'Arvores Natal', 'campaign_id' => 'c1', 'effective_status' => 'ACTIVE', 'daily_budget' => '3000'],
+                    ['id' => 's2', 'name' => 'Cozedor', 'campaign_id' => 'c2', 'effective_status' => 'CAMPAIGN_PAUSED'],
+                ]]),
+                str_contains($url, '/act_123/ads') => Http::response(['data' => [
+                    ['id' => 'a1', 'name' => 'Criativo01', 'adset_id' => 's1', 'campaign_id' => 'c1', 'effective_status' => 'ACTIVE'],
+                    ['id' => 'a3', 'name' => 'Criativo03', 'adset_id' => 's1', 'campaign_id' => 'c1', 'effective_status' => 'ACTIVE'],
+                    ['id' => 'a2', 'name' => 'Criativo02', 'adset_id' => 's1', 'campaign_id' => 'c1', 'effective_status' => 'IN_PROCESS', 'creative' => ['thumbnail_url' => 'https://x/t.jpg']],
+                ]]),
+                str_contains($url, '/act_123/insights') && $nivel === 'campaign' => Http::response(['data' => [
+                    ['campaign_id' => 'c1', 'spend' => '40.00', 'impressions' => '2000', 'reach' => '1500', 'clicks' => '80',
+                        'actions' => [['action_type' => 'omni_purchase', 'value' => '2']], 'action_values' => [['action_type' => 'omni_purchase', 'value' => '200.00']]],
+                ]]),
+                str_contains($url, '/act_123/insights') && $nivel === 'adset' => Http::response(['data' => [
+                    ['adset_id' => 's1', 'spend' => '40.00', 'impressions' => '2000', 'reach' => '1500', 'clicks' => '80',
+                        'actions' => [['action_type' => 'omni_purchase', 'value' => '2']], 'action_values' => [['action_type' => 'omni_purchase', 'value' => '200.00']]],
+                ]]),
+                str_contains($url, '/act_123/insights') && $nivel === 'ad' => Http::response(['data' => [
+                    ['ad_id' => 'a1', 'spend' => '30.00', 'impressions' => '1500', 'reach' => '1200', 'clicks' => '60',
+                        'actions' => [['action_type' => 'omni_purchase', 'value' => '2']], 'action_values' => [['action_type' => 'omni_purchase', 'value' => '200.00']]],
+                    ['ad_id' => 'a3', 'spend' => '10.00', 'impressions' => '500', 'reach' => '400', 'clicks' => '20'],
+                ]]),
+                default => Http::response(['error' => ['message' => 'inesperado '.$url]], 400),
+            };
+        });
+
+        $this->actingAs($this->admin())->get(self::BASE)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/MetaAds/Index', false)
+                ->missing('espelho')
+                ->loadDeferredProps(fn ($reload) => $reload
+                    ->where('espelho.erro', null)
+                    ->has('espelho.campanhas', 2)
+                    ->where('espelho.campanhas.0.nome', 'Vendas | Árvores Natal | Out26')
+                    ->where('espelho.campanhas.0.local_id', $local->id)
+                    ->where('espelho.campanhas.0.orcamento_nivel', 'conjunto')
+                    ->where('espelho.campanhas.0.orcamento_diario', 30)
+                    ->where('espelho.campanhas.0.metricas.gasto', 40)
+                    ->where('espelho.campanhas.0.metricas.alcance', 1500)
+                    ->where('espelho.campanhas.0.metricas.cpc', 0.5)
+                    ->where('espelho.campanhas.0.metricas.compras', 2)
+                    ->where('espelho.campanhas.0.metricas.roas', 5)
+                    ->has('espelho.campanhas.0.conjuntos', 1)
+                    ->where('espelho.campanhas.0.conjuntos.0.nome', 'Arvores Natal')
+                    ->where('espelho.campanhas.0.conjuntos.0.orcamento_diario', 30)
+                    ->has('espelho.campanhas.0.conjuntos.0.anuncios', 3)
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.0.nome', 'Criativo01')
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.0.metricas.roas', 6.67)
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.1.nome', 'Criativo02')
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.1.metricas.gasto', 0)
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.1.metricas.cpc', null)
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.1.miniatura', 'https://x/t.jpg')
+                    ->where('espelho.campanhas.0.conjuntos.0.anuncios.2.metricas.cpc', 0.5)
+                    ->where('espelho.campanhas.1.nome', 'Cozedor de ovo')
+                    ->where('espelho.campanhas.1.orcamento_nivel', 'campanha')
+                    ->where('espelho.campanhas.1.orcamento_diario', 10)
+                    ->where('espelho.campanhas.1.local_id', null)));
+
+        // O token vai no cabeçalho e nunca na URL.
+        Http::assertSent(fn (HttpRequest $r) => $r->hasHeader('Authorization', 'Bearer token-secreto') && ! str_contains($r->url(), 'token-secreto'));
+    }
+
+    public function test_espelho_com_erro_da_meta_nao_derruba_a_tela(): void
+    {
+        config(['inertia.testing.ensure_pages_exist' => false]);
+        Http::fake(['*' => Http::response(['error' => ['message' => 'Token expirado', 'code' => 190]], 400)]);
+
+        $this->actingAs($this->admin())->get(self::BASE.'?periodo=last_7d')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('periodo', 'last_7d')
+                ->loadDeferredProps(fn ($reload) => $reload
+                    ->where('espelho.campanhas', [])
+                    ->where('espelho.erro', 'Token expirado (código 190)')));
+    }
 }

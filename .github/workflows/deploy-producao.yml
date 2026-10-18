@@ -113,10 +113,20 @@ jobs:
           # Arquivos do Vite da versão anterior continuam no ar por 2 dias: quem
           # estava com a página aberta pede o arquivo antigo e levava 404 (em
           # 18/10/2026 o admin no celular ficou sem estilo, ícones e menu).
-          # Link físico com a data original, então sai sozinho depois de 2 dias.
+          # A data do arquivo marca quando ele saiu do ar: os da versão que sai
+          # agora (citados nos manifests dela) ganham a data de hoje, os que já
+          # vieram de deploys anteriores mantêm a deles. Sem isso, depois de 2
+          # dias sem deploy os arquivos da versão no ar eram descartados na hora.
+          # Link físico, então a data vai junto e cada arquivo sai sozinho 2
+          # dias depois de ter saído do ar.
           if [ -n "\$ANTERIOR" ] && [ -d "\$ANTERIOR/public/build/assets" ]; then
-            find \$ANTERIOR/public/build/assets -maxdepth 1 -type f -mtime -2 \
-              -exec cp -pln {} public/build/assets/ \; || echo "aviso: não copiou os arquivos antigos do Vite"
+            {
+              cat \$ANTERIOR/public/build/*manifest.json 2>/dev/null \
+                | grep -oE '"assets/[^"]+"' | tr -d '"' | sort -u \
+                | (cd \$ANTERIOR/public/build && xargs -r touch -c --)
+              find \$ANTERIOR/public/build/assets -maxdepth 1 -type f -mmin -2880 \
+                -exec cp -pln {} public/build/assets/ \;
+            } || echo "aviso: não copiou os arquivos antigos do Vite"
           fi
 
           \$PHP artisan migrate --force

@@ -11,6 +11,7 @@ use App\Modules\Inventory\Support\StockManager;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Coordena o "tudo ou nada" do split de pagamento: só marca o pedido como
@@ -41,6 +42,15 @@ class OrderPaymentFinalizer
         }
 
         if ($order->payments->isEmpty()) {
+            return false;
+        }
+
+        // Pago depois de o pedido já ter sido cancelado (varredura dos 30 min,
+        // admin): não ressuscita sozinho, porque o estoque já voltou. Pix e
+        // boleto já tinham essa trava; cartão (webhook "order") e Stripe não.
+        if ($order->status === Order::STATUS_CANCELLED) {
+            Log::channel('mercadopago')->critical('checkout.pago_com_pedido_cancelado', ['order_id' => $order->id]);
+
             return false;
         }
 

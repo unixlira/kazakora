@@ -370,51 +370,44 @@ const resumo = computed(() => {
             </div>
         </div>
 
-        <!-- Pedido 2026-10-18: Desconto Site e Desconto Checkout com o seletor
-             % ou R$ em cima do campo, um bloco ao lado do outro (empilha no celular). -->
+        <!-- Pedido 2026-10-18: Desconto Site e Desconto Checkout no mesmo formato:
+             rótulo, seletor "Tipo do Desconto" (% ou R$) e o campo do valor embaixo.
+             Um bloco ao lado do outro (empilha no celular). -->
         <div class="grid items-start gap-4 sm:grid-cols-2">
             <div class="space-y-2">
-                <div>
-                    <label for="site_discount_type" class="block text-sm font-medium">Tipo do Desconto Site</label>
-                    <select id="site_discount_type" v-model="siteDiscountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                        <option value="">Sem desconto</option>
-                        <option value="percentage">Percentual (%)</option>
-                        <option value="amount">Valor fixo (R$)</option>
-                    </select>
-                </div>
-                <div>
-                    <label :for="siteDiscountType === 'amount' ? 'discount_amount' : 'discount_percentage'" class="block text-sm font-medium">
-                        Desconto Site {{ siteDiscountType === 'amount' ? '(R$)' : '(%)' }}
-                    </label>
-                    <input v-if="siteDiscountType === 'amount'" id="discount_amount" v-model="form.discount_amount" type="number" step="0.01" min="0"
-                        placeholder="Ex: 10,00" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                    <input v-else id="discount_percentage" v-model="form.discount_percentage" type="number" step="any" min="0" max="100"
-                        placeholder="Ex: 5" :disabled="siteDiscountType === ''"
-                        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
-                    <InputError :message="form.errors.discount_percentage || form.errors.discount_amount" />
-                </div>
+                <label :for="siteDiscountType === 'amount' ? 'discount_amount' : 'discount_percentage'" class="block text-sm font-medium">
+                    Desconto Site {{ siteDiscountType === 'amount' ? '(R$)' : '(%)' }}
+                </label>
+                <select id="site_discount_type" v-model="siteDiscountType" aria-label="Tipo do Desconto Site" title="Tipo do Desconto Site"
+                    class="w-full rounded border border-gray-300 px-3 py-2">
+                    <option value="">Tipo do Desconto Site: sem desconto</option>
+                    <option value="percentage">Percentual (%)</option>
+                    <option value="amount">Valor Fixo (R$)</option>
+                </select>
+                <input v-if="siteDiscountType === 'amount'" id="discount_amount" v-model="form.discount_amount" type="number" step="0.01" min="0"
+                    placeholder="Ex: 10,00" class="w-full rounded border border-gray-300 px-3 py-2">
+                <input v-else id="discount_percentage" v-model="form.discount_percentage" type="number" step="any" min="0" max="100"
+                    placeholder="Ex: 5" :disabled="siteDiscountType === ''"
+                    class="w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
+                <InputError :message="form.errors.discount_percentage || form.errors.discount_amount" />
                 <p class="text-xs text-gray-400">Desconto direto no produto: o card e a página mostram o preço riscado e o preço com desconto. Valor fixo é por unidade.</p>
             </div>
             <div class="space-y-2">
-                <div>
-                    <label for="checkout_discount_type" class="block text-sm font-medium">Tipo do Desconto Checkout</label>
-                    <select id="checkout_discount_type" v-model="checkoutDiscountType" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                        <option value="">Sem desconto</option>
-                        <option value="percentage">Percentual (%)</option>
-                        <option value="amount">Valor fixo (R$)</option>
-                    </select>
-                </div>
-                <div>
-                    <label :for="checkoutDiscountType === 'amount' ? 'checkout_discount_amount' : 'checkout_discount_percentage'" class="block text-sm font-medium">
-                        Desconto Checkout {{ checkoutDiscountType === 'amount' ? '(R$)' : '(%)' }}
-                    </label>
-                    <input v-if="checkoutDiscountType === 'amount'" id="checkout_discount_amount" v-model="form.checkout_discount_amount" type="number" step="0.01" min="0"
-                        placeholder="Ex: 10,00" class="mt-1 w-full rounded border border-gray-300 px-3 py-2">
-                    <input v-else id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
-                        placeholder="Ex: 5" :disabled="checkoutDiscountType === ''"
-                        class="mt-1 w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
-                    <InputError :message="form.errors.checkout_discount_percentage || form.errors.checkout_discount_amount" />
-                </div>
+                <label :for="checkoutDiscountType === 'amount' ? 'checkout_discount_amount' : 'checkout_discount_percentage'" class="block text-sm font-medium">
+                    Desconto Checkout {{ checkoutDiscountType === 'amount' ? '(R$)' : '(%)' }}
+                </label>
+                <select id="checkout_discount_type" v-model="checkoutDiscountType" aria-label="Tipo do Desconto Checkout" title="Tipo do Desconto Checkout"
+                    class="w-full rounded border border-gray-300 px-3 py-2">
+                    <option value="">Tipo do Desconto Checkout: sem desconto</option>
+                    <option value="percentage">Percentual (%)</option>
+                    <option value="amount">Valor Fixo (R$)</option>
+                </select>
+                <input v-if="checkoutDiscountType === 'amount'" id="checkout_discount_amount" v-model="form.checkout_discount_amount" type="number" step="0.01" min="0"
+                    placeholder="Ex: 10,00" class="w-full rounded border border-gray-300 px-3 py-2">
+                <input v-else id="checkout_discount_percentage" v-model="form.checkout_discount_percentage" type="number" step="0.01" min="0" max="100"
+                    placeholder="Ex: 5" :disabled="checkoutDiscountType === ''"
+                    class="w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-100">
+                <InputError :message="form.errors.checkout_discount_percentage || form.errors.checkout_discount_amount" />
                 <p class="text-xs text-gray-400">Desconto no Pix: sai no checkout só pagando 100% no Pix. Valor fixo é por unidade. Sem desconto = preço cheio no Pix.</p>
             </div>
         </div>
@@ -479,19 +472,21 @@ const resumo = computed(() => {
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-x-6 gap-y-2">
-            <label class="flex items-center gap-2 text-sm">
-                <input v-model="form.is_active" type="checkbox">
+        <!-- Pedido 2026-10-18: Ativo, Destaque e Lançamento lado a lado numa linha
+             logo abaixo do resumo (empilha no celular). -->
+        <div class="grid gap-3 rounded-lg border border-gray-200 px-4 py-3 sm:grid-cols-3">
+            <label class="flex items-start gap-2 text-sm">
+                <input class="mt-0.5" v-model="form.is_active" type="checkbox">
                 Produto ativo (visível no catálogo)
             </label>
 
-            <label class="flex items-center gap-2 text-sm">
-                <input v-model="form.is_featured" type="checkbox">
+            <label class="flex items-start gap-2 text-sm">
+                <input class="mt-0.5" v-model="form.is_featured" type="checkbox">
                 Destaque (aparece na seção "Destaques" da home)
             </label>
 
-            <label class="flex items-center gap-2 text-sm">
-                <input v-model="form.is_new_release" type="checkbox">
+            <label class="flex items-start gap-2 text-sm">
+                <input class="mt-0.5" v-model="form.is_new_release" type="checkbox">
                 Lançamento (aparece como novidade)
             </label>
         </div>

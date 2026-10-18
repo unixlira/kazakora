@@ -246,14 +246,16 @@ onUnmounted(limparTimers);
                                     <span class="flex h-14 w-14 items-center justify-center rounded-full text-2xl transition-colors duration-300"
                                         :class="etapaFeita ? 'bg-[#0FB930]/15 text-[#0FB930]' : 'bg-store-bg-sunken text-store-fg-muted'">
                                         <Transition name="cancelar-icone" mode="out-in">
-                                            <i v-if="etapaFeita" key="check" class="fas fa-check" aria-hidden="true"></i>
-                                            <i v-else key="loader" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                            <!-- span em volta: a animação infinita do fa-spin
+                                                 travaria a saída da Transition no próprio <i>. -->
+                                            <span v-if="etapaFeita" key="check" class="flex"><i class="fas fa-check" aria-hidden="true"></i></span>
+                                            <span v-else key="loader" class="flex"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i></span>
                                         </Transition>
                                     </span>
                                     <p class="text-sm font-semibold">{{ etapasDoCancelamento[etapaIndice] }}</p>
+                                    <p class="text-xs text-store-fg-faint">Etapa {{ etapaIndice + 1 }} de {{ etapasDoCancelamento.length }}</p>
                                 </div>
                             </Transition>
-                            <p class="text-xs text-store-fg-faint">Etapa {{ etapaIndice + 1 }} de {{ etapasDoCancelamento.length }}</p>
                         </div>
                         <Transition v-else-if="cancelarFase === 'fim'" name="cancelar-etapa" appear>
                             <div class="flex flex-col items-center gap-3 py-4 text-center" role="status" aria-live="polite">

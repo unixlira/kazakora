@@ -324,6 +324,7 @@ class Order extends Model
             'visitante_latitude' => 'decimal:7',
             'visitante_longitude' => 'decimal:7',
             'fiscal_finality' => 'integer',
+            'whatsapp_confirmacao_em' => 'datetime',
             'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',

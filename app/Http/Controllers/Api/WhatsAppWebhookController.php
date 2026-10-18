@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
+use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
@@ -65,6 +66,16 @@ class WhatsAppWebhookController extends Controller
 
                     [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
                     $handled++;
+
+                    // Botão "Tudo Certo"/"Corrigir Informações" da confirmação
+                    // do pedido: resposta fixa, sem passar pela IA.
+                    if (ResponderConfirmacaoPedido::interpretar($message['button']['payload'] ?? null)) {
+                        if ($stored->wasRecentlyCreated) {
+                            ResponderConfirmacaoPedido::dispatch($conversation->id, $message['button']['payload'])->afterResponse();
+                        }
+
+                        continue;
+                    }
 
                     // A chave da conversa é quem manda (pedido 2026-10-08: "a Manu
                     // não está respondendo depois de ticar a chave"). Reentrega

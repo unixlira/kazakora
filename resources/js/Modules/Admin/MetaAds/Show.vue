@@ -3,8 +3,9 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Deferred, Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import EspelhoMeta from './EspelhoMeta.vue';
 import { formatarData, formatarNumero, formatarReais, STATUS_ESTILOS } from './metaAds';
 
 const props = defineProps({
@@ -19,6 +20,21 @@ const props = defineProps({
     chamadas: { type: Object, required: true },
     generos: { type: Object, required: true },
     orcamentoTipos: { type: Object, required: true },
+    periodo: { type: String, default: 'maximum' },
+    periodos: { type: Object, default: () => ({}) },
+    // Prop adiada (2026-10-18): a campanha como está na Meta, com conjuntos e
+    // anúncios feitos direto no Gerenciador também.
+    espelho: { type: Object, default: null },
+});
+
+const naMeta = computed(() => props.espelho?.campanhas?.[0] ?? null);
+const carregandoMeta = ref(false);
+const trocarPeriodo = (periodo) => router.get(base.value, periodo === 'maximum' ? {} : { periodo }, {
+    only: ['espelho', 'periodo'],
+    preserveScroll: true,
+    preserveState: true,
+    onStart: () => { carregandoMeta.value = true; },
+    onFinish: () => { carregandoMeta.value = false; },
 });
 
 const { can } = usePermissions();
@@ -168,8 +184,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 <h2 class="text-lg font-semibold">Resumo</h2>
                 <dl class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                     <div><dt class="text-slate-500">Objetivo</dt><dd class="font-medium">{{ c.objetivo_rotulo }}</dd></div>
-                    <div><dt class="text-slate-500">Orçamento por dia</dt><dd class="font-medium">{{ orcamento }}<span class="font-normal text-slate-500">{{ divisao }}</span></dd></div>
-                    <div><dt class="text-slate-500">Estrutura</dt><dd class="font-medium">{{ estrutura }} <span class="font-normal text-slate-500">({{ orcamentoTipos[c.orcamento_tipo] ?? c.orcamento_tipo }})</span></dd></div>
+                    <div v-if="naMeta"><dt class="text-slate-500">Orçamento por dia (na Meta)</dt><dd class="font-medium">{{ formatarReais(naMeta.orcamento_diario) }}<span class="font-normal text-slate-500">{{ naMeta.orcamento_nivel === 'conjunto' ? ', somando os conjuntos ativos' : ', da campanha' }}</span></dd></div>
+                    <div v-else><dt class="text-slate-500">Orçamento por dia</dt><dd class="font-medium">{{ orcamento }}<span class="font-normal text-slate-500">{{ divisao }}</span></dd></div>
+                    <div v-if="naMeta"><dt class="text-slate-500">Estrutura (na Meta)</dt><dd class="font-medium">{{ plural(naMeta.conjuntos.length, 'conjunto', 'conjuntos') }} · {{ plural(naMeta.conjuntos.reduce((t, s) => t + s.anuncios.length, 0), 'anúncio', 'anúncios') }}</dd></div>
+                    <div v-else><dt class="text-slate-500">Estrutura</dt><dd class="font-medium">{{ estrutura }} <span class="font-normal text-slate-500">({{ orcamentoTipos[c.orcamento_tipo] ?? c.orcamento_tipo }})</span></dd></div>
                     <div><dt class="text-slate-500">Período</dt><dd class="font-medium">{{ periodo }}</dd></div>
                     <div><dt class="text-slate-500">Público padrão</dt><dd class="font-medium">{{ c.idade_min }} a {{ c.idade_max }} anos, {{ generos[c.genero]?.toLowerCase() }}</dd></div>
                     <div><dt class="text-slate-500">Onde</dt><dd class="font-medium">{{ locais }}</dd></div>
@@ -198,6 +216,38 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 </div>
             </aside>
         </div>
+
+        <section v-if="c.meta_campaign_id && config.configurado" class="mt-6" aria-labelledby="na-meta-titulo">
+            <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 id="na-meta-titulo" class="text-lg font-bold">Na Meta agora</h2>
+                    <p class="text-sm text-slate-500">Conjuntos e anúncios como estão no Gerenciador, inclusive os criados direto lá.</p>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <span class="text-slate-500">Período</span>
+                    <select :value="periodo" :disabled="carregandoMeta"
+                        class="rounded-lg border border-[var(--surface-border)] bg-[var(--surface)] px-3 py-1.5 text-sm"
+                        @change="trocarPeriodo($event.target.value)">
+                        <option v-for="(rotulo, chave) in periodos" :key="chave" :value="chave">{{ rotulo }}</option>
+                    </select>
+                    <i v-if="carregandoMeta" class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i>
+                </label>
+            </div>
+            <Deferred data="espelho">
+                <template #fallback>
+                    <div class="flex items-center gap-2 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 text-sm text-slate-500" role="status" aria-live="polite">
+                        <i class="fas fa-circle-notch animate-spin text-primary" aria-hidden="true"></i> Consultando a Meta…
+                    </div>
+                </template>
+                <p v-if="espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+                    Não deu para ler a Meta agora: {{ espelho.erro }}
+                </p>
+                <EspelhoMeta v-else :campanhas="espelho?.campanhas ?? []" abrir-tudo :class="{ 'opacity-60': carregandoMeta }" />
+            </Deferred>
+            <p class="mt-2 text-xs text-slate-500">Resultado que a própria Meta atribui. O lucro de verdade fica em Resultado e margem.</p>
+        </section>
+
+        <h2 v-if="c.meta_campaign_id && videos.length" class="mt-8 text-lg font-bold">Arquivos enviados pelo KazaKora</h2>
 
         <p v-if="erroDesempenho" class="mt-6 text-xs text-amber-700">Não deu para buscar o resultado na Meta agora: {{ erroDesempenho }}</p>
         <p v-if="!videos.length" class="mt-6 text-sm text-slate-500">

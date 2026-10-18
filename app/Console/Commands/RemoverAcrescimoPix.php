@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Setting;
-use App\Support\DescontoPix;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +18,9 @@ use Illuminate\Support\Facades\Storage;
 class RemoverAcrescimoPix extends Command
 {
     private const MARCA = 'loja.acrescimo_pix_removido_em';
+
+    /** O acréscimo gravado em 2026-10-09 foi de 5%. */
+    private const ACRESCIMO = 5;
 
     protected $signature = 'produtos:remover-acrescimo-pix
         {--ids= : ids dos produtos que têm o +5% gravado, separados por vírgula}
@@ -46,7 +48,7 @@ class RemoverAcrescimoPix extends Command
             return self::FAILURE;
         }
 
-        $fator = DescontoPix::fator();
+        $fator = 1 + self::ACRESCIMO / 100;
         $produtos = DB::table('products')->whereIn('id', $ids)->select('id', 'sku', 'price', 'discount_amount')->orderBy('id')->get();
 
         if ($faltando = $ids->diff($produtos->pluck('id'))->all()) {
@@ -55,7 +57,7 @@ class RemoverAcrescimoPix extends Command
             return self::FAILURE;
         }
 
-        $this->info(sprintf('%d produto(s) vão perder o +%s%% no preço da loja.', $produtos->count(), DescontoPix::percentual()));
+        $this->info(sprintf('%d produto(s) vão perder o +%s%% no preço da loja.', $produtos->count(), self::ACRESCIMO));
 
         foreach ($produtos as $p) {
             $this->line(sprintf('  #%d %s: %s → %s', $p->id, $p->sku, number_format((float) $p->price, 2, ',', '.'), number_format(round((float) $p->price / $fator, 2), 2, ',', '.')));

@@ -197,7 +197,7 @@ abstract class CheckoutOutroSite
      * Cupom: sai dos produtos antes do Pix, como na KazaKora; o Pix desconta
      * do que sobrou.
      *
-     * @return array{subtotal: float, desconto_plataforma: float, desconto_cupom: float, desconto_pix: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
+     * @return array{subtotal: float, desconto_plataforma: float, desconto_cupom: float, desconto_pix: float, desconto_pix_percentual: float, frete: float, total: float, total_pix: float, prazo: ?int, full: ?array, turbo: ?array, turbo_escolhido: bool, opcoes: list<array<string, mixed>>, escolhida: array<string, mixed>}
      */
     public function valores(Collection $itens, ?string $cep = null, ?string $frete = null, ?Coupon $cupom = null): array
     {
@@ -211,13 +211,15 @@ abstract class CheckoutOutroSite
         $plataforma = (float) $entrega['desconto_plataforma'];
         $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens)) : 0.0;
         $total = round(max(0, $subtotal - $plataforma - $descontoCupom) + $valorDoFrete, 2);
-        $pix = DescontoPix::desconto(max(0, $total));
+        $pixPercentual = DescontoPix::percentualDosItens($itens);
+        $pix = DescontoPix::desconto(max(0, $total), $pixPercentual);
 
         return [
             'subtotal' => $subtotal,
             'desconto_plataforma' => $plataforma,
             'desconto_cupom' => $descontoCupom,
             'desconto_pix' => $pix,
+            'desconto_pix_percentual' => $pixPercentual,
             'frete' => $valorDoFrete,
             'total' => $total,
             'total_pix' => round($total - $pix, 2),
@@ -330,7 +332,7 @@ abstract class CheckoutOutroSite
             'cupom_erro' => $cupomErro,
             'desconto_cupom' => self::centavos($valores['desconto_cupom']),
             'desconto_pix' => self::centavos($valores['desconto_pix']),
-            'desconto_pix_percentual' => DescontoPix::percentual(),
+            'desconto_pix_percentual' => $valores['desconto_pix_percentual'],
             'boleto_dias_vencimento' => (int) config('loja.boleto_dias_vencimento', 3),
             'frete' => self::centavos($valores['frete']),
             'prazo_dias' => $valores['prazo'],

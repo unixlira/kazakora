@@ -38,6 +38,7 @@ class Product extends Model
         'cost_price',
         'discount_percentage',
         'discount_amount',
+        'checkout_discount_percentage',
         'stock',
         'is_active',
         'is_featured',
@@ -55,7 +56,8 @@ class Product extends Model
             'parent_product_id' => 'integer',
             'price' => 'decimal:2',
             'cost_price' => 'decimal:2',
-            'discount_percentage' => 'decimal:2',
+            'discount_percentage' => 'decimal:4',
+            'checkout_discount_percentage' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'stock' => 'integer',
             'is_active' => 'boolean',
@@ -201,7 +203,7 @@ class Product extends Model
     public function variacoesAtivas(): HasMany
     {
         return $this->children()->where('is_active', true)
-            ->select(['id', 'parent_product_id', 'price', 'discount_percentage', 'discount_amount', 'stock']);
+            ->select(['id', 'parent_product_id', 'price', 'discount_percentage', 'discount_amount', 'checkout_discount_percentage', 'stock']);
     }
 
     /** Carrega as variações ativas do pai para o card mostrar o menor preço. */
@@ -324,6 +326,7 @@ class Product extends Model
                 'price',
                 'discount_percentage',
                 'discount_amount',
+                'checkout_discount_percentage',
                 'stock',
                 'created_at',
             ])

@@ -36,8 +36,8 @@ const page = usePage();
 const isAuthenticated = computed(() => !!page.props.auth?.user);
 
 const PARCELAS = 12;
-// Desconto no Pix (pedido 2026-10-09) — % compartilhado pelo backend.
-const DESCONTO_PIX = Number(page.props.descontoPix ?? 0);
+// Desconto no Pix: "Desconto Checkout (%)" do produto (2026-10-18).
+const DESCONTO_PIX = Number(props.product.checkout_discount_percentage ?? 0);
 // Mesmas bandeiras e imagens do rodapé, com o boleto (pedido 2026-10-14).
 const PAYMENT_BRANDS = ['mastercard', 'visa', 'elo', 'amex', 'hiper', 'boleto', 'pix'];
 

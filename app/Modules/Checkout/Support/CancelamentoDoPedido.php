@@ -71,6 +71,35 @@ class CancelamentoDoPedido
             },
             'canal' => $doSite ? null : "Pedido do {$canal}: aqui o cancelamento é só no nosso sistema. Cancele também no painel do {$canal}, senão o canal segue esperando o envio.",
             'etiqueta' => $this->previaDaEtiqueta($order),
+            'estorno_pendente' => $this->estornoPendente($order),
+        ];
+    }
+
+    /**
+     * Pedido já cancelado com pagamento ainda cobrado (pedido #3219,
+     * 2026-10-18: o Mercado Pago recusou o estorno e o dinheiro ficou
+     * com a loja). Alimenta o botão "Reenviar estorno" do admin; null
+     * quando não há nada a estornar.
+     *
+     * @return array{valor: string, onde: string}|null
+     */
+    public function estornoPendente(Order $order): ?array
+    {
+        if ($order->status !== Order::STATUS_CANCELLED) {
+            return null;
+        }
+
+        $order->loadMissing('payments');
+        $pendentes = $order->payments->filter(fn (Payment $pagamento) => $pagamento->boletoPendente()
+            || in_array($pagamento->status, [Payment::STATUS_CAPTURED, Payment::STATUS_AUTHORIZED], true));
+
+        if ($pendentes->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'valor' => 'R$ '.number_format((float) $pendentes->sum('amount'), 2, ',', '.'),
+            'onde' => $pendentes->contains(fn (Payment $pagamento) => $pagamento->provider === Payment::PROVIDER_MERCADOPAGO) ? 'Mercado Pago' : 'Stripe',
         ];
     }
 

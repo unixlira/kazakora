@@ -31,7 +31,7 @@ class NumeroDoPedidoTest extends TestCase
         ]);
 
         $this->assertSame('261011K7Q2M9XD', $order->numero);
-        $this->post('/rastreio', ['pedido' => '261011k7q2m9xd', 'documento' => 'maria@exemplo.com'])
+        $this->actingAs($user)->post('/rastreio', ['pedido' => '261011k7q2m9xd'])
             ->assertRedirect(route('rastreio.ver', $order->trackingRef()));
     }
 }

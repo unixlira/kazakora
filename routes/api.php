@@ -14,6 +14,14 @@ use App\Http\Controllers\Api\FerraKoraCheckoutController;
 use App\Http\Controllers\Api\FerraKoraContaController;
 use App\Http\Controllers\Api\FerraKoraPerfilController;
 use App\Http\Middleware\AuthenticateBeautyKoraCliente;
+use App\Modules\App\Http\Controllers\CheckoutAppController;
+use App\Modules\App\Http\Controllers\ContaAppController;
+use App\Modules\App\Http\Controllers\EnderecoAppController;
+use App\Modules\App\Http\Controllers\FavoritoAppController;
+use App\Modules\App\Http\Controllers\LojaController as AppLojaController;
+use App\Modules\App\Http\Controllers\PedidoAppController;
+use App\Modules\App\Http\Middleware\AuthenticateAppCliente;
+use App\Modules\App\Http\Middleware\PrepararLojaDoApp;
 use App\Http\Middleware\AuthenticateFerraKoraCliente;
 use App\Http\Controllers\Api\BlingWebhookController;
 use App\Http\Controllers\Api\DashboardAgentController;
@@ -320,6 +328,49 @@ Route::prefix('beautykora')->name('api.beautykora.')->group(function () {
             Route::put('enderecos/{id}', 'atualizarEndereco')->whereNumber('id')->name('enderecos.atualizar');
             Route::delete('enderecos/{id}', 'apagarEndereco')->whereNumber('id')->name('enderecos.apagar');
         });
+    });
+});
+
+// App nativo da KazaKora (iOS e Android, 2026-10-18): a mesma loja, conta e
+// checkout do kazakora.com. Contrato em docs/app-api.md. Token do Sanctum só
+// de User com ability "app" (AuthenticateAppCliente).
+Route::prefix('app')->name('api.app.')->middleware(PrepararLojaDoApp::class)->group(function () {
+    Route::get('config', [AppLojaController::class, 'config'])->middleware('throttle:60,1,app-config')->name('config');
+    Route::get('inicio', [AppLojaController::class, 'inicio'])->middleware('throttle:120,1,app-inicio')->name('inicio');
+    Route::get('departamentos', [AppLojaController::class, 'departamentos'])->middleware('throttle:120,1,app-departamentos')->name('departamentos');
+    Route::get('produtos', [AppLojaController::class, 'produtos'])->middleware('throttle:120,1,app-produtos')->name('produtos');
+    Route::get('produtos/{slug}', [AppLojaController::class, 'produto'])->where('slug', '[A-Za-z0-9-]{1,200}')->middleware('throttle:120,1,app-produto')->name('produto');
+    Route::get('cep/{cep}', [AppLojaController::class, 'cep'])->where('cep', '[0-9-]{8,9}')->middleware('throttle:30,1,app-cep')->name('cep');
+    Route::post('frete', [AppLojaController::class, 'frete'])->middleware('throttle:60,1,app-frete')->name('frete');
+    Route::post('checkout/resumo', [CheckoutAppController::class, 'resumo'])->middleware('throttle:60,1,app-resumo')->name('checkout.resumo');
+
+    Route::post('conta/cadastro', [ContaAppController::class, 'cadastro'])->middleware('throttle:10,1,app-cadastro')->name('conta.cadastro');
+    Route::post('conta/login', [ContaAppController::class, 'login'])->middleware('throttle:10,1,app-login')->name('conta.login');
+    Route::post('conta/esqueci-senha', [ContaAppController::class, 'esqueciSenha'])->middleware('throttle:5,1,app-esqueci')->name('conta.esqueci');
+
+    Route::middleware([AuthenticateAppCliente::class, 'throttle:120,1,app-conta'])->group(function () {
+        Route::get('conta/eu', [ContaAppController::class, 'eu'])->name('conta.eu');
+        Route::patch('conta/eu', [ContaAppController::class, 'atualizar'])->name('conta.atualizar');
+        Route::put('conta/senha', [ContaAppController::class, 'senha'])->middleware('throttle:10,1,app-senha')->name('conta.senha');
+        Route::post('conta/sair', [ContaAppController::class, 'sair'])->name('conta.sair');
+        Route::delete('conta', [ContaAppController::class, 'excluir'])->middleware('throttle:5,1,app-excluir')->name('conta.excluir');
+        Route::post('conta/push-token', [ContaAppController::class, 'pushToken'])->name('conta.push');
+
+        Route::get('conta/enderecos', [EnderecoAppController::class, 'index'])->name('enderecos');
+        Route::post('conta/enderecos', [EnderecoAppController::class, 'store'])->name('enderecos.criar');
+        Route::put('conta/enderecos/{endereco}', [EnderecoAppController::class, 'update'])->whereNumber('endereco')->name('enderecos.atualizar');
+        Route::delete('conta/enderecos/{endereco}', [EnderecoAppController::class, 'destroy'])->whereNumber('endereco')->name('enderecos.apagar');
+
+        Route::get('favoritos', [FavoritoAppController::class, 'index'])->name('favoritos');
+        Route::post('favoritos/{produto}', [FavoritoAppController::class, 'store'])->whereNumber('produto')->name('favoritos.criar');
+        Route::delete('favoritos/{produto}', [FavoritoAppController::class, 'destroy'])->whereNumber('produto')->name('favoritos.apagar');
+
+        Route::post('checkout/pedido', [CheckoutAppController::class, 'pedido'])->middleware('throttle:10,1,app-pedido')->name('checkout.pedido');
+        Route::get('pedidos', [PedidoAppController::class, 'index'])->name('pedidos');
+        Route::get('pedidos/{pedido}', [PedidoAppController::class, 'show'])->whereNumber('pedido')->name('pedido');
+        Route::get('pedidos/{pedido}/status', [PedidoAppController::class, 'status'])->whereNumber('pedido')->name('pedido.status');
+        Route::post('pedidos/{pedido}/cancelar', [PedidoAppController::class, 'cancelar'])->whereNumber('pedido')->middleware('throttle:10,1,app-cancelar')->name('pedido.cancelar');
+        Route::get('pedidos/{pedido}/nota', [PedidoAppController::class, 'nota'])->whereNumber('pedido')->name('pedido.nota');
     });
 });
 

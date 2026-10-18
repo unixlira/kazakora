@@ -4,6 +4,7 @@ namespace App\Modules\Checkout\Services;
 
 use App\Models\User;
 use App\Modules\Auth\Mail\WelcomeEmail;
+use App\Modules\Checkout\Models\Address;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Mail\PixAguardandoPagamento;
@@ -93,6 +94,68 @@ abstract class CheckoutOutroSite
     }
 
     /**
+     * site_origem gravado no pedido. Padrão: site(). O app da KazaKora
+     * (2026-10-18) devolve null: a venda conta como do kazakora.com.
+     */
+    protected function siteOrigemDoPedido(): ?string
+    {
+        return $this->site();
+    }
+
+    /**
+     * Pais (product_id) publicados no site, entre os pedidos. Padrão: a
+     * tabela do site (modeloPublicado()); o app da KazaKora usa a loja inteira.
+     *
+     * @param  array<int, int>  $paiIds
+     * @return array<int, int>
+     */
+    protected function paisPublicados(array $paiIds): array
+    {
+        return $this->modeloPublicado()::query()
+            ->where('ativo', true)
+            ->whereIn('product_id', $paiIds)
+            ->pluck('product_id')
+            ->all();
+    }
+
+    /** Opções das transportadoras do Melhor Envio (Loggi) além dos Correios? O checkout da KazaKora não tem. */
+    protected function comOutrasTransportadoras(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Valor sobre o qual sai o desconto do Pix. Sites: o total com o frete
+     * (pedido do Lira 2026-10-14). Checkout da KazaKora: só os produtos, já
+     * com cupom e desconto da caixa única (nunca o frete).
+     */
+    protected function baseDoDescontoPix(float $total, float $frete): float
+    {
+        return $total;
+    }
+
+    /**
+     * Conta da KazaKora dona do pedido (null = site com cliente separado).
+     * Padrão: pelo e-mail/CPF do cliente; o app usa a conta do token.
+     */
+    protected function contaDoPedido(array $dados): ?User
+    {
+        return $this->contaNaKazaKora() ? $this->cliente($dados['cliente']) : null;
+    }
+
+    /** Endereço da conta para o pedido. Padrão: um novo com o endereço digitado; o app usa o salvo. */
+    protected function enderecoDaConta(User $user, array $entrega, array $dados): Address
+    {
+        return $user->addresses()->create([...$entrega, 'is_default' => $user->addresses()->count() === 0]);
+    }
+
+    /** Colunas a mais no pedido (app: address_id e app_plataforma). */
+    protected function colunasDoPedido(?User $user, object $address, array $dados): array
+    {
+        return [];
+    }
+
+    /**
      * Acréscimo do site sobre o preço do anúncio, por produto pai (0.05 = 5%),
      * o mesmo que o catálogo do site soma (CatalogoOutroSite::acrescimo()).
      *
@@ -136,11 +199,7 @@ abstract class CheckoutOutroSite
             ->get()
             ->keyBy('id');
 
-        $publicados = $this->modeloPublicado()::query()
-            ->where('ativo', true)
-            ->whereIn('product_id', $produtos->map(fn (Product $p) => $p->parent_product_id ?? $p->id))
-            ->pluck('product_id')
-            ->all();
+        $publicados = $this->paisPublicados($produtos->map(fn (Product $p) => $p->parent_product_id ?? $p->id)->unique()->values()->all());
         $acrescimos = $this->acrescimos($publicados);
 
         $semEstoque = [];
@@ -211,7 +270,7 @@ abstract class CheckoutOutroSite
         $plataforma = (float) $entrega['desconto_plataforma'];
         $descontoCupom = $cupom ? $cupom->discountFor(self::subtotalParaCupom($itens)) : 0.0;
         $total = round(max(0, $subtotal - $plataforma - $descontoCupom) + $valorDoFrete, 2);
-        $pix = DescontoPix::desconto(max(0, $total));
+        $pix = DescontoPix::desconto(max(0, $this->baseDoDescontoPix($total, $valorDoFrete)));
 
         return [
             'subtotal' => $subtotal,
@@ -248,7 +307,7 @@ abstract class CheckoutOutroSite
         }
 
         $custo = isset($entrega['custo']) ? (float) $entrega['custo'] : null;
-        if ($cep && $custo !== null && ! empty($entrega['peso_g'])) {
+        if ($cep && $custo !== null && ! empty($entrega['peso_g']) && $this->comOutrasTransportadoras()) {
             $teto = (float) config('frete_embutido.turbo_max', 60);
             foreach (app(TransportadorasMelhorEnvio::class)->cotar($cep, (int) $entrega['peso_g'], $subtotal) as $cotacao) {
                 $aMais = round(max(0, $cotacao['preco'] - $custo), 2);
@@ -388,7 +447,7 @@ abstract class CheckoutOutroSite
             }
 
             $cpf = preg_replace('/\D/', '', $dados['cliente']['cpf']);
-            $user = $this->contaNaKazaKora() ? $this->cliente($dados['cliente']) : null;
+            $user = $this->contaDoPedido($dados);
             $entrega = [...$endereco, 'recipient_name' => $dados['cliente']['name'], 'phone' => $dados['cliente']['phone']];
             $doSite = $user ? [] : [
                 ...$this->clienteDoSite($dados['cliente'], $entrega),
@@ -396,7 +455,7 @@ abstract class CheckoutOutroSite
                 'shipping_email' => mb_strtolower(trim($dados['cliente']['email'])),
             ];
             $address = $user
-                ? $user->addresses()->create([...$entrega, 'is_default' => $user->addresses()->count() === 0])
+                ? $this->enderecoDaConta($user, $entrega, $dados)
                 : (object) [...$entrega, 'complement' => $entrega['complement'] ?? null];
             $pagador = $user
                 ? ['nome' => $user->name, 'email' => $user->email, 'cpf' => (string) $user->cpf]
@@ -412,7 +471,8 @@ abstract class CheckoutOutroSite
             $order = Order::create([
                 'user_id' => $user?->id,
                 ...$doSite,
-                'site_origem' => $this->site(),
+                ...$this->colunasDoPedido($user, $address, $dados),
+                'site_origem' => $this->siteOrigemDoPedido(),
                 'external_order_id' => Order::gerarNumeroDaLoja(),
                 'status' => Order::STATUS_AWAITING_PAYMENT,
                 'shipping_method_id' => $frete?->id,

@@ -264,6 +264,8 @@ class Order extends Model
         // Cliente do FerraKora (2026-10-15): conta separada, user_id fica nulo.
         'ferrakora_cliente_id',
         'ferrakora_endereco_id',
+        // Pedido feito pelo app nativo (2026-10-18): ios, android ou web. Só marcação.
+        'app_plataforma',
         'external_order_id',
         'channel_pack_id',
         'fiscal_operation_type',

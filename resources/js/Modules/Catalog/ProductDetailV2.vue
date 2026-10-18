@@ -215,15 +215,15 @@ const unitPriceForQuantity = (qty) => {
 
 const quantity = ref(1);
 const currentTotal = computed(() => unitPriceForQuantity(quantity.value) * quantity.value);
-const pixPrice = computed(() => Math.round(Number(precoBase.value.final_price) * (1 - DESCONTO_PIX / 100) * 100) / 100);
-// Referência do bloco de preço: "de" = preço cheio (ou o do cartão, quando
-// não há promoção e existe desconto no Pix); "por" = valor no Pix.
-const precoPor = computed(() => (DESCONTO_PIX > 0 ? pixPrice.value : Number(precoBase.value.final_price)));
+// Bloco de preço com a mesma conta do card (ProductCard): "por" = preço de
+// venda, "de" = preço sem a promoção. O desconto do Pix só entra no checkout,
+// quando o cliente escolhe Pix (pedido 2026-10-18: card 4% e página 9%).
+const precoPor = computed(() => Number(precoBase.value.final_price));
 const precoDe = computed(() => {
-    if (precoBase.value.has_discount) return Number(precoBase.value.preco_de ?? precoBase.value.price);
-    return DESCONTO_PIX > 0 ? Number(precoBase.value.final_price) : null;
+    if ((precoBase.value.oferta_do_dia || precoBase.value.oferta_relampago) && precoBase.value.preco_sem_oferta) return Number(precoBase.value.preco_sem_oferta);
+    return precoBase.value.has_discount ? Number(precoBase.value.preco_de ?? precoBase.value.price) : null;
 });
-const percentualTotal = computed(() => (precoDe.value ? Math.round((1 - precoPor.value / precoDe.value) * 100) : 0));
+const percentualTotal = computed(() => (precoDe.value ? Math.max(1, Math.round((1 - precoPor.value / precoDe.value) * 100)) : 0));
 const descontoTotal = computed(() => (precoDe.value ? Math.round(precoDe.value - precoPor.value) : 0));
 const installmentValue = computed(() => Number(precoBase.value.final_price) / PARCELAS);
 // Antes de escolher, vale o estoque de qualquer variação (o pai pode estar zerado).
@@ -503,9 +503,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                             <hr class="divisor">
 
-                            <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço à
-                                 vista (Pix) em destaque, 12x no cartão e "R$ X de desconto" — tudo
-                                 com os valores reais (preço de cartão = final_price). -->
+                            <!-- Bloco de preço no formato da referência: "de" riscado + ⇣%, preço de
+                                 venda (final_price, igual ao card) em destaque, 12x e "R$ X de desconto".
+                                 O desconto do Pix só aparece no checkout. -->
                             <div class="preco">
                                 <span class="rot">{{ aPartirDe ? 'A partir de:' : 'Preço:' }}</span>
                                 <div class="valores">
@@ -513,8 +513,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <span class="de">{{ formatPrice(precoDe) }}</span>
                                         <span v-if="percentualTotal > 0" class="selo">⇣ {{ percentualTotal }}%</span>
                                     </div>
-                                    <div class="por">{{ formatPrice(precoPor) }}<small v-if="DESCONTO_PIX > 0" class="no-pix">no Pix</small></div>
-                                    <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}<template v-if="DESCONTO_PIX > 0"> no cartão</template></div>
+                                    <div class="por">{{ formatPrice(precoPor) }}</div>
+                                    <div class="parc"><i class="fas fa-credit-card"></i> Em até {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</div>
                                     <span v-if="descontoTotal > 0" class="selo">R$ {{ descontoTotal }} de desconto</span>
                                 </div>
                             </div>
@@ -910,7 +910,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .selo { display: inline-block; background: var(--navy); color: #fff; border-radius: 5px; padding: 4px 8px; font-size: 12px; line-height: 1.3; }
 .pd2 .por { color: var(--green); font-size: 36px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .pd2 .parc { color: var(--ink); font-size: 18px; }
-.pd2 .por .no-pix { font-size: 15px; font-weight: 500; color: var(--text); margin-left: 6px; }
 .pd2 .parc i { color: var(--navy); margin-right: 4px; }
 .dark .pd2 .parc i { color: var(--blue); }
 

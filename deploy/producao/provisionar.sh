@@ -86,6 +86,10 @@ cp "$AQUI/php-kazakora.ini" /etc/php/8.3/fpm/conf.d/90-kazakora.ini
 cp "$AQUI/php-kazakora.ini" /etc/php/8.3/cli/conf.d/90-kazakora.ini
 # O pool padrão (www) não é usado pela loja.
 [ -f /etc/php/8.3/fpm/pool.d/www.conf ] && mv /etc/php/8.3/fpm/pool.d/www.conf /etc/php/8.3/fpm/pool.d/www.conf.desligado
+# Certificado da NF-e na web: OPENSSL_CONF no mestre do FPM (ver o arquivo).
+mkdir -p /etc/systemd/system/php8.3-fpm.service.d
+cp "$AQUI/php8.3-fpm-openssl.conf" /etc/systemd/system/php8.3-fpm.service.d/openssl.conf
+systemctl daemon-reload
 
 echo "== Fila (Supervisor) e agendador (cron)"
 cp "$AQUI/supervisor-kazakora.conf" /etc/supervisor/conf.d/kazakora.conf

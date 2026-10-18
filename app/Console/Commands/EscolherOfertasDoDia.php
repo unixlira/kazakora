@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\DB;
  * (CalculadoraOferta). Não repete produto dos últimos dias; sem candidatos
  * suficientes, completa com os de melhor margem que aguentam o extra.
  * Roda todo dia 00:05 e a home chama se o dia ainda estiver sem ofertas.
- * Os produtos de ofertas.fixas vêm primeiro, todo dia (pedido 2026-10-14).
+ * Os produtos fixos vêm primeiro, todo dia (pedido 2026-10-14): desde
+ * 2026-10-18 são os marcados "Oferta do Dia" no cadastro do produto (a
+ * migration já marcou os do ofertas.fixas). Nenhum marcado = nenhum fixo.
  */
 class EscolherOfertasDoDia extends Command
 {
@@ -61,7 +63,7 @@ class EscolherOfertasDoDia extends Command
             })
             ->filter(fn ($item) => $item['seguro']);
 
-        $fixas = config('ofertas.fixas', []);
+        $fixas = $this->fixas();
         $escolhidos = collect($fixas)
             ->map(fn ($id) => $candidatos->first(fn ($item) => $item['product']->id === $id))
             ->filter()
@@ -97,6 +99,18 @@ class EscolherOfertasDoDia extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return list<int> Marcados no admin, na ordem do ofertas.fixas e depois
+     * por id. Sem fallback para o .env: desmarcar todos tira todos os fixos.
+     */
+    private function fixas(): array
+    {
+        $config = config('ofertas.fixas', []);
+        $marcados = Product::query()->where('is_daily_offer', true)->orderBy('id')->pluck('id')->all();
+
+        return array_values(array_unique([...array_intersect($config, $marcados), ...$marcados]));
     }
 
     /**

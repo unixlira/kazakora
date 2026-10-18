@@ -4,6 +4,7 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Category;
+use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
@@ -18,6 +19,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -139,10 +141,11 @@ class ProductController extends Controller
         $product = $this->createWithGeneratedSku($validated, $category?->name);
 
         $this->gerarConteudoAnuncioDepois($product);
+        $aviso = $product->is_daily_offer ? ' '.$this->refazerOfertasDoDia($product) : '';
 
         return redirect()
             ->route('admin.produtos.editar', $product)
-            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.');
+            ->with('success', 'Produto criado com sucesso. Agora complete os dados fiscais, fotos, vídeo e canais de venda.'.$aviso);
     }
 
     public function edit(Product $product): Response
@@ -273,6 +276,7 @@ class ProductController extends Controller
 
         $product->update($this->comAcrescimoPix($validated));
         $this->gerarConteudoAnuncioDepois($product);
+        $mudouOferta = $product->wasChanged('is_daily_offer');
 
         // $product->stock aqui já é o valor ATUAL do banco (route model
         // binding busca fresco no início desta requisição, e $validated
@@ -282,7 +286,28 @@ class ProductController extends Controller
             $this->stock->adjust($product, $adjustment, StockMovement::TYPE_ADJUSTMENT, reason: 'Ajuste manual no cadastro do produto');
         }
 
-        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.');
+        $aviso = $mudouOferta ? ' '.$this->refazerOfertasDoDia($product) : '';
+
+        return redirect()->route('admin.produtos.listar')->with('success', 'Produto atualizado com sucesso.'.$aviso);
+    }
+
+    /**
+     * Checkbox "Oferta do Dia" mudou (pedido 2026-10-18): refaz as ofertas de
+     * hoje na hora, para a home já mostrar, e diz se o produto entrou.
+     */
+    private function refazerOfertasDoDia(Product $product): string
+    {
+        Artisan::call('loja:ofertas-do-dia', ['--forcar' => true]);
+
+        $entrou = OfertaDoDia::query()->whereDate('data', now()->toDateString())->where('product_id', $product->id)->exists();
+
+        if (! $product->is_daily_offer) {
+            return 'Ofertas do Dia de hoje refeitas sem ele.';
+        }
+
+        return $entrou
+            ? 'Já está nas Ofertas do Dia de hoje.'
+            : 'Marcado como Oferta do Dia, mas não entrou hoje: precisa estar ativo, com estoque, custo cadastrado e sem prejuízo no desconto extra (ou já há fixos demais).';
     }
 
     public function destroy(Product $product): RedirectResponse
@@ -391,6 +416,7 @@ class ProductController extends Controller
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
+            'is_daily_offer' => ['boolean'],
         ];
 
         if ($includeStock) {

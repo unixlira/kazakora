@@ -9,7 +9,7 @@ import CheckoutLayout from '@/Shared/Layouts/CheckoutLayout.vue';
 import PaymentProcessingModal from '@/Shared/Components/PaymentProcessingModal.vue';
 import { maskCep, useCep } from '@/Shared/useCep';
 import { maskCpf, maskPhone } from '@/Shared/useMasks';
-import { loadMercadoPagoSdk } from '@/Shared/useMercadoPagoSdk';
+import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue';
 
@@ -245,12 +245,12 @@ const montarBrick = async () => {
             },
             callbacks: {
                 onReady: () => { brickPronto.value = true; },
-                onError: (error) => { brickErro.value = error?.message ?? 'Não foi possível carregar o formulário do cartão.'; },
+                onError: (error) => { brickErro.value = mensagemErroCartao(error); },
                 onSubmit: () => Promise.resolve(),
             },
         });
     } catch (error) {
-        brickErro.value = error?.message ?? 'Não foi possível carregar o formulário do cartão.';
+        brickErro.value = mensagemErroCartao(error);
     }
 };
 
@@ -769,7 +769,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                         <div v-else class="mt-4">
                             <div id="cartao-brick-v2"></div>
                             <p v-if="!brickPronto && !brickErro" class="py-6 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner mr-2 animate-spin"></i>Carregando ambiente seguro do cartão...</p>
-                            <p v-if="brickErro" class="mt-2 text-sm text-red-600">{{ brickErro }}</p>
+                            <p v-if="brickErro" role="alert" class="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{{ brickErro }}</p>
                         </div>
 
                         <button id="finalizar-pedido" type="button" :disabled="processando || freteCarregando || !!order || (metodo === 'card' && !brickPronto)"

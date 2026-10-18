@@ -113,6 +113,8 @@ class PedidoEnviadoWhatsAppTest extends TestCase
         $this->artisan('loja:acompanhar-rastreio');
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
 
+        // Fora da rota de entrega o pacote só é reconsultado depois de 30 min.
+        $this->travel(31)->minutes();
         $this->objeto['eventos'] = [['codigo' => 'BDE', 'tipo' => '01', 'descricao' => 'Objeto entregue ao destinatário', 'dtHrCriado' => now()->format('Y-m-d\TH:i:s')]];
         $this->artisan('loja:acompanhar-rastreio');
         $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);

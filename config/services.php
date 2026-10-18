@@ -406,6 +406,17 @@ return [
             'intervalo_minutos' => (int) env('ALERTA_COLETA_WHATSAPP_INTERVALO', 60),
         ],
 
+        // Rastreio do site em texto da Manuela (2026-10-18): cada etapa dos
+        // Correios (postado, saiu para entrega, aguardando retirada, entregue)
+        // sem template aprovado na Meta vira mensagem de texto. Texto livre
+        // só chega dentro da janela de 24 h. Fora do kazakora.com (o homolog
+        // usa o mesmo WhatsApp) tudo vai para o número abaixo, nunca para o
+        // cliente, com o pedido e o cliente no começo.
+        'rastreio_texto' => [
+            'ativo' => (bool) env('WHATSAPP_RASTREIO_TEXTO', true),
+            'redirecionar_para' => env('WHATSAPP_RASTREIO_TEXTO_PARA', parse_url((string) env('APP_URL'), PHP_URL_HOST) === 'kazakora.com' ? null : '5511990253050'),
+        ],
+
         'templates' => [
             'pedido_aprovado' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO'),
             'pedido_aprovado_idioma' => env('WHATSAPP_TEMPLATE_PEDIDO_APROVADO_IDIOMA', 'pt_BR'),

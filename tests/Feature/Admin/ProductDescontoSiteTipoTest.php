@@ -42,7 +42,7 @@ class ProductDescontoSiteTipoTest extends TestCase
         $this->salvar($product, ['discount_percentage' => 10, 'discount_amount' => 15]);
 
         $product->refresh();
-        $this->assertSame('10.00', $product->discount_percentage);
+        $this->assertSame('10.0000', $product->discount_percentage);
         $this->assertNull($product->discount_amount);
     }
 }

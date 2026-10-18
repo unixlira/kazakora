@@ -2,6 +2,7 @@
 
 namespace App\Modules\Marketplace\Drivers;
 
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use InvalidArgumentException;
 
@@ -17,13 +18,25 @@ class MarketplaceDriverManager
         MarketplaceAccount::CHANNEL_AMAZON => AmazonDriver::class,
     ];
 
+    /**
+     * Só envio/etiqueta (ChannelShippingService, LabelFetchService). Fica
+     * fora de channels(): o site não publica produto nem importa pedido.
+     *
+     * @var array<string, class-string<MarketplaceChannelDriver>>
+     */
+    private array $somenteEnvio = [
+        Order::ORIGIN_STORE => LojaShippingDriver::class,
+    ];
+
     public function driver(string $channel): MarketplaceChannelDriver
     {
-        if (! isset($this->drivers[$channel])) {
+        $classe = $this->drivers[$channel] ?? $this->somenteEnvio[$channel] ?? null;
+
+        if (! $classe) {
             throw new InvalidArgumentException("Canal de marketplace desconhecido: {$channel}");
         }
 
-        return app($this->drivers[$channel]);
+        return app($classe);
     }
 
     /**

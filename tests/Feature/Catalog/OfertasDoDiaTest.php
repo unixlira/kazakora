@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Coupon;
 use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Models\User;
 use App\Support\PaymentGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
@@ -102,6 +103,7 @@ class OfertasDoDiaTest extends TestCase
         $semEstoque = $this->produto(['stock' => 0]);
         $prejuizo = $this->produto(['cost_price' => 110]);
         config(['ofertas.fixas' => [$semDesconto->id, $semEstoque->id, $prejuizo->id, $primeiro->id]]);
+        Product::query()->whereKey(config('ofertas.fixas'))->update(['is_daily_offer' => true]);
         OfertaDoDia::query()->create(['data' => now()->subDay()->toDateString(), 'product_id' => $primeiro->id, 'desconto_extra' => 5, 'preco_antes' => 140, 'preco_oferta' => 130, 'lucro_estimado' => 50]);
 
         $this->artisan('loja:ofertas-do-dia')->assertSuccessful();
@@ -109,5 +111,46 @@ class OfertasDoDiaTest extends TestCase
         $hoje = OfertaDoDia::query()->whereDate('data', now()->toDateString())->orderBy('posicao');
         $this->assertSame([$semDesconto->id, $primeiro->id, $outro->id], $hoje->pluck('product_id')->all());
         $this->assertSame(95.0, OfertaDoDia::query()->where('product_id', $semDesconto->id)->value('preco_oferta'));
+    }
+
+    public function test_marcados_no_admin_substituem_o_config_como_fixos(): void
+    {
+        config(['ofertas.completar_com_margem' => false, 'ofertas.quantidade' => 2]);
+        $doConfig = $this->produto();
+        $marcado = $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20, 'is_daily_offer' => true]);
+        config(['ofertas.fixas' => [$doConfig->id]]);
+
+        $this->artisan('loja:ofertas-do-dia')->assertSuccessful();
+
+        $hoje = OfertaDoDia::query()->whereDate('data', now()->toDateString())->orderBy('posicao')->pluck('product_id')->all();
+        $this->assertSame($marcado->id, $hoje[0]);
+    }
+
+    public function test_sem_marcados_o_config_nao_volta_como_fixo(): void
+    {
+        config(['ofertas.completar_com_margem' => false, 'ofertas.quantidade' => 1]);
+        $semDesconto = $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20]);
+        $comDesconto = $this->produto();
+        config(['ofertas.fixas' => [$semDesconto->id]]);
+
+        $this->artisan('loja:ofertas-do-dia')->assertSuccessful();
+
+        $this->assertSame([$comDesconto->id], OfertaDoDia::query()->whereDate('data', now()->toDateString())->pluck('product_id')->all());
+    }
+
+    public function test_marcar_no_cadastro_poe_o_produto_nas_ofertas_de_hoje(): void
+    {
+        config(['ofertas.completar_com_margem' => false, 'ofertas.fixas' => []]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $produto = $this->produto(['discount_percentage' => null, 'price' => 100, 'cost_price' => 20]);
+        $this->artisan('loja:ofertas-do-dia')->assertSuccessful();
+        $this->assertFalse(OfertaDoDia::query()->where('product_id', $produto->id)->exists());
+
+        $this->actingAs($admin)->put("/admin/produtos/{$produto->id}", [
+            'name' => $produto->name, 'price' => 100, 'cost_price' => 20, 'is_active' => true, 'is_daily_offer' => true,
+        ])->assertRedirect()->assertSessionHas('success', fn ($msg) => str_contains($msg, 'Já está nas Ofertas do Dia'));
+
+        $this->assertTrue($produto->fresh()->is_daily_offer);
+        $this->assertTrue(OfertaDoDia::query()->whereDate('data', now()->toDateString())->where('product_id', $produto->id)->exists());
     }
 }

@@ -42,6 +42,7 @@ class Product extends Model
         'is_active',
         'is_featured',
         'is_new_release',
+        'is_daily_offer',
     ];
 
     protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine'];
@@ -61,6 +62,7 @@ class Product extends Model
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
             'is_new_release' => 'boolean',
+            'is_daily_offer' => 'boolean',
             'video_duration_seconds' => 'integer',
         ];
     }

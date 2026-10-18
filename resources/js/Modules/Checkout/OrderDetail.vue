@@ -6,7 +6,7 @@ import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import SuporteChat from '@/Shared/Components/SuporteChat.vue';
 import Modal from '@/Shared/Modal.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
     pedido: { type: Object, required: true },
@@ -50,42 +50,92 @@ const chatAberto = ref(false);
 // na hora, mostra o sucesso no próprio modal e fecha sozinho. Substitui o
 // pedido de cancelamento pelo chat da Manuela. Fila (2026-10-18): o Enviar só
 // registra; nota, estorno, estoque e e-mail saem em segundo plano.
+// Etapas animadas (Lira, 2026-10-18): o Enviar não mostra mais o carregando
+// dentro do botão. Cada etapa entra sozinha (fade in) com o carregando, o
+// carregando vira check verde, a etapa sai (fade out) e entra a próxima; no
+// fim, a mensagem de cancelamento. A primeira etapa só vira check quando o
+// servidor confirma; as outras são o que a fila "nfe" faz em seguida.
 const MOTIVOS = ['Desisti da compra', 'Comprei errado', 'Achei mais barato em outro lugar', 'O prazo de entrega ficou longo', 'Outro motivo'];
+const TEMPO_DA_ETAPA = 900;
+const TEMPO_DO_CHECK = 650;
 const cancelarAberto = ref(false);
-const cancelouOk = ref(false);
+const cancelarFase = ref('form'); // form | etapas | fim
+const etapaIndice = ref(0);
+const etapaFeita = ref(false);
 const cancelarErro = ref(null);
 const cancelarForm = useForm({ motivo: '', detalhe: '' });
-let fecharTimer = null;
+const pagou = computed(() => ['captured', 'authorized', 'succeeded'].includes(props.pedido.pagamento?.status));
+// Lista fixada no Enviar: o pedido recarregado no meio não muda as etapas.
+const etapasDoCancelamento = ref([]);
+const montarEtapas = () => [
+    'Registrando o cancelamento',
+    ...(props.pedido.nota ? ['Cancelando a nota fiscal'] : []),
+    ...(pagou.value ? ['Solicitando o estorno do pagamento'] : []),
+    'Devolvendo os produtos ao estoque',
+    'Preparando a confirmação por e-mail',
+];
+let timers = [];
+const limparTimers = () => {
+    timers.forEach(clearTimeout);
+    timers = [];
+};
+const depois = (ms, fn) => timers.push(setTimeout(fn, ms));
+const mostrarEtapa = (i) => {
+    etapaIndice.value = i;
+    etapaFeita.value = false;
+};
+// Check verde na etapa atual e, depois de um tempo, a próxima (ou o fim).
+const concluirEtapa = () => {
+    etapaFeita.value = true;
+    depois(TEMPO_DO_CHECK, () => {
+        const proxima = etapaIndice.value + 1;
+        if (proxima >= etapasDoCancelamento.value.length) {
+            cancelarFase.value = 'fim';
+            return;
+        }
+        mostrarEtapa(proxima);
+        depois(TEMPO_DA_ETAPA, concluirEtapa);
+    });
+};
 const abrirCancelamento = () => {
-    cancelouOk.value = false;
+    limparTimers();
+    cancelarFase.value = 'form';
     cancelarErro.value = null;
     cancelarForm.reset();
     cancelarForm.clearErrors();
     cancelarAberto.value = true;
 };
 const fecharCancelamento = () => {
-    if (cancelarForm.processing) return;
-    clearTimeout(fecharTimer);
+    if (cancelarFase.value === 'etapas') return;
+    limparTimers();
     cancelarAberto.value = false;
 };
 const confirmarCancelamento = () => {
     cancelarErro.value = null;
+    limparTimers();
+    etapasDoCancelamento.value = montarEtapas();
+    mostrarEtapa(0);
+    cancelarFase.value = 'etapas';
+    const inicio = Date.now();
     cancelarForm
         .transform((dados) => ({ motivo: [dados.motivo, dados.detalhe.trim()].filter(Boolean).join(': ') }))
         .post(`/pedidos/${props.pedido.id}/cancelar`, {
             preserveScroll: true,
             onSuccess: (pagina) => {
                 // O controller volta com flash de erro quando a compra já
-                // não pode ser cancelada: o modal mostra o motivo e fica aberto.
+                // não pode ser cancelada: o modal volta ao formulário com o motivo.
                 if (pagina.props.pedido?.status !== 'cancelled') {
                     cancelarErro.value = pagina.props.flash?.error ?? 'Não foi possível cancelar agora. Fale com o suporte.';
+                    cancelarFase.value = 'form';
                     return;
                 }
-                cancelouOk.value = true;
-                fecharTimer = setTimeout(() => { cancelarAberto.value = false; }, 3000);
+                depois(Math.max(0, TEMPO_DA_ETAPA - (Date.now() - inicio)), concluirEtapa);
             },
+            onError: () => { cancelarFase.value = 'form'; },
+            onCancel: () => { cancelarFase.value = 'form'; },
         });
 };
+onUnmounted(limparTimers);
 </script>
 
 <template>
@@ -184,14 +234,33 @@ const confirmarCancelamento = () => {
                     </section>
 
                     <Modal :open="cancelarAberto" max-width="max-w-[480px]" @close="fecharCancelamento">
-                        <div v-if="cancelouOk" class="flex flex-col items-center gap-3 py-4 text-center" role="status" aria-live="polite">
-                            <span class="flex h-14 w-14 items-center justify-center rounded-full bg-[#0FB930]/15 text-3xl text-[#0FB930]"><i class="fas fa-circle-check"></i></span>
-                            <p class="text-lg font-bold">Solicitação recebida</p>
-                            <p class="text-sm text-store-fg-muted">
-                                Seu cancelamento está sendo processado. Assim que terminar, enviamos a confirmação para o seu e-mail.
-                                <template v-if="pedido.pagamento"> Se você já pagou, o valor volta pela mesma forma de pagamento.</template>
-                            </p>
+                        <div v-if="cancelarFase === 'etapas'" class="flex min-h-[180px] flex-col items-center justify-center gap-5 py-4 text-center" role="status" aria-live="polite">
+                            <p class="text-lg font-bold">Cancelando pedido {{ pedido.numero }}</p>
+                            <Transition name="cancelar-etapa" mode="out-in">
+                                <div :key="etapaIndice" class="flex flex-col items-center gap-3">
+                                    <span class="flex h-14 w-14 items-center justify-center rounded-full text-2xl transition-colors duration-300"
+                                        :class="etapaFeita ? 'bg-[#0FB930]/15 text-[#0FB930]' : 'bg-store-bg-sunken text-store-fg-muted'">
+                                        <Transition name="cancelar-icone" mode="out-in">
+                                            <i v-if="etapaFeita" key="check" class="fas fa-check" aria-hidden="true"></i>
+                                            <i v-else key="loader" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                        </Transition>
+                                    </span>
+                                    <p class="text-sm font-semibold">{{ etapasDoCancelamento[etapaIndice] }}</p>
+                                </div>
+                            </Transition>
+                            <p class="text-xs text-store-fg-faint">Etapa {{ etapaIndice + 1 }} de {{ etapasDoCancelamento.length }}</p>
                         </div>
+                        <Transition v-else-if="cancelarFase === 'fim'" name="cancelar-etapa" appear>
+                            <div class="flex flex-col items-center gap-3 py-4 text-center" role="status" aria-live="polite">
+                                <span class="flex h-14 w-14 items-center justify-center rounded-full bg-[#0FB930]/15 text-3xl text-[#0FB930]"><i class="fas fa-circle-check"></i></span>
+                                <p class="text-lg font-bold">Pedido cancelado</p>
+                                <p class="text-sm text-store-fg-muted">
+                                    Você vai receber a confirmação no seu e-mail.
+                                    <template v-if="pagou"> O valor volta pela mesma forma de pagamento.</template>
+                                </p>
+                                <button type="button" class="mt-2 rounded-full bg-[#0FB930] px-6 py-2 text-sm font-bold text-white hover:brightness-95" @click="fecharCancelamento">Ok</button>
+                            </div>
+                        </Transition>
                         <form v-else class="flex flex-col gap-4" @submit.prevent="confirmarCancelamento">
                             <h2 class="flex items-center gap-2 pr-8 text-lg font-bold"><i class="fas fa-circle-xmark text-red-600"></i> Cancelar pedido {{ pedido.numero }}</h2>
                             <fieldset class="flex flex-col gap-2">
@@ -209,7 +278,7 @@ const confirmarCancelamento = () => {
                             <div class="flex flex-wrap justify-end gap-2">
                                 <button type="button" class="rounded-full px-5 py-2 text-sm font-semibold text-store-fg-muted hover:text-store-fg" :disabled="cancelarForm.processing" @click="fecharCancelamento">Voltar</button>
                                 <button type="submit" :disabled="!cancelarForm.motivo || cancelarForm.processing" class="rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50">
-                                    <i v-if="cancelarForm.processing" class="fas fa-spinner fa-spin mr-1"></i> Enviar
+                                    Enviar
                                 </button>
                             </div>
                         </form>
@@ -288,3 +357,35 @@ const confirmarCancelamento = () => {
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+.cancelar-etapa-enter-active,
+.cancelar-etapa-leave-active {
+    transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.cancelar-etapa-enter-from {
+    opacity: 0;
+    transform: translateY(6px);
+}
+.cancelar-etapa-leave-to {
+    opacity: 0;
+    transform: translateY(-6px);
+}
+.cancelar-icone-enter-active,
+.cancelar-icone-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.cancelar-icone-enter-from,
+.cancelar-icone-leave-to {
+    opacity: 0;
+    transform: scale(0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+    .cancelar-etapa-enter-from,
+    .cancelar-etapa-leave-to,
+    .cancelar-icone-enter-from,
+    .cancelar-icone-leave-to {
+        transform: none;
+    }
+}
+</style>

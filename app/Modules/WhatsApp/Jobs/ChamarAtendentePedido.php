@@ -14,8 +14,8 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Cliente tocou em "Falar com Atendente" no aviso de pedido enviado
- * (SendOrderShippedWhatsAppJob): a conversa vai para "precisa de humano"
+ * Cliente tocou em "Falar com Atendente" no aviso de pedido enviado ou
+ * entregue (SendOrderShippedWhatsAppJob, SendOrderDeliveredWhatsAppJob): a conversa vai para "precisa de humano"
  * no painel do WhatsApp e a Manuela avisa que o time já vem.
  */
 class ChamarAtendentePedido implements ShouldQueue

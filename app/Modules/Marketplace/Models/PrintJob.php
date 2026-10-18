@@ -16,6 +16,9 @@ class PrintJob extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    /** error_message do job tirado da fila porque o pedido foi cancelado. */
+    public const MOTIVO_PEDIDO_CANCELADO = 'Pedido cancelado: etiqueta não impressa.';
+
     /**
      * De onde veio a impressão — ver a migration que criou a coluna. Existe
      * pra "quem imprimiu isso duas vezes?" ser consulta, não escavação.

@@ -174,4 +174,36 @@ class PrintAgentControllerTest extends TestCase
         $response->assertOk();
         $response->assertJsonCount(0, 'jobs');
     }
+
+    /**
+     * Etiqueta que entrou na fila antes do cancelamento não pode sair
+     * (Lira, 2026-10-17). O job some da lista e o claim recusa.
+     */
+    public function test_pedido_cancelado_nao_aparece_na_fila_nem_pode_ser_reivindicado(): void
+    {
+        $order = $this->makeOrder(['status' => Order::STATUS_CANCELLED]);
+        $job = PrintJob::create(['order_id' => $order->id, 'channel' => 'shopee', 'label_path' => 'labels/teste.pdf', 'status' => PrintJob::STATUS_QUEUED]);
+
+        $this->getJson('/api/print-agent/jobs', $this->authHeaders())
+            ->assertOk()
+            ->assertJsonCount(0, 'jobs');
+
+        $this->postJson("/api/print-agent/jobs/{$job->id}/claim", ['agent_id' => 'KazaKora-PC'], $this->authHeaders())
+            ->assertStatus(409);
+
+        $this->assertSame(PrintJob::STATUS_FAILED, $job->fresh()->status);
+        $this->assertSame(PrintJob::MOTIVO_PEDIDO_CANCELADO, $job->fresh()->error_message);
+    }
+
+    public function test_pedido_cancelado_depois_do_claim_nao_baixa_a_etiqueta(): void
+    {
+        $order = $this->makeOrder();
+        $job = PrintJob::create(['order_id' => $order->id, 'channel' => 'shopee', 'label_path' => 'labels/teste.pdf', 'status' => PrintJob::STATUS_CLAIMED, 'claimed_by' => 'KazaKora-PC', 'claimed_at' => now()]);
+        $order->update(['status' => Order::STATUS_CANCELLED]);
+
+        $this->get("/api/print-agent/jobs/{$job->id}/label", $this->authHeaders())
+            ->assertStatus(409);
+
+        $this->assertSame(PrintJob::STATUS_FAILED, $job->fresh()->status);
+    }
 }

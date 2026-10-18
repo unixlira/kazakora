@@ -3,10 +3,10 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import Can from '@/Shared/Components/Can.vue';
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import QrCodeSvg from '@/Shared/Components/QrCodeSvg.vue';
-import { confirmDelete } from '@/Shared/notify';
+import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import { statusOptions } from '@/Shared/statusLabels';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, nextTick, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { shippingBadge } from './envio';
 
 const props = defineProps({
@@ -177,35 +177,33 @@ const updateStatus = () => {
 
 // Botão "Cancelar pedido" (2026-10-17): mostra o que vai acontecer (nota,
 // estorno, estoque, cliente, canal) e pede o motivo antes de confirmar.
+// Tudo num modal só (Lira, 2026-10-17): antes o motivo ficava num painel da
+// lateral e o "Poxa, você tem certeza" abria um SweetAlert por cima.
 const showCancelOrder = ref(false);
-const cancelOrderPanel = ref(null);
 const cancelOrderForm = useForm({ motivo: '' });
 const abrirCancelamento = () => {
     showCancelOrder.value = true;
-    nextTick(() => cancelOrderPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
 };
 const fecharCancelamento = () => {
+    if (cancelOrderForm.processing) {
+        return;
+    }
+
     showCancelOrder.value = false;
     cancelOrderForm.reset();
     cancelOrderForm.clearErrors();
 };
-const cancelOrder = async () => {
-    // Pedido do Lira (2026-10-17): confirmação do SweetAlert antes de cancelar.
-    const confirmado = await confirmDelete({
-        title: 'Poxa, você tem certeza que quer fazer isso?',
-        text: `O pedido ${d.value.canal?.numero ?? props.order.id} será cancelado. Isso não tem volta.`,
-        confirmButtonText: 'Sim, cancelar pedido',
-        cancelButtonText: 'Não, voltar',
-        focusCancel: true,
-    });
-
-    if (!confirmado) {
+const cancelOrder = () => {
+    if (cancelOrderForm.motivo.trim().length < 5) {
         return;
     }
 
     cancelOrderForm.post(`/admin/pedidos/${props.order.id}/cancelar`, {
         preserveScroll: true,
-        onSuccess: () => fecharCancelamento(),
+        onSuccess: () => {
+            showCancelOrder.value = false;
+            cancelOrderForm.reset();
+        },
     });
 };
 
@@ -813,12 +811,10 @@ const cancelInvoice = () => {
 
                 <section
                     v-if="cancelamento?.pode"
-                    ref="cancelOrderPanel"
                     class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm"
                 >
                     <h2 class="font-semibold">Cancelar pedido</h2>
                     <button
-                        v-if="!showCancelOrder"
                         type="button"
                         class="mt-2 w-full rounded-lg border border-error py-2 text-sm font-medium text-error hover:bg-error hover:text-white"
                         @click="abrirCancelamento"
@@ -826,56 +822,54 @@ const cancelInvoice = () => {
                         <i class="fas fa-ban mr-1" aria-hidden="true"></i> Cancelar pedido
                     </button>
 
-                    <form v-else class="mt-2 space-y-3" @submit.prevent="cancelOrder">
-                        <p class="text-sm font-medium">O que acontece ao confirmar:</p>
-                        <ul class="space-y-1.5 text-sm">
-                            <li v-if="cancelamento.canal" class="rounded-lg bg-lightwarning p-2 text-warning-emphasis">
-                                <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>{{ cancelamento.canal }}
-                            </li>
-                            <li><span class="text-xs text-slate-400">Nota fiscal</span><br>{{ cancelamento.nota }}</li>
-                            <li>
-                                <span class="text-xs text-slate-400">Pagamento</span>
-                                <span v-for="(linha, i) in cancelamento.pagamentos" :key="i" class="block">{{ linha }}</span>
-                            </li>
-                            <li><span class="text-xs text-slate-400">Estoque</span><br>{{ cancelamento.estoque }}</li>
-                            <li><span class="text-xs text-slate-400">Cliente</span><br>{{ cancelamento.cliente }}</li>
-                        </ul>
-
-                        <div>
-                            <label for="motivo_cancelamento_pedido" class="block text-sm font-medium">Motivo (fica no histórico, não vai para o cliente)</label>
-                            <textarea
-                                id="motivo_cancelamento_pedido"
-                                v-model="cancelOrderForm.motivo"
-                                rows="3"
-                                maxlength="500"
-                                required
-                                class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
-                                placeholder="Ex.: sem estoque, cliente pediu, endereço não atendido"
-                            ></textarea>
-                            <p v-if="cancelOrderForm.errors.motivo" class="text-xs text-error">{{ cancelOrderForm.errors.motivo }}</p>
-                        </div>
-
-
-                        <div class="flex gap-2">
-                            <button
-                                type="submit"
-                                :disabled="cancelOrderForm.processing || cancelOrderForm.motivo.trim().length < 5"
-                                class="flex-1 rounded-lg bg-error py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {{ cancelOrderForm.processing ? 'Cancelando…' : 'Cancelar pedido' }}
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
-                                @click="fecharCancelamento"
-                            >
-                                Voltar
-                            </button>
-                        </div>
-                    </form>
                 </section>
                 </Can>
             </div>
         </div>
     </AdminLayout>
+
+    <ConfirmModal
+        :open="showCancelOrder && !!cancelamento?.pode"
+        title="Poxa, você tem certeza que quer fazer isso?"
+        confirm-label="Sim, cancelar pedido"
+        cancel-label="Não, voltar"
+        danger
+        :loading="cancelOrderForm.processing"
+        :confirm-disabled="cancelOrderForm.motivo.trim().length < 5"
+        @close="fecharCancelamento"
+        @confirm="cancelOrder"
+    >
+        <form v-if="cancelamento" class="space-y-3" @submit.prevent="cancelOrder">
+            <p class="text-sm">O pedido <strong>{{ d.canal?.numero ?? order.id }}</strong> será cancelado. Isso não tem volta.</p>
+            <ul class="space-y-1.5 text-sm">
+                <li v-if="cancelamento.canal" class="rounded-lg bg-lightwarning p-2 text-warning-emphasis">
+                    <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>{{ cancelamento.canal }}
+                </li>
+                <li v-if="cancelamento.etiqueta" class="rounded-lg bg-lightwarning p-2 text-warning-emphasis">
+                    <i class="fas fa-print mr-1" aria-hidden="true"></i>{{ cancelamento.etiqueta }}
+                </li>
+                <li><span class="text-xs text-slate-400">Nota fiscal</span><br>{{ cancelamento.nota }}</li>
+                <li>
+                    <span class="text-xs text-slate-400">Pagamento</span>
+                    <span v-for="(linha, i) in cancelamento.pagamentos" :key="i" class="block">{{ linha }}</span>
+                </li>
+                <li><span class="text-xs text-slate-400">Estoque</span><br>{{ cancelamento.estoque }}</li>
+                <li><span class="text-xs text-slate-400">Cliente</span><br>{{ cancelamento.cliente }}</li>
+            </ul>
+
+            <div>
+                <label for="motivo_cancelamento_pedido" class="block text-sm font-medium">Motivo (fica no histórico, não vai para o cliente)</label>
+                <textarea
+                    id="motivo_cancelamento_pedido"
+                    v-model="cancelOrderForm.motivo"
+                    rows="3"
+                    maxlength="500"
+                    required
+                    class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
+                    placeholder="Ex.: sem estoque, cliente pediu, endereço não atendido"
+                ></textarea>
+                <p v-if="cancelOrderForm.errors.motivo" class="text-xs text-error">{{ cancelOrderForm.errors.motivo }}</p>
+            </div>
+        </form>
+    </ConfirmModal>
 </template>

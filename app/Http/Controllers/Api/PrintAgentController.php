@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Models\PrintJob;
@@ -38,6 +39,7 @@ class PrintAgentController extends Controller
         // aqui, não só order_id.
         $jobs = PrintJob::query()
             ->where('status', PrintJob::STATUS_QUEUED)
+            ->where(fn ($query) => $this->semPedidoCancelado($query))
             ->with('order:id,external_order_id')
             ->oldest()
             ->get(['id', 'order_id', 'channel', 'tracking_code', 'created_at'])
@@ -88,9 +90,20 @@ class PrintAgentController extends Controller
             ], 403);
         }
 
+        // Pedido cancelado não imprime (Lira, 2026-10-17): a etiqueta pode ter
+        // entrado na fila antes do cancelamento, e o KoraSync só confere a
+        // fila. A trava fica aqui porque todo job passa por este claim, seja
+        // automático, lote, reimpressão ou manual.
+        if ($this->pedidoCancelado($printJob)) {
+            $this->descartarPorCancelamento($printJob);
+
+            return response()->json(['message' => "Pedido #{$printJob->order_id} cancelado: etiqueta não impressa."], 409);
+        }
+
         $reivindicado = PrintJob::query()
             ->whereKey($printJob->getKey())
             ->where('status', PrintJob::STATUS_QUEUED)
+            ->where(fn ($query) => $this->semPedidoCancelado($query))
             ->update([
                 'status' => PrintJob::STATUS_CLAIMED,
                 'claimed_by' => $validated['agent_id'],
@@ -107,6 +120,13 @@ class PrintAgentController extends Controller
     public function label(PrintJob $printJob): HttpResponse
     {
         abort_unless($printJob->status === PrintJob::STATUS_CLAIMED, 409, 'Job precisa ser reivindicado antes de baixar a etiqueta.');
+
+        // Cancelado entre o claim e o download: último ponto antes do papel.
+        if ($this->pedidoCancelado($printJob)) {
+            $this->descartarPorCancelamento($printJob);
+
+            abort(409, "Pedido #{$printJob->order_id} cancelado: etiqueta não impressa.");
+        }
         abort_unless(Storage::disk('local')->exists($printJob->label_path), 404, 'Arquivo da etiqueta não encontrado.');
 
         // Etiquetas Full saem em TSPL cru (ver LabelProcessingService::
@@ -167,5 +187,38 @@ class PrintAgentController extends Controller
         }
 
         return response()->json(['job' => $printJob]);
+    }
+
+    /**
+     * Job sem pedido (teste de impressão) ou com pedido que não está
+     * cancelado.
+     */
+    private function semPedidoCancelado($query): void
+    {
+        $query->whereNull('order_id')
+            ->orWhereHas('order', fn ($order) => $order->where('status', '!=', Order::STATUS_CANCELLED));
+    }
+
+    private function pedidoCancelado(PrintJob $printJob): bool
+    {
+        return $printJob->order_id !== null
+            && Order::query()->whereKey($printJob->order_id)->where('status', Order::STATUS_CANCELLED)->exists();
+    }
+
+    /**
+     * Tira o job da fila sem avisar falha de impressora (não é defeito do
+     * KoraSync, é pedido que não deve sair).
+     */
+    private function descartarPorCancelamento(PrintJob $printJob): void
+    {
+        PrintJob::query()
+            ->whereKey($printJob->getKey())
+            ->whereIn('status', [PrintJob::STATUS_QUEUED, PrintJob::STATUS_CLAIMED])
+            ->update([
+                'status' => PrintJob::STATUS_FAILED,
+                'error_message' => PrintJob::MOTIVO_PEDIDO_CANCELADO,
+            ]);
+
+        Log::info('print_agent.job_descartado_pedido_cancelado', ['job_id' => $printJob->id, 'order_id' => $printJob->order_id]);
     }
 }

@@ -8,6 +8,7 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
+use App\Modules\Marketplace\Models\PrintJob;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -185,5 +186,32 @@ class CancelarPedidoTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
+    }
+
+    public function test_cancelar_tira_da_fila_a_etiqueta_que_ainda_nao_saiu(): void
+    {
+        [$order] = $this->pedidoPago();
+        $naFila = PrintJob::create(['order_id' => $order->id, 'channel' => 'loja', 'label_path' => 'labels/x.pdf', 'status' => PrintJob::STATUS_QUEUED]);
+        $impressa = PrintJob::create(['order_id' => $order->id, 'channel' => 'loja', 'label_path' => 'labels/y.pdf', 'status' => PrintJob::STATUS_PRINTED, 'printed_at' => now()]);
+
+        $this->actingAs($this->admin())
+            ->post("/admin/pedidos/{$order->id}/cancelar", ['motivo' => 'Pedido de teste'])
+            ->assertSessionHas('success');
+
+        $this->assertSame(PrintJob::STATUS_FAILED, $naFila->fresh()->status);
+        $this->assertSame(PrintJob::MOTIVO_PEDIDO_CANCELADO, $naFila->fresh()->error_message);
+        $this->assertSame(PrintJob::STATUS_PRINTED, $impressa->fresh()->status);
+    }
+
+    public function test_previa_avisa_quando_a_etiqueta_ja_foi_impressa(): void
+    {
+        [$order] = $this->pedidoPago();
+        PrintJob::create(['order_id' => $order->id, 'channel' => 'loja', 'label_path' => 'labels/y.pdf', 'status' => PrintJob::STATUS_PRINTED, 'printed_at' => '2026-10-17 22:45:26']);
+
+        $this->actingAs($this->admin())
+            ->get("/admin/pedidos/{$order->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('cancelamento.etiqueta', fn ($texto) => str_contains((string) $texto, 'já foi impressa em 17/10 22:45'))
+                ->etc());
     }
 }

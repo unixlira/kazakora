@@ -61,6 +61,7 @@ use App\Modules\Admin\Http\Controllers\RadarController;
 use App\Modules\Admin\Http\Controllers\ReportController;
 use App\Modules\Admin\Http\Controllers\ReviewController as AdminReviewController;
 use App\Modules\Admin\Http\Controllers\ReviewControleController;
+use App\Modules\Admin\Http\Controllers\AvaliacaoPosCompraController;
 use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
@@ -172,6 +173,10 @@ Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
     ->middleware('auth')
     ->name('avaliacoes.armazenar');
+// Botão "Avaliar" do e-mail pós-compra (pedido 2026-10-18).
+Route::get('/avaliar/{product:slug}', [ReviewController::class, 'avaliar'])
+    ->middleware('auth')
+    ->name('avaliacoes.avaliar');
 
 // "Comprar" na página do produto: finalização só com aquele item (pedido 2026-10-11).
 Route::post('/comprar-agora', [CartController::class, 'comprarAgora'])->name('comprar-agora');
@@ -317,6 +322,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('avaliacoes/controle', [ReviewControleController::class, 'index'])->middleware('permission:cadastros.view')->name('avaliacoes.controle');
     Route::post('avaliacoes/controle', [ReviewControleController::class, 'store'])->middleware('permission:cadastros.create')->name('avaliacoes.controle.armazenar');
     Route::post('avaliacoes/controle/atualizar-contagem', [ReviewControleController::class, 'atualizarContagem'])->middleware('permission:cadastros.view')->name('avaliacoes.controle.contagem');
+
+    // Pedido de avaliação pós-compra (pedido 2026-10-18): painel da tela de Avaliações.
+    // Antes do resource: senão "pos-compra" vira o {review} do avaliacoes.exibir.
+    Route::prefix('avaliacoes/pos-compra')->name('avaliacoes.pos-compra.')->group(function () {
+        Route::get('/', [AvaliacaoPosCompraController::class, 'show'])->middleware('permission:cadastros.view')->name('ver');
+        Route::put('/', [AvaliacaoPosCompraController::class, 'update'])->middleware('permission:cadastros.edit')->name('salvar');
+        Route::post('previa', [AvaliacaoPosCompraController::class, 'previa'])->middleware('permission:cadastros.view')->name('previa');
+        Route::post('teste', [AvaliacaoPosCompraController::class, 'teste'])->middleware(['permission:cadastros.edit', 'throttle:10,1'])->name('teste');
+    });
 
     Route::resource('avaliacoes', AdminReviewController::class)->only(['index', 'show', 'edit', 'update', 'destroy'])
         ->parameters(['avaliacoes' => 'review'])

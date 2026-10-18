@@ -1,5 +1,5 @@
 <script setup>
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     product: {
@@ -35,7 +35,9 @@ const detach = (variationId) => {
     router.post(`/admin/produtos/${variationId}/variacoes/desvincular`, {}, { preserveScroll: true });
 };
 
-const thumbnail = (item) => item.images?.find((image) => image.is_primary)?.url ?? item.images?.[0]?.url ?? null;
+// Miniatura (thumb_url) em vez da original de 2048 px, que pesava na memória da aba.
+const fotoPequena = (image) => image?.thumb_url || image?.url || null;
+const thumbnail = (item) => fotoPequena(item.images?.find((image) => image.is_primary) ?? item.images?.[0]);
 </script>
 
 <template>
@@ -51,7 +53,7 @@ const thumbnail = (item) => item.images?.find((image) => image.is_primary)?.url 
 
         <div v-if="variations.parent" class="rounded border border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3 text-sm text-[var(--surface-foreground)]">
             Este produto é uma variação de
-            <a :href="`/admin/produtos/${variations.parent.id}/editar`" class="text-link font-semibold underline">{{ variations.parent.name }}</a>
+            <Link :href="`/admin/produtos/${variations.parent.id}/editar`" class="text-link font-semibold underline">{{ variations.parent.name }}</Link>
             (SKU {{ variations.parent.sku }}).
         </div>
 
@@ -63,13 +65,13 @@ const thumbnail = (item) => item.images?.find((image) => image.is_primary)?.url 
             <div v-if="variations.siblings.length" class="mt-2 flex flex-col gap-2">
                 <div v-for="item in variations.siblings" :key="item.id"
                     class="flex items-center gap-3 rounded border border-slate-200 px-3 py-2">
-                    <img v-if="thumbnail(item)" :src="thumbnail(item)" :alt="item.name" class="h-12 w-12 rounded object-cover">
+                    <img v-if="thumbnail(item)" :src="thumbnail(item)" :alt="item.name" width="48" height="48" loading="lazy" decoding="async" class="h-12 w-12 rounded object-cover">
                     <div v-else class="flex h-12 w-12 items-center justify-center rounded bg-slate-100 text-slate-300">
                         <i class="fas fa-image"></i>
                     </div>
 
                     <div class="flex-1">
-                        <a :href="`/admin/produtos/${item.id}/editar`" class="font-medium text-slate-700 hover:underline">{{ item.name }}</a>
+                        <Link :href="`/admin/produtos/${item.id}/editar`" class="font-medium text-slate-700 hover:underline">{{ item.name }}</Link>
                         <p class="text-xs text-slate-500">
                             SKU {{ item.sku }}
                             <span v-if="item.variation"> · Variação: {{ item.variation }}</span>
@@ -88,11 +90,11 @@ const thumbnail = (item) => item.images?.find((image) => image.is_primary)?.url 
         <div v-if="! variations.parent" class="border-t border-slate-200 pt-4">
             <p class="text-sm font-medium text-slate-600">Adicionar variação</p>
 
-            <a :href="`/admin/produtos/criar?parent_product_id=${product.id}`"
+            <Link :href="`/admin/produtos/criar?parent_product_id=${product.id}`"
                 class="mt-2 inline-block rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
                 <i class="fas fa-plus mr-1.5 text-xs"></i>
                 Nova variação (cadastro do zero)
-            </a>
+            </Link>
 
             <div v-if="linkableOrphans.length" class="mt-4">
                 <label class="block text-sm text-slate-500">Ou vincular um produto já cadastrado como variação deste</label>

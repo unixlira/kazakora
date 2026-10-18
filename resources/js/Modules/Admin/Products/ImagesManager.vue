@@ -136,7 +136,10 @@ const remove = async (image) => {
                 @dragover.prevent
                 @drop.prevent
                 @dragend="onImageDragEnd">
-                <img :src="image.url" class="pointer-events-none h-full w-full object-cover" :alt="product.name" draggable="false">
+                <!-- Miniatura de 512 px (thumb_url), não a original de 2048 px: 12 fotos
+                     originais custavam ~400 MB de memória na aba (medido 2026-10-18). -->
+                <img :src="image.thumb_url || image.url" width="112" height="112" loading="lazy" decoding="async"
+                    class="pointer-events-none h-full w-full object-cover" :alt="product.name" draggable="false">
                 <span v-if="index === 0" class="absolute left-1 top-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                     Principal
                 </span>

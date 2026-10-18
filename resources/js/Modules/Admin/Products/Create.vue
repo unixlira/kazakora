@@ -31,6 +31,7 @@ const form = useForm({
     price: '',
     cost_price: '',
     discount_percentage: null,
+    discount_amount: null,
     checkout_discount_percentage: props.parent?.checkout_discount_percentage ?? null,
     checkout_discount_amount: props.parent?.checkout_discount_amount ?? null,
     stock: 0,

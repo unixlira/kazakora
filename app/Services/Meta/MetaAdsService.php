@@ -28,6 +28,11 @@ use Illuminate\Support\Facades\Storage;
  * Criação em chamadas sequenciais (não batch): cada id é gravado assim que
  * sai, e o reenvio continua do ponto que falhou.
  *
+ * Ordem (2026-10-18, Árvore de Natal): mídias, criativos e só então
+ * campanha, conjuntos e anúncios. O criativo é o passo que a Meta recusa
+ * quando o app está em modo de desenvolvimento (erro 1885183); criando ele
+ * primeiro, a recusa não deixa campanha e conjunto vazios na conta.
+ *
  * Regras que não podem quebrar:
  * - Tudo é criado PAUSADO (campanha, conjuntos e anúncios). Ativar é outro
  *   passo (alterarStatus), disparado só com confirmação do gasto na tela.
@@ -170,11 +175,6 @@ class MetaAdsService
         $video = null;
 
         try {
-            if (blank($campanha->meta_campaign_id)) {
-                $resposta = $this->post($this->conta().'/campaigns', $this->payloadCampanha($campanha));
-                $campanha->forceFill(['meta_campaign_id' => (string) $resposta['id']])->save();
-            }
-
             // 1. Sobe todas as mídias primeiro: a Meta processa os vídeos em paralelo.
             foreach ($campanha->videos as $video) {
                 $passo = "envio do {$this->rotuloDoAnuncio($video)}";
@@ -213,7 +213,41 @@ class MetaAdsService
                 return self::ENVIO_AGUARDANDO;
             }
 
-            // 3. Cada conjunto e, dentro dele, criativo e anúncio de cada mídia.
+            // 3. Criativos antes da campanha. No reenvio, anúncio que já está
+            // no conjunto (criado aqui ou à mão no Gerenciador com a mesma
+            // mídia) é aproveitado em vez de duplicado.
+            foreach ($campanha->videos as $video) {
+                if (filled($video->meta_ad_id)) {
+                    continue;
+                }
+
+                $passo = "conferência do {$this->rotuloDoAnuncio($video)} na Meta";
+                $adset = $video->meta_adset_id ?: $campanha->conjuntos->firstWhere('id', $video->conjunto_id)?->meta_adset_id;
+                if (filled($adset) && ($existente = $this->anuncioJaNoConjunto((string) $adset, $video))) {
+                    $video->forceFill([
+                        'meta_adset_id' => $adset,
+                        'meta_creative_id' => $existente['creative_id'],
+                        'meta_ad_id' => $existente['ad_id'],
+                        'ultimo_erro' => null,
+                    ])->save();
+
+                    continue;
+                }
+
+                $passo = "criativo do {$this->rotuloDoAnuncio($video)}";
+                if (blank($video->meta_creative_id)) {
+                    $video->forceFill(['meta_creative_id' => $this->criarCriativo($campanha, $video)])->save();
+                }
+            }
+
+            $video = null;
+            $passo = 'campanha';
+            if (blank($campanha->meta_campaign_id)) {
+                $resposta = $this->post($this->conta().'/campaigns', $this->payloadCampanha($campanha));
+                $campanha->forceFill(['meta_campaign_id' => (string) $resposta['id']])->save();
+            }
+
+            // 4. Cada conjunto e, dentro dele, o anúncio de cada mídia.
             foreach ($campanha->conjuntos as $conjunto) {
                 $anuncios = $campanha->videos->where('conjunto_id', $conjunto->id);
                 if ($anuncios->isEmpty()) {
@@ -233,12 +267,6 @@ class MetaAdsService
                             'meta_adset_id' => $conjunto->meta_adset_id,
                             'orcamento_diario' => $campanha->orcamentoDaCampanha() ? null : $conjunto->orcamento_diario,
                         ])->save();
-                    }
-
-                    $passo = "criativo do {$this->rotuloDoAnuncio($video)} ({$conjunto->nome})";
-                    if (blank($video->meta_creative_id)) {
-                        $resposta = $this->post($this->conta().'/adcreatives', $this->payloadCriativo($campanha, $video));
-                        $video->forceFill(['meta_creative_id' => (string) $resposta['id']])->save();
                     }
 
                     $passo = "{$this->rotuloDoAnuncio($video)} ({$conjunto->nome})";
@@ -431,6 +459,12 @@ class MetaAdsService
             $payload['bid_strategy'] = 'LOWEST_COST_WITHOUT_CAP';
         }
 
+        if (in_array($campanha->objetivo, ['OUTCOME_SALES', 'OUTCOME_TRAFFIC'], true)) {
+            // Atribuição dita, não o padrão do dia da Meta: a do Gerenciador
+            // na Árvore de Natal (2026-10-18) é 7 dias após o clique.
+            $payload['attribution_spec'] = json_encode(self::ATRIBUICAO);
+        }
+
         if ($campanha->fim) {
             $payload['end_time'] = Carbon::parse($campanha->fim->toDateString(), self::FUSO)->endOfDay()->toIso8601String();
         }
@@ -477,7 +511,8 @@ class MetaAdsService
         if ($geo === []) {
             $geo['countries'] = ['BR'];
         }
-        $geo['location_types'] = ['home', 'recent'];
+        // Igual ao que o Gerenciador grava: mora, esteve há pouco ou frequenta.
+        $geo['location_types'] = ['home', 'recent', 'frequently_in'];
 
         $targeting = [
             'geo_locations' => $geo,
@@ -496,6 +531,88 @@ class MetaAdsService
 
         return $targeting;
     }
+
+    /**
+     * Cria o criativo. Se a Meta recusar as melhorias automáticas
+     * (degrees_of_freedom_spec muda de nome entre versões da API), tenta de
+     * novo sem elas em vez de travar o envio.
+     *
+     * @throws MetaAdsException
+     */
+    private function criarCriativo(MetaAdsCampanha $campanha, MetaAdsVideo $video): string
+    {
+        $payload = $this->payloadCriativo($campanha, $video);
+
+        try {
+            $resposta = $this->post($this->conta().'/adcreatives', $payload);
+        } catch (MetaAdsException $erro) {
+            if (! preg_match('/degrees_of_freedom|creative_features|enroll_status/i', $erro->getMessage())) {
+                throw $erro;
+            }
+
+            unset($payload['degrees_of_freedom_spec']);
+            $resposta = $this->post($this->conta().'/adcreatives', $payload);
+        }
+
+        return (string) $resposta['id'];
+    }
+
+    /**
+     * Anúncio que já está no conjunto com a mesma mídia (vídeo ou imagem).
+     *
+     * @return array{ad_id: string, creative_id: string}|null
+     *
+     * @throws MetaAdsException
+     */
+    private function anuncioJaNoConjunto(string $adsetId, MetaAdsVideo $video): ?array
+    {
+        $midia = (string) ($video->ehImagem() ? $video->meta_image_hash : $video->meta_video_id);
+        if ($midia === '') {
+            return null;
+        }
+
+        $anuncios = $this->getPaginado($adsetId.'/ads', [
+            'fields' => 'id,effective_status,creative{id,object_story_spec}',
+            'limit' => 100,
+        ]);
+
+        foreach ($anuncios as $anuncio) {
+            if (in_array($anuncio['effective_status'] ?? '', ['DELETED', 'ARCHIVED'], true)) {
+                continue;
+            }
+
+            $spec = $anuncio['creative']['object_story_spec'] ?? [];
+            $daMidia = $video->ehImagem()
+                ? ($spec['link_data']['image_hash'] ?? null)
+                : ($spec['video_data']['video_id'] ?? null);
+
+            if ((string) $daMidia === $midia && filled($anuncio['creative']['id'] ?? null)) {
+                return ['ad_id' => (string) $anuncio['id'], 'creative_id' => (string) $anuncio['creative']['id']];
+            }
+        }
+
+        return null;
+    }
+
+    /** Parâmetros de UTM que a Meta cola no link (url_tags), com o nome real da campanha e do anúncio. */
+    public const URL_TAGS = 'utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}';
+
+    /** Janela de atribuição do conjunto: 7 dias após o clique. */
+    public const ATRIBUICAO = [['event_type' => 'CLICK_THROUGH', 'window_days' => 7]];
+
+    /**
+     * Melhorias automáticas do criativo, iguais às que o Lira deixou ligadas
+     * no Gerenciador (Árvore de Natal, 2026-10-18). Ficam de fora a dublagem
+     * automática e o Advantage+ criativo (mexem no texto e na voz).
+     */
+    public const MELHORIAS_DO_CRIATIVO = [
+        'enhance_cta' => 'OPT_IN',
+        'inline_comment' => 'OPT_IN',
+        'video_auto_crop' => 'OPT_IN',
+        'video_filtering' => 'OPT_IN',
+        'video_uncrop' => 'OPT_IN',
+        'text_optimizations' => 'OPT_OUT',
+    ];
 
     /** @return array<string, mixed> */
     public function payloadCriativo(MetaAdsCampanha $campanha, MetaAdsVideo $video): array
@@ -535,10 +652,39 @@ class MetaAdsService
             $spec['instagram_user_id'] = (string) config('services.meta_ads.instagram_actor_id');
         }
 
-        return [
+        $payload = [
             'name' => $campanha->nome.' | '.$this->rotuloDoAnuncio($video).' | criativo',
             'object_story_spec' => json_encode($spec),
+            'url_tags' => self::URL_TAGS,
+            'degrees_of_freedom_spec' => json_encode(['creative_features_spec' => array_map(
+                fn (string $estado) => ['enroll_status' => $estado],
+                self::MELHORIAS_DO_CRIATIVO,
+            )]),
         ];
+
+        // Várias opções de texto, título e descrição: a Meta testa as
+        // combinações (como no Gerenciador). A principal vai primeiro.
+        $extras = $campanha->textosAlternativos();
+        if ($extras['textos'] !== [] || $extras['titulos'] !== [] || $extras['descricoes'] !== []) {
+            $opcoes = fn (?string $principal, array $outras, int $max) => array_map(
+                fn (string $t) => ['text' => $t],
+                array_values(array_slice(array_unique(array_filter([trim((string) $principal), ...$outras], fn ($t) => $t !== '')), 0, $max)),
+            );
+
+            // Igual ao Gerenciador: os textos ficam só no asset_feed_spec.
+            $chave = $video->ehImagem() ? 'link_data' : 'video_data';
+            unset($spec[$chave]['message'], $spec[$chave]['title'], $spec[$chave]['name'], $spec[$chave]['description'], $spec[$chave]['link_description']);
+            $payload['object_story_spec'] = json_encode($spec);
+
+            $payload['asset_feed_spec'] = json_encode(array_filter([
+                'bodies' => $opcoes($criativo['texto'], $extras['textos'], 5),
+                'titles' => $opcoes($criativo['titulo'], $extras['titulos'], 5),
+                'descriptions' => $opcoes($criativo['descricao'], $extras['descricoes'], 5),
+                'optimization_type' => 'DEGREES_OF_FREEDOM',
+            ]));
+        }
+
+        return $payload;
     }
 
     /** @return array<string, mixed> */
@@ -774,6 +920,13 @@ class MetaAdsService
 
         if (filled($erro['error_user_title'] ?? null) && filled($erro['error_user_msg'] ?? null)) {
             $texto = $erro['error_user_title'].'. '.$erro['error_user_msg'];
+        }
+
+        // App da Meta em modo de desenvolvimento: deixa criar campanha e
+        // conjunto, mas recusa o criativo (Árvore de Natal, 2026-10-18).
+        if ((int) ($erro['error_subcode'] ?? 0) === 1885183) {
+            $texto = 'O app da Meta usado pelo KazaKora (KazaKora Ads) está em modo de desenvolvimento e a Meta não deixa ele criar anúncio. '
+                .'No painel de desenvolvedor da Meta, ponha o app em modo Ao vivo e clique em enviar de novo: continua de onde parou.';
         }
 
         if (isset($erro['code'])) {

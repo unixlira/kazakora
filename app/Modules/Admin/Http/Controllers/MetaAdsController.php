@@ -130,6 +130,7 @@ class MetaAdsController extends Controller
                 'ativar' => $campanha->podeAtivar(),
                 'pausar' => $campanha->podePausar(),
                 'excluir' => $campanha->podeExcluir(),
+                'assumir' => $campanha->podeAssumirNoGerenciador(),
                 'mexerNosVideos' => $campanha->podeMexerNosVideos(),
             ],
             'linkGerenciador' => $campanha->meta_campaign_id ? $meta->linkGerenciador($campanha) : null,
@@ -240,6 +241,22 @@ class MetaAdsController extends Controller
         }
 
         return back()->with('success', 'Campanha ativa na Meta. Já está gastando.');
+    }
+
+    /**
+     * Campanha terminada ou mexida à mão no Gerenciador da Meta: o KazaKora
+     * para de enviar, ativar e pausar (reenviar duplicaria anúncio no
+     * conjunto). Não chama a Meta.
+     */
+    public function assumir(MetaAdsCampanha $campanha): RedirectResponse
+    {
+        if (! $campanha->podeAssumirNoGerenciador()) {
+            return back()->with('error', 'Só dá para passar ao Gerenciador campanha que já existe na Meta e não está sendo enviada.');
+        }
+
+        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_GERENCIADOR, 'ultimo_erro' => null])->save();
+
+        return back()->with('success', 'Campanha marcada como assumida no Gerenciador da Meta. Daqui em diante, mexa nela por lá.');
     }
 
     public function pausar(MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse
@@ -478,6 +495,14 @@ class MetaAdsController extends Controller
             'texto_principal' => ['nullable', 'string', 'max:2000'],
             'titulo' => ['nullable', 'string', 'max:255'],
             'descricao' => ['nullable', 'string', 'max:255'],
+            // Outras opções de texto, título e descrição (a Meta testa as combinações).
+            'textos_alternativos' => ['nullable', 'array'],
+            'textos_alternativos.textos' => ['nullable', 'array', 'max:'.MetaAdsCampanha::MAX_TEXTOS_ALTERNATIVOS],
+            'textos_alternativos.textos.*' => ['nullable', 'string', 'max:2000'],
+            'textos_alternativos.titulos' => ['nullable', 'array', 'max:'.MetaAdsCampanha::MAX_TEXTOS_ALTERNATIVOS],
+            'textos_alternativos.titulos.*' => ['nullable', 'string', 'max:255'],
+            'textos_alternativos.descricoes' => ['nullable', 'array', 'max:'.MetaAdsCampanha::MAX_TEXTOS_ALTERNATIVOS],
+            'textos_alternativos.descricoes.*' => ['nullable', 'string', 'max:255'],
             'chamada' => ['required', Rule::in(array_keys(MetaAdsCampanha::CHAMADAS))],
 
             // Conjuntos: a tela manda todos; o que não vier é removido.
@@ -512,7 +537,12 @@ class MetaAdsController extends Controller
             'conjuntos.*.orcamento_diario.min' => 'Mínimo de R$ '.number_format(MetaAdsCampanha::MINIMO_POR_CONJUNTO, 2, ',', '.').' por dia neste conjunto.',
             'anuncios.max' => 'Limite de '.MetaAdsCampanha::MAX_VIDEOS.' anúncios por campanha.',
             'anuncios.*.link_destino.url' => 'Use um link https da loja.',
+            'textos_alternativos.*.max' => 'Até '.MetaAdsCampanha::MAX_TEXTOS_ALTERNATIVOS.' opções além da principal.',
         ]);
+
+        if (array_key_exists('textos_alternativos', $dados)) {
+            $dados['textos_alternativos'] = (new MetaAdsCampanha(['textos_alternativos' => $dados['textos_alternativos'] ?? []]))->textosAlternativos();
+        }
 
         $produto = filled($dados['produto_id'] ?? null) ? Product::query()->find($dados['produto_id']) : null;
 

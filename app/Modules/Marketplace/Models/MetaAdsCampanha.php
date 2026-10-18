@@ -35,13 +35,24 @@ class MetaAdsCampanha extends Model
 
     public const STATUS_ERRO = 'erro';
 
+    /**
+     * O Lira terminou ou mexeu na campanha direto no Gerenciador da Meta
+     * (2026-10-18, Árvore de Natal). O KazaKora não envia, ativa nem pausa
+     * mais nada dela: só mostra o resultado e o link do Gerenciador.
+     */
+    public const STATUS_GERENCIADOR = 'gerenciador';
+
     public const STATUS_ROTULOS = [
         self::STATUS_RASCUNHO => 'Rascunho',
         self::STATUS_ENVIANDO => 'Enviando',
         self::STATUS_ENVIADA_PAUSADA => 'Enviada (pausada)',
         self::STATUS_ATIVA => 'Ativa',
         self::STATUS_ERRO => 'Erro no envio',
+        self::STATUS_GERENCIADOR => 'Assumida no Gerenciador',
     ];
+
+    /** Opções além do texto, título e descrição principais (a Meta aceita 5 de cada no total). */
+    public const MAX_TEXTOS_ALTERNATIVOS = 4;
 
     public const OBJETIVOS = [
         'OUTCOME_SALES' => 'Vendas',
@@ -93,6 +104,7 @@ class MetaAdsCampanha extends Model
         'texto_principal',
         'titulo',
         'descricao',
+        'textos_alternativos',
         'chamada',
         'status',
         'meta_campaign_id',
@@ -113,6 +125,7 @@ class MetaAdsCampanha extends Model
             'idade_min' => 'integer',
             'idade_max' => 'integer',
             'localizacoes' => 'array',
+            'textos_alternativos' => 'array',
             'enviada_em' => 'datetime',
             'ativada_em' => 'datetime',
         ];
@@ -233,5 +246,32 @@ class MetaAdsCampanha extends Model
     public function podePausar(): bool
     {
         return $this->status === self::STATUS_ATIVA && $this->envioCompleto();
+    }
+
+    /** Já tem algo na Meta e o envio não está rodando: dá para passar para o Gerenciador. */
+    public function podeAssumirNoGerenciador(): bool
+    {
+        return in_array($this->status, [self::STATUS_ERRO, self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA], true)
+            && filled($this->meta_campaign_id);
+    }
+
+    /**
+     * Opções extras de texto, sem vazio nem repetida.
+     *
+     * @return array{textos: list<string>, titulos: list<string>, descricoes: list<string>}
+     */
+    public function textosAlternativos(): array
+    {
+        $guardado = $this->textos_alternativos ?? [];
+        $limpar = fn ($lista) => array_values(array_slice(array_unique(array_filter(
+            array_map(fn ($t) => trim((string) $t), (array) $lista),
+            fn (string $t) => $t !== '',
+        )), 0, self::MAX_TEXTOS_ALTERNATIVOS));
+
+        return [
+            'textos' => $limpar($guardado['textos'] ?? []),
+            'titulos' => $limpar($guardado['titulos'] ?? []),
+            'descricoes' => $limpar($guardado['descricoes'] ?? []),
+        ];
     }
 }

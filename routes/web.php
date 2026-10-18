@@ -662,6 +662,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'enviar'])->whereNumber('campanha')->name('enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'pausar'])->whereNumber('campanha')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
+        Route::post('{campanha}/assumir', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'assumir'])->whereNumber('campanha')->name('assumir')->middleware(['permission:financeiro.create', 'throttle:10,1']);
     });
     // Estratégia Shopee, botão Ação (tarefa 569, 2026-10-14): o Cauê pausa,
     // retoma ou muda a meta de ROAS da campanha do produto, só pelo clique

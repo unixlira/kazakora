@@ -15,6 +15,7 @@ export const STATUS_ESTILOS = {
     enviada_pausada: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
     ativa: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
     erro: 'bg-red-500/15 text-red-700 dark:text-red-300',
+    gerenciador: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
 };
 
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');

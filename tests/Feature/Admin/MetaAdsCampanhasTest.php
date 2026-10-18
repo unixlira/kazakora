@@ -700,4 +700,174 @@ class MetaAdsCampanhasTest extends TestCase
                 ->where('limites.max_videos', 50)
                 ->where('limites.max_conjuntos', 10));
     }
+
+    /**
+     * Árvore de Natal (2026-10-18): app da Meta em modo de desenvolvimento
+     * recusa o criativo. O criativo sai antes da campanha, então a recusa
+     * não deixa campanha nem conjunto vazios na conta, e a mensagem diz o que fazer.
+     */
+    public function test_app_em_desenvolvimento_para_no_criativo_sem_criar_campanha(): void
+    {
+        $chamadas = [];
+        Http::fake(function (HttpRequest $request) use (&$chamadas) {
+            $caminho = Str::after(parse_url($request->url(), PHP_URL_PATH), '/v23.0/');
+            $chamadas[] = $caminho;
+
+            return match (true) {
+                $caminho === 'act_123/advideos' => Http::response(['id' => 'vid1']),
+                str_ends_with($caminho, '/thumbnails') => Http::response(['data' => [['uri' => 'https://scontent.example/c.jpg']]]),
+                $caminho === 'vid1' => Http::response(['status' => ['video_status' => 'ready']]),
+                $caminho === 'act_123/adcreatives' => Http::response(['error' => [
+                    'message' => 'Invalid parameter', 'code' => 100, 'error_subcode' => 1885183,
+                    'error_user_title' => 'App em desenvolvimento', 'error_user_msg' => 'Ele deve estar em modo público.',
+                ]], 400),
+                default => Http::response(['id' => 'x'.Str::random(4)]),
+            };
+        });
+
+        $campanha = $this->campanhaComVideos(1, 30);
+        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ENVIANDO])->save();
+        $job = new EnviarCampanhaMetaAds($campanha->id);
+        for ($i = 0; $i < 5 && $campanha->fresh()->status === MetaAdsCampanha::STATUS_ENVIANDO; $i++) {
+            $job->handle(app(MetaAdsService::class));
+        }
+
+        $campanha->refresh();
+        $this->assertSame(MetaAdsCampanha::STATUS_ERRO, $campanha->status);
+        $this->assertNull($campanha->meta_campaign_id);
+        $this->assertStringContainsString('modo de desenvolvimento', $campanha->ultimo_erro);
+        $this->assertStringContainsString('Ao vivo', $campanha->ultimo_erro);
+        $this->assertNotContains('act_123/campaigns', $chamadas);
+        $this->assertNotContains('act_123/adsets', $chamadas);
+    }
+
+    /**
+     * Reenvio de campanha que o Lira completou à mão no Gerenciador: o
+     * anúncio com o mesmo vídeo já está no conjunto, então é aproveitado.
+     */
+    public function test_reenvio_aproveita_anuncio_feito_no_gerenciador_com_o_mesmo_video(): void
+    {
+        $posts = [];
+        Http::fake(function (HttpRequest $request) use (&$posts) {
+            $caminho = Str::after(parse_url($request->url(), PHP_URL_PATH), '/v23.0/');
+            if ($request->method() === 'POST') {
+                $posts[] = $caminho;
+            }
+
+            return match (true) {
+                $caminho === 'set1/ads' => Http::response(['data' => [
+                    ['id' => 'ad-outro', 'effective_status' => 'ACTIVE', 'creative' => ['id' => 'cri-outro', 'object_story_spec' => ['video_data' => ['video_id' => 'vid-outro']]]],
+                    ['id' => 'ad-manual', 'effective_status' => 'ACTIVE', 'creative' => ['id' => 'cri-manual', 'object_story_spec' => ['video_data' => ['video_id' => 'vid1']]]],
+                ]]),
+                default => Http::response(['error' => ['message' => 'não devia chamar '.$caminho]], 400),
+            };
+        });
+
+        $campanha = $this->campanhaComVideos(1, 30);
+        $campanha->forceFill(['meta_campaign_id' => 'camp1', 'status' => MetaAdsCampanha::STATUS_ENVIANDO])->save();
+        $campanha->conjuntos()->update(['meta_adset_id' => 'set1']);
+        $campanha->videos()->update(['meta_video_id' => 'vid1', 'meta_thumbnail_url' => 'https://scontent.example/c.jpg', 'meta_adset_id' => 'set1']);
+
+        $this->enviarAteTerminar($campanha);
+
+        $video = $campanha->videos()->first();
+        $this->assertSame('ad-manual', $video->meta_ad_id);
+        $this->assertSame('cri-manual', $video->meta_creative_id);
+        $this->assertSame([], $posts, 'Não pode criar criativo nem anúncio repetido.');
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->fresh()->status);
+    }
+
+    /** Como a campanha manual da Árvore: vários textos, UTM, atribuição e melhorias ditas. */
+    public function test_criativo_com_varios_textos_utm_e_conjunto_com_atribuicao(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $admin = $this->admin();
+
+        $id = $this->actingAs($admin)->postJson(self::BASE, $this->dados([
+            'objetivo' => 'OUTCOME_TRAFFIC',
+            'texto_principal' => 'Texto 1',
+            'titulo' => 'Título 1',
+            'descricao' => 'Descrição 1',
+            'textos_alternativos' => [
+                'textos' => ['Texto 2', '', 'Texto 2', 'Texto 3'],
+                'titulos' => ['Título 2'],
+                'descricoes' => [],
+            ],
+        ]))->assertCreated()->json('id');
+
+        $campanha = MetaAdsCampanha::findOrFail($id);
+        $this->assertSame(['textos' => ['Texto 2', 'Texto 3'], 'titulos' => ['Título 2'], 'descricoes' => []], $campanha->textos_alternativos);
+
+        $path = "meta-ads/campanha-{$id}/v0.mp4";
+        Storage::disk('local')->put($path, 'video');
+        $campanha->videos()->create(['conjunto_id' => $campanha->conjuntos()->value('id'), 'ordem' => 0, 'nome_original' => 'arvore.mp4', 'path' => $path, 'tamanho' => 10]);
+
+        $this->enviarAteTerminar($campanha);
+
+        $porCaminho = fn (string $fim) => array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH), $fim)));
+        $criativo = $porCaminho('/adcreatives')[0];
+
+        $this->assertSame(MetaAdsService::URL_TAGS, $criativo['url_tags']);
+        $feed = json_decode($criativo['asset_feed_spec'], true);
+        $this->assertSame([['text' => 'Texto 1'], ['text' => 'Texto 2'], ['text' => 'Texto 3']], $feed['bodies']);
+        $this->assertSame([['text' => 'Título 1'], ['text' => 'Título 2']], $feed['titles']);
+        $this->assertSame([['text' => 'Descrição 1']], $feed['descriptions']);
+        $this->assertSame('DEGREES_OF_FREEDOM', $feed['optimization_type']);
+        $video = json_decode($criativo['object_story_spec'], true)['video_data'];
+        $this->assertArrayNotHasKey('message', $video);
+        $this->assertSame('https://kazakora.com/produtos/parafusadeira', $video['call_to_action']['value']['link']);
+        $melhorias = json_decode($criativo['degrees_of_freedom_spec'], true)['creative_features_spec'];
+        $this->assertSame('OPT_IN', $melhorias['enhance_cta']['enroll_status']);
+
+        $conjunto = $porCaminho('/adsets')[0];
+        $this->assertSame(MetaAdsService::ATRIBUICAO, json_decode($conjunto['attribution_spec'], true));
+        $this->assertSame(['home', 'recent', 'frequently_in'], json_decode($conjunto['targeting'], true)['geo_locations']['location_types']);
+
+        // A campanha só nasce depois do criativo.
+        $ordem = array_map(fn (HttpRequest $r) => Str::after(parse_url($r->url(), PHP_URL_PATH), '/v23.0/'), array_filter($chamadas, fn ($r) => $r->method() === 'POST'));
+        $ordem = array_values($ordem);
+        $this->assertLessThan(array_search('act_123/campaigns', $ordem), array_search('act_123/adcreatives', $ordem));
+    }
+
+    public function test_sem_textos_extras_o_texto_vai_no_proprio_criativo(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $campanha = $this->campanhaComVideos(1, 30);
+
+        $this->enviarAteTerminar($campanha);
+
+        $criativo = array_values(array_filter($chamadas, fn (HttpRequest $r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), '/adcreatives')))[0];
+        $this->assertArrayNotHasKey('asset_feed_spec', $criativo->data());
+        $this->assertSame('Parafusadeira com frete grátis', json_decode($criativo['object_story_spec'], true)['video_data']['message']);
+    }
+
+    public function test_assumida_no_gerenciador_nao_envia_ativa_nem_pausa(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $campanha = $this->campanhaComVideos(1, 30);
+        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ERRO, 'meta_campaign_id' => 'camp1', 'ultimo_erro' => 'Falhou'])->save();
+
+        $rascunho = $this->campanhaComVideos(1, 30);
+        $this->actingAs($admin)->post(self::BASE."/{$rascunho->id}/assumir")->assertSessionHas('error');
+        $this->assertSame(MetaAdsCampanha::STATUS_RASCUNHO, $rascunho->fresh()->status);
+
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/assumir")->assertSessionHas('success');
+        $campanha->refresh();
+        $this->assertSame(MetaAdsCampanha::STATUS_GERENCIADOR, $campanha->status);
+        $this->assertNull($campanha->ultimo_erro);
+
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/enviar")->assertSessionHas('error');
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/pausar")->assertSessionHas('error');
+        Queue::assertNothingPushed();
+
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('campanha.status_rotulo', 'Assumida no Gerenciador')
+                ->where('pode.enviar', false)
+                ->where('pode.assumir', false));
+    }
 }

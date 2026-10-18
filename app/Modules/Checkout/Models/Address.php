@@ -3,12 +3,16 @@
 namespace App\Modules\Checkout\Models;
 
 use App\Models\User;
+use App\Support\NomeCapitalizado;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Address extends Model
 {
+    use NomeCapitalizado;
+
     protected $fillable = [
         'user_id',
         'label',
@@ -51,6 +55,17 @@ class Address extends Model
     public function setStateAttribute(?string $value): void
     {
         $this->attributes['state'] = $value !== null ? strtoupper(trim($value)) : null;
+    }
+
+    /**
+     * Nome de quem recebe também sai capitalizado (2026-10-17): o pedido da
+     * Giovanna saiu "Giovanna lira" porque só o nome da conta passava pelo
+     * NomeCapitalizado, e é este campo que vira orders.shipping_name e o nome
+     * da etiqueta dos Correios.
+     */
+    protected function recipientName(): Attribute
+    {
+        return Attribute::make(set: fn (?string $valor) => static::capitalizarNome($valor));
     }
 
     public function user(): BelongsTo

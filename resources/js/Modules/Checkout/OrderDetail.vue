@@ -4,6 +4,7 @@
 // suporte), nota fiscal, entrega e o chat "Falar com suporte" com a Manuela.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import SuporteChat from '@/Shared/Components/SuporteChat.vue';
+import Modal from '@/Shared/Modal.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
@@ -45,15 +46,43 @@ const chatAberto = ref(false);
 
 // Botão "Cancelar pedido" (2026-10-17): o cliente escolhe o motivo e confirma;
 // o servidor cancela nota, estorna, devolve o estoque e manda o e-mail.
+// Modal (Lira, 2026-10-18): motivos prontos + texto livre; ao enviar, cancela
+// na hora, mostra o sucesso no próprio modal e fecha sozinho. Substitui o
+// pedido de cancelamento pelo chat da Manuela.
 const MOTIVOS = ['Desisti da compra', 'Comprei errado', 'Achei mais barato em outro lugar', 'O prazo de entrega ficou longo', 'Outro motivo'];
 const cancelarAberto = ref(false);
+const cancelouOk = ref(false);
+const cancelarErro = ref(null);
 const cancelarForm = useForm({ motivo: '', detalhe: '' });
+let fecharTimer = null;
+const abrirCancelamento = () => {
+    cancelouOk.value = false;
+    cancelarErro.value = null;
+    cancelarForm.reset();
+    cancelarForm.clearErrors();
+    cancelarAberto.value = true;
+};
+const fecharCancelamento = () => {
+    if (cancelarForm.processing) return;
+    clearTimeout(fecharTimer);
+    cancelarAberto.value = false;
+};
 const confirmarCancelamento = () => {
+    cancelarErro.value = null;
     cancelarForm
         .transform((dados) => ({ motivo: [dados.motivo, dados.detalhe.trim()].filter(Boolean).join(': ') }))
         .post(`/pedidos/${props.pedido.id}/cancelar`, {
             preserveScroll: true,
-            onSuccess: () => { cancelarAberto.value = false; cancelarForm.reset(); },
+            onSuccess: (pagina) => {
+                // O controller volta com flash de erro quando a compra já
+                // não pode ser cancelada: o modal mostra o motivo e fica aberto.
+                if (pagina.props.pedido?.status !== 'cancelled') {
+                    cancelarErro.value = pagina.props.flash?.error ?? 'Não foi possível cancelar agora. Fale com o suporte.';
+                    return;
+                }
+                cancelouOk.value = true;
+                fecharTimer = setTimeout(() => { cancelarAberto.value = false; }, 3000);
+            },
         });
 };
 </script>
@@ -153,28 +182,43 @@ const confirmarCancelamento = () => {
                                 Mudou de ideia? Dá para cancelar enquanto a compra não sai para envio.
                                 <template v-if="pedido.cancelamento.estorno"> O valor pago volta pela mesma forma de pagamento.</template>
                             </p>
-                            <button v-if="!cancelarAberto" type="button" class="mt-3 rounded-full border border-red-600 px-5 py-2 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40" @click="cancelarAberto = true">
+                            <button type="button" class="mt-3 rounded-full border border-red-600 px-5 py-2 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40" @click="abrirCancelamento">
                                 Cancelar pedido
                             </button>
-                            <form v-else class="mt-3 flex flex-col gap-3" @submit.prevent="confirmarCancelamento">
-                                <fieldset class="flex flex-col gap-1.5">
-                                    <legend class="mb-1 text-sm font-semibold">Por que você quer cancelar?</legend>
-                                    <label v-for="opcao in MOTIVOS" :key="opcao" class="flex items-center gap-2 text-sm">
-                                        <input v-model="cancelarForm.motivo" type="radio" name="motivo" :value="opcao" class="accent-red-600">
-                                        {{ opcao }}
-                                    </label>
-                                </fieldset>
-                                <textarea v-model="cancelarForm.detalhe" rows="2" maxlength="200" placeholder="Quer contar mais? (opcional)" aria-label="Detalhe do motivo" class="rounded-xl border border-store-border bg-store-bg px-3 py-2 text-sm"></textarea>
-                                <p v-if="cancelarForm.errors.motivo" class="text-xs text-red-600">{{ cancelarForm.errors.motivo }}</p>
-                                <div class="flex flex-wrap gap-2">
-                                    <button type="submit" :disabled="!cancelarForm.motivo || cancelarForm.processing" class="rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50">
-                                        <i v-if="cancelarForm.processing" class="fas fa-spinner fa-spin mr-1"></i> Confirmar cancelamento
-                                    </button>
-                                    <button type="button" class="rounded-full px-5 py-2 text-sm font-semibold text-store-fg-muted hover:text-store-fg" @click="cancelarAberto = false">Voltar</button>
-                                </div>
-                            </form>
                         </template>
                     </section>
+
+                    <Modal :open="cancelarAberto" max-width="max-w-[480px]" @close="fecharCancelamento">
+                        <div v-if="cancelouOk" class="flex flex-col items-center gap-3 py-4 text-center" role="status" aria-live="polite">
+                            <span class="flex h-14 w-14 items-center justify-center rounded-full bg-[#0FB930]/15 text-3xl text-[#0FB930]"><i class="fas fa-circle-check"></i></span>
+                            <p class="text-lg font-bold">Pedido cancelado</p>
+                            <p class="text-sm text-store-fg-muted">
+                                Enviamos a confirmação para o seu e-mail.
+                                <template v-if="pedido.pagamento"> Se você já pagou, o valor volta pela mesma forma de pagamento.</template>
+                            </p>
+                        </div>
+                        <form v-else class="flex flex-col gap-4" @submit.prevent="confirmarCancelamento">
+                            <h2 class="flex items-center gap-2 pr-8 text-lg font-bold"><i class="fas fa-circle-xmark text-red-600"></i> Cancelar pedido {{ pedido.numero }}</h2>
+                            <fieldset class="flex flex-col gap-2">
+                                <legend class="mb-1 text-sm font-semibold">Por que você quer cancelar?</legend>
+                                <label v-for="opcao in MOTIVOS" :key="opcao" class="flex cursor-pointer items-center gap-2 rounded-xl border border-store-border px-3 py-2 text-sm has-[:checked]:border-red-600">
+                                    <input v-model="cancelarForm.motivo" type="radio" name="motivo" :value="opcao" class="accent-red-600">
+                                    {{ opcao }}
+                                </label>
+                            </fieldset>
+                            <label class="flex flex-col gap-1 text-sm font-semibold">
+                                Quer contar mais? (opcional)
+                                <textarea v-model="cancelarForm.detalhe" rows="3" maxlength="200" placeholder="Escreva aqui o motivo, se quiser" class="rounded-xl border border-store-border bg-store-bg px-3 py-2 text-sm font-normal"></textarea>
+                            </label>
+                            <p v-if="cancelarForm.errors.motivo || cancelarErro" class="text-sm text-red-600">{{ cancelarForm.errors.motivo || cancelarErro }}</p>
+                            <div class="flex flex-wrap justify-end gap-2">
+                                <button type="button" class="rounded-full px-5 py-2 text-sm font-semibold text-store-fg-muted hover:text-store-fg" :disabled="cancelarForm.processing" @click="fecharCancelamento">Voltar</button>
+                                <button type="submit" :disabled="!cancelarForm.motivo || cancelarForm.processing" class="rounded-full bg-red-600 px-5 py-2 text-sm font-bold text-white hover:brightness-95 disabled:opacity-50">
+                                    <i v-if="cancelarForm.processing" class="fas fa-spinner fa-spin mr-1"></i> Enviar
+                                </button>
+                            </div>
+                        </form>
+                    </Modal>
                 </div>
 
                 <aside class="flex flex-col gap-4">

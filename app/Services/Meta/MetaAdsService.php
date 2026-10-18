@@ -3,6 +3,7 @@
 namespace App\Services\Meta;
 
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
+use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
 use App\Support\PixelMeta;
 use Illuminate\Http\Client\ConnectionException;
@@ -15,13 +16,17 @@ use Illuminate\Support\Facades\Storage;
 /**
  * Meta ADS (2026-10-13): envio de campanhas pela Marketing API.
  *
- * Estrutura na Meta, igual ao Gerenciador (Campanha > Conjunto > Anúncios):
- * - conjunto único (2026-10-18): um conjunto com o orçamento inteiro e
- *   todos os anúncios dentro; a Meta leva a verba para o que rende mais.
- * - por anúncio: um conjunto por anúncio com a sua parte do orçamento
- *   (divisão igual, pedido do Lira para comparar vídeos).
- * Cada anúncio tem a sua mídia (vídeo ou imagem), criativo e texto próprio
- * (ou o padrão da campanha).
+ * Estrutura na Meta, igual ao Gerenciador (2026-10-18): Campanha > vários
+ * conjuntos (MetaAdsConjunto, com nome e público próprio ou o da campanha)
+ * > vários anúncios em cada. Orçamento:
+ * - da campanha (Advantage campaign budget, padrão): daily_budget e
+ *   bid_strategy vão na campanha e a Meta distribui entre os conjuntos;
+ * - por conjunto: cada ad set com o seu daily_budget e a campanha com
+ *   is_adset_budget_sharing_enabled=false (obrigatório desde a v24).
+ * A Meta não aceita os dois ao mesmo tempo. Cada anúncio tem a sua mídia
+ * (vídeo ou imagem), criativo e texto próprio (ou o padrão da campanha).
+ * Criação em chamadas sequenciais (não batch): cada id é gravado assim que
+ * sai, e o reenvio continua do ponto que falhou.
  *
  * Regras que não podem quebrar:
  * - Tudo é criado PAUSADO (campanha, conjuntos e anúncios). Ativar é outro
@@ -95,18 +100,31 @@ class MetaAdsService
             $problemas[] = 'Objetivo inválido.';
         }
 
-        $conjuntos = $campanha->quantidadeDeConjuntos();
-        if ($conjuntos === 0) {
+        $campanha->loadMissing(['conjuntos', 'videos']);
+        $real = fn (float $valor) => number_format($valor, 2, ',', '.');
+        $comAnuncio = $campanha->conjuntos->filter(fn (MetaAdsConjunto $c) => $campanha->videos->contains('conjunto_id', $c->id));
+
+        if ($campanha->videos->isEmpty()) {
             $problemas[] = 'Envie pelo menos um vídeo ou imagem.';
-        } elseif ((float) $campanha->orcamento_diario / $conjuntos < MetaAdsCampanha::MINIMO_POR_VIDEO) {
-            $problemas[] = $conjuntos === 1
-                ? sprintf('Orçamento baixo: o mínimo é R$ %s por dia.', number_format(MetaAdsCampanha::MINIMO_POR_VIDEO, 2, ',', '.'))
-                : sprintf(
-                    'Orçamento baixo para %d anúncios em conjuntos separados: cada um precisa de pelo menos R$ %s por dia (total mínimo R$ %s).',
-                    $conjuntos,
-                    number_format(MetaAdsCampanha::MINIMO_POR_VIDEO, 2, ',', '.'),
-                    number_format(MetaAdsCampanha::MINIMO_POR_VIDEO * $conjuntos, 2, ',', '.'),
-                );
+        }
+
+        foreach ($campanha->conjuntos as $conjunto) {
+            if (! $comAnuncio->contains($conjunto)) {
+                $problemas[] = "O conjunto {$conjunto->nome} não tem anúncio. Adicione um ou remova o conjunto.";
+            } elseif (! $campanha->orcamentoDaCampanha() && (float) $conjunto->orcamento_diario < MetaAdsCampanha::MINIMO_POR_CONJUNTO) {
+                $problemas[] = "Orçamento baixo no conjunto {$conjunto->nome}: o mínimo é R$ {$real(MetaAdsCampanha::MINIMO_POR_CONJUNTO)} por dia.";
+            }
+        }
+
+        $quantidade = $comAnuncio->count();
+        if ($campanha->orcamentoDaCampanha() && $quantidade > 0 && (float) $campanha->orcamento_diario < MetaAdsCampanha::MINIMO_POR_CONJUNTO * $quantidade) {
+            $problemas[] = $quantidade === 1
+                ? "Orçamento baixo: o mínimo é R$ {$real(MetaAdsCampanha::MINIMO_POR_CONJUNTO)} por dia."
+                : "Orçamento baixo: com {$quantidade} conjuntos, o mínimo é R$ {$real(MetaAdsCampanha::MINIMO_POR_CONJUNTO * $quantidade)} por dia (R$ {$real(MetaAdsCampanha::MINIMO_POR_CONJUNTO)} por conjunto).";
+        }
+
+        if ($campanha->videos->contains(fn (MetaAdsVideo $v) => ! $campanha->conjuntos->contains('id', $v->conjunto_id))) {
+            $problemas[] = 'Há anúncio fora de conjunto. Abra a edição e salve de novo.';
         }
 
         foreach ($campanha->videos as $video) {
@@ -147,7 +165,7 @@ class MetaAdsService
      */
     public function avancarEnvio(MetaAdsCampanha $campanha): string
     {
-        $campanha->loadMissing('videos');
+        $campanha->loadMissing(['conjuntos', 'videos']);
         $passo = 'campanha';
         $video = null;
 
@@ -195,43 +213,48 @@ class MetaAdsService
                 return self::ENVIO_AGUARDANDO;
             }
 
-            // 3. Conjunto(s), criativo e anúncio. No conjunto único, um
-            // conjunto com o orçamento inteiro recebe todos os anúncios.
-            $video = null;
-            $partes = $campanha->orcamentoPorAnuncio();
-
-            if ($campanha->conjuntoUnico() && blank($campanha->meta_adset_id)) {
-                $passo = 'conjunto de anúncios';
-                $centavos = (int) round((float) $campanha->orcamento_diario * 100);
-                $resposta = $this->post($this->conta().'/adsets', $this->payloadConjunto($campanha, 'conjunto', $centavos));
-                $campanha->forceFill(['meta_adset_id' => (string) $resposta['id']])->save();
-            }
-
-            foreach ($campanha->videos->values() as $i => $video) {
-                $passo = "conjunto de anúncios do {$this->rotuloDoAnuncio($video)}";
-                if (blank($video->meta_adset_id)) {
-                    $video->forceFill(['orcamento_diario' => $partes[$i] / 100])->save();
-                    $conjunto = $campanha->conjuntoUnico()
-                        ? $campanha->meta_adset_id
-                        : (string) $this->post($this->conta().'/adsets', $this->payloadConjunto($campanha, $this->rotuloDoAnuncio($video), $partes[$i]))['id'];
-                    $video->forceFill(['meta_adset_id' => $conjunto])->save();
+            // 3. Cada conjunto e, dentro dele, criativo e anúncio de cada mídia.
+            foreach ($campanha->conjuntos as $conjunto) {
+                $anuncios = $campanha->videos->where('conjunto_id', $conjunto->id);
+                if ($anuncios->isEmpty()) {
+                    continue;
                 }
 
-                $passo = "criativo do {$this->rotuloDoAnuncio($video)}";
-                if (blank($video->meta_creative_id)) {
-                    $resposta = $this->post($this->conta().'/adcreatives', $this->payloadCriativo($campanha, $video));
-                    $video->forceFill(['meta_creative_id' => (string) $resposta['id']])->save();
+                $video = null;
+                $passo = "conjunto {$conjunto->nome}";
+                if (blank($conjunto->meta_adset_id)) {
+                    $resposta = $this->post($this->conta().'/adsets', $this->payloadConjunto($campanha, $conjunto));
+                    $conjunto->forceFill(['meta_adset_id' => (string) $resposta['id'], 'ultimo_erro' => null])->save();
                 }
 
-                $passo = "{$this->rotuloDoAnuncio($video)}";
-                if (blank($video->meta_ad_id)) {
-                    $resposta = $this->post($this->conta().'/ads', $this->payloadAnuncio($campanha, $video));
-                    $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ultimo_erro' => null])->save();
+                foreach ($anuncios as $video) {
+                    if (blank($video->meta_adset_id)) {
+                        $video->forceFill([
+                            'meta_adset_id' => $conjunto->meta_adset_id,
+                            'orcamento_diario' => $campanha->orcamentoDaCampanha() ? null : $conjunto->orcamento_diario,
+                        ])->save();
+                    }
+
+                    $passo = "criativo do {$this->rotuloDoAnuncio($video)} ({$conjunto->nome})";
+                    if (blank($video->meta_creative_id)) {
+                        $resposta = $this->post($this->conta().'/adcreatives', $this->payloadCriativo($campanha, $video));
+                        $video->forceFill(['meta_creative_id' => (string) $resposta['id']])->save();
+                    }
+
+                    $passo = "{$this->rotuloDoAnuncio($video)} ({$conjunto->nome})";
+                    if (blank($video->meta_ad_id)) {
+                        $resposta = $this->post($this->conta().'/ads', $this->payloadAnuncio($campanha, $video, $conjunto));
+                        $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ultimo_erro' => null])->save();
+                    }
                 }
             }
         } catch (MetaAdsException $erro) {
             $mensagem = "Falhou no passo {$passo}: {$erro->getMessage()}";
-            $video?->forceFill(['ultimo_erro' => mb_substr($erro->getMessage(), 0, 1000)])->save();
+            if ($video) {
+                $video->forceFill(['ultimo_erro' => mb_substr($erro->getMessage(), 0, 1000)])->save();
+            } elseif (isset($conjunto) && str_starts_with($passo, 'conjunto ')) {
+                $conjunto->forceFill(['ultimo_erro' => mb_substr($erro->getMessage(), 0, 1000)])->save();
+            }
             $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ERRO, 'ultimo_erro' => $mensagem])->save();
 
             throw $erro;
@@ -257,11 +280,12 @@ class MetaAdsService
      */
     public function alterarStatus(MetaAdsCampanha $campanha, string $status): void
     {
-        $campanha->loadMissing('videos');
+        $campanha->loadMissing(['conjuntos', 'videos']);
 
-        // No conjunto único todos os anúncios apontam para o mesmo conjunto.
+        // Vários anúncios apontam para o mesmo conjunto: cada id uma vez só.
         $ids = array_values(array_unique(array_merge(
             $campanha->videos->pluck('meta_ad_id')->filter()->all(),
+            $campanha->conjuntos->pluck('meta_adset_id')->filter()->all(),
             $campanha->videos->pluck('meta_adset_id')->filter()->all(),
             [$campanha->meta_campaign_id],
         )));
@@ -369,32 +393,43 @@ class MetaAdsService
     /** @return array<string, mixed> */
     public function payloadCampanha(MetaAdsCampanha $campanha): array
     {
-        return [
+        $payload = [
             'name' => $campanha->nome,
             'objective' => $campanha->objetivo,
             'status' => 'PAUSED',
             'special_ad_categories' => json_encode([]),
-            // Orçamento fica no conjunto, não na campanha: no conjunto único é
-            // o total; por anúncio, é assim que a divisão igual é garantida.
-            'is_adset_budget_sharing_enabled' => 'false',
         ];
+
+        if ($campanha->orcamentoDaCampanha()) {
+            // Advantage campaign budget: a Meta distribui entre os conjuntos.
+            $payload['daily_budget'] = (int) round((float) $campanha->orcamento_diario * 100);
+            $payload['bid_strategy'] = 'LOWEST_COST_WITHOUT_CAP';
+        } else {
+            // Orçamento em cada conjunto; a Meta exige dizer se empresta entre eles.
+            $payload['is_adset_budget_sharing_enabled'] = 'false';
+        }
+
+        return $payload;
     }
 
     /** @return array<string, mixed> */
-    public function payloadConjunto(MetaAdsCampanha $campanha, string $rotulo, int $orcamentoCentavos): array
+    public function payloadConjunto(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto): array
     {
         $payload = [
-            'name' => $campanha->nome.' | '.$rotulo,
+            'name' => $campanha->nome.' | '.$conjunto->nome,
             'campaign_id' => $campanha->meta_campaign_id,
-            'daily_budget' => $orcamentoCentavos,
             'billing_event' => 'IMPRESSIONS',
             'optimization_goal' => self::OTIMIZACAO[$campanha->objetivo],
-            'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP',
             // Sem publisher_platforms = posicionamentos automáticos.
-            'targeting' => json_encode($this->targeting($campanha)),
+            'targeting' => json_encode($this->targeting($campanha, $conjunto)),
             'start_time' => $this->inicioDoConjunto($campanha)->toIso8601String(),
             'status' => 'PAUSED',
         ];
+
+        if (! $campanha->orcamentoDaCampanha()) {
+            $payload['daily_budget'] = (int) round((float) $conjunto->orcamento_diario * 100);
+            $payload['bid_strategy'] = 'LOWEST_COST_WITHOUT_CAP';
+        }
 
         if ($campanha->fim) {
             $payload['end_time'] = Carbon::parse($campanha->fim->toDateString(), self::FUSO)->endOfDay()->toIso8601String();
@@ -415,9 +450,10 @@ class MetaAdsService
     }
 
     /** @return array<string, mixed> */
-    public function targeting(MetaAdsCampanha $campanha): array
+    public function targeting(MetaAdsCampanha $campanha, ?MetaAdsConjunto $conjunto = null): array
     {
-        $local = $campanha->localizacoes ?? [];
+        $publico = ($conjunto ?? new MetaAdsConjunto)->publico($campanha);
+        $local = $publico['localizacoes'];
         $regioes = collect($local['regioes'] ?? [])->map(fn ($r) => ['key' => (string) $r['key']])->values()->all();
         $cidades = collect($local['cidades'] ?? [])->map(function ($c) {
             $cidade = ['key' => (string) $c['key']];
@@ -445,16 +481,16 @@ class MetaAdsService
 
         $targeting = [
             'geo_locations' => $geo,
-            'age_min' => (int) $campanha->idade_min,
-            'age_max' => (int) $campanha->idade_max,
+            'age_min' => $publico['idade_min'],
+            'age_max' => $publico['idade_max'],
             // Público exatamente como montado na tela (sem o Advantage+
             // ampliar idade e gênero por conta própria).
             'targeting_automation' => ['advantage_audience' => 0],
         ];
 
-        if ($campanha->genero === 'masculino') {
+        if ($publico['genero'] === 'masculino') {
             $targeting['genders'] = [1];
-        } elseif ($campanha->genero === 'feminino') {
+        } elseif ($publico['genero'] === 'feminino') {
             $targeting['genders'] = [2];
         }
 
@@ -506,10 +542,10 @@ class MetaAdsService
     }
 
     /** @return array<string, mixed> */
-    public function payloadAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video): array
+    public function payloadAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsConjunto $conjunto): array
     {
         return [
-            'name' => $campanha->nome.' | '.$this->rotuloDoAnuncio($video),
+            'name' => $campanha->nome.' | '.$conjunto->nome.' | '.$this->rotuloDoAnuncio($video),
             'adset_id' => $video->meta_adset_id,
             'creative' => json_encode(['creative_id' => $video->meta_creative_id]),
             'status' => 'PAUSED',

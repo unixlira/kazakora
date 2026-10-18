@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Jobs\EnviarCampanhaMetaAds;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
+use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Services\Meta\MetaAdsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -17,10 +18,10 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * Meta ADS, campanhas de vídeo (2026-10-13): Lira sobe N vídeos e a
- * campanha vai para a Meta com um conjunto de anúncios por vídeo e o
- * orçamento diário dividido igual. Tudo nasce pausado; ativar exige
- * confirmação do gasto.
+ * Meta ADS (2026-10-13; conjuntos em 2026-10-18): Lira monta a campanha
+ * como no Gerenciador, Campanha > vários conjuntos > vários anúncios, e ela
+ * vai para a Meta com o orçamento na campanha ou em cada conjunto. Tudo
+ * nasce pausado; ativar exige confirmação do gasto.
  */
 class MetaAdsCampanhasTest extends TestCase
 {
@@ -69,17 +70,30 @@ class MetaAdsCampanhasTest extends TestCase
         ];
     }
 
-    private function campanhaComVideos(int $quantidade, float $orcamento = 50): MetaAdsCampanha
+    /**
+     * Campanha com N vídeos. Sem $conjuntos, um conjunto por vídeo; com,
+     * os vídeos se repartem entre os conjuntos na ordem.
+     */
+    private function campanhaComVideos(int $quantidade, float $orcamento = 50, ?int $conjuntos = null, string $tipo = MetaAdsCampanha::ORCAMENTO_CAMPANHA): MetaAdsCampanha
     {
-        $campanha = MetaAdsCampanha::create($this->dados(['orcamento_diario' => $orcamento]) + ['status' => MetaAdsCampanha::STATUS_RASCUNHO]);
+        $campanha = MetaAdsCampanha::create($this->dados(['orcamento_diario' => $orcamento, 'orcamento_tipo' => $tipo]) + ['status' => MetaAdsCampanha::STATUS_RASCUNHO]);
+        $conjuntos ??= max($quantidade, 1);
+        $partes = MetaAdsCampanha::dividirOrcamento($orcamento, $conjuntos);
+
+        $criados = collect(range(0, $conjuntos - 1))->map(fn (int $i) => $campanha->conjuntos()->create([
+            'nome' => 'Conjunto '.($i + 1), 'ordem' => $i, 'orcamento_diario' => $partes[$i] / 100,
+        ]));
 
         for ($i = 0; $i < $quantidade; $i++) {
             $path = "meta-ads/campanha-{$campanha->id}/v{$i}.mp4";
             Storage::disk('local')->put($path, 'conteudo-do-video-'.$i);
-            $campanha->videos()->create(['ordem' => $i, 'nome_original' => "video{$i}.mp4", 'path' => $path, 'tamanho' => 1000]);
+            $campanha->videos()->create([
+                'conjunto_id' => $criados[intdiv($i * $conjuntos, max($quantidade, 1))]->id,
+                'ordem' => $i, 'nome_original' => "video{$i}.mp4", 'path' => $path, 'tamanho' => 1000,
+            ]);
         }
 
-        return $campanha->load('videos');
+        return $campanha->load(['conjuntos', 'videos']);
     }
 
     /**
@@ -121,7 +135,7 @@ class MetaAdsCampanhasTest extends TestCase
         $meta = app(MetaAdsService::class);
 
         for ($i = 0; $i < 20; $i++) {
-            if ($meta->avancarEnvio($campanha->fresh('videos')) === MetaAdsService::ENVIO_PRONTO) {
+            if ($meta->avancarEnvio($campanha->fresh(['conjuntos', 'videos'])) === MetaAdsService::ENVIO_PRONTO) {
                 return;
             }
         }
@@ -159,13 +173,16 @@ class MetaAdsCampanhasTest extends TestCase
             Storage::disk('local')->assertExists($video->path);
         }
 
+        // Sem conjuntos na tela, a campanha ganha o "Conjunto 1" com tudo dentro.
+        $this->assertSame(['Conjunto 1'], $campanha->conjuntos()->pluck('nome')->all());
+        $this->assertSame([$campanha->conjuntos()->value('id')], $campanha->videos->pluck('conjunto_id')->unique()->values()->all());
+
         $this->actingAs($admin)->get(self::BASE."/{$id}")
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Admin/MetaAds/Show', false)
                 ->has('videos', 2)
-                ->where('videos.0.orcamento_diario', 25)
-                ->where('videos.1.orcamento_diario', 25));
+                ->has('conjuntos', 1));
     }
 
     public function test_recusa_arquivo_que_nao_e_video(): void
@@ -208,11 +225,11 @@ class MetaAdsCampanhasTest extends TestCase
         Queue::assertPushed(EnviarCampanhaMetaAds::class, fn ($job) => $job->campanhaId === $ok->id);
     }
 
-    public function test_envio_cria_uma_campanha_e_um_conjunto_por_video_com_o_orcamento_dividido_tudo_pausado(): void
+    public function test_orcamento_por_conjunto_cria_cada_conjunto_com_o_seu_valor_tudo_pausado(): void
     {
         $chamadas = [];
         $this->fakeMeta($chamadas);
-        $campanha = $this->campanhaComVideos(3, 50);
+        $campanha = $this->campanhaComVideos(3, 50, null, MetaAdsCampanha::ORCAMENTO_CONJUNTO);
         $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ENVIANDO])->save();
 
         $this->enviarAteTerminar($campanha);
@@ -231,6 +248,7 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertCount(1, $porCaminho('/campaigns'));
         $this->assertSame('PAUSED', $porCaminho('/campaigns')[0]['status']);
         $this->assertSame('false', $porCaminho('/campaigns')[0]['is_adset_budget_sharing_enabled']);
+        $this->assertArrayNotHasKey('daily_budget', $porCaminho('/campaigns')[0]->data());
 
         // Um conjunto por vídeo, cada um com a sua parte em centavos, pausado.
         $conjuntos = $porCaminho('/adsets');
@@ -393,50 +411,54 @@ class MetaAdsCampanhasTest extends TestCase
     }
 
     /**
-     * Pedido do Lira (2026-10-18): 3 árvores de Natal diferentes na mesma
-     * campanha, como no Gerenciador: Campanha > 1 conjunto > 3 anúncios,
-     * cada um com a sua mídia, produto e texto.
+     * Pedido do Lira (2026-10-18): 3 árvores de Natal diferentes no mesmo
+     * conjunto, cada uma com a sua mídia, produto e texto.
      */
-    public function test_conjunto_unico_cria_um_conjunto_com_varios_anuncios_cada_um_com_o_seu_texto(): void
+    public function test_conjunto_com_varios_anuncios_cada_um_com_o_seu_texto(): void
     {
         $chamadas = [];
         $this->fakeMeta($chamadas);
         $campanha = MetaAdsCampanha::create($this->dados([
             'nome' => 'Natal',
-            'estrutura' => MetaAdsCampanha::ESTRUTURA_CONJUNTO_UNICO,
             'orcamento_diario' => 30,
             'texto_principal' => 'Monte o seu Natal',
             'titulo' => null,
         ]) + ['status' => MetaAdsCampanha::STATUS_RASCUNHO]);
+        $conjunto = $campanha->conjuntos()->create(['nome' => 'Árvores', 'ordem' => 0]);
 
         foreach ([['arvore1.jpg', 'imagem', 'Árvore 1,80 m'], ['arvore2.mp4', 'video', 'Árvore 2,10 m'], ['arvore3.png', 'imagem', 'Árvore nevada']] as $i => [$nome, $tipo, $titulo]) {
             $path = "meta-ads/campanha-{$campanha->id}/{$nome}";
             Storage::disk('local')->put($path, 'conteudo-'.$i);
             $campanha->videos()->create([
+                'conjunto_id' => $conjunto->id,
                 'ordem' => $i, 'tipo' => $tipo, 'nome_original' => $nome, 'path' => $path, 'tamanho' => 1000,
                 'titulo' => $titulo, 'link_destino' => "https://kazakora.com/produtos/arvore-{$i}",
                 'texto_principal' => $i === 2 ? 'Árvore nevada com 500 galhos' : null,
             ]);
         }
 
-        $this->assertSame([], app(MetaAdsService::class)->problemasParaEnviar($campanha->fresh('videos')));
+        $this->assertSame([], app(MetaAdsService::class)->problemasParaEnviar($campanha->fresh(['conjuntos', 'videos'])));
 
         $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ENVIANDO])->save();
         $this->enviarAteTerminar($campanha);
 
-        $campanha->refresh()->load('videos');
+        $campanha->refresh()->load(['conjuntos', 'videos']);
         $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->status);
-        $this->assertSame('set1', $campanha->meta_adset_id);
+        $this->assertSame('set1', $campanha->conjuntos[0]->meta_adset_id);
         $this->assertSame(['set1', 'set1', 'set1'], $campanha->videos->pluck('meta_adset_id')->all());
         $this->assertSame(['hash1', null, 'hash2'], $campanha->videos->pluck('meta_image_hash')->all());
 
         $porCaminho = fn (string $fim) => array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH), $fim)));
 
-        // Um conjunto só, com o orçamento inteiro.
+        // Orçamento da campanha (Advantage): verba na campanha, conjunto sem orçamento.
+        $this->assertSame(3000, (int) $porCaminho('/campaigns')[0]['daily_budget']);
+        $this->assertSame('LOWEST_COST_WITHOUT_CAP', $porCaminho('/campaigns')[0]['bid_strategy']);
+        $this->assertArrayNotHasKey('is_adset_budget_sharing_enabled', $porCaminho('/campaigns')[0]->data());
         $conjuntos = $porCaminho('/adsets');
         $this->assertCount(1, $conjuntos);
-        $this->assertSame(3000, (int) $conjuntos[0]['daily_budget']);
-        $this->assertSame('Natal | conjunto', $conjuntos[0]['name']);
+        $this->assertArrayNotHasKey('daily_budget', $conjuntos[0]->data());
+        $this->assertArrayNotHasKey('bid_strategy', $conjuntos[0]->data());
+        $this->assertSame('Natal | Árvores', $conjuntos[0]['name']);
 
         // Imagem: link_data com o hash; vídeo: video_data. Cada um com o seu título e link.
         $specs = array_map(fn ($r) => json_decode($r['object_story_spec'], true), $porCaminho('/adcreatives'));
@@ -461,26 +483,167 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertSame(['ad1', 'ad2', 'ad3', 'set1', 'camp1'], $ordem);
     }
 
-    public function test_anuncio_sem_texto_proprio_nem_padrao_nao_envia(): void
+    /**
+     * Cenário do Lira (2026-10-18): Black November com 3 conjuntos (Árvore
+     * de Natal com 3 anúncios, Ferramentas com 2, Caixa de Ferramentas com
+     * 2), montada pela tela e enviada de uma vez.
+     */
+    public function test_black_november_com_tres_conjuntos_e_sete_anuncios(): void
     {
-        $campanha = $this->campanhaComVideos(2, 30);
-        $campanha->update(['estrutura' => MetaAdsCampanha::ESTRUTURA_CONJUNTO_UNICO, 'titulo' => null]);
-        $campanha->videos[0]->update(['titulo' => 'Árvore 1']);
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $admin = $this->admin();
 
-        $problemas = app(MetaAdsService::class)->problemasParaEnviar($campanha->fresh('videos'));
+        $resposta = $this->actingAs($admin)->postJson(self::BASE, $this->dados([
+            'nome' => 'Black November',
+            'orcamento_diario' => 60,
+            'conjuntos' => [
+                ['chave' => 'a', 'nome' => 'Árvore de Natal', 'publico_proprio' => false],
+                ['chave' => 'b', 'nome' => 'Ferramentas', 'publico_proprio' => true, 'idade_min' => 30, 'idade_max' => 60, 'genero' => 'masculino',
+                    'localizacoes' => ['regioes' => [['key' => '460', 'nome' => 'São Paulo']], 'cidades' => []]],
+                ['chave' => 'c', 'nome' => 'Caixa de Ferramentas', 'publico_proprio' => false],
+            ],
+        ]))->assertCreated();
 
-        $this->assertSame(['Falta o título do anúncio 2 (video1) (ou um título padrão na campanha).'], $problemas);
+        $id = $resposta->json('id');
+        $mapa = $resposta->json('conjuntos');
+        $this->assertSame(['a', 'b', 'c'], array_keys($mapa));
+
+        foreach (['a' => 3, 'b' => 2, 'c' => 2] as $chave => $quantos) {
+            for ($i = 0; $i < $quantos; $i++) {
+                $this->actingAs($admin)
+                    ->post(self::BASE."/{$id}/videos", ['video' => UploadedFile::fake()->create("{$chave}{$i}.mp4", 500, 'video/mp4'), 'conjunto_id' => $mapa[$chave]], ['Accept' => 'application/json'])
+                    ->assertCreated()
+                    ->assertJsonPath('video.conjunto_id', $mapa[$chave]);
+            }
+        }
+
+        $campanha = MetaAdsCampanha::with(['conjuntos', 'videos'])->findOrFail($id);
+        $this->assertSame(['Árvore de Natal', 'Ferramentas', 'Caixa de Ferramentas'], $campanha->conjuntos->pluck('nome')->all());
+        $this->assertSame([3, 2, 2], $campanha->conjuntos->map(fn ($c) => $campanha->videos->where('conjunto_id', $c->id)->count())->all());
+        $this->assertSame([], app(MetaAdsService::class)->problemasParaEnviar($campanha));
+
+        Queue::fake();
+        $this->actingAs($admin)->post(self::BASE."/{$id}/enviar")->assertSessionHas('success');
+        $this->enviarAteTerminar($campanha);
+
+        $campanha->refresh()->load(['conjuntos', 'videos']);
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->status);
+        $this->assertTrue($campanha->envioCompleto());
+
+        $porCaminho = fn (string $fim) => array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH), $fim)));
+        $this->assertCount(1, $porCaminho('/campaigns'));
+        $this->assertSame(6000, (int) $porCaminho('/campaigns')[0]['daily_budget']);
+
+        $conjuntos = $porCaminho('/adsets');
+        $this->assertSame(['Black November | Árvore de Natal', 'Black November | Ferramentas', 'Black November | Caixa de Ferramentas'], array_map(fn ($r) => $r['name'], $conjuntos));
+
+        // Ferramentas com público próprio; os outros com o da campanha.
+        $publicos = array_map(fn ($r) => json_decode($r['targeting'], true), $conjuntos);
+        $this->assertSame([25, 30, 25], array_column($publicos, 'age_min'));
+        $this->assertSame([1], $publicos[1]['genders']);
+        $this->assertSame([['key' => '460']], $publicos[1]['geo_locations']['regions']);
+        $this->assertSame(['BR'], $publicos[0]['geo_locations']['countries']);
+
+        // 7 anúncios, cada um no conjunto certo.
+        $anuncios = $porCaminho('/ads');
+        $this->assertCount(7, $anuncios);
+        $this->assertSame(['set1', 'set1', 'set1', 'set2', 'set2', 'set3', 'set3'], array_map(fn ($r) => $r['adset_id'], $anuncios));
+        $this->assertStringStartsWith('Black November | Ferramentas | anúncio 4', $anuncios[3]['name']);
+
+        // Ativar: 7 anúncios, 3 conjuntos, campanha, cada um uma vez.
+        $chamadas = [];
+        app(MetaAdsService::class)->alterarStatus($campanha, 'ACTIVE');
+        $this->assertCount(11, $chamadas);
     }
 
-    public function test_conjunto_unico_aceita_orcamento_que_nao_daria_para_dividir(): void
+    public function test_salvar_sincroniza_conjuntos_e_texto_dos_anuncios_de_uma_vez(): void
     {
-        $campanha = $this->campanhaComVideos(5, 10);
+        $admin = $this->admin();
+        $campanha = $this->campanhaComVideos(3, 30, 2);
+        [$c1, $c2] = $campanha->conjuntos->all();
+        [$v1, $v2, $v3] = $campanha->videos->all();
+        $this->assertSame([$c1->id, $c1->id, $c2->id], [$v1->conjunto_id, $v2->conjunto_id, $v3->conjunto_id]);
+
+        // Renomeia o 1º, tira o 2º (com o anúncio dele), cria um novo, move o v2 para o novo e tira o v1.
+        $resposta = $this->actingAs($admin)->putJson(self::BASE."/{$campanha->id}", $this->dados([
+            'orcamento_tipo' => MetaAdsCampanha::ORCAMENTO_CONJUNTO,
+            'orcamento_diario' => null,
+            'conjuntos' => [
+                ['id' => $c1->id, 'chave' => (string) $c1->id, 'nome' => 'Árvore de Natal', 'orcamento_diario' => 20],
+                ['chave' => 'novo', 'nome' => 'Ferramentas', 'orcamento_diario' => 15],
+            ],
+            'anuncios' => [
+                ['id' => $v2->id, 'conjunto' => 'novo', 'ordem' => 0, 'titulo' => 'Furadeira'],
+            ],
+        ]))->assertOk();
+
+        $novo = $resposta->json('conjuntos.novo');
+        $campanha->refresh()->load(['conjuntos', 'videos']);
+        $this->assertSame(['Árvore de Natal', 'Ferramentas'], $campanha->conjuntos->pluck('nome')->all());
+        $this->assertSame('35.00', $campanha->orcamento_diario, 'Por conjunto, o total da campanha é a soma.');
+        $this->assertSame([$v2->id], $campanha->videos->pluck('id')->all());
+        $this->assertSame($novo, $campanha->videos[0]->conjunto_id);
+        $this->assertSame('Furadeira', $campanha->videos[0]->titulo);
+        Storage::disk('local')->assertMissing($v1->path);
+        Storage::disk('local')->assertMissing($v3->path);
+        $this->assertNull(MetaAdsConjunto::find($c2->id));
+
+        // Conjunto de outra campanha e orçamento abaixo do mínimo são recusados.
+        $outra = $this->campanhaComVideos(0);
+        $this->actingAs($admin)->putJson(self::BASE."/{$campanha->id}", $this->dados([
+            'conjuntos' => [['id' => $outra->conjuntos[0]->id, 'chave' => 'x', 'nome' => 'Intruso']],
+        ]))->assertStatus(422)->assertJsonValidationErrors('conjuntos.0.id');
+
+        $this->actingAs($admin)->putJson(self::BASE."/{$campanha->id}", $this->dados([
+            'orcamento_tipo' => MetaAdsCampanha::ORCAMENTO_CONJUNTO,
+            'conjuntos' => [['id' => $c1->id, 'chave' => 'a', 'nome' => 'Árvore', 'orcamento_diario' => 3]],
+        ]))->assertStatus(422)->assertJsonValidationErrors('conjuntos.0.orcamento_diario');
+    }
+
+    public function test_duplicar_anuncio_copia_o_arquivo_para_outro_conjunto(): void
+    {
+        $campanha = $this->campanhaComVideos(1, 30, 1);
+        $outro = $campanha->conjuntos()->create(['nome' => 'Ferramentas', 'ordem' => 1]);
+        $original = $campanha->videos[0];
+
+        $copia = $this->actingAs($this->admin())
+            ->postJson(self::BASE."/{$campanha->id}/videos/{$original->id}/duplicar", ['conjunto_id' => $outro->id, 'titulo' => 'Cópia'])
+            ->assertCreated()
+            ->assertJsonPath('video.conjunto_id', $outro->id)
+            ->assertJsonPath('video.criativo.titulo', 'Cópia')
+            ->json('video.id');
+
+        $video = $campanha->videos()->findOrFail($copia);
+        $this->assertNotSame($original->path, $video->path);
+        $this->assertSame(Storage::disk('local')->get($original->path), Storage::disk('local')->get($video->path));
+    }
+
+    public function test_conjunto_sem_anuncio_e_orcamento_baixo_bloqueiam_o_envio(): void
+    {
         $meta = app(MetaAdsService::class);
 
-        $this->assertNotSame([], $meta->problemasParaEnviar($campanha));
+        $campanha = $this->campanhaComVideos(2, 30, 2);
+        $campanha->conjuntos()->create(['nome' => 'Vazio', 'ordem' => 2]);
+        $this->assertSame(['O conjunto Vazio não tem anúncio. Adicione um ou remova o conjunto.'], $meta->problemasParaEnviar($campanha->fresh(['conjuntos', 'videos'])));
 
-        $campanha->update(['estrutura' => MetaAdsCampanha::ESTRUTURA_CONJUNTO_UNICO]);
-        $this->assertSame([], $meta->problemasParaEnviar($campanha->fresh('videos')));
+        // Orçamento da campanha: R$ 6 por conjunto com anúncio.
+        $baixo = $this->campanhaComVideos(3, 15, 3);
+        $this->assertSame(['Orçamento baixo: com 3 conjuntos, o mínimo é R$ 18,00 por dia (R$ 6,00 por conjunto).'], $meta->problemasParaEnviar($baixo));
+
+        // Vários anúncios no mesmo conjunto não multiplicam o mínimo.
+        $this->assertSame([], $meta->problemasParaEnviar($this->campanhaComVideos(5, 10, 1)));
+    }
+
+    public function test_anuncio_sem_texto_proprio_nem_padrao_nao_envia(): void
+    {
+        $campanha = $this->campanhaComVideos(2, 30, 1);
+        $campanha->update(['titulo' => null]);
+        $campanha->videos[0]->update(['titulo' => 'Árvore 1']);
+
+        $problemas = app(MetaAdsService::class)->problemasParaEnviar($campanha->fresh(['conjuntos', 'videos']));
+
+        $this->assertSame(['Falta o título do anúncio 2 (video1) (ou um título padrão na campanha).'], $problemas);
     }
 
     public function test_sobe_imagem_com_produto_e_texto_proprios_e_edita_depois(): void
@@ -533,6 +696,8 @@ class MetaAdsCampanhasTest extends TestCase
 
         $this->actingAs($this->admin())->get(self::BASE.'/nova')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('Admin/MetaAds/Form', false)->where('limites.max_videos', 10));
+            ->assertInertia(fn ($page) => $page->component('Admin/MetaAds/Form', false)
+                ->where('limites.max_videos', 50)
+                ->where('limites.max_conjuntos', 10));
     }
 }

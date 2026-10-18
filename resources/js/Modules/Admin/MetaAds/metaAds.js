@@ -17,16 +17,6 @@ export const STATUS_ESTILOS = {
     erro: 'bg-red-500/15 text-red-700 dark:text-red-300',
 };
 
-// Mesma conta do servidor (MetaAdsCampanha::dividirOrcamento): divisão
-// igual em centavos, o centavo que sobra vai para os primeiros vídeos.
-export const dividirOrcamento = (total, quantidade) => {
-    if (!quantidade) return [];
-    const centavos = Math.round(Number(total || 0) * 100);
-    const parte = Math.floor(centavos / quantidade);
-    const sobra = centavos - parte * quantidade;
-    return Array.from({ length: quantidade }, (_, i) => (parte + (i < sobra ? 1 : 0)) / 100);
-};
-
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
 
 const erroDaResposta = (status, corpo) => {

@@ -13,9 +13,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * para várias peças diferentes (ex.: 3 árvores de Natal) na mesma campanha.
  *
  * Na Meta ele vira mídia da conta (advideos ou adimages), criativo e
- * anúncio, dentro do conjunto da campanha (conjunto único) ou do seu próprio
- * conjunto (estrutura por anúncio). O arquivo fica no disco local (privado)
- * e é apagado junto com o rascunho.
+ * anúncio, dentro do seu conjunto (MetaAdsConjunto). meta_adset_id guarda o
+ * conjunto onde o anúncio foi criado. O arquivo fica no disco local
+ * (privado) e é apagado junto com o rascunho.
  */
 class MetaAdsVideo extends Model
 {
@@ -27,6 +27,7 @@ class MetaAdsVideo extends Model
 
     protected $fillable = [
         'campanha_id',
+        'conjunto_id',
         'ordem',
         'tipo',
         'nome_original',
@@ -66,6 +67,11 @@ class MetaAdsVideo extends Model
     public function campanha(): BelongsTo
     {
         return $this->belongsTo(MetaAdsCampanha::class, 'campanha_id');
+    }
+
+    public function conjunto(): BelongsTo
+    {
+        return $this->belongsTo(MetaAdsConjunto::class, 'conjunto_id');
     }
 
     public function produto(): BelongsTo

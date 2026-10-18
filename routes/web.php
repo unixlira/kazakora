@@ -641,8 +641,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // Estratégia Shopee (2026-10-14): campanhas de ADS com prejuízo, só leitura.
         Route::get('publicidade/shopee', [\App\Modules\Admin\Http\Controllers\PublicidadeShopeeController::class, 'index'])->name('publicidade.shopee');
     });
-    // Meta ADS, campanhas de vídeo (2026-10-13): Lira sobe os vídeos e a
-    // campanha vai para a Meta com o orçamento dividido entre eles. Ver é
+    // Meta ADS (2026-10-13; conjuntos em 2026-10-18): Lira monta a campanha
+    // com vários conjuntos e anúncios e ela vai para a Meta pausada. Ver é
     // financeiro.view; criar, enviar, ativar e pausar (gastam dinheiro)
     // exigem financeiro.create.
     Route::prefix('publicidade/meta-ads/campanhas')->name('publicidade.meta-ads.campanhas.')->group(function () {
@@ -657,6 +657,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/videos', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoStore'])->whereNumber('campanha')->name('videos.armazenar')->middleware('permission:financeiro.create');
         Route::put('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoUpdate'])->whereNumber(['campanha', 'video'])->name('videos.atualizar')->middleware('permission:financeiro.create');
         Route::delete('{campanha}/videos/{video}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDestroy'])->whereNumber(['campanha', 'video'])->name('videos.excluir')->middleware('permission:financeiro.create');
+        Route::post('{campanha}/videos/{video}/duplicar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoDuplicar'])->whereNumber(['campanha', 'video'])->name('videos.duplicar')->middleware('permission:financeiro.create');
         Route::get('{campanha}/videos/{video}/arquivo', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'videoArquivo'])->whereNumber(['campanha', 'video'])->name('videos.arquivo')->middleware('permission:financeiro.view');
         Route::post('{campanha}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'enviar'])->whereNumber('campanha')->name('enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);

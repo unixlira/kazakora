@@ -91,6 +91,21 @@ class PedidoEnviadoWhatsAppTest extends TestCase
         $this->assertSame(['quick_reply', "pedido_enviado:atendente:{$order->id}"], [$c[3]['sub_type'], $c[3]['parameters'][0]['payload']]);
     }
 
+    public function test_data_da_postagem_vem_do_evento_po(): void
+    {
+        $this->rastro([
+            ['codigo' => 'RO', 'tipo' => '01', 'descricao' => 'Objeto em transferência', 'dtHrCriado' => '2026-10-16T08:00:00'],
+            ['codigo' => 'PO', 'tipo' => '01', 'descricao' => 'Objeto postado', 'dtHrCriado' => '2026-10-15T14:35:19'],
+            ['codigo' => 'FC', 'tipo' => '82', 'descricao' => 'Etiqueta emitida', 'dtHrCriado' => '2026-10-14T10:00:00'],
+        ]);
+
+        $r = app(\App\Services\Correios\CorreiosRastroService::class)->consultar('AE000000000BR');
+
+        $this->assertTrue($r['postado']);
+        $this->assertSame('2026-10-15 14:35', $r['postado_em']->format('Y-m-d H:i'));
+        $this->assertFalse($r['entregue']);
+    }
+
     public function test_so_etiqueta_nao_muda_nada_e_entregue_conclui(): void
     {
         $order = $this->comObjeto($this->pedido());

@@ -17,8 +17,10 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -113,4 +115,21 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // Pedido 2026-10-18: visitante deslogado que bate numa página restrita
+        // vai para o login (e volta para a mesma página depois de entrar) em
+        // vez de ver o "403 Proibido". Quem está logado e não tem permissão
+        // continua vendo o 403. Link assinado vencido (InvalidSignatureException)
+        // e chamadas JSON/API ficam como estão.
+        $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
+            if ($e->getStatusCode() !== 403
+                || $e instanceof InvalidSignatureException
+                || $request->expectsJson()
+                || $request->is('api/*')
+                || $request->user() !== null) {
+                return null;
+            }
+
+            return redirect()->guest(route('entrar'));
+        });
     })->create();

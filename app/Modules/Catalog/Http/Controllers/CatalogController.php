@@ -196,7 +196,7 @@ class CatalogController extends Controller
     }
 
     /** Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem. */
-    private static function filtrarBusca($query, string $search): void
+    public static function filtrarBusca($query, string $search): void
     {
         foreach (preg_split('/\s+/', trim($search)) as $palavra) {
             $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';
@@ -209,7 +209,7 @@ class CatalogController extends Controller
     }
 
     /** O "X% OFF" do card (ProductCard.vue): preço final contra o riscado. */
-    private static function descontoDoCard(Product $produto): int
+    public static function descontoDoCard(Product $produto): int
     {
         $antes = $produto->emOferta()
             ? (float) $produto->preco_sem_oferta

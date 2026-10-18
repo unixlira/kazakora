@@ -1,12 +1,13 @@
 # E-mail "Resultado do dia" (faturamento diário)
 
 Regra de negócio do e-mail diário de faturamento e lucro da KazaKora.
-Pedido de 2026-10-10; horário das 23:55 definido pelo Lira em 2026-10-12
-("depois do processamento das 23h50 e suas possíveis retomadas").
+Pedido de 2026-10-10. Em 2026-10-12 o Lira pediu 23:55, depois do
+processamento e das retomadas; em 2026-10-18 confirmou o envio às 23:50, por
+isso as retomadas foram antecipadas para antes dele.
 
 ## Quando e como sai
 
-- **Todo dia às 23:55 (America/Sao_Paulo)**, pelo agendador do Laravel:
+- **Todo dia às 23:50 (America/Sao_Paulo)**, pelo agendador do Laravel:
   `loja:resultado-diario` (`app/Console/Commands/EnviarResultadoDiario.php`).
 - Destinatários: `LOJA_EMAIL_RELATORIOS` (`config('loja.email_relatorios')`,
   vários separados por vírgula).
@@ -69,15 +70,17 @@ O e-mail só presta se as taxas reais do dia já tiverem entrado. Por isso:
 | 23:15 | VPS, `financeiro:vigiar-coletas` | Vigia: avisa se a coleta do TikTok parou ou se a da Amazon falhou. |
 | 23:30 | Cora Box, tarefa "Agente TikTok - 23h30" | Demonstrativo do TikTok Seller do dia, enviado para `POST /api/tiktok/reports/import`; a importação e a taxa real são gravadas na hora, no próprio envio. |
 | 23:35 | VPS, `amazon:taxas-reais --dias=30` (de hora em hora aos 35) | Taxa real da Amazon pela SP-API (Finances). Leva poucos segundos. |
-| 23:50 | VPS, `amazon:taxas-reais --dias=30` (retomada) | Roda de novo **só se** a das 23:35 falhou ou não terminou depois das 23:30. |
-| 23:55 | VPS, `loja:resultado-diario` | E-mail do resultado do dia. |
+| 23:45 | VPS, `amazon:taxas-reais --dias=30` (retomada) | Roda de novo **só se** a das 23:35 falhou ou não terminou depois das 23:30. |
+| 23:50 | VPS, `loja:resultado-diario` | E-mail do resultado do dia. |
 
 Taxa do TikTok que ainda não veio no extrato fica estimada
 (`orders:estimar-taxas-tiktok`, de 10 em 10 min) e aparece com `*` no e-mail.
 
 ## Pendências conhecidas
 
-- O TikTok não tem retomada entre 23:30 e 23:55: se a coleta das 23:30 falhar,
-  a próxima é a das 00:10, e o e-mail sai com a taxa estimada. Retomada
-  proposta: segunda execução na Cora Box às 23:45 (mudar tarefa lá pede OK do
-  Lira).
+- O TikTok não tem retomada entre 23:30 e 23:50: se a coleta das 23:30 falhar,
+  a próxima é a das 00:10, e o e-mail sai com a taxa estimada. Uma segunda
+  tarefa também às 23:30 não adianta: o `agente.mjs` tem trava (uma execução
+  por vez) e a segunda sai na hora. A retomada tem que começar depois que a
+  primeira termina (normalmente 1 a 3 min; até 5 min na coleta completa),
+  ex.: 23:40, e terminar antes das 23:50.

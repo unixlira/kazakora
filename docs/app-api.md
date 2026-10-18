@@ -186,7 +186,7 @@ Entrada de `/checkout/pedido`:
 - Cartão: o app tokeniza o cartão no aparelho com a chave pública do Mercado Pago (`mercadopago_public_key`) e manda só `mp_card_token`. Número do cartão nunca chega ao servidor da KazaKora.
 - `total_esperado` = `total_pix` se Pix, `total` se cartão (com parcelas sem juros como no site). Diferença → 409 com o resumo novo.
 - Resposta de cartão aprovado: `pedido.pago = true`. Recusado: 422 com a mensagem do site.
-- Pedido do app = venda do site: `origin = loja`, `site_origem` nulo, `orders.app_plataforma` = `ios`/`android` (só marcação; margem, painel, KoraSync e e-mail das 23h55 não mudam).
+- Pedido do app = venda do site: `origin = loja`, `site_origem` nulo, `orders.app_plataforma` = `ios`/`android` (só marcação; margem, painel, KoraSync e e-mail das 23h50 não mudam).
 
 ## Limites
 Por IP: catálogo 120/min, CEP 30/min, frete e resumo 60/min, cadastro e login 10/min, esqueci a senha 5/min. Logado: 120/min; pedido 10/min; cancelar 10/min; excluir conta 5/min.

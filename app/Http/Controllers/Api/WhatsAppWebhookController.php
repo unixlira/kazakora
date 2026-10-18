@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\WhatsApp\Jobs\ChamarAtendentePedido;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
@@ -66,6 +67,15 @@ class WhatsAppWebhookController extends Controller
 
                     [$conversation, $stored] = $this->storeInboundMessage($message, $contact, $payload, $settings);
                     $handled++;
+
+                    // Botão "Falar com Atendente" do aviso de pedido enviado.
+                    if (ChamarAtendentePedido::interpretar($message['button']['payload'] ?? null)) {
+                        if ($stored->wasRecentlyCreated) {
+                            ChamarAtendentePedido::dispatch($conversation->id, $message['button']['payload'])->afterResponse();
+                        }
+
+                        continue;
+                    }
 
                     // Botão "Tudo Certo"/"Corrigir Informações" da confirmação
                     // do pedido: resposta fixa, sem passar pela IA.

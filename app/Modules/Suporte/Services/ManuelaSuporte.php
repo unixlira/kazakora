@@ -34,7 +34,7 @@ class ManuelaSuporte
             return;
         }
 
-        $resposta = $this->perguntarAoGemini($chamado);
+        $resposta = $this->cancelamentoPeloBotao($chamado) ?? $this->perguntarAoGemini($chamado);
 
         $chamado->registrar(MensagemSuporte::MANUELA, $resposta['resposta']);
 
@@ -50,6 +50,31 @@ class ManuelaSuporte
 
             $chamado->registrar(MensagemSuporte::SISTEMA, "Chamado {$chamado->numero} aberto. Nossa equipe vai continuar o seu atendimento por aqui.");
         }
+    }
+
+    /**
+     * Cliente pedindo para cancelar compra que ele mesmo pode cancelar
+     * (Lira, 2026-10-18): resposta fixa apontando o botão, sem chamado e
+     * sem depender da IA (sem Gemini, a resposta padrão abria chamado).
+     *
+     * @return array{resposta: string, abrir_chamado: bool, assunto: ?string, prioridade: ?string, resumo: ?string}|null
+     */
+    private function cancelamentoPeloBotao(Chamado $chamado): ?array
+    {
+        $ultima = $chamado->mensagens()->where('autor', MensagemSuporte::CLIENTE)->latest('id')->value('conteudo');
+
+        if (! $chamado->order || ! preg_match('/cancel/iu', (string) $ultima)
+            || app(CancelamentoDoPedido::class)->bloqueioDoCliente($chamado->order) !== null) {
+            return null;
+        }
+
+        return [
+            'resposta' => 'Você cancela na hora, sem esperar a equipe: toque no botão "Cancelar Pedido" no topo desta página, escolha o motivo e confirme. 💛 Se já pagou, o valor volta pela mesma forma de pagamento e a confirmação chega no seu e-mail.',
+            'abrir_chamado' => false,
+            'assunto' => null,
+            'prioridade' => null,
+            'resumo' => null,
+        ];
     }
 
     /** @return array{resposta: string, abrir_chamado: bool, assunto: ?string, prioridade: ?string, resumo: ?string} */
@@ -122,14 +147,14 @@ TXT;
      * Cancelamento sem intermediário (Lira, 2026-10-18): se a compra ainda
      * pode ser cancelada pelo cliente, a Manuela manda usar o botão
      * "Cancelar pedido" da página da compra, que cancela na hora. Chamado só
-     * quando o botão não serve mais (compra já em preparação ou enviada).
+     * quando o botão não serve mais (compra já enviada ou de marketplace).
      */
     private function orientacaoDeCancelamento(?Order $order): string
     {
         $bloqueio = $order ? app(CancelamentoDoPedido::class)->bloqueioDoCliente($order) : 'Nenhum pedido vinculado.';
 
         if ($bloqueio === null) {
-            return 'esta compra ainda pode ser cancelada pelo próprio cliente, na hora e sem atendente. Se ele quiser cancelar, explique que é só clicar no botão "Cancelar pedido" nesta mesma página da compra (logo abaixo deste chat), escolher o motivo e enviar; o cancelamento é imediato e o valor pago volta pela mesma forma de pagamento. NÃO abra chamado para isso.';
+            return 'esta compra ainda pode ser cancelada pelo próprio cliente, na hora e sem atendente. Se ele quiser cancelar, explique que é só clicar no botão "Cancelar Pedido" no topo desta mesma página da compra, escolher o motivo e enviar; o cancelamento é imediato e o valor pago volta pela mesma forma de pagamento. NÃO abra chamado para isso.';
         }
 
         return "o botão de cancelar não está disponível para esta compra ({$bloqueio}). Se o cliente quiser cancelar, não prometa o cancelamento: diga que vai abrir um chamado para a equipe verificar e abra (abrir_chamado = true).";

@@ -117,6 +117,15 @@ const confirmarCancelamento = () => {
                     </div>
                 </div>
 
+                <!-- Cancelar Pedido no topo (Lira, 2026-10-18): visível no
+                     computador e no celular, abre o modal e cancela na hora. -->
+                <button v-if="pedido.cancelamento?.pode" type="button"
+                    class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white shadow hover:bg-red-700 md:w-auto"
+                    @click="abrirCancelamento">
+                    <i class="fas fa-circle-xmark"></i> Cancelar Pedido
+                </button>
+                <p v-else-if="pedido.cancelamento?.bloqueio" class="mt-4 text-xs text-white/60">{{ pedido.cancelamento.bloqueio }}</p>
+
                 <!-- Etapas -->
                 <ol v-if="!cancelado" class="mt-6 grid grid-cols-6 gap-1">
                     <li v-for="(etapa, i) in pedido.etapas" :key="etapa.titulo" class="flex flex-col items-center text-center">
@@ -171,21 +180,6 @@ const confirmarCancelamento = () => {
                             </button>
                         </div>
                         <SuporteChat v-else :order-id="pedido.id" />
-                    </section>
-
-                    <!-- Cancelar pedido -->
-                    <section v-if="pedido.cancelamento" class="rounded-2xl border border-store-border bg-store-bg-raised p-5 shadow-sm">
-                        <h2 class="flex items-center gap-2 font-bold"><i class="fas fa-circle-xmark text-red-600"></i> Cancelar pedido</h2>
-                        <p v-if="!pedido.cancelamento.pode" class="mt-2 text-sm text-store-fg-muted">{{ pedido.cancelamento.bloqueio }}</p>
-                        <template v-else>
-                            <p class="mt-2 text-sm text-store-fg-muted">
-                                Mudou de ideia? Dá para cancelar enquanto a compra não sai para envio.
-                                <template v-if="pedido.cancelamento.estorno"> O valor pago volta pela mesma forma de pagamento.</template>
-                            </p>
-                            <button type="button" class="mt-3 rounded-full border border-red-600 px-5 py-2 text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40" @click="abrirCancelamento">
-                                Cancelar pedido
-                            </button>
-                        </template>
                     </section>
 
                     <Modal :open="cancelarAberto" max-width="max-w-[480px]" @close="fecharCancelamento">

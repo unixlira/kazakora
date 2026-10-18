@@ -16,7 +16,8 @@ use Throwable;
  * Pedido de avaliação depois da entrega (pedido do Lira 2026-10-18). De hora
  * em hora, das 9h às 20h: pedido do kazakora.com entregue há N dias (rastreio
  * dos Correios ou troca manual para "concluído") recebe o e-mail "Avalie sua
- * compra" com um cupom só dele. Um e-mail por pedido (trava na tabela
+ * compra", que leva à página própria de avaliação do pedido; o cupom só sai
+ * lá, depois das estrelas (desconto pela nota). Um e-mail por pedido (trava na tabela
  * avaliacao_solicitacoes); falha de envio volta na rodada seguinte, até 3
  * vezes. Ligado, desligado e editado na tela de Avaliações do admin.
  * Envio direto, sem fila: o homolog não tem worker.
@@ -25,7 +26,7 @@ class SolicitarAvaliacoes extends Command
 {
     protected $signature = 'avaliacoes:solicitar {--simular : só lista, não grava nem envia} {--pedido= : só este pedido, sem esperar os dias nem o horário}';
 
-    protected $description = 'Manda o e-mail "Avalie sua compra" com cupom para os pedidos do site entregues';
+    protected $description = 'Manda o e-mail "Avalie sua compra" (página de avaliação com cupom pela nota) para os pedidos do site entregues';
 
     public function handle(): int
     {
@@ -73,7 +74,7 @@ class SolicitarAvaliacoes extends Command
         // Falha de envio da rodada anterior (SMTP fora do ar etc.).
         if (! $simular && ! $pedido) {
             AvaliacaoSolicitacao::query()
-                ->with('order.user', 'coupon')
+                ->with('order.user')
                 ->where('status', AvaliacaoSolicitacao::STATUS_FALHOU)
                 ->where('tentativas', '<', AvaliacaoSolicitacao::MAX_TENTATIVAS)
                 ->where('updated_at', '<=', now()->subMinutes(50))
@@ -91,7 +92,7 @@ class SolicitarAvaliacoes extends Command
     }
 
     /**
-     * Grava a trava, cria o cupom e manda o e-mail. Devolve o status final,
+     * Grava a trava (com o token da página de avaliação) e manda o e-mail. Devolve o status final,
      * ou null quando outra rodada já pegou o pedido.
      */
     public static function enviar(Order $order, array $config, ?string $motivoParaPular, ?AvaliacaoSolicitacao $solicitacao = null): ?string
@@ -122,12 +123,7 @@ class SolicitarAvaliacoes extends Command
         }
 
         try {
-            $cupom = $solicitacao->coupon ?? SolicitacaoAvaliacao::criarCupom($order, $config);
-            if ($cupom && ! $solicitacao->coupon_id) {
-                $solicitacao->update(['coupon_id' => $cupom->id]);
-            }
-
-            Mail::to($solicitacao->email)->send(new PedidoAvaliacao($order, $produtos, $cupom, $config));
+            Mail::to($solicitacao->email)->send(new PedidoAvaliacao($order, $produtos, $solicitacao->link(), $config));
         } catch (Throwable $erro) {
             $solicitacao->update([
                 'status' => AvaliacaoSolicitacao::STATUS_FALHOU,

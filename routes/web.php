@@ -77,6 +77,7 @@ use App\Modules\Admin\Http\Controllers\VideosEmbalagemController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
+use App\Modules\Catalog\Http\Controllers\AvaliacaoPedidoController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Catalog\Http\Controllers\ReviewController;
@@ -173,10 +174,19 @@ Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
     ->middleware('auth')
     ->name('avaliacoes.armazenar');
-// Botão "Avaliar" do e-mail pós-compra (pedido 2026-10-18).
+// Botão "Avaliar" do e-mail pós-compra do modelo antigo (pedido 2026-10-18).
 Route::get('/avaliar/{product:slug}', [ReviewController::class, 'avaliar'])
     ->middleware('auth')
     ->name('avaliacoes.avaliar');
+// Página própria de avaliação do pedido (e-mail pós-compra, 2026-10-18): sem
+// login, o token do e-mail identifica o pedido; cupom pela nota em estrelas.
+Route::get('/avaliar-pedido/{token}', [AvaliacaoPedidoController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{20,64}')
+    ->name('avaliacoes.pedido');
+Route::post('/avaliar-pedido/{token}', [AvaliacaoPedidoController::class, 'store'])
+    ->where('token', '[A-Za-z0-9]{20,64}')
+    ->middleware('throttle:10,1')
+    ->name('avaliacoes.pedido.enviar');
 
 // "Comprar" na página do produto: finalização só com aquele item (pedido 2026-10-11).
 Route::post('/comprar-agora', [CartController::class, 'comprarAgora'])->name('comprar-agora');

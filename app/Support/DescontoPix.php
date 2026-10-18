@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Catalog\Support\LucroProduto;
 use Illuminate\Support\Collection;
 
 /**
@@ -12,10 +11,6 @@ use Illuminate\Support\Collection;
  * checkout_discount_amount em R$), sem percentual fixo no código. Vazio =
  * sem desconto no Pix. O preço da loja é
  * o valor do cadastro, sem acréscimo.
- *
- * Com custo cadastrado, o desconto nunca passa do que deixa o "Lucro Mínimo"
- * do produto (LucroProduto, pedido 2026-10-18): se o preço ou o custo mudarem
- * depois do cadastro, o Pix desconta menos em vez de dar prejuízo.
  */
 class DescontoPix
 {
@@ -30,23 +25,10 @@ class DescontoPix
             return 0.0;
         }
 
-        $configurado = self::percentualConfigurado($produto, $preco);
-
-        if ($configurado <= 0 || (float) $produto->cost_price <= 0) {
-            return $configurado;
-        }
-
-        $preco ??= (float) $produto->final_price;
-        $maximo = $preco > 0 ? LucroProduto::descontoPixMaximo($produto, $preco - $produto->freteEmbutido()) : null;
-
-        if ($maximo === null || self::desconto($preco, $configurado) <= $maximo) {
-            return $configurado;
-        }
-
-        return round($maximo * 100 / $preco, 4);
+        return self::percentualConfigurado($produto, $preco);
     }
 
-    /** Desconto do Pix em R$ numa unidade vendida a $preco, já limitado pelo Lucro Mínimo. */
+    /** Desconto do Pix em R$ numa unidade vendida a $preco. */
     public static function descontoUnitario(Product $produto, float $preco): float
     {
         return self::desconto($preco, self::percentualDo($produto, $preco));

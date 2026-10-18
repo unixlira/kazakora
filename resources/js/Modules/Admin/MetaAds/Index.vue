@@ -35,7 +35,7 @@ const columns = [
     },
     { accessorKey: 'orcamento_diario', header: 'Orçamento/dia', cell: ({ row }) => formatarReais(row.original.orcamento_diario) },
     { id: 'periodo', header: 'Período', accessorFn: (row) => periodo(row) },
-    { accessorKey: 'videos', header: 'Anúncios' },
+    { id: 'estrutura', header: 'Conjuntos · anúncios', accessorFn: (row) => `${row.conjuntos} · ${row.videos}` },
     { id: 'criada_por', header: 'Criada por', accessorFn: (row) => row.criada_por ?? '-' },
 ];
 </script>
@@ -71,8 +71,8 @@ const columns = [
         </div>
 
         <p class="mb-4 text-sm text-slate-500">
-            Suba os vídeos e a campanha vai para o Facebook e o Instagram com o orçamento dividido igual entre eles
-            (um anúncio por vídeo). Tudo vai para a Meta <strong>pausado</strong>; só começa a gastar quando você clicar em Ativar.
+            Monte a campanha como no Gerenciador da Meta: vários conjuntos e vários anúncios em cada, de uma vez.
+            Tudo vai para a Meta <strong>pausado</strong>; só começa a gastar quando você clicar em Ativar.
         </p>
 
         <DataTable

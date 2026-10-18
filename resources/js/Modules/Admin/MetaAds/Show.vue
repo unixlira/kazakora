@@ -9,6 +9,7 @@ import { formatarData, formatarNumero, formatarReais, STATUS_ESTILOS } from './m
 
 const props = defineProps({
     campanha: { type: Object, required: true },
+    conjuntos: { type: Array, default: () => [] },
     videos: { type: Array, default: () => [] },
     erroDesempenho: { type: String, default: null },
     config: { type: Object, required: true },
@@ -17,7 +18,7 @@ const props = defineProps({
     linkGerenciador: { type: String, default: null },
     chamadas: { type: Object, required: true },
     generos: { type: Object, required: true },
-    estruturas: { type: Object, required: true },
+    orcamentoTipos: { type: Object, required: true },
 });
 
 const { can } = usePermissions();
@@ -40,7 +41,13 @@ const locais = computed(() => {
 const processando = ref(false);
 const opcoes = { preserveScroll: true, onStart: () => { processando.value = true; }, onFinish: () => { processando.value = false; } };
 
-const enviar = () => router.post(`${base.value}/enviar`, {}, opcoes);
+const modalEnviar = ref(false);
+const enviar = () => router.post(`${base.value}/enviar`, {}, { ...opcoes, onSuccess: () => { modalEnviar.value = false; } });
+const totalPrevisto = computed(() => {
+    if (!c.value.fim) return null;
+    const dias = Math.round((new Date(`${c.value.fim}T00:00:00`) - new Date(`${c.value.inicio}T00:00:00`)) / 86400000) + 1;
+    return dias > 0 ? dias * Number(c.value.orcamento_diario) : null;
+});
 
 const modalAtivar = ref(false);
 const confirmoGasto = ref(false);
@@ -64,19 +71,25 @@ let timer = null;
 const acompanhar = (status) => {
     clearInterval(timer);
     if (status === 'enviando') {
-        timer = setInterval(() => router.reload({ only: ['campanha', 'videos', 'pode', 'problemas', 'linkGerenciador'] }), 5000);
+        timer = setInterval(() => router.reload({ only: ['campanha', 'conjuntos', 'videos', 'pode', 'problemas', 'linkGerenciador'] }), 5000);
     }
 };
 watch(() => c.value.status, acompanhar, { immediate: true });
 onBeforeUnmount(() => clearInterval(timer));
 
-const conjuntoUnico = computed(() => c.value.estrutura === 'conjunto_unico');
+const porConjunto = computed(() => c.value.orcamento_tipo === 'conjunto');
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+const estrutura = computed(() => `${plural(props.conjuntos.length, 'conjunto', 'conjuntos')} · ${plural(props.videos.length, 'anúncio', 'anúncios')}`);
 const divisao = computed(() => {
-    if (props.videos.length < 2) return '';
-    return conjuntoUnico.value
-        ? `, num conjunto com ${props.videos.length} anúncios (a Meta distribui)`
-        : `, dividido entre ${props.videos.length} anúncios (${formatarReais(props.videos[0]?.orcamento_diario)} cada)`;
+    if (props.conjuntos.length < 2) return '';
+    return porConjunto.value ? ', somando os conjuntos' : `, a Meta distribui entre ${props.conjuntos.length} conjuntos`;
 });
+const anunciosDe = (cj) => props.videos.filter((v) => v.conjunto_id === cj.id);
+const nomeDoPublico = (p) => {
+    const l = p?.localizacoes ?? {};
+    const lugares = [...(l.regioes ?? []).map((r) => r.nome), ...(l.cidades ?? []).map((x) => x.nome)];
+    return `${p.idade_min} a ${p.idade_max} anos, ${props.generos[p.genero]?.toLowerCase()}, ${lugares.length ? lugares.join(', ') : 'Brasil inteiro'}`;
+};
 const enviados = computed(() => props.videos.filter((v) => v.enviado).length);
 const comResultado = computed(() => props.videos.some((v) => v.desempenho));
 const roas = (d) => (d && d.gasto > 0 && d.vendas > 0 ? `${(d.vendas / d.gasto).toFixed(2).replace('.', ',')}x` : '-');
@@ -105,7 +118,7 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
                 </Link>
                 <button v-if="pode.enviar && can('financeiro.create')" type="button" :disabled="processando || problemas.length > 0"
-                    :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="enviar">
+                    :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="c.status === 'erro' ? enviar() : (modalEnviar = true)">
                     <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i>
                     {{ c.status === 'erro' ? 'Tentar enviar de novo' : 'Enviar para a Meta (pausada)' }}
                 </button>
@@ -137,7 +150,7 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
         </div>
         <div v-if="c.status === 'enviando'" class="mb-4 flex items-center gap-3 rounded-xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900" role="status" aria-live="polite">
             <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-            <span>Enviando para a Meta: {{ enviados }} de {{ videos.length }} anúncio(s) prontos. A Meta leva alguns minutos para processar cada vídeo. Pode sair desta tela.</span>
+            <span>Enviando para a Meta: {{ enviados }} de {{ videos.length }} anúncio(s) criados. A Meta leva alguns minutos para processar cada vídeo. Pode sair desta tela.</span>
         </div>
         <div v-if="c.status === 'enviada_pausada'" class="mb-4 rounded-xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900" role="status">
             Campanha na Meta e <strong>pausada</strong>. Não gasta nada até você clicar em Ativar.
@@ -150,9 +163,9 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 <dl class="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                     <div><dt class="text-slate-500">Objetivo</dt><dd class="font-medium">{{ c.objetivo_rotulo }}</dd></div>
                     <div><dt class="text-slate-500">Orçamento por dia</dt><dd class="font-medium">{{ orcamento }}<span class="font-normal text-slate-500">{{ divisao }}</span></dd></div>
-                    <div><dt class="text-slate-500">Estrutura</dt><dd class="font-medium">{{ estruturas[c.estrutura] ?? c.estrutura }}</dd></div>
+                    <div><dt class="text-slate-500">Estrutura</dt><dd class="font-medium">{{ estrutura }} <span class="font-normal text-slate-500">({{ orcamentoTipos[c.orcamento_tipo] ?? c.orcamento_tipo }})</span></dd></div>
                     <div><dt class="text-slate-500">Período</dt><dd class="font-medium">{{ periodo }}</dd></div>
-                    <div><dt class="text-slate-500">Público</dt><dd class="font-medium">{{ c.idade_min }} a {{ c.idade_max }} anos, {{ generos[c.genero]?.toLowerCase() }}</dd></div>
+                    <div><dt class="text-slate-500">Público padrão</dt><dd class="font-medium">{{ c.idade_min }} a {{ c.idade_max }} anos, {{ generos[c.genero]?.toLowerCase() }}</dd></div>
                     <div><dt class="text-slate-500">Onde</dt><dd class="font-medium">{{ locais }}</dd></div>
                     <div class="sm:col-span-2"><dt class="text-slate-500">Destino padrão</dt>
                         <dd class="break-all font-medium"><a :href="c.link_destino" target="_blank" rel="noopener" class="text-primary hover:underline">{{ c.link_destino }}</a></dd></div>
@@ -180,18 +193,27 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             </aside>
         </div>
 
-        <section class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" aria-labelledby="videos-titulo">
+        <p v-if="erroDesempenho" class="mt-6 text-xs text-amber-700">Não deu para buscar o resultado na Meta agora: {{ erroDesempenho }}</p>
+        <p v-if="!videos.length" class="mt-6 text-sm text-slate-500">
+            Nenhum anúncio ainda.
+            <Link v-if="pode.editar" :href="`${base}/editar`" class="font-medium text-primary hover:underline">Adicionar vídeos ou imagens</Link>
+        </p>
+
+        <section v-for="cj in conjuntos" :key="cj.id" class="mt-6 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" :aria-label="`Conjunto ${cj.nome}`">
             <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="videos-titulo" class="text-lg font-semibold">Anúncios ({{ videos.length }})</h2>
-                <span class="text-xs text-slate-500">{{ conjuntoUnico ? 'Todos no mesmo conjunto, dividindo o orçamento.' : 'Cada anúncio no seu conjunto, com a sua parte do orçamento.' }}</span>
+                <h2 class="text-lg font-semibold">
+                    {{ cj.nome }}
+                    <span class="text-sm font-normal text-slate-500">· {{ plural(anunciosDe(cj).length, 'anúncio', 'anúncios') }}<template v-if="porConjunto"> · {{ formatarReais(cj.orcamento_diario) }}/dia</template></span>
+                </h2>
+                <span class="text-xs text-slate-500">
+                    <template v-if="cj.publico_proprio">Público próprio: </template>{{ nomeDoPublico(cj.publico) }}
+                    <template v-if="cj.meta_adset_id"> · <i class="fas fa-circle-check text-emerald-600" aria-hidden="true"></i> conjunto criado na Meta</template>
+                </span>
             </div>
-            <p v-if="!videos.length" class="text-sm text-slate-500">
-                Nenhum anúncio ainda.
-                <Link v-if="pode.editar" :href="`${base}/editar`" class="font-medium text-primary hover:underline">Adicionar vídeos ou imagens</Link>
-            </p>
-            <p v-if="erroDesempenho" class="mb-3 text-xs text-amber-700">Não deu para buscar o resultado na Meta agora: {{ erroDesempenho }}</p>
+            <p v-if="cj.ultimo_erro" class="mb-3 text-xs text-red-600">{{ cj.ultimo_erro }}</p>
+            <p v-if="anunciosDe(cj).length > 6" class="mb-3 text-xs text-amber-700">Mais de 6 anúncios no mesmo conjunto dividem demais a entrega.</p>
             <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <li v-for="v in videos" :key="v.id" class="overflow-hidden rounded-lg border" :class="v.ultimo_erro ? 'border-red-400' : 'border-[var(--surface-border)]'">
+                <li v-for="v in anunciosDe(cj)" :key="v.id" class="overflow-hidden rounded-lg border" :class="v.ultimo_erro ? 'border-red-400' : 'border-[var(--surface-border)]'">
                     <img v-if="v.tipo === 'imagem'" :src="v.url" :alt="`Imagem do anúncio ${v.ordem + 1}`" class="aspect-[4/5] w-full bg-black object-contain" loading="lazy">
                     <video v-else :src="v.url" :poster="v.capa ?? undefined" class="aspect-[9/16] w-full bg-black object-contain" preload="none" controls muted></video>
                     <div class="space-y-1 p-3 text-sm">
@@ -199,7 +221,7 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                         <p class="text-sm font-medium">{{ v.criativo?.titulo || 'Sem título' }}</p>
                         <p v-if="v.criativo?.texto" class="line-clamp-3 whitespace-pre-line text-xs text-slate-600 dark:text-slate-300">{{ v.criativo.texto }}</p>
                         <a v-if="v.criativo?.link" :href="v.criativo.link" target="_blank" rel="noopener" class="block truncate text-xs text-primary hover:underline">{{ v.criativo.link }}</a>
-                        <p class="text-xs text-slate-500"><template v-if="!conjuntoUnico">{{ formatarReais(v.orcamento_diario) }}/dia · </template>{{ v.tamanho_mb }} MB<template v-if="v.duracao_segundos"> · {{ Math.round(v.duracao_segundos) }} s</template></p>
+                        <p class="text-xs text-slate-500">{{ v.tamanho_mb }} MB<template v-if="v.duracao_segundos"> · {{ Math.round(v.duracao_segundos) }} s</template></p>
                         <p class="flex items-center gap-1.5 text-xs" :class="v.enviado ? 'text-emerald-700 dark:text-emerald-300' : (v.ultimo_erro ? 'text-red-600' : 'text-slate-500')">
                             <i :class="v.enviado ? 'fas fa-circle-check' : (v.ultimo_erro ? 'fas fa-circle-exclamation' : 'far fa-clock')" aria-hidden="true"></i>
                             {{ v.etapa }}
@@ -215,10 +237,21 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     </div>
                 </li>
             </ul>
-            <p v-if="comResultado" class="mt-3 text-xs text-slate-500">
-                Resultado que a própria Meta atribui ao anúncio, desde o início. O lucro de verdade fica em Resultado e margem.
-            </p>
+            <p v-if="!anunciosDe(cj).length" class="text-sm text-amber-700">Este conjunto não tem anúncio.</p>
         </section>
+        <p v-if="comResultado" class="mt-3 text-xs text-slate-500">
+            Resultado que a própria Meta atribui ao anúncio, desde o início. O lucro de verdade fica em Resultado e margem.
+        </p>
+
+        <ConfirmModal :open="modalEnviar" title="Enviar para a Meta pausado" confirm-label="Criar pausado na Meta" cancel-label="Voltar"
+            :loading="processando" @close="modalEnviar = false" @confirm="enviar">
+            <p class="text-sm">
+                Vamos criar 1 campanha, {{ estrutura.replace(' · ', ' e ') }}, tudo pausado. Nada é gasto até você ativar.
+            </p>
+            <p class="mt-2 text-sm text-slate-500">
+                Depois de ativar, o gasto pode chegar a {{ orcamento }} por dia<template v-if="totalPrevisto !== null">, até {{ formatarReais(totalPrevisto) }} no total</template>.
+            </p>
+        </ConfirmModal>
 
         <ConfirmModal :open="modalAtivar" title="Ativar campanha na Meta?" confirm-label="Ativar e começar a gastar"
             :loading="processando" :confirm-disabled="!confirmoGasto" @close="modalAtivar = false" @confirm="ativar">

@@ -2,6 +2,7 @@
 
 namespace App\Modules\FerraKora\Models;
 
+use App\Support\NomeCapitalizado;
 use App\Modules\Checkout\Models\Order;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,6 +16,8 @@ use Illuminate\Validation\ValidationException;
  */
 class FerraKoraCliente extends Model
 {
+    use NomeCapitalizado;
+
     protected $table = 'ferrakora_clientes';
 
     protected $fillable = ['name', 'email', 'cpf', 'phone', 'birth_date', 'avatar_path', 'password', 'senha_definida'];

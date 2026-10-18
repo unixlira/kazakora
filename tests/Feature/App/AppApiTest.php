@@ -31,7 +31,6 @@ class AppApiTest extends TestCase
     {
         parent::setUp();
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
-        config(['loja.desconto_pix' => 5]);
         Mail::fake();
         Bus::fake();
 

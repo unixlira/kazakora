@@ -41,7 +41,7 @@ class AplicarAcrescimoPix extends Command
         $fator = DescontoPix::fator();
         $produtos = DB::table('products')->select('id', 'sku', 'price', 'discount_amount')->orderBy('id')->get();
 
-        $this->info(sprintf('%d produto(s) vão subir %s%% no preço da loja.', $produtos->count(), DescontoPix::percentual()));
+        $this->info(sprintf('%d produto(s) vão subir %s%% no preço da loja.', $produtos->count(), DescontoPix::acrescimo()));
 
         foreach ($produtos->take(5) as $p) {
             $this->line(sprintf('  %s: %s → %s', $p->sku, number_format((float) $p->price, 2, ',', '.'), number_format(round((float) $p->price * $fator, 2), 2, ',', '.')));

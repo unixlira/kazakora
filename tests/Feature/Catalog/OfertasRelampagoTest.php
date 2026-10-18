@@ -33,7 +33,7 @@ class OfertasRelampagoTest extends TestCase
     {
         parent::setUp();
         // Preço sem frete embutido: a conta fica só no anúncio.
-        config(['frete_embutido.ativo' => false, 'loja.desconto_pix' => 5]);
+        config(['frete_embutido.ativo' => false]);
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
         $this->travelTo(now()->setTime(12, 0));
 

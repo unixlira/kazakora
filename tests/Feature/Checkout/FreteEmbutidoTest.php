@@ -241,7 +241,7 @@ class FreteEmbutidoTest extends TestCase
         $order = Order::firstOrFail();
         $this->assertEquals(360.0, (float) $order->subtotal);
         $this->assertEquals(40.0, (float) $order->desconto_plataforma_amount);
-        $pix = round((360 - 40) * \App\Support\DescontoPix::percentual() / 100, 2);
+        $pix = round((360 - 40) * 5 / 100, 2);
         $this->assertEquals(round(320 - $pix, 2), (float) $order->total);
         $this->assertEquals(round(40 + $pix, 2), (float) $order->discount_amount);
     }

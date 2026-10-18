@@ -72,7 +72,7 @@ class OfertasDoDiaTest extends TestCase
         $this->assertSame(95.0, OfertaDoDia::query()->where('product_id', $semDesconto->id)->value('preco_oferta'));
     }
 
-    public function test_cupom_nao_desconta_produto_em_oferta_e_home_mostra_a_secao(): void
+    public function test_cupom_nao_desconta_produto_em_oferta_e_home_nao_mostra_na_secao(): void
     {
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);
         config(['ofertas.completar_com_margem' => false]);
@@ -87,9 +87,9 @@ class OfertasDoDiaTest extends TestCase
         $this->post('/carrinho', ['product_id' => $normal->id, 'quantity' => 1]);
         $this->postJson('/finalizacao/cupom', ['code' => 'dez'])->assertOk()->assertJson(['discount_amount' => 10]);
 
+        // Desde 2026-10-18 a seção da home é só de Oferta Relâmpago.
         $this->get('/')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('vitrine.ofertas.0.id', $emOferta->id)
-            ->where('vitrine.ofertas.0.final_price', 130)
+            ->where('vitrine.ofertas', [])
             ->where('products', null));
     }
 

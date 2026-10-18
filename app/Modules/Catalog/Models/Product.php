@@ -328,6 +328,7 @@ class Product extends Model
                 'price',
                 'discount_percentage',
                 'discount_amount',
+                'checkout_discount_percentage',
                 'stock',
                 'created_at',
             ])

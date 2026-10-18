@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
@@ -35,6 +35,7 @@ const channelBadge = {
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
     amazon: { color: 'shipped', label: 'Amazon' },
+    manual: { color: 'purple', label: 'Cadastro manual' },
 };
 
 const originLabel = (review) => (review.channel ? (channelBadge[review.channel]?.label ?? review.channel) : 'KazaKora');
@@ -77,9 +78,9 @@ const columns = [
     },
     {
         id: 'images',
-        header: 'Fotos',
+        header: 'Fotos/vídeos',
         accessorFn: (row) => row.images_count ?? 0,
-        cell: ({ row }) => (row.original.images_count ? `${row.original.images_count} foto(s)` : '—'),
+        cell: ({ row }) => (row.original.images_count ? `${row.original.images_count} mídia(s)` : '—'),
     },
     {
         id: 'origin',
@@ -117,9 +118,15 @@ const columns = [
     <Head title="Avaliações" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Avaliações</h1>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-2xl font-bold">Avaliações</h1>
+            <Link href="/admin/avaliacoes/controle"
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                <i class="fas fa-plus mr-1"></i> Cadastro e controle
+            </Link>
+        </div>
         <p class="mb-4 text-sm text-slate-500">
-            Avaliações reais dos clientes no site e importadas automaticamente dos marketplaces conectados (nota, comentário, fotos e nome do comprador).
+            Avaliações reais dos clientes no site, importadas automaticamente dos marketplaces conectados e cadastradas à mão (nota, comentário, fotos, vídeos e nome do comprador).
         </p>
 
         <div class="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">

@@ -308,6 +308,9 @@ Schedule::command('marketplace:release-scheduled-mercadolivre')
 // Roda a cada 4 minutos porque resposta pública atrasada prejudica a loja;
 // falhas ficam registradas no banco, em log PT-BR e notificam administradores.
 Schedule::command('reviews:sync')->cron('*/4 * * * *');
+// Avaliações › Cadastro e controle (2026-10-18): contagem real dos anúncios
+// da Shopee e do ML, só leitura, uma vez por dia.
+Schedule::command('avaliacoes:contar-canais')->dailyAt('06:15')->withoutOverlapping(30);
 Schedule::command('video-downloads:clean')->hourly();
 // Fechamento fiscal do mês anterior por e-mail, pro contador (pedido
 // 2026-10-09: "todo primeiro dia após o final do mês quero o email").

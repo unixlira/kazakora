@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Review extends Model
 {
+    /** Cadastrada à mão no admin (Avaliações › Cadastro e controle, 2026-10-18). */
+    public const CHANNEL_MANUAL = 'manual';
+
     protected $fillable = [
         'user_id',
         'product_id',

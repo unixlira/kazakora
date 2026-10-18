@@ -10,7 +10,6 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductQuantityDiscount;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Marketplace\Models\ProductChannelListing;
-use App\Support\DescontoPix;
 use App\Support\PaymentGateway;
 use App\Support\SiteAtual;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -138,7 +137,7 @@ class OfertasRelampagoTest extends TestCase
         app(SiteAtual::class)->definir(SiteAtual::FERRAKORA);
 
         $listing = new ProductChannelListing(['product_id' => $this->pai->id, 'channel' => 'mercado_livre']);
-        $this->assertSame((float) DescontoPix::semAcrescimo(100.0), $listing->precoDeVenda($this->pai->fresh()));
+        $this->assertSame(100.0, $listing->precoDeVenda($this->pai->fresh()));
     }
 
     public function test_admin_cria_oferta_e_recusa_sobreposicao(): void

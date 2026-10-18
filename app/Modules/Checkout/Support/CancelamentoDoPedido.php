@@ -60,7 +60,7 @@ class CancelamentoDoPedido
     /**
      * Cancela pelo botão do admin.
      *
-     * @return array{ok: bool, erro: ?string, avisos: list<string>}
+     * @return array{ok: bool, erro: ?string, avisos: list<string>, etapas: list<array{etapa: string, ok: bool, texto: string}>}
      */
     public function cancelar(Order $order, string $motivo, ?int $usuarioId): array
     {
@@ -95,9 +95,7 @@ class CancelamentoDoPedido
             $order->user->notify(new OrderStatusUpdated($order));
         }
 
-        $avisos = $this->efeitos($order, $statusAnterior);
-
-        return ['ok' => true, 'erro' => null, 'avisos' => $avisos];
+        return ['ok' => true, 'erro' => null] + $this->executar($order, $statusAnterior);
     }
 
     /**
@@ -109,30 +107,75 @@ class CancelamentoDoPedido
      */
     public function efeitos(Order $order, string $statusAnterior): array
     {
-        $avisos = [];
+        return $this->executar($order, $statusAnterior)['avisos'];
+    }
 
+    /**
+     * Mesmo que efeitos(), com o resultado de cada etapa para o modal do
+     * botão "Cancelar pedido" (2026-10-17, pedido #3205: o Lira só via um
+     * aviso solto e não sabia o que tinha dado certo).
+     *
+     * @return array{avisos: list<string>, etapas: list<array{etapa: string, ok: bool, texto: string}>}
+     */
+    private function executar(Order $order, string $statusAnterior): array
+    {
         $this->tirarEtiquetasDaFila($order);
 
-        if ($avisoDaNota = $this->cancelarNotaSeAutorizada($order)) {
-            $avisos[] = $avisoDaNota;
-        }
-
-        // Sem gate por status anterior: refundOrder() só age em Payment
-        // já capturado/autorizado (nunca existe nenhum pra um pedido que
-        // nunca chegou a ser cobrado), então chamar sempre é seguro.
-        foreach ($this->finalizer->refundOrder($order) as $erroDoEstorno) {
-            Log::error('stripe.refund.order_cancel_failed', ['order_id' => $order->id, 'message' => $erroDoEstorno]);
-            $avisos[] = "Reembolso: {$erroDoEstorno}";
-        }
+        $etapas = [$this->cancelarNotaSeAutorizada($order), $this->estornar($order)];
 
         // Só devolve estoque se o pedido nunca chegou a ser enviado —
         // se já saiu (shipped/completed), o produto saiu de verdade e
         // devolver aqui criaria estoque fantasma.
-        if (! $this->jaSaiu($statusAnterior)) {
+        if ($this->jaSaiu($statusAnterior)) {
+            $etapas[] = ['etapa' => 'Estoque', 'ok' => true, 'texto' => 'Pedido já tinha saído: o estoque não volta (registre a devolução quando o produto chegar).'];
+        } else {
+            $jaDevolvido = (bool) $order->stock_restored_at;
             $this->finalizer->restoreStockIfNeeded($order, 'Pedido cancelado pelo admin');
+            $etapas[] = ['etapa' => 'Estoque', 'ok' => true, 'texto' => $jaDevolvido ? 'O estoque já tinha sido devolvido antes.' : 'Estoque devolvido.'];
         }
 
-        return $avisos;
+        $etapas[] = ['etapa' => 'Pedido', 'ok' => true, 'texto' => 'Pedido cancelado no KazaKora.'];
+
+        $avisos = collect($etapas)->reject(fn (array $etapa) => $etapa['ok'])->pluck('aviso')->values()->all();
+
+        return [
+            'avisos' => $avisos,
+            'etapas' => array_map(fn (array $etapa) => array_intersect_key($etapa, array_flip(['etapa', 'ok', 'texto'])), $etapas),
+        ];
+    }
+
+    /** @return array{etapa: string, ok: bool, texto: string, aviso?: string} */
+    private function estornar(Order $order): array
+    {
+        $order->loadMissing('payments');
+        $aEstornar = $order->payments->filter(fn (Payment $pagamento) => $pagamento->boletoPendente()
+            || in_array($pagamento->status, [Payment::STATUS_CAPTURED, Payment::STATUS_AUTHORIZED], true));
+
+        // Sem gate por status anterior: refundOrder() só age em Payment
+        // já capturado/autorizado (nunca existe nenhum pra um pedido que
+        // nunca chegou a ser cobrado), então chamar sempre é seguro.
+        $erros = $this->finalizer->refundOrder($order);
+
+        foreach ($erros as $erroDoEstorno) {
+            Log::error('stripe.refund.order_cancel_failed', ['order_id' => $order->id, 'message' => $erroDoEstorno]);
+        }
+
+        if ($erros !== []) {
+            $aviso = implode(' ', array_map(fn (string $erro) => "Reembolso: {$erro}", $erros));
+
+            return ['etapa' => 'Estorno', 'ok' => false, 'texto' => $aviso.' Faça o estorno pelo painel do pagamento.', 'aviso' => $aviso];
+        }
+
+        if ($aEstornar->isEmpty()) {
+            return ['etapa' => 'Estorno', 'ok' => true, 'texto' => $order->origin === Order::ORIGIN_STORE
+                ? 'Nenhum pagamento recebido: nada a estornar.'
+                : 'O estorno ao comprador sai pelo próprio canal.'];
+        }
+
+        $valor = 'R$ '.number_format((float) $aEstornar->sum('amount'), 2, ',', '.');
+        $onde = $aEstornar->contains(fn (Payment $pagamento) => $pagamento->provider === Payment::PROVIDER_MERCADOPAGO) ? 'Mercado Pago' : 'Stripe';
+
+        return ['etapa' => 'Estorno', 'ok' => true, 'texto' => "Estorno de {$valor} feito no {$onde}."];
     }
 
     /**
@@ -140,20 +183,23 @@ class CancelamentoDoPedido
      * autorizada. Se o cancelamento na SEFAZ falhar (ex: prazo de 24h
      * expirado), o admin é avisado para tratar manualmente, mas o pedido
      * continua cancelado.
+     *
+     * @return array{etapa: string, ok: bool, texto: string, aviso?: string}
      */
-    private function cancelarNotaSeAutorizada(Order $order): ?string
+    private function cancelarNotaSeAutorizada(Order $order): array
     {
         $order->loadMissing('invoice');
+        $falha = fn (string $aviso) => ['etapa' => 'Nota fiscal', 'ok' => false, 'texto' => $aviso, 'aviso' => $aviso];
 
         // Carrinho do Mercado Livre: a nota é uma só pro carrinho inteiro.
         // Cancelar ela junto com UM pedido derrubaria a nota dos itens que
         // continuam vendidos — avisa e não mexe.
         if ($avisoDoCarrinho = $this->pack->avisoDeCancelamento($order)) {
-            return $avisoDoCarrinho;
+            return $falha($avisoDoCarrinho);
         }
 
         if (! $order->invoice || $order->invoice->status !== Invoice::STATUS_AUTHORIZED) {
-            return null;
+            return ['etapa' => 'Nota fiscal', 'ok' => true, 'texto' => 'Sem NF-e autorizada: nada a cancelar na SEFAZ.'];
         }
 
         // Fora das 24h o cancelamento tem multa ou nem é mais possível: a
@@ -161,21 +207,21 @@ class CancelamentoDoPedido
         $janela = $order->invoice->janelaDeCancelamento();
 
         if ($janela === Invoice::JANELA_EXTEMPORANEA) {
-            return 'Pedido cancelado, mas a NF-e passou das 24h. Se a mercadoria não saiu, cancele pela tela da nota (até 480h, com multa estimada de R$ '.number_format($order->invoice->multaCancelamentoExtemporaneo(), 2, ',', '.').'); se saiu, registre a devolução lá.';
+            return $falha('Pedido cancelado, mas a NF-e passou das 24h. Se a mercadoria não saiu, cancele pela tela da nota (até 480h, com multa estimada de R$ '.number_format($order->invoice->multaCancelamentoExtemporaneo(), 2, ',', '.').'); se saiu, registre a devolução lá.');
         }
 
         if ($janela === Invoice::JANELA_EXPIRADA) {
-            return 'Pedido cancelado, mas a NF-e passou de 480h e não pode mais ser cancelada. Registre a devolução na tela da nota.';
+            return $falha('Pedido cancelado, mas a NF-e passou de 480h e não pode mais ser cancelada. Registre a devolução na tela da nota.');
         }
 
         try {
-            $this->invoices->cancel($order, "Cancelamento do pedido #{$order->id}");
+            $nota = $this->invoices->cancel($order, "Cancelamento do pedido #{$order->id}");
 
-            return null;
+            return ['etapa' => 'Nota fiscal', 'ok' => true, 'texto' => "NF-e nº {$nota->numero} cancelada na SEFAZ."];
         } catch (Throwable $exception) {
             Log::error('nfe.cancel.failed', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
 
-            return "Pedido cancelado, mas a NF-e não pôde ser cancelada automaticamente na SEFAZ: {$exception->getMessage()}";
+            return $falha("Pedido cancelado, mas a NF-e não pôde ser cancelada automaticamente na SEFAZ: {$exception->getMessage()}");
         }
     }
 

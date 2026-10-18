@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Jobs;
 
 use App\Modules\Checkout\Models\Order;
+use App\Modules\WhatsApp\Jobs\ResponderConfirmacaoPedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Services\WhatsAppCloudApiClient;
@@ -18,10 +19,12 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * WhatsApp de pedido aprovado (pedido 2026-10-10): boas-vindas + pós-venda
- * numa mensagem curta, com o botão "Acessar rastreio". Só pedidos da loja.
+ * WhatsApp de pedido aprovado: a Manuela confirma o pedido e mostra nome,
+ * e-mail e endereço para o cliente conferir, com os botões "Tudo Certo" e
+ * "Corrigir Informações" (2026-10-17, modelo Always Fit). Só pedidos da loja.
  * Mensagem iniciada pela loja exige template aprovado na Meta — sem o nome
  * do template no .env (WHATSAPP_TEMPLATE_PEDIDO_APROVADO) não envia nada.
+ * A resposta dos botões chega pelo webhook (ResponderConfirmacaoPedido).
  */
 class SendOrderApprovedWhatsAppJob implements ShouldQueue
 {
@@ -49,7 +52,7 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
             return;
         }
 
-        $phone = WhatsAppPhone::normalize($order->shipping_phone ?: $order->user?->phone);
+        $phone = WhatsAppPhone::normalize($order->shipping_whatsapp ?: $order->shipping_phone ?: $order->user?->phone);
         if ($phone === null) {
             Log::info('whatsapp_pedido_aprovado_sem_telefone', ['order_id' => $order->id]);
 
@@ -63,16 +66,23 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
             return;
         }
 
-        $nome = Str::of($order->shipping_name ?: $order->user?->name ?: 'cliente')->trim()->explode(' ')->first();
-        $ref = $order->trackingRef();
+        $nomeCompleto = trim((string) ($order->shipping_name ?: $order->user?->name)) ?: 'cliente';
+        $nome = Str::of($nomeCompleto)->explode(' ')->first();
+        $email = $order->shipping_email ?: $order->user?->email ?: 'não informado';
+        $imagem = config('services.whatsapp.templates.pedido_aprovado_imagem') ?: asset('images/whatsapp/confirmacao-pedido.jpg');
 
         try {
             $response = $client->sendTemplate(
                 $phone,
                 $template,
                 (string) config('services.whatsapp.templates.pedido_aprovado_idioma', 'pt_BR'),
-                bodyParams: [$nome, (string) $order->id],
-                urlButtonParams: [0 => $ref],
+                headerMediaType: 'image',
+                bodyParams: [$nome, $order->numero, $nomeCompleto, $email, self::endereco($order)],
+                quickReplyPayloads: [
+                    0 => ResponderConfirmacaoPedido::PAYLOAD_OK.$order->id,
+                    1 => ResponderConfirmacaoPedido::PAYLOAD_CORRIGIR.$order->id,
+                ],
+                headerMediaLink: $imagem,
             );
         } catch (Throwable $exception) {
             // Libera a marca pra próxima tentativa da fila.
@@ -92,12 +102,24 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
             'wa_message_id' => $response['messages'][0]['id'] ?? null,
             'direction' => 'outbound',
             'type' => 'template',
-            'body' => "Pedido #{$order->id} aprovado (mensagem automática com o link de rastreio: ".route('rastreio.ver', $ref).')',
+            'body' => "Pedido #{$order->numero} confirmado. Conferência de dados enviada: {$nomeCompleto}, {$email}, ".self::endereco($order).' [Tudo Certo] [Corrigir Informações]',
             'status' => 'sent',
             'sent_by' => 'system',
             'payload' => ['template' => $template, 'order_id' => $order->id],
             'sent_at' => now(),
         ]);
         $conversation->registerMessage($message);
+    }
+
+    /** "Rua X, 20 - Apto 3 - Mooca - 03187-040 - São Paulo/SP", sem pedaço vazio. */
+    public static function endereco(Order $order): string
+    {
+        $rua = trim(implode(', ', array_filter([trim((string) $order->shipping_street), trim((string) $order->shipping_number)])));
+        $cep = preg_replace('/\D/', '', (string) $order->shipping_zip);
+        $cep = strlen($cep) === 8 ? substr($cep, 0, 5).'-'.substr($cep, 5) : $cep;
+        $cidade = trim(implode('/', array_filter([trim((string) $order->shipping_city), trim((string) $order->shipping_state)])));
+
+        // Variável de template da Meta não aceita quebra de linha nem tab.
+        return (string) preg_replace('/\s+/', ' ', implode(' - ', array_filter([$rua, trim((string) $order->shipping_complement), trim((string) $order->shipping_neighborhood), $cep, $cidade])) ?: 'não informado');
     }
 }

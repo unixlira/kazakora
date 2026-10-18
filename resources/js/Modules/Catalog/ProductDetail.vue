@@ -1,4 +1,5 @@
 <script setup>
+import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
 import ProductCard from '@/Shared/Components/ProductCard.vue';
@@ -268,7 +269,11 @@ const buyingNow = ref(false);
 // "Comprar": finalização só com este produto, sem colocar no carrinho (pedido 2026-10-11).
 const buyNow = () => {
     buyingNow.value = true;
-    router.post('/comprar-agora', { product_id: props.product.id, quantity: quantity.value }, {
+    // AddToCart da Meta (2026-10-18): mesmo event_id no Pixel e no servidor.
+    const eventId = novoEventId();
+    const item = { id: props.product.id, preco: props.product.final_price, quantidade: quantity.value };
+    router.post('/comprar-agora', { product_id: props.product.id, quantity: quantity.value, meta_event_id: eventId }, {
+        onSuccess: () => rastrearAddToCart(item, eventId),
         onFinish: () => { buyingNow.value = false; },
     });
 };

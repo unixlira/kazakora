@@ -16,7 +16,8 @@ use Illuminate\Http\Request;
  */
 class Cookies
 {
-    public const VERSAO = '2026-10-16';
+    // 2026-10-18: API de Conversões da Meta (o servidor também manda os eventos).
+    public const VERSAO = '2026-10-18';
 
     /** Guarda que o cliente deu OK (e em qual versão do aviso). */
     public const COOKIE_OK = 'kazakora_cookies';

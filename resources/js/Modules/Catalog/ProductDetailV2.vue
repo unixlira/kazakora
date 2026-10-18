@@ -1,4 +1,5 @@
 <script setup>
+import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // Página de produto v2 (pedido 2026-10-09): mesmo layout da página de
 // produto da izeshop que o Lira mandou como referência — faixa amarela,
 // galeria + box de compra fixo à direita (60/40), cards brancos arredondados,
@@ -362,7 +363,11 @@ const buyingNow = ref(false);
 const buyNow = () => {
     if (exigirVariacao()) return;
     buyingNow.value = true;
-    router.post('/comprar-agora', { product_id: selecionada.value.id, quantity: quantity.value }, {
+    // AddToCart da Meta (2026-10-18): mesmo event_id no Pixel e no servidor.
+    const eventId = novoEventId();
+    const item = { id: selecionada.value.id, preco: selecionada.value.final_price, quantidade: quantity.value };
+    router.post('/comprar-agora', { product_id: selecionada.value.id, quantity: quantity.value, meta_event_id: eventId }, {
+        onSuccess: () => rastrearAddToCart(item, eventId),
         onFinish: () => { buyingNow.value = false; },
     });
 };

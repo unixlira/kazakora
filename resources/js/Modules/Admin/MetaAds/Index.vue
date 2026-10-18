@@ -35,7 +35,7 @@ const columns = [
     },
     { accessorKey: 'orcamento_diario', header: 'Orçamento/dia', cell: ({ row }) => formatarReais(row.original.orcamento_diario) },
     { id: 'periodo', header: 'Período', accessorFn: (row) => periodo(row) },
-    { accessorKey: 'videos', header: 'Vídeos' },
+    { accessorKey: 'videos', header: 'Anúncios' },
     { id: 'criada_por', header: 'Criada por', accessorFn: (row) => row.criada_por ?? '-' },
 ];
 </script>

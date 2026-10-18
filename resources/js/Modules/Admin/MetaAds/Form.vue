@@ -14,6 +14,7 @@ const props = defineProps({
     objetivos: { type: Object, required: true },
     generos: { type: Object, required: true },
     chamadas: { type: Object, required: true },
+    estruturas: { type: Object, required: true },
     siteUrl: { type: String, required: true },
 });
 
@@ -28,6 +29,8 @@ const c = props.campanha ?? {};
 const form = useForm({
     nome: c.nome ?? '',
     objetivo: c.objetivo ?? (props.config.pixel ? 'OUTCOME_SALES' : 'OUTCOME_TRAFFIC'),
+    // Campanha nova: um conjunto com todos os anúncios, como no Gerenciador da Meta.
+    estrutura: c.estrutura ?? 'conjunto_unico',
     orcamento_diario: c.orcamento_diario !== undefined ? Number(c.orcamento_diario) : 20,
     inicio: c.inicio ?? hoje,
     fim: c.fim ?? '',
@@ -56,33 +59,58 @@ const aoEscolherProduto = () => {
     if (!form.titulo) form.titulo = p.nome.slice(0, 255);
 };
 
-// Vídeos: os já guardados no servidor e os escolhidos agora (sobem ao salvar).
-const salvos = ref([...props.videos]);
+// Anúncios: os já guardados no servidor e os escolhidos agora (sobem ao
+// salvar). Cada um tem mídia (vídeo ou imagem) e, opcional, produto e texto
+// próprios; campo vazio usa o padrão da campanha.
+const CAMPOS_ANUNCIO = ['produto_id', 'link_destino', 'texto_principal', 'titulo', 'descricao', 'chamada'];
+const camposDe = (v = {}) => Object.fromEntries(CAMPOS_ANUNCIO.map((k) => [k, v[k] ?? '']));
+
+const salvos = ref(props.videos.map((v) => ({ ...v, campos: camposDe(v) })));
 const novos = ref([]);
 const arrastando = ref(false);
 const erroVideos = ref('');
 const seletor = ref(null);
 const maxBytes = props.limites.max_mb * 1024 * 1024;
+const TIPOS = { 'video/mp4': 'video', 'video/quicktime': 'video', 'image/jpeg': 'imagem', 'image/png': 'imagem' };
 
 const totalVideos = computed(() => salvos.value.length + novos.value.filter((v) => v.estado !== 'erro').length);
+
+// Todos na ordem da tela (salvos primeiro), com a chave usada na prévia.
+const anuncios = computed(() => [
+    ...salvos.value.map((v) => ({ ...v, chave: `s${v.id}`, previa: v.url, novo: false })),
+    ...novos.value.map((v) => ({ ...v, nome: v.arquivo.name, novo: true })),
+]);
 
 const adicionarArquivos = (lista) => {
     erroVideos.value = '';
     for (const arquivo of Array.from(lista ?? [])) {
         if (totalVideos.value >= props.limites.max_videos) {
-            erroVideos.value = `Máximo de ${props.limites.max_videos} vídeos por campanha.`;
+            erroVideos.value = `Máximo de ${props.limites.max_videos} anúncios por campanha.`;
             break;
         }
-        if (!['video/mp4', 'video/quicktime'].includes(arquivo.type)) {
-            erroVideos.value = `${arquivo.name}: use vídeo MP4 ou MOV.`;
+        if (!TIPOS[arquivo.type]) {
+            erroVideos.value = `${arquivo.name}: use vídeo MP4 ou MOV, ou imagem JPG ou PNG.`;
             continue;
         }
         if (arquivo.size > maxBytes) {
             erroVideos.value = `${arquivo.name} passa de ${props.limites.max_mb} MB. Comprima antes de enviar.`;
             continue;
         }
-        novos.value.push({ chave: `${arquivo.name}-${arquivo.size}-${Date.now()}`, arquivo, previa: URL.createObjectURL(arquivo), progresso: 0, estado: 'esperando', erro: '' });
+        const chave = `${arquivo.name}-${arquivo.size}-${Date.now()}`;
+        novos.value.push({ chave, arquivo, tipo: TIPOS[arquivo.type], previa: URL.createObjectURL(arquivo), progresso: 0, estado: 'esperando', erro: '', campos: camposDe() });
+        emPrevia.value = chave;
     }
+};
+
+// Acha o item de verdade (salvos ou novos) para editar os campos dele.
+const itemDe = (a) => (a.novo ? novos.value.find((v) => v.chave === a.chave) : salvos.value.find((v) => v.id === a.id));
+
+const aoEscolherProdutoDoAnuncio = (a) => {
+    const item = itemDe(a);
+    const p = props.produtos.find((x) => x.id === Number(item?.campos.produto_id));
+    if (!item || !p) return;
+    item.campos.link_destino = p.link;
+    if (!item.campos.titulo) item.campos.titulo = p.nome.slice(0, 255);
 };
 
 const aoSoltar = (evento) => {
@@ -108,10 +136,29 @@ const tirarSalvo = async (video) => {
 
 onBeforeUnmount(() => novos.value.forEach((v) => URL.revokeObjectURL(v.previa)));
 
-const partes = computed(() => dividirOrcamento(form.orcamento_diario, totalVideos.value));
-const orcamentoBaixo = computed(() => totalVideos.value > 0 && partes.value[0] !== undefined
+// Conjunto único: a Meta distribui o orçamento inteiro entre os anúncios.
+// Por anúncio: cada conjunto recebe uma parte igual.
+const conjuntoUnico = computed(() => form.estrutura === 'conjunto_unico');
+const conjuntos = computed(() => (conjuntoUnico.value ? Math.min(totalVideos.value, 1) : totalVideos.value));
+const partes = computed(() => dividirOrcamento(form.orcamento_diario, conjuntos.value));
+const orcamentoBaixo = computed(() => conjuntos.value > 0 && partes.value[0] !== undefined
     && Math.min(...partes.value) < props.limites.minimo_por_video);
-const primeiroVideo = computed(() => novos.value[0]?.previa ?? salvos.value[0]?.url ?? null);
+
+// Prévia: o anúncio clicado (ou o primeiro), com o texto próprio ou o padrão.
+const emPrevia = ref(null);
+const anuncioEmPrevia = computed(() => anuncios.value.find((a) => a.chave === emPrevia.value) ?? anuncios.value[0] ?? null);
+const ou = (proprio, padrao) => (proprio !== null && proprio !== undefined && String(proprio).trim() !== '' ? proprio : padrao);
+const previa = computed(() => {
+    const campos = anuncioEmPrevia.value?.campos ?? {};
+    return {
+        midia: anuncioEmPrevia.value?.previa ?? null,
+        tipo: anuncioEmPrevia.value?.tipo ?? 'video',
+        texto: ou(campos.texto_principal, form.texto_principal),
+        titulo: ou(campos.titulo, form.titulo),
+        descricao: ou(campos.descricao, form.descricao),
+        chamada: ou(campos.chamada, form.chamada),
+    };
+});
 
 const dias = computed(() => {
     if (!form.fim || !form.inicio) return null;
@@ -187,26 +234,40 @@ const salvar = async () => {
         return;
     }
 
+    let falhou = false;
+
+    // Produto e texto dos anúncios que já estavam no servidor.
+    for (const item of salvos.value) {
+        item.erro = '';
+        try {
+            await pedirJson('PUT', `${BASE}/${campanhaId.value}/videos/${item.id}`, item.campos);
+        } catch (erro) {
+            item.erro = erro.message;
+            falhou = true;
+        }
+    }
+
     for (const item of novos.value.filter((v) => v.estado !== 'pronto')) {
         item.estado = 'subindo';
         item.erro = '';
         try {
-            const resposta = await enviarArquivo(`${BASE}/${campanhaId.value}/videos`, 'video', item.arquivo, (p) => { item.progresso = p; });
+            const resposta = await enviarArquivo(`${BASE}/${campanhaId.value}/videos`, 'video', item.arquivo, (p) => { item.progresso = p; }, item.campos);
             item.estado = 'pronto';
-            salvos.value.push(resposta.video);
+            salvos.value.push({ ...resposta.video, campos: camposDe(resposta.video) });
         } catch (erro) {
             item.estado = 'erro';
             item.erro = erro.message;
+            falhou = true;
         }
     }
 
     novos.value = novos.value.filter((v) => v.estado !== 'pronto');
     salvando.value = false;
 
-    if (novos.value.length === 0) {
+    if (!falhou) {
         router.visit(`${BASE}/${campanhaId.value}`);
     } else {
-        erroVideos.value = 'O rascunho foi salvo, mas algum vídeo não subiu. Veja o motivo abaixo e clique em salvar de novo.';
+        erroVideos.value = 'O rascunho foi salvo, mas algum anúncio não. Veja o motivo abaixo e clique em salvar de novo.';
     }
 };
 
@@ -273,19 +334,44 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
                             {{ dias }} dia(s) a {{ formatarReais(form.orcamento_diario) }} = até <strong>{{ formatarReais(totalPrevisto) }}</strong> no total.
                         </template>
                         <template v-else>Sem data de fim: gasta até {{ formatarReais(form.orcamento_diario) }} por dia até você pausar.</template>
-                        <template v-if="totalVideos > 1">
-                            Dividido igual entre os {{ totalVideos }} vídeos: <strong>{{ formatarReais(partes[0]) }}</strong> por vídeo por dia.
+                        <template v-if="totalVideos > 1 && conjuntoUnico">
+                            A Meta distribui entre os {{ totalVideos }} anúncios e leva mais verba para o que vende mais.
+                        </template>
+                        <template v-else-if="totalVideos > 1">
+                            Dividido igual entre os {{ totalVideos }} anúncios: <strong>{{ formatarReais(partes[0]) }}</strong> por anúncio por dia.
                         </template>
                     </p>
+
+                    <fieldset>
+                        <legend class="block text-sm font-medium">Como organizar os anúncios</legend>
+                        <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label v-for="(rotulo, valor) in props.estruturas" :key="valor"
+                                class="flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm"
+                                :class="form.estrutura === valor ? 'border-primary bg-primary/5' : 'border-[var(--surface-border)]'">
+                                <input v-model="form.estrutura" type="radio" name="estrutura" :value="valor" class="mt-0.5">
+                                <span>
+                                    <span class="block font-medium">{{ rotulo }}</span>
+                                    <span class="block text-xs text-slate-500">
+                                        {{ valor === 'conjunto_unico'
+                                            ? 'Igual ao Gerenciador: Campanha > 1 conjunto > vários anúncios. Bom para vários produtos parecidos (ex.: 3 árvores de Natal).'
+                                            : 'Cada anúncio no seu conjunto, com a mesma verba. Bom para comparar qual vídeo vende mais.' }}
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                        <InputError :message="form.errors.estrutura" />
+                    </fieldset>
                 </section>
 
-                <!-- Vídeos -->
-                <section class="space-y-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" aria-labelledby="videos-titulo">
+                <!-- Anúncios -->
+                <section class="space-y-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" aria-labelledby="anuncios-titulo">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 id="videos-titulo" class="text-lg font-semibold">Vídeos</h2>
-                        <span class="text-xs text-slate-500">{{ totalVideos }} de {{ props.limites.max_videos }} · MP4 ou MOV até {{ props.limites.max_mb }} MB · vertical 9:16 rende mais</span>
+                        <h2 id="anuncios-titulo" class="text-lg font-semibold">Anúncios</h2>
+                        <span class="text-xs text-slate-500">{{ totalVideos }} de {{ props.limites.max_videos }} · vídeo MP4/MOV ou imagem JPG/PNG até {{ props.limites.max_mb }} MB · vertical rende mais</span>
                     </div>
-                    <p class="text-sm text-slate-500">Cada vídeo vira um anúncio com a sua parte do orçamento. Assim dá para ver qual vídeo vende mais.</p>
+                    <p class="text-sm text-slate-500">
+                        Cada arquivo vira um anúncio. Escolha o produto e o texto de cada um; o que ficar vazio usa o texto padrão da campanha, mais abaixo.
+                    </p>
 
                     <div
                         class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors"
@@ -294,44 +380,80 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
                         @dragleave.prevent="arrastando = false"
                         @drop.prevent="aoSoltar"
                     >
-                        <i class="fas fa-film text-2xl text-slate-400" aria-hidden="true"></i>
-                        <p class="text-sm">Arraste os vídeos aqui ou</p>
+                        <i class="fas fa-photo-film text-2xl text-slate-400" aria-hidden="true"></i>
+                        <p class="text-sm">Arraste vídeos ou imagens aqui ou</p>
                         <button type="button" :disabled="totalVideos >= props.limites.max_videos || salvando"
                             class="rounded-lg border border-primary px-4 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
                             @click="seletor?.click()">
-                            Escolher vídeos
+                            Adicionar anúncios
                         </button>
-                        <input ref="seletor" type="file" accept="video/mp4,video/quicktime" multiple class="sr-only" aria-label="Escolher vídeos"
+                        <input ref="seletor" type="file" accept="video/mp4,video/quicktime,image/jpeg,image/png" multiple class="sr-only" aria-label="Escolher vídeos ou imagens"
                             @change="adicionarArquivos($event.target.files); $event.target.value = ''">
                     </div>
                     <p v-if="erroVideos" class="text-sm text-red-600" role="alert">{{ erroVideos }}</p>
 
-                    <ul v-if="salvos.length || novos.length" class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        <li v-for="(v, i) in salvos" :key="`s${v.id}`" class="overflow-hidden rounded-lg border border-[var(--surface-border)]">
-                            <video :src="v.url" class="aspect-[9/16] w-full bg-black object-contain" preload="metadata" muted controls></video>
-                            <div class="space-y-1 p-2 text-xs">
-                                <p class="truncate font-semibold" :title="v.nome">{{ v.nome }}</p>
-                                <p class="text-slate-500">{{ v.tamanho_mb }} MB<template v-if="totalVideos"> · {{ formatarReais(partes[i]) }}/dia</template></p>
-                                <button type="button" class="font-medium text-red-600 hover:underline" :disabled="salvando" @click="tirarSalvo(v)">Tirar</button>
-                            </div>
-                        </li>
-                        <li v-for="(v, i) in novos" :key="v.chave" class="overflow-hidden rounded-lg border" :class="v.estado === 'erro' ? 'border-red-400' : 'border-[var(--surface-border)]'">
-                            <video :src="v.previa" class="aspect-[9/16] w-full bg-black object-contain" preload="metadata" muted controls></video>
-                            <div class="space-y-1 p-2 text-xs">
-                                <p class="truncate font-semibold" :title="v.arquivo.name">{{ v.arquivo.name }}</p>
-                                <p class="text-slate-500">{{ tamanho(v.arquivo.size) }}<template v-if="v.estado !== 'erro'"> · {{ formatarReais(partes[salvos.length + i]) }}/dia</template></p>
-                                <div v-if="v.estado === 'subindo'" class="h-1.5 overflow-hidden rounded-full bg-slate-500/20" role="progressbar" :aria-valuenow="v.progresso" aria-valuemin="0" aria-valuemax="100" :aria-label="`Enviando ${v.arquivo.name}`">
-                                    <div class="h-full bg-primary transition-all" :style="{ width: `${v.progresso}%` }"></div>
+                    <ol v-if="anuncios.length" class="space-y-3">
+                        <li v-for="(a, i) in anuncios" :key="a.chave"
+                            class="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row"
+                            :class="a.estado === 'erro' || a.erro ? 'border-red-400' : (anuncioEmPrevia?.chave === a.chave ? 'border-primary' : 'border-[var(--surface-border)]')"
+                            @focusin="emPrevia = a.chave" @click="emPrevia = a.chave">
+                            <div class="w-full shrink-0 sm:w-32">
+                                <img v-if="a.tipo === 'imagem'" :src="a.previa" :alt="`Imagem do anúncio ${i + 1}`" class="aspect-[4/5] w-full rounded bg-black object-contain">
+                                <video v-else :src="a.previa" class="aspect-[9/16] w-full rounded bg-black object-contain" preload="metadata" muted controls></video>
+                                <p class="mt-1 truncate text-xs font-semibold" :title="a.nome">{{ i + 1 }}. {{ a.nome }}</p>
+                                <p class="text-xs text-slate-500">
+                                    {{ a.novo ? tamanho(a.arquivo.size) : `${a.tamanho_mb} MB` }}
+                                    <template v-if="!conjuntoUnico && a.estado !== 'erro'"> · {{ formatarReais(partes[i]) }}/dia</template>
+                                </p>
+                                <div v-if="a.estado === 'subindo'" class="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-500/20" role="progressbar" :aria-valuenow="a.progresso" aria-valuemin="0" aria-valuemax="100" :aria-label="`Enviando ${a.nome}`">
+                                    <div class="h-full bg-primary transition-all" :style="{ width: `${a.progresso}%` }"></div>
                                 </div>
-                                <p v-if="v.estado === 'esperando'" class="text-slate-500">Sobe ao salvar</p>
-                                <p v-if="v.estado === 'erro'" class="text-red-600">{{ v.erro }}</p>
-                                <button v-if="v.estado !== 'subindo'" type="button" class="font-medium text-red-600 hover:underline" @click="tirarNovo(v.chave)">Tirar</button>
+                                <p v-if="a.estado === 'esperando'" class="text-xs text-slate-500">Sobe ao salvar</p>
+                                <button v-if="a.estado !== 'subindo'" type="button" class="text-xs font-medium text-red-600 hover:underline" :disabled="salvando"
+                                    @click.stop="a.novo ? tirarNovo(a.chave) : tirarSalvo(a)">Tirar</button>
+                            </div>
+
+                            <div class="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div class="sm:col-span-2">
+                                    <label :for="`produto-${a.chave}`" class="block text-xs font-medium">Produto</label>
+                                    <select :id="`produto-${a.chave}`" v-model="itemDe(a).campos.produto_id" :class="campo" @change="aoEscolherProdutoDoAnuncio(a)">
+                                        <option value="">Padrão da campanha</option>
+                                        <option v-for="p in props.produtos" :key="p.id" :value="p.id">{{ p.nome }}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label :for="`titulo-${a.chave}`" class="block text-xs font-medium">Título</label>
+                                    <input :id="`titulo-${a.chave}`" v-model="itemDe(a).campos.titulo" type="text" maxlength="255" :class="campo" :placeholder="form.titulo || 'Título do anúncio'">
+                                </div>
+                                <div>
+                                    <label :for="`chamada-${a.chave}`" class="block text-xs font-medium">Botão</label>
+                                    <select :id="`chamada-${a.chave}`" v-model="itemDe(a).campos.chamada" :class="campo">
+                                        <option value="">Padrão ({{ props.chamadas[form.chamada] }})</option>
+                                        <option v-for="(rotulo, valor) in props.chamadas" :key="valor" :value="valor">{{ rotulo }}</option>
+                                    </select>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label :for="`texto-${a.chave}`" class="block text-xs font-medium">Texto principal</label>
+                                    <textarea :id="`texto-${a.chave}`" v-model="itemDe(a).campos.texto_principal" rows="2" maxlength="2000" :class="campo" :placeholder="form.texto_principal || 'Texto do anúncio'" />
+                                </div>
+                                <div>
+                                    <label :for="`link-${a.chave}`" class="block text-xs font-medium">Link de destino</label>
+                                    <input :id="`link-${a.chave}`" v-model="itemDe(a).campos.link_destino" type="url" maxlength="500" :class="campo" :placeholder="form.link_destino || `${props.siteUrl}/`">
+                                </div>
+                                <div>
+                                    <label :for="`descricao-${a.chave}`" class="block text-xs font-medium">Descrição</label>
+                                    <input :id="`descricao-${a.chave}`" v-model="itemDe(a).campos.descricao" type="text" maxlength="255" :class="campo" :placeholder="form.descricao || 'Opcional'">
+                                </div>
+                                <p v-if="a.erro" class="text-xs text-red-600 sm:col-span-2" role="alert">{{ a.erro }}</p>
                             </div>
                         </li>
-                    </ul>
+                    </ol>
                     <p v-if="orcamentoBaixo" class="text-sm text-amber-700" role="status">
-                        Cada vídeo precisa de pelo menos {{ formatarReais(props.limites.minimo_por_video) }} por dia.
-                        Com {{ totalVideos }} vídeos, o orçamento mínimo é {{ formatarReais(props.limites.minimo_por_video * totalVideos) }}.
+                        <template v-if="conjuntoUnico">O orçamento mínimo é {{ formatarReais(props.limites.minimo_por_video) }} por dia.</template>
+                        <template v-else>
+                            Cada anúncio precisa de pelo menos {{ formatarReais(props.limites.minimo_por_video) }} por dia.
+                            Com {{ totalVideos }} anúncios em conjuntos separados, o orçamento mínimo é {{ formatarReais(props.limites.minimo_por_video * totalVideos) }}.
+                        </template>
                     </p>
                 </section>
 
@@ -394,9 +516,12 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
                     </div>
                 </section>
 
-                <!-- Anúncio -->
+                <!-- Texto padrão -->
                 <section class="space-y-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
-                    <h2 class="text-lg font-semibold">Anúncio</h2>
+                    <div>
+                        <h2 class="text-lg font-semibold">Texto padrão dos anúncios</h2>
+                        <p class="text-sm text-slate-500">Vale para todo anúncio que deixou o campo vazio. Se cada anúncio tem o seu texto, pode deixar em branco.</p>
+                    </div>
                     <div>
                         <label for="produto" class="block text-sm font-medium">Produto (opcional)</label>
                         <select id="produto" v-model="form.produto_id" :class="campo" @change="aoEscolherProduto">
@@ -413,13 +538,13 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
                     </div>
                     <div>
                         <label for="texto" class="block text-sm font-medium">Texto principal</label>
-                        <textarea id="texto" v-model="form.texto_principal" rows="4" required maxlength="2000" :class="campo" />
+                        <textarea id="texto" v-model="form.texto_principal" rows="4" maxlength="2000" :class="campo" />
                         <InputError :message="form.errors.texto_principal" />
                     </div>
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <label for="titulo" class="block text-sm font-medium">Título</label>
-                            <input id="titulo" v-model="form.titulo" type="text" required maxlength="255" :class="campo">
+                            <input id="titulo" v-model="form.titulo" type="text" maxlength="255" :class="campo">
                             <InputError :message="form.errors.titulo" />
                         </div>
                         <div>
@@ -441,28 +566,31 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
                         class="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50">
                         {{ salvando ? 'Salvando…' : (editando ? 'Salvar rascunho' : 'Criar rascunho') }}
                     </button>
-                    <span class="text-xs text-slate-500">Salvar guarda os vídeos aqui no servidor. Nada vai para a Meta ainda.</span>
+                    <span class="text-xs text-slate-500">Salvar guarda os anúncios aqui no servidor. Nada vai para a Meta ainda.</span>
                 </div>
             </div>
 
             <!-- Prévia -->
             <aside class="lg:sticky lg:top-4 lg:self-start">
-                <p class="mb-2 text-sm font-semibold text-slate-500">Prévia aproximada</p>
+                <p class="mb-2 text-sm font-semibold text-slate-500">
+                    Prévia aproximada<template v-if="anuncios.length > 1"> do anúncio {{ anuncios.indexOf(anuncioEmPrevia) + 1 }} (clique em outro para ver)</template>
+                </p>
                 <div class="overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
                     <div class="flex items-center gap-2 p-3">
                         <div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">KK</div>
                         <div class="text-sm font-semibold">KazaKora <span class="block text-xs font-normal text-slate-500">Patrocinado</span></div>
                     </div>
-                    <p class="whitespace-pre-line px-3 pb-3 text-sm">{{ form.texto_principal || 'Texto principal do anúncio' }}</p>
-                    <video v-if="primeiroVideo" :src="primeiroVideo" class="aspect-[4/5] w-full bg-black object-cover" muted loop autoplay playsinline aria-label="Prévia do primeiro vídeo"></video>
-                    <div v-else class="flex aspect-[4/5] w-full items-center justify-center bg-slate-500/10 text-sm text-slate-500">Sem vídeo</div>
+                    <p class="whitespace-pre-line px-3 pb-3 text-sm">{{ previa.texto || 'Texto principal do anúncio' }}</p>
+                    <img v-if="previa.midia && previa.tipo === 'imagem'" :src="previa.midia" alt="Prévia da imagem do anúncio" class="aspect-[4/5] w-full bg-black object-cover">
+                    <video v-else-if="previa.midia" :key="previa.midia" :src="previa.midia" class="aspect-[4/5] w-full bg-black object-cover" muted loop autoplay playsinline aria-label="Prévia do vídeo do anúncio"></video>
+                    <div v-else class="flex aspect-[4/5] w-full items-center justify-center bg-slate-500/10 text-sm text-slate-500">Sem vídeo ou imagem</div>
                     <div class="flex items-center justify-between gap-3 bg-slate-500/5 p-3">
                         <div class="min-w-0">
                             <p class="truncate text-xs uppercase text-slate-500">kazakora.com</p>
-                            <p class="truncate text-sm font-semibold">{{ form.titulo || 'Título' }}</p>
-                            <p v-if="form.descricao" class="truncate text-xs text-slate-500">{{ form.descricao }}</p>
+                            <p class="truncate text-sm font-semibold">{{ previa.titulo || 'Título' }}</p>
+                            <p v-if="previa.descricao" class="truncate text-xs text-slate-500">{{ previa.descricao }}</p>
                         </div>
-                        <span class="shrink-0 rounded-md bg-slate-500/15 px-3 py-1.5 text-xs font-semibold">{{ props.chamadas[form.chamada] }}</span>
+                        <span class="shrink-0 rounded-md bg-slate-500/15 px-3 py-1.5 text-xs font-semibold">{{ props.chamadas[previa.chamada] }}</span>
                     </div>
                 </div>
             </aside>

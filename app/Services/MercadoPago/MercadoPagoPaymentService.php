@@ -64,10 +64,13 @@ class MercadoPagoPaymentService
         return $this->request('POST', "v1/orders/{$orderId}/cancel");
     }
 
-    /** Só funciona com a order em status "processed". Sem $amount, estorna o valor total. */
-    public function refundOrder(string $orderId, ?float $amount = null): array
+    /**
+     * Só funciona com a order em status "processed". Sem $amount, estorna o valor total.
+     * $idempotencyKey: a mesma chave numa nova tentativa não estorna duas vezes.
+     */
+    public function refundOrder(string $orderId, ?float $amount = null, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : []);
+        return $this->request('POST', "v1/orders/{$orderId}/refund", $amount !== null ? ['amount' => $amount] : [], $idempotencyKey);
     }
 
     /**
@@ -196,9 +199,10 @@ class MercadoPagoPaymentService
         return $this->request('PUT', "v1/payments/{$paymentId}", ['status' => 'cancelled']);
     }
 
-    public function refundPayment(string $paymentId): array
+    /** $idempotencyKey: a mesma chave numa nova tentativa não estorna duas vezes. */
+    public function refundPayment(string $paymentId, ?string $idempotencyKey = null): array
     {
-        return $this->request('POST', "v1/payments/{$paymentId}/refunds");
+        return $this->request('POST', "v1/payments/{$paymentId}/refunds", [], $idempotencyKey);
     }
 
     private function request(
@@ -270,13 +274,30 @@ class MercadoPagoPaymentService
     {
         if ($response->failed() && ! in_array($response->status(), $toleratedStatuses, true)) {
             throw new MercadoPagoException(
-                $response->json('message') ?? "Erro na API do Mercado Pago (HTTP {$response->status()}).",
+                $response->json('message')
+                    // API de Orders responde {"errors":[{"code","message"}]}: sem
+                    // isso o estorno do #3219 só mostrava "HTTP 400" (2026-10-18).
+                    ?? $this->primeiroErro($response)
+                    ?? "Erro na API do Mercado Pago (HTTP {$response->status()}).",
                 $response->status(),
                 ['body' => $response->json()],
             );
         }
 
         return $response->json() ?? [];
+    }
+
+    private function primeiroErro(Response $response): ?string
+    {
+        $erro = $response->json('errors.0');
+
+        if (! is_array($erro) || empty($erro['message'])) {
+            return null;
+        }
+
+        $codigo = $erro['code'] ?? null;
+
+        return "Mercado Pago (HTTP {$response->status()}".($codigo ? ", {$codigo}" : '')."): {$erro['message']}";
     }
 
     private function log(string $method, string $uri, Response $response): void

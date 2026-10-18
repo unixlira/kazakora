@@ -16,14 +16,14 @@ use Throwable;
 /**
  * Cancelamento pedido pelo cliente em Meus pedidos, em segundo plano
  * (Lira, 2026-10-18): o Enviar do modal só marca o
- * pedido como cancelado e responde na hora; aqui saem a NF-e na SEFAZ, o
- * estorno no Mercado Pago ou Stripe, a devolução do estoque e o e-mail.
+ * pedido como cancelado e responde na hora; aqui saem a NF-e na SEFAZ e a
+ * devolução do estoque. Estorno e e-mail têm jobs próprios, com novas
+ * tentativas (EstornarPedidoCanceladoJob e EnviarEmailDeCancelamentoJob).
  *
  * Fila "nfe": o worker dela já carrega o certificado e tem 300s de prazo,
  * e a SEFAZ lenta não segura e-mail nem etiqueta da fila "default".
  *
- * Uma tentativa só: estorno e cancelamento de nota não se repetem às
- * cegas. Se quebrar no meio, os admins recebem o aviso no sino para
+ * Uma tentativa só: cancelamento de nota não se repete às cegas. Se quebrar no meio, os admins recebem o aviso no sino para
  * conferir na tela do pedido o que já foi feito.
  */
 class ProcessarCancelamentoDoPedidoJob implements ShouldQueue, ShouldBeUnique
@@ -69,7 +69,7 @@ class ProcessarCancelamentoDoPedidoJob implements ShouldQueue, ShouldBeUnique
         if ($order = Order::find($this->orderId)) {
             app(CancelamentoDoPedido::class)->avisarAdmins($order, [
                 ...$this->avisosDoPacote,
-                "O processamento automático parou no meio ({$exception->getMessage()}). Confira na tela do pedido se a NF-e foi cancelada, se o estorno saiu e se o estoque voltou.",
+                "O processamento automático parou no meio ({$exception->getMessage()}). Confira na tela do pedido se a NF-e foi cancelada e se o estoque voltou.",
             ]);
         }
     }

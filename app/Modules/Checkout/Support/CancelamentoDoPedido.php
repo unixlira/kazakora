@@ -3,6 +3,8 @@
 namespace App\Modules\Checkout\Support;
 
 use App\Models\User;
+use App\Modules\Checkout\Jobs\EnviarEmailDeCancelamentoJob;
+use App\Modules\Checkout\Jobs\EstornarPedidoCanceladoJob;
 use App\Modules\Checkout\Jobs\ProcessarCancelamentoDoPedidoJob;
 use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
@@ -16,6 +18,7 @@ use App\Modules\Marketplace\Models\PrintJob;
 use App\Notifications\OrderStatusUpdated;
 use App\Notifications\PedidoCanceladoPeloClienteNotification;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -68,6 +71,35 @@ class CancelamentoDoPedido
             },
             'canal' => $doSite ? null : "Pedido do {$canal}: aqui o cancelamento é só no nosso sistema. Cancele também no painel do {$canal}, senão o canal segue esperando o envio.",
             'etiqueta' => $this->previaDaEtiqueta($order),
+            'estorno_pendente' => $this->estornoPendente($order),
+        ];
+    }
+
+    /**
+     * Pedido já cancelado com pagamento ainda cobrado (pedido #3219,
+     * 2026-10-18: o Mercado Pago recusou o estorno e o dinheiro ficou
+     * com a loja). Alimenta o botão "Reenviar estorno" do admin; null
+     * quando não há nada a estornar.
+     *
+     * @return array{valor: string, onde: string}|null
+     */
+    public function estornoPendente(Order $order): ?array
+    {
+        if ($order->status !== Order::STATUS_CANCELLED) {
+            return null;
+        }
+
+        $order->loadMissing('payments');
+        $pendentes = $order->payments->filter(fn (Payment $pagamento) => $pagamento->boletoPendente()
+            || in_array($pagamento->status, [Payment::STATUS_CAPTURED, Payment::STATUS_AUTHORIZED], true));
+
+        if ($pendentes->isEmpty()) {
+            return null;
+        }
+
+        return [
+            'valor' => 'R$ '.number_format((float) $pendentes->sum('amount'), 2, ',', '.'),
+            'onde' => $pendentes->contains(fn (Payment $pagamento) => $pagamento->provider === Payment::PROVIDER_MERCADOPAGO) ? 'Mercado Pago' : 'Stripe',
         ];
     }
 
@@ -147,7 +179,12 @@ class CancelamentoDoPedido
      * hora (a etiqueta sai da fila, o KoraSync e os sites clonados já veem o
      * status novo e um segundo clique não faz nada) e a fila "nfe" roda o
      * resto em segundo plano (ProcessarCancelamentoDoPedidoJob): NF-e na
-     * SEFAZ, estorno no Mercado Pago ou Stripe, estoque e e-mail.
+     * SEFAZ e estoque.
+     *
+     * Estorno e e-mail (Lira, 2026-10-18) entram na fila "default" no
+     * mesmo instante, em jobs próprios que tentam de novo se falhar:
+     * EstornarPedidoCanceladoJob e, depois dele, EnviarEmailDeCancelamentoJob
+     * (o e-mail diz quanto foi estornado, por isso vem em seguida).
      *
      * @return array{ok: bool, erro: ?string}
      */
@@ -182,20 +219,25 @@ class CancelamentoDoPedido
 
         ProcessarCancelamentoDoPedidoJob::dispatch($order->id, $statusAnterior, $pacote);
 
+        Bus::chain([
+            new EstornarPedidoCanceladoJob($order->id),
+            new EnviarEmailDeCancelamentoJob($order->id),
+        ])->dispatch();
+
         return ['ok' => true, 'erro' => null];
     }
 
     /**
-     * O que a fila faz depois de solicitarPeloCliente(): mesmo cancelamento
-     * do admin (nota, estorno, estoque, e-mail) e os admins são avisados no
-     * sino com o que ficou para tratar.
+     * O que a fila "nfe" faz depois de solicitarPeloCliente(): nota e
+     * estoque como no cancelamento do admin, e os admins são avisados no
+     * sino com o que ficou para tratar. Estorno e e-mail têm jobs próprios.
      *
      * @param  list<string>  $avisosDoPacote
      * @return array{avisos: list<string>, etapas: list<array{etapa: string, ok: bool, texto: string}>}
      */
     public function processarPeloCliente(Order $order, string $statusAnterior, array $avisosDoPacote = []): array
     {
-        $resultado = $this->executarEAvisar($order, $statusAnterior);
+        $resultado = $this->executar($order, $statusAnterior, estornar: false);
         $resultado['avisos'] = [...$avisosDoPacote, ...$resultado['avisos']];
 
         $this->avisarAdmins($order->refresh(), $resultado['avisos']);
@@ -256,6 +298,27 @@ class CancelamentoDoPedido
         return $resultado;
     }
 
+    /**
+     * Quanto foi estornado neste cancelamento, para o e-mail que sai pela
+     * fila: pagamento que virou estornado depois de o pedido ser cancelado.
+     */
+    public function valorEstornadoNoCancelamento(Order $order): float
+    {
+        return (float) $order->payments()
+            ->where('status', Payment::STATUS_REFUNDED)
+            ->when($order->cancelado_em, fn ($query) => $query->where('updated_at', '>=', $order->cancelado_em))
+            ->sum('amount');
+    }
+
+    public function jaMandouEmailDeCancelamento(Order $order): bool
+    {
+        return OrderEmailLog::query()
+            ->where('order_id', $order->id)
+            ->where('mailable', PedidoCancelado::class)
+            ->where('status', OrderEmailLog::STATUS_SENT)
+            ->exists();
+    }
+
     private function destinatario(Order $order): ?string
     {
         return $order->user?->email ?: ($order->shipping_email ?: null);
@@ -266,7 +329,7 @@ class CancelamentoDoPedido
      *
      * @return array{etapa: string, ok: bool, texto: string, aviso?: string}
      */
-    private function avisarCliente(Order $order, float $valorEstornado): array
+    public function avisarCliente(Order $order, float $valorEstornado, int $tentativa = 1): array
     {
         $order->loadMissing('user');
         $destinatario = $this->destinatario($order);
@@ -281,7 +344,7 @@ class CancelamentoDoPedido
             OrderEmailLog::create([
                 'order_id' => $order->id,
                 'mailable' => PedidoCancelado::class,
-                'attempt' => 1,
+                'attempt' => $tentativa,
                 'status' => OrderEmailLog::STATUS_SENT,
                 'invoice_attached' => false,
             ]);
@@ -293,7 +356,7 @@ class CancelamentoDoPedido
             OrderEmailLog::create([
                 'order_id' => $order->id,
                 'mailable' => PedidoCancelado::class,
-                'attempt' => 1,
+                'attempt' => $tentativa,
                 'status' => OrderEmailLog::STATUS_FAILED,
                 'invoice_attached' => false,
                 'error_message' => mb_substr($exception->getMessage(), 0, 500),
@@ -312,11 +375,15 @@ class CancelamentoDoPedido
      *
      * @return array{avisos: list<string>, etapas: list<array{etapa: string, ok: bool, texto: string}>}
      */
-    private function executar(Order $order, string $statusAnterior): array
+    private function executar(Order $order, string $statusAnterior, bool $estornar = true): array
     {
         $this->tirarEtiquetasDaFila($order);
 
-        $etapas = [$this->cancelarNotaSeAutorizada($order), $this->estornar($order)];
+        $etapas = [$this->cancelarNotaSeAutorizada($order)];
+
+        if ($estornar) {
+            $etapas[] = $this->estornar($order);
+        }
 
         // Só devolve estoque se o pedido nunca chegou a ser enviado —
         // se já saiu (shipped/completed), o produto saiu de verdade e
@@ -339,8 +406,14 @@ class CancelamentoDoPedido
         ];
     }
 
-    /** @return array{etapa: string, ok: bool, texto: string, aviso?: string} */
-    private function estornar(Order $order): array
+    /**
+     * Seguro de chamar de novo: só mexe em pagamento ainda capturado,
+     * autorizado ou boleto pendente, e o estorno vai com chave fixa por
+     * pagamento (OrderPaymentFinalizer::refundOrder).
+     *
+     * @return array{etapa: string, ok: bool, texto: string, aviso?: string}
+     */
+    public function estornar(Order $order): array
     {
         $order->loadMissing('payments');
         $aEstornar = $order->payments->filter(fn (Payment $pagamento) => $pagamento->boletoPendente()

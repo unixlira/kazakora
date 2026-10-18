@@ -224,10 +224,15 @@ class OrderPaymentFinalizer
                     $this->mercadoPago->cancelPayment($reference);
                     $payment->update(['status' => Payment::STATUS_CANCELED]);
                 } elseif ($payment->status === Payment::STATUS_CAPTURED) {
+                    // Chave fixa por pagamento (2026-10-18): o estorno do
+                    // cancelamento pelo cliente tenta de novo na fila, e
+                    // uma resposta perdida no caminho não pode virar um
+                    // segundo estorno do mesmo pagamento.
+                    $chave = "estorno-pagamento-{$payment->id}";
                     match (true) {
-                        $isMercadoPagoOrder => $this->mercadoPago->refundOrder($reference),
-                        $isMercadoPago => $this->mercadoPago->refundPayment($reference),
-                        default => $this->stripe->refund($reference),
+                        $isMercadoPagoOrder => $this->mercadoPago->refundOrder($reference, idempotencyKey: $chave),
+                        $isMercadoPago => $this->mercadoPago->refundPayment($reference, $chave),
+                        default => $this->stripe->refund($reference, $chave),
                     };
                     $payment->update(['status' => Payment::STATUS_REFUNDED]);
                 } elseif ($payment->status === Payment::STATUS_AUTHORIZED) {

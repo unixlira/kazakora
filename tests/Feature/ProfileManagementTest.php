@@ -58,7 +58,7 @@ class ProfileManagementTest extends TestCase
             'email' => $customer->email,
         ])->assertRedirect();
 
-        $this->assertSame('Corrigido pelo admin', $customer->fresh()->name);
+        $this->assertSame('Corrigido Pelo Admin', $customer->fresh()->name);
     }
 
     public function test_editing_a_user_is_recorded_in_the_audit_log_with_password_redacted(): void
@@ -75,7 +75,7 @@ class ProfileManagementTest extends TestCase
 
         $this->assertNotNull($log);
         $this->assertSame(AuditLog::ACTION_UPDATE, $log->action);
-        $this->assertSame('Novo nome', $log->new_values['name']);
+        $this->assertSame('Novo Nome', $log->new_values['name']);
         $this->assertArrayNotHasKey('password', $log->new_values);
     }
 

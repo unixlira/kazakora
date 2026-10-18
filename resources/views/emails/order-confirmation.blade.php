@@ -54,7 +54,7 @@
         </tr>
     </table>
 
-    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order))['pedido'], 'texto' => 'Acompanhar meu pedido', 'cor' => '#0FB930'])
+    @include('emails.partials.botao', ['url' => ($marcaEmail ?? \App\Support\MarcaDoEmail::kazakora($order))['pedido'], 'texto' => 'Acompanhar meu pedido', 'cor' => '#F27A2A'])
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border-radius: 10px;">
         <tr>

@@ -266,8 +266,8 @@ class OrderController extends Controller
 
     /**
      * Botão "Cancelar pedido" (2026-10-17): mesmo efeito da troca de status
-     * para cancelado (nota, estorno, estoque), com motivo obrigatório e quem
-     * cancelou. Sem e-mail ao cliente. Ver CancelamentoDoPedido.
+     * para cancelado (nota, estorno, estoque, e-mail ao cliente do site),
+     * com motivo obrigatório e quem cancelou. Ver CancelamentoDoPedido.
      */
     public function cancel(Request $request, Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
     {

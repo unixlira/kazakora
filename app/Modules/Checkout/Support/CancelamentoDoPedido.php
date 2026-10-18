@@ -2,16 +2,23 @@
 
 namespace App\Modules\Checkout\Support;
 
+use App\Models\User;
+use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderEmailLog;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Modules\Fiscal\Support\PackDoPedido;
+use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\PrintJob;
 use App\Notifications\OrderStatusUpdated;
+use App\Notifications\PedidoCanceladoPeloClienteNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
 /**
@@ -20,8 +27,12 @@ use Throwable;
  * Junta num lugar só o que antes vivia em OrderController::update() quando
  * o status virava "cancelado": NF-e na SEFAZ, estorno no Mercado Pago ou
  * Stripe e devolução do estoque. O botão soma motivo, quem cancelou e uma
- * prévia do que vai acontecer antes do clique. Sem e-mail ao cliente (Lira,
- * 2026-10-17): ele só vê o status novo no sino e em Meus pedidos.
+ * prévia do que vai acontecer antes do clique.
+ *
+ * E-mail "Seu pedido foi cancelado" (Lira, 2026-10-17, voltou depois de ter
+ * saído no mesmo dia): pedido do site avisa o cliente quando o admin cancela
+ * (botão ou troca de status) e quando o próprio cliente cancela em Meus
+ * pedidos (cancelarPeloCliente).
  */
 class CancelamentoDoPedido
 {
@@ -49,9 +60,11 @@ class CancelamentoDoPedido
             'nota' => $this->previaDaNota($order),
             'pagamentos' => $this->previaDosPagamentos($order),
             'estoque' => $this->previaDoEstoque($order),
-            'cliente' => $doSite
-                ? 'Nenhum e-mail sai para o cliente: ele vê o status novo em Meus pedidos.'
-                : "O comprador é avisado pelo próprio {$canal}, não por nós.",
+            'cliente' => match (true) {
+                ! $doSite => "O comprador é avisado pelo próprio {$canal}, não por nós.",
+                $this->destinatario($order) === null => 'O cliente não tem e-mail cadastrado: ele só vê o status novo em Meus pedidos.',
+                default => "O cliente recebe um e-mail avisando do cancelamento ({$this->destinatario($order)}) e vê o status novo em Meus pedidos.",
+            },
             'canal' => $doSite ? null : "Pedido do {$canal}: aqui o cancelamento é só no nosso sistema. Cancele também no painel do {$canal}, senão o canal segue esperando o envio.",
             'etiqueta' => $this->previaDaEtiqueta($order),
         ];
@@ -95,7 +108,57 @@ class CancelamentoDoPedido
             $order->user->notify(new OrderStatusUpdated($order));
         }
 
-        return ['ok' => true, 'erro' => null] + $this->executar($order, $statusAnterior);
+        return ['ok' => true, 'erro' => null] + $this->executarEAvisar($order, $statusAnterior);
+    }
+
+    /**
+     * Por que o cliente não pode cancelar sozinho agora (null = pode).
+     * Só compra do site, antes de a etiqueta sair: depois disso o pacote
+     * pode já estar na bancada ou nos Correios e quem resolve é o suporte.
+     */
+    public function bloqueioDoCliente(Order $order): ?string
+    {
+        if ($order->status === Order::STATUS_CANCELLED) {
+            return 'Esta compra já está cancelada.';
+        }
+
+        if ($order->origin !== Order::ORIGIN_STORE) {
+            return 'Esta compra só pode ser cancelada pelo canal onde foi feita.';
+        }
+
+        $preparando = ! in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PAID], true)
+            || PrintJob::query()->where('order_id', $order->id)->where('is_thank_you', false)->where('status', PrintJob::STATUS_PRINTED)->exists()
+            || CorreiosPrePostagem::query()->where('order_id', $order->id)->where('status', CorreiosPrePostagem::STATUS_GERADA)->exists();
+
+        return $preparando
+            ? 'Sua compra já está sendo preparada para envio. Para cancelar, fale com o suporte.'
+            : null;
+    }
+
+    /**
+     * Botão "Cancelar pedido" de Meus pedidos (2026-10-17): mesmo
+     * cancelamento do admin (nota, estorno, estoque, e-mail) e os admins
+     * são avisados no sino com o que ficou para tratar.
+     *
+     * @return array{ok: bool, erro: ?string, avisos?: list<string>, etapas?: list<array{etapa: string, ok: bool, texto: string}>}
+     */
+    public function cancelarPeloCliente(Order $order, User $cliente, string $motivo): array
+    {
+        if ($bloqueio = $this->bloqueioDoCliente($order)) {
+            return ['ok' => false, 'erro' => $bloqueio];
+        }
+
+        $resultado = $this->cancelar($order, 'Cancelado pelo cliente: '.trim($motivo), $cliente->id);
+
+        if ($resultado['ok']) {
+            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+            if ($admins->isNotEmpty()) {
+                rescue(fn () => Notification::send($admins, new PedidoCanceladoPeloClienteNotification($order->refresh(), $resultado['avisos'])), report: false);
+            }
+        }
+
+        return $resultado;
     }
 
     /**
@@ -107,7 +170,87 @@ class CancelamentoDoPedido
      */
     public function efeitos(Order $order, string $statusAnterior): array
     {
-        return $this->executar($order, $statusAnterior)['avisos'];
+        return $this->executarEAvisar($order, $statusAnterior)['avisos'];
+    }
+
+    /**
+     * executar() e, no pedido do site, o e-mail ao cliente com o valor que
+     * foi estornado agora (só o que estava pago e virou estornado).
+     *
+     * @return array{avisos: list<string>, etapas: list<array{etapa: string, ok: bool, texto: string}>}
+     */
+    private function executarEAvisar(Order $order, string $statusAnterior): array
+    {
+        $capturados = $order->payments()->where('status', Payment::STATUS_CAPTURED)->pluck('id');
+
+        $resultado = $this->executar($order, $statusAnterior);
+
+        if ($order->origin !== Order::ORIGIN_STORE) {
+            return $resultado;
+        }
+
+        $valorEstornado = (float) $order->payments()
+            ->whereIn('id', $capturados)
+            ->where('status', Payment::STATUS_REFUNDED)
+            ->sum('amount');
+
+        $email = $this->avisarCliente($order, $valorEstornado);
+        $resultado['etapas'][] = array_intersect_key($email, array_flip(['etapa', 'ok', 'texto']));
+
+        if (! $email['ok']) {
+            $resultado['avisos'][] = $email['aviso'];
+        }
+
+        return $resultado;
+    }
+
+    private function destinatario(Order $order): ?string
+    {
+        return $order->user?->email ?: ($order->shipping_email ?: null);
+    }
+
+    /**
+     * Manda o e-mail e registra em order_email_logs.
+     *
+     * @return array{etapa: string, ok: bool, texto: string, aviso?: string}
+     */
+    private function avisarCliente(Order $order, float $valorEstornado): array
+    {
+        $order->loadMissing('user');
+        $destinatario = $this->destinatario($order);
+
+        if ($destinatario === null) {
+            return ['etapa' => 'E-mail ao cliente', 'ok' => true, 'texto' => 'Cliente sem e-mail cadastrado: nenhum e-mail enviado.'];
+        }
+
+        try {
+            Mail::to($destinatario)->send(new PedidoCancelado($order, $valorEstornado));
+
+            OrderEmailLog::create([
+                'order_id' => $order->id,
+                'mailable' => PedidoCancelado::class,
+                'attempt' => 1,
+                'status' => OrderEmailLog::STATUS_SENT,
+                'invoice_attached' => false,
+            ]);
+
+            return ['etapa' => 'E-mail ao cliente', 'ok' => true, 'texto' => "E-mail de cancelamento enviado para {$destinatario}."];
+        } catch (Throwable $exception) {
+            Log::error('pedido.cancelado.email_failed', ['order_id' => $order->id, 'message' => $exception->getMessage()]);
+
+            OrderEmailLog::create([
+                'order_id' => $order->id,
+                'mailable' => PedidoCancelado::class,
+                'attempt' => 1,
+                'status' => OrderEmailLog::STATUS_FAILED,
+                'invoice_attached' => false,
+                'error_message' => mb_substr($exception->getMessage(), 0, 500),
+            ]);
+
+            $aviso = 'O e-mail de cancelamento para o cliente não saiu: avise por outro meio.';
+
+            return ['etapa' => 'E-mail ao cliente', 'ok' => false, 'texto' => $aviso, 'aviso' => $aviso];
+        }
     }
 
     /**
@@ -130,7 +273,7 @@ class CancelamentoDoPedido
             $etapas[] = ['etapa' => 'Estoque', 'ok' => true, 'texto' => 'Pedido já tinha saído: o estoque não volta (registre a devolução quando o produto chegar).'];
         } else {
             $jaDevolvido = (bool) $order->stock_restored_at;
-            $this->finalizer->restoreStockIfNeeded($order, 'Pedido cancelado pelo admin');
+            $this->finalizer->restoreStockIfNeeded($order, str_starts_with((string) $order->motivo_cancelamento, 'Cancelado pelo cliente') ? 'Pedido cancelado pelo cliente' : 'Pedido cancelado pelo admin');
             $etapas[] = ['etapa' => 'Estoque', 'ok' => true, 'texto' => $jaDevolvido ? 'O estoque já tinha sido devolvido antes.' : 'Estoque devolvido.'];
         }
 

@@ -4,7 +4,9 @@ namespace Tests\Feature\Admin;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderEmailLog;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -17,8 +19,8 @@ use Tests\TestCase;
 
 /**
  * Botão "Cancelar pedido" do admin (2026-10-17): motivo obrigatório,
- * estorno, estoque de volta e trava contra cancelar duas vezes. Sem e-mail
- * ao cliente (Lira, 2026-10-17). Ver CancelamentoDoPedido.
+ * estorno, estoque de volta, e-mail ao cliente do site e trava contra
+ * cancelar duas vezes. Ver CancelamentoDoPedido.
  */
 class CancelarPedidoTest extends TestCase
 {
@@ -76,7 +78,7 @@ class CancelarPedidoTest extends TestCase
         return User::factory()->create(['role' => User::ROLE_ADMIN]);
     }
 
-    public function test_cancela_pedido_do_site_estorna_e_devolve_estoque_sem_mandar_email(): void
+    public function test_cancela_pedido_do_site_estorna_devolve_estoque_e_manda_email(): void
     {
         Mail::fake();
         [$order, $product] = $this->pedidoPago();
@@ -90,7 +92,8 @@ class CancelarPedidoTest extends TestCase
             ->assertSessionHas('cancelamento', fn (array $resultado) => $resultado['ok'] === true
                 && collect($resultado['etapas'])->pluck('texto')->contains('Estorno de R$ 20,00 feito no Mercado Pago.')
                 && collect($resultado['etapas'])->pluck('texto')->contains('Estoque devolvido.')
-                && collect($resultado['etapas'])->pluck('texto')->contains('Pedido cancelado no KazaKora.'));
+                && collect($resultado['etapas'])->pluck('texto')->contains('Pedido cancelado no KazaKora.')
+                && collect($resultado['etapas'])->pluck('texto')->contains('E-mail de cancelamento enviado para cliente@example.com.'));
 
         $order->refresh();
         $this->assertSame(Order::STATUS_CANCELLED, $order->status);
@@ -100,8 +103,31 @@ class CancelarPedidoTest extends TestCase
         $this->assertSame(Payment::STATUS_REFUNDED, $payment->fresh()->status);
         $this->assertSame(10, (int) $product->fresh()->stock);
 
-        Mail::assertNothingSent();
-        $this->assertDatabaseMissing('order_email_logs', ['order_id' => $order->id]);
+        Mail::assertSent(PedidoCancelado::class, fn (PedidoCancelado $mail) => $mail->hasTo('cliente@example.com') && $mail->valorEstornado === 20.0);
+        $this->assertDatabaseHas('order_email_logs', ['order_id' => $order->id, 'mailable' => PedidoCancelado::class, 'status' => OrderEmailLog::STATUS_SENT]);
+    }
+
+    public function test_trocar_status_para_cancelado_tambem_manda_email(): void
+    {
+        Mail::fake();
+        [$order] = $this->pedidoPago();
+
+        $this->actingAs($this->admin())
+            ->patch("/admin/pedidos/{$order->id}", ['status' => Order::STATUS_CANCELLED])
+            ->assertRedirect();
+
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        Mail::assertSent(PedidoCancelado::class, fn (PedidoCancelado $mail) => $mail->hasTo('cliente@example.com'));
+    }
+
+    public function test_email_renderiza_com_numero_e_estorno(): void
+    {
+        [$order] = $this->pedidoPago();
+
+        $html = (new PedidoCancelado($order, 20.0))->render();
+
+        $this->assertStringContainsString($order->numero, $html);
+        $this->assertStringContainsString('R$ 20,00', $html);
     }
 
     public function test_segundo_clique_nao_estorna_nem_devolve_estoque_de_novo(): void
@@ -171,7 +197,7 @@ class CancelarPedidoTest extends TestCase
             ->get("/admin/pedidos/{$order->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('cancelamento.pode', true)
-                ->where('cancelamento.cliente', 'Nenhum e-mail sai para o cliente: ele vê o status novo em Meus pedidos.')
+                ->where('cancelamento.cliente', 'O cliente recebe um e-mail avisando do cancelamento (cliente@example.com) e vê o status novo em Meus pedidos.')
                 ->where('cancelamento.canal', null)
                 ->where('cancelamento.pagamentos.0', 'R$ 20,00 pagos: estorno total pedido ao Mercado Pago.')
                 ->where('cancelamento.estoque', '2 unidades voltam para o estoque.')

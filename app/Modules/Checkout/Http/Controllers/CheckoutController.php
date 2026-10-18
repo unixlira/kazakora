@@ -15,6 +15,7 @@ use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Services\CorreiosFreightQuoteService;
 use App\Modules\Checkout\Services\FreightQuoteService;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
+use App\Modules\Checkout\Support\CancelamentoDoPedido;
 use App\Modules\Checkout\Support\CartStockChangedException;
 use App\Modules\Checkout\Support\CupomEsgotadoException;
 use App\Modules\Checkout\Support\EntregaExpressa;
@@ -1089,7 +1090,7 @@ class CheckoutController extends Controller
     }
 
     /** Detalhe da compra com tudo para o cliente e o chat de suporte (pedido 2026-10-11). */
-    public function showOrder(Request $request, Order $order): Response
+    public function showOrder(Request $request, Order $order, CancelamentoDoPedido $cancelamento): Response
     {
         abort_unless($order->user_id === $request->user()->id, 403);
 
@@ -1104,6 +1105,13 @@ class CheckoutController extends Controller
                 'status' => $order->status,
                 'criado_em' => $order->created_at?->toIso8601String(),
                 'etapas' => $order->etapas(),
+                // Botão "Cancelar pedido" (2026-10-17): só aparece enquanto
+                // a etiqueta não saiu; depois disso, o aviso manda ao suporte.
+                'cancelamento' => $order->status === Order::STATUS_CANCELLED ? null : [
+                    'pode' => ($bloqueio = $cancelamento->bloqueioDoCliente($order)) === null,
+                    'bloqueio' => $bloqueio,
+                    'estorno' => $order->payments->contains(fn ($pagamento) => in_array($pagamento->status, [\App\Modules\Checkout\Models\Payment::STATUS_CAPTURED, \App\Modules\Checkout\Models\Payment::STATUS_AUTHORIZED], true)),
+                ],
                 'itens' => $order->items->map(fn ($item) => [
                     'nome' => $item->product_name,
                     'quantidade' => (int) $item->quantity,
@@ -1152,6 +1160,30 @@ class CheckoutController extends Controller
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Cliente cancela a própria compra (2026-10-17). Mesmo cancelamento do
+     * admin: nota, estorno, estoque e e-mail "Seu pedido foi cancelado".
+     */
+    public function cancelOrder(Request $request, Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
+    {
+        abort_unless($order->user_id === $request->user()->id, 403);
+
+        $validated = $request->validate([
+            'motivo' => ['required', 'string', 'min:3', 'max:300'],
+        ], [
+            'motivo.required' => 'Conte para a gente o motivo do cancelamento.',
+            'motivo.min' => 'Conte para a gente o motivo do cancelamento.',
+        ]);
+
+        $resultado = $cancelamento->cancelarPeloCliente($order, $request->user(), $validated['motivo']);
+
+        if (! $resultado['ok']) {
+            return back()->with('error', $resultado['erro']);
+        }
+
+        return back()->with('success', 'Compra cancelada. Enviamos a confirmação para o seu e-mail.');
     }
 
     /** Nota fiscal do próprio pedido (PDF ou XML) para o cliente. */

@@ -20,8 +20,8 @@ use Tests\TestCase;
 
 /**
  * Botão "Cancelar pedido" em Meus pedidos (2026-10-17): o cliente cancela
- * a própria compra do site antes de a etiqueta sair, recebe o e-mail e os
- * admins são avisados no sino. Ver CancelamentoDoPedido::cancelarPeloCliente().
+ * a própria compra do site na hora (desde 2026-10-18 até sair para entrega,
+ * sem passar pelo suporte), recebe o e-mail e os admins são avisados no sino. Ver CancelamentoDoPedido::cancelarPeloCliente().
  */
 class ClienteCancelaPedidoTest extends TestCase
 {
@@ -123,30 +123,39 @@ class ClienteCancelaPedidoTest extends TestCase
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
     }
 
-    public function test_com_etiqueta_impressa_manda_falar_com_suporte(): void
+    public function test_com_etiqueta_impressa_cancela_na_hora_e_avisa_admin_do_pacote(): void
     {
         Mail::fake();
+        Notification::fake();
         [$order, , $cliente] = $this->compra();
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         PrintJob::create(['order_id' => $order->id, 'channel' => 'loja', 'label_path' => 'labels/y.pdf', 'status' => PrintJob::STATUS_PRINTED, 'printed_at' => now()]);
 
         $this->actingAs($cliente)
             ->get("/pedidos/{$order->id}")
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('pedido.cancelamento.pode', false)
-                ->where('pedido.cancelamento.bloqueio', fn ($texto) => str_contains((string) $texto, 'suporte'))
+                ->where('pedido.cancelamento.pode', true)
                 ->etc());
 
         $this->actingAs($cliente)
             ->post("/pedidos/{$order->id}/cancelar", ['motivo' => 'Desisti da compra'])
-            ->assertSessionHas('error');
+            ->assertSessionHas('success');
 
-        $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
-        Mail::assertNothingSent();
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        Mail::assertSent(PedidoCancelado::class);
+        Notification::assertSentTo($admin, PedidoCanceladoPeloClienteNotification::class,
+            fn (PedidoCanceladoPeloClienteNotification $aviso) => str_contains($aviso->toArray($admin)['body'], 'tire o pacote da bancada'));
     }
 
     public function test_pedido_enviado_nao_cancela(): void
     {
         [$order, , $cliente] = $this->compra(['status' => Order::STATUS_SHIPPED]);
+
+        $this->actingAs($cliente)
+            ->get("/pedidos/{$order->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('pedido.cancelamento.pode', false)
+                ->etc());
 
         $this->actingAs($cliente)
             ->post("/pedidos/{$order->id}/cancelar", ['motivo' => 'Desisti da compra'])

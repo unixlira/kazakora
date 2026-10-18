@@ -44,8 +44,10 @@ class MetaAdsController extends Controller
 
     private const TIPOS_IMAGEM = ['image/jpeg', 'image/png'];
 
-    public function index(MetaAdsService $meta): Response
+    public function index(Request $request, MetaAdsService $meta): Response
     {
+        $periodo = $this->periodo($request);
+
         $campanhas = MetaAdsCampanha::query()
             ->with('user:id,name')
             ->withCount(['videos', 'conjuntos'])
@@ -66,9 +68,14 @@ class MetaAdsController extends Controller
                 'criada_por' => $c->user?->name,
             ]);
 
+        $noKazaKora = MetaAdsCampanha::query()->whereNotNull('meta_campaign_id')->pluck('id', 'meta_campaign_id');
+
         return Inertia::render('Admin/MetaAds/Index', [
             'campanhas' => $campanhas,
             'config' => $this->estadoConfig($meta),
+            'periodo' => $periodo,
+            'periodos' => MetaAdsService::PERIODOS,
+            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $noKazaKora->all())),
         ]);
     }
 
@@ -102,8 +109,10 @@ class MetaAdsController extends Controller
         return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)->with('success', 'Rascunho salvo.');
     }
 
-    public function show(MetaAdsCampanha $campanha, MetaAdsService $meta): Response
+    public function show(Request $request, MetaAdsCampanha $campanha, MetaAdsService $meta): Response
     {
+        $periodo = $this->periodo($request);
+
         $campanha->load(['produto:id,name,slug', 'user:id,name', 'conjuntos', 'videos']);
 
         $desempenho = [];
@@ -123,6 +132,11 @@ class MetaAdsController extends Controller
                 'desempenho' => $v->meta_ad_id ? ($desempenho[$v->meta_ad_id] ?? null) : null,
             ]),
             'erroDesempenho' => $erroDesempenho,
+            'periodo' => $periodo,
+            'periodos' => MetaAdsService::PERIODOS,
+            'espelho' => Inertia::defer(fn () => filled($campanha->meta_campaign_id)
+                ? $this->espelho($meta, $periodo, (string) $campanha->meta_campaign_id)
+                : ['campanhas' => [], 'erro' => null]),
             'config' => $this->estadoConfig($meta),
             'problemas' => $campanha->podeEnviar() ? $meta->problemasParaEnviar($campanha) : [],
             'pode' => [
@@ -815,6 +829,38 @@ class MetaAdsController extends Controller
     }
 
     /** @return array{configurado: bool, faltando: list<string>, pixel: bool} */
+    private function periodo(Request $request): string
+    {
+        $periodo = (string) $request->query('periodo', 'maximum');
+
+        return array_key_exists($periodo, MetaAdsService::PERIODOS) ? $periodo : 'maximum';
+    }
+
+    /**
+     * Estrutura real da Meta (Campanha > Conjuntos > Anúncios) com métricas.
+     * Erro da Meta não derruba a tela: volta a mensagem para mostrar.
+     *
+     * @param  array<string, int>  $noKazaKora  meta_campaign_id => id local, para o link da campanha
+     * @return array{campanhas: list<array<string, mixed>>, erro: ?string}
+     */
+    private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = []): array
+    {
+        if (! $meta->configurado()) {
+            return ['campanhas' => [], 'erro' => null];
+        }
+
+        try {
+            $campanhas = array_map(
+                fn (array $c) => $c + ['local_id' => $noKazaKora[$c['id']] ?? null],
+                $meta->espelho($periodo, $campaignId),
+            );
+
+            return ['campanhas' => $campanhas, 'erro' => null];
+        } catch (MetaAdsException $erro) {
+            return ['campanhas' => [], 'erro' => $erro->getMessage()];
+        }
+    }
+
     private function estadoConfig(MetaAdsService $meta): array
     {
         return [

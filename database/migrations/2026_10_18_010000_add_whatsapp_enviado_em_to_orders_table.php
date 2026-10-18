@@ -13,7 +13,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->timestamp('whatsapp_enviado_em')->nullable()->after('whatsapp_confirmacao_em');
+            $table->timestamp('whatsapp_enviado_em')->nullable();
         });
     }
 

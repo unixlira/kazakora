@@ -113,8 +113,9 @@ class CancelamentoDoPedido
 
     /**
      * Por que o cliente não pode cancelar sozinho agora (null = pode).
-     * Só compra do site, antes de a etiqueta sair: depois disso o pacote
-     * pode já estar na bancada ou nos Correios e quem resolve é o suporte.
+     * Desde 2026-10-18 (Lira, depois do teste da Giovanna) o cancelamento é
+     * imediato, sem passar pelo suporte: só fica de fora compra de
+     * marketplace e a que já saiu para entrega (aí é devolução).
      */
     public function bloqueioDoCliente(Order $order): ?string
     {
@@ -126,12 +127,8 @@ class CancelamentoDoPedido
             return 'Esta compra só pode ser cancelada pelo canal onde foi feita.';
         }
 
-        $preparando = ! in_array($order->status, [Order::STATUS_PENDING, Order::STATUS_AWAITING_PAYMENT, Order::STATUS_PAID], true)
-            || PrintJob::query()->where('order_id', $order->id)->where('is_thank_you', false)->where('status', PrintJob::STATUS_PRINTED)->exists()
-            || CorreiosPrePostagem::query()->where('order_id', $order->id)->where('status', CorreiosPrePostagem::STATUS_GERADA)->exists();
-
-        return $preparando
-            ? 'Sua compra já está sendo preparada para envio. Para cancelar, fale com o suporte.'
+        return $this->jaSaiu($order->status)
+            ? 'Esta compra já saiu para entrega e não pode mais ser cancelada. Se quiser devolver, fale com o suporte.'
             : null;
     }
 
@@ -148,9 +145,20 @@ class CancelamentoDoPedido
             return ['ok' => false, 'erro' => $bloqueio];
         }
 
+        // Etiqueta impressa ou pré-postagem gerada não seguram mais o
+        // cliente: o admin recebe no sino o que fazer com o pacote.
+        $pacote = array_values(array_filter([
+            $this->previaDaEtiqueta($order),
+            CorreiosPrePostagem::query()->where('order_id', $order->id)->where('status', CorreiosPrePostagem::STATUS_GERADA)->exists()
+                ? 'A pré-postagem dos Correios já foi gerada: cancele no painel dos Correios.'
+                : null,
+        ]));
+
         $resultado = $this->cancelar($order, 'Cancelado pelo cliente: '.trim($motivo), $cliente->id);
 
         if ($resultado['ok']) {
+            $resultado['avisos'] = [...$pacote, ...$resultado['avisos']];
+
             $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
 
             if ($admins->isNotEmpty()) {

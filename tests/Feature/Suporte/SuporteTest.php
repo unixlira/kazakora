@@ -132,13 +132,26 @@ class SuporteTest extends TestCase
         foreach ([Order::STATUS_PAID, Order::STATUS_SHIPPED] as $status) {
             $order = $this->pedido(null, ['status' => $status, 'origin' => Order::ORIGIN_STORE]);
             $chamado = Chamado::create(['numero' => Chamado::gerarNumero(), 'user_id' => $order->user_id, 'order_id' => $order->id, 'status' => Chamado::CONVERSA, 'aberto_por' => 'cliente']);
-            $chamado->registrar(MensagemSuporte::CLIENTE, 'Quero cancelar');
+            $chamado->registrar(MensagemSuporte::CLIENTE, 'Desisti, como faço para não receber?');
             app(ManuelaSuporte::class)->responder($chamado);
         }
 
-        $this->assertStringContainsString('botão "Cancelar pedido"', $instrucoes[0]);
+        $this->assertStringContainsString('botão "Cancelar Pedido"', $instrucoes[0]);
         $this->assertStringContainsString('NÃO abra chamado para isso', $instrucoes[0]);
         $this->assertStringContainsString('não está disponível', $instrucoes[1]);
+    }
+
+    public function test_pedido_de_cancelamento_aponta_o_botao_sem_abrir_chamado_mesmo_sem_ia(): void
+    {
+        $this->gemini(null);
+        $order = $this->pedido(null, ['origin' => Order::ORIGIN_STORE]);
+        $chamado = Chamado::create(['numero' => Chamado::gerarNumero(), 'user_id' => $order->user_id, 'order_id' => $order->id, 'status' => Chamado::CONVERSA, 'aberto_por' => 'cliente']);
+        $chamado->registrar(MensagemSuporte::CLIENTE, 'Quero cancelar meu pedido');
+
+        app(ManuelaSuporte::class)->responder($chamado);
+
+        $this->assertSame(Chamado::CONVERSA, $chamado->fresh()->status);
+        $this->assertStringContainsString('Cancelar Pedido', (string) $chamado->mensagens()->where('autor', MensagemSuporte::MANUELA)->value('conteudo'));
     }
 
     public function test_sem_ia_responde_padrao_e_abre_chamado(): void

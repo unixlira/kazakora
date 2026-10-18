@@ -226,6 +226,8 @@ Route::get('/pedidos', [CheckoutController::class, 'myOrders'])->middleware('aut
 // Detalhe da compra e chat de suporte com a Manuela (pedido 2026-10-11).
 Route::middleware('auth')->group(function () {
     Route::get('/pedidos/{order}', [CheckoutController::class, 'showOrder'])->whereNumber('order')->name('pedidos.ver');
+    // Cliente cancela a própria compra antes de a etiqueta sair (2026-10-17).
+    Route::post('/pedidos/{order}/cancelar', [CheckoutController::class, 'cancelOrder'])->whereNumber('order')->middleware('throttle:10,1')->name('pedidos.cancelar.cliente');
     Route::get('/pedidos/{order}/nota/{tipo}', [CheckoutController::class, 'notaDoCliente'])->whereNumber('order')->whereIn('tipo', ['pdf', 'xml'])->name('pedidos.nota.cliente');
     Route::get('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'mostrar'])->whereNumber('order')->name('pedidos.suporte');
     Route::post('/pedidos/{order}/suporte', [\App\Modules\Suporte\Http\Controllers\ChatSuporteController::class, 'enviar'])->whereNumber('order')->middleware('throttle:20,1')->name('pedidos.suporte.enviar');

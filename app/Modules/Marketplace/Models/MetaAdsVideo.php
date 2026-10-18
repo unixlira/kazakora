@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Models;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Marketplace\Support\FormatoDeVideo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -34,6 +35,9 @@ class MetaAdsVideo extends Model
         'path',
         'tamanho',
         'duracao_segundos',
+        'largura',
+        'altura',
+        'path_vertical',
         'produto_id',
         'link_destino',
         'texto_principal',
@@ -60,6 +64,8 @@ class MetaAdsVideo extends Model
             'ordem' => 'integer',
             'tamanho' => 'integer',
             'duracao_segundos' => 'decimal:2',
+            'largura' => 'integer',
+            'altura' => 'integer',
             'orcamento_diario' => 'decimal:2',
         ];
     }
@@ -100,6 +106,18 @@ class MetaAdsVideo extends Model
             'descricao' => $ou($this->descricao, $campanha->descricao),
             'chamada' => (string) $ou($this->chamada, $campanha->chamada),
         ];
+    }
+
+    /** Vídeo horizontal: sobe como 9:16 com laterais desfocadas (FormatoDeVideo). */
+    public function precisaFicarVertical(): bool
+    {
+        return ! $this->ehImagem() && FormatoDeVideo::precisaFicarVertical($this->largura, $this->altura);
+    }
+
+    /** Arquivo que vai para a Meta: a versão 9:16, quando existe, ou o original. */
+    public function arquivoParaMeta(): string
+    {
+        return $this->path_vertical ?: $this->path;
     }
 
     public function temObjetoNoMeta(): bool

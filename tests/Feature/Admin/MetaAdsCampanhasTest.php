@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Jobs\EnviarCampanhaMetaAds;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
+use App\Modules\Marketplace\Support\FormatoDeVideo;
 use App\Services\Meta\MetaAdsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
@@ -101,6 +102,9 @@ class MetaAdsCampanhasTest extends TestCase
      *
      * @param  list<HttpRequest>  $chamadas
      */
+    /** @var list<string> corpo de cada upload de vídeo, na ordem */
+    private array $corposDosVideos = [];
+
     private function fakeMeta(array &$chamadas): void
     {
         $videos = 0;
@@ -112,6 +116,10 @@ class MetaAdsCampanhasTest extends TestCase
         Http::fake(function (HttpRequest $request) use (&$chamadas, &$videos, &$adsets, &$imagens, &$criativos, &$ads) {
             $chamadas[] = $request;
             $caminho = Str::after(parse_url($request->url(), PHP_URL_PATH), '/v23.0/');
+            if ($caminho === 'act_123/advideos') {
+                // O arquivo é fechado depois do envio: guarda o corpo agora.
+                $this->corposDosVideos[] = $request->body();
+            }
 
             return match (true) {
                 $caminho === 'act_123/campaigns' => Http::response(['id' => 'camp1']),
@@ -869,5 +877,74 @@ class MetaAdsCampanhasTest extends TestCase
                 ->where('campanha.status_rotulo', 'Assumida no Gerenciador')
                 ->where('pode.enviar', false)
                 ->where('pode.assumir', false));
+    }
+
+    /**
+     * Padrão da Árvore de Natal: vídeo em pé vai como está; horizontal (16:9)
+     * vira 9:16 com laterais desfocadas antes de subir, e o criativo leva
+     * as melhorias de recorte e os vários anúncios juntos no feed.
+     */
+    public function test_video_horizontal_sobe_como_9x16_e_o_vertical_vai_como_esta(): void
+    {
+        $campanha = $this->campanhaComVideos(2, 30, 1);
+        $campanha->videos[0]->update(['largura' => 1920, 'altura' => 1080]);
+        $campanha->videos[1]->update(['largura' => 576, 'altura' => 1024]);
+
+        $formato = $this->mock(FormatoDeVideo::class);
+        $formato->shouldReceive('deixarVertical')->once()->andReturnUsing(function (string $origem, string $destino) {
+            $this->assertStringEndsWith('v0.mp4', $origem);
+            file_put_contents($destino, 'versao-9x16');
+        });
+
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $this->enviarAteTerminar($campanha);
+
+        $horizontal = $campanha->videos[0]->fresh();
+        $this->assertSame("meta-ads/campanha-{$campanha->id}/v0-9x16.mp4", $horizontal->path_vertical);
+        $this->assertNull($campanha->videos[1]->fresh()->path_vertical);
+
+        $this->assertCount(2, $this->corposDosVideos);
+        $this->assertStringContainsString('versao-9x16', $this->corposDosVideos[0]);
+        $this->assertStringContainsString('conteudo-do-video-1', $this->corposDosVideos[1]);
+
+        $criativo = collect($chamadas)->first(fn (HttpRequest $r) => str_ends_with($r->url(), 'act_123/adcreatives'))->data();
+        $this->assertSame(['enroll_status' => 'OPT_IN'], json_decode($criativo['contextual_multi_ads'], true));
+        $melhorias = json_decode($criativo['degrees_of_freedom_spec'], true)['creative_features_spec'];
+        $this->assertSame('OPT_IN', $melhorias['video_auto_crop']['enroll_status']);
+        $this->assertSame('OPT_IN', $melhorias['video_uncrop']['enroll_status']);
+    }
+
+    public function test_formato_do_video_aparece_na_tela(): void
+    {
+        $this->assertSame('16:9 horizontal (1920x1080)', FormatoDeVideo::descrever(1920, 1080));
+        $this->assertSame('9:16 vertical (576x1024)', FormatoDeVideo::descrever(576, 1024));
+        $this->assertSame('1:1 quadrado (576x576)', FormatoDeVideo::descrever(576, 576));
+        $this->assertNull(FormatoDeVideo::descrever(null, null));
+        $this->assertTrue(FormatoDeVideo::precisaFicarVertical(1920, 1080));
+        $this->assertFalse(FormatoDeVideo::precisaFicarVertical(576, 1024));
+        $this->assertFalse(FormatoDeVideo::precisaFicarVertical(null, null));
+    }
+
+    /** Com ffmpeg de verdade: 16:9 vira 1080x1920. */
+    public function test_ffmpeg_deixa_16x9_em_pe(): void
+    {
+        $pasta = sys_get_temp_dir().'/meta-formato-'.Str::random(8);
+        mkdir($pasta);
+        $origem = "{$pasta}/horizontal.mp4";
+        exec('ffmpeg -loglevel error -f lavfi -i testsrc=size=640x360:rate=30 -f lavfi -i sine=frequency=440 -t 2 -pix_fmt yuv420p -shortest '.escapeshellarg($origem).' 2>&1', $saida, $codigo);
+        exec('ffprobe -version 2>&1', $saida, $semFfprobe);
+        if ($codigo !== 0 || $semFfprobe !== 0) {
+            $this->markTestSkipped('ffmpeg ou ffprobe não está instalado aqui.');
+        }
+
+        $formato = new FormatoDeVideo;
+        $this->assertSame(['largura' => 640, 'altura' => 360], $formato->medir($origem));
+
+        $formato->deixarVertical($origem, "{$pasta}/vertical.mp4");
+        $this->assertSame(['largura' => 1080, 'altura' => 1920], $formato->medir("{$pasta}/vertical.mp4"));
+
+        array_map('unlink', glob("{$pasta}/*"));
+        rmdir($pasta);
     }
 }

@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
 use App\Modules\Marketplace\Support\DuracaoDeVideo;
+use App\Modules\Marketplace\Support\FormatoDeVideo;
 use App\Services\Meta\MetaAdsException;
 use App\Services\Meta\MetaAdsService;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -284,7 +285,7 @@ class MetaAdsController extends Controller
      * Recebe UM anúncio por requisição: o arquivo (vídeo ou imagem, até
      * 64 MB por envio no servidor) e, opcional, o produto e o texto dele.
      */
-    public function videoStore(Request $request, MetaAdsCampanha $campanha, DuracaoDeVideo $duracao): JsonResponse
+    public function videoStore(Request $request, MetaAdsCampanha $campanha, DuracaoDeVideo $duracao, FormatoDeVideo $formato): JsonResponse
     {
         if (! $campanha->podeMexerNosVideos()) {
             return response()->json(['message' => 'Campanha já enviada à Meta: os anúncios não mudam mais por aqui.'], 409);
@@ -324,7 +325,7 @@ class MetaAdsController extends Controller
             'path' => $path,
             'tamanho' => (int) $arquivo->getSize(),
             'duracao_segundos' => $imagem ? null : $duracao->segundos(Storage::disk('local')->path($path)),
-        ]);
+        ] + ($imagem ? [] : ($formato->medir(Storage::disk('local')->path($path)) ?? [])));
 
         return response()->json(['video' => $this->dadosDoVideo($campanha, $video)], 201);
     }
@@ -382,6 +383,8 @@ class MetaAdsController extends Controller
             'path' => $path,
             'tamanho' => $video->tamanho,
             'duracao_segundos' => $video->duracao_segundos,
+            'largura' => $video->largura,
+            'altura' => $video->altura,
         ]);
 
         return response()->json(['video' => $this->dadosDoVideo($campanha, $copia)], 201);
@@ -397,7 +400,7 @@ class MetaAdsController extends Controller
             return $request->wantsJson() ? response()->json(['message' => $mensagem], 409) : back()->with('error', $mensagem);
         }
 
-        Storage::disk('local')->delete($video->path);
+        Storage::disk('local')->delete(array_filter([$video->path, $video->path_vertical]));
         $video->delete();
 
         return $request->wantsJson() ? response()->json(['ok' => true]) : back()->with('success', 'Anúncio removido.');
@@ -867,6 +870,8 @@ class MetaAdsController extends Controller
             'nome' => $video->nome_original,
             'tamanho_mb' => round($video->tamanho / 1048576, 1),
             'duracao_segundos' => $video->duracao_segundos !== null ? (float) $video->duracao_segundos : null,
+            'formato' => FormatoDeVideo::descrever($video->largura, $video->altura),
+            'vira_vertical' => $video->precisaFicarVertical(),
             'url' => route('admin.publicidade.meta-ads.campanhas.videos.arquivo', [$campanha, $video]),
             'capa' => $video->meta_thumbnail_url,
             'etapa' => $video->etapa(),

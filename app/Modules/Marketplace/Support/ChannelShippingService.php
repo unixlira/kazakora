@@ -98,7 +98,7 @@ class ChannelShippingService
             CheckShipmentLabelJob::dispatch($shipment->id, CarbonImmutable::now()->addHours(24), 60)->afterCommit();
         }
 
-        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON], true)
+        if (in_array($order->origin, [Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_SHOPEE, Order::ORIGIN_AMAZON, Order::ORIGIN_STORE], true)
             && $order->fresh()?->status === Order::STATUS_PAID) {
             // BUG REAL 2026-08-14 (pedido #278): venda agendada (ver
             // MercadoLivreDriver::extractScheduledFor()) disparando o job

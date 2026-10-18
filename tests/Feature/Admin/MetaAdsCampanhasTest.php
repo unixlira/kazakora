@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Jobs\EnviarCampanhaMetaAds;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Services\Meta\MetaAdsService;
@@ -90,22 +91,26 @@ class MetaAdsCampanhasTest extends TestCase
     {
         $videos = 0;
         $adsets = 0;
+        $imagens = 0;
+        $criativos = 0;
+        $ads = 0;
 
-        Http::fake(function (HttpRequest $request) use (&$chamadas, &$videos, &$adsets) {
+        Http::fake(function (HttpRequest $request) use (&$chamadas, &$videos, &$adsets, &$imagens, &$criativos, &$ads) {
             $chamadas[] = $request;
             $caminho = Str::after(parse_url($request->url(), PHP_URL_PATH), '/v23.0/');
 
             return match (true) {
                 $caminho === 'act_123/campaigns' => Http::response(['id' => 'camp1']),
                 $caminho === 'act_123/advideos' => Http::response(['id' => 'vid'.(++$videos)]),
+                $caminho === 'act_123/adimages' => Http::response(['images' => ['arvore.jpg' => ['hash' => 'hash'.(++$imagens), 'url' => "https://scontent.example/img{$imagens}.jpg"]]]),
                 str_ends_with($caminho, '/thumbnails') => Http::response(['data' => [
                     ['uri' => 'https://scontent.example/outra.jpg', 'is_preferred' => false],
                     ['uri' => "https://scontent.example/{$caminho}.jpg", 'is_preferred' => true],
                 ]]),
                 str_starts_with($caminho, 'vid') => Http::response(['status' => ['video_status' => 'ready']]),
                 $caminho === 'act_123/adsets' => Http::response(['id' => 'set'.(++$adsets)]),
-                $caminho === 'act_123/adcreatives' => Http::response(['id' => 'cri'.$adsets]),
-                $caminho === 'act_123/ads' => Http::response(['id' => 'ad'.$adsets]),
+                $caminho === 'act_123/adcreatives' => Http::response(['id' => 'cri'.(++$criativos)]),
+                $caminho === 'act_123/ads' => Http::response(['id' => 'ad'.(++$ads)]),
                 default => Http::response(['success' => true]),
             };
         });
@@ -385,6 +390,134 @@ class MetaAdsCampanhasTest extends TestCase
         foreach ($paths as $path) {
             Storage::disk('local')->assertMissing($path);
         }
+    }
+
+    /**
+     * Pedido do Lira (2026-10-18): 3 árvores de Natal diferentes na mesma
+     * campanha, como no Gerenciador: Campanha > 1 conjunto > 3 anúncios,
+     * cada um com a sua mídia, produto e texto.
+     */
+    public function test_conjunto_unico_cria_um_conjunto_com_varios_anuncios_cada_um_com_o_seu_texto(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $campanha = MetaAdsCampanha::create($this->dados([
+            'nome' => 'Natal',
+            'estrutura' => MetaAdsCampanha::ESTRUTURA_CONJUNTO_UNICO,
+            'orcamento_diario' => 30,
+            'texto_principal' => 'Monte o seu Natal',
+            'titulo' => null,
+        ]) + ['status' => MetaAdsCampanha::STATUS_RASCUNHO]);
+
+        foreach ([['arvore1.jpg', 'imagem', 'Árvore 1,80 m'], ['arvore2.mp4', 'video', 'Árvore 2,10 m'], ['arvore3.png', 'imagem', 'Árvore nevada']] as $i => [$nome, $tipo, $titulo]) {
+            $path = "meta-ads/campanha-{$campanha->id}/{$nome}";
+            Storage::disk('local')->put($path, 'conteudo-'.$i);
+            $campanha->videos()->create([
+                'ordem' => $i, 'tipo' => $tipo, 'nome_original' => $nome, 'path' => $path, 'tamanho' => 1000,
+                'titulo' => $titulo, 'link_destino' => "https://kazakora.com/produtos/arvore-{$i}",
+                'texto_principal' => $i === 2 ? 'Árvore nevada com 500 galhos' : null,
+            ]);
+        }
+
+        $this->assertSame([], app(MetaAdsService::class)->problemasParaEnviar($campanha->fresh('videos')));
+
+        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ENVIANDO])->save();
+        $this->enviarAteTerminar($campanha);
+
+        $campanha->refresh()->load('videos');
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->status);
+        $this->assertSame('set1', $campanha->meta_adset_id);
+        $this->assertSame(['set1', 'set1', 'set1'], $campanha->videos->pluck('meta_adset_id')->all());
+        $this->assertSame(['hash1', null, 'hash2'], $campanha->videos->pluck('meta_image_hash')->all());
+
+        $porCaminho = fn (string $fim) => array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH), $fim)));
+
+        // Um conjunto só, com o orçamento inteiro.
+        $conjuntos = $porCaminho('/adsets');
+        $this->assertCount(1, $conjuntos);
+        $this->assertSame(3000, (int) $conjuntos[0]['daily_budget']);
+        $this->assertSame('Natal | conjunto', $conjuntos[0]['name']);
+
+        // Imagem: link_data com o hash; vídeo: video_data. Cada um com o seu título e link.
+        $specs = array_map(fn ($r) => json_decode($r['object_story_spec'], true), $porCaminho('/adcreatives'));
+        $this->assertCount(3, $specs);
+        $this->assertSame('hash1', $specs[0]['link_data']['image_hash']);
+        $this->assertSame('Árvore 1,80 m', $specs[0]['link_data']['name']);
+        $this->assertSame('https://kazakora.com/produtos/arvore-0', $specs[0]['link_data']['link']);
+        $this->assertSame('Monte o seu Natal', $specs[0]['link_data']['message']);
+        $this->assertSame('vid1', $specs[1]['video_data']['video_id']);
+        $this->assertSame('Árvore 2,10 m', $specs[1]['video_data']['title']);
+        $this->assertSame('https://kazakora.com/produtos/arvore-1', $specs[1]['video_data']['call_to_action']['value']['link']);
+        $this->assertSame('Árvore nevada com 500 galhos', $specs[2]['link_data']['message']);
+
+        $anuncios = $porCaminho('/ads');
+        $this->assertCount(3, $anuncios);
+        $this->assertSame(['set1', 'set1', 'set1'], array_map(fn ($r) => $r['adset_id'], $anuncios));
+
+        // Ativar liga cada objeto uma vez só (o conjunto é o mesmo para todos).
+        $chamadas = [];
+        app(MetaAdsService::class)->alterarStatus($campanha, 'ACTIVE');
+        $ordem = array_map(fn (HttpRequest $r) => Str::after(parse_url($r->url(), PHP_URL_PATH), '/v23.0/'), $chamadas);
+        $this->assertSame(['ad1', 'ad2', 'ad3', 'set1', 'camp1'], $ordem);
+    }
+
+    public function test_anuncio_sem_texto_proprio_nem_padrao_nao_envia(): void
+    {
+        $campanha = $this->campanhaComVideos(2, 30);
+        $campanha->update(['estrutura' => MetaAdsCampanha::ESTRUTURA_CONJUNTO_UNICO, 'titulo' => null]);
+        $campanha->videos[0]->update(['titulo' => 'Árvore 1']);
+
+        $problemas = app(MetaAdsService::class)->problemasParaEnviar($campanha->fresh('videos'));
+
+        $this->assertSame(['Falta o título do anúncio 2 (video1) (ou um título padrão na campanha).'], $problemas);
+    }
+
+    public function test_conjunto_unico_aceita_orcamento_que_nao_daria_para_dividir(): void
+    {
+        $campanha = $this->campanhaComVideos(5, 10);
+        $meta = app(MetaAdsService::class);
+
+        $this->assertNotSame([], $meta->problemasParaEnviar($campanha));
+
+        $campanha->update(['estrutura' => MetaAdsCampanha::ESTRUTURA_CONJUNTO_UNICO]);
+        $this->assertSame([], $meta->problemasParaEnviar($campanha->fresh('videos')));
+    }
+
+    public function test_sobe_imagem_com_produto_e_texto_proprios_e_edita_depois(): void
+    {
+        $admin = $this->admin();
+        $produto = Product::factory()->create(['slug' => 'arvore-natal-180']);
+        $campanha = $this->campanhaComVideos(0);
+
+        $this->actingAs($admin)
+            ->post(self::BASE."/{$campanha->id}/videos", [
+                'video' => UploadedFile::fake()->create('arvore.jpg', 300, 'image/jpeg'),
+                'produto_id' => $produto->id,
+                'titulo' => 'Árvore 1,80 m',
+                'chamada' => '',
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('video.tipo', 'imagem')
+            ->assertJsonPath('video.link_destino', 'https://kazakora.com/produtos/arvore-natal-180')
+            ->assertJsonPath('video.criativo.titulo', 'Árvore 1,80 m')
+            ->assertJsonPath('video.criativo.texto', 'Parafusadeira com frete grátis');
+
+        $anuncio = $campanha->videos()->firstOrFail();
+        $this->assertNull($anuncio->chamada);
+        $this->assertNull($anuncio->duracao_segundos);
+
+        $this->actingAs($admin)
+            ->putJson(self::BASE."/{$campanha->id}/videos/{$anuncio->id}", ['texto_principal' => 'Árvore cheia, 580 galhos', 'link_destino' => 'https://kazakora.devlira.com.br/x'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('link_destino');
+
+        $this->actingAs($admin)
+            ->putJson(self::BASE."/{$campanha->id}/videos/{$anuncio->id}", ['produto_id' => $produto->id, 'texto_principal' => 'Árvore cheia, 580 galhos'])
+            ->assertOk()
+            ->assertJsonPath('video.criativo.texto', 'Árvore cheia, 580 galhos');
+
+        // Campo que não veio volta para o padrão da campanha.
+        $this->assertNull($anuncio->fresh()->titulo);
     }
 
     public function test_tela_abre_mesmo_sem_meta_configurada(): void

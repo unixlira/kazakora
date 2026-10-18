@@ -13,11 +13,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Meta ADS (2026-10-13): envio de campanhas de vídeo pela Marketing API.
+ * Meta ADS (2026-10-13): envio de campanhas pela Marketing API.
  *
- * Estrutura na Meta: uma campanha e, para cada vídeo, um conjunto de
- * anúncios com a sua parte do orçamento diário (divisão igual, pedido do
- * Lira), um criativo de vídeo e um anúncio.
+ * Estrutura na Meta, igual ao Gerenciador (Campanha > Conjunto > Anúncios):
+ * - conjunto único (2026-10-18): um conjunto com o orçamento inteiro e
+ *   todos os anúncios dentro; a Meta leva a verba para o que rende mais.
+ * - por anúncio: um conjunto por anúncio com a sua parte do orçamento
+ *   (divisão igual, pedido do Lira para comparar vídeos).
+ * Cada anúncio tem a sua mídia (vídeo ou imagem), criativo e texto próprio
+ * (ou o padrão da campanha).
  *
  * Regras que não podem quebrar:
  * - Tudo é criado PAUSADO (campanha, conjuntos e anúncios). Ativar é outro
@@ -91,21 +95,32 @@ class MetaAdsService
             $problemas[] = 'Objetivo inválido.';
         }
 
-        $quantidade = $campanha->videos->count();
-        if ($quantidade === 0) {
-            $problemas[] = 'Envie pelo menos um vídeo.';
-        } elseif ((float) $campanha->orcamento_diario / $quantidade < MetaAdsCampanha::MINIMO_POR_VIDEO) {
-            $problemas[] = sprintf(
-                'Orçamento baixo para %d vídeos: cada um precisa de pelo menos R$ %s por dia (total mínimo R$ %s).',
-                $quantidade,
-                number_format(MetaAdsCampanha::MINIMO_POR_VIDEO, 2, ',', '.'),
-                number_format(MetaAdsCampanha::MINIMO_POR_VIDEO * $quantidade, 2, ',', '.'),
-            );
+        $conjuntos = $campanha->quantidadeDeConjuntos();
+        if ($conjuntos === 0) {
+            $problemas[] = 'Envie pelo menos um vídeo ou imagem.';
+        } elseif ((float) $campanha->orcamento_diario / $conjuntos < MetaAdsCampanha::MINIMO_POR_VIDEO) {
+            $problemas[] = $conjuntos === 1
+                ? sprintf('Orçamento baixo: o mínimo é R$ %s por dia.', number_format(MetaAdsCampanha::MINIMO_POR_VIDEO, 2, ',', '.'))
+                : sprintf(
+                    'Orçamento baixo para %d anúncios em conjuntos separados: cada um precisa de pelo menos R$ %s por dia (total mínimo R$ %s).',
+                    $conjuntos,
+                    number_format(MetaAdsCampanha::MINIMO_POR_VIDEO, 2, ',', '.'),
+                    number_format(MetaAdsCampanha::MINIMO_POR_VIDEO * $conjuntos, 2, ',', '.'),
+                );
         }
 
         foreach ($campanha->videos as $video) {
-            if (blank($video->meta_video_id) && ! Storage::disk('local')->exists($video->path)) {
-                $problemas[] = "O arquivo do vídeo {$video->nome_original} sumiu do servidor. Tire e envie de novo.";
+            $nome = $this->rotuloDoAnuncio($video);
+            $criativo = $video->criativo($campanha);
+
+            if (blank($video->ehImagem() ? $video->meta_image_hash : $video->meta_video_id) && ! Storage::disk('local')->exists($video->path)) {
+                $problemas[] = "O arquivo do {$nome} sumiu do servidor. Tire e envie de novo.";
+            }
+            if (blank($criativo['texto'])) {
+                $problemas[] = "Falta o texto principal do {$nome} (ou um texto padrão na campanha).";
+            }
+            if (blank($criativo['titulo'])) {
+                $problemas[] = "Falta o título do {$nome} (ou um título padrão na campanha).";
             }
         }
 
@@ -142,21 +157,27 @@ class MetaAdsService
                 $campanha->forceFill(['meta_campaign_id' => (string) $resposta['id']])->save();
             }
 
-            // 1. Sobe todos os vídeos primeiro: a Meta processa em paralelo.
+            // 1. Sobe todas as mídias primeiro: a Meta processa os vídeos em paralelo.
             foreach ($campanha->videos as $video) {
-                $passo = "envio do vídeo {$video->nome_original}";
-                if (blank($video->meta_video_id)) {
+                $passo = "envio do {$this->rotuloDoAnuncio($video)}";
+                if ($video->ehImagem() && blank($video->meta_image_hash)) {
+                    [$hash, $url] = $this->subirImagem($video);
+                    $video->forceFill(['meta_image_hash' => $hash, 'meta_thumbnail_url' => $url, 'ultimo_erro' => null])->save();
+
+                    return self::ENVIO_CONTINUAR;
+                }
+                if (! $video->ehImagem() && blank($video->meta_video_id)) {
                     $video->forceFill(['meta_video_id' => $this->subirVideo($video), 'ultimo_erro' => null])->save();
 
                     return self::ENVIO_CONTINUAR;
                 }
             }
 
-            // 2. Espera o processamento e pega a capa que a Meta escolheu.
+            // 2. Espera o processamento dos vídeos e pega a capa que a Meta escolheu.
             $todosProntos = true;
             foreach ($campanha->videos as $video) {
-                $passo = "processamento do vídeo {$video->nome_original}";
-                if (filled($video->meta_thumbnail_url)) {
+                $passo = "processamento do {$this->rotuloDoAnuncio($video)}";
+                if ($video->midiaPronta()) {
                     continue;
                 }
 
@@ -174,24 +195,35 @@ class MetaAdsService
                 return self::ENVIO_AGUARDANDO;
             }
 
-            // 3. Um conjunto (com a parte do orçamento), criativo e anúncio por vídeo.
-            $partes = MetaAdsCampanha::dividirOrcamento((float) $campanha->orcamento_diario, $campanha->videos->count());
+            // 3. Conjunto(s), criativo e anúncio. No conjunto único, um
+            // conjunto com o orçamento inteiro recebe todos os anúncios.
+            $video = null;
+            $partes = $campanha->orcamentoPorAnuncio();
+
+            if ($campanha->conjuntoUnico() && blank($campanha->meta_adset_id)) {
+                $passo = 'conjunto de anúncios';
+                $centavos = (int) round((float) $campanha->orcamento_diario * 100);
+                $resposta = $this->post($this->conta().'/adsets', $this->payloadConjunto($campanha, 'conjunto', $centavos));
+                $campanha->forceFill(['meta_adset_id' => (string) $resposta['id']])->save();
+            }
 
             foreach ($campanha->videos->values() as $i => $video) {
-                $passo = "conjunto de anúncios do vídeo {$video->nome_original}";
+                $passo = "conjunto de anúncios do {$this->rotuloDoAnuncio($video)}";
                 if (blank($video->meta_adset_id)) {
                     $video->forceFill(['orcamento_diario' => $partes[$i] / 100])->save();
-                    $resposta = $this->post($this->conta().'/adsets', $this->payloadConjunto($campanha, $video, $partes[$i]));
-                    $video->forceFill(['meta_adset_id' => (string) $resposta['id']])->save();
+                    $conjunto = $campanha->conjuntoUnico()
+                        ? $campanha->meta_adset_id
+                        : (string) $this->post($this->conta().'/adsets', $this->payloadConjunto($campanha, $this->rotuloDoAnuncio($video), $partes[$i]))['id'];
+                    $video->forceFill(['meta_adset_id' => $conjunto])->save();
                 }
 
-                $passo = "criativo do vídeo {$video->nome_original}";
+                $passo = "criativo do {$this->rotuloDoAnuncio($video)}";
                 if (blank($video->meta_creative_id)) {
                     $resposta = $this->post($this->conta().'/adcreatives', $this->payloadCriativo($campanha, $video));
                     $video->forceFill(['meta_creative_id' => (string) $resposta['id']])->save();
                 }
 
-                $passo = "anúncio do vídeo {$video->nome_original}";
+                $passo = "{$this->rotuloDoAnuncio($video)}";
                 if (blank($video->meta_ad_id)) {
                     $resposta = $this->post($this->conta().'/ads', $this->payloadAnuncio($campanha, $video));
                     $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ultimo_erro' => null])->save();
@@ -227,11 +259,12 @@ class MetaAdsService
     {
         $campanha->loadMissing('videos');
 
-        $ids = array_merge(
+        // No conjunto único todos os anúncios apontam para o mesmo conjunto.
+        $ids = array_values(array_unique(array_merge(
             $campanha->videos->pluck('meta_ad_id')->filter()->all(),
             $campanha->videos->pluck('meta_adset_id')->filter()->all(),
             [$campanha->meta_campaign_id],
-        );
+        )));
 
         if ($status === 'PAUSED') {
             $ids = array_reverse($ids);
@@ -341,17 +374,17 @@ class MetaAdsService
             'objective' => $campanha->objetivo,
             'status' => 'PAUSED',
             'special_ad_categories' => json_encode([]),
-            // Orçamento fica em cada conjunto (um por vídeo), não na campanha:
-            // é assim que a divisão igual entre os vídeos é garantida.
+            // Orçamento fica no conjunto, não na campanha: no conjunto único é
+            // o total; por anúncio, é assim que a divisão igual é garantida.
             'is_adset_budget_sharing_enabled' => 'false',
         ];
     }
 
     /** @return array<string, mixed> */
-    public function payloadConjunto(MetaAdsCampanha $campanha, MetaAdsVideo $video, int $orcamentoCentavos): array
+    public function payloadConjunto(MetaAdsCampanha $campanha, string $rotulo, int $orcamentoCentavos): array
     {
         $payload = [
-            'name' => $campanha->nome.' | '.$this->rotuloDoVideo($video),
+            'name' => $campanha->nome.' | '.$rotulo,
             'campaign_id' => $campanha->meta_campaign_id,
             'daily_budget' => $orcamentoCentavos,
             'billing_event' => 'IMPRESSIONS',
@@ -431,22 +464,34 @@ class MetaAdsService
     /** @return array<string, mixed> */
     public function payloadCriativo(MetaAdsCampanha $campanha, MetaAdsVideo $video): array
     {
-        $videoData = array_filter([
-            'video_id' => (string) $video->meta_video_id,
-            'image_url' => $video->meta_thumbnail_url,
-            'message' => $campanha->texto_principal,
-            'title' => $campanha->titulo,
-            'link_description' => $campanha->descricao,
-            'call_to_action' => [
-                'type' => $campanha->chamada,
-                'value' => ['link' => $campanha->link_destino],
-            ],
-        ], fn ($valor) => $valor !== null && $valor !== '');
-
-        $spec = [
-            'page_id' => (string) config('services.meta_ads.page_id'),
-            'video_data' => $videoData,
+        $criativo = $video->criativo($campanha);
+        $chamada = [
+            'type' => $criativo['chamada'],
+            'value' => ['link' => $criativo['link']],
         ];
+        $semVazio = fn (array $dados) => array_filter($dados, fn ($valor) => $valor !== null && $valor !== '');
+
+        $spec = ['page_id' => (string) config('services.meta_ads.page_id')];
+
+        if ($video->ehImagem()) {
+            $spec['link_data'] = $semVazio([
+                'image_hash' => (string) $video->meta_image_hash,
+                'link' => $criativo['link'],
+                'message' => $criativo['texto'],
+                'name' => $criativo['titulo'],
+                'description' => $criativo['descricao'],
+                'call_to_action' => $chamada,
+            ]);
+        } else {
+            $spec['video_data'] = $semVazio([
+                'video_id' => (string) $video->meta_video_id,
+                'image_url' => $video->meta_thumbnail_url,
+                'message' => $criativo['texto'],
+                'title' => $criativo['titulo'],
+                'link_description' => $criativo['descricao'],
+                'call_to_action' => $chamada,
+            ]);
+        }
 
         if (filled(config('services.meta_ads.instagram_actor_id'))) {
             // Desde a v22 o campo se chama instagram_user_id (o antigo
@@ -455,7 +500,7 @@ class MetaAdsService
         }
 
         return [
-            'name' => $campanha->nome.' | '.$this->rotuloDoVideo($video).' | criativo',
+            'name' => $campanha->nome.' | '.$this->rotuloDoAnuncio($video).' | criativo',
             'object_story_spec' => json_encode($spec),
         ];
     }
@@ -464,16 +509,16 @@ class MetaAdsService
     public function payloadAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video): array
     {
         return [
-            'name' => $campanha->nome.' | '.$this->rotuloDoVideo($video),
+            'name' => $campanha->nome.' | '.$this->rotuloDoAnuncio($video),
             'adset_id' => $video->meta_adset_id,
             'creative' => json_encode(['creative_id' => $video->meta_creative_id]),
             'status' => 'PAUSED',
         ];
     }
 
-    private function rotuloDoVideo(MetaAdsVideo $video): string
+    private function rotuloDoAnuncio(MetaAdsVideo $video): string
     {
-        return 'vídeo '.($video->ordem + 1).' ('.mb_substr(pathinfo($video->nome_original, PATHINFO_FILENAME), 0, 60).')';
+        return 'anúncio '.($video->ordem + 1).' ('.mb_substr(pathinfo($video->nome_original, PATHINFO_FILENAME), 0, 60).')';
     }
 
     /** Início no dia escolhido; se já passou, agora (a Meta recusa início no passado). */
@@ -522,6 +567,40 @@ class MetaAdsService
         }
 
         return (string) $corpo['id'];
+    }
+
+    /**
+     * Sobe a imagem para a biblioteca da conta (adimages).
+     *
+     * @return array{0: string, 1: ?string} hash e url da imagem na Meta
+     *
+     * @throws MetaAdsException
+     */
+    private function subirImagem(MetaAdsVideo $video): array
+    {
+        $this->exigirConfiguracao();
+
+        $disco = Storage::disk('local');
+        if (! $disco->exists($video->path)) {
+            throw new MetaAdsException('O arquivo da imagem não está mais no servidor.');
+        }
+
+        try {
+            $resposta = $this->cliente()
+                ->timeout(120)
+                ->attach('filename', $disco->get($video->path), $video->nome_original)
+                ->post($this->url($this->conta().'/adimages'));
+        } catch (ConnectionException) {
+            throw new MetaAdsException('Sem conexão com a Meta ao enviar a imagem. Tente de novo em alguns minutos.');
+        }
+
+        $imagem = collect($this->ler($resposta)['images'] ?? [])->first();
+
+        if (blank($imagem['hash'] ?? null)) {
+            throw new MetaAdsException('A Meta não devolveu o código da imagem.');
+        }
+
+        return [(string) $imagem['hash'], $imagem['url'] ?? null];
     }
 
     /**

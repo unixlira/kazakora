@@ -56,9 +56,10 @@ export const pedirJson = async (metodo, url, dados = null) => {
 };
 
 /** Sobe um arquivo com barra de progresso (fetch não mostra progresso de envio). */
-export const enviarArquivo = (url, campo, arquivo, aoProgredir) => new Promise((resolve, reject) => {
+export const enviarArquivo = (url, campo, arquivo, aoProgredir, extras = {}) => new Promise((resolve, reject) => {
     const dados = new FormData();
     dados.append(campo, arquivo);
+    Object.entries(extras).forEach(([chave, valor]) => dados.append(chave, valor ?? ''));
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);

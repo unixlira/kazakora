@@ -3,6 +3,7 @@
 namespace App\Modules\Checkout\Support;
 
 use App\Models\User;
+use App\Modules\Checkout\Jobs\ProcessarCancelamentoDoPedidoJob;
 use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderEmailLog;
@@ -32,7 +33,7 @@ use Throwable;
  * E-mail "Seu pedido foi cancelado" (Lira, 2026-10-17, voltou depois de ter
  * saído no mesmo dia): pedido do site avisa o cliente quando o admin cancela
  * (botão ou troca de status) e quando o próprio cliente cancela em Meus
- * pedidos (cancelarPeloCliente).
+ * pedidos (solicitarPeloCliente + ProcessarCancelamentoDoPedidoJob).
  */
 class CancelamentoDoPedido
 {
@@ -77,9 +78,29 @@ class CancelamentoDoPedido
      */
     public function cancelar(Order $order, string $motivo, ?int $usuarioId): array
     {
-        // Trava: dois cliques (ou o webhook do canal chegando junto) não
-        // podem rodar estorno e devolução de estoque duas vezes.
-        $statusAnterior = DB::transaction(function () use ($order, $motivo, $usuarioId) {
+        $statusAnterior = $this->marcarCancelado($order, $motivo, $usuarioId);
+
+        if ($statusAnterior === null) {
+            return ['ok' => false, 'erro' => 'Este pedido já está cancelado. Nada foi feito de novo.', 'avisos' => []];
+        }
+
+        $order->refresh();
+
+        if ($order->user) {
+            $order->user->notify(new OrderStatusUpdated($order));
+        }
+
+        return ['ok' => true, 'erro' => null] + $this->executarEAvisar($order, $statusAnterior);
+    }
+
+    /**
+     * Vira "cancelado" com trava: dois cliques (ou o webhook do canal
+     * chegando junto) não podem rodar estorno e devolução de estoque duas
+     * vezes. Devolve o status anterior, ou null se já estava cancelado.
+     */
+    private function marcarCancelado(Order $order, string $motivo, ?int $usuarioId): ?string
+    {
+        return DB::transaction(function () use ($order, $motivo, $usuarioId) {
             $travado = Order::query()->whereKey($order->id)->lockForUpdate()->first();
 
             if (! $travado || $travado->status === Order::STATUS_CANCELLED) {
@@ -97,18 +118,6 @@ class CancelamentoDoPedido
 
             return $anterior;
         });
-
-        if ($statusAnterior === null) {
-            return ['ok' => false, 'erro' => 'Este pedido já está cancelado. Nada foi feito de novo.', 'avisos' => []];
-        }
-
-        $order->refresh();
-
-        if ($order->user) {
-            $order->user->notify(new OrderStatusUpdated($order));
-        }
-
-        return ['ok' => true, 'erro' => null] + $this->executarEAvisar($order, $statusAnterior);
     }
 
     /**
@@ -133,20 +142,24 @@ class CancelamentoDoPedido
     }
 
     /**
-     * Botão "Cancelar pedido" de Meus pedidos (2026-10-17): mesmo
-     * cancelamento do admin (nota, estorno, estoque, e-mail) e os admins
-     * são avisados no sino com o que ficou para tratar.
+     * Botão "Cancelar pedido" de Meus pedidos (2026-10-17). Desde 18/10 o
+     * Enviar do modal só registra a solicitação: o pedido vira cancelado na
+     * hora (a etiqueta sai da fila, o KoraSync e os sites clonados já veem o
+     * status novo e um segundo clique não faz nada) e a fila "nfe" roda o
+     * resto em segundo plano (ProcessarCancelamentoDoPedidoJob): NF-e na
+     * SEFAZ, estorno no Mercado Pago ou Stripe, estoque e e-mail.
      *
-     * @return array{ok: bool, erro: ?string, avisos?: list<string>, etapas?: list<array{etapa: string, ok: bool, texto: string}>}
+     * @return array{ok: bool, erro: ?string}
      */
-    public function cancelarPeloCliente(Order $order, User $cliente, string $motivo): array
+    public function solicitarPeloCliente(Order $order, User $cliente, string $motivo): array
     {
         if ($bloqueio = $this->bloqueioDoCliente($order)) {
             return ['ok' => false, 'erro' => $bloqueio];
         }
 
         // Etiqueta impressa ou pré-postagem gerada não seguram mais o
-        // cliente: o admin recebe no sino o que fazer com o pacote.
+        // cliente: o admin recebe no sino o que fazer com o pacote. Lido
+        // antes de tirar a etiqueta da fila, senão o aviso some.
         $pacote = array_values(array_filter([
             $this->previaDaEtiqueta($order),
             CorreiosPrePostagem::query()->where('order_id', $order->id)->where('status', CorreiosPrePostagem::STATUS_GERADA)->exists()
@@ -154,19 +167,50 @@ class CancelamentoDoPedido
                 : null,
         ]));
 
-        $resultado = $this->cancelar($order, 'Cancelado pelo cliente: '.trim($motivo), $cliente->id);
+        $statusAnterior = $this->marcarCancelado($order, 'Cancelado pelo cliente: '.trim($motivo), $cliente->id);
 
-        if ($resultado['ok']) {
-            $resultado['avisos'] = [...$pacote, ...$resultado['avisos']];
-
-            $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
-
-            if ($admins->isNotEmpty()) {
-                rescue(fn () => Notification::send($admins, new PedidoCanceladoPeloClienteNotification($order->refresh(), $resultado['avisos'])), report: false);
-            }
+        if ($statusAnterior === null) {
+            return ['ok' => false, 'erro' => 'Esta compra já está cancelada.'];
         }
 
+        $order->refresh();
+        $this->tirarEtiquetasDaFila($order);
+
+        if ($order->user) {
+            $order->user->notify(new OrderStatusUpdated($order));
+        }
+
+        ProcessarCancelamentoDoPedidoJob::dispatch($order->id, $statusAnterior, $pacote);
+
+        return ['ok' => true, 'erro' => null];
+    }
+
+    /**
+     * O que a fila faz depois de solicitarPeloCliente(): mesmo cancelamento
+     * do admin (nota, estorno, estoque, e-mail) e os admins são avisados no
+     * sino com o que ficou para tratar.
+     *
+     * @param  list<string>  $avisosDoPacote
+     * @return array{avisos: list<string>, etapas: list<array{etapa: string, ok: bool, texto: string}>}
+     */
+    public function processarPeloCliente(Order $order, string $statusAnterior, array $avisosDoPacote = []): array
+    {
+        $resultado = $this->executarEAvisar($order, $statusAnterior);
+        $resultado['avisos'] = [...$avisosDoPacote, ...$resultado['avisos']];
+
+        $this->avisarAdmins($order->refresh(), $resultado['avisos']);
+
         return $resultado;
+    }
+
+    /** @param list<string> $avisos */
+    public function avisarAdmins(Order $order, array $avisos): void
+    {
+        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
+
+        if ($admins->isNotEmpty()) {
+            rescue(fn () => Notification::send($admins, new PedidoCanceladoPeloClienteNotification($order, $avisos)), report: false);
+        }
     }
 
     /**

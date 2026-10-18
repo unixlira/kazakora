@@ -1177,13 +1177,13 @@ class CheckoutController extends Controller
             'motivo.min' => 'Conte para a gente o motivo do cancelamento.',
         ]);
 
-        $resultado = $cancelamento->cancelarPeloCliente($order, $request->user(), $validated['motivo']);
+        $resultado = $cancelamento->solicitarPeloCliente($order, $request->user(), $validated['motivo']);
 
         if (! $resultado['ok']) {
             return back()->with('error', $resultado['erro']);
         }
 
-        return back()->with('success', 'Compra cancelada. Enviamos a confirmação para o seu e-mail.');
+        return back()->with('success', 'Recebemos o seu pedido de cancelamento e ele já está sendo processado. Assim que terminar, enviamos a confirmação para o seu e-mail.');
     }
 
     /** Nota fiscal do próprio pedido (PDF ou XML) para o cliente. */

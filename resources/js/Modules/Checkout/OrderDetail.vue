@@ -48,7 +48,8 @@ const chatAberto = ref(false);
 // o servidor cancela nota, estorna, devolve o estoque e manda o e-mail.
 // Modal (Lira, 2026-10-18): motivos prontos + texto livre; ao enviar, cancela
 // na hora, mostra o sucesso no próprio modal e fecha sozinho. Substitui o
-// pedido de cancelamento pelo chat da Manuela.
+// pedido de cancelamento pelo chat da Manuela. Fila (2026-10-18): o Enviar só
+// registra; nota, estorno, estoque e e-mail saem em segundo plano.
 const MOTIVOS = ['Desisti da compra', 'Comprei errado', 'Achei mais barato em outro lugar', 'O prazo de entrega ficou longo', 'Outro motivo'];
 const cancelarAberto = ref(false);
 const cancelouOk = ref(false);
@@ -185,9 +186,9 @@ const confirmarCancelamento = () => {
                     <Modal :open="cancelarAberto" max-width="max-w-[480px]" @close="fecharCancelamento">
                         <div v-if="cancelouOk" class="flex flex-col items-center gap-3 py-4 text-center" role="status" aria-live="polite">
                             <span class="flex h-14 w-14 items-center justify-center rounded-full bg-[#0FB930]/15 text-3xl text-[#0FB930]"><i class="fas fa-circle-check"></i></span>
-                            <p class="text-lg font-bold">Pedido cancelado</p>
+                            <p class="text-lg font-bold">Solicitação recebida</p>
                             <p class="text-sm text-store-fg-muted">
-                                Enviamos a confirmação para o seu e-mail.
+                                Seu cancelamento está sendo processado. Assim que terminar, enviamos a confirmação para o seu e-mail.
                                 <template v-if="pedido.pagamento"> Se você já pagou, o valor volta pela mesma forma de pagamento.</template>
                             </p>
                         </div>

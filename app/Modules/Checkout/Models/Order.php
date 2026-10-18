@@ -310,7 +310,14 @@ class Order extends Model
         'pix_discount_amount',
         'desconto_plataforma_amount',
         'total',
+        // API de Conversões da Meta (2026-10-18, ver ConversoesMeta).
+        'meta_rastreio',
+        'meta_purchase_enviado_em',
     ];
+
+    // IP, navegador e cookies da Meta (2026-10-18): nunca vão para a tela
+    // (a confirmação e "Minhas Compras" mandam o pedido inteiro ao navegador).
+    protected $hidden = ['meta_rastreio'];
 
     protected function casts(): array
     {
@@ -323,6 +330,8 @@ class Order extends Model
             'total' => 'decimal:2',
             'visitante_latitude' => 'decimal:7',
             'visitante_longitude' => 'decimal:7',
+            'meta_rastreio' => 'array',
+            'meta_purchase_enviado_em' => 'datetime',
             'fiscal_finality' => 'integer',
             'whatsapp_confirmacao_em' => 'datetime',
             'whatsapp_enviado_em' => 'datetime',

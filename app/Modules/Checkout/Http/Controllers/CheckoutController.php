@@ -22,6 +22,7 @@ use App\Modules\Checkout\Support\EntregaExpressa;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Checkout\Support\GuestEmailAlreadyExistsException;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Services\Meta\ConversoesMeta;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
@@ -719,6 +720,9 @@ class CheckoutController extends Controller
                     'shipping_city' => $address->city,
                     'shipping_state' => $address->state,
                     ...$this->localizacaoDoVisitante($request),
+                    // Para o Purchase da API de Conversões da Meta quando o
+                    // pagamento aprovar (2026-10-18): só com o OK de cookies.
+                    'meta_rastreio' => app(ConversoesMeta::class)->rastreioDoPedido($request),
                     'subtotal' => $subtotal,
                     'shipping_cost' => $shipping['cost'],
                     'coupon_code' => $coupon?->code,
@@ -1050,9 +1054,17 @@ class CheckoutController extends Controller
 
         $order->refresh();
 
+        $pago = $order->status === Order::STATUS_PAID;
+
         return response()->json([
             'status' => $order->status,
-            'redirect' => $order->status === Order::STATUS_PAID ? route('finalizacao.confirmacao', $order) : null,
+            'redirect' => $pago ? route('finalizacao.confirmacao', $order) : null,
+            // Purchase do Pixel no modal de pagamento aprovado (2026-10-18), com o
+            // mesmo event_id do servidor (EnviarPurchaseMetaJob).
+            'meta_purchase' => $pago && ConversoesMeta::pedidoDaLoja($order) ? [
+                'event_id' => ConversoesMeta::eventIdDoPurchase($order),
+                'dados' => ConversoesMeta::dadosDoPurchase($order),
+            ] : null,
         ]);
     }
 
@@ -1060,8 +1072,14 @@ class CheckoutController extends Controller
     {
         abort_if($order->user_id !== $request->user()->id, 403);
 
+        $pago = $order->status === Order::STATUS_PAID && ConversoesMeta::pedidoDaLoja($order);
+
         return Inertia::render('Checkout/Confirmation', [
             'order' => $order->load('items')->append('numero'),
+            'metaPurchase' => $pago ? [
+                'event_id' => ConversoesMeta::eventIdDoPurchase($order),
+                'dados' => ConversoesMeta::dadosDoPurchase($order),
+            ] : null,
         ]);
     }
 

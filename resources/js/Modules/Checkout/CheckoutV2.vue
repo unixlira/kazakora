@@ -1,4 +1,5 @@
 <script setup>
+import { rastrearPurchase } from '@/Shared/pixelMeta';
 // Checkout v2 (pedido 2026-10-10): uma tela só, sem topo e rodapé da loja,
 // feita pra fechar a venda — dados, endereço, entrega e pagamento juntos,
 // resumo do pedido ao lado. Pix já mostra os 5% aplicados ao ser escolhido.
@@ -464,6 +465,8 @@ const acompanhar = (orderId) => {
             const dados = await resposta.json();
             if (dados.status === 'paid') {
                 pararTimers();
+                // Purchase do Pixel com o event_id do servidor (2026-10-18).
+                rastrearPurchase(dados.meta_purchase);
                 urlSucesso.value = `/pedidos/${orderId}`;
                 estado.value = 'success';
                 return;

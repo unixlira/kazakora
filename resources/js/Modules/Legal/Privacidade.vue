@@ -9,7 +9,7 @@ const dadosCategorias = [
     { titulo: 'Dados de cadastro', texto: 'nome, sobrenome, número de telefone, cidade, estado, endereço de e-mail, CPF/CNPJ.' },
     { titulo: 'Dados de navegação', texto: 'dados de geolocalização ao acessar a Loja, preferências e interesses em relação aos produtos/serviços, dados de navegação gerais.' },
     { titulo: 'Dados de pagamento', texto: 'processados por intermediadores seguros, não armazenados diretamente pela KazaKora.' },
-    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança) e, com o seu OK, de estatística de visitas e do Pixel da Meta (publicidade). Veja a Política de Cookies.' },
+    { titulo: 'Cookies', texto: 'necessários para a loja funcionar (sessão, carrinho, segurança) e, com o seu OK, de estatística de visitas e do Pixel da Meta (publicidade). Com esse OK, a loja também informa à Meta, pelo nosso servidor, os produtos colocados no carrinho e as compras aprovadas, com e-mail, telefone, nome, cidade e CEP embaralhados (hash), para medir os anúncios. Veja a Política de Cookies.' },
     { titulo: 'Registros de acesso', texto: 'endereço IP, data e hora de acesso, guardados por 6 meses em sigilo, por obrigação do Marco Civil da Internet (Lei nº 12.965/14).' },
 ];
 

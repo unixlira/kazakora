@@ -2,6 +2,7 @@
 
 namespace App\Modules\Checkout\Support;
 
+use App\Modules\Checkout\Jobs\EnviarPurchaseMetaJob;
 use App\Modules\Checkout\Jobs\SendOrderApprovedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
@@ -9,6 +10,7 @@ use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
+use App\Services\Meta\ConversoesMeta;
 use App\Services\Stripe\StripePaymentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -93,6 +95,12 @@ class OrderPaymentFinalizer
 
             // Aviso no sino da loja com link para a compra (2026-10-11).
             rescue(fn () => $order->user?->notify(new \App\Notifications\Cliente\PedidoConfirmado($order)));
+        }
+
+        // Purchase na API de Conversões da Meta (2026-10-18): só kazakora.com,
+        // uma vez por pedido (o job trava). Cobre Pix e boleto pagos depois.
+        if (ConversoesMeta::pedidoDaLoja($order)) {
+            EnviarPurchaseMetaJob::dispatch($order->id)->afterCommit();
         }
 
         return true;

@@ -188,7 +188,7 @@ const precoPartes = computed(() => {
 });
 // Variações com preços diferentes: o carrinho do card abre o produto para
 // escolher (o preço do card é o da mais barata, não o do produto da página).
-const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props.product.id));
+const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props.product.id, preco.value.final_price));
 </script>
 
 <template>

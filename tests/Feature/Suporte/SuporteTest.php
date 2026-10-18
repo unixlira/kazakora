@@ -117,6 +117,30 @@ class SuporteTest extends TestCase
         );
     }
 
+    public function test_manuela_manda_para_o_botao_quando_o_cliente_ainda_pode_cancelar(): void
+    {
+        $instrucoes = [];
+        $mock = Mockery::mock(GeminiClient::class);
+        $mock->shouldReceive('isConfigured')->andReturn(true);
+        $mock->shouldReceive('generate')->andReturnUsing(function ($modelo, $historico, $sistema) use (&$instrucoes) {
+            $instrucoes[] = $sistema;
+
+            return json_encode(['resposta' => 'ok', 'abrir_chamado' => false]);
+        });
+        $this->app->instance(GeminiClient::class, $mock);
+
+        foreach ([Order::STATUS_PAID, Order::STATUS_SHIPPED] as $status) {
+            $order = $this->pedido(null, ['status' => $status, 'origin' => Order::ORIGIN_STORE]);
+            $chamado = Chamado::create(['numero' => Chamado::gerarNumero(), 'user_id' => $order->user_id, 'order_id' => $order->id, 'status' => Chamado::CONVERSA, 'aberto_por' => 'cliente']);
+            $chamado->registrar(MensagemSuporte::CLIENTE, 'Quero cancelar');
+            app(ManuelaSuporte::class)->responder($chamado);
+        }
+
+        $this->assertStringContainsString('botão "Cancelar pedido"', $instrucoes[0]);
+        $this->assertStringContainsString('NÃO abra chamado para isso', $instrucoes[0]);
+        $this->assertStringContainsString('não está disponível', $instrucoes[1]);
+    }
+
     public function test_sem_ia_responde_padrao_e_abre_chamado(): void
     {
         $this->gemini(null);

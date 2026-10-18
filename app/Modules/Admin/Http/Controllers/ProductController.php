@@ -161,7 +161,7 @@ class ProductController extends Controller
         $siblingsQuery = fn () => Product::query()
             ->where('parent_product_id', $product->parent_product_id ?? $product->id)
             ->whereKeyNot($product->id)
-            ->with('images:id,product_id,path,is_primary')
+            ->with('images:id,product_id,path,thumb_path,medium_path,is_primary')
             ->get(['id', 'name', 'sku', 'variation', 'stock']);
 
         $variationsPayload = [

@@ -589,7 +589,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p v-if="review.comment" class="mt-2 text-sm leading-relaxed text-store-fg-muted">{{ review.comment }}</p>
                             <div v-if="review.images?.length" class="mt-3 flex flex-wrap gap-2">
                                 <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                                    <img :src="image.image_url" alt="" class="h-16 w-16 rounded-lg border border-store-border object-cover">
+                                    <video v-if="image.media_type === 'video'" :src="image.image_url" muted playsinline preload="metadata" class="h-16 w-16 rounded-lg border border-store-border object-cover"></video>
+                                    <img v-else :src="image.image_url" alt="" class="h-16 w-16 rounded-lg border border-store-border object-cover">
                                 </a>
                             </div>
                         </div>

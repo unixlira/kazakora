@@ -201,7 +201,8 @@ class CatalogoApp
                 'nota' => (int) $review->rating,
                 'comentario' => $review->comment,
                 'resposta_loja' => $review->seller_reply,
-                'imagens' => $review->images->pluck('image_url')->filter()->values()->all(),
+                'imagens' => $review->images->where('media_type', '!=', 'video')->pluck('image_url')->filter()->values()->all(),
+                'videos' => $review->images->where('media_type', 'video')->pluck('image_url')->filter()->values()->all(),
                 'criado_em' => $review->created_at?->toIso8601String(),
             ])->values()->all(),
         ];

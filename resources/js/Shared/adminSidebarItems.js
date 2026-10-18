@@ -50,6 +50,7 @@ export const sidebarSections = [
             { label: 'Concorrentes', href: '/admin/concorrencia', icon: 'fas fa-magnifying-glass-chart', cor: 'violeta', permission: 'cadastros.view' },
             { label: 'Fotos de anúncio', href: '/admin/marketplaces/fotos-anuncio', icon: 'fas fa-camera', cor: 'rosa', permission: 'relatorios.view' },
             { label: 'Avaliações', href: '/admin/avaliacoes', icon: 'fas fa-star', cor: 'ambar', permission: 'cadastros.view' },
+            { label: 'Cadastro de avaliações', href: '/admin/avaliacoes/controle', icon: 'fas fa-star-half-stroke', cor: 'ambar', permission: 'cadastros.view' },
         ],
     },
     {

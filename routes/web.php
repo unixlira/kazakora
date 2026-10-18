@@ -60,6 +60,7 @@ use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
 use App\Modules\Admin\Http\Controllers\RadarController;
 use App\Modules\Admin\Http\Controllers\ReportController;
 use App\Modules\Admin\Http\Controllers\ReviewController as AdminReviewController;
+use App\Modules\Admin\Http\Controllers\ReviewControleController;
 use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
@@ -310,6 +311,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor('store', 'permission:cadastros.create')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    // Avaliações › Cadastro e controle (pedido do Lira 2026-10-18). Antes do
+    // resource: senão "controle" vira {review}.
+    Route::get('avaliacoes/controle', [ReviewControleController::class, 'index'])->middleware('permission:cadastros.view')->name('avaliacoes.controle');
+    Route::post('avaliacoes/controle', [ReviewControleController::class, 'store'])->middleware('permission:cadastros.create')->name('avaliacoes.controle.armazenar');
+    Route::post('avaliacoes/controle/atualizar-contagem', [ReviewControleController::class, 'atualizarContagem'])->middleware('permission:cadastros.view')->name('avaliacoes.controle.contagem');
 
     Route::resource('avaliacoes', AdminReviewController::class)->only(['index', 'show', 'edit', 'update', 'destroy'])
         ->parameters(['avaliacoes' => 'review'])

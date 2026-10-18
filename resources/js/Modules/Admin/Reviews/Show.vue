@@ -18,6 +18,7 @@ const channelBadge = {
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
     amazon: { color: 'shipped', label: 'Amazon' },
+    manual: { color: 'purple', label: 'Cadastro manual' },
 };
 
 const originLabel = props.review.channel ? (channelBadge[props.review.channel]?.label ?? props.review.channel) : 'KazaKora';
@@ -80,10 +81,11 @@ const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') :
             </div>
 
             <div v-if="review.images?.length" class="mt-6">
-                <p class="mb-2 text-xs font-medium uppercase text-slate-400">Fotos enviadas pelo cliente</p>
+                <p class="mb-2 text-xs font-medium uppercase text-slate-400">Fotos e vídeos enviados pelo cliente</p>
                 <div class="flex flex-wrap gap-3">
                     <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                        <img :src="image.image_url" alt="" class="h-24 w-24 rounded-lg border border-[var(--surface-border)] object-cover">
+                        <video v-if="image.media_type === 'video'" :src="image.image_url" controls preload="metadata" class="h-24 w-24 rounded-lg border border-[var(--surface-border)] object-cover"></video>
+                        <img v-else :src="image.image_url" alt="" class="h-24 w-24 rounded-lg border border-[var(--surface-border)] object-cover">
                     </a>
                 </div>
             </div>

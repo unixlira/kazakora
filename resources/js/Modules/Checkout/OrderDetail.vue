@@ -111,16 +111,22 @@ const confirmarCancelamento = () => {
                         <p class="mt-1 text-sm text-white/70">Feita em {{ formatDate(pedido.criado_em) }}</p>
                     </div>
                     <div class="text-right">
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-bold" :style="{ color: status.cor }">
+                        <!-- Compra cancelada (Lira, 2026-10-18): sem o selo branco
+                             acima do preço; o aviso fica no lugar do botão. -->
+                        <span v-if="!cancelado" class="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-bold" :style="{ color: status.cor }">
                             <i class="fas" :class="status.icone"></i> {{ status.label }}
                         </span>
-                        <p class="mt-2 text-3xl font-extrabold">{{ formatPrice(pedido.valores.total) }}</p>
+                        <p class="text-3xl font-extrabold" :class="{ 'mt-2': !cancelado }">{{ formatPrice(pedido.valores.total) }}</p>
                     </div>
                 </div>
 
                 <!-- Cancelar Pedido no topo (Lira, 2026-10-18): visível no
                      computador e no celular, abre o modal e cancela na hora. -->
-                <button v-if="pedido.cancelamento?.pode" type="button"
+                <div v-if="cancelado" class="mt-5">
+                    <p class="rounded-xl bg-red-500/20 px-4 py-3 text-sm font-medium text-red-100"><i class="fas fa-circle-xmark mr-1"></i> Esta compra foi cancelada.</p>
+                    <p v-if="pedido.cancelamento?.bloqueio" class="mt-2 text-xs text-white/60">{{ pedido.cancelamento.bloqueio }}</p>
+                </div>
+                <button v-else-if="pedido.cancelamento?.pode" type="button"
                     class="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white shadow hover:bg-red-700 md:w-auto"
                     @click="abrirCancelamento">
                     <i class="fas fa-circle-xmark"></i> Cancelar Pedido
@@ -137,7 +143,6 @@ const confirmarCancelamento = () => {
                         <span class="mt-1.5 text-[10px] leading-tight md:text-xs" :class="etapa.feito || i === etapaAtual ? 'text-white' : 'text-white/40'">{{ etapa.titulo }}</span>
                     </li>
                 </ol>
-                <p v-else class="mt-5 rounded-xl bg-red-500/20 px-4 py-3 text-sm font-medium text-red-100"><i class="fas fa-circle-xmark mr-1"></i> Esta compra foi cancelada.</p>
             </section>
 
             <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">

@@ -8,7 +8,9 @@ use App\Modules\Audit\Models\AuditLog;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderFulfillmentEvent;
+use App\Modules\Checkout\Models\PagamentoRecusado;
 use App\Modules\Checkout\Support\CancelamentoDoPedido;
+use App\Modules\Checkout\Support\MotivoRecusaMercadoPago;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
@@ -629,6 +631,10 @@ class OrderController extends Controller
                 ->get(['mp_payment_id', 'data_criacao', 'data_aprovacao', 'data_liberacao', 'status', 'status_detalhe', 'tipo_operacao', 'canal', 'meio_pagamento', 'valor', 'liquido', 'reembolsado'])
             : collect();
 
+        $tentativasRecusadas = $order->origin === Order::ORIGIN_STORE && Schema::hasTable('pagamentos_recusados')
+            ? PagamentoRecusado::query()->antesDoPedido($order)->limit(20)->get()
+            : collect();
+
         $pack = $order->channel_pack_id
             ? Order::query()
                 ->where('origin', $order->origin)
@@ -712,8 +718,22 @@ class OrderController extends Controller
                 'pedido_no_provedor' => $pagamento->mercadopago_order_id,
                 'boleto_url' => $pagamento->boleto_url,
                 'expira_em' => $pagamento->expira_em,
+                'motivo_recusa' => $pagamento->motivo_recusa,
+                'motivo_recusa_texto' => MotivoRecusaMercadoPago::texto($pagamento->motivo_recusa),
                 'criado_em' => $pagamento->created_at,
                 'atualizado_em' => $pagamento->updated_at,
+            ])->values(),
+            // Cartão recusado na hora de pagar desfaz o pedido; as tentativas
+            // do mesmo cliente nas 24 h antes deste pedido aparecem aqui.
+            'tentativas_recusadas' => $tentativasRecusadas->map(fn (PagamentoRecusado $tentativa) => [
+                'id' => $tentativa->id,
+                'meio' => $tentativa->metodo,
+                'valor' => (float) $tentativa->valor,
+                'motivo_recusa' => $tentativa->motivo_recusa,
+                'motivo_recusa_texto' => MotivoRecusaMercadoPago::texto($tentativa->motivo_recusa) ?? 'Motivo não informado pelo Mercado Pago',
+                'transacao' => $tentativa->mercadopago_payment_id,
+                'pedido_no_provedor' => $tentativa->mercadopago_order_id,
+                'em' => $tentativa->created_at,
             ])->values(),
             'mercado_pago' => $mercadoPago->map(fn ($mp) => [
                 'transacao' => $mp->mp_payment_id,

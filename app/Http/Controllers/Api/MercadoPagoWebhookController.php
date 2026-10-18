@@ -73,11 +73,12 @@ class MercadoPagoWebhookController extends Controller
         // documentação): "processed" é sucesso, "failed"/"rejected"/
         // "cancelled" são falha. "approved" (API de Payments antiga) não
         // existe mais aqui.
-        $mpStatus = $mpOrder['transactions']['payments'][0]['status'] ?? null;
+        $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
+        $mpStatus = $mpPayment['status'] ?? null;
 
         match (true) {
             $mpStatus === 'processed' => $this->handleSuccess($payment),
-            in_array($mpStatus, ['failed', 'rejected', 'cancelled'], true) => $this->handleFailure($payment),
+            in_array($mpStatus, ['failed', 'rejected', 'cancelled'], true) => $this->handleFailure($payment, $mpPayment),
             default => null,
         };
 
@@ -158,13 +159,13 @@ class MercadoPagoWebhookController extends Controller
         $this->finalizer->finalize($payment->order);
     }
 
-    private function handleFailure(Payment $payment): void
+    private function handleFailure(Payment $payment, array $mpPayment): void
     {
         if ($payment->status === Payment::STATUS_CANCELED) {
             return;
         }
 
-        $payment->update(['status' => Payment::STATUS_CANCELED]);
+        $payment->recusar($mpPayment);
         $payment->load('order.payments');
 
         $this->finalizer->cancelSiblingsAfterFailure($payment->order, $payment);

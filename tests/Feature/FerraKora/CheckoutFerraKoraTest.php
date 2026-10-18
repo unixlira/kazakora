@@ -199,6 +199,15 @@ class CheckoutFerraKoraTest extends TestCase
 
         $this->assertSame(0, Order::count());
         $this->assertSame(5, $this->produto->fresh()->stock);
+        // Motivo da recusa guardado mesmo com o pedido desfeito (2026-10-18).
+        $this->assertDatabaseHas('pagamentos_recusados', [
+            'site_origem' => Order::SITE_FERRAKORA,
+            'email' => 'maria@exemplo.com',
+            'metodo' => 'card',
+            'mercadopago_order_id' => 'ORD1',
+            'mercadopago_payment_id' => 'PAY1',
+            'motivo_recusa' => 'cc_rejected',
+        ]);
     }
 
     public function test_cartao_aprovado_fica_pago(): void

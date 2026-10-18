@@ -21,7 +21,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\CredenciaisCheckout;
-use App\Services\MercadoPago\Exceptions\MercadoPagoException;
+use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\DescontoPix;
 use Illuminate\Support\Collection;
@@ -497,7 +497,7 @@ abstract class CheckoutOutroSite
 
             if (in_array($pagamento['status'] ?? null, ['failed', 'rejected'], true)) {
                 // Rollback: sem pedido, sem baixa de estoque, sem conta nova.
-                throw new MercadoPagoException('Pagamento no cartão recusado: '.($pagamento['status_detail'] ?? 'sem motivo.'));
+                throw new PagamentoRecusadoException($order, $user, Payment::METHOD_CARD, $total, $mp, $pagamento);
             }
 
             Payment::create([
@@ -543,7 +543,9 @@ abstract class CheckoutOutroSite
                 };
             }
 
-            if ($status) {
+            if ($status === Payment::STATUS_CANCELED) {
+                $payment->recusar($mp);
+            } elseif ($status) {
                 $payment->update(['status' => $status]);
             }
             if ($status === Payment::STATUS_CANCELED) {

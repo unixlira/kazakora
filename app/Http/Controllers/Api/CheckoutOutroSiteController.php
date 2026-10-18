@@ -12,6 +12,7 @@ use App\Modules\FerraKora\Models\FerraKoraCliente;
 use App\Modules\FerraKora\Services\PrecoMudouException;
 use App\Rules\CpfValido;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
+use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Support\PaymentGateway;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -124,6 +125,10 @@ abstract class CheckoutOutroSiteController extends Controller
         } catch (UniqueConstraintViolationException) {
             return response()->json(['message' => 'Este CPF ou e-mail já tem cadastro na KazaKora. Use os dados da sua conta.'], 422);
         } catch (MercadoPagoException $e) {
+            if ($e instanceof PagamentoRecusadoException) {
+                rescue(fn () => $e->registrar());
+            }
+
             Log::channel('mercadopago')->error('mercadopago.'.$this->checkout->site().'.payment_failed', [
                 'metodo' => $dados['pagamento']['metodo'],
                 'message' => $e->getMessage(),

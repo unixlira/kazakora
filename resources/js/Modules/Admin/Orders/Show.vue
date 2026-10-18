@@ -367,11 +367,38 @@ const cancelInvoice = () => {
                                 <span v-if="pagamento.expira_em">Vence {{ formatDateTime(pagamento.expira_em) }}</span>
                                 <a v-if="pagamento.boleto_url" :href="pagamento.boleto_url" target="_blank" rel="noopener" class="text-primary">Abrir boleto</a>
                             </div>
+                            <p v-if="pagamento.motivo_recusa" class="mt-2 text-sm text-error">
+                                <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+                                Recusado: {{ pagamento.motivo_recusa_texto }}
+                                <span class="font-mono text-xs text-slate-400">({{ pagamento.motivo_recusa }})</span>
+                            </p>
                         </li>
                     </ul>
                     <p v-else class="mt-2 text-sm text-slate-400">
                         {{ order.origin === 'loja' ? 'Nenhum pagamento registrado.' : 'Pagamento feito no próprio canal (o canal repassa o valor).' }}
                     </p>
+
+                    <template v-if="d.tentativas_recusadas?.length">
+                        <h3 class="mt-4 text-sm font-semibold text-slate-500">Tentativas recusadas antes deste pedido</h3>
+                        <ul class="mt-2 space-y-2 text-sm">
+                            <li v-for="tentativa in d.tentativas_recusadas" :key="tentativa.id" class="rounded-lg border border-[var(--surface-border)] p-3">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <StatusBadge status="failed" context="payment" label="Recusado" />
+                                    <span class="font-medium">{{ paymentMethodLabel(tentativa.meio) }}</span>
+                                    <span class="ml-auto font-semibold tabular-nums">{{ formatPrice(tentativa.valor) }}</span>
+                                </div>
+                                <p class="mt-1 text-error">
+                                    {{ tentativa.motivo_recusa_texto }}
+                                    <span v-if="tentativa.motivo_recusa" class="font-mono text-xs text-slate-400">({{ tentativa.motivo_recusa }})</span>
+                                </p>
+                                <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                                    <span>{{ formatDateTime(tentativa.em) }}</span>
+                                    <span v-if="tentativa.transacao">Transação: <span class="font-mono">{{ tentativa.transacao }}</span></span>
+                                    <span v-if="tentativa.pedido_no_provedor">Pedido no provedor: <span class="font-mono">{{ tentativa.pedido_no_provedor }}</span></span>
+                                </div>
+                            </li>
+                        </ul>
+                    </template>
 
                     <template v-if="d.mercado_pago?.length">
                         <h3 class="mt-4 text-sm font-semibold text-slate-500">Mercado Pago (conciliação)</h3>

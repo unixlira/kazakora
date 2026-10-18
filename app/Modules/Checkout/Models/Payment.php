@@ -42,6 +42,7 @@ class Payment extends Model
         'boleto_linha_digitavel',
         'boleto_url',
         'expira_em',
+        'motivo_recusa',
     ];
 
     /**
@@ -69,6 +70,20 @@ class Payment extends Model
         return $this->method_type === self::METHOD_BOLETO
             && $this->provider === self::PROVIDER_MERCADOPAGO
             && $this->status === self::STATUS_REQUIRES_CONFIRMATION;
+    }
+
+    /**
+     * Pagamento recusado pelo Mercado Pago depois de criado (webhook, polling,
+     * varredura): cancela e guarda o status_detail para a tela do pedido.
+     */
+    public function recusar(array $mpPayment): void
+    {
+        $this->update([
+            'status' => self::STATUS_CANCELED,
+            'motivo_recusa' => in_array($mpPayment['status'] ?? null, ['failed', 'rejected'], true) && isset($mpPayment['status_detail'])
+                ? mb_substr((string) $mpPayment['status_detail'], 0, 80)
+                : $this->motivo_recusa,
+        ]);
     }
 
     public function order(): BelongsTo

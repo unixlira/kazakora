@@ -73,7 +73,7 @@ const copyPixCode = async () => {
 
             <!-- Pix (pedido 2026-10-12): sem padding no cartão, cada faixa cuida do seu,
                  e tudo dimensionado pela altura da tela para caber sem rolagem. -->
-            <div class="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] overflow-y-auto overflow-x-hidden rounded-2xl text-center shadow-xl" :class="state === 'awaiting_pix' ? 'bg-white p-0 [color-scheme:light]' : 'bg-store-bg-raised p-8'">
+            <div class="relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] overflow-y-auto overflow-x-hidden rounded-2xl text-center shadow-xl" :class="state === 'awaiting_pix' ? 'bg-white p-0 [color-scheme:light]' : 'bg-store-bg-raised p-6 sm:p-8'">
                 <template v-if="state === 'processing' || state === 'timeout'">
                     <div class="mx-auto flex h-14 w-14 items-center justify-center">
                         <i class="fas fa-circle-notch animate-spin text-4xl text-store-accent"></i>
@@ -149,7 +149,7 @@ const copyPixCode = async () => {
 
                 <template v-else-if="state === 'boleto'">
                     <!-- Boleto gerado (2026-10-14): pedido feito, pagamento chega em dias. -->
-                    <div class="-mx-8 -mt-8 rounded-t-2xl bg-gradient-to-br from-[#1c1c1e] to-[#111] px-5 pb-4 pt-5 text-white">
+                    <div class="-mx-6 -mt-6 rounded-t-2xl bg-gradient-to-br from-[#1c1c1e] sm:-mx-8 sm:-mt-8 to-[#111] px-5 pb-4 pt-5 text-white">
                         <div class="flex items-center justify-between gap-3">
                             <h2 class="flex items-center gap-2 whitespace-nowrap font-display text-lg font-bold">
                                 <i class="fas fa-barcode text-[#F27A2A]"></i> Boleto gerado
@@ -200,20 +200,23 @@ const copyPixCode = async () => {
                 <template v-else-if="state === 'success'">
                     <!-- Sucesso caprichado (pedido 2026-10-11): faixa verde com confete,
                          número do pedido em laranja e botões em vez de só redirecionar. -->
-                    <div class="relative -mx-8 -mt-8 overflow-hidden rounded-t-2xl bg-gradient-to-br from-[#0FB930] to-[#0a8a23] px-6 pb-7 pt-8 text-white">
+                    <!-- Faixa mais baixa (2026-10-17): no celular ela ocupava meia tela. -->
+                    <div class="relative -mx-6 -mt-6 overflow-hidden sm:-mx-8 sm:-mt-8 rounded-t-2xl bg-gradient-to-br from-[#0FB930] to-[#0a8a23] px-5 pb-7 pt-5 text-white sm:pt-6">
                         <span v-for="n in 14" :key="n" aria-hidden="true" class="confete"
                             :style="{ left: `${(n * 37) % 100}%`, animationDelay: `${(n % 7) * 0.18}s`, backgroundColor: ['#F27A2A', '#fde047', '#ffffff', '#38bdf8'][n % 4] }"></span>
-                        <div class="sucesso-check mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl text-[#0FB930] shadow-lg">
+                        <div class="sucesso-check mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl text-[#0FB930] shadow-lg sm:h-14 sm:w-14">
                             <i class="fas fa-check"></i>
                         </div>
-                        <h2 class="mt-3 font-display text-2xl font-bold">Pagamento aprovado!</h2>
-                        <p class="mt-1 text-sm opacity-90">Oba! Sua compra está confirmada 🎉</p>
+                        <h2 class="mt-2 font-display text-xl font-bold sm:text-2xl">Pagamento aprovado!</h2>
+                        <p class="mt-0.5 text-xs opacity-90 sm:text-sm">Oba! Sua compra está confirmada 🎉</p>
                     </div>
 
-                    <div v-if="orderCode" class="mx-auto -mt-4 flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-1.5 shadow-md ring-1 ring-black/5">
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pedido</span>
-                        <span class="text-xl font-black uppercase italic tracking-tight text-[#F27A2A]">{{ orderCode }}</span>
-                        <button type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-sm transition"
+                    <!-- relative z-10 (2026-10-17): a faixa verde é posicionada e pintava por cima
+                         da metade de cima do número. max-w-full + break-all para caber em 320px. -->
+                    <div v-if="orderCode" class="relative z-10 mx-auto -mt-4 flex w-fit max-w-full items-center gap-1.5 rounded-xl bg-white px-2.5 py-1.5 shadow-md ring-1 ring-black/5 sm:gap-2 sm:px-3">
+                        <span class="shrink-0 text-[10px] font-bold uppercase tracking-wider text-slate-500">Pedido</span>
+                        <span class="min-w-0 break-all text-sm font-black uppercase italic leading-tight tracking-tight text-[#F27A2A] min-[360px]:text-base min-[400px]:text-lg">{{ orderCode }}</span>
+                        <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sm transition"
                             :class="codigoCopiado ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-50 text-[#F27A2A] hover:bg-orange-100'"
                             :aria-label="codigoCopiado ? 'Número copiado' : 'Copiar número do pedido'" @click="copiarCodigoDoPedido">
                             <i class="fas" :class="codigoCopiado ? 'fa-check' : 'fa-copy'"></i>

@@ -1,6 +1,6 @@
 <script setup>
 // Pedido de avaliação pós-compra (pedido do Lira 2026-10-18): liga/desliga,
-// texto do e-mail, cupom, prévia e teste. Busca e salva sozinho em
+// texto do e-mail, cupom por estrela, prévia e teste. Busca e salva sozinho em
 // /admin/avaliacoes/pos-compra, então funciona em qualquer tela de Avaliações.
 import { StatusBadge } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
@@ -46,8 +46,8 @@ async function chamar(metodo, caminho = '', corpo = null) {
 
 function aplicar(json) {
     dados.value = json;
-    form.value = { ...json.config };
-    salvo.value = { ...json.config };
+    form.value = { ...json.config, cupom_por_estrela: [...json.config.cupom_por_estrela] };
+    salvo.value = { ...json.config, cupom_por_estrela: [...json.config.cupom_por_estrela] };
 }
 
 async function carregar() {
@@ -109,10 +109,12 @@ function restaurarTexto() {
     ['assunto', 'titulo', 'mensagem', 'botao'].forEach((campo) => { form.value[campo] = padrao[campo]; });
 }
 
+const PADRAO_ESTRELAS = [1, 2, 3, 4, 10];
+
 const descontoExemplo = computed(() => {
-    if (!form.value?.cupom_ativo || !Number(form.value.cupom_valor)) return 'sem cupom';
-    const valor = Number(form.value.cupom_valor).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-    return form.value.cupom_tipo === 'percentage' ? `${valor}% de desconto` : `R$ ${Number(form.value.cupom_valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de desconto`;
+    const maior = Math.max(...(form.value?.cupom_por_estrela ?? []).map(Number));
+    if (!form.value?.cupom_ativo || !maior) return 'sem cupom';
+    return `até ${maior.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% de desconto`;
 });
 
 const STATUS = {
@@ -139,9 +141,9 @@ onMounted(carregar);
                     <StatusBadge v-if="form" :tone="salvo?.ativo ? 'green' : 'gray'" :label="salvo?.ativo ? 'Ligada' : 'Desligada'" />
                 </h2>
                 <p class="mt-1 text-sm text-slate-500">
-                    Quando um pedido do kazakora.com é entregue, o cliente recebe um e-mail pedindo a avaliação de cada produto,
-                    com um cupom só dele para a próxima compra. Envia de hora em hora, das {{ dados.horario || '9h às 20h' }}, um e-mail por pedido.
-                    O cupom vai para todos, sem depender da nota.
+                    Quando um pedido do kazakora.com é entregue, o cliente recebe um e-mail que leva à página de avaliação do pedido
+                    (não à página do produto). Lá ele dá as estrelas e ganha na hora um cupom só dele, com o desconto da nota.
+                    Envia de hora em hora, das {{ dados.horario || '9h às 20h' }}, um e-mail por pedido. Só e-mail: a Manuela não manda nada.
                 </p>
             </div>
             <button v-if="form && podeEditar" type="button" :disabled="salvando" @click="alternarAtivo"
@@ -195,7 +197,7 @@ onMounted(carregar);
                     <label class="block text-sm">
                         <span class="font-medium">Mensagem</span>
                         <textarea v-model="form.mensagem" rows="7" maxlength="3000" :class="campo" class="mt-1" @focus="campoEmFoco = 'mensagem'"></textarea>
-                        <span class="block text-xs text-slate-500">Linha em branco separa parágrafos. Os produtos com o botão "Avaliar" e o cupom entram depois do texto.</span>
+                        <span class="block text-xs text-slate-500">Linha em branco separa parágrafos. Os produtos com as estrelas, o botão e a tabela de desconto entram depois do texto.</span>
                         <span v-if="erros.mensagem" class="block text-xs text-red-600">{{ erros.mensagem }}</span>
                     </label>
 
@@ -218,35 +220,28 @@ onMounted(carregar);
 
                 <div class="space-y-5">
                     <fieldset :disabled="!podeEditar" class="space-y-3 rounded-xl border border-[var(--surface-border)] p-4">
-                        <legend class="px-1 font-semibold">Cupom para a próxima compra</legend>
+                        <legend class="px-1 font-semibold">Cupom pela nota</legend>
 
                         <label class="flex items-center gap-2 text-sm">
                             <input v-model="form.cupom_ativo" type="checkbox" class="h-4 w-4 rounded">
-                            <span class="font-medium">Mandar cupom no e-mail</span>
+                            <span class="font-medium">Dar cupom a quem avaliar</span>
                         </label>
 
                         <template v-if="form.cupom_ativo">
-                            <div class="grid grid-cols-2 gap-3">
-                                <label class="block text-sm">
-                                    <span class="font-medium">Tipo</span>
-                                    <select v-model="form.cupom_tipo" :class="campo" class="mt-1">
-                                        <option value="percentage">Porcentagem (%)</option>
-                                        <option value="fixed">Valor fixo (R$)</option>
-                                    </select>
-                                </label>
-                                <label class="block text-sm">
-                                    <span class="font-medium">Desconto</span>
-                                    <input v-model.number="form.cupom_valor" type="number" min="0" :max="form.cupom_tipo === 'percentage' ? 50 : 999" step="0.5" :class="campo" class="mt-1">
-                                    <span v-if="erros.cupom_valor" class="block text-xs text-red-600">{{ erros.cupom_valor }}</span>
-                                </label>
-                            </div>
-                            <div class="flex flex-wrap gap-1.5">
-                                <button v-for="sugestao in [5, 10, 15]" :key="sugestao" type="button"
-                                    class="rounded-md border px-2.5 py-1 text-xs font-semibold"
-                                    :class="form.cupom_tipo === 'percentage' && Number(form.cupom_valor) === sugestao ? 'border-amber-500 text-amber-600' : 'border-[var(--surface-border)] hover:border-slate-400'"
-                                    @click="form.cupom_tipo = 'percentage'; form.cupom_valor = sugestao">
-                                    {{ sugestao }}%
-                                </button>
+                            <div>
+                                <span class="text-sm font-medium">Desconto (%) por nota</span>
+                                <div class="mt-1 grid grid-cols-5 gap-2">
+                                    <label v-for="(valor, i) in form.cupom_por_estrela" :key="i" class="block text-center text-xs">
+                                        <span class="block text-amber-500"><i v-for="n in i + 1" :key="n" class="fas fa-star"></i></span>
+                                        <input v-model.number="form.cupom_por_estrela[i]" type="number" min="0" max="50" step="0.5" :class="campo" class="mt-1 text-center">
+                                        <span v-if="erros[`cupom_por_estrela.${i}`]" class="block text-red-600">{{ erros[`cupom_por_estrela.${i}`] }}</span>
+                                    </label>
+                                </div>
+                                <span class="mt-1 block text-xs text-slate-500">
+                                    O cupom nasce na página de avaliação, depois das estrelas. Pedido com mais de um produto usa a média arredondada.
+                                    0 = sem cupom para aquela nota.
+                                    <button type="button" class="text-primary hover:underline" @click="form.cupom_por_estrela = [...PADRAO_ESTRELAS]">Voltar para 1/2/3/4/10%</button>
+                                </span>
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <label class="block text-sm">
@@ -300,8 +295,8 @@ onMounted(carregar);
                                 <th class="px-3 py-2">Cliente</th>
                                 <th class="px-3 py-2">Situação</th>
                                 <th class="px-3 py-2">Enviado</th>
-                                <th class="px-3 py-2">Cupom</th>
                                 <th class="px-3 py-2">Avaliou</th>
+                                <th class="px-3 py-2">Cupom</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -313,13 +308,18 @@ onMounted(carregar);
                                     <span v-if="item.erro" class="block max-w-[260px] text-xs text-slate-500" :title="item.erro">{{ item.erro }}</span>
                                 </td>
                                 <td class="px-3 py-2 whitespace-nowrap">{{ dataHora(item.enviado_em) }}</td>
+                                <td class="px-3 py-2 whitespace-nowrap">
+                                    <template v-if="item.avaliado_em">
+                                        <span v-if="item.nota" class="text-amber-500"><i v-for="n in item.nota" :key="n" class="fas fa-star"></i></span>
+                                        <span v-else class="text-amber-600"><i class="fas fa-star"></i></span>
+                                        <span class="block text-xs text-slate-500">{{ dataHora(item.avaliado_em) }}</span>
+                                    </template>
+                                    <span v-else class="text-slate-400">—</span>
+                                </td>
                                 <td class="px-3 py-2">
                                     <span v-if="item.cupom" class="font-mono">{{ item.cupom }}</span><span v-else>—</span>
+                                    <span v-if="item.cupom && item.desconto_percentual" class="block text-xs text-slate-500">{{ Number(item.desconto_percentual).toLocaleString('pt-BR') }}%</span>
                                     <span v-if="item.cupom_usado" class="block text-xs font-semibold text-green-600">usado</span>
-                                </td>
-                                <td class="px-3 py-2 whitespace-nowrap">
-                                    <span v-if="item.avaliado_em" class="text-amber-600"><i class="fas fa-star"></i> {{ dataHora(item.avaliado_em) }}</span>
-                                    <span v-else class="text-slate-400">—</span>
                                 </td>
                             </tr>
                         </tbody>

@@ -457,6 +457,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('pedidos/{order}/cancelar', [AdminOrderController::class, 'cancel'])
         ->name('pedidos.cancelar')
         ->middleware('permission:pedidos.edit');
+    // Botão "Reenviar estorno" do pedido cancelado ainda cobrado (2026-10-18, #3219).
+    Route::post('pedidos/{order}/reenviar-estorno', [AdminOrderController::class, 'reenviarEstorno'])
+        ->name('pedidos.reenviar-estorno')
+        ->middleware('permission:pedidos.edit');
     Route::patch('pedidos/{order}/itens', [AdminOrderController::class, 'updateItems'])
         ->name('pedidos.itens.atualizar')
         ->middleware('permission:pedidos.edit');

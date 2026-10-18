@@ -209,6 +209,19 @@ const cancelOrder = () => {
     });
 };
 
+// Pedido #3219 (2026-10-18): cancelado com o estorno recusado pelo Mercado
+// Pago, o dinheiro seguia cobrado. "Reenviar estorno" tenta de novo na hora.
+const showReenviarEstorno = ref(false);
+const reenviarEstornoForm = useForm({});
+const reenviarEstorno = () => {
+    reenviarEstornoForm.post(`/admin/pedidos/${props.order.id}/reenviar-estorno`, {
+        preserveScroll: true,
+        onFinish: () => {
+            showReenviarEstorno.value = false;
+        },
+    });
+};
+
 // Pedido #3205 (2026-10-17): o resultado vinha num aviso solto. Agora o
 // modal lista cada etapa (nota, estorno, estoque, pedido, e-mail) com o que
 // deu certo e o que ficou para tratar, uma por vez (CancelamentoProgressoModal).
@@ -851,6 +864,24 @@ const cancelInvoice = () => {
                 </section>
 
                 <section
+                    v-if="cancelamento?.estorno_pendente"
+                    class="rounded-xl border border-error bg-[var(--surface)] p-4 shadow-sm"
+                >
+                    <h2 class="font-semibold text-error">Estorno pendente</h2>
+                    <p class="mt-2 text-sm">
+                        Pedido cancelado, mas {{ cancelamento.estorno_pendente.valor }} seguem cobrados no {{ cancelamento.estorno_pendente.onde }}.
+                    </p>
+                    <button
+                        type="button"
+                        :disabled="reenviarEstornoForm.processing"
+                        class="mt-2 w-full rounded-lg bg-error py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                        @click="showReenviarEstorno = true"
+                    >
+                        <i class="fas fa-rotate-left mr-1" aria-hidden="true"></i> Reenviar estorno
+                    </button>
+                </section>
+
+                <section
                     v-if="cancelamento?.pode"
                     class="rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm"
                 >
@@ -912,6 +943,21 @@ const cancelInvoice = () => {
                 <p v-if="cancelOrderForm.errors.motivo" class="text-xs text-error">{{ cancelOrderForm.errors.motivo }}</p>
             </div>
         </form>
+    </ConfirmModal>
+
+    <ConfirmModal
+        :open="showReenviarEstorno && !!cancelamento?.estorno_pendente"
+        title="Reenviar o estorno?"
+        confirm-label="Sim, estornar"
+        cancel-label="Não, voltar"
+        :loading="reenviarEstornoForm.processing"
+        @close="showReenviarEstorno = false"
+        @confirm="reenviarEstorno"
+    >
+        <p v-if="cancelamento?.estorno_pendente" class="text-sm">
+            Devolve {{ cancelamento.estorno_pendente.valor }} ao cliente pelo {{ cancelamento.estorno_pendente.onde }}.
+            Clicar de novo não gera um segundo estorno do mesmo pagamento.
+        </p>
     </ConfirmModal>
 
     <CancelamentoProgressoModal

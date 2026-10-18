@@ -109,6 +109,16 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
             Order::query()->whereKey($order->id)->update(['whatsapp_aprovado_enviado_em' => null]);
             Log::warning('whatsapp_pedido_aprovado_falhou', ['order_id' => $order->id, 'error' => $exception->getMessage()]);
 
+            // Achado real 17/10 (#3210): template ainda em análise na Meta
+            // (#132001) falhou igual nas 3 tentativas e segurou a NF-e e a
+            // etiqueta por 2,5 min. Erro que não muda tentando de novo
+            // desiste na hora e a nota sai (failed()).
+            if (self::erroDefinitivo($exception)) {
+                $this->fail($exception);
+
+                return;
+            }
+
             throw $exception;
         }
 
@@ -137,6 +147,17 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
     public function failed(?Throwable $exception): void
     {
         FaturarPedidoSemResposta::emitir($this->orderId);
+    }
+
+    /**
+     * Erros da Meta que não passam com nova tentativa: template inexistente
+     * ou não aprovado no idioma (132001), parâmetros que não batem com o
+     * template (132000, 132012), template pausado/desativado (132015, 132016)
+     * e número que não recebe WhatsApp (131026).
+     */
+    public static function erroDefinitivo(Throwable $exception): bool
+    {
+        return (bool) preg_match('/"code":\s*(132000|132001|132012|132015|132016|131026)\b/', $exception->getMessage());
     }
 
     /** "Rua X, 20 - Apto 3 - Mooca - 03187-040 - São Paulo/SP", sem pedaço vazio. */

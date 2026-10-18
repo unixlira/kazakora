@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -292,6 +293,49 @@ class OrderController extends Controller
             'ok' => $resultado['avisos'] === [],
             'etapas' => $resultado['etapas'],
         ]);
+    }
+
+    /**
+     * Botão "Reenviar estorno" (Lira, 2026-10-18, pedido #3219): pedido
+     * cancelado cujo estorno o Mercado Pago/Stripe recusou. Tenta de novo
+     * na hora, com a mesma chave fixa por pagamento (dois cliques não
+     * viram dois estornos) e fica no histórico de quem pediu.
+     */
+    public function reenviarEstorno(Order $order, CancelamentoDoPedido $cancelamento): RedirectResponse
+    {
+        $pendente = $cancelamento->estornoPendente($order);
+
+        if ($pendente === null) {
+            return back()->with('error', $order->status === Order::STATUS_CANCELLED
+                ? 'Nada a estornar: nenhum pagamento deste pedido segue cobrado.'
+                : 'Só dá para reenviar o estorno de pedido cancelado.');
+        }
+
+        $trava = Cache::lock("reenviar-estorno-{$order->id}", 120);
+
+        if (! $trava->get()) {
+            return back()->with('error', 'O estorno deste pedido já está sendo enviado. Aguarde e recarregue a página.');
+        }
+
+        try {
+            $resultado = $cancelamento->estornar($order);
+        } finally {
+            $trava->release();
+        }
+
+        AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'pedido.reenviar_estorno',
+            'entity' => class_basename(Order::class),
+            'entity_id' => $order->id,
+            'old_values' => $pendente,
+            'new_values' => ['ok' => $resultado['ok'], 'texto' => $resultado['texto']],
+            'created_at' => now(),
+        ]);
+
+        return $resultado['ok']
+            ? back()->with('success', $resultado['texto'])
+            : back()->with('error', ($resultado['aviso'] ?? $resultado['texto']).' O pagamento segue cobrado.');
     }
 
     public function updateItems(Request $request, Order $order, StockManager $stock): RedirectResponse

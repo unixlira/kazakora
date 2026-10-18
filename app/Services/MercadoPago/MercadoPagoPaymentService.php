@@ -274,13 +274,30 @@ class MercadoPagoPaymentService
     {
         if ($response->failed() && ! in_array($response->status(), $toleratedStatuses, true)) {
             throw new MercadoPagoException(
-                $response->json('message') ?? "Erro na API do Mercado Pago (HTTP {$response->status()}).",
+                $response->json('message')
+                    // API de Orders responde {"errors":[{"code","message"}]}: sem
+                    // isso o estorno do #3219 só mostrava "HTTP 400" (2026-10-18).
+                    ?? $this->primeiroErro($response)
+                    ?? "Erro na API do Mercado Pago (HTTP {$response->status()}).",
                 $response->status(),
                 ['body' => $response->json()],
             );
         }
 
         return $response->json() ?? [];
+    }
+
+    private function primeiroErro(Response $response): ?string
+    {
+        $erro = $response->json('errors.0');
+
+        if (! is_array($erro) || empty($erro['message'])) {
+            return null;
+        }
+
+        $codigo = $erro['code'] ?? null;
+
+        return "Mercado Pago (HTTP {$response->status()}".($codigo ? ", {$codigo}" : '')."): {$erro['message']}";
     }
 
     private function log(string $method, string $uri, Response $response): void

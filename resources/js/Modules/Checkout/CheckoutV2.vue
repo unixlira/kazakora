@@ -11,7 +11,7 @@ import { maskCep, useCep } from '@/Shared/useCep';
 import { maskCpf, maskPhone } from '@/Shared/useMasks';
 import { loadMercadoPagoSdk, mensagemErroCartao } from '@/Shared/useMercadoPagoSdk';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
     items: { type: Array, default: () => [] },
@@ -303,6 +303,14 @@ const payloadEntrega = () => {
     return data;
 };
 
+// Logado com tudo preenchido (pedido 2026-10-18): a tela já abre no
+// pagamento, sem fazer o cliente rolar por dados que a loja já tem.
+const faltaDadoDoLogado = () => pedirCpf.value || !String(pessoa.phone ?? '').replace(/\D/g, '') || usarNovoEndereco.value;
+onMounted(() => {
+    if (!isLoggedIn.value || props.order || faltaDadoDoLogado() || Object.keys(serverErrors.value).length) return;
+    nextTick(() => document.getElementById('pagamento-v2')?.scrollIntoView({ block: 'start' }));
+});
+
 const irParaErro = () => nextTick(() => {
     document.querySelector('[data-erro="1"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
@@ -557,9 +565,9 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                                 <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">1</span>
                                 Dados pessoais
                             </h2>
-                            <p class="mt-0.5 text-sm text-slate-500">
-                                <template v-if="isLoggedIn">Comprando como <strong class="text-slate-700">{{ customer.email }}</strong></template>
-                                <template v-else>Preencha seus dados corretamente · Já tem conta? <Link href="/entrar" class="font-medium text-sky-600 hover:underline">Entrar</Link></template>
+                            <!-- Logado (pedido 2026-10-18): sem "Comprando como" nem campo de e-mail; o pedido usa o e-mail da conta. -->
+                            <p v-if="!isLoggedIn" class="mt-0.5 text-sm text-slate-500">
+                                Preencha seus dados corretamente · Já tem conta? <Link href="/entrar" class="font-medium text-sky-600 hover:underline">Entrar</Link>
                             </p>
                         </header>
 
@@ -711,7 +719,7 @@ const inputErroClass = 'border-red-500 ring-1 ring-red-200';
                     </section>
 
                     <!-- 4. Pagamento -->
-                    <section class="rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
+                    <section id="pagamento-v2" class="scroll-mt-4 rounded-xl border border-b-[3px] border-slate-200 bg-white p-5 md:p-6">
                         <header class="mb-4">
                             <h2 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
                                 <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">4</span>

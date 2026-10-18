@@ -359,7 +359,7 @@ const regenerateSku = async () => {
 
             <label class="flex items-center gap-2 text-sm">
                 <input v-model="form.is_daily_offer" type="checkbox">
-                Oferta do Dia (fixo na seção "Ofertas do Dia" da home, se tiver estoque e não der prejuízo)
+                Oferta do Dia (aparece na seção "Ofertas do Dia" da home, depois das Ofertas Relâmpago, se tiver estoque)
             </label>
         </div>
 

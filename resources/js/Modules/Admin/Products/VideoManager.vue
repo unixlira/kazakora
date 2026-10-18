@@ -82,7 +82,7 @@ const remove = async () => {
         <p class="text-xs text-slate-500">Máximo de 100MB e 60 segundos de duração — usado nos anúncios de marketplace.</p>
 
         <div v-if="product.video_url" class="flex items-start gap-4">
-            <video :src="product.video_url" controls class="h-40 w-72 rounded border border-slate-200 bg-black" />
+            <video :src="product.video_url" controls preload="metadata" class="h-40 w-72 rounded border border-slate-200 bg-black" />
             <div class="text-sm text-slate-500">
                 <p>Duração: {{ product.video_duration_seconds }}s</p>
                 <button type="button" class="mt-2 text-red-500 hover:underline" @click="remove">Remover vídeo</button>

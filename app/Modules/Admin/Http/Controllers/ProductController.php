@@ -161,8 +161,9 @@ class ProductController extends Controller
         $siblingsQuery = fn () => Product::query()
             ->where('parent_product_id', $product->parent_product_id ?? $product->id)
             ->whereKeyNot($product->id)
-            ->with('images:id,product_id,path,is_primary')
-            ->get(['id', 'name', 'sku', 'variation', 'stock']);
+            ->with('images:id,product_id,path,thumb_path,medium_path,is_primary')
+            ->get(['id', 'name', 'sku', 'variation', 'stock'])
+            ->each(fn (Product $sibling) => $sibling->setAppends([]));
 
         $variationsPayload = [
             'parent' => $product->parent()->select(['id', 'name', 'sku'])->first(),
@@ -177,7 +178,11 @@ class ProductController extends Controller
                 ->whereNull('parent_product_id')
                 ->whereDoesntHave('children')
                 ->orderBy('name')
-                ->get(['id', 'name', 'sku']);
+                ->get(['id', 'name', 'sku'])
+                // Sem os appends do model (preço, oferta, vídeo): a lista só
+                // usa id/nome/SKU. Com eles ia ~280 B por produto, e no
+                // homolog a lista passava de 120 KB (2026-10-18).
+                ->each(fn (Product $orphan) => $orphan->setAppends([]));
         }
 
         return Inertia::render('Admin/Products/Edit', [

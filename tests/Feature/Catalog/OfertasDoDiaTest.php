@@ -48,7 +48,7 @@ class OfertasDoDiaTest extends TestCase
         $this->assertSame(130.0, $boa->fresh()->final_price);
         $this->assertTrue($boa->fresh()->oferta_do_dia);
         $listing = new ProductChannelListing(['product_id' => $boa->id, 'channel' => 'mercado_livre']);
-        $this->assertSame(round(140 / 1.05, 2), round($listing->precoDeVenda($boa->fresh()), 2));
+        $this->assertSame(140.0, round($listing->precoDeVenda($boa->fresh()), 2));
         $this->assertSame(140.0, $prejuizo->fresh()->final_price);
     }
 

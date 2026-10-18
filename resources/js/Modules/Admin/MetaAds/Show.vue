@@ -227,7 +227,8 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                         <p class="text-sm font-medium">{{ v.criativo?.titulo || 'Sem título' }}</p>
                         <p v-if="v.criativo?.texto" class="line-clamp-3 whitespace-pre-line text-xs text-slate-600 dark:text-slate-300">{{ v.criativo.texto }}</p>
                         <a v-if="v.criativo?.link" :href="v.criativo.link" target="_blank" rel="noopener" class="block truncate text-xs text-primary hover:underline">{{ v.criativo.link }}</a>
-                        <p class="text-xs text-slate-500">{{ v.tamanho_mb }} MB<template v-if="v.duracao_segundos"> · {{ Math.round(v.duracao_segundos) }} s</template></p>
+                        <p class="text-xs text-slate-500">{{ v.tamanho_mb }} MB<template v-if="v.duracao_segundos"> · {{ Math.round(v.duracao_segundos) }} s</template><template v-if="v.formato"> · {{ v.formato }}</template></p>
+                        <p v-if="v.vira_vertical" class="text-xs text-amber-700 dark:text-amber-400">Horizontal: sobe como 9:16 com as laterais desfocadas</p>
                         <p class="flex items-center gap-1.5 text-xs" :class="v.enviado ? 'text-emerald-700 dark:text-emerald-300' : (v.ultimo_erro ? 'text-red-600' : 'text-slate-500')">
                             <i :class="v.enviado ? 'fas fa-circle-check' : (v.ultimo_erro ? 'fas fa-circle-exclamation' : 'far fa-clock')" aria-hidden="true"></i>
                             {{ v.etapa }}

@@ -83,8 +83,22 @@ const semExtensao = (nome) => String(nome ?? '').replace(/\.[^.]+$/, '');
 
 const anuncioSalvo = (v) => ({
     chave: `s${v.id}`, id: v.id, origemId: null, arquivo: null, tipo: v.tipo, nome: v.nome, previa: v.url,
-    tamanho: `${v.tamanho_mb} MB`, campos: camposDe(v), estado: 'salvo', progresso: 0, erro: '', aberto: false,
+    tamanho: `${v.tamanho_mb} MB`, formato: v.formato ?? '', vira_vertical: Boolean(v.vira_vertical),
+    campos: camposDe(v), estado: 'salvo', progresso: 0, erro: '', aberto: false,
 });
+
+// Mesmo padrão da campanha da Árvore de Natal (FormatoDeVideo no servidor):
+// vertical e quadrado vão como estão; horizontal sobe como 9:16 com as
+// laterais desfocadas.
+const medirPrevia = (a, evento) => {
+    const { videoWidth: l, videoHeight: h } = evento.target;
+    if (a.formato || !l || !h) return;
+    const tipo = l > h ? 'horizontal' : (l < h ? 'vertical' : 'quadrado');
+    const nomes = { '9:16': 9 / 16, '4:5': 4 / 5, '1:1': 1, '4:3': 4 / 3, '16:9': 16 / 9 };
+    const nome = Object.keys(nomes).find((k) => Math.abs(nomes[k] - l / h) / nomes[k] < 0.03) ?? '';
+    a.formato = `${nome} ${tipo} (${l}x${h})`.trim();
+    a.vira_vertical = l > h;
+};
 
 const conjuntoVazio = (nome, extra = {}) => ({
     chave: novaChave('c'), id: null, nome, orcamento_diario: MINIMO * 2, publico_proprio: false,
@@ -206,7 +220,7 @@ const adicionarArquivos = (cj, lista) => {
         }
         const novo = {
             chave: novaChave('a'), id: null, origemId: null, arquivo, tipo: TIPOS[arquivo.type], nome: arquivo.name,
-            previa: URL.createObjectURL(arquivo), tamanho: `${(arquivo.size / 1048576).toFixed(1)} MB`,
+            previa: URL.createObjectURL(arquivo), tamanho: `${(arquivo.size / 1048576).toFixed(1)} MB`, formato: '', vira_vertical: false,
             campos: camposDe(), estado: 'esperando', progresso: 0, erro: '', aberto: false,
         };
         cj.anuncios.push(novo);
@@ -453,7 +467,7 @@ const salvar = async (depois = 'ficar') => {
                 ? await pedirJson('POST', `${BASE}/${campanhaId.value}/videos/${a.origemId}/duplicar`, extras)
                 : await enviarArquivo(`${BASE}/${campanhaId.value}/videos`, 'video', a.arquivo, (p) => { a.progresso = p; }, extras);
             if (a.arquivo) URL.revokeObjectURL(a.previa);
-            Object.assign(a, { id: resposta.video.id, origemId: null, arquivo: null, previa: resposta.video.url, estado: 'salvo' });
+            Object.assign(a, { id: resposta.video.id, origemId: null, arquivo: null, previa: resposta.video.url, estado: 'salvo', formato: resposta.video.formato || a.formato, vira_vertical: Boolean(resposta.video.vira_vertical) });
         } catch (erro) {
             a.estado = 'erro';
             a.erro = erro.message;
@@ -739,12 +753,13 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                                 <div class="flex items-center gap-3 p-2">
                                     <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" :aria-expanded="a.aberto" @click="a.aberto = !a.aberto; emPrevia = a.chave">
                                         <img v-if="a.tipo === 'imagem'" :src="a.previa" alt="" class="h-14 w-11 shrink-0 rounded bg-black object-cover">
-                                        <video v-else :src="a.previa" class="h-14 w-11 shrink-0 rounded bg-black object-cover" preload="metadata" muted></video>
+                                        <video v-else :src="a.previa" class="h-14 w-11 shrink-0 rounded bg-black object-cover" preload="metadata" muted @loadedmetadata="medirPrevia(a, $event)"></video>
                                         <span class="min-w-0">
                                             <span class="block truncate text-sm font-semibold" :title="a.nome">{{ semExtensao(a.nome) }}</span>
                                             <span class="block truncate text-xs text-slate-500">
-                                                {{ props.produtos.find((p) => p.id === Number(a.campos.produto_id))?.nome ?? (a.campos.titulo || 'Sem produto') }} · {{ a.tamanho }}
+                                                {{ props.produtos.find((p) => p.id === Number(a.campos.produto_id))?.nome ?? (a.campos.titulo || 'Sem produto') }} · {{ a.tamanho }}<template v-if="a.formato"> · {{ a.formato }}</template>
                                             </span>
+                                            <span v-if="a.vira_vertical" class="block text-xs text-amber-700 dark:text-amber-400">Horizontal: sobe como 9:16 com as laterais desfocadas</span>
                                         </span>
                                     </button>
                                     <span v-if="a.estado === 'esperando'" class="hidden text-xs text-slate-500 sm:inline">Sobe ao salvar</span>

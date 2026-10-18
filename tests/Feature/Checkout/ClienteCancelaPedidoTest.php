@@ -4,6 +4,7 @@ namespace Tests\Feature\Checkout;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Jobs\ProcessarCancelamentoDoPedidoJob;
 use App\Modules\Checkout\Mail\PedidoCancelado;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
@@ -15,13 +16,16 @@ use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
  * Botão "Cancelar pedido" em Meus pedidos (2026-10-17): o cliente cancela
  * a própria compra do site na hora (desde 2026-10-18 até sair para entrega,
- * sem passar pelo suporte), recebe o e-mail e os admins são avisados no sino. Ver CancelamentoDoPedido::cancelarPeloCliente().
+ * sem passar pelo suporte), recebe o e-mail e os admins são avisados no sino. Ver
+ * CancelamentoDoPedido::solicitarPeloCliente() e ProcessarCancelamentoDoPedidoJob
+ * (fila, 2026-10-18).
  */
 class ClienteCancelaPedidoTest extends TestCase
 {
@@ -99,6 +103,56 @@ class ClienteCancelaPedidoTest extends TestCase
 
         Mail::assertSent(PedidoCancelado::class, fn (PedidoCancelado $mail) => $mail->hasTo('cliente@example.com') && $mail->valorEstornado === 20.0);
         Notification::assertSentTo($admin, PedidoCanceladoPeloClienteNotification::class);
+    }
+
+    public function test_enviar_so_registra_e_o_resto_vai_para_a_fila(): void
+    {
+        Queue::fake();
+        Mail::fake();
+        [$order, $product, $cliente] = $this->compra();
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'provider' => Payment::PROVIDER_MERCADOPAGO,
+            'mercadopago_payment_id' => '778',
+            'method_type' => Payment::METHOD_PIX,
+            'amount' => 20,
+            'status' => Payment::STATUS_CAPTURED,
+        ]);
+        $etiqueta = PrintJob::create(['order_id' => $order->id, 'channel' => 'loja', 'label_path' => 'labels/z.pdf', 'status' => PrintJob::STATUS_QUEUED]);
+        $this->mock(MercadoPagoPaymentService::class, fn ($mock) => $mock->shouldNotReceive('refundPayment'));
+
+        $this->actingAs($cliente)
+            ->post("/pedidos/{$order->id}/cancelar", ['motivo' => 'Desisti da compra: achei caro'])
+            ->assertRedirect()
+            ->assertSessionHas('success', fn ($texto) => str_contains($texto, 'sendo processado'));
+
+        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame('Cancelado pelo cliente: Desisti da compra: achei caro', $order->fresh()->motivo_cancelamento);
+        $this->assertSame(PrintJob::STATUS_FAILED, $etiqueta->fresh()->status);
+        $this->assertSame(Payment::STATUS_CAPTURED, $payment->fresh()->status);
+        $this->assertSame(8, (int) $product->fresh()->stock);
+        Mail::assertNothingSent();
+        Queue::assertPushedOn('nfe', ProcessarCancelamentoDoPedidoJob::class, fn ($job) => $job->orderId === $order->id
+            && $job->statusAnterior === Order::STATUS_PAID
+            && str_contains(implode(' ', $job->avisosDoPacote), 'fila da impressora'));
+
+        // Segundo clique: nada de novo na fila.
+        $this->actingAs($cliente)
+            ->post("/pedidos/{$order->id}/cancelar", ['motivo' => 'Desisti da compra'])
+            ->assertSessionHas('error');
+        Queue::assertPushed(ProcessarCancelamentoDoPedidoJob::class, 1);
+    }
+
+    public function test_falha_no_job_avisa_os_admins(): void
+    {
+        Notification::fake();
+        [$order] = $this->compra(['status' => Order::STATUS_CANCELLED]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        (new ProcessarCancelamentoDoPedidoJob($order->id, Order::STATUS_PAID))->failed(new \RuntimeException('SEFAZ fora do ar'));
+
+        Notification::assertSentTo($admin, PedidoCanceladoPeloClienteNotification::class,
+            fn (PedidoCanceladoPeloClienteNotification $aviso) => str_contains($aviso->toArray($admin)['body'], 'SEFAZ fora do ar'));
     }
 
     public function test_motivo_e_obrigatorio(): void

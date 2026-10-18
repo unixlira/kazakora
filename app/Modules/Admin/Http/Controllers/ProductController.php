@@ -8,6 +8,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\Catalog\Support\DuplicateProductGuard;
+use App\Modules\Catalog\Support\LucroProduto;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Marketplace\Drivers\MarketplaceDriverManager;
@@ -71,6 +72,7 @@ class ProductController extends Controller
         return Inertia::render('Admin/Products/Create', [
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'parent' => $parent,
+            'taxasLucro' => LucroProduto::taxas(),
         ]);
     }
 
@@ -190,6 +192,7 @@ class ProductController extends Controller
             'quantityDiscounts' => $product->quantityDiscounts,
             'variations' => $variationsPayload,
             'linkableOrphans' => $orphans,
+            'taxasLucro' => LucroProduto::taxas(),
         ]);
     }
 
@@ -380,6 +383,8 @@ class ProductController extends Controller
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             // "Desconto Site (%)" e "Desconto Checkout (%)" (Pix), pedido 2026-10-18.
             'discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // "Desconto Site" em valor fixo (R$), no lugar do % (pedido 2026-10-18).
+            'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'checkout_discount_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             // "Desconto Checkout" em valor fixo (R$ por unidade), no lugar do %.
             'checkout_discount_amount' => ['nullable', 'numeric', 'min:0'],
@@ -392,16 +397,19 @@ class ProductController extends Controller
             $rules['stock'] = ['required', 'integer', 'min:0'];
         }
 
-        // Desde 2026-10-18 o desconto do produto é só em % ("Desconto Site"):
-        // o antigo desconto em R$ sai ao salvar.
         $dados = $request->validate($rules);
+
+        // Desconto Site é em % OU em R$: com o % preenchido, o valor sai.
+        if (filled($dados['discount_percentage'] ?? null)) {
+            $dados['discount_amount'] = null;
+        }
 
         // Desconto Checkout é em % OU em R$: com o % preenchido, o valor sai.
         if (filled($dados['checkout_discount_percentage'] ?? null)) {
             $dados['checkout_discount_amount'] = null;
         }
 
-        return [...$dados, 'discount_amount' => null];
+        return $dados;
     }
 
     /**

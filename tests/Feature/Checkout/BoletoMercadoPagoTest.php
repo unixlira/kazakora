@@ -94,7 +94,7 @@ class BoletoMercadoPagoTest extends TestCase
                 && $request['payment_method_id'] === 'bolbradesco'
                 && $request['date_of_expiration'] === '2026-10-17T23:59:59.000-03:00'
                 && $payer['email'] === "pedido-{$order->id}@kazakora.com"
-                && $payer['first_name'] === 'Maria' && $payer['last_name'] === 'da Silva'
+                && $payer['first_name'] === 'Maria' && $payer['last_name'] === 'Da Silva'
                 && $payer['identification'] === ['type' => 'CPF', 'number' => preg_replace('/\D/', '', $user->cpf)]
                 && $payer['address'] === ['zip_code' => '01001000', 'street_name' => 'Praça da Sé', 'street_number' => '1', 'neighborhood' => 'Sé', 'city' => 'São Paulo', 'federal_unit' => 'SP']
                 && $request->hasHeader('X-Idempotency-Key', "order:{$order->id}:payment:1");

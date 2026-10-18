@@ -23,7 +23,7 @@ use Throwable;
 /**
  * WhatsApp "Seu pedido foi entregue" (2026-10-17, modelo Always Fit): a
  * Manuela avisa quando os Correios registram a entrega, com número do pedido,
- * data e hora, quem recebeu (os Correios não informam hoje) e os botões
+ * quem recebeu e quando (os Correios não informam o nome hoje) e os botões
  * "Comprovante Entrega" (URL do rastreio), "Não Recebi" e "Falar com
  * Atendente" (respostas rápidas). Só pedidos da loja e só com o template
  * aprovado na Meta no .env (WHATSAPP_TEMPLATE_PEDIDO_ENTREGUE).
@@ -73,8 +73,7 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
         }
 
         $nome = Str::of(trim((string) ($order->shipping_name ?: $order->user?->name)))->explode(' ')->first() ?: 'cliente';
-        $quando = self::quando($this->entregueEm);
-        $recebedor = filled($this->recebedor) ? Str::title(trim($this->recebedor)) : 'não informado pelos Correios';
+        $recebidoPor = self::recebidoPor($this->recebedor, $this->entregueEm);
         $imagem = config('services.whatsapp.templates.pedido_entregue_imagem') ?: asset('images/whatsapp/pedido-entregue.jpg');
 
         try {
@@ -83,7 +82,7 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
                 $template,
                 (string) config('services.whatsapp.templates.pedido_entregue_idioma', 'pt_BR'),
                 headerMediaType: 'image',
-                bodyParams: [$nome, $order->numero, $quando, $recebedor],
+                bodyParams: [$nome, $order->numero, $recebidoPor],
                 // Botão 0: https://kazakora.com/rastreio/{{1}} no template.
                 urlButtonParams: [0 => $order->trackingRef()],
                 quickReplyPayloads: [
@@ -108,7 +107,7 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
             'wa_message_id' => $response['messages'][0]['id'] ?? null,
             'direction' => 'outbound',
             'type' => 'template',
-            'body' => "Pedido #{$order->numero} foi entregue em {$quando}. Quem recebeu: {$recebedor}. [Comprovante Entrega] [Não Recebi] [Falar com Atendente]",
+            'body' => "Pedido #{$order->numero} foi entregue. Quem recebeu: {$recebidoPor}. [Comprovante Entrega] [Não Recebi] [Falar com Atendente]",
             'status' => 'sent',
             'sent_by' => 'system',
             'payload' => ['template' => $template, 'order_id' => $order->id],
@@ -117,13 +116,16 @@ class SendOrderDeliveredWhatsAppJob implements ShouldQueue
         $conversation->registerMessage($message);
     }
 
-    /** "09/10 às 12:54" ou, sem data dos Correios, "hoje". */
-    public static function quando(?string $data): string
+    /**
+     * Linha "Quem recebeu": "José, em 09/10 às 12:54". Os Correios não
+     * informam o nome hoje: "não informado pelos Correios, em 09/10 às 12:54".
+     */
+    public static function recebidoPor(?string $recebedor, ?string $data): string
     {
-        if (! filled($data)) {
-            return 'hoje';
-        }
+        $quem = filled($recebedor) ? Str::title(trim($recebedor)) : 'não informado pelos Correios';
 
-        return Carbon::parse($data)->setTimezone('America/Sao_Paulo')->format('d/m \à\s H:i');
+        return filled($data)
+            ? $quem.', em '.Carbon::parse($data)->setTimezone('America/Sao_Paulo')->format('d/m \à\s H:i')
+            : $quem;
     }
 }

@@ -89,7 +89,7 @@ class PedidoEntregueWhatsAppTest extends TestCase
         $this->assertCount(1, $this->enviados());
         $c = $this->enviados()[0][0]['template']['components'];
         $this->assertStringEndsWith('/images/whatsapp/pedido-entregue.jpg', $c[0]['parameters'][0]['image']['link']);
-        $this->assertSame(['Maria', $order->numero, now()->format('d/m').' às 12:54', 'não informado pelos Correios'], array_column($c[1]['parameters'], 'text'));
+        $this->assertSame(['Maria', $order->numero, 'não informado pelos Correios, em '.now()->format('d/m').' às 12:54'], array_column($c[1]['parameters'], 'text'));
         $this->assertSame(['url', $order->trackingRef()], [$c[2]['sub_type'], $c[2]['parameters'][0]['text']]);
         $this->assertSame(['quick_reply', "pedido_entregue:nao_recebi:{$order->id}"], [$c[3]['sub_type'], $c[3]['parameters'][0]['payload']]);
         $this->assertSame(['quick_reply', "pedido_enviado:atendente:{$order->id}"], [$c[4]['sub_type'], $c[4]['parameters'][0]['payload']]);
@@ -98,11 +98,11 @@ class PedidoEntregueWhatsAppTest extends TestCase
     public function test_recebedor_dos_correios_vai_na_mensagem(): void
     {
         $order = $this->comObjeto($this->pedido());
-        $this->rastro(['dtHrCriado' => now()->format('Y-m-d\TH:i:s'), 'recebedor' => ['nome' => 'JOSE PORTEIRO']]);
+        $this->rastro(['dtHrCriado' => now()->setTime(9, 5)->format('Y-m-d\TH:i:s'), 'recebedor' => ['nome' => 'JOSE PORTEIRO']]);
 
         $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
 
-        $this->assertSame('Jose Porteiro', $this->enviados()[0][0]['template']['components'][1]['parameters'][3]['text']);
+        $this->assertSame('Jose Porteiro, em '.now()->format('d/m').' às 09:05', $this->enviados()[0][0]['template']['components'][1]['parameters'][2]['text']);
     }
 
     public function test_entrega_antiga_conclui_sem_avisar_e_marketplace_nao_recebe(): void
@@ -114,7 +114,7 @@ class PedidoEntregueWhatsAppTest extends TestCase
 
         $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
         $this->assertCount(0, $this->enviados());
-        $this->assertSame('hoje', SendOrderDeliveredWhatsAppJob::quando(null));
+        $this->assertSame('não informado pelos Correios', SendOrderDeliveredWhatsAppJob::recebidoPor(null, null));
     }
 
     public function test_botao_nao_recebi_marca_pedido_chama_humano_e_avisa_admins(): void

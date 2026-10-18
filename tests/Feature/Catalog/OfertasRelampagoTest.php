@@ -183,4 +183,29 @@ class OfertasRelampagoTest extends TestCase
         $this->delete("/admin/ofertas-relampago/{$oferta->id}")->assertRedirect();
         $this->assertSame(1, OfertaRelampago::query()->count());
     }
+
+    public function test_ofertas_do_dia_da_home_so_tem_relampago_no_ar_da_kazakora(): void
+    {
+        $doDia = Product::factory()->create(['price' => 200, 'discount_percentage' => 30, 'cost_price' => 40, 'stock' => 10, 'is_active' => true]);
+        OfertaDoDia::query()->create(['data' => now()->toDateString(), 'product_id' => $doDia->id, 'desconto_extra' => 5, 'preco_antes' => 140, 'preco_oferta' => 130, 'lucro_estimado' => 50]);
+        $agendado = Product::factory()->create(['price' => 50, 'stock' => 10, 'is_active' => true]);
+        $outroSite = Product::factory()->create(['price' => 50, 'stock' => 10, 'is_active' => true]);
+        $semEstoque = Product::factory()->create(['price' => 50, 'stock' => 0, 'is_active' => true]);
+        $this->oferta(SiteAtual::KAZAKORA, 20, -1, 3);
+        OfertaRelampago::create(['site' => SiteAtual::KAZAKORA, 'product_id' => $agendado->id, 'desconto_pct' => 10, 'inicio_em' => now()->addHour(), 'fim_em' => now()->addHours(2)]);
+        OfertaRelampago::create(['site' => SiteAtual::FERRAKORA, 'product_id' => $outroSite->id, 'desconto_pct' => 10, 'inicio_em' => now()->subHour(), 'fim_em' => now()->addHours(2)]);
+        OfertaRelampago::create(['site' => SiteAtual::KAZAKORA, 'product_id' => $semEstoque->id, 'desconto_pct' => 10, 'inicio_em' => now()->subHour(), 'fim_em' => now()->addHours(2)]);
+
+        $this->get('/')->assertInertia(fn ($page) => $page
+            ->has('vitrine.ofertas', 1)
+            ->where('vitrine.ofertas.0.id', $this->pai->id)
+            ->where('vitrine.ofertasTerminamEm', now()->addHours(3)->toIso8601String()));
+
+        // A agendada entra sozinha quando começa.
+        $this->travel(90)->minutes();
+        OfertaRelampago::esquecer();
+        $this->get('/')->assertInertia(fn ($page) => $page
+            ->where('vitrine.ofertas.0.id', $agendado->id)
+            ->where('vitrine.ofertas.1.id', $this->pai->id));
+    }
 }

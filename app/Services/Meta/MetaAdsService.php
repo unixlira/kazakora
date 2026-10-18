@@ -5,6 +5,7 @@ namespace App\Services\Meta;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
+use App\Modules\Marketplace\Support\FormatoDeVideo;
 use App\Support\PixelMeta;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
@@ -181,6 +182,13 @@ class MetaAdsService
                 if ($video->ehImagem() && blank($video->meta_image_hash)) {
                     [$hash, $url] = $this->subirImagem($video);
                     $video->forceFill(['meta_image_hash' => $hash, 'meta_thumbnail_url' => $url, 'ultimo_erro' => null])->save();
+
+                    return self::ENVIO_CONTINUAR;
+                }
+                if ($video->precisaFicarVertical() && blank($video->meta_video_id) && blank($video->path_vertical)) {
+                    // Horizontal (16:9) vira 9:16 com laterais desfocadas antes de subir.
+                    $passo = "ajuste para 9:16 do {$this->rotuloDoAnuncio($video)}";
+                    $video->forceFill(['path_vertical' => $this->deixarVertical($video), 'ultimo_erro' => null])->save();
 
                     return self::ENVIO_CONTINUAR;
                 }
@@ -546,11 +554,11 @@ class MetaAdsService
         try {
             $resposta = $this->post($this->conta().'/adcreatives', $payload);
         } catch (MetaAdsException $erro) {
-            if (! preg_match('/degrees_of_freedom|creative_features|enroll_status/i', $erro->getMessage())) {
+            if (! preg_match('/degrees_of_freedom|creative_features|enroll_status|contextual/i', $erro->getMessage())) {
                 throw $erro;
             }
 
-            unset($payload['degrees_of_freedom_spec']);
+            unset($payload['degrees_of_freedom_spec'], $payload['contextual_multi_ads']);
             $resposta = $this->post($this->conta().'/adcreatives', $payload);
         }
 
@@ -660,6 +668,8 @@ class MetaAdsService
                 fn (string $estado) => ['enroll_status' => $estado],
                 self::MELHORIAS_DO_CRIATIVO,
             )]),
+            // Vários anúncios juntos no feed (ligado nos 3 da Árvore de Natal).
+            'contextual_multi_ads' => json_encode(['enroll_status' => 'OPT_IN']),
         ];
 
         // Várias opções de texto, título e descrição: a Meta testa as
@@ -714,6 +724,31 @@ class MetaAdsService
     // Vídeo ------------------------------------------------------------------
 
     /**
+     * Versão 9:16 do vídeo horizontal, na mesma pasta do original.
+     *
+     * @throws MetaAdsException
+     */
+    private function deixarVertical(MetaAdsVideo $video): string
+    {
+        $disco = Storage::disk('local');
+        if (! $disco->exists($video->path)) {
+            throw new MetaAdsException('O arquivo do vídeo não está mais no servidor.');
+        }
+
+        $destino = dirname($video->path).'/'.pathinfo($video->path, PATHINFO_FILENAME).'-9x16.mp4';
+
+        try {
+            app(FormatoDeVideo::class)->deixarVertical($disco->path($video->path), $disco->path($destino));
+        } catch (\RuntimeException $e) {
+            report($e);
+
+            throw new MetaAdsException('Não consegui deixar o vídeo horizontal no formato 9:16. Exporte o vídeo em pé (1080x1920) e envie de novo.');
+        }
+
+        return $destino;
+    }
+
+    /**
      * Sobe o arquivo para a biblioteca de vídeos da conta (advideos).
      *
      * @throws MetaAdsException
@@ -723,11 +758,11 @@ class MetaAdsService
         $this->exigirConfiguracao();
 
         $disco = Storage::disk('local');
-        if (! $disco->exists($video->path)) {
+        if (! $disco->exists($video->arquivoParaMeta())) {
             throw new MetaAdsException('O arquivo do vídeo não está mais no servidor.');
         }
 
-        $arquivo = fopen($disco->path($video->path), 'r');
+        $arquivo = fopen($disco->path($video->arquivoParaMeta()), 'r');
 
         try {
             $resposta = $this->cliente()

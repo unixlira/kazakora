@@ -140,12 +140,15 @@ watch(() => props.products, (novos) => {
 
 const temMais = computed(() => !!props.products && props.products.current_page < props.products.last_page);
 
-// Ofertas do dia: contagem até o fim da Relâmpago que acaba primeiro.
+// Ofertas do dia: contagem visual de 24h (23:59:59 → 00:00:00) até a meia-noite
+// de São Paulo, reiniciando todo dia (pedido 2026-10-18). Só o relógio: quais
+// ofertas aparecem continua pelo início/fim configurados no back-end.
 const restanteOfertas = ref('');
 let relogioOfertas = null;
+const horaSaoPaulo = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 const atualizarRelogio = () => {
-    const fim = props.vitrine?.ofertasTerminamEm ? new Date(props.vitrine.ofertasTerminamEm).getTime() : 0;
-    const segundos = Math.max(0, Math.floor((fim - Date.now()) / 1000));
+    const [h, m, s] = horaSaoPaulo.format(new Date()).split(':').map(Number);
+    const segundos = Math.max(0, 86399 - (h * 3600 + m * 60 + s));
     const dois = (valor) => String(valor).padStart(2, '0');
     restanteOfertas.value = `${dois(Math.floor(segundos / 3600))}:${dois(Math.floor((segundos % 3600) / 60))}:${dois(segundos % 60)}`;
 };

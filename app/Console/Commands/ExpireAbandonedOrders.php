@@ -124,11 +124,15 @@ class ExpireAbandonedOrders extends Command
 
         try {
             foreach ($pendentes as $payment) {
-                $novoStatus = $payment->mercadopago_order_id
-                    ? $this->statusDoCartao($mercadoPago->retrieveOrder($payment->mercadopago_order_id))
+                $mpOrder = $payment->mercadopago_order_id ? $mercadoPago->retrieveOrder($payment->mercadopago_order_id) : null;
+                $novoStatus = $mpOrder !== null
+                    ? $this->statusDoCartao($mpOrder)
                     : $this->statusDoPix($payment, $mercadoPago);
 
-                if ($novoStatus !== null) {
+                if ($novoStatus === Payment::STATUS_CANCELED && $mpOrder !== null) {
+                    // Cartão recusado: o motivo fica na tela do pedido.
+                    $payment->recusar($mpOrder['transactions']['payments'][0] ?? []);
+                } elseif ($novoStatus !== null) {
                     $payment->update(['status' => $novoStatus]);
                 }
             }

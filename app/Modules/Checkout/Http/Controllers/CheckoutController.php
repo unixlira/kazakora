@@ -26,6 +26,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockManager;
 use App\Modules\Operacional\Models\ShippingMethod;
 use App\Services\MercadoPago\Exceptions\MercadoPagoException;
+use App\Services\MercadoPago\Exceptions\PagamentoRecusadoException;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use App\Services\Stripe\StripePaymentService;
 use App\Support\DescontoPix;
@@ -780,9 +781,7 @@ class CheckoutController extends Controller
                     $mpOrderPayment = $mpOrder['transactions']['payments'][0] ?? [];
 
                     if (in_array($mpOrderPayment['status'] ?? null, ['failed', 'rejected'], true)) {
-                        throw new MercadoPagoException(
-                            'Pagamento no cartão recusado: '.($mpOrderPayment['status_detail'] ?? 'motivo não informado pela operadora.'),
-                        );
+                        throw new PagamentoRecusadoException($order, $user, $primaryMethod, $primaryAmount, $mpOrder, $mpOrderPayment);
                     }
 
                     Payment::create([
@@ -852,6 +851,12 @@ class CheckoutController extends Controller
 
             return redirect()->route('finalizacao.pagamento')->withErrors(['payment' => 'Não foi possível iniciar o pagamento agora. Tente novamente em instantes ou escolha outra forma de pagamento.']);
         } catch (MercadoPagoException $exception) {
+            // Cartão recusado: o pedido foi desfeito, a tentativa fica guardada
+            // para o motivo aparecer no pedido que o cliente fizer depois.
+            if ($exception instanceof PagamentoRecusadoException) {
+                rescue(fn () => $exception->registrar());
+            }
+
             Log::channel('mercadopago')->error('mercadopago.checkout.payment_failed', [
                 'payment_method' => $data['payment_method'],
                 'message' => $exception->getMessage(),
@@ -997,7 +1002,7 @@ class CheckoutController extends Controller
                 $mpPayment = $mpOrder['transactions']['payments'][0] ?? [];
 
                 if (in_array($mpPayment['status'] ?? null, ['failed', 'rejected', 'cancelled'], true)) {
-                    $payment->update(['status' => Payment::STATUS_CANCELED]);
+                    $payment->recusar($mpPayment);
                     $this->finalizer->cancelSiblingsAfterFailure($order->fresh(['payments']), $payment);
                 } else {
                     $localStatus = $this->mercadoPagoLocalStatus($mpPayment);
@@ -1018,7 +1023,7 @@ class CheckoutController extends Controller
                 if ($mpPayment['status'] === 'approved') {
                     $payment->update(['status' => Payment::STATUS_CAPTURED]);
                 } elseif (in_array($mpPayment['status'], ['cancelled', 'rejected'], true)) {
-                    $payment->update(['status' => Payment::STATUS_CANCELED]);
+                    $payment->recusar($mpPayment);
                     $this->finalizer->cancelSiblingsAfterFailure($order->fresh(['payments']), $payment);
                 }
 

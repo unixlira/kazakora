@@ -165,6 +165,21 @@ class ConteudoAnuncioTest extends TestCase
                 ->missing('product.ad_content.erro'));
     }
 
+    public function test_produto_novo_sem_conteudo_ganha_o_conteudo_na_primeira_visita(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+        $product = $this->produto();
+        $this->assertNull($product->adContent);
+
+        $this->get("/produtos/{$product->slug}")->assertOk();
+
+        $conteudo = $product->fresh()->adContent;
+        $this->assertNotNull($conteudo, 'a visita gera o conteúdo depois de responder (homolog não roda o agendador)');
+        $this->assertCount(3, $conteudo->destaques);
+        $this->assertNotEmpty($conteudo->blocos);
+        $this->assertNotEmpty($conteudo->beneficios);
+    }
+
     public function test_admin_gera_de_novo_pelo_botao(): void
     {
         Http::fake(fn () => throw new ConnectionException('timeout'));

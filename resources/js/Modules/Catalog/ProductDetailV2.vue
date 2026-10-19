@@ -614,7 +614,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                              persuasivo, comparativo, benefícios e dúvidas. -->
                         <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
                             <header class="desc-cabecalho">
-                                <span class="desc-icone bg-store-accent-soft text-store-accent-strong"><i class="fas fa-wand-magic-sparkles"></i></span>
+                                <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
                                 <p class="desc-eyebrow">Por que esse produto merece atenção</p>
                                 <h2>{{ anuncio?.chamada || 'Descrição' }}</h2>
                             </header>
@@ -1003,8 +1003,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
-.pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; }
-.pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); }
+/* Laranja do logo da KazaKora (#F1691B): círculo num tom mais fraco com ícone branco e frase no laranja cheio (pedido 2026-10-19). */
+.pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: #f59a62; color: #ffffff; }
+.pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: #f1691b; }
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }

@@ -91,6 +91,9 @@
     /* Cor do item ativo do menu e de texto em destaque: laranja escuro
        (7,3 no branco). O laranja puro nunca é texto no claro. */
     --destaque: #9a3412;
+    /* Fundo do item ativo do menu (Lira, 2026-10-19): azul da seta das
+       seções (icone-cor-azul) em vez do laranja. */
+    --menu-ativo: color-mix(in oklab, #2563eb 14%, transparent);
     /* Preenchimento sólido com texto/ícone branco por cima (bolinhas de
        ícone, barras, ranking): grafite no claro. */
     --primary-solido: #3c4044;
@@ -118,6 +121,7 @@
     --texto-fundo: #f5f4f3;
     --texto-fundo-suave: #cfd1d3;
     --destaque: #fd7b41;
+    --menu-ativo: color-mix(in oklab, #60a5fa 18%, transparent);
     /* Laranja mais fechado: o ícone branco por cima continua visível. */
     --primary-solido: #e5651f;
     --faixa-card: #8a8f95;

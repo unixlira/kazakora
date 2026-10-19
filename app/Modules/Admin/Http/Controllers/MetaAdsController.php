@@ -34,11 +34,6 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * conjuntos e texto de todos os anúncios num pedido só (transação); os
  * arquivos novos sobem um por um depois, com barra de progresso. Envio cria
  * tudo PAUSADO; ativar é outro botão, com confirmação explícita do gasto.
- *
- * Desde 2026-10-19 (pedido do Lira) dá para criar conjunto novo dentro de
- * campanha que já está na Meta: o conjunto é montado à parte e sobe
- * sozinho, pausado, sem reenviar nem pausar o resto da campanha. Do mesmo
- * jeito, dá para acrescentar anúncio novo em conjunto que já está na Meta.
  */
 class MetaAdsController extends Controller
 {
@@ -69,17 +64,18 @@ class MetaAdsController extends Controller
                 'fim' => $c->fim?->toDateString(),
                 'videos' => $c->videos_count,
                 'conjuntos' => $c->conjuntos_count,
-                'novo_conjunto' => $c->podeAdicionarConjunto() && $c->conjuntos_count < MetaAdsCampanha::MAX_CONJUNTOS,
                 'ultimo_erro' => $c->ultimo_erro,
                 'criada_por' => $c->user?->name,
             ]);
+
+        $noKazaKora = MetaAdsCampanha::query()->whereNotNull('meta_campaign_id')->pluck('id', 'meta_campaign_id');
 
         return Inertia::render('Admin/MetaAds/Index', [
             'campanhas' => $campanhas,
             'config' => $this->estadoConfig($meta),
             'periodo' => $periodo,
             'periodos' => MetaAdsService::PERIODOS,
-            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $this->noKazaKora())),
+            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $noKazaKora->all())),
         ]);
     }
 
@@ -131,15 +127,7 @@ class MetaAdsController extends Controller
 
         return Inertia::render('Admin/MetaAds/Show', [
             'campanha' => $campanha->makeHidden(['videos', 'conjuntos']),
-            'conjuntos' => $campanha->conjuntos->map(fn (MetaAdsConjunto $c) => $this->dadosDoConjunto($campanha, $c) + [
-                'pode' => [
-                    'acrescentarAnuncios' => $c->aceitaAnuncioNovo($campanha) && $campanha->videos->count() < MetaAdsCampanha::MAX_VIDEOS,
-                    'editar' => $c->aceitaMudanca($campanha),
-                    'enviar' => $c->podeEnviar($campanha),
-                    'ativar' => $c->podeAtivar($campanha),
-                ],
-                'problemas' => $c->podeEnviar($campanha) ? $meta->problemasDoConjuntoNovo($campanha, $c) : [],
-            ])->values(),
+            'conjuntos' => $campanha->conjuntos->map(fn (MetaAdsConjunto $c) => $this->dadosDoConjunto($campanha, $c))->values(),
             'videos' => $campanha->videos->values()->map(fn (MetaAdsVideo $v) => $this->dadosDoVideo($campanha, $v) + [
                 'desempenho' => $v->meta_ad_id ? ($desempenho[$v->meta_ad_id] ?? null) : null,
             ]),
@@ -157,9 +145,7 @@ class MetaAdsController extends Controller
                 'ativar' => $campanha->podeAtivar(),
                 'pausar' => $campanha->podePausar(),
                 'excluir' => $campanha->podeExcluir(),
-                'assumir' => $campanha->podeAssumirNoGerenciador(),
                 'mexerNosVideos' => $campanha->podeMexerNosVideos(),
-                'adicionarConjunto' => $campanha->podeAdicionarConjunto() && $campanha->conjuntos->count() < MetaAdsCampanha::MAX_CONJUNTOS,
             ],
             'linkGerenciador' => $campanha->meta_campaign_id ? $meta->linkGerenciador($campanha) : null,
             'chamadas' => MetaAdsCampanha::CHAMADAS,
@@ -271,22 +257,6 @@ class MetaAdsController extends Controller
         return back()->with('success', 'Campanha ativa na Meta. Já está gastando.');
     }
 
-    /**
-     * Campanha terminada ou mexida à mão no Gerenciador da Meta: o KazaKora
-     * para de enviar, ativar e pausar (reenviar duplicaria anúncio no
-     * conjunto). Não chama a Meta.
-     */
-    public function assumir(MetaAdsCampanha $campanha): RedirectResponse
-    {
-        if (! $campanha->podeAssumirNoGerenciador()) {
-            return back()->with('error', 'Só dá para passar ao Gerenciador campanha que já existe na Meta e não está sendo enviada.');
-        }
-
-        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_GERENCIADOR, 'ultimo_erro' => null])->save();
-
-        return back()->with('success', 'Campanha marcada como assumida no Gerenciador da Meta. Daqui em diante, mexa nela por lá.');
-    }
-
     public function pausar(MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse
     {
         $campanha->load('videos');
@@ -314,7 +284,7 @@ class MetaAdsController extends Controller
      */
     public function videoStore(Request $request, MetaAdsCampanha $campanha, DuracaoDeVideo $duracao, FormatoDeVideo $formato): JsonResponse
     {
-        if (! $this->podeMexerNoConjunto($campanha, $request->input('conjunto_id'))) {
+        if (! $campanha->podeMexerNosVideos()) {
             return response()->json(['message' => 'Campanha já enviada à Meta: os anúncios não mudam mais por aqui.'], 409);
         }
 
@@ -346,7 +316,6 @@ class MetaAdsController extends Controller
 
         $video = $campanha->videos()->create($textos + [
             'conjunto_id' => $conjunto->id,
-            'adicionado_depois' => ! $campanha->podeMexerNosVideos(),
             'ordem' => $request->filled('ordem') ? (int) $request->input('ordem') : $this->proximaOrdem($campanha),
             'tipo' => $imagem ? MetaAdsVideo::TIPO_IMAGEM : MetaAdsVideo::TIPO_VIDEO,
             'nome_original' => mb_substr($arquivo->getClientOriginalName() ?: ($imagem ? 'imagem.jpg' : 'video.mp4'), 0, 250),
@@ -363,8 +332,7 @@ class MetaAdsController extends Controller
     {
         abort_unless($video->campanha_id === $campanha->id, 404);
 
-        if ($video->temObjetoNoMeta() || ! $this->podeMexerNoConjunto($campanha, $video->conjunto_id)
-            || ($request->filled('conjunto_id') && ! $this->podeMexerNoConjunto($campanha, $request->input('conjunto_id')))) {
+        if (! $campanha->podeMexerNosVideos() || $video->temObjetoNoMeta()) {
             return response()->json(['message' => 'Anúncio já enviado à Meta: edite pelo Gerenciador de Anúncios.'], 409);
         }
 
@@ -385,7 +353,7 @@ class MetaAdsController extends Controller
     {
         abort_unless($video->campanha_id === $campanha->id, 404);
 
-        if (! $this->podeMexerNoConjunto($campanha, $request->input('conjunto_id'))) {
+        if (! $campanha->podeMexerNosVideos()) {
             return response()->json(['message' => 'Campanha já enviada à Meta: os anúncios não mudam mais por aqui.'], 409);
         }
 
@@ -406,7 +374,6 @@ class MetaAdsController extends Controller
 
         $copia = $campanha->videos()->create($textos + [
             'conjunto_id' => $conjunto->id,
-            'adicionado_depois' => ! $campanha->podeMexerNosVideos(),
             'ordem' => $request->filled('ordem') ? (int) $request->input('ordem') : $this->proximaOrdem($campanha),
             'tipo' => $video->tipo,
             'nome_original' => $video->nome_original,
@@ -424,7 +391,7 @@ class MetaAdsController extends Controller
     {
         abort_unless($video->campanha_id === $campanha->id, 404);
 
-        if ($video->temObjetoNoMeta() || ! $this->podeMexerNoConjunto($campanha, $video->conjunto_id)) {
+        if (! $campanha->podeMexerNosVideos() || $video->temObjetoNoMeta()) {
             $mensagem = 'Anúncio já enviado à Meta: tire pelo Gerenciador de Anúncios.';
 
             return $request->wantsJson() ? response()->json(['message' => $mensagem], 409) : back()->with('error', $mensagem);
@@ -445,180 +412,6 @@ class MetaAdsController extends Controller
         abort_unless($disco->exists($video->path), 404);
 
         return response()->file($disco->path($video->path), ['Cache-Control' => 'private, max-age=3600']);
-    }
-
-    // Conjunto novo em campanha que já está na Meta (2026-10-19) --------------
-
-    public function conjuntoCreate(MetaAdsCampanha $campanha, MetaAdsService $meta): Response|RedirectResponse
-    {
-        $campanha->load(['conjuntos', 'videos']);
-
-        if (! $campanha->podeAdicionarConjunto()) {
-            return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)
-                ->with('error', 'Conjunto novo só em campanha que já está na Meta (enviada, ativa ou assumida no Gerenciador).');
-        }
-
-        if ($campanha->conjuntos->count() >= MetaAdsCampanha::MAX_CONJUNTOS) {
-            return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)
-                ->with('error', 'Limite de '.MetaAdsCampanha::MAX_CONJUNTOS.' conjuntos por campanha.');
-        }
-
-        return Inertia::render('Admin/MetaAds/ConjuntoNovo', $this->dadosDoConjuntoNovo($meta, $campanha, null));
-    }
-
-    public function conjuntoEdit(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): Response|RedirectResponse
-    {
-        abort_unless($conjunto->campanha_id === $campanha->id, 404);
-        $campanha->load(['conjuntos', 'videos']);
-
-        if (! $conjunto->aceitaMudanca($campanha)) {
-            return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)
-                ->with('error', 'Este conjunto já foi para a Meta. Mude pelo Gerenciador de Anúncios.');
-        }
-
-        return Inertia::render('Admin/MetaAds/ConjuntoNovo', $this->dadosDoConjuntoNovo($meta, $campanha, $conjunto));
-    }
-
-    /** Acrescentar anúncios novos em conjunto que já existe (na Meta ou ainda não). */
-    public function conjuntoAnuncios(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): Response|RedirectResponse
-    {
-        abort_unless($conjunto->campanha_id === $campanha->id, 404);
-        $campanha->load(['conjuntos', 'videos']);
-        $conjunto = $campanha->conjuntos->firstWhere('id', $conjunto->id);
-
-        if (! $conjunto->aceitaAnuncioNovo($campanha)) {
-            return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)
-                ->with('error', 'Só dá para acrescentar anúncio em campanha que já está na Meta e com o conjunto fora de envio.');
-        }
-
-        return Inertia::render('Admin/MetaAds/ConjuntoNovo', $this->dadosDoConjuntoNovo($meta, $campanha, $conjunto, true));
-    }
-
-    public function conjuntoStore(Request $request, MetaAdsCampanha $campanha): JsonResponse
-    {
-        $campanha->load(['conjuntos', 'videos']);
-
-        if (! $campanha->podeAdicionarConjunto()) {
-            return response()->json(['message' => 'Conjunto novo só em campanha que já está na Meta (enviada, ativa ou assumida no Gerenciador).'], 409);
-        }
-
-        if ($campanha->conjuntos->count() >= MetaAdsCampanha::MAX_CONJUNTOS) {
-            return response()->json(['message' => 'Limite de '.MetaAdsCampanha::MAX_CONJUNTOS.' conjuntos por campanha.'], 422);
-        }
-
-        $dados = $this->comErrosEmJson($request, fn () => $this->validarConjuntoNovo($request, $campanha));
-
-        $conjunto = DB::transaction(function () use ($campanha, $dados) {
-            $conjunto = $campanha->conjuntos()->create($dados + [
-                'ordem' => (int) $campanha->conjuntos->max('ordem') + 1,
-                'adicionado_depois' => true,
-            ]);
-            $this->somarOrcamentoDosConjuntos($campanha);
-
-            return $conjunto;
-        });
-
-        return response()->json(['id' => $conjunto->id], 201);
-    }
-
-    public function conjuntoUpdate(Request $request, MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto): JsonResponse
-    {
-        abort_unless($conjunto->campanha_id === $campanha->id, 404);
-        $campanha->load(['conjuntos', 'videos']);
-
-        if (! $conjunto->aceitaMudanca($campanha)) {
-            return response()->json(['message' => 'Este conjunto já foi para a Meta. Mude pelo Gerenciador de Anúncios.'], 409);
-        }
-
-        $dados = $this->comErrosEmJson($request, fn () => $this->validarConjuntoNovo($request, $campanha));
-
-        DB::transaction(function () use ($campanha, $conjunto, $dados) {
-            $conjunto->update($dados);
-            $this->somarOrcamentoDosConjuntos($campanha);
-        });
-
-        return response()->json(['id' => $conjunto->id]);
-    }
-
-    public function conjuntoDestroy(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto): RedirectResponse
-    {
-        abort_unless($conjunto->campanha_id === $campanha->id, 404);
-        $campanha->load(['conjuntos', 'videos']);
-
-        if (! $conjunto->aceitaMudanca($campanha)) {
-            return back()->with('error', 'Este conjunto já foi para a Meta. Tire pelo Gerenciador de Anúncios.');
-        }
-
-        DB::transaction(function () use ($campanha, $conjunto) {
-            foreach ($campanha->videos->where('conjunto_id', $conjunto->id) as $video) {
-                Storage::disk('local')->delete(array_filter([$video->path, $video->path_vertical]));
-                $video->delete();
-            }
-            $conjunto->delete();
-            $this->somarOrcamentoDosConjuntos($campanha);
-        });
-
-        return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)->with('success', 'Conjunto novo excluído.');
-    }
-
-    public function conjuntoEnviar(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): RedirectResponse
-    {
-        abort_unless($conjunto->campanha_id === $campanha->id, 404);
-        $campanha->load(['conjuntos', 'videos']);
-        $conjunto = $campanha->conjuntos->firstWhere('id', $conjunto->id);
-
-        if (! $conjunto->podeEnviar($campanha)) {
-            return back()->with('error', 'Nada novo para enviar neste conjunto, ou o envio já está rodando.');
-        }
-
-        if ($problemas = $meta->problemasDoConjuntoNovo($campanha, $conjunto)) {
-            return back()->with('error', implode(' ', $problemas));
-        }
-
-        $conjunto->forceFill(['enviando' => true, 'ultimo_erro' => null])->save();
-        $campanha->videos()->where('conjunto_id', $conjunto->id)->update(['ultimo_erro' => null]);
-        EnviarCampanhaMetaAds::dispatch($campanha->id, $conjunto->id);
-
-        $oQue = blank($conjunto->meta_adset_id) ? "o conjunto {$conjunto->nome} e os anúncios dele" : "os anúncios novos do conjunto {$conjunto->nome}";
-
-        return back()->with('success', "Enviando {$oQue} para a Meta. Nascem PAUSADOS; o resto da campanha não muda.");
-    }
-
-    public function conjuntoAtivar(Request $request, MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): RedirectResponse
-    {
-        abort_unless($conjunto->campanha_id === $campanha->id, 404);
-
-        $request->validate([
-            'confirmo_gasto' => ['accepted'],
-            'orcamento_diario' => ['required', 'numeric'],
-        ], [
-            'confirmo_gasto.accepted' => 'Confirme que o conjunto vai começar a gastar.',
-        ]);
-
-        $campanha->load(['conjuntos', 'videos']);
-        $conjunto = $campanha->conjuntos->firstWhere('id', $conjunto->id);
-
-        // Orçamento por conjunto: confirma o do conjunto; da campanha: o total, que não muda.
-        $esperado = $campanha->orcamentoDaCampanha() ? (float) $campanha->orcamento_diario : (float) $conjunto->orcamento_diario;
-        if (round((float) $request->input('orcamento_diario'), 2) !== round($esperado, 2)) {
-            throw ValidationException::withMessages(['orcamento_diario' => 'O orçamento mudou. Recarregue a tela e confirme de novo.']);
-        }
-
-        if (! $conjunto->podeAtivar($campanha)) {
-            return back()->with('error', 'Só dá para ativar conjunto ou anúncio novo já criado na Meta, em campanha ativa.');
-        }
-
-        if (! $meta->configurado()) {
-            return back()->with('error', 'Meta não configurado.');
-        }
-
-        try {
-            $meta->ativarConjunto($campanha, $conjunto);
-        } catch (MetaAdsException) {
-            return back()->with('error', 'A Meta não ativou. Veja o erro na tela.');
-        }
-
-        return back()->with('success', "Novidades do conjunto {$conjunto->nome} ativas na Meta.");
     }
 
     public function localizacoes(Request $request, MetaAdsService $meta): JsonResponse
@@ -659,86 +452,6 @@ class MetaAdsController extends Controller
 
             throw $erro;
         }
-    }
-
-    /**
-     * Anúncio só muda em rascunho ou dentro de conjunto novo que ainda não
-     * subiu (campanha já na Meta).
-     */
-    private function podeMexerNoConjunto(MetaAdsCampanha $campanha, mixed $conjuntoId): bool
-    {
-        if ($campanha->podeMexerNosVideos()) {
-            return true;
-        }
-
-        $campanha->loadMissing(['conjuntos', 'videos']);
-        $conjunto = filled($conjuntoId) ? $campanha->conjuntos->firstWhere('id', (int) $conjuntoId) : null;
-
-        return (bool) $conjunto?->aceitaAnuncioNovo($campanha);
-    }
-
-    /** @return array<string, mixed> */
-    private function validarConjuntoNovo(Request $request, MetaAdsCampanha $campanha): array
-    {
-        $dados = $request->validate([
-            'nome' => ['required', 'string', 'max:120'],
-            'orcamento_diario' => [$campanha->orcamentoDaCampanha() ? 'nullable' : 'required', 'numeric', 'min:'.MetaAdsCampanha::MINIMO_POR_CONJUNTO, 'max:10000'],
-            'publico_proprio' => ['boolean'],
-            'idade_min' => ['integer', 'min:18', 'max:65'],
-            'idade_max' => ['integer', 'min:18', 'max:65'],
-            'genero' => [Rule::in(array_keys(MetaAdsCampanha::GENEROS))],
-            'localizacoes' => ['nullable', 'array'],
-            'localizacoes.regioes' => ['nullable', 'array', 'max:30'],
-            'localizacoes.regioes.*.key' => ['required', 'string', 'max:40'],
-            'localizacoes.regioes.*.nome' => ['required', 'string', 'max:120'],
-            'localizacoes.cidades' => ['nullable', 'array', 'max:50'],
-            'localizacoes.cidades.*.key' => ['required', 'string', 'max:40'],
-            'localizacoes.cidades.*.nome' => ['required', 'string', 'max:160'],
-            'localizacoes.cidades.*.raio_km' => ['nullable', 'integer', 'min:10', 'max:80'],
-        ], [
-            'nome.required' => 'Dê um nome para o conjunto.',
-            'orcamento_diario.required' => 'Informe o orçamento por dia deste conjunto.',
-            'orcamento_diario.min' => 'Mínimo de R$ '.number_format(MetaAdsCampanha::MINIMO_POR_CONJUNTO, 2, ',', '.').' por dia neste conjunto.',
-        ]);
-
-        $conjunto = $this->normalizarConjuntos([$dados + ['chave' => 'novo']], $campanha)[0];
-
-        return collect($conjunto)->except(['id', 'chave', 'ordem'])->all();
-    }
-
-    /** Orçamento por conjunto: o diário da campanha é a soma (é o que a tela de ativar confirma). */
-    private function somarOrcamentoDosConjuntos(MetaAdsCampanha $campanha): void
-    {
-        if ($campanha->orcamentoDaCampanha()) {
-            return;
-        }
-
-        $campanha->forceFill(['orcamento_diario' => round((float) $campanha->conjuntos()->sum('orcamento_diario'), 2)])->save();
-    }
-
-    /** @return array<string, mixed> */
-    private function dadosDoConjuntoNovo(MetaAdsService $meta, MetaAdsCampanha $campanha, ?MetaAdsConjunto $conjunto, bool $soAnuncios = false): array
-    {
-        $formulario = $this->dadosDoFormulario($meta, $campanha);
-        $doConjunto = $conjunto ? $campanha->videos->where('conjunto_id', $conjunto->id) : collect();
-
-        return [
-            'campanha' => $formulario['campanha'],
-            'conjunto' => $conjunto ? $this->dadosDoConjunto($campanha, $conjunto) : null,
-            // Acrescentar anúncios: os que já estão na Meta só aparecem como lista.
-            'soAnuncios' => $soAnuncios,
-            'videos' => $doConjunto->reject(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta())
-                ->map(fn (MetaAdsVideo $v) => $this->dadosDoVideo($campanha, $v))->values(),
-            'jaNaMeta' => $doConjunto->filter(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta())
-                ->map(fn (MetaAdsVideo $v) => ['id' => $v->id, 'nome' => $v->nome_original])->values(),
-            'outrosConjuntos' => $campanha->conjuntos->where('id', '!=', $conjunto?->id)->pluck('nome')->values(),
-            'limites' => $formulario['limites'] + ['anuncios_na_campanha' => $campanha->videos->count()],
-            'produtos' => $formulario['produtos'],
-            'config' => $formulario['config'],
-            'generos' => $formulario['generos'],
-            'chamadas' => $formulario['chamadas'],
-            'siteUrl' => $formulario['siteUrl'],
-        ];
     }
 
     /**
@@ -1110,7 +823,7 @@ class MetaAdsController extends Controller
      * Estrutura real da Meta (Campanha > Conjuntos > Anúncios) com métricas.
      * Erro da Meta não derruba a tela: volta a mensagem para mostrar.
      *
-     * @param  array<string, array<string, array<string, mixed>>>  $noKazaKora  ids da Meta => registro local (ver noKazaKora())
+     * @param  array<string, int>  $noKazaKora  meta_campaign_id => id local, para o link da campanha
      * @return array{campanhas: list<array<string, mixed>>, erro: ?string}
      */
     private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = []): array
@@ -1120,57 +833,15 @@ class MetaAdsController extends Controller
         }
 
         try {
-            $campanhas = array_map(function (array $c) use ($noKazaKora) {
-                $local = $noKazaKora['campanhas'][$c['id']] ?? null;
-                $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local) {
-                    $conjunto = $local ? ($noKazaKora['conjuntos'][$s['id']] ?? null) : null;
-
-                    return $s + [
-                        'local_id' => $conjunto['id'] ?? null,
-                        'novo_anuncio' => (bool) ($conjunto['novo_anuncio'] ?? false),
-                    ];
-                }, $c['conjuntos'] ?? []);
-
-                return $c + [
-                    'local_id' => $local['id'] ?? null,
-                    'novo_conjunto' => (bool) ($local['novo_conjunto'] ?? false),
-                ];
-            }, $meta->espelho($periodo, $campaignId));
+            $campanhas = array_map(
+                fn (array $c) => $c + ['local_id' => $noKazaKora[$c['id']] ?? null],
+                $meta->espelho($periodo, $campaignId),
+            );
 
             return ['campanhas' => $campanhas, 'erro' => null];
         } catch (MetaAdsException $erro) {
             return ['campanhas' => [], 'erro' => $erro->getMessage()];
         }
-    }
-
-    /**
-     * Campanhas e conjuntos do Gerenciador que existem no KazaKora, com o
-     * que dá para acrescentar em cada um (1 campanha > N conjuntos > N
-     * anúncios, como no Gerenciador). Pedido do Lira 2026-10-19.
-     *
-     * @return array{campanhas: array<string, array{id: int, novo_conjunto: bool}>, conjuntos: array<string, array{id: int, novo_anuncio: bool}>}
-     */
-    private function noKazaKora(): array
-    {
-        $mapa = ['campanhas' => [], 'conjuntos' => []];
-
-        MetaAdsCampanha::query()
-            ->whereNotNull('meta_campaign_id')
-            ->with('conjuntos')
-            ->get()
-            ->each(function (MetaAdsCampanha $c) use (&$mapa) {
-                $mapa['campanhas'][(string) $c->meta_campaign_id] = [
-                    'id' => $c->id,
-                    'novo_conjunto' => $c->podeAdicionarConjunto() && $c->conjuntos->count() < MetaAdsCampanha::MAX_CONJUNTOS,
-                ];
-                foreach ($c->conjuntos as $s) {
-                    if (filled($s->meta_adset_id)) {
-                        $mapa['conjuntos'][(string) $s->meta_adset_id] = ['id' => $s->id, 'novo_anuncio' => $s->aceitaAnuncioNovo($c)];
-                    }
-                }
-            });
-
-        return $mapa;
     }
 
     private function estadoConfig(MetaAdsService $meta): array
@@ -1214,9 +885,6 @@ class MetaAdsController extends Controller
             'publico' => $conjunto->publico($campanha),
             'meta_adset_id' => $conjunto->meta_adset_id,
             'ultimo_erro' => $conjunto->ultimo_erro,
-            'adicionado_depois' => $conjunto->adicionado_depois,
-            'enviando' => $conjunto->enviando,
-            'ativado_em' => $conjunto->ativado_em?->toIso8601String(),
         ];
     }
 
@@ -1246,8 +914,6 @@ class MetaAdsController extends Controller
             'chamada' => $video->chamada,
             // O que de fato vai no criativo (próprio ou padrão da campanha).
             'criativo' => $video->criativo($campanha),
-            'adicionado_depois' => $video->adicionado_depois,
-            'ativado_em' => $video->ativado_em?->toIso8601String(),
         ];
     }
 }

@@ -963,6 +963,7 @@ class MetaAdsCampanhasTest extends TestCase
             'meta_campaign_id' => 'c1',
             'user_id' => $this->admin()->id,
         ]));
+        $conjuntoLocal = $local->conjuntos()->create(['nome' => 'Arvores Natal', 'ordem' => 0, 'meta_adset_id' => 's1']);
 
         Http::fake(function (HttpRequest $request) {
             $url = $request->url();
@@ -1009,6 +1010,10 @@ class MetaAdsCampanhasTest extends TestCase
                     ->has('espelho.campanhas', 2)
                     ->where('espelho.campanhas.0.nome', 'Vendas | Árvores Natal | Out26')
                     ->where('espelho.campanhas.0.local_id', $local->id)
+                    // Botões Novo conjunto e Novo anúncio (1 campanha > N conjuntos > N anúncios).
+                    ->where('espelho.campanhas.0.novo_conjunto', true)
+                    ->where('espelho.campanhas.0.conjuntos.0.local_id', $conjuntoLocal->id)
+                    ->where('espelho.campanhas.0.conjuntos.0.novo_anuncio', true)
                     ->where('espelho.campanhas.0.orcamento_nivel', 'conjunto')
                     ->where('espelho.campanhas.0.orcamento_diario', 30)
                     ->where('espelho.campanhas.0.metricas.gasto', 40)
@@ -1030,7 +1035,9 @@ class MetaAdsCampanhasTest extends TestCase
                     ->where('espelho.campanhas.1.nome', 'Cozedor de ovo')
                     ->where('espelho.campanhas.1.orcamento_nivel', 'campanha')
                     ->where('espelho.campanhas.1.orcamento_diario', 10)
-                    ->where('espelho.campanhas.1.local_id', null)));
+                    ->where('espelho.campanhas.1.local_id', null)
+                    ->where('espelho.campanhas.1.novo_conjunto', false)
+                    ->where('espelho.campanhas.1.conjuntos.0.novo_anuncio', false)));
 
         // O token vai no cabeçalho e nunca na URL.
         Http::assertSent(fn (HttpRequest $r) => $r->hasHeader('Authorization', 'Bearer token-secreto') && ! str_contains($r->url(), 'token-secreto'));

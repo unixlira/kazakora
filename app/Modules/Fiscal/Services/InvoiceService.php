@@ -51,6 +51,12 @@ class InvoiceService
     private const CACHE_CONSUMO_INDEVIDO = 'nfe.consumo_indevido_ate';
 
     /**
+     * cStat 204 — "Duplicidade de NF-e": a MESMA chave já está autorizada.
+     * Não confundir com 539 (mesmo número, chave diferente).
+     */
+    private const CSTAT_DUPLICIDADE_MESMA_CHAVE = '204';
+
+    /**
      * Até quando a SEFAZ está nos barrando por consumo indevido (656), ou
      * null se está liberado. Quem emite em lote consulta isto ANTES de
      * começar — insistir durante a punição só renova a punição.
@@ -132,6 +138,22 @@ class InvoiceService
             $invoice = $order->invoice ?? $this->createPendingInvoice($order);
         }
 
+        // BUG REAL 2026-10-19 (pedido #3279, Rubens): a 1ª tentativa deu
+        // "Empty reply from server", mas a SEFAZ tinha autorizado a nota
+        // 2-3154. O retry reenviou a mesma chave, voltou 204 (duplicidade
+        // da MESMA chave), o 204 caiu na regra do 539 e o pedido ganhou uma
+        // segunda nota autorizada (2-3156); a 3154 teve de ser cancelada à
+        // mão. Nota que já pode ter chegado à SEFAZ (assinada, enviada sem
+        // resposta ou respondida com 204) é consultada por chave ANTES de
+        // qualquer reenvio ou número novo.
+        if ($this->podeJaEstarNaSefaz($invoice) && $this->certificateService->isConfigured()) {
+            $invoice = $this->reconcileSent($invoice);
+
+            if (in_array($invoice->status, [Invoice::STATUS_AUTHORIZED, Invoice::STATUS_DENIED], true)) {
+                return $invoice;
+            }
+        }
+
         // Achado real 2026-08-08 (pedido #188): a nota ficou pendente com
         // um XML montado a partir de dado fiscal incompleto (retorno de um
         // canal sem CST de PIS/COFINS preenchido); consertar o cadastro do
@@ -173,7 +195,31 @@ class InvoiceService
     {
         $motivo = (string) $invoice->motivo_rejeicao;
 
+        // 204 também diz "Duplicidade", mas é a própria nota já autorizada:
+        // queimar o número aqui gera uma segunda nota pro mesmo pedido.
+        if ($this->rejeitadaPorMesmaChave($invoice)) {
+            return false;
+        }
+
         return str_contains($motivo, '539') || stripos($motivo, 'duplicidade') !== false;
+    }
+
+    private function rejeitadaPorMesmaChave(Invoice $invoice): bool
+    {
+        return $invoice->status === Invoice::STATUS_REJECTED
+            && str_starts_with((string) $invoice->motivo_rejeicao, self::CSTAT_DUPLICIDADE_MESMA_CHAVE.' ');
+    }
+
+    /**
+     * `signed`: a falha pode ter sido na volta (a SEFAZ recebeu e autorizou,
+     * a resposta se perdeu). `sent`: enviada sem protocolo na resposta.
+     * 204: a SEFAZ já disse que esta chave está autorizada.
+     */
+    private function podeJaEstarNaSefaz(Invoice $invoice): bool
+    {
+        return $invoice->chave_acesso !== null
+            && (in_array($invoice->status, [Invoice::STATUS_SIGNED, Invoice::STATUS_SENT], true)
+                || $this->rejeitadaPorMesmaChave($invoice));
     }
 
     /**
@@ -434,7 +480,8 @@ class InvoiceService
     }
 
     /**
-     * Pergunta à SEFAZ o que aconteceu com uma nota que ficou em `sent`.
+     * Pergunta à SEFAZ o que aconteceu com uma nota que ficou em `sent`
+     * (também `signed` e rejeitada com 204, ver podeJaEstarNaSefaz()).
      *
      * BURACO REAL, achado em 2026-09-07 nos pedidos do Mercado Livre: o
      * envio é síncrono, mas quando a resposta vem sem protocolo
@@ -457,7 +504,7 @@ class InvoiceService
      */
     public function reconcileSent(Invoice $invoice): Invoice
     {
-        if ($invoice->status !== Invoice::STATUS_SENT || ! $invoice->chave_acesso) {
+        if (! $this->podeJaEstarNaSefaz($invoice)) {
             return $invoice;
         }
 
@@ -615,6 +662,12 @@ class InvoiceService
             $invoice->update(['status' => Invoice::STATUS_DENIED, 'motivo_rejeicao' => "{$cStat} - {$xMotivo}"]);
         } else {
             $invoice->update(['status' => Invoice::STATUS_REJECTED, 'motivo_rejeicao' => "{$cStat} - {$xMotivo}"]);
+
+            // 204: esta chave já foi autorizada numa tentativa anterior cuja
+            // resposta se perdeu. Adota o protocolo de lá.
+            if ($cStat === self::CSTAT_DUPLICIDADE_MESMA_CHAVE) {
+                $this->reconcileSent($invoice->fresh());
+            }
         }
     }
 

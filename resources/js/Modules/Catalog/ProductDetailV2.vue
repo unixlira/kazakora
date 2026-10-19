@@ -449,7 +449,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     <Head :title="product.name">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     </Head>
 
     <AppLayout>
@@ -1077,10 +1077,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
-/* Círculo no amarelo do botão COMPRAR com ícone branco; frase no mesmo amarelo, em negrito e com
-   contorno preto em cada letra (paint-order deixa o traço por fora e o amarelo inteiro; pedido 2026-10-19). */
+/* Círculo no amarelo do botão COMPRAR com ícone branco; frase no mesmo amarelo, em negrito, sem contorno
+   e na Nunito (arredondada, deixa o amarelo nítido sem pesar; pedido 2026-10-19). */
 .pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: var(--yellow); color: #fff; }
-.pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--yellow); -webkit-text-stroke: 2px #000; paint-order: stroke fill; }
+.pd2 .desc-eyebrow { margin: 12px 0 6px; font: 800 13.5px Nunito, Poppins, sans-serif; letter-spacing: .22em; text-transform: uppercase; color: var(--yellow); }
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }

@@ -278,15 +278,19 @@ watch(
         <nav id="menu-admin" class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
             :class="[sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64', collapseShow === 'hidden' ? 'max-md:hidden' : 'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-[69px] max-md:z-30 max-md:overflow-y-auto']">
             <div class="mx-auto flex w-full flex-wrap items-center justify-between px-0 md:min-h-full md:flex-col md:flex-nowrap md:items-stretch">
-                <!-- Menu recolhido: logo em cima e botão embaixo (lado a lado não cabe em 80px). -->
-                <div class="hidden w-full items-center justify-between md:flex" :class="sidebarCollapsed ? 'flex-col gap-2' : ''">
-                    <Link href="/admin" class="flex items-center py-3" title="KazaKora">
-                        <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
-                        <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
-                    </Link>
-                    <button type="button" class="icone-cor icone-cor-azul hover:opacity-80" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
-                        <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
+                <!-- Menu recolhido (Lira, 2026-10-19): sem a seta; clicar no logo abre o menu. -->
+                <div class="hidden w-full items-center justify-between md:flex" :class="sidebarCollapsed ? 'justify-center' : ''">
+                    <button v-if="sidebarCollapsed" type="button" class="flex items-center py-3 hover:opacity-80" title="Abrir menu" aria-label="Abrir menu" @click="toggleSidebar">
+                        <img :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                     </button>
+                    <template v-else>
+                        <Link href="/admin" class="flex items-center py-3" title="KazaKora">
+                            <img :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
+                        </Link>
+                        <button type="button" class="icone-cor icone-cor-azul hover:opacity-80" title="Recolher menu" aria-label="Recolher menu" @click="toggleSidebar">
+                            <i class="fas fa-angles-left"></i>
+                        </button>
+                    </template>
                 </div>
 
                 <!-- Bug real reportado 2026-08-09: esse painel não tinha

@@ -23,8 +23,11 @@ class KpiController extends Controller
      * Abas (2026-10-19): o que era o Gerenciador veio para cá quando /admin
      * virou o Fluxo de Caixa. Cada aba manda só as próprias props; trocar
      * de aba é uma visita nova com ?aba= e calcula só aquela aba.
+     * A aba "Acessos ao site" saiu em 2026-10-19 (pedido do Lira); os
+     * acessos continuam em Visão geral (visitantes e conversão do site) e no
+     * Log de visitas (/admin/visitas-site). A coleta não mudou.
      */
-    public const ABAS = ['visao-geral', 'hoje-e-mes', 'caue-diego', 'produtos', 'acessos'];
+    public const ABAS = ['visao-geral', 'hoje-e-mes', 'caue-diego', 'produtos'];
 
     public function index(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem, PainelGerencial $gerencial): Response
     {
@@ -35,7 +38,6 @@ class KpiController extends Controller
             'hoje-e-mes' => ['hojeMes' => fn () => $gerencial->hojeEMes(Permissions::has($request->user(), 'financeiro.view'))],
             'caue-diego' => ['diagnosticos' => fn () => $gerencial->diagnosticos()],
             'produtos' => ['produtos' => fn () => $gerencial->produtos()],
-            'acessos' => ['visitantes' => fn () => $gerencial->visitantes((string) $request->query('mes', ''))],
             default => $this->visaoGeral($request, $painel, $serie, $margem),
         };
 

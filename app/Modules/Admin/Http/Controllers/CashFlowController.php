@@ -9,6 +9,7 @@ use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Financeiro\Support\AlertasFinanceiros;
 use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
+use App\Modules\Financeiro\Support\RadarDeAds;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Support\Http\TableSort;
@@ -219,9 +220,12 @@ class CashFlowController extends Controller
         });
         $pendencias = fn () => $uma('pendencias', fn () => $this->pendencias($f['de'], $f['fim'], $canal));
         $das = fn () => $uma('das', fn () => app(PrevisaoDeCaixa::class)->das());
+        // Alerta de ADS acima de 6% (mês e 7 dias), fixo, não segue o filtro.
+        $radar = fn () => $uma('radar', fn () => app(RadarDeAds::class)->resumo());
 
         return [
             'resumo' => $resumo,
+            'radarAds' => $radar,
             'canais' => function () use ($porCanal, $qualidade, $canal) {
                 $linhas = $porCanal();
                 if ($canal === null) {
@@ -269,7 +273,7 @@ class CashFlowController extends Controller
                     'pendencias' => $pendencias(),
                 ];
             },
-            'alertas' => function () use ($f, $canal, $porCanal, $qualidade, $pendencias, $resumo, $das) {
+            'alertas' => function () use ($f, $canal, $porCanal, $qualidade, $pendencias, $resumo, $das, $radar) {
                 $r = $resumo();
                 $linhas = $porCanal();
                 if ($canal !== null) {
@@ -295,6 +299,7 @@ class CashFlowController extends Controller
                         'aba' => 'vendas', 'sem_custo' => 1, 'de' => $f['de']->toDateString(), 'ate' => $f['ate']->toDateString(), 'canal' => $canal,
                     ])),
                     'notasCanceladas' => $p['notasCanceladas'],
+                    'adsNoRadar' => array_column($radar()['acima'], 'canal'),
                 ]);
             },
         ];

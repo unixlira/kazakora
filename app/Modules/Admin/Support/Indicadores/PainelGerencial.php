@@ -2,8 +2,6 @@
 
 namespace App\Modules\Admin\Support\Indicadores;
 
-use App\Models\User;
-use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Marketplace\Support\ContributionMargin;
@@ -14,8 +12,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * O que era a tela Gerenciador (/admin) até 2026-10-19, quando o Lira
  * aprovou o Fluxo de Caixa no lugar dela. Tudo foi para Indicadores, em
- * abas (Hoje e mês, Cauê e Diego, Produtos, Acessos ao site); a conta é a
- * mesma de antes, só mudou de casa (era DashboardController). O lucro
+ * abas (Hoje e mês, Cauê e Diego, Produtos); a conta é a mesma de antes,
+ * só mudou de casa (era DashboardController). O lucro
  * continua vindo de ContributionMargin.
  */
 class PainelGerencial
@@ -298,72 +296,6 @@ class PainelGerencial
             ->push(['nome' => 'Outras', 'receita' => round($linhas->slice(6)->sum('receita'), 2)])
             ->values()
             ->all();
-    }
-
-    /**
-     * Acessos ao site no mês escolhido (pedido 2026-10-11: gráfico,
-     * visitantes do mês e do dia, filtro de mês). Conta só gente de fora:
-     * sai quem entrou como equipe (admin/gerente) no mês, com tudo o que o
-     * mesmo navegador visitou, e o visitante que passou de 300 páginas num
-     * dia. Visitante = cookie kazakora_visitor; sem OK de cookies, um por
-     * IP no dia (SiteVisit::visitantesPorDia).
-     *
-     * @return array<string, mixed>
-     */
-    public function visitantes(string $mes): array
-    {
-        $hoje = Carbon::today();
-        $inicio = preg_match('/^\d{4}-\d{2}$/', $mes)
-            ? Carbon::createFromFormat('!Y-m', $mes)->startOfMonth()
-            : $hoje->copy()->startOfMonth();
-        if ($inicio->greaterThan($hoje)) {
-            $inicio = $hoje->copy()->startOfMonth();
-        }
-        $fim = $inicio->copy()->addMonthNoOverflow();
-
-        $equipe = User::query()->whereIn('role', User::STAFF_ROLES)->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $porVisitante = SiteVisit::visitantesPorDia(
-            SiteVisit::query()->daLoja()->where('created_at', '>=', $inicio)->where('created_at', '<', $fim),
-            $equipe,
-        );
-        // Regra de equipe e robô num lugar só: o Log de visitas usa a mesma.
-        $linhas = SiteVisit::soDeFora($porVisitante);
-
-        $porDia = $linhas->groupBy(fn ($l) => substr((string) $l->dia, 0, 10));
-        $ultimoDia = $inicio->isSameMonth($hoje) ? $hoje->day : $inicio->daysInMonth;
-        $dias = [];
-        for ($d = 1; $d <= $ultimoDia; $d++) {
-            $data = $inicio->copy()->day($d)->toDateString();
-            $grupo = $porDia->get($data, collect());
-            $dias[] = ['dia' => $data, 'visitantes' => $grupo->count(), 'paginas' => (int) $grupo->sum('paginas')];
-        }
-
-        $hojeStr = $hoje->toDateString();
-        $deHoje = $porDia->get($hojeStr, collect());
-        $primeira = SiteVisit::query()->daLoja()->min('created_at');
-        $meses = [];
-        $cursor = $hoje->copy()->startOfMonth();
-        $limite = $primeira ? Carbon::parse($primeira)->startOfMonth() : $cursor->copy();
-        while ($cursor->greaterThanOrEqualTo($limite) && count($meses) < 24) {
-            $meses[] = $cursor->format('Y-m');
-            $cursor->subMonthNoOverflow();
-        }
-
-        $visitantesMes = $linhas->pluck('visitante')->unique()->count();
-        $diasComDado = max(1, count($dias));
-
-        return [
-            'mes' => $inicio->format('Y-m'),
-            'meses' => $meses,
-            'mesAtual' => $inicio->isSameMonth($hoje),
-            'dias' => $dias,
-            'visitantesMes' => $visitantesMes,
-            'paginasMes' => (int) $linhas->sum('paginas'),
-            'visitantesHoje' => $inicio->isSameMonth($hoje) ? $deHoje->count() : null,
-            'paginasHoje' => $inicio->isSameMonth($hoje) ? (int) $deHoje->sum('paginas') : null,
-            'mediaDia' => round(array_sum(array_column($dias, 'visitantes')) / $diasComDado, 1),
-            'melhorDia' => collect($dias)->sortByDesc('visitantes')->first(),
-        ];
     }
 
     /**

@@ -181,6 +181,12 @@ return [
         // Rastreio (SRO): usa o mesmo token do Preço/Prazo; o da pré-postagem
         // é recusado (GTW-012, API 87).
         'rastro_base_url' => env('CORREIOS_RASTRO_BASE_URL', 'https://api.correios.com.br/srorastro'),
+        // Avisos de WhatsApp ao cliente pelo rastreio (postado, saiu para
+        // entrega, aguardando retirada, entregue) em loja:acompanhar-rastreio.
+        // Desligado por padrão (2026-10-19): o homolog não manda mensagem a
+        // cliente real. Produção precisa de CORREIOS_RASTREIO_WHATSAPP=true
+        // no .env para continuar avisando. Ver docs/correios-rastro.md.
+        'rastreio_whatsapp' => (bool) env('CORREIOS_RASTREIO_WHATSAPP', false),
     ],
 
     // Ponte pro TikTok Shop via Bling (pedido explícito 2026-08-31 — integração

@@ -27,6 +27,7 @@ class PedidoEnviadoWhatsAppTest extends TestCase
     {
         parent::setUp();
         config([
+            'services.correios.rastreio_whatsapp' => true,
             'services.whatsapp.access_token' => 'meta-token',
             'services.whatsapp.phone_number_id' => '123',
             'services.whatsapp.templates.pedido_enviado' => 'pedido_enviado',

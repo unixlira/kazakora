@@ -177,9 +177,12 @@ class CatalogoApp
     /**
      * Avaliações do anúncio e das variações, na ordem da página do produto
      * (CatalogController::show): mais estrelas, com foto antes, mais recentes.
-     * Média e total de todas; a lista vai até 20, como a primeira carga do site.
+     * Média, total e lista (até 20) só das avaliações da KazaKora. As feitas
+     * em outra loja (pedido 2026-10-18) vêm à parte em `outras_lojas`, com
+     * média própria e o selo obrigatório em cada item; o app mostra num bloco
+     * separado, nunca misturado com as da loja.
      *
-     * @return array{media: ?float, total: int, itens: list<array<string, mixed>>}
+     * @return array{media: ?float, total: int, itens: list<array<string, mixed>>, outras_lojas: array{selo: string, media: ?float, total: int, itens: list<array<string, mixed>>}}
      */
     private function avaliacoes(Product $pai): array
     {
@@ -192,19 +195,28 @@ class CatalogoApp
             ->latest()
             ->get();
 
-        return [
-            'media' => $reviews->isNotEmpty() ? round((float) $reviews->avg('rating'), 1) : null,
-            'total' => $reviews->count(),
-            'itens' => $reviews->take(20)->map(fn (Review $review) => [
+        [$deOutraLoja, $daLoja] = $reviews->partition(fn (Review $review) => $review->outra_loja);
+
+        $resumo = fn ($lista) => [
+            'media' => $lista->isNotEmpty() ? round((float) $lista->avg('rating'), 1) : null,
+            'total' => $lista->count(),
+            'itens' => $lista->take(20)->map(fn (Review $review) => [
                 'id' => $review->id,
                 'nome' => $review->reviewer_display_name,
                 'nota' => (int) $review->rating,
                 'comentario' => $review->comment,
-                'resposta_loja' => $review->seller_reply,
+                'resposta_loja' => $review->outra_loja ? null : $review->seller_reply,
                 'imagens' => $review->images->where('media_type', '!=', 'video')->pluck('image_url')->filter()->values()->all(),
                 'videos' => $review->images->where('media_type', 'video')->pluck('image_url')->filter()->values()->all(),
                 'criado_em' => $review->created_at?->toIso8601String(),
+                'outra_loja' => (bool) $review->outra_loja,
+                'selo' => $review->outra_loja ? Review::SELO_OUTRA_LOJA : null,
             ])->values()->all(),
+        ];
+
+        return [
+            ...$resumo($daLoja),
+            'outras_lojas' => ['selo' => Review::SELO_OUTRA_LOJA, ...$resumo($deOutraLoja)],
         ];
     }
 

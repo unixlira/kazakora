@@ -19,6 +19,8 @@ const channelBadge = {
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
     amazon: { color: 'shipped', label: 'Amazon' },
     manual: { color: 'purple', label: 'Cadastro manual' },
+    outra_loja: { color: 'outra_loja', label: 'Outra loja' },
+    marketplace_reference: { color: 'outra_loja', label: 'Outra loja (referência)' },
 };
 
 const originLabel = props.review.channel ? (channelBadge[props.review.channel]?.label ?? props.review.channel) : 'KazaKora';
@@ -54,7 +56,17 @@ const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') :
                     </Link>
                     <p v-else class="text-lg font-semibold text-slate-400">Produto removido</p>
                 </div>
-                <StatusBadge :status="originColor" :label="originLabel" />
+                <div class="flex flex-col items-end gap-1">
+                    <StatusBadge :status="originColor" :label="originLabel" />
+                    <span v-if="review.outra_loja" class="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        No site: selo "Avaliação feita em outra loja", fora da nota da loja
+                    </span>
+                </div>
+            </div>
+
+            <div v-if="review.outra_loja" class="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                <p class="text-xs font-semibold uppercase">Loja de origem (só o admin vê)</p>
+                <p class="mt-1 break-all">{{ review.origem_loja || 'Não informada' }}</p>
             </div>
 
             <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3">

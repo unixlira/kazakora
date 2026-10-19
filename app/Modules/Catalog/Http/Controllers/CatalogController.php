@@ -5,13 +5,12 @@ namespace App\Modules\Catalog\Http\Controllers;
 use App\Http\Controllers\Concerns\HandlesShopeeAuthorizationLanding;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Banner;
-use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
-use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\MenuDaLoja;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
@@ -20,7 +19,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -319,7 +317,7 @@ class CatalogController extends Controller
     /** Departamentos da home — os mesmos do mega menu (ver MenuDaLoja). */
     private function departamentos(): array
     {
-        return \App\Modules\Catalog\Support\MenuDaLoja::departamentos();
+        return MenuDaLoja::departamentos();
     }
 
     public function show(Request $request, Product $product): Response
@@ -333,8 +331,6 @@ class CatalogController extends Controller
             // Benefícios + descrição em blocos (pedido 2026-10-09).
             'adContent',
         ]);
-        $product->loadCount('reviews');
-        $product->loadAvg('reviews', 'rating');
 
         // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
         // todos os canais (loja e marketplaces), somando as variações.
@@ -356,6 +352,14 @@ class CatalogController extends Controller
             ->orderByDesc('images_count')
             ->latest()
             ->get();
+
+        // Avaliações de outra loja (pedido 2026-10-18): compradores do mesmo
+        // produto em outras lojas, com o selo "Avaliação feita em outra loja",
+        // num bloco próprio e com média separada. Não entram na nota, na
+        // contagem nem no JSON-LD do produto (só as da KazaKora contam).
+        [$reviewsOutraLoja, $reviews] = $reviews->partition(fn (Review $review) => $review->outra_loja);
+        $reviews = $reviews->values();
+        $reviewsOutraLoja = $reviewsOutraLoja->values();
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());
@@ -468,6 +472,12 @@ class CatalogController extends Controller
             'variations' => $variations,
             'galeria' => $galeria,
             'reviews' => $reviews,
+            'reviewsOutraLoja' => $reviewsOutraLoja,
+            'outraLojaResumo' => [
+                'total' => $reviewsOutraLoja->count(),
+                'media' => $reviewsOutraLoja->isNotEmpty() ? round((float) $reviewsOutraLoja->avg('rating'), 2) : null,
+                'selo' => Review::SELO_OUTRA_LOJA,
+            ],
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
                 ->orderBy('price')

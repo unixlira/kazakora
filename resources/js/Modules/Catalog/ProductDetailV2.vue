@@ -22,6 +22,10 @@ const props = defineProps({
     variations: { type: Array, default: () => [] },
     galeria: { type: Array, default: null },
     reviews: { type: Array, default: () => [] },
+    // Avaliações do mesmo produto feitas em outra loja (pedido 2026-10-18):
+    // bloco próprio, com selo e média separada; não entram na nota da loja.
+    reviewsOutraLoja: { type: Array, default: () => [] },
+    outraLojaResumo: { type: Object, default: () => ({ total: 0, media: null, selo: 'Avaliação feita em outra loja' }) },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
     canReview: { type: Boolean, default: false },
@@ -378,7 +382,7 @@ const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
     return { star, count, percent: props.reviews.length ? Math.round((count / props.reviews.length) * 100) : 0 };
 }));
 
-const showReviews = computed(() => props.reviews.length > 0 || (props.canReview && !props.hasReviewed));
+const showReviews = computed(() => props.reviews.length > 0 || props.reviewsOutraLoja.length > 0 || (props.canReview && !props.hasReviewed));
 
 // Lista de avaliações (pedido 2026-10-11): já vem ordenada do servidor (mais
 // estrelas primeiro, com foto antes). Mostra 20 no computador e 6 no celular;
@@ -388,6 +392,13 @@ const avaliacoesVisiveis = ref(ehCelular ? 6 : 20);
 const reviewsNaTela = computed(() => props.reviews.slice(0, avaliacoesVisiveis.value));
 const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - avaliacoesVisiveis.value));
 const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
+
+// Outras lojas: mesma paginação, contada à parte (começa com menos na tela
+// para as da KazaKora continuarem em destaque).
+const outraLojaVisiveis = ref(ehCelular ? 4 : 8);
+const outraLojaNaTela = computed(() => props.reviewsOutraLoja.slice(0, outraLojaVisiveis.value));
+const outraLojaRestantes = computed(() => Math.max(0, props.reviewsOutraLoja.length - outraLojaVisiveis.value));
+const carregarMaisOutraLoja = () => { outraLojaVisiveis.value += 12; };
 
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
 const fotoAberta = ref(null);
@@ -758,7 +769,40 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             Carregar mais avaliações <span>({{ avaliacoesRestantes }} restantes)</span>
                         </button>
                     </div>
-                    <p v-else class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
+                    <p v-else-if="!reviews.length" class="sem-margem">Este produto ainda não recebeu avaliações na KazaKora.<template v-if="canReview && !hasReviewed"> Seja o primeiro a avaliar.</template></p>
+
+                    <!-- Avaliações feitas em outra loja: separadas, com selo em cada uma. -->
+                    <div v-if="reviewsOutraLoja.length" class="aval-outras" data-teste="avaliacoes-outra-loja">
+                        <h3>Avaliações deste produto em outras lojas</h3>
+                        <p class="aval-outras-resumo">
+                            <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(Number(outraLojaResumo.media ?? 0)) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                            <strong>{{ Number(outraLojaResumo.media ?? 0).toFixed(1).replace('.', ',') }} de 5</strong>
+                            em {{ outraLojaResumo.total }} avaliaç{{ outraLojaResumo.total === 1 ? 'ão' : 'ões' }} de compradores deste mesmo produto em outras lojas. Não entram na nota da KazaKora.
+                        </p>
+                        <div class="aval-grade">
+                            <div v-for="review in outraLojaNaTela" :key="review.id" class="aval-item">
+                                <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}</div>
+                                <span class="selo-outra-loja"><i class="fas fa-store" aria-hidden="true"></i> {{ outraLojaResumo.selo }}</span>
+                                <div class="nota-data">
+                                    <span class="estrelas" :aria-label="`Nota ${review.rating} de 5`"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                    <small>{{ formatDate(review.created_at) }}</small>
+                                </div>
+                                <p v-if="review.comment">{{ review.comment }}</p>
+                                <div v-if="review.images?.length" class="fotos-avaliacao">
+                                    <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
+                                        :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
+                                        <video v-if="image.media_type === 'video'" :src="image.image_url" muted playsinline preload="metadata"></video>
+                                        <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="outraLojaRestantes > 0" class="aval-mais">
+                            <button type="button" class="btn-sec" @click="carregarMaisOutraLoja">
+                                Ver mais avaliações de outras lojas <span>({{ outraLojaRestantes }} restantes)</span>
+                            </button>
+                        </div>
+                    </div>
                 </section>
 
                 <!-- Foto da avaliação ampliada -->
@@ -1078,6 +1122,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-mais .btn-sec { display: inline-flex; width: auto; min-width: 260px; padding: 0 22px; }
 .pd2 .aval-mais span { opacity: .7; font-weight: 400; }
 @media (max-width: 767px) { .pd2 .aval-mais .btn-sec { width: 100%; min-width: 0; } }
+/* avaliações de outra loja (pedido 2026-10-18): bloco à parte e selo legível */
+.pd2 .aval-outras { margin-top: 34px; padding-top: 24px; border-top: 1px solid rgba(0, 0, 0, .1); }
+.dark .pd2 .aval-outras { border-top-color: var(--line); }
+.pd2 .aval-outras h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
+.pd2 .aval-outras-resumo { margin: 0 0 18px; font-size: 14px; color: var(--text); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.pd2 .selo-outra-loja { display: inline-flex; align-items: center; gap: 5px; margin: 4px 0 2px; padding: 2px 8px; border-radius: 999px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #1e293b; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.pd2 .selo-outra-loja i { font-size: 10px; }
+.dark .pd2 .selo-outra-loja { border-color: #475569; background: #1e293b; color: #f1f5f9; }
 .aval-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); padding: 48px 12px; }
 .aval-lightbox img, .aval-lightbox video { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
 .aval-lightbox button { position: absolute; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; cursor: pointer; }

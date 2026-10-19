@@ -59,11 +59,19 @@ ProdutoCard +
   "avaliacoes": {
     "media": 4.8,
     "total": 37,
-    "itens": [{ "id": 1, "nome": "Maria", "nota": 5, "comentario": "...", "resposta_loja": null, "imagens": ["https://..."], "criado_em": "..." }]
+    "itens": [{ "id": 1, "nome": "Maria", "nota": 5, "comentario": "...", "resposta_loja": null, "imagens": ["https://..."], "videos": [], "criado_em": "...", "outra_loja": false, "selo": null }],
+    "outras_lojas": {
+      "selo": "Avaliação feita em outra loja",
+      "media": 4.7,
+      "total": 120,
+      "itens": [{ "id": 9, "nome": "J***a", "nota": 4, "comentario": "...", "resposta_loja": null, "imagens": [], "videos": [], "criado_em": "...", "outra_loja": true, "selo": "Avaliação feita em outra loja" }]
+    }
   }
 }
 ```
-`avaliacoes.itens` traz até 20 (mesma ordem da página do produto: mais estrelas, com foto antes, mais recentes); `media` e `total` contam todas, variações incluídas.
+`avaliacoes.itens` traz até 20 (mesma ordem da página do produto: mais estrelas, com foto antes, mais recentes); `media` e `total` contam só as avaliações da KazaKora, variações incluídas.
+
+`avaliacoes.outras_lojas`: avaliações de compradores do mesmo produto feitas em outras lojas (pedido 2026-10-18). O app tem que mostrar num bloco separado, abaixo das da loja, com título "Avaliações deste produto em outras lojas", a média delas à parte e o `selo` visível em cada item. Nunca somar com a nota da loja nem mostrar estrela do produto só por causa delas (sem selo seria avaliação falsa, CDC). O nome já vem anonimizado e não há indicação de plataforma.
 
 ### Endereco
 ```json

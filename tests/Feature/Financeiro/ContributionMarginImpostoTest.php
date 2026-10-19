@@ -103,9 +103,13 @@ class ContributionMarginImpostoTest extends TestCase
         $conta = app(ContributionMargin::class)->periodo(Carbon::today()->startOfMonth(), Carbon::tomorrow());
         $email = app(ResultadoDiario::class)->calcular(Carbon::today())['mes'];
 
-        $this->actingAs($admin)->get('/admin')->assertOk()->assertInertia(fn ($page) => $page
-            ->where('stats.netProfitMonth', $conta['lucro'])
-            ->where('stats.taxMonth', $conta['imposto']));
+        $this->actingAs($admin)->get('/admin/indicadores?aba=hoje-e-mes')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('hojeMes.stats.netProfitMonth', $conta['lucro'])
+            ->where('hojeMes.stats.taxMonth', $conta['imposto']));
+        // Fluxo de Caixa (2026-10-19): mesmo lucro, mesmo imposto.
+        $this->actingAs($admin)->get('/admin/fluxo-de-caixa')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('resumo.atual.lucro', $conta['lucro'])
+            ->where('resumo.atual.imposto', $conta['imposto']));
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk()->assertInertia(fn ($page) => $page
             ->where('summary.profitMonth', $conta['lucro'])
             ->where('netProfit.netProfitMonth', $conta['lucro'])

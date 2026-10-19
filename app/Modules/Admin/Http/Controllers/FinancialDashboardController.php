@@ -6,28 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Financeiro\Models\CashFlowEntry;
+use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
-use App\Modules\Marketplace\Models\ChannelWalletBalance;
-use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Modules\Marketplace\Support\FlexDeliveryService;
-use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
-use Throwable;
 
 class FinancialDashboardController extends Controller
 {
     private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
 
-    private const WALLET_CACHE_MINUTES = 5;
-
-    public function index(ShopeeWalletService $shopeeWallet, FlexDeliveryService $flexDelivery): Response
+    public function index(PrevisaoDeCaixa $previsao, FlexDeliveryService $flexDelivery): Response
     {
         $startOfMonth = Carbon::today()->startOfMonth();
         $start14 = Carbon::today()->subDays(13);
@@ -334,7 +328,8 @@ class FinancialDashboardController extends Controller
             ->selectRaw('COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0) as total')
             ->value('total'), 2);
 
-        $walletBalances = $this->walletBalances($shopeeWallet);
+        // Carteiras e repasses: mesmo serviço do Fluxo de Caixa (2026-10-19).
+        $walletBalances = $previsao->walletBalances();
 
         return Inertia::render('Admin/Financeiro/Dashboard', [
             'summary' => [
@@ -387,7 +382,7 @@ class FinancialDashboardController extends Controller
             // hoje, não um bug local; fica null (indisponível) até isso
             // ser resolvido do lado do cadastro do app na Mercado Livre.
             'walletBalances' => $walletBalances,
-            'receivableProjection' => $this->receivableProjection($walletBalances),
+            'receivableProjection' => $previsao->receivableProjection($walletBalances),
             'netProfit' => [
                 'salesRevenueMonth' => $salesRevenueMonth,
                 'productCostMonth' => $productCostMonth,
@@ -443,145 +438,6 @@ class FinancialDashboardController extends Controller
     {
         return "(COALESCE({$orders}.subtotal, 0) - COALESCE({$orders}.discount_amount, 0) + CASE WHEN {$orders}.origin = 'amazon' THEN COALESCE({$orders}.shipping_cost, 0) ELSE 0 END)";
     }
-
-    /**
-     * Projeção de recebíveis por janelas de 15 dias. Usa data de liquidação
-     * quando o extrato financeiro da plataforma já foi importado; saldo atual
-     * vem das carteiras disponíveis e fica separado da previsão futura.
-     *
-     * @param array{shopee: float|null, mercado_livre: float|null, mercado_livre_as_of: string|null} $walletBalances
-     */
-    private function receivableProjection(array $walletBalances): array
-    {
-        $today = Carbon::today();
-        $channels = [
-            'shopee' => 'Shopee',
-            'mercado_livre' => 'Mercado Livre',
-            'tiktok_shop' => 'TikTok Shop',
-            'amazon' => 'Amazon',
-        ];
-
-        $periods = collect(range(0, 3))->map(function (int $index) use ($today) {
-            $start = $today->copy()->addDays($index * 15);
-            $end = $today->copy()->addDays((($index + 1) * 15) - 1);
-
-            return [
-                'index' => $index,
-                'label' => $index === 0 ? 'Próximos 15 dias' : 'Dias '.(($index * 15) + 1).'–'.(($index + 1) * 15),
-                'startDate' => $start->toDateString(),
-                'endDate' => $end->toDateString(),
-                'total' => 0.0,
-                'channels' => [],
-            ];
-        });
-
-        $availableNow = collect($channels)->map(function (string $label, string $channel) use ($walletBalances) {
-            return [
-                'channel' => $channel,
-                'label' => $label,
-                'amount' => isset($walletBalances[$channel]) && $walletBalances[$channel] !== null ? round((float) $walletBalances[$channel], 2) : null,
-            ];
-        })->values()->all();
-
-        if (Schema::hasTable('marketplace_settlement_details')) {
-            $horizon = $today->copy()->addDays(59);
-            $rows = DB::table('marketplace_settlement_details')
-                ->whereNotNull('settlement_date')
-                ->where('settlement_date', '<=', $horizon->toDateString())
-                ->where(function ($query) {
-                    $query->whereNull('status')
-                        ->orWhere('status', '<>', 'Pagos');
-                })
-                ->selectRaw('channel, settlement_date, COALESCE(SUM(payout_amount), 0) as amount')
-                ->groupBy('channel', 'settlement_date')
-                ->get();
-
-            foreach ($rows as $row) {
-                $settlementDate = Carbon::parse($row->settlement_date);
-                $daysUntilSettlement = (int) floor($today->diffInDays($settlementDate, false));
-                $index = intdiv(max(0, $daysUntilSettlement), 15);
-
-                if ($index < 0 || $index > 3) {
-                    continue;
-                }
-
-                $amount = round((float) $row->amount, 2);
-                $period = $periods[$index];
-                $current = collect($period['channels'])->firstWhere('channel', $row->channel);
-
-                if ($current) {
-                    $period['channels'] = collect($period['channels'])->map(function ($channelRow) use ($row, $amount) {
-                        if ($channelRow['channel'] === $row->channel) {
-                            $channelRow['amount'] = round($channelRow['amount'] + $amount, 2);
-                        }
-
-                        return $channelRow;
-                    })->values()->all();
-                } else {
-                    $period['channels'][] = [
-                        'channel' => $row->channel,
-                        'label' => $channels[$row->channel] ?? $row->channel,
-                        'amount' => $amount,
-                    ];
-                }
-
-                $period['total'] = round($period['total'] + $amount, 2);
-                $periods[$index] = $period;
-            }
-        }
-
-        return [
-            'asOf' => $today->toDateString(),
-            'availableNow' => $availableNow,
-            'periods' => $periods->values()->all(),
-            'source' => Schema::hasTable('marketplace_settlement_details') ? 'Extratos financeiros importados + carteiras disponíveis' : 'Carteiras disponíveis',
-        ];
-    }
-
-    /**
-     * @return array{shopee: float|null, mercado_livre: float|null, mercado_livre_as_of: string|null}
-     */
-    private function walletBalances(ShopeeWalletService $shopeeWallet): array
-    {
-        $shopeeAccount = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
-        $shopee = null;
-
-        if ($shopeeAccount?->isConnected()) {
-            try {
-                // A chamada ao vivo na Shopee custava ~1,2s em TODO carregamento
-                // do dashboard (medido em produção 2026-09-29) — o saldo da
-                // carteira não muda a cada segundo, então fica em cache por
-                // alguns minutos por loja. Exceção não é cacheada (sai do
-                // remember antes do put) e null (sem transação na janela)
-                // também não fica preso: Cache::remember recalcula quando o
-                // valor guardado é null. ?refresh=1 força buscar de novo.
-                $cacheKey = 'shopee:wallet_balance:'.$shopeeAccount->seller_id;
-
-                if (request()->boolean('refresh')) {
-                    Cache::forget($cacheKey);
-                }
-
-                $shopee = Cache::remember($cacheKey, now()->addMinutes(self::WALLET_CACHE_MINUTES), fn () => $shopeeWallet->currentBalance());
-            } catch (Throwable) {
-                // Best-effort — o dashboard não pode ficar indisponível só
-                // porque a consulta de saldo ao vivo falhou.
-                $shopee = null;
-            }
-        }
-
-        // Mercado Pago não tem "saldo agora" — só relatório assíncrono
-        // (~15-20min pra ficar pronto, ver MercadoPagoWalletService).
-        // ads:sync-wallet-balance já deixa isso pré-calculado aqui; não dá
-        // pra consultar ao vivo numa requisição de página normal.
-        $mlBalance = ChannelWalletBalance::query()->where('channel', 'mercado_livre')->first();
-
-        return [
-            'shopee' => $shopee,
-            'mercado_livre' => $mlBalance?->balance !== null ? (float) $mlBalance->balance : null,
-            'mercado_livre_as_of' => $mlBalance?->balance_as_of?->toDateTimeString(),
-        ];
-    }
-
 
     /**
      * Métricas do mês por marketplace para comparação lado a lado.

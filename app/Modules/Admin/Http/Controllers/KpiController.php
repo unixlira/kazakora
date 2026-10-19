@@ -4,11 +4,13 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\Indicadores\PainelDeAlertas;
+use App\Modules\Admin\Support\Indicadores\PainelGerencial;
 use App\Modules\Admin\Support\Indicadores\SerieDiaria;
 use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Support\ContributionMargin;
+use App\Support\Rbac\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -17,7 +19,31 @@ use Inertia\Response;
 
 class KpiController extends Controller
 {
-    public function index(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem): Response
+    /**
+     * Abas (2026-10-19): o que era o Gerenciador veio para cá quando /admin
+     * virou o Fluxo de Caixa. Cada aba manda só as próprias props; trocar
+     * de aba é uma visita nova com ?aba= e calcula só aquela aba.
+     */
+    public const ABAS = ['visao-geral', 'hoje-e-mes', 'caue-diego', 'produtos', 'acessos'];
+
+    public function index(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem, PainelGerencial $gerencial): Response
+    {
+        $aba = (string) $request->query('aba', 'visao-geral');
+        $aba = in_array($aba, self::ABAS, true) ? $aba : 'visao-geral';
+
+        $props = match ($aba) {
+            'hoje-e-mes' => ['hojeMes' => fn () => $gerencial->hojeEMes(Permissions::has($request->user(), 'financeiro.view'))],
+            'caue-diego' => ['diagnosticos' => fn () => $gerencial->diagnosticos()],
+            'produtos' => ['produtos' => fn () => $gerencial->produtos()],
+            'acessos' => ['visitantes' => fn () => $gerencial->visitantes((string) $request->query('mes', ''))],
+            default => $this->visaoGeral($request, $painel, $serie, $margem),
+        };
+
+        return Inertia::render('Admin/Indicadores/Index', ['aba' => $aba] + $props);
+    }
+
+    /** Aba "Visão geral": o conteúdo de Indicadores de antes, sem mudar. */
+    private function visaoGeral(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem): array
     {
         $startOfMonth = Carbon::today()->startOfMonth();
 
@@ -84,7 +110,7 @@ class KpiController extends Controller
             return ['paineis' => $paineis, 'composicao' => $composicao, 'serie' => $serie->gerar()];
         });
 
-        return Inertia::render('Admin/Indicadores/Index', [
+        return [
             'painel' => $dados['paineis'][$dias],
             'paineis' => $dados['paineis'],
             'composicao' => $dados['composicao'],
@@ -97,6 +123,6 @@ class KpiController extends Controller
                 'uniqueVisitorsMonth' => $uniqueVisitorsMonth,
                 'ordersMonth' => $totalOrdersMonth,
             ],
-        ]);
+        ];
     }
 }

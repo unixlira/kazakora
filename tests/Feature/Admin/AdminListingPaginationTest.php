@@ -225,54 +225,70 @@ class AdminListingPaginationTest extends TestCase
         $cancelled->items()->create(['product_id' => null, 'product_name' => 'Cancelado', 'product_price' => 100, 'quantity' => 1, 'subtotal' => 100]);
 
         $admin = $this->admin();
+        $de = now()->subMonths(3)->startOfMonth()->toDateString();
+        $ate = now()->toDateString();
+        $base = "/admin/fluxo-de-caixa?aba=vendas&de={$de}&ate={$ate}";
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?sort=product_name&direction=asc')
+        // Fluxo de Caixa 2026-10-19: as linhas saem de ContributionMargin::porItem
+        // (a conta oficial). Receita da Amazon já inclui o frete do comprador,
+        // então o frete da linha é o Correios inteiro; Flex é do canal e fica
+        // só no total (soma das linhas − ADS − Flex + bônus = margem oficial).
+        $this->actingAs($admin)->get("{$base}&sort=product_name&direction=asc")
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->has('sales.data', 3)
                 ->where('sales.data.0.product_name', 'Item A')
+                ->where('sales.data.0.receita', 30)
                 ->where('sales.data.0.product_cost', 10.5)
                 ->where('sales.data.0.has_cost', true)
                 ->where('sales.data.0.has_fee_data', false)
                 ->where('sales.data.0.platform_fee', 0)
-                // Flex 12,99 × 30% = 3,90 (arredondado).
-                ->where('sales.data.0.shipping_cost', 3.9)
-                ->where('sales.data.0.net_profit', 15.6)
+                ->where('sales.data.0.shipping_cost', 0)
+                ->where('sales.data.0.net_profit', 19.5)
                 ->where('sales.data.1.product_name', 'Item B')
                 ->where('sales.data.1.has_cost', false)
-                ->where('sales.data.1.shipping_cost', 9.09)
+                ->where('sales.data.1.net_profit', 70)
                 ->where('sales.data.2.product_name', 'Produto Amazon')
                 ->where('sales.data.2.platform', 'Amazon')
+                ->where('sales.data.2.receita', 120.75)
                 ->where('sales.data.2.product_cost', 60.5)
                 ->where('sales.data.2.platform_fee', 15.25)
-                ->where('sales.data.2.shipping_cost', 2.5)
+                ->where('sales.data.2.shipping_cost', 22.75)
                 ->where('sales.data.2.net_profit', 22.25)
                 ->where('salesTotals.cost', 71)
                 ->where('salesTotals.fee', 15.25)
-                ->where('salesTotals.shipping', 15.49)
-                ->where('salesTotals.netProfit', 98.76)
-                ->where('salesPlatforms', [
-                    ['value' => 'amazon', 'label' => 'Amazon'],
-                    ['value' => 'mercado_livre', 'label' => 'Mercado Livre'],
-                ]));
+                ->where('salesTotals.shipping', 22.75)
+                ->where('salesTotals.netProfit', 111.75)
+                ->where('salesTotals.flex', 12.99)
+                ->where('salesTotals.semCusto', 1)
+                // 111,75 − 12,99 de Flex = 98,76, a margem do período.
+                ->where('salesTotals.margemOficial', 98.76));
 
-        // Plataforma + período filtram linhas E totais.
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?platform=mercado_livre')
-            ->assertInertia(fn ($page) => $page
-                ->has('sales.data', 2)
-                ->where('salesTotals.cost', 10.5)
-                ->where('salesFilter.platform', 'mercado_livre'));
+        $oficial = app(\App\Modules\Marketplace\Support\ContributionMargin::class)
+            ->periodo(Carbon::parse($de), Carbon::tomorrow());
+        $this->assertEqualsWithDelta(98.76, $oficial['margem'], 0.001);
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?start='.now()->startOfMonth()->toDateString())
+        // Canal (e o nome antigo "platform") + período filtram linhas E totais.
+        foreach (['canal', 'platform'] as $param) {
+            $this->actingAs($admin)->get("{$base}&{$param}=mercado_livre")
+                ->assertInertia(fn ($page) => $page
+                    ->has('sales.data', 2)
+                    ->where('salesTotals.cost', 10.5)
+                    ->where('filtro.canal', 'mercado_livre'));
+        }
+
+        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?aba=vendas&de='.now()->startOfMonth()->toDateString())
             ->assertInertia(fn ($page) => $page
                 ->has('sales.data', 1)
                 ->where('salesTotals.netProfit', 22.25));
 
-        // Busca por produto e por nome da plataforma.
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?search=item b')
-            ->assertInertia(fn ($page) => $page->has('sales.data', 1)->where('salesTotals.shipping', 9.09));
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?search=mercado')
+        // Busca por produto e por nome do canal; filtro "só sem custo".
+        $this->actingAs($admin)->get("{$base}&search=item b")
+            ->assertInertia(fn ($page) => $page->has('sales.data', 1)->where('salesTotals.margemOficial', null));
+        $this->actingAs($admin)->get("{$base}&search=mercado")
             ->assertInertia(fn ($page) => $page->has('sales.data', 2));
+        $this->actingAs($admin)->get("{$base}&sem_custo=1")
+            ->assertInertia(fn ($page) => $page->has('sales.data', 1)->where('sales.data.0.product_name', 'Item B'));
     }
 
     public function test_cash_flow_entries_are_paginated_and_totals_cover_all_entries(): void
@@ -296,7 +312,10 @@ class AdminListingPaginationTest extends TestCase
             'created_by' => $admin->id,
         ]);
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa')
+        // Lançamentos ficam na aba própria e seguem o período do topo.
+        $periodo = 'aba=lancamentos&de='.now()->subDays(60)->toDateString().'&ate='.now()->toDateString();
+
+        $this->actingAs($admin)->get("/admin/fluxo-de-caixa?{$periodo}")
             ->assertInertia(fn ($page) => $page
                 ->has('entries.data', 50)
                 ->where('entries.total', 53)
@@ -305,17 +324,24 @@ class AdminListingPaginationTest extends TestCase
                 ->where('summary.expense', 100.25)
                 ->where('summary.balance', 445.75));
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?entries_search=aluguel')
+        $this->actingAs($admin)->get("/admin/fluxo-de-caixa?{$periodo}&entries_search=aluguel")
             ->assertInertia(fn ($page) => $page
                 ->has('entries.data', 1)
                 // Busca da tabela não mexe nos cards (igual antes).
                 ->where('summary.income', 546));
 
-        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?entries_sort=amount&entries_direction=asc&entries_page=2')
+        $this->actingAs($admin)->get("/admin/fluxo-de-caixa?{$periodo}&entries_sort=amount&entries_direction=asc&entries_page=2")
             ->assertInertia(fn ($page) => $page
                 ->has('entries.data', 3)
                 ->where('entries.data.2.description', 'Aluguel')
                 ->where('entriesFilter.sort', 'amount'));
+
+        // Período curto: só o que caiu nele entra na tabela e nos totais.
+        $this->actingAs($admin)->get('/admin/fluxo-de-caixa?aba=lancamentos&de='.now()->subDays(2)->toDateString().'&ate='.now()->toDateString())
+            ->assertInertia(fn ($page) => $page
+                ->where('entries.total', 3)
+                ->where('summary.income', 21)
+                ->where('summary.expense', 100.25));
     }
 
     public function test_product_listing_only_sends_the_columns_the_table_uses(): void

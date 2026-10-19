@@ -46,20 +46,20 @@ class DashboardAnalyticsTest extends TestCase
         $this->venda('2026-09-03 10:00', 200);
         $this->venda('2026-09-20 10:00', 1000);
 
-        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin');
+        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin/indicadores?aba=hoje-e-mes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('analytics.kpis.crescimento', 100)
-            ->where('analytics.kpis.receitaPeriodoAnterior', 200)
-            ->where('analytics.kpis.receitaMesAnterior', 1200)
-            ->where('analytics.kpis.ticketMedio', 200)
-            ->where('analytics.kpis.itensPorPedido', 1.5)
+            ->where('hojeMes.analytics.kpis.crescimento', 100)
+            ->where('hojeMes.analytics.kpis.receitaPeriodoAnterior', 200)
+            ->where('hojeMes.analytics.kpis.receitaMesAnterior', 1200)
+            ->where('hojeMes.analytics.kpis.ticketMedio', 200)
+            ->where('hojeMes.analytics.kpis.itensPorPedido', 1.5)
             // 400 em 6 dias, mês de 31 → 2066,67
-            ->where('analytics.kpis.projecaoMes', 2066.67)
-            ->where('analytics.ritmo.dia', 6)
-            ->where('analytics.ritmo.atual', [0, 300, 300, 300, 400, 400])
-            ->where('analytics.mensal', fn ($meses) => collect($meses)->pluck('mes')->all() === ['2026-09', '2026-10']
+            ->where('hojeMes.analytics.kpis.projecaoMes', 2066.67)
+            ->where('hojeMes.analytics.ritmo.dia', 6)
+            ->where('hojeMes.analytics.ritmo.atual', [0, 300, 300, 300, 400, 400])
+            ->where('hojeMes.analytics.mensal', fn ($meses) => collect($meses)->pluck('mes')->all() === ['2026-09', '2026-10']
                 && collect($meses)->last()['canais']['tiktok_shop'] == 300));
     }
 }

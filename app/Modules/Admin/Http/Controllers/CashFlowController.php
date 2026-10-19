@@ -4,48 +4,511 @@ namespace App\Modules\Admin\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Cadastros\Models\CostCenter;
-use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use App\Modules\Financeiro\Models\CashFlowEntry;
-use App\Modules\Marketplace\Models\MarketplaceAccount;
-use App\Modules\Marketplace\Models\ChannelShipment;
-use App\Modules\Marketplace\Models\CorreiosPrePostagem;
+use App\Modules\Financeiro\Support\AlertasFinanceiros;
+use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Marketplace\Models\OrderChannelFee;
-use App\Modules\Marketplace\Support\FlexDeliveryService;
+use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Support\Http\TableSort;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * Fluxo de Caixa (nova tela aprovada pelo Lira em 2026-10-19, proposta em
+ * Documents/2026-10-19-proposta-fluxo-de-caixa.md). Três abas:
+ *
+ * - Resumo: alertas, KPIs, cascata, lucro por canal, evolução, próximos 30
+ *   dias e confiabilidade. Tudo pela conta oficial (ContributionMargin).
+ * - Vendas (custo e comissão): a tabela item a item, agora pela mesma conta
+ *   (ContributionMargin::porItem); antes fazia conta própria e dava margem
+ *   4 vezes maior que a oficial.
+ * - Lançamentos: entradas e saídas digitadas à mão, filtradas pelo período.
+ *
+ * Só a aba aberta é calculada: cada aba manda as próprias props.
+ */
 class CashFlowController extends Controller
 {
     private const PER_PAGE = 50;
 
-    private const REVENUE_STATUSES = [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED];
+    private const ABAS = ['resumo', 'vendas', 'lancamentos'];
 
-    private const CHANNEL_LABELS = [
-        MarketplaceAccount::CHANNEL_MERCADO_LIVRE => 'Mercado Livre',
-        MarketplaceAccount::CHANNEL_SHOPEE => 'Shopee',
-        MarketplaceAccount::CHANNEL_TIKTOK_SHOP => 'TikTok Shop',
-        MarketplaceAccount::CHANNEL_AMAZON => 'Amazon',
-        MarketplaceAccount::CHANNEL_SHEIN => 'Shein',
-        Order::ORIGIN_STORE => 'Loja própria',
+    /** Canais do filtro (FerraKora e Beauty Kora só aparecem com venda). */
+    public const CANAIS = [
+        Order::ORIGIN_STORE => 'KazaKora',
+        Order::ORIGIN_SHOPEE => 'Shopee',
+        Order::ORIGIN_MERCADO_LIVRE => 'Mercado Livre',
+        Order::ORIGIN_TIKTOK_SHOP => 'TikTok Shop',
+        Order::ORIGIN_AMAZON => 'Amazon',
+        Order::SITE_FERRAKORA => 'FerraKora',
+        Order::SITE_BEAUTYKORA => 'Beauty Kora',
+        'shein' => 'Shein',
     ];
+
+    private const CANAIS_FIXOS = [Order::ORIGIN_TIKTOK_SHOP, Order::ORIGIN_SHOPEE, Order::ORIGIN_MERCADO_LIVRE, Order::ORIGIN_AMAZON, Order::ORIGIN_STORE];
+
+    public function __construct(private ContributionMargin $margem) {}
 
     public function index(Request $request): Response
     {
-        // Paginado no servidor (as duas tabelas da tela) — antes iam TODOS
-        // os lançamentos e TODAS as linhas de venda (uma por item de pedido,
-        // desde sempre) pro navegador, ~575 KB de HTML medido em produção
-        // 2026-09-29. Busca/ordenação/plataforma viraram query param e os
-        // totais (cards) continuam sobre o conjunto filtrado inteiro, só que
-        // somados no SQL em vez de no front.
+        $filtro = $this->filtro($request);
+        $aba = $filtro['aba'];
+
+        $props = [
+            'filtro' => $filtro['publico'],
+            'canaisFiltro' => fn () => $this->canaisDoFiltro($filtro),
+            'costCenters' => fn () => CostCenter::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ];
+
+        if ($aba === 'resumo') {
+            $props += $this->propsResumo($filtro);
+        } elseif ($aba === 'vendas') {
+            $props += $this->propsVendas($request, $filtro);
+        } else {
+            $props += $this->propsLancamentos($request, $filtro);
+        }
+
+        return Inertia::render('Admin/CashFlow/Index', $props);
+    }
+
+    // ------------------------------------------------------------------
+    // Filtros
+    // ------------------------------------------------------------------
+
+    /**
+     * Período em America/Sao_Paulo, intervalo [de, até + 1 dia). Aceita os
+     * nomes antigos da aba de vendas (start/end/platform) para não quebrar
+     * link salvo.
+     *
+     * @return array<string, mixed>
+     */
+    private function filtro(Request $request): array
+    {
+        $hoje = Carbon::today();
+        $data = function (?string $valor): ?Carbon {
+            if ($valor === null || $valor === '') {
+                return null;
+            }
+            try {
+                return Carbon::createFromFormat('!Y-m-d', substr($valor, 0, 10));
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+
+        $de = $data($request->query('de') ?? $request->query('start')) ?? $hoje->copy()->startOfMonth();
+        $ate = $data($request->query('ate') ?? $request->query('end')) ?? $hoje->copy();
+        if ($de->gt($ate)) {
+            [$de, $ate] = [$ate, $de];
+        }
+        $fim = $ate->copy()->addDay();
+
+        $canal = (string) ($request->query('canal') ?? $request->query('platform') ?? '');
+        $canal = array_key_exists($canal, self::CANAIS) ? $canal : null;
+
+        $comparar = (string) $request->query('comparar', 'mes_passado');
+        $comparar = in_array($comparar, ['mes_passado', 'anterior', 'nenhum'], true) ? $comparar : 'mes_passado';
+
+        $dias = (int) $de->diffInDays($ate) + 1;
+        $agrupar = (string) $request->query('agrupar', 'auto');
+        $agruparFixo = in_array($agrupar, ['dia', 'semana', 'mes'], true);
+        if (! $agruparFixo) {
+            $agrupar = $dias <= 31 ? 'dia' : ($dias <= 120 ? 'semana' : 'mes');
+        }
+        // Cada balde é uma conta inteira: dia a dia num ano seriam 365.
+        if ($agrupar === 'dia' && $dias > 92) {
+            $agrupar = 'semana';
+        }
+        if ($agrupar === 'semana' && $dias > 400) {
+            $agrupar = 'mes';
+        }
+
+        $aba = (string) $request->query('aba', 'resumo');
+        $aba = in_array($aba, self::ABAS, true) ? $aba : 'resumo';
+
+        [$compDe, $compAte, $compRotulo] = match ($comparar) {
+            'mes_passado' => [$de->copy()->subMonthNoOverflow(), $ate->copy()->subMonthNoOverflow(), 'mesmo período do mês passado'],
+            'anterior' => [$de->copy()->subDays($dias), $de->copy()->subDay(), 'período anterior'],
+            default => [null, null, null],
+        };
+
+        return [
+            'aba' => $aba,
+            'de' => $de,
+            'ate' => $ate,
+            'fim' => $fim,
+            'canal' => $canal,
+            'comparar' => $comparar,
+            'agrupar' => $agrupar,
+            'dias' => $dias,
+            'compDe' => $compDe,
+            'compFim' => $compAte?->copy()->addDay(),
+            'compRotulo' => $compRotulo ? $compRotulo.' ('.$compDe->format('d/m').' a '.$compAte->format('d/m').')' : null,
+            'publico' => [
+                'aba' => $aba,
+                'de' => $de->toDateString(),
+                'ate' => $ate->toDateString(),
+                'canal' => $canal,
+                'comparar' => $comparar,
+                'agrupar' => $agrupar,
+                'agruparFixo' => $agruparFixo,
+                'hoje' => $hoje->toDateString(),
+                'compDe' => $compDe?->toDateString(),
+                'compAte' => $compAte?->toDateString(),
+                'rotuloComparacao' => $compRotulo,
+            ],
+        ];
+    }
+
+    /** @return list<array{value: string, label: string}> */
+    private function canaisDoFiltro(array $f): array
+    {
+        $comVenda = DB::table('orders')
+            ->whereIn('orders.status', ContributionMargin::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $f['de'])
+            ->where('orders.created_at', '<', $f['fim'])
+            ->tap(fn ($q) => ContributionMargin::semDevolucao($q))
+            ->selectRaw('DISTINCT '.Order::canalSql().' as canal')
+            ->pluck('canal')
+            ->all();
+
+        return collect(array_unique([...self::CANAIS_FIXOS, ...$comVenda, ...array_filter([$f['canal']])]))
+            ->filter(fn ($c) => isset(self::CANAIS[$c]))
+            ->map(fn ($c) => ['value' => $c, 'label' => self::CANAIS[$c]])
+            ->values()
+            ->all();
+    }
+
+    private function rotuloPeriodo(Carbon $de, Carbon $ate): string
+    {
+        if ($de->isSameMonth($ate) && $de->day === 1 && ($ate->isSameDay($ate->copy()->endOfMonth()) || $ate->isToday())) {
+            return $de->copy()->locale('pt_BR')->translatedFormat('F');
+        }
+
+        return $de->format('d/m').' a '.$ate->format('d/m');
+    }
+
+    // ------------------------------------------------------------------
+    // Aba Resumo
+    // ------------------------------------------------------------------
+
+    /** @return array<string, \Closure> */
+    private function propsResumo(array $f): array
+    {
+        $canal = $f['canal'];
+        $memo = [];
+        $uma = function (string $chave, \Closure $calc) use (&$memo) {
+            return $memo[$chave] ??= $calc();
+        };
+
+        $porCanal = fn () => $uma('porCanal', fn () => $this->margem->porCanal($f['de'], $f['fim']));
+        $qualidade = fn () => $uma('qualidade', fn () => ContributionMargin::qualidadeTaxas($f['de'], $f['fim']));
+        $resumo = fn () => $uma('resumo', function () use ($f, $canal, $porCanal) {
+            $atual = $this->numeros($f['de'], $f['fim'], $canal, $porCanal());
+            $comparacao = $f['compDe'] ? $this->numeros($f['compDe'], $f['compFim'], $canal) : null;
+
+            return ['atual' => $atual, 'comparacao' => $comparacao, 'aliquota' => ContributionMargin::aliquotaSimples(),
+                'adsMeta' => (float) config('loja.ads_meta_percentual', 4), 'adsLimite' => (float) config('loja.ads_alerta_percentual', 6)];
+        });
+        $pendencias = fn () => $uma('pendencias', fn () => $this->pendencias($f['de'], $f['fim'], $canal));
+        $das = fn () => $uma('das', fn () => app(PrevisaoDeCaixa::class)->das());
+
+        return [
+            'resumo' => $resumo,
+            'canais' => function () use ($porCanal, $qualidade, $canal) {
+                $linhas = $porCanal();
+                if ($canal === null) {
+                    foreach (self::CANAIS_FIXOS as $fixo) {
+                        $linhas[$fixo] ??= ContributionMargin::contaVazia();
+                    }
+                } else {
+                    $linhas = [$canal => $linhas[$canal] ?? ContributionMargin::contaVazia()];
+                }
+                $q = $qualidade();
+
+                return collect($linhas)
+                    ->filter(fn ($l, $c) => isset(self::CANAIS[$c]) || $l['receita'] != 0)
+                    ->map(fn ($l, $c) => ['canal' => $c, 'nome' => self::CANAIS[$c] ?? $c] + $l + [
+                        'taxa_estimada' => (float) ($q[$c]['estimada'] ?? 0),
+                    ])
+                    ->sortByDesc('lucro')
+                    ->values()
+                    ->all();
+            },
+            'serie' => function () use ($f, $canal) {
+                $atual = $this->margem->serie($f['de'], $f['fim'], $f['agrupar'], $canal);
+                $anterior = $f['compDe'] ? $this->margem->serie($f['compDe'], $f['compFim'], $f['agrupar'], $canal) : [];
+
+                return collect($atual)->values()->map(fn ($b, $i) => [
+                    'inicio' => $b['inicio'],
+                    'fim' => $b['fim'],
+                    'receita' => (float) $b['receita'],
+                    'margem' => (float) $b['margem'],
+                    'lucro' => (float) $b['lucro'],
+                    'ads' => (float) $b['ads'],
+                    'comparacao' => isset($anterior[$i]) ? (float) $anterior[$i]['receita'] : null,
+                    'comparacaoInicio' => $anterior[$i]['inicio'] ?? null,
+                ])->all();
+            },
+            'previsao' => fn () => app(PrevisaoDeCaixa::class)->proximosDias(),
+            'qualidade' => function () use ($qualidade, $pendencias, $canal) {
+                $q = $qualidade();
+                if ($canal !== null) {
+                    $q = array_intersect_key($q, [$canal => true]);
+                }
+
+                return [
+                    'canais' => collect($q)->map(fn ($l, $c) => ['canal' => $c, 'nome' => self::CANAIS[$c] ?? $c] + $l)->values()->all(),
+                    'pendencias' => $pendencias(),
+                ];
+            },
+            'alertas' => function () use ($f, $canal, $porCanal, $qualidade, $pendencias, $resumo, $das) {
+                $r = $resumo();
+                $linhas = $porCanal();
+                if ($canal !== null) {
+                    $linhas = array_intersect_key($linhas, [$canal => true]);
+                }
+                $q = $qualidade();
+                if ($canal !== null) {
+                    $q = array_intersect_key($q, [$canal => true]);
+                }
+                $p = $pendencias();
+
+                return app(AlertasFinanceiros::class)->gerar([
+                    'hoje' => Carbon::today(),
+                    'rotuloPeriodo' => $this->rotuloPeriodo($f['de'], $f['ate']),
+                    'das' => $das(),
+                    'canais' => $linhas,
+                    'receita' => (float) $r['atual']['receita'],
+                    'receitaComparacao' => $r['comparacao'] !== null ? (float) $r['comparacao']['receita'] : null,
+                    'rotuloComparacao' => $f['compRotulo'],
+                    'qualidade' => $q,
+                    'semCusto' => $p['semCusto'],
+                    'linkSemCusto' => '/admin/fluxo-de-caixa?'.http_build_query(array_filter([
+                        'aba' => 'vendas', 'sem_custo' => 1, 'de' => $f['de']->toDateString(), 'ate' => $f['ate']->toDateString(), 'canal' => $canal,
+                    ])),
+                    'notasCanceladas' => $p['notasCanceladas'],
+                ]);
+            },
+        ];
+    }
+
+    /**
+     * Números dos cartões: a conta oficial + vendas brutas, faturamento em
+     * nota e pedidos.
+     *
+     * @return array<string, float|int>
+     */
+    private function numeros(Carbon $desde, Carbon $fim, ?string $canal, ?array $porCanal = null): array
+    {
+        $porCanal ??= $this->margem->porCanal($desde, $fim);
+        $conta = $this->margem->conta($desde, $fim, $canal);
+        $base = ContributionMargin::baseImposto($desde, $fim);
+        $pedidos = $canal === null
+            ? (int) array_sum(array_column($porCanal, 'pedidos'))
+            : (int) ($porCanal[$canal]['pedidos'] ?? 0);
+
+        return [
+            'receita' => (float) $conta['receita'],
+            'custo_produtos' => (float) $conta['custo_produtos'],
+            'taxas' => (float) $conta['taxas'],
+            'frete' => (float) $conta['frete'],
+            'ads' => (float) $conta['ads'],
+            'bonificacoes' => (float) $conta['bonificacoes'],
+            'margem' => (float) $conta['margem'],
+            'imposto' => (float) $conta['imposto'],
+            'lucro' => (float) $conta['lucro'],
+            'pedidos' => $pedidos,
+            'vendas_brutas' => ContributionMargin::vendasBrutas($desde, $fim, $canal),
+            'faturamento_nota' => round($canal === null ? array_sum($base) : (float) ($base[$canal] ?? 0), 2),
+            'pedidos_site' => $canal === null || $canal === Order::ORIGIN_STORE ? (int) ($porCanal[Order::ORIGIN_STORE]['pedidos'] ?? 0) : null,
+        ];
+    }
+
+    /**
+     * Itens sem custo, notas autorizadas de pedido cancelado e vendas sem
+     * nota no período (bloco 7).
+     *
+     * @return array{semCusto: int, notasCanceladas: array{quantidade: int, valor: float}, semNota: int}
+     */
+    private function pendencias(Carbon $desde, Carbon $fim, ?string $canal): array
+    {
+        $vendas = fn () => DB::table('orders')
+            ->whereIn('orders.status', ContributionMargin::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $fim)
+            ->when($canal, fn ($q) => Order::filtrarCanal($q, $canal))
+            ->tap(fn ($q) => ContributionMargin::semDevolucao($q));
+
+        $semCusto = (int) $vendas()
+            ->join('order_items', 'order_items.order_id', '=', 'orders.id')
+            ->leftJoin('products', 'products.id', '=', 'order_items.product_id')
+            ->whereNull('products.cost_price')
+            ->whereNull('order_items.manual_cost_price')
+            ->count();
+
+        $notas = DB::table('invoices')
+            ->join('orders', 'orders.id', '=', 'invoices.order_id')
+            ->where('orders.status', Order::STATUS_CANCELLED)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $fim)
+            ->when($canal, fn ($q) => Order::filtrarCanal($q, $canal))
+            ->where('invoices.status', 'authorized')
+            ->where('invoices.operation_type', 'saida')
+            ->whereNull('invoices.cancelada_em')
+            ->selectRaw('COUNT(*) as n, COALESCE(SUM(invoices.valor_total), 0) as valor')
+            ->first();
+
+        $semNota = (int) $vendas()
+            ->whereNotExists(fn ($q) => $q->from('invoices')
+                ->whereColumn('invoices.order_id', 'orders.id')
+                ->where('invoices.status', 'authorized')
+                ->where('invoices.operation_type', 'saida')
+                ->whereNull('invoices.cancelada_em'))
+            ->count();
+
+        return [
+            'semCusto' => $semCusto,
+            'notasCanceladas' => ['quantidade' => (int) ($notas->n ?? 0), 'valor' => round((float) ($notas->valor ?? 0), 2)],
+            'semNota' => $semNota,
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Aba Vendas (custo e comissão)
+    // ------------------------------------------------------------------
+
+    /** @return array<string, mixed> */
+    private function propsVendas(Request $request, array $f): array
+    {
+        $search = $request->string('search')->toString();
+        $semCusto = $request->boolean('sem_custo');
+        $taxaEstimada = $request->boolean('taxa_estimada');
+        $sort = TableSort::resolve($request, [
+            'date' => 'pedido_em',
+            'product_name' => 'product_name',
+            'platform' => 'canal',
+            'receita' => 'receita',
+            'product_cost' => 'custo_produtos',
+            'platform_fee' => 'taxas',
+            'shipping_cost' => 'frete',
+            'net_profit' => 'margem',
+        ], 'pedido_em');
+
+        $memo = null;
+        $dados = function () use (&$memo, $f, $search, $semCusto, $taxaEstimada, $sort) {
+            if ($memo !== null) {
+                return $memo;
+            }
+            $conta = $this->margem->porItem($f['de'], $f['fim'], $f['canal']);
+            $todas = collect($conta['linhas']);
+
+            $termo = mb_strtolower(trim($search));
+            $linhas = $todas
+                ->when($termo !== '', fn ($c) => $c->filter(fn ($l) => str_contains(mb_strtolower($l['product_name']), $termo)
+                    || str_contains((string) $l['order_id'], $termo)
+                    || str_contains(mb_strtolower(self::CANAIS[$l['canal']] ?? $l['canal']), $termo)))
+                ->when($semCusto, fn ($c) => $c->filter(fn ($l) => $l['item_id'] !== null && ! $l['tem_custo']))
+                ->when($taxaEstimada, fn ($c) => $c->filter(fn ($l) => $l['taxa_estimada']));
+
+            $coluna = $sort['column'];
+            $linhas = $linhas->sort(function ($a, $b) use ($coluna, $sort) {
+                $cmp = is_string($a[$coluna]) ? strnatcasecmp($a[$coluna], $b[$coluna]) : $a[$coluna] <=> $b[$coluna];
+                $cmp = $sort['direction'] === 'desc' ? -$cmp : $cmp;
+
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+
+                return ($b['order_id'] <=> $a['order_id']) ?: (($a['item_id'] ?? 0) <=> ($b['item_id'] ?? 0));
+            })->values();
+
+            $filtrado = $termo !== '' || $semCusto || $taxaEstimada;
+            $margemLinhas = (float) $linhas->sum('margem');
+
+            return $memo = [
+                'linhas' => $linhas,
+                'totais' => [
+                    'receita' => round((float) $linhas->sum('receita'), 2),
+                    'cost' => round((float) $linhas->sum('custo_produtos'), 2),
+                    'fee' => round((float) $linhas->sum('taxas'), 2),
+                    'shipping' => round((float) $linhas->sum('frete'), 2),
+                    'netProfit' => round($margemLinhas, 2),
+                    'ads' => $conta['canal']['ads'],
+                    'flex' => round((float) $conta['canal']['flex'], 2),
+                    'bonificacoes' => $conta['canal']['bonificacoes'],
+                    // Igual à margem do Resumo (periodo/porCanal) quando não
+                    // há busca nem filtro de linha.
+                    'margemOficial' => $filtrado ? null : round($margemLinhas - $conta['canal']['ads'] - $conta['canal']['flex'] + $conta['canal']['bonificacoes'], 2),
+                    'filtrado' => $filtrado,
+                    'semCusto' => $todas->filter(fn ($l) => $l['item_id'] !== null && ! $l['tem_custo'])->count(),
+                    'taxaEstimada' => $todas->filter(fn ($l) => $l['taxa_estimada'])->count(),
+                ],
+            ];
+        };
+
+        return [
+            'sales' => function () use ($dados, $request) {
+                $linhas = $dados()['linhas'];
+                $pagina = max(1, (int) $request->query('page', 1));
+
+                return (new LengthAwarePaginator(
+                    $linhas->forPage($pagina, self::PER_PAGE)->map(fn ($l) => $this->linhaVenda($l))->values(),
+                    $linhas->count(),
+                    self::PER_PAGE,
+                    $pagina,
+                    ['path' => $request->url(), 'query' => $request->query()],
+                ));
+            },
+            'salesTotals' => fn () => $dados()['totais'],
+            'salesFilter' => [
+                'search' => $search,
+                'sem_custo' => $semCusto,
+                'taxa_estimada' => $taxaEstimada,
+                'sort' => $sort['key'],
+                'direction' => $sort['direction'],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function linhaVenda(array $l): array
+    {
+        return [
+            'row_key' => $l['order_id'].'-'.($l['item_id'] ?? 0),
+            'date' => Carbon::parse($l['pedido_em'])->toDateString(),
+            'order_id' => $l['order_id'],
+            'item_id' => $l['item_id'],
+            'product_name' => $l['product_name'] !== '' ? $l['product_name'] : '(pedido sem itens)',
+            'quantity' => $l['quantidade'],
+            'canal' => $l['canal'],
+            'platform' => self::CANAIS[$l['canal']] ?? $l['canal'],
+            'receita' => round($l['receita'], 2),
+            'product_cost' => round($l['custo_produtos'], 2),
+            'has_cost' => $l['tem_custo'],
+            'has_product' => $l['product_id'] !== null,
+            'platform_fee' => round($l['taxas'], 2),
+            'has_fee_data' => $l['tem_taxa'],
+            'fee_source' => $l['tem_taxa'] ? ($l['taxa_estimada'] ? 'estimate' : 'real') : null,
+            'shipping_cost' => round($l['frete'], 2),
+            'net_profit' => round($l['margem'], 2),
+        ];
+    }
+
+    // ------------------------------------------------------------------
+    // Aba Lançamentos
+    // ------------------------------------------------------------------
+
+    /** @return array<string, mixed> */
+    private function propsLancamentos(Request $request, array $f): array
+    {
         $entriesSearch = TableSort::likeTerm($request->string('entries_search')->toString());
         $entriesSort = TableSort::resolve($request, [
             'entry_date' => 'entry_date',
@@ -55,313 +518,57 @@ class CashFlowController extends Controller
             'costCenter' => 'cost_center_name',
         ], 'entry_date', 'desc', 'entries_');
 
-        $entries = CashFlowEntry::query()
-            ->with('costCenter:id,name', 'creator:id,name')
-            ->when($entriesSearch, function ($query) use ($entriesSearch) {
-                $query->where(function ($query) use ($entriesSearch) {
-                    $query->where('description', 'like', $entriesSearch)
-                        ->orWhereHas('costCenter', fn ($costCenter) => $costCenter->where('name', 'like', $entriesSearch));
-                });
-            })
-            ->when(
-                $entriesSort['column'] === 'cost_center_name',
-                fn ($query) => $query->orderBy(CostCenter::query()->select('name')->whereColumn('cost_centers.id', 'cash_flow_entries.cost_center_id'), $entriesSort['direction']),
-                fn ($query) => $query->orderBy($entriesSort['column'], $entriesSort['direction']),
-            )
-            ->orderByDesc('id')
-            ->paginate(self::PER_PAGE, ['*'], 'entries_page')
-            ->withQueryString();
+        $doPeriodo = fn () => CashFlowEntry::query()
+            ->where('entry_date', '>=', $f['de']->toDateString())
+            ->where('entry_date', '<', $f['fim']->toDateString());
 
-        // Saldo/entradas/saídas sempre sobre TODOS os lançamentos (como já
-        // era — a busca da tabela nunca mexeu nesses cards).
-        $entryTotals = CashFlowEntry::query()
-            ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as income', [CashFlowEntry::TYPE_INCOME])
-            ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as expense', [CashFlowEntry::TYPE_EXPENSE])
-            ->toBase()
-            ->first();
-        $income = round((float) $entryTotals->income, 2);
-        $expense = round((float) $entryTotals->expense, 2);
+        return [
+            'entries' => fn () => $doPeriodo()
+                ->with('costCenter:id,name', 'creator:id,name')
+                ->when($entriesSearch, function ($query) use ($entriesSearch) {
+                    $query->where(function ($query) use ($entriesSearch) {
+                        $query->where('description', 'like', $entriesSearch)
+                            ->orWhereHas('costCenter', fn ($costCenter) => $costCenter->where('name', 'like', $entriesSearch));
+                    });
+                })
+                ->when(
+                    $entriesSort['column'] === 'cost_center_name',
+                    fn ($query) => $query->orderBy(CostCenter::query()->select('name')->whereColumn('cost_centers.id', 'cash_flow_entries.cost_center_id'), $entriesSort['direction']),
+                    fn ($query) => $query->orderBy($entriesSort['column'], $entriesSort['direction']),
+                )
+                ->orderByDesc('id')
+                ->paginate(self::PER_PAGE, ['*'], 'entries_page')
+                ->withQueryString(),
+            // Entradas e saídas do período (antes: de todos os lançamentos,
+            // sem período). A busca da tabela não mexe nos totais.
+            'summary' => function () use ($doPeriodo) {
+                $totais = $doPeriodo()
+                    ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as income', [CashFlowEntry::TYPE_INCOME])
+                    ->selectRaw('COALESCE(SUM(CASE WHEN type = ? THEN amount ELSE 0 END), 0) as expense', [CashFlowEntry::TYPE_EXPENSE])
+                    ->toBase()
+                    ->first();
+                $income = round((float) $totais->income, 2);
+                $expense = round((float) $totais->expense, 2);
 
-        [$start, $end] = $this->resolveSalesPeriod($request);
-
-        $platform = $request->string('platform')->toString();
-        $platform = $platform !== '' ? $platform : null;
-        $salesSearch = $request->string('search')->toString();
-        $salesSort = TableSort::resolve($request, [
-            'date' => 'ordered_at',
-            'product_name' => 'product_name',
-            'platform' => 'origin',
-            'product_cost' => 'product_cost',
-            'platform_fee' => 'platform_fee',
-            'shipping_cost' => 'shipping_cost',
-            'net_profit' => 'net_profit',
-        ], 'ordered_at');
-
-        $salesLines = $this->filteredSalesLines($start, $end, $platform, $salesSearch);
-
-        $sales = DB::query()
-            ->fromSub($salesLines, 'sales_lines')
-            ->orderBy($salesSort['column'], $salesSort['direction'])
-            ->orderByDesc('order_id')
-            ->orderBy('item_id')
-            ->paginate(self::PER_PAGE)
-            ->withQueryString()
-            ->through(fn (object $line) => $this->presentSalesLine($line));
-
-        // Totais da listagem de vendas — seguem período + plataforma + busca,
-        // pra bater com o que está na tabela (antes o front somava as linhas
-        // filtradas). Sempre número, mesmo sem venda: pedido explícito
-        // 2026-08-14 "se não tiver dado colocar 0,00".
-        $salesTotals = DB::query()
-            ->fromSub($salesLines, 'sales_lines')
-            ->selectRaw('COALESCE(SUM(product_cost), 0) as cost, COALESCE(SUM(platform_fee), 0) as fee, COALESCE(SUM(shipping_cost), 0) as shipping, COALESCE(SUM(net_profit), 0) as net_profit')
-            ->first();
-
-        return Inertia::render('Admin/CashFlow/Index', [
-            'entries' => $entries,
-            'costCenters' => CostCenter::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'summary' => [
-                'balance' => round($income - $expense, 2),
-                'income' => $income,
-                'expense' => $expense,
-                // Valor em estoque = soma de todo produto pelo custo pago
-                // no fornecedor × quantidade em estoque — mesma conta já
-                // usada no Painel Financeiro (FinancialDashboardController).
-                // Produto sem custo cadastrado conta como 0 aqui (mesmo
-                // aviso de dado incompleto do resto da tela). Pedido
-                // explícito 2026-08-14.
-                'stockValue' => round((float) Product::query()
-                    ->selectRaw('COALESCE(SUM(stock * COALESCE(cost_price, 0)), 0) as total')
-                    ->value('total'), 2),
-            ],
-            // Listagem de lucro por venda — pedido explícito 2026-08-14:
-            // data do pedido, produto, custo pago no fornecedor, comissão
-            // da plataforma e lucro líquido linha a linha, pra ficar claro
-            // de onde vem cada real do saldo mostrado acima. Padrão é
-            // "todas as vendas, todos os períodos" (pedido explícito
-            // 2026-08-14: "quero todas vendas todos periodos") — só filtra
-            // se o usuário escolher De/Até na tela.
-            'sales' => $sales,
-            'salesTotals' => [
-                'cost' => round((float) $salesTotals->cost, 2),
-                'fee' => round((float) $salesTotals->fee, 2),
-                'shipping' => round((float) $salesTotals->shipping, 2),
-                'netProfit' => round((float) $salesTotals->net_profit, 2),
-            ],
-            // Opções do filtro de plataforma — as que têm venda no período
-            // (antes saíam das linhas carregadas no front, mesma regra).
-            'salesPlatforms' => $this->salesLinesQuery($start, $end)
-                ->reorder()
-                ->distinct()
-                ->pluck('orders.origin')
-                ->map(fn (string $origin) => ['value' => $origin, 'label' => $this->platformLabel($origin)])
-                ->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)
-                ->values(),
-            'salesFilter' => [
-                'start' => $start?->toDateString(),
-                'end' => $end?->toDateString(),
-                'platform' => $platform,
-                'search' => $salesSearch,
-                'sort' => $salesSort['key'],
-                'direction' => $salesSort['direction'],
-            ],
+                return ['balance' => round($income - $expense, 2), 'income' => $income, 'expense' => $expense];
+            },
             'entriesFilter' => [
                 'search' => $request->string('entries_search')->toString(),
                 'sort' => $entriesSort['key'],
                 'direction' => $entriesSort['direction'],
             ],
-        ]);
-    }
-
-    /**
-     * @return array{0: ?Carbon, 1: ?Carbon}
-     */
-    private function resolveSalesPeriod(Request $request): array
-    {
-        $start = null;
-        $end = null;
-
-        try {
-            $start = $request->filled('start') ? Carbon::parse($request->string('start')->toString())->startOfDay() : null;
-        } catch (\Throwable) {
-            $start = null;
-        }
-
-        try {
-            $end = $request->filled('end') ? Carbon::parse($request->string('end')->toString())->endOfDay() : null;
-        } catch (\Throwable) {
-            $end = null;
-        }
-
-        // Início depois do fim não faz sentido — troca em vez de devolver
-        // uma listagem vazia sem explicação.
-        if ($start && $end && $start->gt($end)) {
-            [$start, $end] = [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
-        }
-
-        return [$start, $end];
-    }
-
-    /**
-     * Linhas de "Margem de Contribuição por Venda" (uma por item de pedido)
-     * já calculadas no SQL — mesma conta que antes era feita em PHP pedido a
-     * pedido (ver salesLinesQuery()), agora como subquery pra poder paginar
-     * e somar os totais sem carregar todas as vendas.
-     */
-    private function filteredSalesLines(?Carbon $start, ?Carbon $end, ?string $platform, string $search): Builder
-    {
-        $like = TableSort::likeTerm($search);
-        $searchText = mb_strtolower(trim($search));
-        // A busca do navegador também casava o nome da plataforma mostrado
-        // na tabela — mantém mapeando o texto pros origins correspondentes.
-        $matchingOrigins = $searchText === '' ? [] : array_keys(array_filter(
-            self::CHANNEL_LABELS,
-            fn (string $label) => str_contains(mb_strtolower($label), $searchText),
-        ));
-
-        $lines = $this->salesLinesQuery($start, $end)
-            ->when($platform, fn ($query) => $query->where('orders.origin', $platform))
-            ->when($like, function ($query) use ($like, $matchingOrigins) {
-                $query->where(function ($query) use ($like, $matchingOrigins) {
-                    $query->where('order_items.product_name', 'like', $like)
-                        ->orWhere('orders.id', 'like', $like)
-                        ->when($matchingOrigins, fn ($query) => $query->orWhereIn('orders.origin', $matchingOrigins));
-                });
-            })
-            ->select([
-                'orders.created_at as ordered_at',
-                'orders.id as order_id',
-                'order_items.id as item_id',
-                'order_items.product_name',
-                'orders.origin',
-                'order_items.quantity',
-                'order_items.subtotal as item_subtotal',
-                'orders.subtotal as order_subtotal',
-                'products.id as product_ref',
-                'products.cost_price',
-                'order_items.manual_cost_price',
-                'order_channel_fees.id as fee_id',
-                'order_channel_fees.fee_amount',
-            ])
-            // Frete pago pela LOJA por pedido (margem de contribuição, ver
-            // ContributionMargin): pré-postagem dos Correios e entrega Flex.
-            ->selectRaw(
-                'COALESCE(correios.total, 0) + CASE WHEN channel_shipments.channel = ? AND channel_shipments.shipping_method = ? THEN ? ELSE 0 END as frete_loja',
-                [MarketplaceAccount::CHANNEL_MERCADO_LIVRE, 'self_service', app(FlexDeliveryService::class)->costPerDelivery()],
-            )
-            // Amazon: o frete que o comprador paga vem pra loja (envio
-            // pelos Correios da loja) — mesma regra de ContributionMargin::receitaSql().
-            ->selectRaw('CASE WHEN orders.origin = ? THEN COALESCE(orders.shipping_cost, 0) ELSE 0 END as frete_recebido', [Order::ORIGIN_AMAZON]);
-
-        // Rateio por item. Multiplica ANTES de dividir (e força decimal com
-        // 1.0) pra não perder precisão nem cair em divisão inteira no
-        // SQLite — o arredondamento fica igual ao round() do PHP de antes.
-        $perItem = DB::query()->fromSub($lines, 'l')->select([
-            'ordered_at', 'order_id', 'item_id', 'product_name', 'origin', 'item_subtotal',
-        ])
-            // Item com produto local mapeado: custo vem do cadastro do
-            // produto (cost_price × quantidade). Sem produto (venda de
-            // anúncio nunca trazido pro catálogo — autoImportProduct()
-            // falhou/não suportado) não tem onde buscar isso, usa o valor
-            // digitado à mão direto na linha (manual_cost_price, já é o
-            // total, sem quantidade envolvida). Pedido explícito
-            // 2026-08-14: "editar os que está sem custo também".
-            ->selectRaw('CASE WHEN product_ref IS NOT NULL THEN ROUND(COALESCE(cost_price, 0) * quantity, 2) ELSE COALESCE(manual_cost_price, 0) END as product_cost')
-            ->selectRaw('CASE WHEN product_ref IS NOT NULL THEN (CASE WHEN cost_price IS NOT NULL THEN 1 ELSE 0 END) ELSE (CASE WHEN manual_cost_price IS NOT NULL THEN 1 ELSE 0 END) END as has_cost')
-            // Sem OrderChannelFee (canal não devolveu a taxa real, ou
-            // pedido anterior à integração), a comissão é DESCONHECIDA —
-            // nunca 0. Mesmo critério já usado em
-            // MercadoLivreSalesController: inventar 0 aqui esconderia a
-            // taxa de verdade e inflaria o lucro líquido mostrado.
-            ->selectRaw('CASE WHEN fee_id IS NOT NULL THEN 1 ELSE 0 END as has_fee_data')
-            // Comissão da plataforma é lançada por pedido, não por item —
-            // rateia proporcionalmente ao valor de cada item quando o
-            // pedido tem mais de um produto.
-            ->selectRaw('CASE WHEN order_subtotal > 0 THEN ROUND(COALESCE(fee_amount, 0) * 1.0 * item_subtotal / order_subtotal, 2) ELSE 0 END as platform_fee')
-            ->selectRaw('CASE WHEN order_subtotal > 0 THEN ROUND(frete_loja * 1.0 * item_subtotal / order_subtotal, 2) ELSE 0 END as item_frete_loja')
-            ->selectRaw('CASE WHEN order_subtotal > 0 THEN ROUND(frete_recebido * 1.0 * item_subtotal / order_subtotal, 2) ELSE 0 END as item_frete_recebido');
-
-        return DB::query()->fromSub($perItem, 'i')->select([
-            'ordered_at', 'order_id', 'item_id', 'product_name', 'origin',
-            'product_cost', 'has_cost', 'platform_fee', 'has_fee_data',
-        ])
-            ->selectRaw('ROUND(item_frete_loja - item_frete_recebido, 2) as shipping_cost')
-            // Lucro líquido sem dado de comissão não desconta taxa nenhuma —
-            // mostrado como incompleto no front (mesmo aviso do "sem
-            // custo"), não como se a taxa fosse zero. Margem de contribuição
-            // da linha: ADS não entra aqui (não é por venda — sai no total do
-            // mês no Financeiro).
-            ->selectRaw('ROUND(item_subtotal + item_frete_recebido - product_cost - (CASE WHEN has_fee_data = 1 THEN platform_fee ELSE 0 END) - item_frete_loja, 2) as net_profit');
-    }
-
-    /**
-     * Base (joins + período + status de venda) das linhas de venda — um
-     * registro por item de pedido. channelFee/channelShipment são HasOne:
-     * junta só uma linha por pedido (a de menor id, como o eager-load
-     * pegaria) pra item nunca aparecer duplicado.
-     */
-    private function salesLinesQuery(?Carbon $start, ?Carbon $end): Builder
-    {
-        $correios = CorreiosPrePostagem::query()
-            ->toBase()
-            ->where('status', CorreiosPrePostagem::STATUS_GERADA)
-            ->whereNotNull('order_id')
-            ->selectRaw('order_id, COALESCE(SUM(postage_price), 0) as total')
-            ->groupBy('order_id');
-        $firstFee = OrderChannelFee::query()->toBase()->selectRaw('order_id, MIN(id) as id')->groupBy('order_id');
-        $firstShipment = ChannelShipment::query()->toBase()->selectRaw('order_id, MIN(id) as id')->groupBy('order_id');
-
-        return DB::table('order_items')
-            ->join('orders', 'orders.id', '=', 'order_items.order_id')
-            // Produto excluído (soft delete) conta como "sem produto", igual
-            // ao eager-load items.product de antes.
-            ->leftJoin('products', function ($join) {
-                $join->on('products.id', '=', 'order_items.product_id')->whereNull('products.deleted_at');
-            })
-            ->leftJoinSub($firstFee, 'first_fee', 'first_fee.order_id', '=', 'orders.id')
-            ->leftJoin('order_channel_fees', 'order_channel_fees.id', '=', 'first_fee.id')
-            ->leftJoinSub($firstShipment, 'first_shipment', 'first_shipment.order_id', '=', 'orders.id')
-            ->leftJoin('channel_shipments', 'channel_shipments.id', '=', 'first_shipment.id')
-            ->leftJoinSub($correios, 'correios', 'correios.order_id', '=', 'orders.id')
-            ->whereIn('orders.status', self::REVENUE_STATUSES)
-            ->when($start, fn ($query) => $query->where('orders.created_at', '>=', $start))
-            ->when($end, fn ($query) => $query->where('orders.created_at', '<=', $end));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentSalesLine(object $line): array
-    {
-        return [
-            'date' => Carbon::parse($line->ordered_at)->toDateString(),
-            'order_id' => (int) $line->order_id,
-            'item_id' => (int) $line->item_id,
-            'product_name' => $line->product_name,
-            'product_cost' => round((float) $line->product_cost, 2),
-            'has_cost' => (bool) $line->has_cost,
-            'platform_fee' => round((float) $line->platform_fee, 2),
-            'shipping_cost' => round((float) $line->shipping_cost, 2),
-            'has_fee_data' => (bool) $line->has_fee_data,
-            'platform' => $this->platformLabel($line->origin),
-            'net_profit' => round((float) $line->net_profit, 2),
         ];
     }
 
-    private function platformLabel(string $origin): string
-    {
-        return self::CHANNEL_LABELS[$origin] ?? ucfirst(str_replace('_', ' ', $origin));
-    }
+    // ------------------------------------------------------------------
+    // Gravações (rotas e regras de antes)
+    // ------------------------------------------------------------------
 
     /**
-     * Comissão digitada à mão na própria tabela de "Lucro por Venda" —
-     * pedido explícito 2026-08-14, pro caso comum de o canal não ter
-     * devolvido a taxa real (ver has_fee_data em filteredSalesLines()). Grava
-     * como OrderChannelFee normal (source=manual) — assim que salvo, a
-     * linha some do estado "sem dado" igual a qualquer taxa vinda da API.
-     * Editar a comissão de um pedido com mais de um produto afeta o
-     * pedido inteiro (a taxa é por pedido, não por item — mesmo rateio
-     * proporcional de filteredSalesLines() é reaplicado no próximo carregamento).
+     * Comissão digitada à mão na aba Vendas (pedido explícito 2026-08-14),
+     * para quando o canal não devolveu a taxa real. Grava como
+     * OrderChannelFee normal (source=manual). A taxa é por pedido: editar
+     * numa linha vale para o pedido inteiro.
      */
     public function updateSaleFee(Request $request, Order $order): RedirectResponse
     {
@@ -383,20 +590,10 @@ class CashFlowController extends Controller
     }
 
     /**
-     * Custo do fornecedor editado à mão na tabela de "Lucro por Venda" —
-     * mesmo pedido explícito 2026-08-14 da comissão editável, agora pro
-     * "Pago ao fornecedor" (incluindo linha "sem custo": pedido explícito
-     * "editar os que está sem custo também"). O valor digitado é o custo
-     * TOTAL daquela linha (já ×quantidade, é o que aparece na tela).
-     *
-     * Item com produto local mapeado: grava como cost_price UNITÁRIO no
-     * produto (÷quantidade) — custo é atributo do produto, não do
-     * pedido, então passa a valer pra essa venda e qualquer venda futura
-     * do mesmo produto, igual a cadastrar em /admin/produtos.
-     *
-     * Item SEM produto mapeado (venda de anúncio nunca trazido pro
-     * catálogo): não existe Product pra editar, grava o total direto no
-     * próprio item (manual_cost_price) — vale só pra essa venda.
+     * Custo do fornecedor editado à mão na aba Vendas. O valor digitado é o
+     * custo TOTAL da linha (já × quantidade). Item com produto: vira o custo
+     * UNITÁRIO do produto (vale para todas as vendas dele; a tela pede
+     * confirmação). Item sem produto: grava só na linha (manual_cost_price).
      */
     public function updateItemCost(Request $request, OrderItem $orderItem): RedirectResponse
     {

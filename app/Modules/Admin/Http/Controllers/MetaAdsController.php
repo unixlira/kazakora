@@ -217,7 +217,7 @@ class MetaAdsController extends Controller
         }
 
         Storage::disk('local')->deleteDirectory(self::pastaDosVideos($campanha));
-        $campanha->delete();
+        $campanha->forceDelete();
 
         return redirect()->route('admin.publicidade.meta-ads.campanhas.listar')->with('success', 'Rascunho excluído.');
     }
@@ -773,7 +773,7 @@ class MetaAdsController extends Controller
                 Storage::disk('local')->delete(array_values(array_filter([$video->path, $video->path_vertical])));
                 $video->forceDelete();
             }
-            $conjunto->delete();
+            $conjunto->forceDelete();
             $this->somarOrcamentoDosConjuntos($campanha);
         });
 
@@ -1175,7 +1175,7 @@ class MetaAdsController extends Controller
             $saindo = $campanha->conjuntos()->whereNotIn('id', $manter)->pluck('id');
             if ($saindo->isNotEmpty()) {
                 $this->apagarAnuncios($campanha->videos()->whereIn('conjunto_id', $saindo)->get());
-                $campanha->conjuntos()->whereIn('id', $saindo)->delete();
+                $campanha->conjuntos()->whereIn('id', $saindo)->forceDelete();
             }
         } elseif (! $campanha->conjuntos()->exists()) {
             $mapa['1'] = $campanha->conjuntos()->create(['nome' => 'Conjunto 1', 'ordem' => 0])->id;

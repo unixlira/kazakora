@@ -17,7 +17,7 @@ const props = defineProps({
 
 const situacao = ref(props.filtros.situacao || '');
 const busca = ref(props.filtros.busca || '');
-const abertos = ref({});
+const expandidos = ref({});
 
 const CANAIS = { loja: 'Site', amazon: 'Amazon', mercado_livre: 'Mercado Livre', shopee: 'Shopee', tiktok_shop: 'TikTok' };
 
@@ -41,7 +41,7 @@ function filtrar() {
 }
 
 function alternar(id) {
-    abertos.value = { ...abertos.value, [id]: !abertos.value[id] };
+    expandidos.value = { ...expandidos.value, [id]: !expandidos.value[id] };
 }
 </script>
 
@@ -90,14 +90,14 @@ function alternar(id) {
             <ul v-else class="divide-y divide-[var(--surface-border)]">
                 <li v-for="r in rastreios.data" :key="r.id">
                     <button type="button" class="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left hover:bg-[var(--surface-muted)]"
-                        :aria-expanded="!!abertos[r.id]" @click="alternar(r.id)">
-                        <i :class="abertos[r.id] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'" class="w-3 text-xs text-slate-400" aria-hidden="true"></i>
+                        :aria-expanded="!!expandidos[r.id]" @click="alternar(r.id)">
+                        <i :class="expandidos[r.id] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'" class="w-3 text-xs text-slate-400" aria-hidden="true"></i>
                         <span class="font-mono text-sm font-semibold">{{ r.codigo }}</span>
                         <span class="rounded-full px-2 py-0.5 text-xs font-semibold" :class="cor(r.situacao)">{{ r.situacao_rotulo || 'Sem consulta' }}</span>
                         <span class="min-w-0 flex-1 truncate text-sm text-slate-600 dark:text-slate-300">{{ r.ultimo_evento || '—' }}</span>
                         <span class="text-xs tabular-nums text-slate-500 dark:text-slate-400">{{ dataHora(r.ultimo_evento_em) }}</span>
                     </button>
-                    <div v-if="abertos[r.id]" class="border-t border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3 text-sm">
+                    <div v-if="expandidos[r.id]" class="border-t border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3 text-sm">
                         <dl class="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
                             <div>
                                 <dt class="text-xs text-slate-500 dark:text-slate-400">Pedido</dt>

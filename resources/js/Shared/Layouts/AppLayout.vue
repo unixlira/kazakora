@@ -139,6 +139,9 @@ onMounted(() => {
 // Pedido do Lira 2026-10-12: o topo é branco parado no lugar e fica
 // translúcido e fumê quando passa a flutuar (a marcação logo acima dele
 // sumiu da tela). Estilo em .loja-topo-fume (app.css).
+// Com o menu do celular aberto o topo volta a ser sólido (2026-10-19): no
+// iPhone com tema escuro (o Chrome tem tema próprio) o fumê deixava a página
+// aparecer por trás do menu, embaralhando as letras e parecendo que não abria.
 const marcaDoTopo = ref(null);
 const topoFlutuando = ref(false);
 const medirRolagem = () => {
@@ -193,7 +196,7 @@ const REDES = [
         <!-- Header -->
         <div ref="marcaDoTopo" aria-hidden="true"></div>
         <header class="loja-topo sticky top-0 z-40 border-b border-store-border bg-store-bg-raised"
-            :class="{ 'loja-topo-fume': topoFlutuando }">
+            :class="{ 'loja-topo-fume': topoFlutuando && !mobileMenuOpen }">
             <!-- Topo mais baixo no celular (pedido 2026-10-15): py-2 e ícones de 36px abaixo do lg. -->
             <div class="mx-auto flex max-w-[1320px] items-center gap-4 px-3 py-2 md:px-6 lg:gap-8 lg:py-4">
                 <!-- Logo (Admin > Banners > Logos e favicon); no modo escuro usa a clara do rodapé. -->

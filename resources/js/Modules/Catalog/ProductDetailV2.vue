@@ -289,6 +289,7 @@ const descriptionSections = computed(() => {
 const SELOS_VERIFICADOS = [
     ['Loja verificada', 'Empresa com CNPJ ativo e selo RA Verificada no Reclame Aqui'],
     ['Compra segura', 'Pagamento processado com segurança; não guardamos dados do cartão'],
+    ['Nota fiscal', 'Toda compra sai com nota fiscal eletrônica (NF-e)'],
 ];
 
 // Destaques do box de compra: os 3 primeiros itens da primeira lista da
@@ -449,7 +450,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     <Head :title="product.name">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800&family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     </Head>
 
     <AppLayout>
@@ -983,8 +984,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .nota .separador { color: var(--line); }
 .pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
-/* Selos de verificação abaixo do nome (padrão desde 2026-10-19) */
-.pd2 .selos-verificados { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+/* Selos de verificação abaixo do nome (padrão desde 2026-10-19): Poppins Black,
+   check azul e texto sem fundo próprio; branco no tema escuro, cor do título no claro
+   (o box é branco e o texto branco sumiria). */
+.pd2 .selos-verificados { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; font-size: 13px; font-weight: 900; color: var(--ink); }
+.dark .pd2 .selos-verificados { color: #fff; }
 .pd2 .selos-verificados li { display: inline-flex; align-items: center; gap: 5px; }
 .pd2 .selos-verificados .icone { width: 18px; height: 18px; fill: #1d9bf0; stroke: #fff; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }

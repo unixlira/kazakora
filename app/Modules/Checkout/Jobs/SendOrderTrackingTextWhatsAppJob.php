@@ -77,8 +77,8 @@ class SendOrderTrackingTextWhatsAppJob implements ShouldQueue
             return;
         }
 
-        $conversation = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $phone],
+        $conversation = WhatsAppConversation::doNumeroOuCria(
+            $phone,
             ['phone' => $phone, 'profile_name' => $redirecionar ? null : $order->shipping_name, 'last_message_at' => now(), 'unread_count' => 0],
         );
         if ($redirecionar === null && ! $conversation->insideServiceWindow()) {

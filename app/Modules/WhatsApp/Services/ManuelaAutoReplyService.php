@@ -2,6 +2,9 @@
 
 namespace App\Modules\WhatsApp\Services;
 
+use App\Modules\Checkout\Jobs\SendOrderApprovedWhatsAppJob;
+use App\Modules\Checkout\Models\Order;
+use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Support\Facades\Log;
@@ -83,6 +86,10 @@ class ManuelaAutoReplyService
         $productBlock = $product
             ? "Produto em conversa com este cliente (ficha completa, é daqui que saem as respostas):\n".json_encode($product, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
             : 'Nenhum produto aberto com este cliente ainda.';
+        $pedidos = $conversation ? self::pedidosDaConversa($conversation) : [];
+        $pedidosBlock = $pedidos !== []
+            ? "Pedidos deste cliente (os avisos automáticos deles foram enviados nesta conversa; é daqui que saem status, nota e rastreio):\n".json_encode($pedidos, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+            : 'Nenhum pedido ligado a esta conversa.';
 
         return <<<PROMPT
 {$s['agent_instructions']}
@@ -104,6 +111,16 @@ Você trabalha com vendas: o assunto da conversa são os produtos da loja. Siga 
 
 {$productBlock}
 
+Mensagens automáticas da loja (modelos do WhatsApp): no histórico aparecem como "[mensagem automática da loja enviada ao cliente]" e o toque nos botões como "[cliente tocou no botão ...]". São a confirmação do pedido (botões Tudo Certo e Corrigir Informações), o aviso de pedido enviado (Ir para o rastreio e Falar com Atendente) e o de entregue (Não Recebi). Quem trata o toque no botão é o sistema; você responde quando o cliente escreve, manda áudio ou quando o sistema te passa o toque. Nunca deixe o cliente sem resposta e nunca trate esse aviso como se o cliente tivesse escrito:
+- Confirmou os dados por escrito ("tá certo", "ok", "isso mesmo") ou tocou em Tudo Certo: agradeça e diga que o pedido segue para separação.
+- Tocou em Corrigir Informações ou disse que algo está errado, sem dizer o quê: pergunte o que precisa corrigir (nome, e-mail, endereço, número, complemento, CEP).
+- Mandou o dado certo: repita o dado para ele conferir, diga que o time vai ajustar no pedido e comece a resposta com {$tag}. Nunca diga que já alterou. Se o pedido já tem nota_emitida ou rastreio, diga com sinceridade que a nota e a etiqueta já saíram e que o time vai ver o que ainda dá para ajustar.
+- Falar com atendente, não recebeu, entrega com problema, troca ou cancelamento: comece com {$tag} e diga que uma pessoa do time vai continuar.
+- Perguntou do pedido (status, nota, rastreio, prazo): responda só pelos "Pedidos deste cliente". Rastreio só com o link_rastreio de lá. Prazo que não estiver lá, não invente.
+- Nunca fale de pedido que não está nessa lista nem passe dados de outra pessoa.
+
+{$pedidosBlock}
+
 Regras de formato:
 - Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.
 - Preço, estoque, link e características só da ficha ou da busca. Nunca invente.
@@ -111,6 +128,67 @@ Regras de formato:
 - Preço e estoque só depois de abrir a ficha DESTE produto (abrir_produto ou ficha em conversa). Na dúvida sobre qual produto é, pergunte: errar o preço afasta o cliente.
 - Se o assunto envolver {$s['handoff_keywords']}, comece a resposta com {$tag} e diga ao cliente que uma pessoa do time vai acompanhar.
 PROMPT;
+    }
+
+    /**
+     * Pedidos cujos avisos (modelos da Meta) saíram para esta conversa, os
+     * mais novos primeiro. Achado real 19/10, #3274: o cliente tocou em
+     * "Corrigir Informações" e a Manuela não sabia de pedido nenhum.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function pedidosDaConversa(WhatsAppConversation $conversation): array
+    {
+        $ids = $conversation->messages()
+            ->where('direction', 'outbound')
+            ->where('created_at', '>=', now()->subDays(60))
+            ->latest('id')
+            ->limit(50)
+            ->pluck('payload')
+            ->map(fn ($payload) => $payload['order_id'] ?? null)
+            ->filter()
+            ->unique()
+            ->take(3)
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $status = [
+            Order::STATUS_PENDING => 'aguardando pagamento',
+            Order::STATUS_AWAITING_PAYMENT => 'aguardando pagamento',
+            Order::STATUS_PAID => 'pago, em separação',
+            Order::STATUS_SHIPPED => 'enviado',
+            Order::STATUS_COMPLETED => 'entregue',
+            Order::STATUS_CANCELLED => 'cancelado',
+        ];
+
+        return Order::query()
+            ->with(['items', 'user', 'invoice', 'channelShipment', 'latestCorreiosPrePostagem'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->sortByDesc('id')
+            ->map(fn (Order $order) => array_filter([
+                'numero' => $order->numero,
+                'feito_em' => $order->created_at?->timezone('America/Sao_Paulo')->format('d/m/Y H:i'),
+                'status' => $status[$order->status] ?? $order->status,
+                'itens' => $order->items->map(fn ($item) => "{$item->quantity}x {$item->product_name}")->all(),
+                'total' => 'R$ '.number_format((float) $order->total, 2, ',', '.'),
+                'nome' => $order->shipping_name ?: $order->user?->name,
+                'email' => $order->shipping_email ?: $order->user?->email,
+                'endereco' => SendOrderApprovedWhatsAppJob::endereco($order),
+                'confirmacao_do_cliente' => match ($order->whatsapp_confirmacao) {
+                    'ok' => 'tocou em Tudo Certo',
+                    'corrigir' => 'pediu para corrigir os dados',
+                    default => 'ainda não respondeu',
+                },
+                'nota_emitida' => $order->invoice?->status === Invoice::STATUS_AUTHORIZED,
+                'rastreio' => $order->trackingCode(),
+                'link_rastreio' => route('rastreio.ver', $order->trackingRef()),
+            ], fn ($valor) => $valor !== null && $valor !== ''))
+            ->values()
+            ->all();
     }
 
     private function searchingElsewhere(): string

@@ -851,32 +851,24 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertSame('Parafusadeira com frete grátis', json_decode($criativo['object_story_spec'], true)['video_data']['message']);
     }
 
-    public function test_assumida_no_gerenciador_nao_envia_ativa_nem_pausa(): void
+    /**
+     * Lira (2026-10-19): a campanha continua gerenciada pelo KazaKora; não
+     * existe "Assumir no Gerenciador", só o link para abrir lá.
+     */
+    public function test_nao_existe_assumir_no_gerenciador(): void
     {
         Queue::fake();
         $admin = $this->admin();
         $campanha = $this->campanhaComVideos(1, 30);
-        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ERRO, 'meta_campaign_id' => 'camp1', 'ultimo_erro' => 'Falhou'])->save();
+        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ATIVA, 'meta_campaign_id' => 'camp1'])->save();
 
-        $rascunho = $this->campanhaComVideos(1, 30);
-        $this->actingAs($admin)->post(self::BASE."/{$rascunho->id}/assumir")->assertSessionHas('error');
-        $this->assertSame(MetaAdsCampanha::STATUS_RASCUNHO, $rascunho->fresh()->status);
-
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/assumir")->assertSessionHas('success');
-        $campanha->refresh();
-        $this->assertSame(MetaAdsCampanha::STATUS_GERENCIADOR, $campanha->status);
-        $this->assertNull($campanha->ultimo_erro);
-
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/enviar")->assertSessionHas('error');
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/pausar")->assertSessionHas('error');
-        Queue::assertNothingPushed();
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/assumir")->assertNotFound();
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
 
         $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('campanha.status_rotulo', 'Assumida no Gerenciador')
-                ->where('pode.enviar', false)
-                ->where('pode.assumir', false));
+                ->missing('pode.assumir'));
     }
 
     /**

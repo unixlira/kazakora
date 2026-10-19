@@ -275,13 +275,6 @@ class MetaAdsCampanha extends Model
         return $this->status === self::STATUS_ATIVA && $this->envioCompleto();
     }
 
-    /** Já tem algo na Meta e o envio não está rodando: dá para passar para o Gerenciador. */
-    public function podeAssumirNoGerenciador(): bool
-    {
-        return in_array($this->status, [self::STATUS_ERRO, self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA], true)
-            && filled($this->meta_campaign_id);
-    }
-
     /**
      * Opções extras de texto, sem vazio nem repetida.
      *

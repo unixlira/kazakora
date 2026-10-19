@@ -157,7 +157,6 @@ class MetaAdsController extends Controller
                 'ativar' => $campanha->podeAtivar(),
                 'pausar' => $campanha->podePausar(),
                 'excluir' => $campanha->podeExcluir(),
-                'assumir' => $campanha->podeAssumirNoGerenciador(),
                 'mexerNosVideos' => $campanha->podeMexerNosVideos(),
                 'adicionarConjunto' => $campanha->podeAdicionarConjunto() && $campanha->conjuntos->count() < MetaAdsCampanha::MAX_CONJUNTOS,
             ],
@@ -269,22 +268,6 @@ class MetaAdsController extends Controller
         }
 
         return back()->with('success', 'Campanha ativa na Meta. Já está gastando.');
-    }
-
-    /**
-     * Campanha terminada ou mexida à mão no Gerenciador da Meta: o KazaKora
-     * para de enviar, ativar e pausar (reenviar duplicaria anúncio no
-     * conjunto). Não chama a Meta.
-     */
-    public function assumir(MetaAdsCampanha $campanha): RedirectResponse
-    {
-        if (! $campanha->podeAssumirNoGerenciador()) {
-            return back()->with('error', 'Só dá para passar ao Gerenciador campanha que já existe na Meta e não está sendo enviada.');
-        }
-
-        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_GERENCIADOR, 'ultimo_erro' => null])->save();
-
-        return back()->with('success', 'Campanha marcada como assumida no Gerenciador da Meta. Daqui em diante, mexa nela por lá.');
     }
 
     public function pausar(MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse

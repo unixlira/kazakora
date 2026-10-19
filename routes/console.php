@@ -45,6 +45,9 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
 Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
+// Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
+// de hora em hora, e-mail só quando aparece pedido novo travado.
+Schedule::command('loja:nota-etiqueta-pendentes')->hourlyAt(10)->withoutOverlapping(30);
 Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 
 // Reconciliação periódica pedido/faturamento (2026-08-06) — rede de

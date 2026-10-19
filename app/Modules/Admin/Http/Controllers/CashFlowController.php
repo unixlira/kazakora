@@ -10,6 +10,7 @@ use App\Modules\Financeiro\Models\CashFlowEntry;
 use App\Modules\Financeiro\Support\AlertasFinanceiros;
 use App\Modules\Financeiro\Support\PrevisaoDeCaixa;
 use App\Modules\Financeiro\Support\RadarDeAds;
+use App\Modules\Financeiro\Support\SaldosCanais;
 use App\Modules\Marketplace\Models\OrderChannelFee;
 use App\Modules\Marketplace\Support\ContributionMargin;
 use App\Support\Http\TableSort;
@@ -24,13 +25,15 @@ use Inertia\Response;
 
 /**
  * Fluxo de Caixa (nova tela aprovada pelo Lira em 2026-10-19, proposta em
- * Documents/2026-10-19-proposta-fluxo-de-caixa.md). Três abas:
+ * Documents/2026-10-19-proposta-fluxo-de-caixa.md). Quatro abas:
  *
  * - Resumo: alertas, KPIs, cascata, lucro por canal, evolução, próximos 30
  *   dias e confiabilidade. Tudo pela conta oficial (ContributionMargin).
  * - Vendas (custo e comissão): a tabela item a item, agora pela mesma conta
  *   (ContributionMargin::porItem); antes fazia conta própria e dava margem
  *   4 vezes maior que a oficial.
+ * - Saldos nos canais (2026-10-19): saldo disponível e repasses a receber
+ *   de cada marketplace, por empresa, com a evolução de hora em hora.
  * - Lançamentos: entradas e saídas digitadas à mão, filtradas pelo período.
  *
  * Só a aba aberta é calculada: cada aba manda as próprias props.
@@ -39,7 +42,7 @@ class CashFlowController extends Controller
 {
     private const PER_PAGE = 50;
 
-    private const ABAS = ['resumo', 'vendas', 'lancamentos'];
+    private const ABAS = ['resumo', 'saldos', 'vendas', 'lancamentos'];
 
     /** Canais do filtro (FerraKora e Beauty Kora só aparecem com venda). */
     public const CANAIS = [
@@ -70,6 +73,10 @@ class CashFlowController extends Controller
 
         if ($aba === 'resumo') {
             $props += $this->propsResumo($filtro);
+        } elseif ($aba === 'saldos') {
+            // Fotos de hora em hora (financeiro:coletar-saldos): a aba não
+            // chama API de marketplace, só lê saldos_canais.
+            $props['saldos'] = fn () => app(SaldosCanais::class)->painel();
         } elseif ($aba === 'vendas') {
             $props += $this->propsVendas($request, $filtro);
         } else {

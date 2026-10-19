@@ -259,7 +259,10 @@ const horaCurta = (iso) => {
 
         <!-- 5. Dinheiro para receber -->
         <section class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm" aria-labelledby="rm-receber">
-            <h2 id="rm-receber" class="font-semibold">Dinheiro para receber</h2>
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 id="rm-receber" class="font-semibold">Dinheiro para receber</h2>
+                <Link href="/admin/fluxo-de-caixa?aba=saldos" class="text-sm font-semibold text-[var(--destaque)] hover:underline">Ver saldos nos canais, hora a hora</Link>
+            </div>
             <div class="mt-2 grid grid-cols-1 gap-5 lg:grid-cols-2">
                 <div>
                     <h3 class="mb-1 text-sm font-semibold">Disponível para saque agora</h3>

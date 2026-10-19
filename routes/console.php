@@ -265,6 +265,11 @@ Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverla
 // é a rede de segurança e o que pega a Shopee (sem push de devolução).
 Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverlapping(25);
 
+// Venda cancelada/estornada com NF-e autorizada e sem devolução (DAS de
+// setembro, 2026-10-19): todo dia lista e avisa no sino; emitir é manual,
+// com --pedido, porque há "cancelada" que na verdade valeu.
+Schedule::command('devolucoes:vendas-canceladas --simular --avisar')->dailyAt('08:20');
+
 // Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido
 // no consentimento, MENOS recibo retido como prova ou com pendência aberta
 // (ver PurgeKoraFlexReceiptImages). Existia desde 2026-09-10, mas nunca
@@ -345,6 +350,12 @@ Schedule::command('financeiro:vigiar-coletas')->hourlyAt(15)->withoutOverlapping
 // ADS de um canal acima de 6% da receita (mês ou 7 dias): aviso no sino do
 // admin, mesma regra e cadência do vigia do Homer (2026-10-19). Das 8h às 22h.
 Schedule::command('financeiro:vigiar-ads')->hourlyAt(25)->between('8:00', '22:00')->withoutOverlapping(10);
+
+// Saldo e repasses a receber de Shopee, Mercado Livre, TikTok e Amazon,
+// uma foto por hora para a aba "Saldos nos canais" do Fluxo de Caixa
+// (2026-10-19). Aos 10 minutos: o ads:sync-wallet-balance (hora cheia) já
+// deixou o saldo do Mercado Pago pronto. Fuso do app (America/Sao_Paulo).
+Schedule::command('financeiro:coletar-saldos')->hourlyAt(10)->withoutOverlapping(30);
 
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.

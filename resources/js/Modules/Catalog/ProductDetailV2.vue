@@ -284,6 +284,13 @@ const descriptionSections = computed(() => {
         .filter((item) => item.heading || item.parts.length);
 });
 
+// Selos abaixo do nome (padrão de todo produto desde 2026-10-19): empresa com
+// CNPJ e RA Verificada, e pagamento pelo checkout da loja.
+const SELOS_VERIFICADOS = [
+    ['Loja verificada', 'Empresa com CNPJ ativo e selo RA Verificada no Reclame Aqui'],
+    ['Compra segura', 'Pagamento processado com segurança; não guardamos dados do cartão'],
+];
+
 // Destaques do box de compra: os 3 primeiros itens da primeira lista da
 // própria descrição (nada inventado à parte).
 // Conteúdo do anúncio gerado (Gemini ou regra automática) — pedido
@@ -510,6 +517,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                 </button>
                             </div>
+
+                            <!-- Selos de confiança abaixo do nome, em todo produto (padrão desde
+                                 2026-10-19, como no FerraKora): só fatos de toda compra na loja. -->
+                            <ul class="selos-verificados" aria-label="Selos de verificação">
+                                <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica">
+                                    <svg class="icone" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
+                                    </svg>
+                                    {{ rotulo }}
+                                </li>
+                            </ul>
 
                             <!-- Estrelas e vendidos em destaque (pedido 2026-10-10: saem do card e
                                  ficam aqui). Vendidos no formato do Mercado Livre: +5, +10, +50, +100... -->
@@ -965,6 +983,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .nota .separador { color: var(--line); }
 .pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
+/* Selos de verificação abaixo do nome (padrão desde 2026-10-19) */
+.pd2 .selos-verificados { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; font-size: 13px; font-weight: 600; color: var(--ink); }
+.pd2 .selos-verificados li { display: inline-flex; align-items: center; gap: 5px; }
+.pd2 .selos-verificados .icone { width: 18px; height: 18px; fill: #1d9bf0; stroke: #fff; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
 /* Check sempre verde (o emoji ✔️ mudava de cor conforme o aparelho) — pedido 2026-10-10. */
 .pd2 .checks li i { color: #00a650; margin-right: 6px; font-size: 1.1em; -webkit-text-stroke: 0.8px #00a650; }

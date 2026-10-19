@@ -10,6 +10,7 @@ use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Services\AnuncioConteudoService;
 use App\Modules\Catalog\Support\MenuDaLoja;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
@@ -19,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -320,6 +322,34 @@ class CatalogController extends Controller
         return MenuDaLoja::departamentos();
     }
 
+    /**
+     * Todo produto novo nasce com o conteúdo da página (3 destaques, blocos
+     * com foto, benefícios), padrão desde 2026-10-19: se ainda não tem ou se
+     * nome/descrição/fotos mudaram (foto enviada sem salvar o cadastro,
+     * produto importado de canal), gera depois de responder. Cobre o homolog,
+     * que não roda o agendador de 15 minutos; no máximo 1 tentativa a cada
+     * 10 minutos por produto.
+     */
+    private function gerarConteudoAnuncioSeFaltar(Product $product): void
+    {
+        $servico = app(AnuncioConteudoService::class);
+
+        if (! $servico->precisaGerar($product) || ! Cache::add("conteudo-anuncio-visita:{$product->id}", 1, now()->addMinutes(10))) {
+            return;
+        }
+
+        $id = $product->id;
+
+        dispatch(static function () use ($id) {
+            $product = Product::query()->find($id);
+            $servico = app(AnuncioConteudoService::class);
+
+            if ($product && $servico->precisaGerar($product)) {
+                $servico->gerar($product);
+            }
+        })->afterResponse();
+    }
+
     public function show(Request $request, Product $product): Response
     {
         abort_unless($product->is_active, 404);
@@ -331,6 +361,8 @@ class CatalogController extends Controller
             // Benefícios + descrição em blocos (pedido 2026-10-09).
             'adContent',
         ]);
+
+        $this->gerarConteudoAnuncioSeFaltar($product);
 
         // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
         // todos os canais (loja e marketplaces), somando as variações.

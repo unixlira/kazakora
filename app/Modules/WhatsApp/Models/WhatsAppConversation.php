@@ -2,6 +2,7 @@
 
 namespace App\Modules\WhatsApp\Models;
 
+use App\Modules\WhatsApp\Support\WhatsAppPhone;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -60,6 +61,26 @@ class WhatsAppConversation extends Model
             'last_message_direction' => $message->direction,
             'unread_count' => $message->direction === 'inbound' ? $this->unread_count + 1 : $this->unread_count,
         ])->save();
+    }
+
+    /**
+     * Conversa deste número, com ou sem o nono dígito (a Meta manda o toque
+     * do cliente sem o 9 e o aviso do pedido sai com o 9). Havendo as duas,
+     * vale a mais recente.
+     */
+    public static function doNumero(?string $waId): ?self
+    {
+        return static::query()
+            ->whereIn('wa_id', WhatsAppPhone::variantes($waId))
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /** @param  array<string, mixed>  $criar */
+    public static function doNumeroOuCria(string $waId, array $criar = []): self
+    {
+        return static::doNumero($waId) ?? static::query()->create(['wa_id' => $waId] + $criar);
     }
 
     /** Janela de 24h da Meta: fora dela só template, texto livre é recusado. */

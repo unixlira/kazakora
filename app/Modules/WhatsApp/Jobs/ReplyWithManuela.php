@@ -163,6 +163,20 @@ class ReplyWithManuela
         $conversation->update(['last_auto_reply_at' => now()]);
     }
 
+    /**
+     * Botão de modelo que o sistema não conseguiu tratar (número que não
+     * bate com o pedido, pedido que não existe): em vez de silêncio, a
+     * Manuela responde pela última mensagem do cliente, com o histórico.
+     */
+    public static function passarAdiante(WhatsAppConversation $conversation): void
+    {
+        $ultima = $conversation->messages()->where('direction', 'inbound')->latest('id')->value('id');
+
+        if ($ultima && $conversation->ai_enabled) {
+            self::dispatchSync($conversation->id, $ultima);
+        }
+    }
+
     /** Resposta falada só para os números liberados (hoje: o do Lira). */
     private function audioReplyAllowed(WhatsAppConversation $conversation): bool
     {

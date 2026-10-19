@@ -48,6 +48,8 @@ class ChamarAtendentePedido implements ShouldQueue
         if (! $order || ! WhatsAppPhone::mesmoNumero($conversation->wa_id, [$order?->shipping_whatsapp, $order?->shipping_phone, $order?->user?->phone])) {
             Log::warning('whatsapp_atendente_pedido_numero_diferente', ['conversation_id' => $conversation->id, 'order_id' => $orderId]);
 
+            ReplyWithManuela::passarAdiante($conversation);
+
             return;
         }
 

@@ -7,6 +7,7 @@ import { Deferred, Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import AnuncioModais from './AnuncioModais.vue';
 import EspelhoMeta from './EspelhoMeta.vue';
+import GerenciarModais from './GerenciarModais.vue';
 import { formatarData, formatarNumero, formatarReais, STATUS_ESTILOS } from './metaAds';
 
 const props = defineProps({
@@ -47,7 +48,34 @@ const alvoDoCard = (v) => {
         ultimoAtivo: Boolean(a?.ultimo_ativo),
     };
 };
-const recarregarTudo = () => router.reload({ only: ['campanha', 'conjuntos', 'videos', 'pode', 'problemas', 'espelho'] });
+const recarregarTudo = (mudanca) => (mudanca?.nivel === 'campanha' && mudanca?.acao === 'excluir'
+    ? router.visit('/admin/publicidade/meta-ads/campanhas')
+    : router.reload({ only: ['campanha', 'conjuntos', 'videos', 'pode', 'problemas', 'espelho'] }));
+
+// Editar e excluir campanha e conjunto que já estão na Meta (2026-10-20), com
+// o que a Meta diz agora (nome, status, orçamento, gasto no período).
+const gerenciar = ref(null);
+const conjuntoNaMetaPorId = computed(() => Object.fromEntries((naMeta.value?.conjuntos ?? []).map((s) => [s.id, s])));
+const alvoDaCampanha = () => {
+    const m = naMeta.value;
+    const anuncios = m.conjuntos.reduce((t, s) => t + s.anuncios.length, 0);
+    return {
+        nivel: 'campanha', id: m.id, nome: m.nome, status: m.status, gasto: m.metricas?.gasto ?? 0,
+        orcamento_diario: m.orcamento_nivel === 'campanha' ? m.orcamento_diario : null,
+        dentro: `${plural(m.conjuntos.length, 'conjunto', 'conjuntos')} e ${plural(anuncios, 'anúncio', 'anúncios')}`,
+    };
+};
+const alvoDoConjunto = (cj) => {
+    const s = conjuntoNaMetaPorId.value[cj.meta_adset_id];
+    return {
+        nivel: 'conjunto', id: s.id, nome: s.nome, status: s.status, gasto: s.metricas?.gasto ?? 0,
+        orcamento_diario: naMeta.value.orcamento_nivel === 'conjunto' ? s.orcamento_diario : null,
+        dentro: s.anuncios.length ? plural(s.anuncios.length, 'anúncio', 'anúncios') : '',
+        ultimoAtivo: s.status === 'ACTIVE' && naMeta.value.conjuntos.filter((x) => x.status === 'ACTIVE').length === 1,
+    };
+};
+const gerenciaCampanha = computed(() => can('financeiro.create') && Boolean(naMeta.value) && c.value.status !== 'enviando');
+const gerenciaConjunto = (cj) => can('financeiro.create') && Boolean(conjuntoNaMetaPorId.value[cj.meta_adset_id]) && !cj.enviando && c.value.status !== 'enviando';
 
 const naMeta = computed(() => props.espelho?.campanhas?.[0] ?? null);
 const carregandoMeta = ref(false);
@@ -176,6 +204,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']">
                     <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
                 </Link>
+                <button v-else-if="gerenciaCampanha" type="button"
+                    :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="gerenciar.editar(alvoDaCampanha())">
+                    <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
+                </button>
                 <button v-if="pode.enviar && can('financeiro.create')" type="button" :disabled="processando || problemas.length > 0"
                     :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="c.status === 'erro' ? enviar() : (modalEnviar = true)">
                     <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i>
@@ -195,6 +227,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 </Link>
                 <button v-if="pode.excluir && can('financeiro.create')" type="button"
                     :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="excluir">
+                    <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir
+                </button>
+                <button v-else-if="gerenciaCampanha" type="button"
+                    :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="gerenciar.excluir(alvoDaCampanha())">
                     <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir
                 </button>
             </div>
@@ -309,10 +345,18 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 </span>
             </div>
 
-            <div v-if="can('financeiro.create') && cj.pode.acrescentarAnuncios && !cj.pode.editar" class="mb-3">
-                <Link :href="`${base}/conjuntos/${cj.id}/anuncios`" :class="[botao, 'border border-primary text-primary hover:bg-primary/10']">
+            <div v-if="can('financeiro.create') && ((cj.pode.acrescentarAnuncios && !cj.pode.editar) || gerenciaConjunto(cj))" class="mb-3 flex flex-wrap gap-2">
+                <Link v-if="cj.pode.acrescentarAnuncios && !cj.pode.editar" :href="`${base}/conjuntos/${cj.id}/anuncios`" :class="[botao, 'border border-primary text-primary hover:bg-primary/10']">
                     <i class="fas fa-plus text-xs" aria-hidden="true"></i> Acrescentar novos anúncios
                 </Link>
+                <template v-if="gerenciaConjunto(cj)">
+                    <button type="button" :aria-label="`Editar conjunto ${cj.nome}`" :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="gerenciar.editar(alvoDoConjunto(cj))">
+                        <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar conjunto
+                    </button>
+                    <button type="button" :aria-label="`Excluir conjunto ${cj.nome}`" :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="gerenciar.excluir(alvoDoConjunto(cj))">
+                        <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir conjunto
+                    </button>
+                </template>
             </div>
 
             <div v-if="cj.pode.editar || cj.pode.enviar || cj.pode.ativar || cj.enviando"
@@ -461,5 +505,6 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
         </ConfirmModal>
 
         <AnuncioModais ref="modais" :produtos="produtos" :chamadas="chamadas" @mudou="recarregarTudo" />
+        <GerenciarModais ref="gerenciar" @mudou="recarregarTudo" />
     </AdminLayout>
 </template>

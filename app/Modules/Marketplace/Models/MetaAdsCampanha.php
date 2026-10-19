@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * Meta ADS (2026-10-13): campanha montada no admin e enviada pela
@@ -208,13 +209,38 @@ class MetaAdsCampanha extends Model
         return $this->videos->contains(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta());
     }
 
-    /** Campanha e todos os anúncios com conjunto, criativo e anúncio na Meta. */
+    /**
+     * Campanha e todos os anúncios com conjunto, criativo e anúncio na Meta.
+     * Conjunto novo que ainda não subiu (adicionado depois do envio) não
+     * conta: a campanha segue podendo pausar e ativar enquanto ele é montado.
+     */
     public function envioCompleto(): bool
     {
+        $pendentes = $this->conjuntosNovosPendentes()->pluck('id');
+        $conjuntos = $this->conjuntos->whereNotIn('id', $pendentes);
+        $videos = $this->videos->whereNotIn('conjunto_id', $pendentes);
+
         return filled($this->meta_campaign_id)
-            && $this->videos->isNotEmpty()
-            && $this->conjuntos->every(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))
-            && $this->videos->every(fn (MetaAdsVideo $v) => $v->envioCompleto());
+            && $videos->isNotEmpty()
+            && $conjuntos->every(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))
+            && $videos->every(fn (MetaAdsVideo $v) => $v->envioCompleto());
+    }
+
+    /** @return Collection<int, MetaAdsConjunto> */
+    public function conjuntosNovosPendentes(): Collection
+    {
+        return $this->conjuntos->filter(fn (MetaAdsConjunto $c) => $c->novoPendente($this))->values();
+    }
+
+    /**
+     * Conjunto novo dentro de campanha que já está na Meta (pedido do Lira
+     * 2026-10-19). Vale também para campanha assumida no Gerenciador: o
+     * conjunto sobe sozinho, pausado, sem reenviar o resto.
+     */
+    public function podeAdicionarConjunto(): bool
+    {
+        return filled($this->meta_campaign_id)
+            && in_array($this->status, [self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA, self::STATUS_GERENCIADOR], true);
     }
 
     public function podeEditar(): bool

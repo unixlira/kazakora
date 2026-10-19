@@ -601,11 +601,106 @@ class MetaAdsService
         return $ativos->count() === 1 && $ativos->first() === (string) $video->meta_ad_id;
     }
 
-    /** O espelho fica guardado 2 minutos: depois de mudar algo, lê a Meta de novo. */
-    public function esquecerEspelho(?MetaAdsCampanha $campanha = null): void
+    // Editar e excluir campanha, conjunto e anúncio pelo id da Meta (2026-10-20) --
+
+    /** Nível na tela => campos lidos da Meta. */
+    private const CAMPOS_DO_NIVEL = [
+        'campanha' => 'id,name,account_id,effective_status,daily_budget,lifetime_budget',
+        'conjunto' => 'id,name,account_id,campaign_id,effective_status,daily_budget,lifetime_budget',
+        'anuncio' => 'id,name,account_id,campaign_id,adset_id,effective_status',
+    ];
+
+    /**
+     * Lê campanha, conjunto ou anúncio na Meta e confere que é da conta de
+     * anúncios da loja (o id vem da tela; nada fora da conta é tocado).
+     *
+     * @param  'campanha'|'conjunto'|'anuncio'  $nivel
+     * @return array{id: string, nome: string, status: string, campanha_id: ?string, conjunto_id: ?string, orcamento_diario: ?float, orcamento_total: ?float}
+     *
+     * @throws MetaAdsException
+     */
+    public function objeto(string $nivel, string $id): array
     {
+        $dados = $this->get($id, ['fields' => self::CAMPOS_DO_NIVEL[$nivel]]);
+
+        if ((string) ($dados['account_id'] ?? '') !== preg_replace('/^act_/', '', $this->conta())) {
+            throw new MetaAdsException('Este item não é da conta de anúncios da loja.');
+        }
+
+        return [
+            'id' => (string) $dados['id'],
+            'nome' => (string) ($dados['name'] ?? ''),
+            'status' => (string) ($dados['effective_status'] ?? ''),
+            'campanha_id' => $nivel === 'campanha' ? (string) $dados['id'] : (isset($dados['campaign_id']) ? (string) $dados['campaign_id'] : null),
+            'conjunto_id' => isset($dados['adset_id']) ? (string) $dados['adset_id'] : null,
+            'orcamento_diario' => $this->centavosEmReais($dados['daily_budget'] ?? null),
+            'orcamento_total' => $this->centavosEmReais($dados['lifetime_budget'] ?? null),
+        ];
+    }
+
+    /**
+     * Nome e, quando o orçamento é diário neste nível, o orçamento por dia.
+     *
+     * @param  array{id: string, campanha_id: ?string}  $objeto  (ver objeto())
+     *
+     * @throws MetaAdsException
+     */
+    public function editarObjeto(array $objeto, string $nome, ?float $orcamentoDiario): void
+    {
+        $dados = ['name' => $nome];
+        if ($orcamentoDiario !== null) {
+            $dados['daily_budget'] = (int) round($orcamentoDiario * 100);
+        }
+
+        $this->post($objeto['id'], $dados);
+        $this->esquecerEspelho($objeto['campanha_id']);
+    }
+
+    /**
+     * Excluir na Meta é status DELETED (definitivo). Na campanha e no
+     * conjunto a Meta exclui junto o que está dentro.
+     *
+     * @param  array{id: string, campanha_id: ?string}  $objeto
+     *
+     * @throws MetaAdsException
+     */
+    public function excluirObjeto(array $objeto): void
+    {
+        $this->post($objeto['id'], ['status' => 'DELETED']);
+        $this->esquecerEspelho($objeto['campanha_id']);
+    }
+
+    /**
+     * É o único conjunto ativo da campanha, ou o único anúncio ativo do
+     * conjunto? (sem ele, a campanha ou o conjunto para de entregar)
+     *
+     * @param  'conjunto'|'anuncio'  $nivel
+     * @param  array{id: string, status: string, campanha_id: ?string, conjunto_id: ?string}  $objeto
+     *
+     * @throws MetaAdsException
+     */
+    public function unicoAtivo(string $nivel, array $objeto): bool
+    {
+        $pai = $nivel === 'conjunto' ? $objeto['campanha_id'] : $objeto['conjunto_id'];
+        if (blank($pai) || $objeto['status'] !== 'ACTIVE') {
+            return false;
+        }
+
+        $ativos = collect($this->getPaginado($pai.($nivel === 'conjunto' ? '/adsets' : '/ads'), ['fields' => 'id,effective_status', 'limit' => 100]))
+            ->filter(fn (array $item) => ($item['effective_status'] ?? '') === 'ACTIVE')
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id);
+
+        return $ativos->count() === 1 && $ativos->first() === $objeto['id'];
+    }
+
+    /** O espelho fica guardado 2 minutos: depois de mudar algo, lê a Meta de novo. */
+    public function esquecerEspelho(MetaAdsCampanha|string|null $campanha = null): void
+    {
+        $campanhaId = $campanha instanceof MetaAdsCampanha ? $campanha->meta_campaign_id : $campanha;
+
         foreach (array_keys(self::PERIODOS) as $periodo) {
-            foreach (array_unique([null, $campanha?->meta_campaign_id]) as $id) {
+            foreach (array_unique([null, $campanhaId]) as $id) {
                 Cache::forget('meta-ads:espelho:'.md5($this->conta().'|'.$periodo.'|'.$id));
             }
         }

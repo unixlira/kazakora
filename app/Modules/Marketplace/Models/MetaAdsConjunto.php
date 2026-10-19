@@ -5,6 +5,7 @@ namespace App\Modules\Marketplace\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
 /**
@@ -13,9 +14,15 @@ use Illuminate\Support\Collection;
  * set na Meta. O público é o da campanha, a menos que publico_proprio
  * esteja ligado; o orçamento só vale quando a campanha divide o orçamento
  * por conjunto.
+ *
+ * Desde 2026-10-20 o conjunto que já está na Meta pode ser editado (nome e
+ * orçamento) e excluído pelo admin; excluído na Meta fica no banco
+ * (SoftDeletes). Conjunto que nunca subiu sai de vez (forceDelete).
  */
 class MetaAdsConjunto extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'meta_ads_conjuntos';
 
     protected $fillable = [

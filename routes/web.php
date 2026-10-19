@@ -705,6 +705,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/conjuntos/{conjunto}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoEnviar'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/conjuntos/{conjunto}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoAtivar'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
     });
+    // Editar e excluir campanha, conjunto e anúncio pelo id da Meta (Lira
+    // 2026-10-20), inclusive os criados direto no Gerenciador.
+    Route::prefix('publicidade/meta-ads/gerenciar')->name('publicidade.meta-ads.gerenciar.')->group(function () {
+        Route::put('{nivel}/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'update'])->whereIn('nivel', ['campanha', 'conjunto', 'anuncio'])->whereNumber('metaId')->name('atualizar')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+        Route::delete('{nivel}/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'destroy'])->whereIn('nivel', ['campanha', 'conjunto', 'anuncio'])->whereNumber('metaId')->name('excluir')->middleware(['permission:financeiro.create', 'throttle:20,1']);
+    });
     // Estratégia Shopee, botão Ação (tarefa 569, 2026-10-14): o Cauê pausa,
     // retoma ou muda a meta de ROAS da campanha do produto, só pelo clique
     // do Lira. Escrita real só com SHOPEE_ADS_ESCRITA=true; sem ela, simula.

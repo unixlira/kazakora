@@ -419,6 +419,225 @@ class MetaAdsService
         $conjunto->forceFill(['ativado_em' => $conjunto->ativado_em ?? now(), 'ultimo_erro' => null])->save();
     }
 
+    // Editar e excluir anúncio que já está na Meta (2026-10-19) ---------------
+
+    /**
+     * Nome do anúncio na Meta: o escolhido no KazaKora ou o automático
+     * "campanha | conjunto | anúncio N (arquivo)".
+     */
+    public function nomeDoAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video, ?MetaAdsConjunto $conjunto = null): string
+    {
+        if (filled($video->nome)) {
+            return (string) $video->nome;
+        }
+
+        $conjunto ??= $campanha->relationLoaded('conjuntos')
+            ? $campanha->conjuntos->firstWhere('id', $video->conjunto_id)
+            : $video->conjunto;
+
+        return $campanha->nome.' | '.($conjunto?->nome ?? 'Conjunto').' | '.$this->rotuloDoAnuncio($video);
+    }
+
+    /**
+     * Aplica na Meta a edição guardada em edicao_pendente e, só depois que
+     * a Meta aceita, grava os campos no anúncio local. Texto, link, botão
+     * ou arquivo novo = criativo novo (adcreatives) e o anúncio passa a
+     * usar ele (POST no ad com creative); só o nome = POST no ad com name.
+     *
+     * edicao_pendente: {campos: array, nome: ?string, muda_criativo: bool,
+     * midia: ?array (arquivo novo: tipo, path, ... e os ids que a Meta
+     * devolver no caminho)}.
+     *
+     * Vídeo novo precisa a Meta processar antes de virar criativo: devolve
+     * ENVIO_CONTINUAR/ENVIO_AGUARDANDO e o job (TrocarCriativoMetaAds)
+     * chama de novo. Sem arquivo ou com imagem, resolve numa chamada só.
+     *
+     * Erro da Meta: descarta a edição (o anúncio fica como estava), apaga
+     * o arquivo novo e relança. Com $gravarErro o erro fica no anúncio
+     * (envio em segundo plano, a tela mostra).
+     *
+     * @return self::ENVIO_*
+     *
+     * @throws MetaAdsException
+     */
+    public function avancarEdicao(MetaAdsCampanha $campanha, MetaAdsVideo $video, bool $gravarErro = false): string
+    {
+        $pendente = $video->edicao_pendente;
+        if (blank($pendente) || blank($video->meta_ad_id)) {
+            return self::ENVIO_PRONTO;
+        }
+
+        $midia = $pendente['midia'] ?? null;
+        $guardar = function () use ($video, &$pendente, &$midia) {
+            $pendente['midia'] = $midia;
+            $video->forceFill(['edicao_pendente' => $pendente])->save();
+        };
+
+        try {
+            if ($midia) {
+                $alvo = $this->versaoEditada($video, $pendente);
+
+                if ($alvo->ehImagem()) {
+                    if (blank($midia['meta_image_hash'] ?? null)) {
+                        [$hash, $url] = $this->subirImagem($alvo);
+                        $midia['meta_image_hash'] = $hash;
+                        $midia['meta_thumbnail_url'] = $url;
+                        $guardar();
+                    }
+                } else {
+                    if ($alvo->precisaFicarVertical() && blank($midia['path_vertical'] ?? null) && blank($midia['meta_video_id'] ?? null)) {
+                        $midia['path_vertical'] = $this->deixarVertical($alvo);
+                        $guardar();
+
+                        return self::ENVIO_CONTINUAR;
+                    }
+                    if (blank($midia['meta_video_id'] ?? null)) {
+                        $midia['meta_video_id'] = $this->subirVideo($alvo);
+                        $guardar();
+
+                        return self::ENVIO_CONTINUAR;
+                    }
+                    if (blank($midia['meta_thumbnail_url'] ?? null)) {
+                        $capa = $this->capaSeProcessado((string) $midia['meta_video_id']);
+                        if ($capa === null) {
+                            return self::ENVIO_AGUARDANDO;
+                        }
+                        $midia['meta_thumbnail_url'] = $capa;
+                        $guardar();
+                    }
+                }
+            }
+
+            $alvo = $this->versaoEditada($video, $pendente);
+            $dados = [];
+            $criativo = null;
+
+            if ($pendente['muda_criativo'] ?? false) {
+                $criativo = $this->criarCriativo($campanha, $alvo);
+                $dados['creative'] = json_encode(['creative_id' => $criativo]);
+            }
+            if (filled($pendente['nome'] ?? null)) {
+                $dados['name'] = (string) $pendente['nome'];
+            }
+            if ($dados !== []) {
+                $this->post((string) $video->meta_ad_id, $dados);
+            }
+        } catch (MetaAdsException $erro) {
+            $this->descartarEdicao($video, $gravarErro ? 'Não deu para salvar na Meta: '.$erro->getMessage().'. Nada foi alterado.' : null);
+
+            throw $erro;
+        }
+
+        // A Meta aceitou: agora o anúncio local muda.
+        $antigos = $midia ? array_filter([$video->path, $video->path_vertical]) : [];
+        $video->forceFill(
+            ($pendente['campos'] ?? [])
+            + (filled($pendente['nome'] ?? null) ? ['nome' => $pendente['nome']] : [])
+            + ($midia ? self::camposDaMidia($midia) : [])
+            + ($criativo ? ['meta_creative_id' => $criativo] : [])
+            + ['edicao_pendente' => null, 'ultimo_erro' => null]
+        )->save();
+
+        if ($antigos !== []) {
+            Storage::disk('local')->delete(array_values(array_diff($antigos, array_filter([$video->path, $video->path_vertical]))));
+        }
+
+        $this->esquecerEspelho($campanha);
+
+        return self::ENVIO_PRONTO;
+    }
+
+    /** Desiste da edição pendente: apaga o arquivo novo; o anúncio fica como estava. */
+    public function descartarEdicao(MetaAdsVideo $video, ?string $erro = null): void
+    {
+        $midia = $video->edicao_pendente['midia'] ?? null;
+        if ($midia) {
+            $manter = array_filter([$video->path, $video->path_vertical]);
+            Storage::disk('local')->delete(array_values(array_diff(array_filter([$midia['path'] ?? null, $midia['path_vertical'] ?? null]), $manter)));
+        }
+
+        $video->forceFill(['edicao_pendente' => null] + ($erro !== null ? ['ultimo_erro' => mb_substr($erro, 0, 1000)] : []))->save();
+    }
+
+    /**
+     * Excluir o anúncio na Meta: status DELETED (a doc da Meta aceita isso
+     * ou DELETE no objeto; os dois são definitivos). As métricas continuam
+     * consultáveis pelo id do anúncio.
+     *
+     * @throws MetaAdsException
+     */
+    public function excluirAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video): void
+    {
+        $this->post((string) $video->meta_ad_id, ['status' => 'DELETED']);
+        $this->esquecerEspelho($campanha);
+    }
+
+    /** @throws MetaAdsException */
+    public function pausarAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video): void
+    {
+        $this->post((string) $video->meta_ad_id, ['status' => 'PAUSED']);
+        $video->forceFill(['ativado_em' => null])->save();
+        $this->esquecerEspelho($campanha);
+    }
+
+    /**
+     * O anúncio é o único ativo do conjunto na Meta? (sem ele o conjunto
+     * para de entregar)
+     *
+     * @throws MetaAdsException
+     */
+    public function ultimoAtivoDoConjunto(MetaAdsVideo $video): bool
+    {
+        $adset = (string) $video->meta_adset_id;
+        if ($adset === '') {
+            return false;
+        }
+
+        $ativos = collect($this->getPaginado($adset.'/ads', ['fields' => 'id,effective_status', 'limit' => 100]))
+            ->filter(fn (array $a) => ($a['effective_status'] ?? '') === 'ACTIVE')
+            ->pluck('id')
+            ->map(fn ($id) => (string) $id);
+
+        return $ativos->count() === 1 && $ativos->first() === (string) $video->meta_ad_id;
+    }
+
+    /** O espelho fica guardado 2 minutos: depois de mudar algo, lê a Meta de novo. */
+    public function esquecerEspelho(?MetaAdsCampanha $campanha = null): void
+    {
+        foreach (array_keys(self::PERIODOS) as $periodo) {
+            foreach (array_unique([null, $campanha?->meta_campaign_id]) as $id) {
+                Cache::forget('meta-ads:espelho:'.md5($this->conta().'|'.$periodo.'|'.$id));
+            }
+        }
+    }
+
+    /** Cópia do anúncio (sem gravar) com os campos e o arquivo da edição. */
+    private function versaoEditada(MetaAdsVideo $video, array $pendente): MetaAdsVideo
+    {
+        $alvo = $video->replicate(['edicao_pendente']);
+        $alvo->forceFill(($pendente['campos'] ?? []) + (($pendente['midia'] ?? null) ? self::camposDaMidia($pendente['midia']) : []));
+
+        return $alvo;
+    }
+
+    /** @return array<string, mixed> */
+    private static function camposDaMidia(array $midia): array
+    {
+        return [
+            'tipo' => $midia['tipo'],
+            'path' => $midia['path'],
+            'nome_original' => $midia['nome_original'],
+            'tamanho' => $midia['tamanho'],
+            'duracao_segundos' => $midia['duracao_segundos'] ?? null,
+            'largura' => $midia['largura'] ?? null,
+            'altura' => $midia['altura'] ?? null,
+            'path_vertical' => $midia['path_vertical'] ?? null,
+            'meta_video_id' => $midia['meta_video_id'] ?? null,
+            'meta_image_hash' => $midia['meta_image_hash'] ?? null,
+            'meta_thumbnail_url' => $midia['meta_thumbnail_url'] ?? null,
+        ];
+    }
+
     /**
      * O que impede o envio do conjunto novo (lista vazia = pode enviar).
      *
@@ -673,6 +892,15 @@ class MetaAdsService
         return $campanha->meta_campaign_id
             ? $url.'&selected_campaign_ids='.urlencode($campanha->meta_campaign_id)
             : $url;
+    }
+
+    /** Anúncio aberto no Gerenciador (espelho, anúncio criado direto lá). */
+    public function linkAnuncioGerenciador(string $adId): ?string
+    {
+        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+
+        return $conta === '' ? null
+            : 'https://adsmanager.facebook.com/adsmanager/manage/ads?act='.urlencode($conta).'&selected_ad_ids='.urlencode($adId);
     }
 
     // Payloads ---------------------------------------------------------------
@@ -952,7 +1180,7 @@ class MetaAdsService
     public function payloadAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsConjunto $conjunto): array
     {
         return [
-            'name' => $campanha->nome.' | '.$conjunto->nome.' | '.$this->rotuloDoAnuncio($video),
+            'name' => $this->nomeDoAnuncio($campanha, $video, $conjunto),
             'adset_id' => $video->meta_adset_id,
             'creative' => json_encode(['creative_id' => $video->meta_creative_id]),
             'status' => 'PAUSED',

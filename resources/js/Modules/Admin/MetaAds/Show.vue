@@ -5,6 +5,7 @@ import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
 import { Deferred, Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import AnuncioModais from './AnuncioModais.vue';
 import EspelhoMeta from './EspelhoMeta.vue';
 import { formatarData, formatarNumero, formatarReais, STATUS_ESTILOS } from './metaAds';
 
@@ -25,7 +26,28 @@ const props = defineProps({
     // Prop adiada (2026-10-18): a campanha como está na Meta, com conjuntos e
     // anúncios feitos direto no Gerenciador também.
     espelho: { type: Object, default: null },
+    produtos: { type: Array, default: () => [] },
 });
+
+// Editar e excluir anúncio (2026-10-19): no card usa o que a Meta diz agora
+// (nome, status, gasto no período, último ativo do conjunto), se já carregou.
+const modais = ref(null);
+const naMetaPorId = computed(() => {
+    const mapa = {};
+    (props.espelho?.campanhas ?? []).forEach((camp) => camp.conjuntos.forEach((s) => s.anuncios.forEach((a) => { mapa[a.id] = a; })));
+    return mapa;
+});
+const alvoDoCard = (v) => {
+    const a = v.meta_ad_id ? naMetaPorId.value[v.meta_ad_id] : null;
+    return {
+        local: v.editar,
+        nome: a?.nome ?? v.editar.nome,
+        status: a?.status ?? null,
+        gasto: a?.metricas?.gasto ?? v.desempenho?.gasto ?? 0,
+        ultimoAtivo: Boolean(a?.ultimo_ativo),
+    };
+};
+const recarregarTudo = () => router.reload({ only: ['campanha', 'conjuntos', 'videos', 'pode', 'problemas', 'espelho'] });
 
 const naMeta = computed(() => props.espelho?.campanhas?.[0] ?? null);
 const carregandoMeta = ref(false);
@@ -84,7 +106,7 @@ const excluir = async () => {
 // Enquanto envia (a campanha ou um conjunto novo), a tela se atualiza
 // sozinha a cada 5 s para mostrar o andamento de cada vídeo.
 let timer = null;
-const enviandoAlgo = computed(() => c.value.status === 'enviando' || props.conjuntos.some((cj) => cj.enviando));
+const enviandoAlgo = computed(() => c.value.status === 'enviando' || props.conjuntos.some((cj) => cj.enviando) || props.videos.some((v) => v.editar?.trocando_arquivo));
 const acompanhar = (enviando) => {
     clearInterval(timer);
     if (enviando) {
@@ -261,7 +283,8 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 <p v-if="espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
                     Não deu para ler a Meta agora: {{ espelho.erro }}
                 </p>
-                <EspelhoMeta v-else :campanhas="espelho?.campanhas ?? []" abrir-tudo :class="{ 'opacity-60': carregandoMeta }" />
+                <EspelhoMeta v-else :campanhas="espelho?.campanhas ?? []" abrir-tudo sem-link-local :editar-anuncios="can('financeiro.create')"
+                    :produtos="produtos" :chamadas="chamadas" :class="{ 'opacity-60': carregandoMeta }" @mudou="recarregarTudo" />
             </Deferred>
             <p class="mt-2 text-xs text-slate-500">Resultado que a própria Meta atribui. O lucro de verdade fica em Resultado e margem.</p>
         </section>
@@ -355,6 +378,21 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                             <dt class="text-slate-500">Compras</dt><dd class="text-right">{{ formatarNumero(v.desempenho.compras) }}</dd>
                             <dt class="text-slate-500">ROAS</dt><dd class="text-right font-medium">{{ roas(v.desempenho) }}</dd>
                         </dl>
+                        <p v-if="v.editar?.trocando_arquivo" class="flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-300" role="status" aria-live="polite">
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> A Meta está processando o arquivo novo
+                        </p>
+                    </div>
+                    <div v-if="can('financeiro.create') && v.editar" class="flex flex-wrap gap-1.5 border-t border-[var(--surface-border)] px-3 py-2">
+                        <button type="button" :disabled="processando || Boolean(v.editar.bloqueio)" :title="v.editar.bloqueio ?? undefined" :aria-label="`Editar anúncio ${alvoDoCard(v).nome}`"
+                            class="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                            @click="modais.editar(alvoDoCard(v))">
+                            <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar
+                        </button>
+                        <button type="button" :disabled="processando || Boolean(v.editar.bloqueio)" :title="v.editar.bloqueio ?? undefined" :aria-label="`Excluir anúncio ${alvoDoCard(v).nome}`"
+                            class="inline-flex items-center gap-1 rounded-md border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-500/10"
+                            @click="modais.excluir(alvoDoCard(v))">
+                            <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
+                        </button>
                     </div>
                 </li>
             </ul>
@@ -422,5 +460,6 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             <p class="text-sm">A campanha para de gastar. Dá para ativar de novo depois.</p>
         </ConfirmModal>
 
+        <AnuncioModais ref="modais" :produtos="produtos" :chamadas="chamadas" @mudou="recarregarTudo" />
     </AdminLayout>
 </template>

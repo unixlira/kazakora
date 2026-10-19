@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Modules\Checkout\Jobs\EnviarEmailPedidoEnviadoJob;
 use App\Modules\Checkout\Jobs\SendOrderDeliveredWhatsAppJob;
 use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
 use App\Modules\Checkout\Jobs\SendOrderTrackingTextWhatsAppJob;
@@ -26,7 +27,8 @@ use Throwable;
  * Correios nem o KoraSync avisam o despacho (sem webhook), e até hoje pedido
  * da loja ficava "pago" para sempre. A cada 30 minutos consulta o objeto da
  * pré-postagem: primeiro evento físico (postagem) vira "enviado" e manda o
- * WhatsApp "Seu pedido saiu para entrega"; entregue vira "concluído" e
+ * WhatsApp "Seu pedido saiu para entrega" e o e-mail "Seu pedido foi
+ * enviado" (EnviarEmailPedidoEnviadoJob); entregue vira "concluído" e
  * manda o WhatsApp "Seu pedido foi entregue" (SendOrderDeliveredWhatsAppJob).
  * Entrega numa cidade diferente da do pedido é devolução ao remetente (os
  * Correios marcam como BDE/01): não conclui, não avisa o cliente e chama
@@ -43,7 +45,7 @@ use Throwable;
  * Logística › Rastreio), para de consultar objeto entregue ou devolvido e
  * também guarda o histórico dos objetos dos Correios de outros canais
  * (Amazon, Mercado Livre), só para consulta: status e aviso desses pedidos
- * continuam com o canal. Os avisos de WhatsApp ao cliente só saem com
+ * continuam com o canal. Os avisos de WhatsApp (e o e-mail de enviado) ao cliente só saem com
  * CORREIOS_RASTREIO_WHATSAPP=true (services.correios.rastreio_whatsapp);
  * desligado, o resto (histórico e status) roda igual. Docs em
  * docs/correios-rastro.md.
@@ -162,6 +164,12 @@ class AcompanharRastreioLoja extends Command
                     if ($order->status === Order::STATUS_PAID) {
                         $pedidos->syncStatus($order, Order::STATUS_SHIPPED, 'correios:postado');
                         $contagem['enviados']++;
+
+                        // E-mail "Seu pedido foi enviado" (2026-10-19), uma vez, na virada para enviado.
+                        // Mesma chave dos avisos de WhatsApp: desligada, o cliente não recebe nada.
+                        if ($whatsapp && self::recente($r['postado_em'])) {
+                            EnviarEmailPedidoEnviadoJob::dispatch($order->id, $r['previsao']?->toDateString());
+                        }
                     }
 
                     // Texto sai na hora, sem fila: as etapas chegam em ordem e o

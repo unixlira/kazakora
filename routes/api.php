@@ -178,6 +178,8 @@ Route::prefix('print-agent')->name('api.print-agent.')->middleware('print.agent'
     Route::post('/dashboard/queue/{order}/video', [DashboardAgentController::class, 'uploadPackingVideo'])->name('dashboard.queue.video.upload');
     Route::get('/dashboard/queue/{order}/video', [DashboardAgentController::class, 'packingVideo'])->name('dashboard.queue.video');
     Route::post('/dashboard/queue/{order}/desfazer-separacao', [DashboardAgentController::class, 'unseparateOrder'])->name('dashboard.queue.unseparate');
+    Route::post('/dashboard/queue/{order}/conferido', [DashboardAgentController::class, 'markChecked'])->name('dashboard.queue.checked');
+    Route::post('/dashboard/queue/{order}/desfazer-conferido', [DashboardAgentController::class, 'unmarkChecked'])->name('dashboard.queue.unchecked');
     Route::get('/dashboard/queue/{order}/etiqueta-status', [DashboardAgentController::class, 'labelStatus'])->name('dashboard.queue.label-status');
     Route::post('/dashboard/queue/{order}/reimprimir', [DashboardAgentController::class, 'reprintLabel'])->name('dashboard.queue.reprint');
     // "Gerar etiquetas em lote" (2026-09-07): imprime de uma vez toda

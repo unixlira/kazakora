@@ -319,15 +319,17 @@ watch(
                                 <!-- Cor só no item ativo (2026-10-11): fundo azul translúcido (--menu-ativo, mesmo azul da seta, 2026-10-19),
                                 texto e ícone na cor de destaque (grafite no claro, laranja
                                 no escuro) e barra de 3px à esquerda. Ícones sempre coloridos
-                                (2026-10-14), ativos ou não: cor da marca ou do assunto. -->
+                                (2026-10-14), ativos ou não: cor da marca ou do assunto.
+                                Item dentro de grupo (2026-10-19): recuo antes do ícone e fonte
+                                13px para ler como submenu do título; itens diretos ficam como estão. -->
                                 <div class="flex items-center">
                                     <Link :href="item.href" :title="item.label"
-                                        class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
-                                        :class="isActive(item.href)
+                                        class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] font-medium transition-colors"
+                                        :class="[!sidebarCollapsed && !section.direto ? 'py-2 pl-3 text-[13px]' : 'py-2.5 text-sm', isActive(item.href)
                                             ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
-                                            : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                            : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                         :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
-                                        <i class="w-8 text-center text-sm" :class="[item.icon, classeIcone(item)]"></i>
+                                        <i class="w-8 text-center" :class="[item.icon, classeIcone(item), !sidebarCollapsed && !section.direto ? 'text-xs' : 'text-sm']"></i>
                                         <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                         <span v-if="sidebarBadge(item) > 0"
                                             class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"
@@ -343,14 +345,15 @@ watch(
                                     </button>
                                 </div>
                                 <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
-                                recuado embaixo do pai; com o menu recolhido fica só o ícone. -->
+                                recuado embaixo do pai; com o menu recolhido fica só o ícone.
+                                Espaço antes do ícone e fonte menor (2026-10-19) para ler como item de dentro. -->
                                 <ul v-if="item.children" v-show="sidebarCollapsed || submenuAberto(item)" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
                                     <li v-for="filho in item.children" :key="filho.href">
                                         <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
-                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"
-                                            :class="isActive(filho.href)
+                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-[13px] font-medium transition-colors"
+                                            :class="[{ 'pl-3': !sidebarCollapsed }, isActive(filho.href)
                                                 ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
-                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
                                             <i class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
                                             <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>

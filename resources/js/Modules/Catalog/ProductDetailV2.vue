@@ -620,10 +620,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </header>
 
                             <div v-if="blocosAnuncio.length" class="descricao">
-                                <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio">
-                                    <h3>{{ bloco.titulo }}</h3>
-                                    <img v-if="imagemDoBloco(bloco.imagem)" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
-                                    <p>{{ bloco.texto }}</p>
+                                <!-- Foto pequena ao lado do texto, alternando o lado a cada bloco, na
+                                     estrutura da página do FerraKora (pedido 2026-10-19). -->
+                                <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio"
+                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
+                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
+                                    <div>
+                                        <h3>{{ bloco.titulo }}</h3>
+                                        <p>{{ bloco.texto }}</p>
+                                    </div>
                                 </article>
 
                                 <div v-if="anuncio.comparativo?.linhas?.length" class="bloco-anuncio">
@@ -1003,8 +1008,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }
-.pd2 .bloco-anuncio img { width: 100%; max-width: 600px; height: auto; margin: 0 auto 16px; border-radius: 2px; }
 .pd2 .bloco-anuncio p { font-size: 16px; line-height: 1.7; }
+.pd2 .bloco-anuncio > div > :last-child { margin-bottom: 0; }
+.pd2 .com-foto { display: grid; grid-template-columns: minmax(0, 320px) 1fr; gap: 32px; align-items: center; }
+.pd2 .com-foto.foto-direita { grid-template-columns: 1fr minmax(0, 320px); }
+.pd2 .com-foto.foto-direita .foto-desc { order: 2; }
+.pd2 .foto-desc { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; background: #fff; border: 1px solid var(--line); }
 .pd2 .tabela-wrap { overflow-x: auto; }
 .pd2 .comparativo { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0; }
 .pd2 .comparativo th, .pd2 .comparativo td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
@@ -1123,6 +1132,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 h2 { font-size: 24px; }
     .pd2 .desc-cabecalho h2 { font-size: 22px; }
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
+    .pd2 .com-foto, .pd2 .com-foto.foto-direita { grid-template-columns: 1fr; gap: 14px; }
+    .pd2 .com-foto.foto-direita .foto-desc { order: 0; }
+    .pd2 .foto-desc { max-width: 320px; margin: 0 auto; }
     .pd2 .compra h1 { font-size: 20px; }
     .pd2 .nota { font-size: 14px; }
     .pd2 .galeria { flex-direction: column; gap: 10px; }

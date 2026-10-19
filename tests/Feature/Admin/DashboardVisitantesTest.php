@@ -56,7 +56,7 @@ class DashboardVisitantesTest extends TestCase
         $this->visita('duda', '2026-10-11 14:02:00', null, 1, true, '5.5.5.5');
 
         // Hoje: ana(3), bia, carla, IP 4.4.4.4 (2), duda (2) = 5 visitantes, 9 páginas.
-        $this->actingAs($admin)->get('/admin')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos')->assertOk()->assertInertia(fn ($page) => $page
             ->where('visitantes.mes', '2026-10')
             ->where('visitantes.visitantesHoje', 5)
             ->where('visitantes.paginasHoje', 9)
@@ -72,7 +72,7 @@ class DashboardVisitantesTest extends TestCase
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $this->visita('caio', '2026-09-20 10:00:00', null, 2);
 
-        $this->actingAs($admin)->get('/admin?mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos&mes=2026-09')->assertOk()->assertInertia(fn ($page) => $page
             ->where('visitantes.mes', '2026-09')
             ->where('visitantes.mesAtual', false)
             ->where('visitantes.visitantesHoje', null)

@@ -8,6 +8,7 @@ use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -113,6 +114,20 @@ class WhatsAppInboxTest extends TestCase
         $this->assertSame(1, WhatsAppMessage::query()->where('direction', 'inbound')->count());
         $this->assertSame(1, WhatsAppMessage::query()->where('direction', 'outbound')->count());
         $this->assertSame(1, WhatsAppConversation::query()->first()->unread_count);
+    }
+
+    public function test_horario_da_mensagem_recebida_fica_no_fuso_de_sao_paulo(): void
+    {
+        // Meta manda o horário em Unix (UTC); 11:43 em SP não pode virar 14:43.
+        Carbon::setTestNow(Carbon::parse('2026-10-19 11:43:18', 'America/Sao_Paulo'));
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.OUT']]])]);
+
+        $this->postJson('/api/whatsapp/webhook', $this->inbound('wamid.FUSO', 'Oi'))->assertOk();
+
+        $message = WhatsAppMessage::query()->where('direction', 'inbound')->firstOrFail();
+        $this->assertSame('2026-10-19 11:43:18', $message->getRawOriginal('received_at'));
+        $this->assertSame('2026-10-19 11:43:18', WhatsAppConversation::query()->first()->getRawOriginal('last_message_at'));
+        Carbon::setTestNow();
     }
 
     public function test_tag_humano_sinaliza_a_conversa(): void

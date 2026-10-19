@@ -153,7 +153,7 @@ class WhatsAppWebhookController extends Controller
             ?? $message[$type]['caption']
             ?? $message['document']['filename']
             ?? (isset($message['location']) ? trim(($message['location']['name'] ?? '').' '.($message['location']['address'] ?? '')) ?: null : null);
-        $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp']) : now();
+        $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp'], config('app.timezone')) : now();
         $waId = $message['from'];
 
         $conversation = WhatsAppConversation::query()->firstOrNew(['wa_id' => $waId]);

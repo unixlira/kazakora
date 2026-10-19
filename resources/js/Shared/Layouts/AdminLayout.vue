@@ -324,7 +324,7 @@ watch(
                                     <Link :href="item.href" :title="item.label"
                                         class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
                                         :class="isActive(item.href)
-                                            ? 'border-[var(--destaque)] bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
+                                            ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
                                         :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
                                         <i class="w-8 text-center text-sm" :class="[item.icon, classeIcone(item)]"></i>
@@ -349,7 +349,7 @@ watch(
                                         <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
                                             class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"
                                             :class="isActive(filho.href)
-                                                ? 'border-[var(--destaque)] bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
+                                                ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
                                                 : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
                                             <i class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
@@ -366,7 +366,7 @@ watch(
                     <ul class="mb-4 flex list-none flex-col md:min-w-full md:flex-col">
                         <li v-if="user?.role === 'admin'">
                             <Link href="/admin/filas" class="flex items-center gap-2 rounded-lg border-l-[3px] py-2.5 text-sm font-medium transition-colors"
-                                :class="urlPath === '/admin/filas' ? 'border-[var(--destaque)] bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
+                                :class="urlPath === '/admin/filas' ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]' : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'" title="Horizon">
                                 <i class="fas fa-layer-group icone-cor icone-cor-violeta w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Horizon</span>
                             </Link>

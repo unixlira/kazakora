@@ -99,4 +99,26 @@ class ConfirmacaoPedidoBotoesTest extends TestCase
         Http::assertNothingSent();
         $this->assertSame(1, WhatsAppMessage::query()->where('direction', 'inbound')->count());
     }
+
+    /** Achado real 19/10, #3274: a Meta mandou o toque sem o nono dígito. */
+    public function test_tudo_certo_vindo_sem_o_nono_digito_vale(): void
+    {
+        Bus::fake([GenerateInvoiceJob::class]);
+        $order = $this->pedido();
+
+        $this->toque('551188887777', "confirmacao_pedido:ok:{$order->id}", 'Tudo Certo', 'wamid.E');
+
+        $this->assertSame('ok', $order->fresh()->whatsapp_confirmacao);
+        Bus::assertDispatchedTimes(GenerateInvoiceJob::class, 1);
+    }
+
+    public function test_sem_nono_digito_de_outro_numero_continua_ignorado(): void
+    {
+        $order = $this->pedido();
+
+        $this->toque('551188887766', "confirmacao_pedido:ok:{$order->id}", 'Tudo Certo', 'wamid.F');
+
+        $this->assertNull($order->fresh()->whatsapp_confirmacao);
+        Http::assertNothingSent();
+    }
 }

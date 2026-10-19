@@ -50,8 +50,7 @@ class ResponderNaoRecebi implements ShouldQueue
         }
 
         $order = Order::query()->with('user')->find($orderId);
-        $telefones = array_filter(array_map([WhatsAppPhone::class, 'normalize'], [$order?->shipping_whatsapp, $order?->shipping_phone, $order?->user?->phone]));
-        if (! $order || ! in_array(WhatsAppPhone::normalize($conversation->wa_id), $telefones, true)) {
+        if (! $order || ! WhatsAppPhone::mesmoNumero($conversation->wa_id, [$order?->shipping_whatsapp, $order?->shipping_phone, $order?->user?->phone])) {
             Log::warning('whatsapp_nao_recebi_numero_diferente', ['conversation_id' => $conversation->id, 'order_id' => $orderId]);
 
             return;

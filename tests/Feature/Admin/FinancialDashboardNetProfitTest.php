@@ -7,24 +7,25 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
 use App\Modules\Marketplace\Models\OrderChannelFee;
+use App\Modules\Marketplace\Support\ContributionMargin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Pedido explícito 2026-08-09/10/14: lucro líquido de vendas = receita −
- * custo de produto − taxa de marketplace − gasto com anúncio − custo Flex.
- * A taxa de marketplace ficou de fora da conta entre 2026-08-10 e
- * 2026-08-14 (pedido explícito da época: "o lucro liquido é realmente só o
- * que sobra do desconto do material, do ads") — reconsiderado em
- * 2026-08-14 (achado real auditando o dashboard: 57 pedidos Shopee sem
- * taxa nenhuma registrada inflavam o número) e voltou a entrar, porque é
- * um custo real (~12-20% da receita).
+ * Resultado e margem (/admin/dashboard-financeiro), reestruturado em
+ * 2026-10-19. Todo número de lucro é o da conta oficial
+ * (ContributionMargin::periodo e porCanal), pelo período escolhido.
  *
- * Valores de teste usam centavos fracionários de propósito (nunca um total
- * "redondo" tipo 100.0) — Inertia serializa um PHP float sem casas
- * decimais como inteiro no JSON (json_encode(100.0) === "100"), e a
- * comparação ->where() do teste é estrita (===): comparar contra o literal
- * 100.0 quebraria com "100 is identical to 100.0" mesmo com a conta certa.
+ * Regras de antes que continuam valendo e estão aqui: taxa do canal entra
+ * no lucro (2026-08-14), taxa vai para o mês do PEDIDO e não do backfill,
+ * frete pago pelo comprador não é receita (2026-08-15), Amazon com taxa do
+ * Bling e frete dos Correios (2026-09-25/29), custo manual da linha não
+ * multiplica pela quantidade.
+ *
+ * Valores com centavos fracionários de propósito: o JSON do Inertia vira
+ * inteiro quando o float é redondo e o ->where() compara estrito.
  */
 class FinancialDashboardNetProfitTest extends TestCase
 {
@@ -33,9 +34,7 @@ class FinancialDashboardNetProfitTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Cada teste daqui olha uma parte da conta; o imposto do Simples tem
-        // teste próprio (test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue
-        // e ContributionMarginImpostoTest).
+        // Cada teste olha uma parte da conta; o imposto tem teste próprio.
         config(['loja.simples.aliquota' => 0]);
     }
 
@@ -62,22 +61,26 @@ class FinancialDashboardNetProfitTest extends TestCase
         ], $attributes));
     }
 
-    public function test_financial_summary_keeps_frontend_nan_guard_contract_without_sales(): void
+    public function test_sem_vendas_a_tela_abre_zerada_e_lista_os_canais_sem_venda(): void
     {
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('summary.productCostMonth', 0)
-            ->where('summary.marketplaceFeesMonth', 0)
-            ->where('summary.flexCostMonth', 0)
-            ->where('summary.adSpendMonth', 0)
-            ->where('summary.grossProfitMonth', 0)
-            ->where('summary.platformCostsMonth', 0)
-            ->where('summary.netProfitMarginMonth', 0));
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('filtro.periodo', 'mes')
+                ->where('filtro.de', Carbon::today()->startOfMonth()->toDateString())
+                ->where('filtro.ate', Carbon::today()->toDateString())
+                ->where('conta.lucro', 0)
+                ->where('conta.pedidos', 0)
+                ->where('canais.linhas', [])
+                ->where('canais.semVendas', ['Shopee', 'Mercado Livre', 'TikTok Shop', 'Amazon', 'KazaKora (site)'])
+                // Removidos na reestruturação.
+                ->missing('summary')
+                ->missing('netProfit')
+                ->missing('cashFlowSeries')
+                ->missing('marketplaceMetrics'));
     }
 
-    public function test_net_profit_subtracts_product_cost_and_ad_spend_from_revenue(): void
+    public function test_extrato_do_periodo_e_a_conta_oficial_com_imposto(): void
     {
         config(['loja.simples.aliquota' => 4.5, 'loja.simples.desde' => '2026-01-01']);
         $product = Product::factory()->create(['price' => 60.375, 'cost_price' => 40.25]);
@@ -102,165 +105,104 @@ class FinancialDashboardNetProfitTest extends TestCase
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'shopee', 'spend' => 10.20]);
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 5.10]);
 
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+        $oficial = app(ContributionMargin::class)->periodo(Carbon::today()->startOfMonth(), Carbon::tomorrow());
 
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.salesRevenueMonth', 120.75)
-            ->where('netProfit.productCostMonth', 80.5)
-            // Pedido explícito 2026-08-14: taxa de marketplace agora entra
-            // na conta do lucro líquido.
-            ->where('netProfit.marketplaceFeeMonth', 15.3)
-            ->where('netProfit.adSpendMonth', 15.3)
-            // 120.75 - 80.50 - 15.30 (taxa) - 15.30 (ads) = 9.65 de margem;
-            // - 5.43 de Simples (4,5% de 120.75) = 4.22 de lucro líquido.
-            ->where('netProfit.marginBeforeTaxMonth', 9.65)
-            ->where('netProfit.taxMonth', 5.43)
-            ->where('netProfit.netProfitMonth', 4.22)
-            // Pedido explícito 2026-08-09: "lucro no mês sendo só o
-            // líquido" — o card de resumo usa o mesmo valor calculado
-            // aqui, não mais o saldo de fluxo de caixa manual.
-            ->where('summary.profitMonth', 4.22)
-            ->where('summary.taxMonth', 5.43)
-            // Cards invertidos (pedido explícito 2026-08-09): bruto/líquido
-            // desde o primeiro dia — só há esse 1 pedido no teste, então
-            // "desde o início" bate com "no mês".
-            ->where('summary.grossRevenueAllTime', 120.75)
-            ->where('summary.netProfitAllTime', 4.22)
-            ->where('summary.grossRevenueMonth', 120.75)
-            // Contrato com o Dashboard.vue atual: esses campos também ficam
-            // em summary porque os cards do topo não podem receber undefined
-            // e renderizar R$ NaN/NaN% quando backend e asset saem
-            // desalinhados.
-            ->where('summary.productCostMonth', 80.5)
-            ->where('summary.marketplaceFeesMonth', 15.3)
-            ->where('summary.flexCostMonth', 0)
-            ->where('summary.adSpendMonth', 15.3)
-            ->where('summary.grossProfitMonth', 40.25)
-            ->where('summary.platformCostsMonth', 15.3)
-            ->where('summary.netProfitMarginMonth', 3.49)
-            // Pedido explícito 2026-08-10: faturamento líquido = bruto -
-            // ads (sem abater custo do material) — vai no card "Entradas
-            // no Mês".
-            ->where('summary.netRevenueMonth', 105.45) // 120.75 - 15.30
-            // Mercado Livre sempre indisponível hoje (API pede escopo de
-            // pagamentos que o app não tem); Shopee null porque não há
-            // MarketplaceAccount conectada neste teste.
-            ->where('walletBalances.mercado_livre', null)
-            ->where('walletBalances.shopee', null));
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('conta.receita', 120.75)
+                ->where('conta.custo_produtos', 80.5)
+                ->where('conta.taxas', 15.3)
+                ->where('conta.ads', 15.3)
+                // 120.75 - 80.50 - 15.30 - 15.30 = 9.65; - 5.43 de Simples = 4.22.
+                ->where('conta.margem', 9.65)
+                ->where('conta.imposto', 5.43)
+                ->where('conta.lucro', 4.22)
+                ->where('conta.lucro', $oficial['lucro'])
+                ->where('conta.pedidos', 1)
+                ->where('conta.aliquota', 4.5)
+                // O site vende; Shopee e ML só gastaram com anúncio (prejuízo).
+                ->where('canais.linhas.0.canal', 'loja')
+                ->where('canais.linhas.0.margemPct', round(($oficial['lucro'] + 15.3) / 120.75 * 100, 2))
+                ->where('canais.linhas', fn ($linhas) => collect($linhas)->firstWhere('canal', 'shopee')['lucro'] === -10.2
+                    && collect($linhas)->firstWhere('canal', 'shopee')['margemPct'] === null));
     }
 
     /**
-     * BUG REAL 2026-08-14: marketplaceFeeMonth filtrava por computed_at
-     * (quando a taxa foi gravada no nosso banco) em vez da data do
-     * PEDIDO — um backfill retroativo (ver BackfillShopeeOrderFeesCommand)
-     * grava computed_at=agora pra pedido de semanas atrás, e com o filtro
-     * antigo essa taxa "pulava" pro mês do backfill em vez de ficar no mês
-     * real da venda. Aqui simula exatamente isso: pedido de MÊS PASSADO
-     * com taxa gravada (computed_at) HOJE.
+     * BUG REAL 2026-08-14: taxa gravada hoje (backfill) para pedido do mês
+     * passado fica no mês do pedido. O período "Mês passado" e "Desde o
+     * início" mostram esse pedido; "Este mês" não.
      */
-    public function test_marketplace_fee_is_attributed_to_the_orders_month_not_when_it_was_backfilled(): void
+    public function test_taxa_fica_no_mes_do_pedido_e_os_periodos_mudam_a_conta(): void
     {
-        // Valores fracionários de propósito (ver docblock da classe) —
-        // 100.75 - 18.30 = 82.45, nunca um total redondo tipo 100.0/82.0.
         $lastMonthOrder = $this->makeOrder(['subtotal' => 100.75, 'total' => 100.75]);
-        $lastMonthOrder->forceFill(['created_at' => now()->subMonthNoOverflow()])->save();
-
+        $lastMonthOrder->forceFill(['created_at' => now()->startOfMonth()->subDays(3)])->save();
         OrderChannelFee::create([
-            'order_id' => $lastMonthOrder->id,
-            'channel' => 'shopee',
-            'gross_amount' => 100.75,
-            // Backfill rodando HOJE pra um pedido do mês passado.
-            'fee_amount' => 18.30,
-            'computed_at' => now(),
+            'order_id' => $lastMonthOrder->id, 'channel' => 'shopee', 'gross_amount' => 100.75,
+            'fee_amount' => 18.30, 'computed_at' => now(),
         ]);
+        $admin = $this->admin();
 
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+        $this->actingAs($admin)->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page->where('conta.taxas', 0)->where('conta.lucro', 0));
 
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.marketplaceFeeMonth', 0)
-            ->where('netProfit.netProfitMonth', 0)
-            // Mas continua contando "desde o início" (sem filtro de data):
-            // 100.75 de receita - 18.30 de taxa, sem custo de
-            // produto/ads/flex nesse pedido.
-            ->where('summary.netProfitAllTime', 82.45));
+        $this->actingAs($admin)->get('/admin/dashboard-financeiro?periodo=mes_passado')
+            ->assertInertia(fn ($page) => $page
+                ->where('filtro.periodo', 'mes_passado')
+                ->where('filtro.de', Carbon::today()->startOfMonth()->subMonthNoOverflow()->toDateString())
+                ->where('filtro.ate', Carbon::today()->startOfMonth()->subDay()->toDateString())
+                ->where('conta.lucro', 82.45));
+
+        $this->actingAs($admin)->get('/admin/dashboard-financeiro?periodo=inicio')
+            ->assertInertia(fn ($page) => $page
+                ->where('filtro.periodo', 'inicio')
+                ->where('filtro.de', $lastMonthOrder->created_at->toDateString())
+                ->where('conta.lucro', 82.45));
+
+        // Datas escolhidas (invertidas viram na ordem certa).
+        $dia = $lastMonthOrder->created_at->toDateString();
+        $this->actingAs($admin)->get("/admin/dashboard-financeiro?de={$dia}&ate=".Carbon::parse($dia)->subDays(2)->toDateString())
+            ->assertInertia(fn ($page) => $page
+                ->where('filtro.periodo', 'datas')
+                ->where('filtro.ate', $dia)
+                ->where('conta.receita', 100.75));
     }
 
-    /**
-     * Pedido explícito 2026-08-15 (achado investigando reclamação real do
-     * usuário — pedido #305 Shopee: R$44,99 no Seller Center vs R$58,24 no
-     * dashboard): frete é informativo (visível, atrelado ao pedido) mas
-     * nunca entra em salesRevenueMonth/netProfitMonth — quem cobra/paga o
-     * frete é o canal (Shopee Xpress etc.), nunca o vendedor.
-     */
-    public function test_shipping_cost_is_informational_and_never_affects_revenue_or_profit(): void
+    public function test_frete_pago_pelo_comprador_nao_entra_nas_vendas_nem_no_lucro(): void
     {
         $this->makeOrder(['subtotal' => 44.99, 'shipping_cost' => 13.25, 'total' => 58.24]);
 
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.shippingCostMonth', 13.25)
-            ->where('netProfit.salesRevenueMonth', 44.99)
-            ->where('netProfit.netProfitMonth', 44.99)
-            ->where('summary.grossRevenueMonth', 44.99));
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page
+                ->where('conta.receita', 44.99)
+                ->where('conta.lucro', 44.99)
+                ->where('conta.frete', 0));
     }
 
-    public function test_stock_value_sums_cost_price_times_stock_across_all_products(): void
+    public function test_aviso_de_itens_vendidos_sem_custo(): void
     {
-        Product::factory()->create(['cost_price' => 10.50, 'stock' => 4]); // 42.00
-        Product::factory()->create(['cost_price' => 5.25, 'stock' => 2]); // 10.50
-        Product::factory()->create(['cost_price' => null, 'stock' => 100]); // conta como 0, não quebra
-
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('summary.stockValue', 52.5));
-    }
-
-    public function test_net_profit_flags_when_no_active_product_has_a_cost_price_yet(): void
-    {
+        $sem = Product::factory()->create(['is_active' => true, 'cost_price' => null]);
         Product::factory()->create(['is_active' => true, 'cost_price' => null]);
-        Product::factory()->create(['is_active' => true, 'cost_price' => null]);
-
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.productsWithCost', 0)
-            ->where('netProfit.productsActive', 2)
-            ->where('netProfit.productCostMonth', 0));
-    }
-
-    public function test_order_items_without_a_linked_product_do_not_break_the_cost_calculation(): void
-    {
-        // Item de emissão manual de nota (serviço avulso, sem product_id) —
-        // não pode quebrar a query de custo nem contar como custo zero
-        // indevido pra um produto real.
+        Product::factory()->create(['is_active' => true, 'cost_price' => 5.25]);
         $order = $this->makeOrder(['subtotal' => 50, 'total' => 50]);
-        $order->items()->create([
-            'product_id' => null,
-            'product_name' => 'Serviço avulso',
-            'product_price' => 50,
-            'quantity' => 1,
-            'subtotal' => 50,
-        ]);
+        $order->items()->create(['product_id' => $sem->id, 'product_name' => $sem->name, 'product_price' => 50, 'quantity' => 1, 'subtotal' => 50]);
+        // Item avulso (sem produto e sem custo manual) também conta, e não quebra a conta.
+        $order->items()->create(['product_id' => null, 'product_name' => 'Serviço avulso', 'product_price' => 0, 'quantity' => 1, 'subtotal' => 0]);
 
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertOk();
-        $response->assertInertia(fn ($page) => $page->where('netProfit.productCostMonth', 0));
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page
+                ->where('confianca.itensSemCusto', 2)
+                ->where('confianca.produtosAtivos', 3)
+                ->where('confianca.produtosAtivosSemCusto', 2)
+                ->where('conta.custo_produtos', 0)
+                ->where('confianca.linkSemCusto', fn ($link) => str_starts_with($link, '/admin/fluxo-de-caixa?aba=vendas&sem_custo=1')));
     }
 
     /**
-     * Pedido explícito 2026-09-25: a margem de contribuição da Amazon com
-     * dado real — taxa que veio do Bling, frete dos Correios da nossa
-     * pré-postagem, e o frete que o comprador pagou entrando nas vendas
-     * (envio é da loja). Antes o card da Amazon era forçado a zero.
+     * Amazon com dado real: taxa do Bling, frete dos Correios da nossa
+     * pré-postagem e o frete do comprador nas vendas (o envio é da loja).
      */
-    public function test_amazon_contribution_margin_uses_bling_fee_and_correios_postage(): void
+    public function test_amazon_usa_taxa_real_e_frete_dos_correios(): void
     {
         $product = Product::factory()->create(['cost_price' => 30.25]);
         $order = $this->makeOrder(['origin' => Order::ORIGIN_AMAZON, 'subtotal' => 100.5, 'shipping_cost' => 20.25, 'total' => 120.75]);
@@ -273,58 +215,102 @@ class FinancialDashboardNetProfitTest extends TestCase
             'content_items' => [], 'status' => \App\Modules\Marketplace\Models\CorreiosPrePostagem::STATUS_GERADA,
         ]);
 
-        // receita 100,50 + 20,25 = 120,75 · custo 60,50 · taxa 15,25 · Correios 22,75
-        // lucro líquido = 120,75 − 60,50 − 15,25 − 22,75 = 22,25 (pedido
-        // explícito 2026-09-29: "precisa descontar frete, se for lucro líquido").
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertInertia(fn ($page) => $page
-            ->where('netProfit.correiosCostMonth', 22.75)
-            ->where('netProfit.netProfitMonth', 22.25)
-            ->where('marketplaceMetrics.month', fn ($canais) => collect($canais)->firstWhere('channel', 'amazon')['netProfit'] === 22.25
-                && collect($canais)->firstWhere('channel', 'amazon')['isEmpty'] === false));
-
-        // Painel inicial e KoraSync fazem a MESMA conta.
-        $this->assertSame(22.25, app(\App\Modules\Marketplace\Support\ContributionMargin::class)->periodo(now()->startOfDay(), now()->startOfDay()->addDay())['margem']);
+        // 120,75 − 60,50 − 15,25 − 22,75 = 22,25
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page
+                ->where('conta.frete', 22.75)
+                ->where('conta.lucro', 22.25)
+                ->where('canais.linhas.0.canal', 'amazon')
+                ->where('canais.linhas.0.lucro', 22.25)
+                ->where('canais.linhas.0.pedidosTaxaEstimada', 0));
     }
 
-    /**
-     * Custo digitado à mão em item sem produto é o TOTAL da linha — a
-     * soma não pode multiplicar pela quantidade de novo.
-     */
-    public function test_manual_line_cost_is_not_multiplied_by_quantity(): void
+    public function test_custo_manual_da_linha_nao_multiplica_pela_quantidade(): void
     {
         $order = $this->makeOrder(['subtotal' => 100.5, 'total' => 100.5]);
         $order->items()->create(['product_id' => null, 'product_name' => 'Avulso', 'product_price' => 33.5, 'quantity' => 3, 'subtotal' => 100.5, 'manual_cost_price' => 45.25]);
 
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
-
-        $response->assertInertia(fn ($page) => $page->where('summary.productCostMonth', 45.25));
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page->where('conta.custo_produtos', 45.25));
     }
 
-    /**
-     * Pedido do usuário 2026-10-06: o card do canal mostra a quebra da taxa
-     * real e avisa quando há pedido sem taxa do canal (margem estimada).
-     */
-    public function test_marketplace_card_shows_fee_breakdown_and_flags_orders_without_real_fee(): void
+    public function test_pedido_sem_taxa_real_marca_o_canal_como_taxa_estimada(): void
     {
         $comTaxa = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SN1']);
         OrderChannelFee::create([
             'order_id' => $comTaxa->id, 'channel' => 'shopee', 'gross_amount' => 100, 'fee_amount' => 30,
-            'commission_fee' => 12, 'service_fee' => 10, 'shipping_fee' => 8, 'seller_discount' => 0, 'platform_discount' => 4.49,
-            'payout_amount' => 70, 'source' => OrderChannelFee::SOURCE_API, 'computed_at' => now(),
+            'source' => OrderChannelFee::SOURCE_API, 'computed_at' => now(),
         ]);
-        $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SN2']);
+        $estimada = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SN2']);
+        OrderChannelFee::create([
+            'order_id' => $estimada->id, 'channel' => 'shopee', 'gross_amount' => 100, 'fee_amount' => 20.5,
+            'source' => OrderChannelFee::SOURCE_ESTIMATE, 'computed_at' => now(),
+        ]);
+        $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'external_order_id' => 'SN3']);
+        // Site não tem "taxa do canal" a esperar: não marca.
+        $this->makeOrder();
 
-        $response = $this->actingAs($this->admin())->get('/admin/dashboard-financeiro');
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page
+                ->where('confianca.taxaEstimada.pedidos', 2)
+                ->where('confianca.taxaEstimada.valor', 20.5)
+                ->where('confianca.taxaEstimada.canais', ['Shopee'])
+                ->where('canais.linhas', fn ($linhas) => collect($linhas)->firstWhere('canal', 'shopee')['pedidosTaxaEstimada'] === 2
+                    && collect($linhas)->firstWhere('canal', 'loja')['pedidosTaxaEstimada'] === 0));
+    }
 
-        $response->assertInertia(fn ($page) => $page->where('marketplaceMetrics.month', function ($canais) {
-            $shopee = collect($canais)->firstWhere('channel', 'shopee');
+    /**
+     * "A liberar": só o que não foi pago e tem data de hoje em diante. Na
+     * Amazon, RELEASED já foi pago; DEFERRED é retido sem data.
+     */
+    public function test_a_liberar_ignora_pago_e_data_passada_e_separa_amazon_retida(): void
+    {
+        $linha = fn (array $a) => DB::table('marketplace_settlement_details')->insert($a + [
+            'statement_id' => '', 'external_sku_id' => '', 'transaction_type' => 'Pedido', 'source_file' => 't.xlsx',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $hoje = Carbon::today();
+        $linha(['channel' => 'tiktok_shop', 'external_order_id' => 'T1', 'status' => 'Pagos', 'settlement_date' => $hoje->copy()->addDays(2)->toDateString(), 'payout_amount' => 50.25]);
+        $linha(['channel' => 'tiktok_shop', 'external_order_id' => 'T2', 'status' => 'A pagar', 'settlement_date' => $hoje->copy()->addDays(3)->toDateString(), 'payout_amount' => 40.5]);
+        $linha(['channel' => 'tiktok_shop', 'external_order_id' => 'T3', 'status' => 'A pagar', 'settlement_date' => $hoje->copy()->subDays(3)->toDateString(), 'payout_amount' => 99.75]);
+        $linha(['channel' => 'amazon', 'external_order_id' => 'A1', 'transaction_type' => 'Order', 'status' => 'RELEASED', 'settlement_date' => $hoje->toDateString(), 'payout_amount' => 70.25]);
+        $linha(['channel' => 'amazon', 'external_order_id' => 'A2', 'transaction_type' => 'Order', 'status' => 'DEFERRED', 'settlement_date' => $hoje->copy()->subDays(1)->toDateString(), 'payout_amount' => 30.5]);
 
-            return $shopee['feeBreakdown']['comissao'] == 22
-                && $shopee['feeBreakdown']['freteLoja'] == 8
-                && $shopee['feeBreakdown']['descontoPlataforma'] == 4.49
-                && $shopee['ordersWithoutRealFee'] === 1;
-        }));
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page->where('receber.aLiberar', function ($canais) use ($hoje) {
+                $c = collect($canais)->keyBy('canal');
+
+                return $c['tiktok_shop']['total'] === 40.5
+                    && $c['tiktok_shop']['datas'] === [['data' => $hoje->copy()->addDays(3)->toDateString(), 'valor' => 40.5]]
+                    && $c['amazon']['total'] == 0 && $c['amazon']['datas'] === []
+                    && $c['amazon']['retido'] === 30.5 && $c['amazon']['retidoPedidos'] === 1
+                    && $c['shopee']['temExtrato'] === false && $c['mercado_livre']['temExtrato'] === false;
+            })
+                ->where('receber.disponivel.1.nome', 'Mercado Pago (ML + site)')
+                ->where('receber.disponivel.2.valor', null)
+                ->where('receber.disponivel.2.motivo', 'Saldo não disponível pela integração.'));
+
+        // A projeção do Fluxo de Caixa usa a mesma regra.
+        $projecao = app(\App\Modules\Financeiro\Support\PrevisaoDeCaixa::class)->receivableProjection(['shopee' => null, 'mercado_livre' => null]);
+        $this->assertSame(40.5, $projecao['periods'][0]['total']);
+    }
+
+    public function test_anuncios_mostram_sem_dado_em_vez_de_zero(): void
+    {
+        $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 200.5, 'total' => 200.5]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'shopee', 'spend' => 10.25, 'attributed_orders' => 2, 'attributed_gmv' => 80.5]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 5.5, 'attributed_orders' => 0, 'attributed_gmv' => 0]);
+
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertInertia(fn ($page) => $page->where('anuncios.linhas', function ($linhas) {
+                $l = collect($linhas)->keyBy('canal');
+
+                return $l['shopee']['gasto'] === 10.25 && $l['shopee']['vendas'] === 80.5 && $l['shopee']['roas'] === 7.85
+                    && $l['mercado_livre']['vendas'] === null && $l['mercado_livre']['roas'] === null
+                    && $l['tiktok_shop']['gasto'] == 0 && $l['tiktok_shop']['vendas'] === null
+                    && ! $l->has('amazon')
+                    // Meta sem configuração no teste: gasto não disponível.
+                    && $l['meta_ads']['gasto'] === null && $l['meta_ads']['link']['href'] === '/admin/publicidade/meta-ads';
+            })->has('anuncios.serie', 14));
     }
 }

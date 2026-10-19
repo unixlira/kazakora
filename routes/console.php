@@ -347,6 +347,10 @@ Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping
 // já avisa na hora (RelatoriosTikTok::avisar e /api/financeiro/coletas/falha).
 Schedule::command('financeiro:vigiar-coletas')->hourlyAt(15)->withoutOverlapping(10);
 
+// ADS de um canal acima de 6% da receita (mês ou 7 dias): aviso no sino do
+// admin, mesma regra e cadência do vigia do Homer (2026-10-19). Das 8h às 22h.
+Schedule::command('financeiro:vigiar-ads')->hourlyAt(25)->between('8:00', '22:00')->withoutOverlapping(10);
+
 // Saldo e repasses a receber de Shopee, Mercado Livre, TikTok e Amazon,
 // uma foto por hora para a aba "Saldos nos canais" do Fluxo de Caixa
 // (2026-10-19). Aos 10 minutos: o ads:sync-wallet-balance (hora cheia) já

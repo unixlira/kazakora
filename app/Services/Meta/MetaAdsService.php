@@ -603,6 +603,32 @@ class MetaAdsService
     }
 
     /**
+     * Gasto da conta inteira num intervalo de dias (Resultado e margem e
+     * alerta de ADS, 2026-10-19): o gasto da Meta não fica gravado no banco
+     * (não está em channel_ad_spends nem na conta oficial do lucro), então
+     * vem da Marketing API. Vendas = valor das compras que o pixel atribuiu.
+     * Timeout curto: a tela que chama não pode ficar presa na Meta.
+     *
+     * @return array{gasto: float, vendas: float}
+     *
+     * @throws MetaAdsException
+     */
+    public function gastoNoPeriodo(Carbon $desde, Carbon $ate): array
+    {
+        $resposta = $this->get($this->conta().'/insights', [
+            'level' => 'account',
+            'time_range' => json_encode(['since' => $desde->toDateString(), 'until' => $ate->toDateString()]),
+            'fields' => 'spend,action_values',
+        ], 10);
+        $linha = $resposta['data'][0] ?? [];
+
+        return [
+            'gasto' => round((float) ($linha['spend'] ?? 0), 2),
+            'vendas' => round($this->valorDeCompra($linha['action_values'] ?? []), 2),
+        ];
+    }
+
+    /**
      * Métricas de uma linha de insights. CPC = gasto ÷ cliques (todos os
      * cliques, a coluna "CPC (todos)" do Gerenciador); ROAS = valor das
      * compras ÷ gasto.
@@ -1105,11 +1131,11 @@ class MetaAdsService
         return str_starts_with($conta, 'act_') ? $conta : 'act_'.$conta;
     }
 
-    private function cliente(): PendingRequest
+    private function cliente(int $timeout = 60): PendingRequest
     {
         return Http::withToken((string) config('services.meta_ads.access_token'))
             ->acceptJson()
-            ->timeout(60);
+            ->timeout($timeout);
     }
 
     private function url(string $caminho): string
@@ -1142,12 +1168,12 @@ class MetaAdsService
      *
      * @throws MetaAdsException
      */
-    private function get(string $caminho, array $params): array
+    private function get(string $caminho, array $params, int $timeout = 60): array
     {
         $this->exigirConfiguracao();
 
         try {
-            $resposta = $this->cliente()->get($this->url($caminho), $params);
+            $resposta = $this->cliente($timeout)->get($this->url($caminho), $params);
         } catch (ConnectionException) {
             throw new MetaAdsException('Sem conexão com a Meta. Tente de novo em alguns minutos.');
         }

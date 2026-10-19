@@ -13,6 +13,7 @@ import { formatPercent, formatPrice } from '@/Shared/graficos';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AbaLancamentos from './AbaLancamentos.vue';
 import AbaVendas from './AbaVendas.vue';
+import AlertaAds from '../Financeiro/AlertaAds.vue';
 import AlertasFinanceiros from './AlertasFinanceiros.vue';
 import CascataResultado from './CascataResultado.vue';
 import DeCadaCem from './DeCadaCem.vue';
@@ -30,6 +31,7 @@ const props = defineProps({
     costCenters: { type: Array, default: () => [] },
     // Resumo
     resumo: { type: Object, default: null },
+    radarAds: { type: Object, default: null },
     canais: { type: Array, default: null },
     serie: { type: Array, default: null },
     previsao: { type: Object, default: null },
@@ -172,6 +174,7 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
 
         <!-- ================= Resumo ================= -->
         <div v-if="filtro.aba === 'resumo' && atual" :class="{ 'opacity-60 transition-opacity': calculando }">
+            <AlertaAds :radar="radarAds" />
             <AlertasFinanceiros :alertas="alertas ?? []" />
 
             <p v-if="vazio" class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 text-sm shadow-sm">Nenhuma venda paga neste período.</p>

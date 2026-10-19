@@ -342,6 +342,12 @@ Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping
 // já avisa na hora (RelatoriosTikTok::avisar e /api/financeiro/coletas/falha).
 Schedule::command('financeiro:vigiar-coletas')->hourlyAt(15)->withoutOverlapping(10);
 
+// Saldo e repasses a receber de Shopee, Mercado Livre, TikTok e Amazon,
+// uma foto por hora para a aba "Saldos nos canais" do Fluxo de Caixa
+// (2026-10-19). Aos 10 minutos: o ads:sync-wallet-balance (hora cheia) já
+// deixou o saldo do Mercado Pago pronto. Fuso do app (America/Sao_Paulo).
+Schedule::command('financeiro:coletar-saldos')->hourlyAt(10)->withoutOverlapping(30);
+
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.
 Schedule::command('beautykora:conciliar-pagamentos')->everyFiveMinutes()->withoutOverlapping(10);

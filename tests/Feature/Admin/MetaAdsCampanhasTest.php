@@ -1092,9 +1092,9 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertTrue($novo->adicionado_depois);
         $this->assertTrue($novo->publico_proprio);
 
-        // Anúncio entra só no conjunto novo; o antigo continua travado.
+        // Sem conjunto dito, o anúncio não entra (o antigo não vira alvo sozinho).
         $this->actingAs($admin)
-            ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('velho.mp4', 100, 'video/mp4'), 'conjunto_id' => $antigo->id], ['Accept' => 'application/json'])
+            ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('solto.mp4', 100, 'video/mp4')], ['Accept' => 'application/json'])
             ->assertStatus(409);
         $this->actingAs($admin)
             ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('ferramentas.mp4', 100, 'video/mp4'), 'conjunto_id' => $id, 'titulo' => 'Kit ferramentas'], ['Accept' => 'application/json'])
@@ -1226,6 +1226,67 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertNull($campanha->ultimo_erro);
         $this->assertTrue($campanha->load(['conjuntos', 'videos'])->podePausar());
         $this->assertTrue($novo->podeEnviar($campanha));
+    }
+
+    /**
+     * Pedido do Lira (2026-10-19): "acrescentar novos anúncios" dentro de
+     * conjunto que já está na Meta. Só os anúncios novos sobem, pausados, no
+     * ad set que já existe; ativar liga só eles.
+     */
+    public function test_acrescentar_anuncio_em_conjunto_que_ja_esta_na_meta(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $admin = $this->admin();
+        $campanha = $this->campanhaComVideos(1, 30);
+        $this->enviarAteTerminar($campanha);
+        app(MetaAdsService::class)->alterarStatus($campanha->fresh(['conjuntos', 'videos']), 'ACTIVE');
+        $conjunto = $campanha->conjuntos()->first();
+        $velho = $campanha->videos()->first();
+
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}/conjuntos/{$conjunto->id}/anuncios")->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Admin/MetaAds/ConjuntoNovo', false)
+                ->where('soAnuncios', true)->where('videos', [])->where('jaNaMeta.0.id', $velho->id));
+
+        // O anúncio que já está na Meta continua travado.
+        $this->actingAs($admin)->deleteJson(self::BASE."/{$campanha->id}/videos/{$velho->id}")->assertStatus(409);
+
+        $novoId = $this->actingAs($admin)
+            ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('novo.mp4', 100, 'video/mp4'), 'conjunto_id' => $conjunto->id, 'texto_principal' => 'Outro texto'], ['Accept' => 'application/json'])
+            ->assertCreated()->json('video.id');
+        $this->assertTrue(\App\Modules\Marketplace\Models\MetaAdsVideo::find($novoId)->adicionado_depois);
+
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('pode.pausar', true)
+                ->where('conjuntos.0.pode.enviar', true)
+                ->where('conjuntos.0.pode.editar', false)
+                ->where('conjuntos.0.pode.acrescentarAnuncios', true)
+                ->where('conjuntos.0.problemas', []));
+
+        Queue::fake();
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$conjunto->id}/enviar")->assertSessionHas('success');
+        Queue::assertPushed(EnviarCampanhaMetaAds::class, fn ($job) => $job->conjuntoId === $conjunto->id);
+
+        $chamadas = [];
+        $meta = app(MetaAdsService::class);
+        for ($i = 0; $i < 10 && $meta->avancarEnvio($campanha->fresh(['conjuntos', 'videos']), $conjunto->fresh()) !== MetaAdsService::ENVIO_PRONTO; $i++);
+
+        $posts = $this->posts($chamadas);
+        $this->assertSame(['act_123/advideos', 'act_123/adcreatives', 'act_123/ads'], array_map(fn ($r) => $this->caminho($r), $posts));
+        $this->assertSame('set1', $posts[2]['adset_id']);
+        $this->assertSame('PAUSED', $posts[2]['status']);
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
+
+        // Ativar liga só o anúncio novo (nem o conjunto, nem o anúncio antigo).
+        $chamadas = [];
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$conjunto->id}/ativar", ['confirmo_gasto' => true, 'orcamento_diario' => 30])
+            ->assertSessionHas('success');
+        $this->assertSame(['ad2'], array_map(fn ($r) => $this->caminho($r), $chamadas));
+        $this->assertNotNull(\App\Modules\Marketplace\Models\MetaAdsVideo::find($novoId)->ativado_em);
+
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")->assertOk()
+            ->assertInertia(fn ($page) => $page->where('conjuntos.0.pode.ativar', false)->where('conjuntos.0.pode.enviar', false));
     }
 }
 

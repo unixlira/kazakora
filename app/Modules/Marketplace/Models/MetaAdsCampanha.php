@@ -211,14 +211,15 @@ class MetaAdsCampanha extends Model
 
     /**
      * Campanha e todos os anúncios com conjunto, criativo e anúncio na Meta.
-     * Conjunto novo que ainda não subiu (adicionado depois do envio) não
-     * conta: a campanha segue podendo pausar e ativar enquanto ele é montado.
+     * Conjunto ou anúncio novo que ainda não subiu (acrescentado depois do
+     * envio) não conta: a campanha segue podendo pausar e ativar enquanto
+     * ele é montado.
      */
     public function envioCompleto(): bool
     {
         $pendentes = $this->conjuntosNovosPendentes()->pluck('id');
         $conjuntos = $this->conjuntos->whereNotIn('id', $pendentes);
-        $videos = $this->videos->whereNotIn('conjunto_id', $pendentes);
+        $videos = $this->videos->whereNotIn('conjunto_id', $pendentes)->reject(fn (MetaAdsVideo $v) => $v->adicionado_depois && ! $v->envioCompleto());
 
         return filled($this->meta_campaign_id)
             && $videos->isNotEmpty()

@@ -83,16 +83,33 @@ const excluir = async () => {
     }
 };
 
-// Enquanto envia, a tela se atualiza sozinha a cada 5 s para mostrar o
-// andamento de cada vídeo.
+// Enquanto envia (a campanha ou um conjunto novo), a tela se atualiza
+// sozinha a cada 5 s para mostrar o andamento de cada vídeo.
 let timer = null;
-const acompanhar = (status) => {
+const enviandoAlgo = computed(() => c.value.status === 'enviando' || props.conjuntos.some((cj) => cj.enviando));
+const acompanhar = (enviando) => {
     clearInterval(timer);
-    if (status === 'enviando') {
+    if (enviando) {
         timer = setInterval(() => router.reload({ only: ['campanha', 'conjuntos', 'videos', 'pode', 'problemas', 'linkGerenciador'] }), 5000);
     }
 };
-watch(() => c.value.status, acompanhar, { immediate: true });
+watch(enviandoAlgo, acompanhar, { immediate: true });
+
+// Conjunto novo em campanha que já está na Meta (2026-10-19).
+const conjuntoEmEnvio = ref(null);
+const enviarConjunto = () => router.post(`${base.value}/conjuntos/${conjuntoEmEnvio.value.id}/enviar`, {}, { ...opcoes, onSuccess: () => { conjuntoEmEnvio.value = null; } });
+const conjuntoEmAtivacao = ref(null);
+const confirmoGastoConjunto = ref(false);
+const gastoDoConjunto = computed(() => Number(porConjunto.value ? conjuntoEmAtivacao.value?.orcamento_diario : c.value.orcamento_diario));
+const ativarConjunto = () => router.post(`${base.value}/conjuntos/${conjuntoEmAtivacao.value.id}/ativar`, {
+    confirmo_gasto: confirmoGastoConjunto.value,
+    orcamento_diario: gastoDoConjunto.value,
+}, { ...opcoes, onSuccess: () => { conjuntoEmAtivacao.value = null; confirmoGastoConjunto.value = false; } });
+const excluirConjunto = async (cj) => {
+    if (await confirmDelete({ title: `Excluir o conjunto novo "${cj.nome}"?`, text: 'Ele ainda não está na Meta. Os anúncios dele saem junto.' })) {
+        router.delete(`${base.value}/conjuntos/${cj.id}`, { preserveScroll: true });
+    }
+};
 onBeforeUnmount(() => clearInterval(timer));
 
 const porConjunto = computed(() => c.value.orcamento_tipo === 'conjunto');
@@ -152,6 +169,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="modalAssumir = true">
                     <i class="fab fa-meta text-xs" aria-hidden="true"></i> Assumida no Gerenciador
                 </button>
+                <Link v-if="pode.adicionarConjunto && can('financeiro.create')" :href="`${base}/conjuntos/novo`"
+                    :class="[botao, 'border border-primary text-primary hover:bg-primary/10']">
+                    <i class="fas fa-plus text-xs" aria-hidden="true"></i> Novo conjunto
+                </Link>
                 <button v-if="pode.excluir && can('financeiro.create')" type="button"
                     :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="excluir">
                     <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir
@@ -266,6 +287,39 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     <template v-if="cj.meta_adset_id"> · <i class="fas fa-circle-check text-emerald-600" aria-hidden="true"></i> conjunto criado na Meta</template>
                 </span>
             </div>
+
+            <div v-if="cj.adicionado_depois && (cj.pode.editar || cj.pode.enviar || cj.pode.ativar || cj.enviando)"
+                class="mb-3 space-y-2 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-500/10 dark:text-sky-200">
+                <p v-if="cj.enviando" class="flex items-center gap-2" role="status" aria-live="polite">
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    Enviando este conjunto para a Meta, pausado. O resto da campanha não muda. Pode sair desta tela.
+                </p>
+                <p v-else-if="cj.pode.ativar">Conjunto novo já na Meta e <strong>pausado</strong>. A campanha está rodando; ative quando quiser que ele comece a gastar.</p>
+                <p v-else-if="cj.pode.enviar">Conjunto novo, ainda <strong>não está na Meta</strong>. Ao enviar, ele e os anúncios dele nascem pausados dentro da campanha.</p>
+                <ul v-if="cj.problemas?.length" class="ml-5 list-disc text-amber-800 dark:text-amber-300">
+                    <li v-for="p in cj.problemas" :key="p">{{ p }}</li>
+                </ul>
+                <div v-if="can('financeiro.create')" class="flex flex-wrap gap-2">
+                    <button v-if="cj.pode.enviar" type="button" :disabled="processando || cj.problemas?.length > 0 || !config.configurado"
+                        :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="conjuntoEmEnvio = cj">
+                        <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i> {{ cj.ultimo_erro ? 'Tentar enviar de novo' : 'Enviar conjunto para a Meta (pausado)' }}
+                    </button>
+                    <button v-if="cj.pode.ativar" type="button" :disabled="processando || !config.configurado"
+                        :class="[botao, 'bg-emerald-600 text-white hover:bg-emerald-700']" @click="conjuntoEmAtivacao = cj">
+                        <i class="fas fa-play text-xs" aria-hidden="true"></i> Ativar este conjunto
+                    </button>
+                    <Link v-if="cj.pode.editar" :href="`${base}/conjuntos/${cj.id}/editar`"
+                        :class="[botao, 'border border-[var(--surface-border)] bg-[var(--surface)] hover:bg-[var(--surface-muted)]']">
+                        <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
+                    </Link>
+                    <button v-if="cj.pode.editar" type="button" :class="[botao, 'border border-red-300 bg-[var(--surface)] text-red-700 hover:bg-red-50']" @click="excluirConjunto(cj)">
+                        <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir
+                    </button>
+                </div>
+            </div>
+            <p v-else-if="cj.adicionado_depois && cj.meta_adset_id && !cj.ativado_em && c.status === 'enviada_pausada'" class="mb-3 text-xs text-slate-500">
+                Conjunto novo pausado: liga junto quando você ativar a campanha.
+            </p>
             <p v-if="cj.ultimo_erro" class="mb-3 text-xs text-red-600">{{ cj.ultimo_erro }}</p>
             <p v-if="anunciosDe(cj).length > 6" class="mb-3 text-xs text-amber-700">Mais de 6 anúncios no mesmo conjunto dividem demais a entrega.</p>
             <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -319,6 +373,28 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             <label class="mt-4 flex items-start gap-2 text-sm">
                 <input v-model="confirmoGasto" type="checkbox" class="mt-0.5">
                 <span>Confirmo que a campanha vai gastar até {{ orcamento }} por dia.</span>
+            </label>
+        </ConfirmModal>
+
+        <ConfirmModal :open="conjuntoEmEnvio !== null" title="Enviar conjunto novo para a Meta" confirm-label="Criar pausado na Meta" cancel-label="Voltar"
+            :loading="processando" @close="conjuntoEmEnvio = null" @confirm="enviarConjunto">
+            <p class="text-sm">
+                Vamos criar o conjunto <strong>{{ conjuntoEmEnvio?.nome }}</strong> com {{ conjuntoEmEnvio ? plural(anunciosDe(conjuntoEmEnvio).length, 'anúncio', 'anúncios') : '' }}
+                dentro da campanha {{ c.nome }}, tudo pausado. Os outros conjuntos não mudam e nada é gasto até você ativar.
+            </p>
+        </ConfirmModal>
+
+        <ConfirmModal :open="conjuntoEmAtivacao !== null" title="Ativar conjunto na Meta?" confirm-label="Ativar e começar a gastar"
+            :loading="processando" :confirm-disabled="!confirmoGastoConjunto" @close="conjuntoEmAtivacao = null; confirmoGastoConjunto = false" @confirm="ativarConjunto">
+            <p v-if="porConjunto" class="text-sm">
+                O conjunto <strong>{{ conjuntoEmAtivacao?.nome }}</strong> vai começar a gastar <strong>{{ formatarReais(gastoDoConjunto) }}/dia</strong>, além do que a campanha já gasta.
+            </p>
+            <p v-else class="text-sm">
+                O conjunto <strong>{{ conjuntoEmAtivacao?.nome }}</strong> entra na divisão do orçamento da campanha, <strong>{{ formatarReais(gastoDoConjunto) }}/dia</strong> no total. O total não muda.
+            </p>
+            <label class="mt-4 flex items-start gap-2 text-sm">
+                <input v-model="confirmoGastoConjunto" type="checkbox" class="mt-0.5">
+                <span>{{ porConjunto ? `Confirmo que o conjunto vai gastar até ${formatarReais(gastoDoConjunto)} por dia.` : `Confirmo que o conjunto vai gastar parte dos ${formatarReais(gastoDoConjunto)} por dia da campanha.` }}</span>
             </label>
         </ConfirmModal>
 

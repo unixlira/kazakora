@@ -14,7 +14,12 @@ const props = defineProps({
     periodos: { type: Object, default: () => ({}) },
     // Prop adiada: estrutura e métricas lidas ao vivo da Meta.
     espelho: { type: Object, default: null },
+    // Modal de editar anúncio no espelho (2026-10-19).
+    produtos: { type: Array, default: () => [] },
+    chamadas: { type: Object, default: () => ({}) },
 });
+
+const recarregar = () => router.reload({ only: ['espelho', 'campanhas'] });
 
 const carregando = ref(false);
 // Campanha ligada ou pausada no Gerenciador: o espelho acerta o status no
@@ -126,7 +131,8 @@ const columns = [
                 <p v-if="props.espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
                     Não deu para ler a Meta agora: {{ props.espelho.erro }}
                 </p>
-                <EspelhoMeta v-else :campanhas="props.espelho?.campanhas ?? []" :acoes="can('financeiro.create')" :class="{ 'opacity-60': carregando }" />
+                <EspelhoMeta v-else :campanhas="props.espelho?.campanhas ?? []" :acoes="can('financeiro.create')" :editar-anuncios="can('financeiro.create')"
+                    :produtos="props.produtos" :chamadas="props.chamadas" :class="{ 'opacity-60': carregando }" @mudou="recarregar" />
             </Deferred>
         </section>
 

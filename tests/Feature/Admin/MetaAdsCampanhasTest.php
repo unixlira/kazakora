@@ -396,7 +396,8 @@ class MetaAdsCampanhasTest extends TestCase
         $video = $campanha->videos()->first();
 
         $this->actingAs($admin)->putJson(self::BASE."/{$campanha->id}", $this->dados(['orcamento_diario' => 999]))->assertStatus(409);
-        $this->actingAs($admin)->deleteJson(self::BASE."/{$campanha->id}/videos/{$video->id}")->assertStatus(409);
+        // Anúncio na Meta só sai com a confirmação de que é definitivo (2026-10-19).
+        $this->actingAs($admin)->deleteJson(self::BASE."/{$campanha->id}/videos/{$video->id}")->assertStatus(422)->assertJsonValidationErrors('confirmo_exclusao');
         $this->actingAs($admin)
             ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('c.mp4', 100, 'video/mp4')], ['Accept' => 'application/json'])
             ->assertStatus(409);
@@ -1273,8 +1274,9 @@ class MetaAdsCampanhasTest extends TestCase
             ->assertInertia(fn ($page) => $page->component('Admin/MetaAds/ConjuntoNovo', false)
                 ->where('soAnuncios', true)->where('videos', [])->where('jaNaMeta.0.id', $velho->id));
 
-        // O anúncio que já está na Meta continua travado.
-        $this->actingAs($admin)->deleteJson(self::BASE."/{$campanha->id}/videos/{$velho->id}")->assertStatus(409);
+        // O anúncio que já está na Meta só sai com confirmação (2026-10-19).
+        $this->actingAs($admin)->deleteJson(self::BASE."/{$campanha->id}/videos/{$velho->id}")->assertStatus(422);
+        $this->assertNotNull($velho->fresh());
 
         $novoId = $this->actingAs($admin)
             ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('novo.mp4', 100, 'video/mp4'), 'conjunto_id' => $conjunto->id, 'texto_principal' => 'Outro texto'], ['Accept' => 'application/json'])

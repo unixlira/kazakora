@@ -4,10 +4,10 @@ namespace Tests\Feature\Marketplace;
 
 use App\Models\MercadoLivreToken;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
 use App\Modules\Marketplace\Drivers\MercadoLivreDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use App\Modules\Marketplace\Models\ProductChannelListing;
-use App\Modules\Marketplace\Models\Review;
 use App\Modules\Marketplace\Support\ReviewImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;

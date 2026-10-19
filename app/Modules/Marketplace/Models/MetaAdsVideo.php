@@ -51,6 +51,8 @@ class MetaAdsVideo extends Model
         'meta_adset_id',
         'meta_creative_id',
         'meta_ad_id',
+        'adicionado_depois',
+        'ativado_em',
         'ultimo_erro',
     ];
 
@@ -66,6 +68,8 @@ class MetaAdsVideo extends Model
             'duracao_segundos' => 'decimal:2',
             'largura' => 'integer',
             'altura' => 'integer',
+            'adicionado_depois' => 'boolean',
+            'ativado_em' => 'datetime',
             'orcamento_diario' => 'decimal:2',
         ];
     }

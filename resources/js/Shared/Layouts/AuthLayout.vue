@@ -61,7 +61,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     <div v-for="(cena, i) in cenas" :key="cena.etiqueta"
                         class="absolute inset-0 transition-opacity duration-700"
                         :class="i === atual ? 'opacity-100' : 'opacity-0'">
-                        <span class="inline-block rounded-full bg-store-accent px-3 py-1 text-xs font-semibold uppercase tracking-wide text-store-accent-contrast">
+                        <span class="inline-block rounded-full bg-[#f27a2a] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                             {{ cena.etiqueta }}
                         </span>
                         <p class="mb-0 mt-2 text-base text-white/90">{{ cena.frase }}</p>
@@ -74,7 +74,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <div class="flex gap-2">
                     <span v-for="(cena, i) in cenas" :key="'ponto-' + i"
                         class="h-1 rounded-full transition-all duration-500"
-                        :class="i === atual ? 'w-8 bg-store-accent' : 'w-4 bg-white/40'"></span>
+                        :class="i === atual ? 'w-8 bg-[#f27a2a]' : 'w-4 bg-white/40'"></span>
                 </div>
             </div>
         </div>

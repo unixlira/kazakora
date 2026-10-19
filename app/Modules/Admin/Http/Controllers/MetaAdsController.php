@@ -1120,10 +1120,31 @@ class MetaAdsController extends Controller
                 ];
             }, $meta->espelho($periodo, $campaignId));
 
-            return ['campanhas' => $campanhas, 'erro' => null];
+            return ['campanhas' => $campanhas, 'erro' => null, 'status_atualizado' => $this->acompanharStatus($campanhas)];
         } catch (MetaAdsException $erro) {
             return ['campanhas' => [], 'erro' => $erro->getMessage()];
         }
+    }
+
+    /**
+     * Status do KazaKora igual ao da Meta para as campanhas que estão nos
+     * dois lados. Devolve true se alguma mudou (a tela recarrega a lista).
+     *
+     * @param  list<array<string, mixed>>  $campanhas  espelho da Meta
+     */
+    private function acompanharStatus(array $campanhas): bool
+    {
+        $statusNaMeta = collect($campanhas)->mapWithKeys(fn (array $c) => [(string) $c['id'] => (string) $c['status']]);
+
+        if ($statusNaMeta->isEmpty()) {
+            return false;
+        }
+
+        return MetaAdsCampanha::query()
+            ->whereIn('meta_campaign_id', $statusNaMeta->keys())
+            ->get()
+            ->map(fn (MetaAdsCampanha $c) => $c->acompanharStatusDaMeta($statusNaMeta[(string) $c->meta_campaign_id]))
+            ->contains(true);
     }
 
     /**

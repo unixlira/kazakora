@@ -92,6 +92,10 @@ const acompanhar = (enviando) => {
     }
 };
 watch(enviandoAlgo, acompanhar, { immediate: true });
+// Status mudado no Gerenciador: o espelho acerta o banco e a tela recarrega.
+watch(() => props.espelho?.status_atualizado, (mudou) => {
+    if (mudou) router.reload({ only: ['campanha', 'pode'] });
+});
 
 // Conjunto novo em campanha que já está na Meta (2026-10-19).
 const conjuntoEmEnvio = ref(null);

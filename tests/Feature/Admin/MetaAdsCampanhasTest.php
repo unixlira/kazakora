@@ -941,6 +941,31 @@ class MetaAdsCampanhasTest extends TestCase
     }
 
     /**
+     * Caixa Sanfonada 168 (2026-10-19): ligada no Gerenciador, aparecia
+     * "Enviada (pausada)" no admin. O status acompanha a Meta.
+     */
+    public function test_status_acompanha_a_meta(): void
+    {
+        $campanha = MetaAdsCampanha::create($this->dados([
+            'status' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
+            'meta_campaign_id' => 'c1',
+        ]));
+
+        $this->assertTrue($campanha->acompanharStatusDaMeta('ACTIVE'));
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
+        $this->assertNotNull($campanha->fresh()->ativada_em);
+        $this->assertFalse($campanha->acompanharStatusDaMeta('ACTIVE'));
+
+        $this->assertTrue($campanha->acompanharStatusDaMeta('PAUSED'));
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->fresh()->status);
+        $this->assertFalse($campanha->acompanharStatusDaMeta('IN_PROCESS'));
+
+        $rascunho = MetaAdsCampanha::create($this->dados(['status' => MetaAdsCampanha::STATUS_RASCUNHO]));
+        $this->assertFalse($rascunho->acompanharStatusDaMeta('ACTIVE'));
+        $this->assertSame(MetaAdsCampanha::STATUS_RASCUNHO, $rascunho->fresh()->status);
+    }
+
+    /**
      * Árvore de Natal (2026-10-18): na Meta a campanha tem 1 conjunto e 3
      * criativos (2 feitos no Gerenciador), e a tela mostrava só o que o
      * banco conhecia. O espelho lê a estrutura e as métricas da Meta.
@@ -999,6 +1024,7 @@ class MetaAdsCampanhasTest extends TestCase
                 ->missing('espelho')
                 ->loadDeferredProps(fn ($reload) => $reload
                     ->where('espelho.erro', null)
+                    ->where('espelho.status_atualizado', false)
                     ->has('espelho.campanhas', 2)
                     ->where('espelho.campanhas.0.nome', 'Vendas | Árvores Natal | Out26')
                     ->where('espelho.campanhas.0.local_id', $local->id)

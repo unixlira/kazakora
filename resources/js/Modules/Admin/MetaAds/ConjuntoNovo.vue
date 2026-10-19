@@ -2,7 +2,9 @@
 // Meta ADS (pedido do Lira 2026-10-19): conjunto novo dentro de campanha que
 // já está na Meta. Monta nome, orçamento (quando é por conjunto), público e
 // os anúncios do conjunto; salvar não fala com a Meta. O envio é um botão na
-// tela da campanha e sobe só este conjunto, pausado.
+// tela da campanha e sobe só este conjunto, pausado. Com soAnuncios
+// ("Acrescentar novos anúncios" em conjunto que já existe), só os anúncios
+// novos mudam; nome e público do conjunto ficam como estão.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
@@ -13,6 +15,8 @@ import { enviarArquivo, formatarReais, pedirJson } from './metaAds';
 const props = defineProps({
     campanha: { type: Object, required: true },
     conjunto: { type: Object, default: null },
+    soAnuncios: { type: Boolean, default: false },
+    jaNaMeta: { type: Array, default: () => [] },
     videos: { type: Array, default: () => [] },
     outrosConjuntos: { type: Array, default: () => [] },
     limites: { type: Object, required: true },
@@ -128,9 +132,9 @@ const pendenciasDoAnuncio = (a) => {
 
 const pendencias = computed(() => {
     const lista = [];
-    if (!preenchido(form.nome)) lista.push('Dê um nome para o conjunto.');
-    if (porConjunto && Number(form.orcamento_diario || 0) < MINIMO) lista.push(`Mínimo de ${formatarReais(MINIMO)} por dia neste conjunto.`);
-    if (!anuncios.value.length) lista.push('Adicione pelo menos um vídeo ou imagem.');
+    if (!props.soAnuncios && !preenchido(form.nome)) lista.push('Dê um nome para o conjunto.');
+    if (!props.soAnuncios && porConjunto && Number(form.orcamento_diario || 0) < MINIMO) lista.push(`Mínimo de ${formatarReais(MINIMO)} por dia neste conjunto.`);
+    if (!anuncios.value.length && (!props.soAnuncios || !removidos.value.length)) lista.push('Adicione pelo menos um vídeo ou imagem.');
     anuncios.value.forEach((a) => lista.push(...pendenciasDoAnuncio(a)));
     return lista;
 });
@@ -156,7 +160,7 @@ const salvar = async () => {
     };
 
     try {
-        const resposta = await pedirJson(conjuntoId.value ? 'PUT' : 'POST', conjuntoId.value ? `${BASE}/conjuntos/${conjuntoId.value}` : `${BASE}/conjuntos`, dados);
+        const resposta = props.soAnuncios ? { id: conjuntoId.value } : await pedirJson(conjuntoId.value ? 'PUT' : 'POST', conjuntoId.value ? `${BASE}/conjuntos/${conjuntoId.value}` : `${BASE}/conjuntos`, dados);
         conjuntoId.value = resposta.id;
     } catch (erro) {
         if (erro.erros) erros.value = Object.fromEntries(Object.entries(erro.erros).map(([k, m]) => [k, m[0]]));
@@ -200,7 +204,7 @@ const salvar = async () => {
 
     if (falhou) {
         erroGeral.value ||= 'O conjunto foi salvo, mas algum anúncio não. Veja o motivo no anúncio e salve de novo.';
-        window.history.replaceState(window.history.state, '', `${BASE}/conjuntos/${conjuntoId.value}/editar`);
+        window.history.replaceState(window.history.state, '', `${BASE}/conjuntos/${conjuntoId.value}/${props.soAnuncios ? 'anuncios' : 'editar'}`);
         return;
     }
 
@@ -213,7 +217,7 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
 </script>
 
 <template>
-    <Head :title="conjunto ? 'Editar conjunto novo' : 'Novo conjunto'" />
+    <Head :title="soAnuncios ? 'Acrescentar novos anúncios' : (conjunto ? 'Editar conjunto novo' : 'Acrescentar novo conjunto')" />
 
     <AdminLayout>
         <div class="mb-2">
@@ -222,16 +226,29 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
         <div class="mb-4">
             <h1 class="flex items-center gap-3 text-2xl font-bold">
                 <i class="fab fa-meta text-[#0866FF]" aria-hidden="true"></i>
-                {{ conjunto ? 'Editar conjunto novo' : 'Novo conjunto' }}
+                {{ soAnuncios ? 'Acrescentar novos anúncios' : (conjunto ? 'Editar conjunto novo' : 'Acrescentar novo conjunto') }}
             </h1>
-            <p class="mt-1 text-sm text-slate-500">
+            <p v-if="soAnuncios" class="mt-1 text-sm text-slate-500">
+                No conjunto <strong>{{ conjunto.nome }}</strong> da campanha <strong>{{ c.nome }}</strong>.
+                Salvar não manda nada: o envio é na tela da campanha e os anúncios novos nascem pausados, sem mexer nos que já rodam.
+            </p>
+            <p v-else class="mt-1 text-sm text-slate-500">
                 Na campanha <strong>{{ c.nome }}</strong>, que já está na Meta.
                 Salvar não manda nada: o envio é na tela da campanha e o conjunto nasce pausado, sem mexer nos outros conjuntos.
             </p>
         </div>
 
         <form class="space-y-6 lg:max-w-4xl" @submit.prevent="salvar">
-            <section :class="[cartao, 'space-y-4 p-5']">
+            <section v-if="soAnuncios" :class="[cartao, 'space-y-1 p-5 text-sm']">
+                <h2 class="text-lg font-semibold">{{ conjunto.nome }}</h2>
+                <p class="text-slate-500">
+                    {{ conjunto.publico_proprio ? 'Público próprio' : 'Público da campanha' }}: {{ conjunto.publico.idade_min }} a {{ conjunto.publico.idade_max }} anos, {{ generos[conjunto.publico.genero]?.toLowerCase() }}
+                    <template v-if="porConjunto"> · {{ formatarReais(conjunto.orcamento_diario) }}/dia</template>
+                </p>
+                <p v-if="jaNaMeta.length" class="text-slate-500">Já na Meta (não mudam): {{ jaNaMeta.map((v) => v.nome).join(', ') }}.</p>
+            </section>
+
+            <section v-else :class="[cartao, 'space-y-4 p-5']">
                 <h2 class="text-lg font-semibold">Conjunto</h2>
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div :class="porConjunto ? 'sm:col-span-2' : 'sm:col-span-3'">
@@ -281,7 +298,7 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
 
             <section :class="[cartao, 'space-y-4 p-5']" aria-labelledby="anuncios-titulo">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
-                    <h2 id="anuncios-titulo" class="text-lg font-semibold">Anúncios</h2>
+                    <h2 id="anuncios-titulo" class="text-lg font-semibold">{{ soAnuncios ? 'Anúncios novos' : 'Anúncios' }}</h2>
                     <span class="text-xs text-slate-500">Vídeo MP4/MOV ou imagem JPG/PNG até {{ limites.max_mb }} MB. Campo vazio usa o padrão da campanha.</span>
                 </div>
                 <p v-if="aviso" class="text-sm text-amber-700" role="alert">{{ aviso }}</p>
@@ -368,7 +385,7 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                     <p v-else-if="pendencias.length" class="mr-auto text-xs text-amber-700" role="status">{{ pendencias[0] }}<template v-if="pendencias.length > 1"> (+{{ pendencias.length - 1 }})</template></p>
                     <p v-else class="mr-auto hidden text-xs text-slate-500 sm:block">Salvar guarda aqui no servidor. Nada vai para a Meta ainda.</p>
                     <Link :href="BASE" class="rounded-lg border border-[var(--surface-border)] px-4 py-2 text-sm font-medium hover:bg-[var(--surface-muted)]">Cancelar</Link>
-                    <button type="submit" :disabled="salvando || !preenchido(form.nome)"
+                    <button type="submit" :disabled="salvando || (!soAnuncios && !preenchido(form.nome))"
                         class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:cursor-not-allowed disabled:opacity-50">
                         {{ salvando ? 'Salvando…' : 'Salvar e voltar para a campanha' }}
                     </button>

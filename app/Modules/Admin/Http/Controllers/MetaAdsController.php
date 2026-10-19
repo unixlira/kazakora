@@ -37,7 +37,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *
  * Desde 2026-10-19 (pedido do Lira) dá para criar conjunto novo dentro de
  * campanha que já está na Meta: o conjunto é montado à parte e sobe
- * sozinho, pausado, sem reenviar nem pausar o resto da campanha.
+ * sozinho, pausado, sem reenviar nem pausar o resto da campanha. Do mesmo
+ * jeito, dá para acrescentar anúncio novo em conjunto que já está na Meta.
  */
 class MetaAdsController extends Controller
 {
@@ -133,6 +134,7 @@ class MetaAdsController extends Controller
             'campanha' => $campanha->makeHidden(['videos', 'conjuntos']),
             'conjuntos' => $campanha->conjuntos->map(fn (MetaAdsConjunto $c) => $this->dadosDoConjunto($campanha, $c) + [
                 'pode' => [
+                    'acrescentarAnuncios' => $c->aceitaAnuncioNovo($campanha) && $campanha->videos->count() < MetaAdsCampanha::MAX_VIDEOS,
                     'editar' => $c->aceitaMudanca($campanha),
                     'enviar' => $c->podeEnviar($campanha),
                     'ativar' => $c->podeAtivar($campanha),
@@ -345,6 +347,7 @@ class MetaAdsController extends Controller
 
         $video = $campanha->videos()->create($textos + [
             'conjunto_id' => $conjunto->id,
+            'adicionado_depois' => ! $campanha->podeMexerNosVideos(),
             'ordem' => $request->filled('ordem') ? (int) $request->input('ordem') : $this->proximaOrdem($campanha),
             'tipo' => $imagem ? MetaAdsVideo::TIPO_IMAGEM : MetaAdsVideo::TIPO_VIDEO,
             'nome_original' => mb_substr($arquivo->getClientOriginalName() ?: ($imagem ? 'imagem.jpg' : 'video.mp4'), 0, 250),
@@ -404,6 +407,7 @@ class MetaAdsController extends Controller
 
         $copia = $campanha->videos()->create($textos + [
             'conjunto_id' => $conjunto->id,
+            'adicionado_depois' => ! $campanha->podeMexerNosVideos(),
             'ordem' => $request->filled('ordem') ? (int) $request->input('ordem') : $this->proximaOrdem($campanha),
             'tipo' => $video->tipo,
             'nome_original' => $video->nome_original,
@@ -474,6 +478,21 @@ class MetaAdsController extends Controller
         }
 
         return Inertia::render('Admin/MetaAds/ConjuntoNovo', $this->dadosDoConjuntoNovo($meta, $campanha, $conjunto));
+    }
+
+    /** Acrescentar anúncios novos em conjunto que já existe (na Meta ou ainda não). */
+    public function conjuntoAnuncios(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): Response|RedirectResponse
+    {
+        abort_unless($conjunto->campanha_id === $campanha->id, 404);
+        $campanha->load(['conjuntos', 'videos']);
+        $conjunto = $campanha->conjuntos->firstWhere('id', $conjunto->id);
+
+        if (! $conjunto->aceitaAnuncioNovo($campanha)) {
+            return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)
+                ->with('error', 'Só dá para acrescentar anúncio em campanha que já está na Meta e com o conjunto fora de envio.');
+        }
+
+        return Inertia::render('Admin/MetaAds/ConjuntoNovo', $this->dadosDoConjuntoNovo($meta, $campanha, $conjunto, true));
     }
 
     public function conjuntoStore(Request $request, MetaAdsCampanha $campanha): JsonResponse
@@ -550,7 +569,7 @@ class MetaAdsController extends Controller
         $conjunto = $campanha->conjuntos->firstWhere('id', $conjunto->id);
 
         if (! $conjunto->podeEnviar($campanha)) {
-            return back()->with('error', 'Este conjunto já está na Meta ou sendo enviado.');
+            return back()->with('error', 'Nada novo para enviar neste conjunto, ou o envio já está rodando.');
         }
 
         if ($problemas = $meta->problemasDoConjuntoNovo($campanha, $conjunto)) {
@@ -561,7 +580,9 @@ class MetaAdsController extends Controller
         $campanha->videos()->where('conjunto_id', $conjunto->id)->update(['ultimo_erro' => null]);
         EnviarCampanhaMetaAds::dispatch($campanha->id, $conjunto->id);
 
-        return back()->with('success', "Enviando o conjunto {$conjunto->nome} para a Meta, dentro da campanha. Ele e os anúncios dele nascem PAUSADOS; o resto da campanha não muda.");
+        $oQue = blank($conjunto->meta_adset_id) ? "o conjunto {$conjunto->nome} e os anúncios dele" : "os anúncios novos do conjunto {$conjunto->nome}";
+
+        return back()->with('success', "Enviando {$oQue} para a Meta. Nascem PAUSADOS; o resto da campanha não muda.");
     }
 
     public function conjuntoAtivar(Request $request, MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): RedirectResponse
@@ -585,7 +606,7 @@ class MetaAdsController extends Controller
         }
 
         if (! $conjunto->podeAtivar($campanha)) {
-            return back()->with('error', 'Só dá para ativar conjunto novo já criado na Meta, em campanha ativa.');
+            return back()->with('error', 'Só dá para ativar conjunto ou anúncio novo já criado na Meta, em campanha ativa.');
         }
 
         if (! $meta->configurado()) {
@@ -595,10 +616,10 @@ class MetaAdsController extends Controller
         try {
             $meta->ativarConjunto($campanha, $conjunto);
         } catch (MetaAdsException) {
-            return back()->with('error', 'A Meta não ativou o conjunto. Veja o erro na tela.');
+            return back()->with('error', 'A Meta não ativou. Veja o erro na tela.');
         }
 
-        return back()->with('success', "Conjunto {$conjunto->nome} ativo na Meta.");
+        return back()->with('success', "Novidades do conjunto {$conjunto->nome} ativas na Meta.");
     }
 
     public function localizacoes(Request $request, MetaAdsService $meta): JsonResponse
@@ -654,7 +675,7 @@ class MetaAdsController extends Controller
         $campanha->loadMissing(['conjuntos', 'videos']);
         $conjunto = filled($conjuntoId) ? $campanha->conjuntos->firstWhere('id', (int) $conjuntoId) : null;
 
-        return (bool) $conjunto?->aceitaMudanca($campanha);
+        return (bool) $conjunto?->aceitaAnuncioNovo($campanha);
     }
 
     /** @return array<string, mixed> */
@@ -697,16 +718,20 @@ class MetaAdsController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function dadosDoConjuntoNovo(MetaAdsService $meta, MetaAdsCampanha $campanha, ?MetaAdsConjunto $conjunto): array
+    private function dadosDoConjuntoNovo(MetaAdsService $meta, MetaAdsCampanha $campanha, ?MetaAdsConjunto $conjunto, bool $soAnuncios = false): array
     {
         $formulario = $this->dadosDoFormulario($meta, $campanha);
+        $doConjunto = $conjunto ? $campanha->videos->where('conjunto_id', $conjunto->id) : collect();
 
         return [
             'campanha' => $formulario['campanha'],
             'conjunto' => $conjunto ? $this->dadosDoConjunto($campanha, $conjunto) : null,
-            'videos' => $conjunto
-                ? $campanha->videos->where('conjunto_id', $conjunto->id)->map(fn (MetaAdsVideo $v) => $this->dadosDoVideo($campanha, $v))->values()
-                : [],
+            // Acrescentar anúncios: os que já estão na Meta só aparecem como lista.
+            'soAnuncios' => $soAnuncios,
+            'videos' => $doConjunto->reject(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta())
+                ->map(fn (MetaAdsVideo $v) => $this->dadosDoVideo($campanha, $v))->values(),
+            'jaNaMeta' => $doConjunto->filter(fn (MetaAdsVideo $v) => $v->temObjetoNoMeta())
+                ->map(fn (MetaAdsVideo $v) => ['id' => $v->id, 'nome' => $v->nome_original])->values(),
             'outrosConjuntos' => $campanha->conjuntos->where('id', '!=', $conjunto?->id)->pluck('nome')->values(),
             'limites' => $formulario['limites'] + ['anuncios_na_campanha' => $campanha->videos->count()],
             'produtos' => $formulario['produtos'],
@@ -1180,6 +1205,8 @@ class MetaAdsController extends Controller
             'chamada' => $video->chamada,
             // O que de fato vai no criativo (próprio ou padrão da campanha).
             'criativo' => $video->criativo($campanha),
+            'adicionado_depois' => $video->adicionado_depois,
+            'ativado_em' => $video->ativado_em?->toIso8601String(),
         ];
     }
 }

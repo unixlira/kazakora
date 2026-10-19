@@ -18,12 +18,13 @@
  */
 export const sidebarSections = [
     {
-        // Link direto, sem dropdown (Lira, 2026-10-14): o Gerenciador volta a
-        // ser item normal do menu, como era antes do menu em grupos.
-        heading: 'Gerenciador',
+        // Link direto, sem dropdown (Lira, 2026-10-14). Desde 2026-10-19 o
+        // primeiro item é o Fluxo de Caixa, no lugar do Gerenciador (que foi
+        // para Indicadores, em abas); /admin abre o Fluxo de Caixa.
+        heading: 'Painel',
         direto: true,
         items: [
-            { label: 'Gerenciador', href: '/admin', icon: 'fas fa-gauge-high', cor: 'azul', permission: null },
+            { label: 'Fluxo de Caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', cor: 'verde', permission: 'financeiro.view' },
             { label: 'Indicadores', href: '/admin/indicadores', icon: 'fas fa-square-poll-vertical', cor: 'indigo', permission: 'relatorios.view' },
         ],
     },
@@ -124,7 +125,6 @@ export const sidebarSections = [
         heading: 'Financeiro',
         items: [
             { label: 'Resultado e margem', href: '/admin/dashboard-financeiro', icon: 'fas fa-chart-line', cor: 'verde', permission: 'financeiro.view' },
-            { label: 'Fluxo de caixa', href: '/admin/fluxo-de-caixa', icon: 'fas fa-money-bill-transfer', cor: 'verde', permission: 'financeiro.view' },
             { label: 'Notas fiscais', href: '/admin/notas-fiscais', icon: 'fas fa-file-invoice', cor: 'azul', permission: 'pedidos.view', badgeKey: 'fiscalDuplicidades' },
             { label: 'Fechamento fiscal', href: '/admin/notas-fiscais/fechamento', icon: 'fas fa-calendar-check', cor: 'ciano', permission: 'pedidos.view' },
             { label: 'Custo do Flex', href: '/admin/integracoes/mercado-livre/flex', icon: 'fas fa-file-invoice-dollar', marca: 'mercado-livre', permission: 'configuracoes.integracoes' },

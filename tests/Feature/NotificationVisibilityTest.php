@@ -54,7 +54,7 @@ class NotificationVisibilityTest extends TestCase
         $this->makeNotification($admin, InvoiceIssuanceFailedNotification::class, 'Falha ao emitir NF-e do pedido #1');
         $this->makeNotification($admin, 'App\\Notifications\\OrderStatusUpdated', 'Seu pedido foi enviado');
 
-        $response = $this->actingAs($admin)->get('/admin');
+        $response = $this->actingAs($admin)->get('/admin/fluxo-de-caixa');
 
         $response->assertInertia(fn ($page) => $page
             ->where('notifications.unreadCount', 2)
@@ -66,7 +66,7 @@ class NotificationVisibilityTest extends TestCase
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
         $admin->notify(new \App\Notifications\TikTokRelatorioNotification(false, 'Token inválido'));
 
-        foreach (['/', '/admin'] as $url) {
+        foreach (['/', '/admin/fluxo-de-caixa'] as $url) {
             $this->actingAs($admin)->get($url)->assertInertia(fn ($page) => $page
                 ->where('notifications.unreadCount', 1)
                 ->where('notifications.items.0.message', 'Erro importação arquivo financeiro TikTok')

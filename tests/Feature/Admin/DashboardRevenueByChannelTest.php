@@ -11,7 +11,7 @@ use Tests\TestCase;
  * BUG REAL 2026-08-17 ("as métricas não estão funcionando", relatado pelo
  * usuário): DashboardController::revenueByChannel() nunca teve filtro de
  * data — somava TODO pedido pago desde o início da loja, enquanto
- * 'stats.revenue' ao lado (mesma tela, mesmo rótulo "Faturamento") já era
+ * 'hojeMes.stats.revenue' ao lado (mesma tela, mesmo rótulo "Faturamento") já era
  * escopado pro mês corrente desde 2026-08-06. A soma "por canal" dava maior
  * que o "faturamento do mês" no mesmo carregamento — visivelmente quebrado.
  */
@@ -49,11 +49,11 @@ class DashboardRevenueByChannelTest extends TestCase
         $lastMonthOrder = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 999.99, 'total' => 999.99]);
         $lastMonthOrder->forceFill(['created_at' => now()->subMonthNoOverflow()])->save();
 
-        $response = $this->actingAs($this->admin())->get('/admin');
+        $response = $this->actingAs($this->admin())->get('/admin/indicadores?aba=hoje-e-mes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('revenueByChannel', [['origin' => Order::ORIGIN_SHOPEE, 'total' => 150.50]]));
+            ->where('hojeMes.revenueByChannel', [['origin' => Order::ORIGIN_SHOPEE, 'total' => 150.50]]));
     }
 
     /**
@@ -71,11 +71,11 @@ class DashboardRevenueByChannelTest extends TestCase
         $oldOrder = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 500, 'total' => 500]);
         $oldOrder->forceFill(['created_at' => now()->subMonths(2)])->save();
 
-        $response = $this->actingAs($this->admin())->get('/admin');
+        $response = $this->actingAs($this->admin())->get('/admin/indicadores?aba=hoje-e-mes');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('stats.revenue', 150.50)
-            ->where('revenueByChannel', [['origin' => Order::ORIGIN_SHOPEE, 'total' => 150.50]]));
+            ->where('hojeMes.stats.revenue', 150.50)
+            ->where('hojeMes.revenueByChannel', [['origin' => Order::ORIGIN_SHOPEE, 'total' => 150.50]]));
     }
 }

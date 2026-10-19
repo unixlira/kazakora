@@ -104,7 +104,7 @@ class DiagnosticoCanaisTest extends TestCase
         DB::table('diagnosticos_canal')->insert(['canal' => 'shopee', 'dados' => json_encode(['kpis' => ['pedidos' => 3], 'alertas' => []]), 'gerado_em' => now()]);
         $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
 
-        $this->actingAs($admin)->get('/admin')->assertOk()->assertInertia(fn ($page) => $page
+        $this->actingAs($admin)->get('/admin/indicadores?aba=caue-diego')->assertOk()->assertInertia(fn ($page) => $page
             ->where('diagnosticos.shopee.kpis.pedidos', 3)
             ->where('diagnosticos.mercado_livre', null));
     }

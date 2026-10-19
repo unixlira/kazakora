@@ -51,15 +51,15 @@ class DashboardTopProductsAndAbcTest extends TestCase
         $this->venda($minimo, 50, 100, ['status' => Order::STATUS_CANCELLED]);
         $this->venda($pequeno, 50, 100)->forceFill(['created_at' => now()->subMonths(4)])->save();
 
-        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin');
+        $response = $this->actingAs(User::factory()->create(['role' => User::ROLE_ADMIN]))->get('/admin/indicadores?aba=produtos');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page
-            ->where('topProducts.0.name', 'Minimo')
-            ->where('topProducts.0.quantity', 8)
-            ->where('abcCurve.total', 1000)
-            ->where('abcCurve.a', fn ($a) => collect($a)->pluck('name')->all() === ['Grande', 'Medio'])
-            ->where('abcCurve.b', fn ($b) => collect($b)->pluck('name')->all() === ['Pequeno'])
+            ->where('produtos.topProducts.0.name', 'Minimo')
+            ->where('produtos.topProducts.0.quantity', 8)
+            ->where('produtos.abcCurve.total', 1000)
+            ->where('produtos.abcCurve.a', fn ($a) => collect($a)->pluck('name')->all() === ['Grande', 'Medio'])
+            ->where('produtos.abcCurve.b', fn ($b) => collect($b)->pluck('name')->all() === ['Pequeno'])
             ->missing('recentOrders')
             ->missing('lowStockProducts'));
     }

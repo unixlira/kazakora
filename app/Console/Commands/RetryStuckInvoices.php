@@ -207,7 +207,14 @@ class RetryStuckInvoices extends Command
     private function reconciliarEnviadas(?string $canal, array $delegadosAoBling): void
     {
         $enviadas = Invoice::query()
-            ->where('status', Invoice::STATUS_SENT)
+            // `signed` parado há mais de 10 min: o envio caiu no meio (ex.:
+            // "Empty reply from server", pedido #3279) e a nota pode estar
+            // autorizada lá. Os 10 min evitam pegar um envio em andamento.
+            ->where(fn ($query) => $query
+                ->where('status', Invoice::STATUS_SENT)
+                ->orWhere(fn ($q) => $q
+                    ->where('status', Invoice::STATUS_SIGNED)
+                    ->where('updated_at', '<', now()->subMinutes(10))))
             ->whereNotNull('chave_acesso')
             ->whereHas('order', fn ($query) => $query
                 ->where('status', Order::STATUS_PAID)

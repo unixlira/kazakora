@@ -342,11 +342,13 @@ class MetaAdsService
     {
         $campanha->loadMissing(['conjuntos', 'videos']);
 
-        // Conjunto novo que ainda não terminou de subir não liga junto
-        // (pausar desliga tudo, inclusive ele).
-        $fora = $status === 'ACTIVE' ? $campanha->conjuntosNovosPendentes()->pluck('id') : collect();
+        // Conjunto ou anúncio novo que ainda não terminou de subir não liga
+        // junto (pausar desliga tudo, inclusive ele).
+        $ativando = $status === 'ACTIVE';
+        $fora = $ativando ? $campanha->conjuntosNovosPendentes()->pluck('id') : collect();
         $conjuntos = $campanha->conjuntos->whereNotIn('id', $fora);
-        $videos = $campanha->videos->whereNotIn('conjunto_id', $fora);
+        $videos = $campanha->videos->whereNotIn('conjunto_id', $fora)
+            ->reject(fn (MetaAdsVideo $v) => $ativando && $v->adicionado_depois && ! $v->envioCompleto());
 
         // Vários anúncios apontam para o mesmo conjunto: cada id uma vez só.
         $ids = array_values(array_unique(array_merge(
@@ -379,22 +381,28 @@ class MetaAdsService
 
         MetaAdsConjunto::query()
             ->whereIn('id', $conjuntos->filter(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))->pluck('id'))
-            ->update(['ativado_em' => $status === 'ACTIVE' ? now() : null]);
+            ->update(['ativado_em' => $ativando ? now() : null]);
+        MetaAdsVideo::query()
+            ->whereIn('id', $videos->filter(fn (MetaAdsVideo $v) => filled($v->meta_ad_id))->pluck('id'))
+            ->update(['ativado_em' => $ativando ? now() : null]);
     }
 
     /**
-     * Liga um conjunto novo (anúncios e depois o ad set) dentro de campanha
-     * que já está rodando. A campanha não é tocada.
+     * Liga o que foi acrescentado depois do envio, dentro de campanha que já
+     * está rodando: os anúncios novos e, se o conjunto é novo, o ad set. A
+     * campanha e os anúncios que já existiam não são tocados.
      *
      * @throws MetaAdsException
      */
     public function ativarConjunto(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto): void
     {
         $campanha->loadMissing('videos');
+        $anuncios = $conjunto->anunciosParaAtivar($campanha);
+        $ligarConjunto = $conjunto->adicionado_depois && $conjunto->ativado_em === null;
 
         $ids = array_values(array_unique(array_filter([
-            ...$campanha->videos->where('conjunto_id', $conjunto->id)->pluck('meta_ad_id')->all(),
-            $conjunto->meta_adset_id,
+            ...$anuncios->pluck('meta_ad_id')->all(),
+            $ligarConjunto ? $conjunto->meta_adset_id : null,
         ])));
 
         try {
@@ -407,7 +415,8 @@ class MetaAdsService
             throw $erro;
         }
 
-        $conjunto->forceFill(['ativado_em' => now(), 'ultimo_erro' => null])->save();
+        MetaAdsVideo::query()->whereIn('id', $anuncios->pluck('id'))->update(['ativado_em' => now()]);
+        $conjunto->forceFill(['ativado_em' => $conjunto->ativado_em ?? now(), 'ultimo_erro' => null])->save();
     }
 
     /**
@@ -429,13 +438,13 @@ class MetaAdsService
         }
 
         $campanha->loadMissing('videos');
-        $anuncios = $campanha->videos->where('conjunto_id', $conjunto->id);
+        $anuncios = $conjunto->anunciosNovosPendentes($campanha);
 
-        if ($anuncios->isEmpty()) {
+        if ($campanha->videos->where('conjunto_id', $conjunto->id)->isEmpty()) {
             $problemas[] = "O conjunto {$conjunto->nome} não tem anúncio. Adicione um vídeo ou imagem.";
         }
 
-        if (! $campanha->orcamentoDaCampanha() && (float) $conjunto->orcamento_diario < MetaAdsCampanha::MINIMO_POR_CONJUNTO) {
+        if ($conjunto->adicionado_depois && blank($conjunto->meta_adset_id) && ! $campanha->orcamentoDaCampanha() && (float) $conjunto->orcamento_diario < MetaAdsCampanha::MINIMO_POR_CONJUNTO) {
             $problemas[] = "Orçamento baixo no conjunto {$conjunto->nome}: o mínimo é R$ {$real(MetaAdsCampanha::MINIMO_POR_CONJUNTO)} por dia.";
         }
 

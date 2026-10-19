@@ -9,7 +9,6 @@ import { sidebarSections } from '@/Shared/adminSidebarItems';
 import MarketplaceAbas from '@/Shared/Components/MarketplaceAbas.vue';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
-import SeloReclameAqui from '@/Shared/Components/SeloReclameAqui.vue';
 
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
@@ -279,15 +278,19 @@ watch(
         <nav id="menu-admin" class="relative z-20 flex flex-wrap items-center justify-between border-r border-[var(--surface-border)] bg-[var(--surface)] px-6 py-4 shadow-sm transition-all md:fixed md:bottom-0 md:left-0 md:top-0 md:block md:flex-row md:flex-nowrap md:overflow-y-auto"
             :class="[sidebarCollapsed ? 'md:w-20 md:px-3' : 'md:w-64', collapseShow === 'hidden' ? 'max-md:hidden' : 'max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:top-[69px] max-md:z-30 max-md:overflow-y-auto']">
             <div class="mx-auto flex w-full flex-wrap items-center justify-between px-0 md:min-h-full md:flex-col md:flex-nowrap md:items-stretch">
-                <!-- Menu recolhido: logo em cima e botão embaixo (lado a lado não cabe em 80px). -->
-                <div class="hidden w-full items-center justify-between md:flex" :class="sidebarCollapsed ? 'flex-col gap-2' : ''">
-                    <Link href="/admin" class="flex items-center py-3" title="KazaKora">
-                        <img v-if="sidebarCollapsed" :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
-                        <img v-else :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
-                    </Link>
-                    <button type="button" class="icone-cor icone-cor-azul hover:opacity-80" :title="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" :aria-label="sidebarCollapsed ? 'Abrir menu' : 'Recolher menu'" @click="toggleSidebar">
-                        <i :class="sidebarCollapsed ? 'fas fa-angles-right' : 'fas fa-angles-left'"></i>
+                <!-- Menu recolhido (Lira, 2026-10-19): sem a seta; clicar no logo abre o menu. -->
+                <div class="hidden w-full items-center justify-between md:flex" :class="sidebarCollapsed ? 'justify-center' : ''">
+                    <button v-if="sidebarCollapsed" type="button" class="flex items-center py-3 hover:opacity-80" title="Abrir menu" aria-label="Abrir menu" @click="toggleSidebar">
+                        <img :src="marcaFavicon" alt="KazaKora" class="h-10 w-10 max-w-none shrink-0 rounded-xl object-cover shadow-sm">
                     </button>
+                    <template v-else>
+                        <Link href="/admin" class="flex items-center py-3" title="KazaKora">
+                            <img :src="marcaLogo" alt="KazaKora" class="h-7 w-auto">
+                        </Link>
+                        <button type="button" class="icone-cor icone-cor-azul hover:opacity-80" title="Recolher menu" aria-label="Recolher menu" @click="toggleSidebar">
+                            <i class="fas fa-angles-left"></i>
+                        </button>
+                    </template>
                 </div>
 
                 <!-- Bug real reportado 2026-08-09: esse painel não tinha
@@ -341,14 +344,15 @@ watch(
                                     </button>
                                 </div>
                                 <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
-                                recuado embaixo do pai; com o menu recolhido fica só o ícone. -->
+                                recuado embaixo do pai; com o menu recolhido fica só o ícone.
+                                Espaço antes do ícone e fonte menor (2026-10-19) para ler como item de dentro. -->
                                 <ul v-if="item.children" v-show="sidebarCollapsed || submenuAberto(item)" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
                                     <li v-for="filho in item.children" :key="filho.href">
                                         <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
-                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"
-                                            :class="isActive(filho.href)
+                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-[13px] font-medium transition-colors"
+                                            :class="[{ 'pl-3': !sidebarCollapsed }, isActive(filho.href)
                                                 ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
-                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
                                             <i class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
                                             <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>
@@ -388,8 +392,6 @@ watch(
                 <div v-if="!sidebarCollapsed" class="mt-auto hidden w-full flex-col items-center gap-0.5 border-t border-[var(--surface-border)] py-4 text-center md:flex">
                     <p class="truncate text-xs font-bold text-slate-400">Versão 1.12.0</p>
                     <p class="truncate text-xs text-slate-400">Desenvolvido por KoraTech</p>
-                    <!-- Selo oficial RA Verificada (2026-10-14), discreto. -->
-                    <SeloReclameAqui class="mt-2 rounded-[2px] opacity-80 transition hover:opacity-100" :altura="36" />
                 </div>
             </div>
         </nav>

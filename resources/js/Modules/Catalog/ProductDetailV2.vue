@@ -1077,11 +1077,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* descrição no visual da v1 */
 .pd2 .descricao-card { position: relative; overflow: hidden; padding-top: 34px; }
 .pd2 .desc-cabecalho { text-align: center; max-width: 640px; margin: 0 auto 26px; }
-/* Círculo amarelo claro com ícone no amarelo escuro; frase no amarelo do botão COMPRAR, em negrito e com
-   borda em cada palavra (teste de atenção, pedido 2026-10-19). */
-.pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: #fff3c4; color: #c98f00; }
+/* Círculo no amarelo do botão COMPRAR com ícone preto; frase no mesmo amarelo, em negrito e com
+   borda preta em cada palavra (teste de atenção, pedido 2026-10-19). */
+.pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: var(--yellow); color: #000; }
 .pd2 .desc-eyebrow { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 12px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--yellow); }
-.pd2 .desc-eyebrow span { border: 1.5px solid var(--yellow); border-radius: 6px; padding: 3px 4px 3px 7px; line-height: 1.2; }
+.pd2 .desc-eyebrow span { border: 1.5px solid #000; border-radius: 6px; padding: 3px 4px 3px 7px; line-height: 1.2; }
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }

@@ -18,7 +18,7 @@ Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->without
 // 1 por dia por 7 dias (manhã, tarde e noite) — ver LembreteCarrinho.
 Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlapping(10);
 // Pedido do site: rastreio dos Correios (sem webhook) marca enviado/entregue
-// e manda o WhatsApp "saiu para entrega" (AcompanharRastreioLoja).
+// e manda o WhatsApp "saiu para entrega" e "foi entregue" (AcompanharRastreioLoja).
 Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
@@ -45,6 +45,9 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
 Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
+// Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
+// de hora em hora, e-mail só quando aparece pedido novo travado.
+Schedule::command('loja:nota-etiqueta-pendentes')->hourlyAt(10)->withoutOverlapping(30);
 Schedule::command('daily-text:fetch')->twiceDaily(0, 12);
 
 // Reconciliação periódica pedido/faturamento (2026-08-06) — rede de

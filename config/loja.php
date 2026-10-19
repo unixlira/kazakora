@@ -63,6 +63,13 @@ return [
     'email_relatorios' => env('LOJA_EMAIL_RELATORIOS', env('LOJA_EMAIL_CONTATO', 'korashopecom@gmail.com')),
 
     /*
+    | Vigia de pedido pago sem NF-e e sem etiqueta (loja:nota-etiqueta-pendentes,
+    | de hora em hora): destinatário próprio (Lira 2026-10-19, unixlira@gmail.com).
+    | Vazio, usa o dos relatórios.
+    */
+    'email_nota_etiqueta' => env('LOJA_EMAIL_NOTA_ETIQUETA') ?: env('LOJA_EMAIL_RELATORIOS', env('LOJA_EMAIL_CONTATO', 'korashopecom@gmail.com')),
+
+    /*
     | Simples Nacional (pedido 2026-10-10): alíquota efetiva informada pelo
     | contador, em %, e a data em que a empresa entrou no Simples (antes era
     | MEI). Usada para estimar o DAS do mês no e-mail de resultado.

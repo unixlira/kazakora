@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Modules\Checkout\Jobs\EnviarEmailPedidoEnviadoJob;
 use App\Modules\Checkout\Jobs\SendOrderDeliveredWhatsAppJob;
 use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
@@ -16,7 +17,8 @@ use Throwable;
  * Correios nem o KoraSync avisam o despacho (sem webhook), e até hoje pedido
  * da loja ficava "pago" para sempre. A cada 30 minutos consulta o objeto da
  * pré-postagem: primeiro evento físico (postagem) vira "enviado" e manda o
- * WhatsApp "Seu pedido saiu para entrega"; entregue vira "concluído" e
+ * WhatsApp "Seu pedido saiu para entrega" e o e-mail "Seu pedido foi
+ * enviado" (EnviarEmailPedidoEnviadoJob); entregue vira "concluído" e
  * manda o WhatsApp "Seu pedido foi entregue" (SendOrderDeliveredWhatsAppJob).
  */
 class AcompanharRastreioLoja extends Command
@@ -71,12 +73,18 @@ class AcompanharRastreioLoja extends Command
                         continue;
                     }
 
+                    $recente = ! $r['postado_em'] || $r['postado_em']->gt(now()->subHours(self::AVISO_ATE_HORAS));
+
                     if ($order->status === Order::STATUS_PAID) {
                         $pedidos->syncStatus($order, Order::STATUS_SHIPPED, 'correios:postado');
                         $contagem['enviados']++;
+
+                        // E-mail "Seu pedido foi enviado" (2026-10-19), uma vez, na virada para enviado.
+                        if ($recente) {
+                            EnviarEmailPedidoEnviadoJob::dispatch($order->id, $r['previsao']?->toDateString());
+                        }
                     }
 
-                    $recente = ! $r['postado_em'] || $r['postado_em']->gt(now()->subHours(self::AVISO_ATE_HORAS));
                     if ($order->whatsapp_enviado_em === null && $recente) {
                         SendOrderShippedWhatsAppJob::dispatch($order->id, $r['previsao']?->toDateString());
                     }

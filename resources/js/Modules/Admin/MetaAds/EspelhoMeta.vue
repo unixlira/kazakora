@@ -10,7 +10,11 @@ const props = defineProps({
     campanhas: { type: Array, default: () => [] },
     // Abre todos os conjuntos de cara (tela de uma campanha só).
     abrirTudo: { type: Boolean, default: false },
+    // Botões Novo conjunto e Novo anúncio (quem pode criar; Lira 2026-10-19).
+    acoes: { type: Boolean, default: false },
 });
+
+const BASE = '/admin/publicidade/meta-ads/campanhas';
 
 const STATUS = {
     ACTIVE: ['Ativo', 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'],
@@ -75,7 +79,13 @@ const COLUNAS = [
                                     </span>
                                 </span>
                             </button>
-                            <Link v-if="c.local_id" :href="`/admin/publicidade/meta-ads/campanhas/${c.local_id}`" class="ml-5 text-xs font-medium text-primary hover:underline">Ver no KazaKora</Link>
+                            <span v-if="c.local_id" class="ml-5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <Link :href="`${BASE}/${c.local_id}`" class="text-xs font-medium text-primary hover:underline">Ver no KazaKora</Link>
+                                <Link v-if="acoes && c.novo_conjunto" :href="`${BASE}/${c.local_id}/conjuntos/novo`"
+                                    class="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10">
+                                    <i class="fas fa-plus text-[10px]" aria-hidden="true"></i> Novo conjunto
+                                </Link>
+                            </span>
                         </td>
                         <td class="px-3 py-3"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status(c.status)[1]">{{ status(c.status)[0] }}</span></td>
                         <td class="whitespace-nowrap px-3 py-3 text-right" :title="c.orcamento_nivel === 'conjunto' ? 'Soma do orçamento dos conjuntos ativos' : 'Orçamento da campanha'">
@@ -95,6 +105,10 @@ const COLUNAS = [
                                             <span class="block text-xs text-slate-500">Conjunto · {{ plural(s.anuncios.length, 'anúncio', 'anúncios') }}</span>
                                         </span>
                                     </button>
+                                    <Link v-if="acoes && s.novo_anuncio" :href="`${BASE}/${c.local_id}/conjuntos/${s.local_id}/anuncios`"
+                                        class="ml-5 mt-1 inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10">
+                                        <i class="fas fa-plus text-[10px]" aria-hidden="true"></i> Novo anúncio
+                                    </Link>
                                 </td>
                                 <td class="px-3 py-2.5"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status(s.status)[1]">{{ status(s.status)[0] }}</span></td>
                                 <td class="whitespace-nowrap px-3 py-2.5 text-right">{{ c.orcamento_nivel === 'conjunto' ? orcamento(s) : 'da campanha' }}</td>

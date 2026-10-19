@@ -61,8 +61,7 @@ class ResponderConfirmacaoPedido implements ShouldQueue
         $order = Order::query()->with('user')->find($orderId);
 
         // O botão só vale para o número que recebeu a mensagem do pedido.
-        $telefones = array_filter(array_map([WhatsAppPhone::class, 'normalize'], [$order?->shipping_whatsapp, $order?->shipping_phone, $order?->user?->phone]));
-        if (! $order || ! in_array(WhatsAppPhone::normalize($conversation->wa_id), $telefones, true)) {
+        if (! $order || ! WhatsAppPhone::mesmoNumero($conversation->wa_id, [$order?->shipping_whatsapp, $order?->shipping_phone, $order?->user?->phone])) {
             Log::warning('whatsapp_confirmacao_pedido_numero_diferente', ['conversation_id' => $conversation->id, 'order_id' => $orderId]);
 
             return;

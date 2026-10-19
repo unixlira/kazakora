@@ -3,7 +3,9 @@
 namespace Tests\Feature\Checkout;
 
 use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
+use App\Modules\Checkout\Mail\PedidoEnviado;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderEmailLog;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\WhatsApp\Jobs\ChamarAtendentePedido;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
@@ -11,6 +13,7 @@ use App\Services\Correios\CorreiosTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -90,6 +93,28 @@ class PedidoEnviadoWhatsAppTest extends TestCase
         $this->assertSame(['Maria', $order->numero, 'até 22/10 (quinta-feira)'], array_column($c[1]['parameters'], 'text'));
         $this->assertSame(['url', $order->trackingRef()], [$c[2]['sub_type'], $c[2]['parameters'][0]['text']]);
         $this->assertSame(['quick_reply', "pedido_enviado:atendente:{$order->id}"], [$c[3]['sub_type'], $c[3]['parameters'][0]['payload']]);
+    }
+
+    public function test_postagem_manda_email_de_pedido_enviado_uma_vez(): void
+    {
+        Mail::fake();
+        $order = $this->comObjeto($this->pedido(['shipping_email' => 'maria@exemplo.com']));
+        $this->rastro([
+            ['codigo' => 'PO', 'tipo' => '01', 'descricao' => 'Objeto postado', 'dtHrCriado' => now()->subHour()->format('Y-m-d\TH:i:s')],
+        ], '2026-10-22T23:59:59');
+
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+        $this->travel(31)->minutes();
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+
+        Mail::assertSent(PedidoEnviado::class, 1);
+        Mail::assertSent(PedidoEnviado::class, fn (PedidoEnviado $mail) => $mail->hasTo('maria@exemplo.com')
+            && $mail->order->is($order) && $mail->previsao === 'até 22/10 (quinta-feira)');
+        $this->assertSame(1, OrderEmailLog::query()->where('order_id', $order->id)->where('mailable', PedidoEnviado::class)->where('status', OrderEmailLog::STATUS_SENT)->count());
+
+        $html = (new PedidoEnviado($order->fresh(), 'até 22/10 (quinta-feira)'))->render();
+        $this->assertStringContainsString('/rastreio/'.$order->trackingRef(), $html);
+        $this->assertStringContainsString('AE000000000BR', $html);
     }
 
     public function test_data_da_postagem_vem_do_evento_po(): void

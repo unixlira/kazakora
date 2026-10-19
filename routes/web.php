@@ -653,15 +653,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'pausar'])->whereNumber('campanha')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/assumir', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'assumir'])->whereNumber('campanha')->name('assumir')->middleware(['permission:financeiro.create', 'throttle:10,1']);
-        // Conjunto novo em campanha que já está na Meta (Lira 2026-10-19).
-        Route::get('{campanha}/conjuntos/novo', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoCreate'])->whereNumber('campanha')->name('conjuntos.criar')->middleware('permission:financeiro.create');
-        Route::post('{campanha}/conjuntos', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoStore'])->whereNumber('campanha')->name('conjuntos.armazenar')->middleware('permission:financeiro.create');
-        Route::get('{campanha}/conjuntos/{conjunto}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoEdit'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.editar')->middleware('permission:financeiro.create');
-        Route::get('{campanha}/conjuntos/{conjunto}/anuncios', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoAnuncios'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.anuncios')->middleware('permission:financeiro.create');
-        Route::put('{campanha}/conjuntos/{conjunto}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoUpdate'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.atualizar')->middleware('permission:financeiro.create');
-        Route::delete('{campanha}/conjuntos/{conjunto}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoDestroy'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.excluir')->middleware('permission:financeiro.create');
-        Route::post('{campanha}/conjuntos/{conjunto}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoEnviar'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
-        Route::post('{campanha}/conjuntos/{conjunto}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoAtivar'])->whereNumber(['campanha', 'conjunto'])->name('conjuntos.ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
     });
     // Estratégia Shopee, botão Ação (tarefa 569, 2026-10-14): o Cauê pausa,
     // retoma ou muda a meta de ROAS da campanha do produto, só pelo clique

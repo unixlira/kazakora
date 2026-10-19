@@ -166,31 +166,19 @@ class MetaAdsService
      * passo que faltou. Sobe no máximo um vídeo por chamada, para cada
      * rodada da fila caber no tempo limite do worker.
      *
-     * Com $somente (conjunto novo em campanha que já está na Meta, pedido do
-     * Lira 2026-10-19), sobe só esse conjunto e os anúncios dele, dentro da
-     * campanha que já existe, e não mexe no status da campanha: ela pode
-     * estar gastando. O erro fica no conjunto.
-     *
      * @return self::ENVIO_*
      *
      * @throws MetaAdsException
      */
-    public function avancarEnvio(MetaAdsCampanha $campanha, ?MetaAdsConjunto $somente = null): string
+    public function avancarEnvio(MetaAdsCampanha $campanha): string
     {
         $campanha->loadMissing(['conjuntos', 'videos']);
         $passo = 'campanha';
         $video = null;
-        $conjuntos = $somente ? $campanha->conjuntos->where('id', $somente->id)->values() : $campanha->conjuntos;
-        $videos = $somente ? $campanha->videos->where('conjunto_id', $somente->id)->values() : $campanha->videos;
-        $alvo = $somente ? $conjuntos->first() : null;
-
-        if ($somente && (! $alvo || blank($campanha->meta_campaign_id))) {
-            throw new MetaAdsException('A campanha não está na Meta: envie a campanha inteira.');
-        }
 
         try {
             // 1. Sobe todas as mídias primeiro: a Meta processa os vídeos em paralelo.
-            foreach ($videos as $video) {
+            foreach ($campanha->videos as $video) {
                 $passo = "envio do {$this->rotuloDoAnuncio($video)}";
                 if ($video->ehImagem() && blank($video->meta_image_hash)) {
                     [$hash, $url] = $this->subirImagem($video);
@@ -214,7 +202,7 @@ class MetaAdsService
 
             // 2. Espera o processamento dos vídeos e pega a capa que a Meta escolheu.
             $todosProntos = true;
-            foreach ($videos as $video) {
+            foreach ($campanha->videos as $video) {
                 $passo = "processamento do {$this->rotuloDoAnuncio($video)}";
                 if ($video->midiaPronta()) {
                     continue;
@@ -237,7 +225,7 @@ class MetaAdsService
             // 3. Criativos antes da campanha. No reenvio, anúncio que já está
             // no conjunto (criado aqui ou à mão no Gerenciador com a mesma
             // mídia) é aproveitado em vez de duplicado.
-            foreach ($videos as $video) {
+            foreach ($campanha->videos as $video) {
                 if (filled($video->meta_ad_id)) {
                     continue;
                 }
@@ -269,8 +257,8 @@ class MetaAdsService
             }
 
             // 4. Cada conjunto e, dentro dele, o anúncio de cada mídia.
-            foreach ($conjuntos as $conjunto) {
-                $anuncios = $videos->where('conjunto_id', $conjunto->id);
+            foreach ($campanha->conjuntos as $conjunto) {
+                $anuncios = $campanha->videos->where('conjunto_id', $conjunto->id);
                 if ($anuncios->isEmpty()) {
                     continue;
                 }
@@ -301,23 +289,12 @@ class MetaAdsService
             $mensagem = "Falhou no passo {$passo}: {$erro->getMessage()}";
             if ($video) {
                 $video->forceFill(['ultimo_erro' => mb_substr($erro->getMessage(), 0, 1000)])->save();
-            } elseif (! $alvo && isset($conjunto) && str_starts_with($passo, 'conjunto ')) {
+            } elseif (isset($conjunto) && str_starts_with($passo, 'conjunto ')) {
                 $conjunto->forceFill(['ultimo_erro' => mb_substr($erro->getMessage(), 0, 1000)])->save();
             }
-
-            if ($alvo) {
-                $alvo->forceFill(['enviando' => false, 'ultimo_erro' => mb_substr($mensagem, 0, 1000)])->save();
-            } else {
-                $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ERRO, 'ultimo_erro' => $mensagem])->save();
-            }
+            $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ERRO, 'ultimo_erro' => $mensagem])->save();
 
             throw $erro;
-        }
-
-        if ($alvo) {
-            $alvo->forceFill(['enviando' => false, 'ultimo_erro' => null])->save();
-
-            return self::ENVIO_PRONTO;
         }
 
         $campanha->forceFill([
@@ -342,19 +319,11 @@ class MetaAdsService
     {
         $campanha->loadMissing(['conjuntos', 'videos']);
 
-        // Conjunto ou anúncio novo que ainda não terminou de subir não liga
-        // junto (pausar desliga tudo, inclusive ele).
-        $ativando = $status === 'ACTIVE';
-        $fora = $ativando ? $campanha->conjuntosNovosPendentes()->pluck('id') : collect();
-        $conjuntos = $campanha->conjuntos->whereNotIn('id', $fora);
-        $videos = $campanha->videos->whereNotIn('conjunto_id', $fora)
-            ->reject(fn (MetaAdsVideo $v) => $ativando && $v->adicionado_depois && ! $v->envioCompleto());
-
         // Vários anúncios apontam para o mesmo conjunto: cada id uma vez só.
         $ids = array_values(array_unique(array_merge(
-            $videos->pluck('meta_ad_id')->filter()->all(),
-            $conjuntos->pluck('meta_adset_id')->filter()->all(),
-            $videos->pluck('meta_adset_id')->filter()->all(),
+            $campanha->videos->pluck('meta_ad_id')->filter()->all(),
+            $campanha->conjuntos->pluck('meta_adset_id')->filter()->all(),
+            $campanha->videos->pluck('meta_adset_id')->filter()->all(),
             [$campanha->meta_campaign_id],
         )));
 
@@ -378,92 +347,6 @@ class MetaAdsService
             'ativada_em' => $status === 'ACTIVE' ? now() : $campanha->ativada_em,
             'ultimo_erro' => null,
         ])->save();
-
-        MetaAdsConjunto::query()
-            ->whereIn('id', $conjuntos->filter(fn (MetaAdsConjunto $c) => filled($c->meta_adset_id))->pluck('id'))
-            ->update(['ativado_em' => $ativando ? now() : null]);
-        MetaAdsVideo::query()
-            ->whereIn('id', $videos->filter(fn (MetaAdsVideo $v) => filled($v->meta_ad_id))->pluck('id'))
-            ->update(['ativado_em' => $ativando ? now() : null]);
-    }
-
-    /**
-     * Liga o que foi acrescentado depois do envio, dentro de campanha que já
-     * está rodando: os anúncios novos e, se o conjunto é novo, o ad set. A
-     * campanha e os anúncios que já existiam não são tocados.
-     *
-     * @throws MetaAdsException
-     */
-    public function ativarConjunto(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto): void
-    {
-        $campanha->loadMissing('videos');
-        $anuncios = $conjunto->anunciosParaAtivar($campanha);
-        $ligarConjunto = $conjunto->adicionado_depois && $conjunto->ativado_em === null;
-
-        $ids = array_values(array_unique(array_filter([
-            ...$anuncios->pluck('meta_ad_id')->all(),
-            $ligarConjunto ? $conjunto->meta_adset_id : null,
-        ])));
-
-        try {
-            foreach ($ids as $id) {
-                $this->post((string) $id, ['status' => 'ACTIVE']);
-            }
-        } catch (MetaAdsException $erro) {
-            $conjunto->forceFill(['ultimo_erro' => mb_substr("Falhou ao ativar: {$erro->getMessage()}", 0, 1000)])->save();
-
-            throw $erro;
-        }
-
-        MetaAdsVideo::query()->whereIn('id', $anuncios->pluck('id'))->update(['ativado_em' => now()]);
-        $conjunto->forceFill(['ativado_em' => $conjunto->ativado_em ?? now(), 'ultimo_erro' => null])->save();
-    }
-
-    /**
-     * O que impede o envio do conjunto novo (lista vazia = pode enviar).
-     *
-     * @return list<string>
-     */
-    public function problemasDoConjuntoNovo(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto): array
-    {
-        $problemas = [];
-        $real = fn (float $valor) => number_format($valor, 2, ',', '.');
-
-        if (! $this->configurado()) {
-            $problemas[] = 'Meta não configurado.';
-        }
-
-        if ($campanha->objetivo === 'OUTCOME_SALES' && ! $this->pixelConfigurado()) {
-            $problemas[] = 'Objetivo Vendas precisa do pixel da Meta (Configurações › Pixel da Meta).';
-        }
-
-        $campanha->loadMissing('videos');
-        $anuncios = $conjunto->anunciosNovosPendentes($campanha);
-
-        if ($campanha->videos->where('conjunto_id', $conjunto->id)->isEmpty()) {
-            $problemas[] = "O conjunto {$conjunto->nome} não tem anúncio. Adicione um vídeo ou imagem.";
-        }
-
-        if ($conjunto->adicionado_depois && blank($conjunto->meta_adset_id) && ! $campanha->orcamentoDaCampanha() && (float) $conjunto->orcamento_diario < MetaAdsCampanha::MINIMO_POR_CONJUNTO) {
-            $problemas[] = "Orçamento baixo no conjunto {$conjunto->nome}: o mínimo é R$ {$real(MetaAdsCampanha::MINIMO_POR_CONJUNTO)} por dia.";
-        }
-
-        foreach ($anuncios as $video) {
-            $nome = $this->rotuloDoAnuncio($video);
-            $criativo = $video->criativo($campanha);
-
-            if (blank($video->ehImagem() ? $video->meta_image_hash : $video->meta_video_id) && ! Storage::disk('local')->exists($video->path)) {
-                $problemas[] = "O arquivo do {$nome} sumiu do servidor. Tire e envie de novo.";
-            }
-            if (blank($criativo['texto'])) {
-                $problemas[] = "Falta o texto principal do {$nome} (ou um texto padrão na campanha).";
-            }
-            if (blank($criativo['titulo'])) {
-                $problemas[] = "Falta o título do {$nome} (ou um título padrão na campanha).";
-            }
-        }
-
-        return $problemas;
     }
 
     /**

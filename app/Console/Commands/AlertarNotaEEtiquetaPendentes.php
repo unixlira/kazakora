@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\Storage;
  *
  * Nota "external" conta como emitida (o canal emite, ver Invoice). Pedidos
  * criados há menos de 30 minutos ficam de fora: a nota automática ainda
- * pode estar saindo. Olha só os últimos 7 dias.
+ * pode estar saindo. Olha só os últimos 7 dias. Destinatário em
+ * LOJA_EMAIL_NOTA_ETIQUETA (vazio, LOJA_EMAIL_RELATORIOS).
  */
 class AlertarNotaEEtiquetaPendentes extends Command
 {
@@ -82,7 +83,7 @@ class AlertarNotaEEtiquetaPendentes extends Command
             return self::SUCCESS;
         }
 
-        $para = $teste ? [$this->option('para')] : array_filter(array_map('trim', explode(',', (string) config('loja.email_relatorios'))));
+        $para = $teste ? [$this->option('para')] : array_filter(array_map('trim', explode(',', (string) config('loja.email_nota_etiqueta'))));
         Mail::to($para)->send(new NotaEEtiquetaPendentes($lista));
 
         if (! $teste) {

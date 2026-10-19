@@ -24,7 +24,7 @@ class NotaEEtiquetaPendentesTest extends TestCase
         parent::setUp();
         Storage::fake('local');
         Mail::fake();
-        config(['loja.email_relatorios' => 'dono@exemplo.com']);
+        config(['loja.email_nota_etiqueta' => 'dono@exemplo.com']);
         Carbon::setTestNow('2026-10-19 15:10:00');
     }
 

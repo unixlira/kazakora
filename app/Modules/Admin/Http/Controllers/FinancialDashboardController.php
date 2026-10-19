@@ -253,7 +253,8 @@ class FinancialDashboardController extends Controller
                 continue;
             }
             $a = $atribuido->get($canal);
-            $vendas = $a && ((float) $a->vendas > 0 || (int) $a->pedidos > 0) ? round((float) $a->vendas, 2) : null;
+            // Mercado Ads devolve pedidos atribuídos sem o valor: sem valor = sem dado.
+            $vendas = $a && (float) $a->vendas > 0 ? round((float) $a->vendas, 2) : null;
             $linhas[] = [
                 'canal' => $canal,
                 'nome' => self::CANAIS[$canal],

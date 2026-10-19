@@ -299,7 +299,7 @@ class FinancialDashboardNetProfitTest extends TestCase
     {
         $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE, 'subtotal' => 200.5, 'total' => 200.5]);
         ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'shopee', 'spend' => 10.25, 'attributed_orders' => 2, 'attributed_gmv' => 80.5]);
-        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 5.5, 'attributed_orders' => 0, 'attributed_gmv' => 0]);
+        ChannelAdSpend::create(['date' => now()->toDateString(), 'channel' => 'mercado_livre', 'spend' => 5.5, 'attributed_orders' => 3, 'attributed_gmv' => 0]);
 
         $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
             ->assertInertia(fn ($page) => $page->where('anuncios.linhas', function ($linhas) {

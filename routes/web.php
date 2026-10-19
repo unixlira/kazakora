@@ -693,7 +693,6 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('{campanha}/enviar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'enviar'])->whereNumber('campanha')->name('enviar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/ativar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'ativar'])->whereNumber('campanha')->name('ativar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::post('{campanha}/pausar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'pausar'])->whereNumber('campanha')->name('pausar')->middleware(['permission:financeiro.create', 'throttle:10,1']);
-        Route::post('{campanha}/assumir', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'assumir'])->whereNumber('campanha')->name('assumir')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         // Conjunto novo em campanha que já está na Meta (Lira 2026-10-19).
         Route::get('{campanha}/conjuntos/novo', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoCreate'])->whereNumber('campanha')->name('conjuntos.criar')->middleware('permission:financeiro.create');
         Route::post('{campanha}/conjuntos', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'conjuntoStore'])->whereNumber('campanha')->name('conjuntos.armazenar')->middleware('permission:financeiro.create');

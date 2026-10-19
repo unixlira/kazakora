@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable } from '@/Shared/Components/DataTable';
 import { usePermissions } from '@/Shared/usePermissions';
 import { Deferred, Head, Link, router } from '@inertiajs/vue3';
-import { h, ref } from 'vue';
+import { h, ref, watch } from 'vue';
 import EspelhoMeta from './EspelhoMeta.vue';
 import { formatarData, formatarReais, STATUS_ESTILOS } from './metaAds';
 
@@ -17,6 +17,12 @@ const props = defineProps({
 });
 
 const carregando = ref(false);
+// Campanha ligada ou pausada no Gerenciador: o espelho acerta o status no
+// banco e a lista do KazaKora recarrega para mostrar o mesmo que a Meta.
+watch(() => props.espelho?.status_atualizado, (mudou) => {
+    if (mudou) router.reload({ only: ['campanhas'] });
+});
+
 const trocarPeriodo = (periodo) => router.get('/admin/publicidade/meta-ads/campanhas', periodo === 'maximum' ? {} : { periodo }, {
     only: ['espelho', 'periodo'],
     preserveScroll: true,

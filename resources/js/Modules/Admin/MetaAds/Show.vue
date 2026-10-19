@@ -74,8 +74,6 @@ const ativar = () => router.post(`${base.value}/ativar`, {
 
 const modalPausar = ref(false);
 const pausar = () => router.post(`${base.value}/pausar`, {}, { ...opcoes, onSuccess: () => { modalPausar.value = false; } });
-const modalAssumir = ref(false);
-const assumir = () => router.post(`${base.value}/assumir`, {}, { ...opcoes, onSuccess: () => { modalAssumir.value = false; } });
 
 const excluir = async () => {
     if (await confirmDelete({ title: `Excluir o rascunho "${c.value.nome}"?` })) {
@@ -94,6 +92,10 @@ const acompanhar = (enviando) => {
     }
 };
 watch(enviandoAlgo, acompanhar, { immediate: true });
+// Status mudado no Gerenciador: o espelho acerta o banco e a tela recarrega.
+watch(() => props.espelho?.status_atualizado, (mudou) => {
+    if (mudou) router.reload({ only: ['campanha', 'pode'] });
+});
 
 // Conjunto novo em campanha que já está na Meta (2026-10-19).
 const conjuntoEmEnvio = ref(null);
@@ -168,10 +170,6 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 <button v-if="pode.pausar && can('financeiro.create')" type="button" :disabled="processando || !config.configurado"
                     :class="[botao, 'bg-amber-500 text-white hover:bg-amber-600']" @click="modalPausar = true">
                     <i class="fas fa-pause text-xs" aria-hidden="true"></i> Pausar
-                </button>
-                <button v-if="pode.assumir && can('financeiro.create')" type="button" :disabled="processando"
-                    :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="modalAssumir = true">
-                    <i class="fab fa-meta text-xs" aria-hidden="true"></i> Assumida no Gerenciador
                 </button>
                 <Link v-if="pode.adicionarConjunto && can('financeiro.create')" :href="`${base}/conjuntos/novo`"
                     :class="[botao, 'border border-primary text-primary hover:bg-primary/10']">
@@ -428,9 +426,5 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             <p class="text-sm">A campanha para de gastar. Dá para ativar de novo depois.</p>
         </ConfirmModal>
 
-        <ConfirmModal :open="modalAssumir" title="Passar a campanha para o Gerenciador?" confirm-label="Marcar como assumida" cancel-label="Voltar"
-            :loading="processando" @close="modalAssumir = false" @confirm="assumir">
-            <p class="text-sm">Use quando a campanha foi terminada ou mudada direto no Gerenciador da Meta. O KazaKora para de enviar, ativar e pausar ela (reenviar criaria anúncio repetido). Nada muda na Meta.</p>
-        </ConfirmModal>
     </AdminLayout>
 </template>

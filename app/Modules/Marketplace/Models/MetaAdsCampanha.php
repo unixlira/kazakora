@@ -275,11 +275,36 @@ class MetaAdsCampanha extends Model
         return $this->status === self::STATUS_ATIVA && $this->envioCompleto();
     }
 
-    /** Já tem algo na Meta e o envio não está rodando: dá para passar para o Gerenciador. */
-    public function podeAssumirNoGerenciador(): bool
+    /**
+     * Acompanha o status que a Meta informa (effective_status da campanha).
+     * Lira 2026-10-19: campanha ligada ou pausada direto no Gerenciador
+     * aparecia com o status antigo no admin, porque o KazaKora só mudava o
+     * status pelos próprios botões. Só mexe em campanha já enviada; rascunho,
+     * envio em andamento e erro ficam como estão.
+     */
+    public function acompanharStatusDaMeta(string $statusMeta): bool
     {
-        return in_array($this->status, [self::STATUS_ERRO, self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA], true)
-            && filled($this->meta_campaign_id);
+        if (blank($this->meta_campaign_id)
+            || ! in_array($this->status, [self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA, self::STATUS_GERENCIADOR], true)) {
+            return false;
+        }
+
+        $novo = match ($statusMeta) {
+            'ACTIVE' => self::STATUS_ATIVA,
+            'PAUSED' => self::STATUS_ENVIADA_PAUSADA,
+            default => null,
+        };
+
+        if ($novo === null || $novo === $this->status) {
+            return false;
+        }
+
+        $this->forceFill([
+            'status' => $novo,
+            'ativada_em' => $novo === self::STATUS_ATIVA ? ($this->ativada_em ?? now()) : $this->ativada_em,
+        ])->save();
+
+        return true;
     }
 
     /**

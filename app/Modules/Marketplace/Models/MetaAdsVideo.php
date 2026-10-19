@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Support\FormatoDeVideo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Meta ADS (2026-10-13): um anúncio da campanha, com o arquivo enviado pelo
@@ -17,9 +18,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * anúncio, dentro do seu conjunto (MetaAdsConjunto). meta_adset_id guarda o
  * conjunto onde o anúncio foi criado. O arquivo fica no disco local
  * (privado) e é apagado junto com o rascunho.
+ *
+ * Desde 2026-10-19 o anúncio que já está na Meta pode ser editado (nome,
+ * texto, link, botão e arquivo, com criativo novo) e excluído. Excluído na
+ * Meta sai da tela mas fica no banco (SoftDeletes), para não perder o
+ * vínculo com o gasto; o que nunca foi para a Meta sai de vez (forceDelete).
  */
 class MetaAdsVideo extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'meta_ads_videos';
 
     public const TIPO_VIDEO = 'video';
@@ -30,6 +38,7 @@ class MetaAdsVideo extends Model
         'campanha_id',
         'conjunto_id',
         'ordem',
+        'nome',
         'tipo',
         'nome_original',
         'path',
@@ -54,6 +63,7 @@ class MetaAdsVideo extends Model
         'adicionado_depois',
         'ativado_em',
         'ultimo_erro',
+        'edicao_pendente',
     ];
 
     protected $attributes = [
@@ -71,6 +81,7 @@ class MetaAdsVideo extends Model
             'adicionado_depois' => 'boolean',
             'ativado_em' => 'datetime',
             'orcamento_diario' => 'decimal:2',
+            'edicao_pendente' => 'array',
         ];
     }
 
@@ -128,6 +139,18 @@ class MetaAdsVideo extends Model
     {
         return filled($this->meta_video_id) || filled($this->meta_image_hash) || filled($this->meta_adset_id)
             || filled($this->meta_creative_id) || filled($this->meta_ad_id);
+    }
+
+    /** Anúncio criado na Meta (dá para editar e excluir lá). */
+    public function estaNaMeta(): bool
+    {
+        return filled($this->meta_ad_id);
+    }
+
+    /** Troca de arquivo esperando a Meta processar o vídeo novo. */
+    public function temEdicaoPendente(): bool
+    {
+        return filled($this->edicao_pendente);
     }
 
     /** Mídia já está na Meta e pronta para virar criativo. */

@@ -1049,4 +1049,183 @@ class MetaAdsCampanhasTest extends TestCase
                     ->where('espelho.campanhas', [])
                     ->where('espelho.erro', 'Token expirado (código 190)')));
     }
+
+    /** @param  list<HttpRequest>  $chamadas */
+    private function posts(array $chamadas): array
+    {
+        return array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST'));
+    }
+
+    private function caminho(HttpRequest $r): string
+    {
+        return Str::after(parse_url($r->url(), PHP_URL_PATH), '/v23.0/');
+    }
+
+    /**
+     * Pedido do Lira (2026-10-19): conjunto novo dentro de campanha que já
+     * está rodando. Sobe sozinho, pausado, dentro da campanha que existe;
+     * a campanha segue ativa e o resto não é reenviado.
+     */
+    public function test_conjunto_novo_em_campanha_ativa_sobe_sozinho_pausado(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $admin = $this->admin();
+        $campanha = $this->campanhaComVideos(1, 30);
+        $this->enviarAteTerminar($campanha);
+        app(MetaAdsService::class)->alterarStatus($campanha->fresh(['conjuntos', 'videos']), 'ACTIVE');
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
+        $antigo = $campanha->conjuntos()->first();
+
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}/conjuntos/novo")->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Admin/MetaAds/ConjuntoNovo', false)->where('conjunto', null));
+
+        $id = $this->actingAs($admin)->postJson(self::BASE."/{$campanha->id}/conjuntos", [
+            'nome' => 'Ferramentas',
+            'publico_proprio' => true,
+            'idade_min' => 30,
+            'idade_max' => 60,
+            'genero' => 'masculino',
+            'localizacoes' => ['regioes' => [['key' => '460', 'nome' => 'São Paulo']], 'cidades' => []],
+        ])->assertCreated()->json('id');
+        $novo = MetaAdsConjunto::findOrFail($id);
+        $this->assertTrue($novo->adicionado_depois);
+        $this->assertTrue($novo->publico_proprio);
+
+        // Anúncio entra só no conjunto novo; o antigo continua travado.
+        $this->actingAs($admin)
+            ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('velho.mp4', 100, 'video/mp4'), 'conjunto_id' => $antigo->id], ['Accept' => 'application/json'])
+            ->assertStatus(409);
+        $this->actingAs($admin)
+            ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('ferramentas.mp4', 100, 'video/mp4'), 'conjunto_id' => $id, 'titulo' => 'Kit ferramentas'], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        // A campanha segue podendo pausar enquanto o conjunto novo é montado.
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('pode.pausar', true)
+                ->where('pode.adicionarConjunto', true)
+                ->where('conjuntos.1.pode.enviar', true)
+                ->where('conjuntos.1.pode.editar', true)
+                ->where('conjuntos.1.problemas', []));
+
+        Queue::fake();
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar")->assertSessionHas('success');
+        Queue::assertPushed(EnviarCampanhaMetaAds::class, fn ($job) => $job->campanhaId === $campanha->id && $job->conjuntoId === $id);
+        $this->assertTrue($novo->fresh()->enviando);
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
+
+        $chamadas = [];
+        $meta = app(MetaAdsService::class);
+        for ($i = 0; $i < 10 && $meta->avancarEnvio($campanha->fresh(['conjuntos', 'videos']), $novo->fresh()) !== MetaAdsService::ENVIO_PRONTO; $i++);
+
+        $posts = $this->posts($chamadas);
+        $this->assertSame(['act_123/advideos', 'act_123/adcreatives', 'act_123/adsets', 'act_123/ads'], array_map(fn ($r) => $this->caminho($r), $posts));
+        $this->assertSame('camp1', $posts[2]['campaign_id']);
+        $this->assertSame('PAUSED', $posts[2]['status']);
+        $this->assertSame('PAUSED', $posts[3]['status']);
+        $this->assertStringContainsString('Ferramentas', $posts[2]['name']);
+        $targeting = json_decode($posts[2]['targeting'], true);
+        $this->assertSame(30, $targeting['age_min']);
+        $this->assertSame([1], $targeting['genders']);
+        $this->assertArrayNotHasKey('daily_budget', $posts[2]->data());
+
+        $novo->refresh();
+        $this->assertFalse($novo->enviando);
+        $this->assertSame('set2', $novo->meta_adset_id);
+        $campanha->refresh();
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->status);
+        $this->assertNull($campanha->ultimo_erro);
+
+        // Ativar o conjunto pede confirmação e liga só ele.
+        $chamadas = [];
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/ativar", ['orcamento_diario' => 30])
+            ->assertSessionHasErrors('confirmo_gasto');
+        $this->assertSame([], $chamadas);
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/ativar", ['confirmo_gasto' => true, 'orcamento_diario' => 30])
+            ->assertSessionHas('success');
+        $this->assertSame(['ad2', 'set2'], array_map(fn ($r) => $this->caminho($r), $chamadas));
+        $this->assertNotNull($novo->fresh()->ativado_em);
+
+        $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")->assertOk()
+            ->assertInertia(fn ($page) => $page->where('conjuntos.1.pode.ativar', false)->where('conjuntos.1.pode.enviar', false));
+    }
+
+    public function test_conjunto_novo_so_em_campanha_na_meta_e_soma_o_orcamento_por_conjunto(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $admin = $this->admin();
+
+        $rascunho = $this->campanhaComVideos(1, 30);
+        $this->actingAs($admin)->postJson(self::BASE."/{$rascunho->id}/conjuntos", ['nome' => 'X'])->assertStatus(409);
+
+        $campanha = $this->campanhaComVideos(1, 20, 1, MetaAdsCampanha::ORCAMENTO_CONJUNTO);
+        $this->enviarAteTerminar($campanha);
+
+        $this->actingAs($admin)->postJson(self::BASE."/{$campanha->id}/conjuntos", ['nome' => 'Caixa'])
+            ->assertStatus(422)->assertJsonValidationErrors('orcamento_diario');
+        $this->actingAs($admin)->postJson(self::BASE."/{$campanha->id}/conjuntos", ['nome' => 'Caixa', 'orcamento_diario' => 3])
+            ->assertStatus(422)->assertJsonValidationErrors('orcamento_diario');
+
+        $id = $this->actingAs($admin)->postJson(self::BASE."/{$campanha->id}/conjuntos", ['nome' => 'Caixa', 'orcamento_diario' => 15])
+            ->assertCreated()->json('id');
+        $this->assertSame('35.00', $campanha->fresh()->orcamento_diario);
+
+        $this->actingAs($admin)->putJson(self::BASE."/{$campanha->id}/conjuntos/{$id}", ['nome' => 'Caixa 2', 'orcamento_diario' => 10])->assertOk();
+        $this->assertSame('30.00', $campanha->fresh()->orcamento_diario);
+        $this->assertSame('Caixa 2', MetaAdsConjunto::find($id)->nome);
+
+        // Sem anúncio não envia.
+        Queue::fake();
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar")->assertSessionHas('error');
+        Queue::assertNothingPushed();
+
+        $this->actingAs($admin)
+            ->post(self::BASE."/{$campanha->id}/videos", ['video' => UploadedFile::fake()->create('caixa.mp4', 100, 'video/mp4'), 'conjunto_id' => $id], ['Accept' => 'application/json'])
+            ->assertCreated();
+        $path = $campanha->videos()->where('conjunto_id', $id)->value('path');
+        Storage::disk('local')->assertExists($path);
+
+        $this->actingAs($admin)->delete(self::BASE."/{$campanha->id}/conjuntos/{$id}")->assertSessionHas('success');
+        $this->assertNull(MetaAdsConjunto::find($id));
+        Storage::disk('local')->assertMissing($path);
+        $this->assertSame('20.00', $campanha->fresh()->orcamento_diario);
+
+        // Conjunto que já foi para a Meta não sai por aqui.
+        $antigo = $campanha->conjuntos()->first();
+        $this->actingAs($admin)->delete(self::BASE."/{$campanha->id}/conjuntos/{$antigo->id}")->assertSessionHas('error');
+        $this->assertNotNull($antigo->fresh());
+    }
+
+    public function test_erro_no_conjunto_novo_fica_nele_e_a_campanha_segue_ativa(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+        $campanha = $this->campanhaComVideos(1, 30);
+        $this->enviarAteTerminar($campanha);
+        app(MetaAdsService::class)->alterarStatus($campanha->fresh(['conjuntos', 'videos']), 'ACTIVE');
+
+        $novo = $campanha->conjuntos()->create(['nome' => 'Novo', 'ordem' => 1, 'adicionado_depois' => true, 'enviando' => true]);
+        Storage::disk('local')->put("meta-ads/campanha-{$campanha->id}/n.mp4", 'video');
+        $campanha->videos()->create(['conjunto_id' => $novo->id, 'ordem' => 1, 'nome_original' => 'n.mp4', 'path' => "meta-ads/campanha-{$campanha->id}/n.mp4", 'tamanho' => 10]);
+
+        // Troca a Meta falsa: agora ela recusa o conjunto.
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::fake(['*/act_123/adsets' => Http::response(['error' => ['message' => 'Público pequeno demais', 'code' => 100]], 400), '*' => Http::response(['id' => 'x1', 'status' => ['video_status' => 'ready'], 'data' => [['uri' => 'https://scontent.example/c.jpg']]])]);
+
+        (new EnviarCampanhaMetaAds($campanha->id, $novo->id))->handle(app(MetaAdsService::class));
+        (new EnviarCampanhaMetaAds($campanha->id, $novo->id))->handle(app(MetaAdsService::class));
+        (new EnviarCampanhaMetaAds($campanha->id, $novo->id))->handle(app(MetaAdsService::class));
+
+        $novo->refresh();
+        $this->assertFalse($novo->enviando);
+        $this->assertStringContainsString('Público pequeno demais', $novo->ultimo_erro);
+        $campanha->refresh();
+        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->status);
+        $this->assertNull($campanha->ultimo_erro);
+        $this->assertTrue($campanha->load(['conjuntos', 'videos'])->podePausar());
+        $this->assertTrue($novo->podeEnviar($campanha));
+    }
 }
+

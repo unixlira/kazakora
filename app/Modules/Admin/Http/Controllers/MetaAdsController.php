@@ -69,18 +69,17 @@ class MetaAdsController extends Controller
                 'fim' => $c->fim?->toDateString(),
                 'videos' => $c->videos_count,
                 'conjuntos' => $c->conjuntos_count,
+                'novo_conjunto' => $c->podeAdicionarConjunto() && $c->conjuntos_count < MetaAdsCampanha::MAX_CONJUNTOS,
                 'ultimo_erro' => $c->ultimo_erro,
                 'criada_por' => $c->user?->name,
             ]);
-
-        $noKazaKora = MetaAdsCampanha::query()->whereNotNull('meta_campaign_id')->pluck('id', 'meta_campaign_id');
 
         return Inertia::render('Admin/MetaAds/Index', [
             'campanhas' => $campanhas,
             'config' => $this->estadoConfig($meta),
             'periodo' => $periodo,
             'periodos' => MetaAdsService::PERIODOS,
-            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $noKazaKora->all())),
+            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $this->noKazaKora())),
         ]);
     }
 
@@ -1111,7 +1110,7 @@ class MetaAdsController extends Controller
      * Estrutura real da Meta (Campanha > Conjuntos > Anúncios) com métricas.
      * Erro da Meta não derruba a tela: volta a mensagem para mostrar.
      *
-     * @param  array<string, int>  $noKazaKora  meta_campaign_id => id local, para o link da campanha
+     * @param  array<string, array<string, array<string, mixed>>>  $noKazaKora  ids da Meta => registro local (ver noKazaKora())
      * @return array{campanhas: list<array<string, mixed>>, erro: ?string}
      */
     private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = []): array
@@ -1121,15 +1120,57 @@ class MetaAdsController extends Controller
         }
 
         try {
-            $campanhas = array_map(
-                fn (array $c) => $c + ['local_id' => $noKazaKora[$c['id']] ?? null],
-                $meta->espelho($periodo, $campaignId),
-            );
+            $campanhas = array_map(function (array $c) use ($noKazaKora) {
+                $local = $noKazaKora['campanhas'][$c['id']] ?? null;
+                $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local) {
+                    $conjunto = $local ? ($noKazaKora['conjuntos'][$s['id']] ?? null) : null;
+
+                    return $s + [
+                        'local_id' => $conjunto['id'] ?? null,
+                        'novo_anuncio' => (bool) ($conjunto['novo_anuncio'] ?? false),
+                    ];
+                }, $c['conjuntos'] ?? []);
+
+                return $c + [
+                    'local_id' => $local['id'] ?? null,
+                    'novo_conjunto' => (bool) ($local['novo_conjunto'] ?? false),
+                ];
+            }, $meta->espelho($periodo, $campaignId));
 
             return ['campanhas' => $campanhas, 'erro' => null];
         } catch (MetaAdsException $erro) {
             return ['campanhas' => [], 'erro' => $erro->getMessage()];
         }
+    }
+
+    /**
+     * Campanhas e conjuntos do Gerenciador que existem no KazaKora, com o
+     * que dá para acrescentar em cada um (1 campanha > N conjuntos > N
+     * anúncios, como no Gerenciador). Pedido do Lira 2026-10-19.
+     *
+     * @return array{campanhas: array<string, array{id: int, novo_conjunto: bool}>, conjuntos: array<string, array{id: int, novo_anuncio: bool}>}
+     */
+    private function noKazaKora(): array
+    {
+        $mapa = ['campanhas' => [], 'conjuntos' => []];
+
+        MetaAdsCampanha::query()
+            ->whereNotNull('meta_campaign_id')
+            ->with('conjuntos')
+            ->get()
+            ->each(function (MetaAdsCampanha $c) use (&$mapa) {
+                $mapa['campanhas'][(string) $c->meta_campaign_id] = [
+                    'id' => $c->id,
+                    'novo_conjunto' => $c->podeAdicionarConjunto() && $c->conjuntos->count() < MetaAdsCampanha::MAX_CONJUNTOS,
+                ];
+                foreach ($c->conjuntos as $s) {
+                    if (filled($s->meta_adset_id)) {
+                        $mapa['conjuntos'][(string) $s->meta_adset_id] = ['id' => $s->id, 'novo_anuncio' => $s->aceitaAnuncioNovo($c)];
+                    }
+                }
+            });
+
+        return $mapa;
     }
 
     private function estadoConfig(MetaAdsService $meta): array

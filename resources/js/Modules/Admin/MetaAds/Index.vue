@@ -51,6 +51,17 @@ const columns = [
     { id: 'periodo', header: 'Período', accessorFn: (row) => periodo(row) },
     { id: 'estrutura', header: 'Conjuntos · anúncios', accessorFn: (row) => `${row.conjuntos} · ${row.videos}` },
     { id: 'criada_por', header: 'Criada por', accessorFn: (row) => row.criada_por ?? '-' },
+    {
+        id: 'acoes',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => (can('financeiro.create') && row.original.novo_conjunto
+            ? h(Link, {
+                href: `/admin/publicidade/meta-ads/campanhas/${row.original.id}/conjuntos/novo`,
+                class: 'inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10',
+            }, () => [h('i', { class: 'fas fa-plus text-[10px]', 'aria-hidden': 'true' }), ' Novo conjunto'])
+            : null),
+    },
 ];
 </script>
 
@@ -109,7 +120,7 @@ const columns = [
                 <p v-if="props.espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
                     Não deu para ler a Meta agora: {{ props.espelho.erro }}
                 </p>
-                <EspelhoMeta v-else :campanhas="props.espelho?.campanhas ?? []" :class="{ 'opacity-60': carregando }" />
+                <EspelhoMeta v-else :campanhas="props.espelho?.campanhas ?? []" :acoes="can('financeiro.create')" :class="{ 'opacity-60': carregando }" />
             </Deferred>
         </section>
 

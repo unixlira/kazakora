@@ -340,14 +340,15 @@ watch(
                                     </button>
                                 </div>
                                 <!-- Submenu (Radar, pedido do Lira 2026-10-12): recolhível pela setinha,
-                                recuado embaixo do pai; com o menu recolhido fica só o ícone. -->
+                                recuado embaixo do pai; com o menu recolhido fica só o ícone.
+                                Espaço antes do ícone e fonte menor (2026-10-19) para ler como item de dentro. -->
                                 <ul v-if="item.children" v-show="sidebarCollapsed || submenuAberto(item)" class="flex list-none flex-col" :class="{ 'ml-4 border-l border-[var(--surface-border)] pl-1': !sidebarCollapsed }">
                                     <li v-for="filho in item.children" :key="filho.href">
                                         <Link :href="filho.href" :title="`${item.label} › ${filho.label}`"
-                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-sm font-medium transition-colors"
-                                            :class="isActive(filho.href)
+                                            class="flex items-center gap-2 rounded-lg border-l-[3px] py-2 text-[13px] font-medium transition-colors"
+                                            :class="[{ 'pl-3': !sidebarCollapsed }, isActive(filho.href)
                                                 ? 'border-[var(--destaque)] bg-lightprimary font-semibold text-[var(--destaque)]'
-                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30'"
+                                                : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                             :aria-current="isActive(filho.href) ? 'page' : undefined">
                                             <i class="w-8 text-center text-xs" :class="[filho.icon, classeIcone(filho)]"></i>
                                             <span v-if="!sidebarCollapsed" class="truncate">{{ filho.label }}</span>

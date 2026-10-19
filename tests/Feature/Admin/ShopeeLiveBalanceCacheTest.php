@@ -50,6 +50,18 @@ class ShopeeLiveBalanceCacheTest extends TestCase
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk();
     }
 
+    public function test_wallet_ip_block_shows_the_reason(): void
+    {
+        $wallet = Mockery::mock(ShopeeWalletService::class);
+        $wallet->shouldReceive('currentBalance')->once()->andThrow(new RuntimeException('Request Source IP (1.2.3.4) is undeclared. Please declare all your IP addresses'));
+        $this->app->instance(ShopeeWalletService::class, $wallet);
+
+        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('walletBalances.shopee', null)
+                ->where('walletBalances.shopee_erro', 'A Shopee bloqueou o IP deste servidor (lista branca do app).'));
+    }
+
     public function test_wallet_failure_is_not_cached_and_refresh_forces_a_new_call(): void
     {
         $wallet = Mockery::mock(ShopeeWalletService::class);
@@ -63,7 +75,8 @@ class ShopeeLiveBalanceCacheTest extends TestCase
         // Falha: página abre normal (fallback de sempre), nada em cache.
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('walletBalances.shopee', null));
+            ->assertInertia(fn ($page) => $page->where('walletBalances.shopee', null)
+                ->where('walletBalances.shopee_erro', 'A Shopee não respondeu agora. Tente atualizar.'));
         // Tenta de novo e grava o sucesso.
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk();
         // Vem do cache — não chama a Shopee.

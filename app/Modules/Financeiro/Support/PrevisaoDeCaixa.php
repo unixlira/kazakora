@@ -10,6 +10,7 @@ use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -37,14 +38,17 @@ class PrevisaoDeCaixa
      * não fica em cache, ?refresh=1 busca de novo); Mercado Livre pelo saldo
      * do Mercado Pago que o ads:sync-wallet-balance deixa pronto.
      *
-     * @return array{shopee: float|null, mercado_livre: float|null, mercado_livre_as_of: string|null}
+     * @return array{shopee: float|null, shopee_erro: string|null, mercado_livre: float|null, mercado_livre_as_of: string|null}
      */
     public function walletBalances(): array
     {
         $shopeeAccount = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
         $shopee = null;
+        $shopeeErro = null;
 
-        if ($shopeeAccount?->isConnected()) {
+        if (! $shopeeAccount?->isConnected()) {
+            $shopeeErro = 'Loja da Shopee não conectada.';
+        } else {
             try {
                 $cacheKey = 'shopee:wallet_balance:'.$shopeeAccount->seller_id;
 
@@ -53,9 +57,20 @@ class PrevisaoDeCaixa
                 }
 
                 $shopee = Cache::remember($cacheKey, now()->addMinutes(self::WALLET_CACHE_MINUTES), fn () => $this->shopeeWallet->currentBalance());
-            } catch (Throwable) {
-                // A tela não pode cair porque a consulta ao vivo falhou.
+
+                if ($shopee === null) {
+                    $shopeeErro = 'Nenhuma movimentação na carteira nos últimos 7 dias.';
+                }
+            } catch (Throwable $e) {
+                // A tela não pode cair porque a consulta ao vivo falhou, mas o
+                // motivo fica no log e na tela (antes era engolido e só
+                // aparecia "Indisponível"; 19/10: no homolog era o IP do
+                // servidor fora da lista branca do app na Shopee).
+                Log::warning('shopee.wallet_balance.failed', ['erro' => mb_substr($e->getMessage(), 0, 300)]);
                 $shopee = null;
+                $shopeeErro = str_contains($e->getMessage(), 'is undeclared')
+                    ? 'A Shopee bloqueou o IP deste servidor (lista branca do app).'
+                    : 'A Shopee não respondeu agora. Tente atualizar.';
             }
         }
 
@@ -63,6 +78,7 @@ class PrevisaoDeCaixa
 
         return [
             'shopee' => $shopee,
+            'shopee_erro' => $shopeeErro,
             'mercado_livre' => $mlBalance?->balance !== null ? (float) $mlBalance->balance : null,
             'mercado_livre_as_of' => $mlBalance?->balance_as_of?->toDateTimeString(),
         ];

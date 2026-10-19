@@ -42,7 +42,8 @@ const descontoDaNota = computed(() => (notaDoPedido.value && props.tabela.length
 
 function enviar() {
     if (faltam.value) return;
-    form.post(`/avaliar-pedido/${props.token}`, { preserveScroll: true });
+    // Sem preserveScroll: o cartão do cupom aparece do topo.
+    form.post(`/avaliar-pedido/${props.token}`);
 }
 
 const copiado = ref(false);

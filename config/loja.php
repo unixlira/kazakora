@@ -82,4 +82,13 @@ return [
         'pedidos' => (int) env('LOJA_SELO_CLIENTE_PEDIDOS', 10),
         'desde' => env('LOJA_SELO_CLIENTE_DESDE', '2026-10-15'),
     ],
+
+    /*
+    | Alertas do Fluxo de Caixa (2026-10-19, AlertasFinanceiros): ADS do
+    | canal acima de X% do faturamento do canal (meta do Lira 3 a 4%) e
+    | receita Y% abaixo do período de comparação.
+    */
+    'ads_alerta_percentual' => (float) env('LOJA_ADS_ALERTA_PERCENTUAL', 6),
+    'ads_meta_percentual' => (float) env('LOJA_ADS_META_PERCENTUAL', 4),
+    'queda_vendas_percentual' => (float) env('LOJA_QUEDA_VENDAS_PERCENTUAL', 30),
 ];

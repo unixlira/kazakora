@@ -1,370 +1,248 @@
 <script setup>
+/**
+ * Fluxo de Caixa (aprovado pelo Lira em 2026-10-19, substitui o
+ * Gerenciador em /admin). Casca com três abas; filtros na URL (de, ate,
+ * canal, comparar, agrupar, aba). O servidor calcula só a aba aberta
+ * (CashFlowController). Todo número do Resumo vem da conta oficial
+ * (ContributionMargin), a mesma do painel e do e-mail das 23h50.
+ */
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
-import CardStats from '@/Shared/Components/CardStats.vue';
-import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
-import ActionIcon from '@/Shared/Components/ActionIcon.vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { usePermissions } from '@/Shared/usePermissions';
-import { useServerTable, toTableSort } from '@/Shared/useServerTable';
-import { Head, router, useForm } from '@inertiajs/vue3';
-import { computed, h, ref } from 'vue';
-import { confirmDelete } from '@/Shared/notify';
+import { formatPercent, formatPrice } from '@/Shared/graficos';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import AbaLancamentos from './AbaLancamentos.vue';
+import AbaVendas from './AbaVendas.vue';
+import AlertasFinanceiros from './AlertasFinanceiros.vue';
+import CascataResultado from './CascataResultado.vue';
+import DeCadaCem from './DeCadaCem.vue';
+import EvolucaoPeriodo from './EvolucaoPeriodo.vue';
+import FiltrosPeriodo from './FiltrosPeriodo.vue';
+import KpiResultado from './KpiResultado.vue';
+import LucroPorCanal from './LucroPorCanal.vue';
+import ProximosDias from './ProximosDias.vue';
+import QualidadeDados from './QualidadeDados.vue';
 
-// Lançamentos e vendas chegam paginados do servidor (~50 por página cada,
-// paginators do Laravel) — busca, ordenação, período e plataforma são query
-// param tratados em CashFlowController@index. Os totais das vendas também
-// vêm prontos de lá (salesTotals), somados sobre o conjunto filtrado todo.
 const props = defineProps({
-    entries: { type: Object, default: () => ({ data: [] }) },
+    filtro: { type: Object, required: true },
+    canaisFiltro: { type: Array, default: () => [] },
     costCenters: { type: Array, default: () => [] },
-    summary: { type: Object, required: true },
-    sales: { type: Object, default: () => ({ data: [] }) },
-    salesTotals: { type: Object, default: () => ({ cost: 0, fee: 0, shipping: 0, netProfit: 0 }) },
-    salesPlatforms: { type: Array, default: () => [] },
-    salesFilter: { type: Object, required: true },
-    entriesFilter: { type: Object, default: () => ({}) },
+    // Resumo
+    resumo: { type: Object, default: null },
+    canais: { type: Array, default: null },
+    serie: { type: Array, default: null },
+    previsao: { type: Object, default: null },
+    qualidade: { type: Object, default: null },
+    alertas: { type: Array, default: null },
+    // Vendas
+    sales: { type: Object, default: null },
+    salesTotals: { type: Object, default: null },
+    salesFilter: { type: Object, default: null },
+    // Lançamentos
+    entries: { type: Object, default: null },
+    summary: { type: Object, default: null },
+    entriesFilter: { type: Object, default: null },
 });
-
-// Um único conjunto de query params pras duas tabelas — mudar o filtro de
-// uma não pode apagar o da outra. Página não entra aqui de propósito:
-// qualquer filtro novo volta as duas pra primeira página.
-const { visit, sortParams } = useServerTable('/admin/fluxo-de-caixa', {
-    start: props.salesFilter.start ?? null,
-    end: props.salesFilter.end ?? null,
-    platform: props.salesFilter.platform ?? null,
-    search: props.salesFilter.search ?? null,
-    sort: props.salesFilter.sort ?? null,
-    direction: props.salesFilter.sort ? props.salesFilter.direction : null,
-    entries_search: props.entriesFilter.search ?? null,
-    entries_sort: props.entriesFilter.sort ?? null,
-    entries_direction: props.entriesFilter.sort ? props.entriesFilter.direction : null,
-});
-
-const entryRows = computed(() => props.entries?.data ?? []);
-const salesRows = computed(() => props.sales?.data ?? []);
 
 const { can } = usePermissions();
-const showForm = ref(false);
+const URL_BASE = '/admin/fluxo-de-caixa';
 
-const form = useForm({
-    type: 'income',
-    description: '',
-    amount: 0,
-    cost_center_id: '',
-    entry_date: new Date().toISOString().slice(0, 10),
+// ---- Navegação: filtros na URL --------------------------------------------
+const filtroBase = (aba = props.filtro.aba) => {
+    const f = props.filtro;
+    const p = { aba, de: f.de, ate: f.ate };
+    if (f.canal) p.canal = f.canal;
+    if (f.comparar !== 'mes_passado') p.comparar = f.comparar;
+    if (f.agruparFixo) p.agrupar = f.agrupar;
+    return p;
+};
+const hrefAba = (aba) => `${URL_BASE}?${new URLSearchParams(filtroBase(aba)).toString()}`;
+
+const visitar = (mudancas = {}) => {
+    const atuais = Object.fromEntries(new URLSearchParams(window.location.search).entries());
+    delete atuais.page;
+    delete atuais.entries_page;
+    delete atuais.start;
+    delete atuais.end;
+    delete atuais.platform;
+    const params = { ...atuais, ...filtroBase(), ...mudancas };
+    if (mudancas.agrupar === null) delete params.agrupar;
+    const limpos = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== ''));
+    router.get(URL_BASE, limpos, { preserveState: true, preserveScroll: true, replace: true });
+};
+
+// "Calculando…" enquanto o servidor refaz a conta.
+const calculando = ref(false);
+let pararInicio = null;
+let pararFim = null;
+onMounted(() => {
+    pararInicio = router.on('start', (e) => { if (e.detail.visit.url.pathname === URL_BASE) calculando.value = true; });
+    pararFim = router.on('finish', () => { calculando.value = false; });
 });
+onBeforeUnmount(() => { pararInicio?.(); pararFim?.(); });
 
-const submit = () => {
-    form.post('/admin/fluxo-de-caixa', {
-        preserveScroll: true,
-        onSuccess: () => {
-            form.reset();
-            showForm.value = false;
-        },
-    });
-};
-
-const formatPrice = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-const salesRangeStart = ref(props.salesFilter.start ?? '');
-const salesRangeEnd = ref(props.salesFilter.end ?? '');
-
-const applySalesRange = () => {
-    visit({ start: salesRangeStart.value || null, end: salesRangeEnd.value || null });
-};
-
-const toDateInput = (date) => date.toISOString().slice(0, 10);
-
-const applyPreset = (preset) => {
-    const now = new Date();
-
-    if (preset === 'all') {
-        salesRangeStart.value = '';
-        salesRangeEnd.value = '';
-        applySalesRange();
+// ---- Novo lançamento ------------------------------------------------------
+const abaLancamentos = ref(null);
+const abrirForm = ref(false);
+const novoLancamento = () => {
+    if (props.filtro.aba === 'lancamentos') {
+        abaLancamentos.value?.abrirNovo();
         return;
     }
-
-    let start;
-    let end;
-
-    if (preset === 'thisMonth') {
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = now;
-    } else if (preset === 'lastMonth') {
-        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        end = new Date(now.getFullYear(), now.getMonth(), 0);
-    } else {
-        start = new Date(now.getFullYear(), 0, 1);
-        end = now;
-    }
-
-    salesRangeStart.value = toDateInput(start);
-    salesRangeEnd.value = toDateInput(end);
-    applySalesRange();
+    router.get(URL_BASE, { ...filtroBase('lancamentos') }, { preserveScroll: true, onSuccess: () => { abrirForm.value = true; } });
 };
 
-// Filtro por plataforma — pedido explícito 2026-08-14. O valor é o origin
-// do pedido (salesPlatforms vem do servidor com o rótulo de cada um).
-const platformFilter = ref(props.salesFilter.platform ?? '');
-const applyPlatform = () => visit({ platform: platformFilter.value || null });
-
-// Comissão editável direto na tabela — pedido explícito 2026-08-14: "editavel
-// na propria tabela o valor de comissao ... clicar no enter ai ele atualiza".
-// Grava (CashFlowController::updateSaleFee) e deixa o Inertia recarregar
-// 'sales' já recalculado no servidor (rateio entre itens do mesmo pedido,
-// has_fee_data, lucro líquido) — não tenta recalcular isso no front.
-const savingFeeOrderId = ref(null);
-
-const saveFee = (orderId, rawValue) => {
-    const feeAmount = parseFloat(String(rawValue).replace(',', '.'));
-    if (Number.isNaN(feeAmount) || feeAmount < 0) return;
-
-    savingFeeOrderId.value = orderId;
-    router.put(`/admin/fluxo-de-caixa/vendas/${orderId}/comissao`, { fee_amount: feeAmount }, {
-        preserveScroll: true,
-        preserveState: true,
-        onFinish: () => { savingFeeOrderId.value = null; },
-    });
-};
-
-// Pago ao fornecedor editável direto na tabela — mesmo pedido explícito
-// 2026-08-14. O valor digitado é o custo total daquela linha (já
-// ×quantidade); o backend grava de volta como custo unitário no produto
-// (updateItemCost), então passa a valer pra qualquer venda futura dele
-// também — igual a editar o custo em /admin/produtos.
-const savingCostItemId = ref(null);
-
-const saveCost = (itemId, rawValue) => {
-    const productCost = parseFloat(String(rawValue).replace(',', '.'));
-    if (Number.isNaN(productCost) || productCost < 0) return;
-
-    savingCostItemId.value = itemId;
-    router.put(`/admin/fluxo-de-caixa/vendas/item/${itemId}/custo`, { product_cost: productCost }, {
-        preserveScroll: true,
-        preserveState: true,
-        onFinish: () => { savingCostItemId.value = null; },
-    });
-};
-
-const destroy = async (entry) => {
-    if (await confirmDelete({ title: `Remover o lançamento "${entry.description}"?` })) {
-        router.delete(`/admin/fluxo-de-caixa/${entry.id}`);
-    }
-};
-
-const columns = [
-    { accessorKey: 'entry_date', header: 'Data', cell: ({ row }) => new Date(`${row.original.entry_date}T00:00:00`).toLocaleDateString('pt-BR') },
-    { accessorKey: 'description', header: 'Descrição' },
-    { id: 'costCenter', header: 'Centro de custo', accessorFn: (row) => row.cost_center?.name ?? '—' },
-    {
-        accessorKey: 'type',
-        header: 'Tipo',
-        cell: ({ row }) => h(StatusBadge, { status: row.original.type === 'income' ? 'active' : 'cancelled', label: row.original.type === 'income' ? 'Entrada' : 'Saída' }),
-    },
-    {
-        accessorKey: 'amount',
-        header: 'Valor',
-        cell: ({ row }) => h('span', { class: row.original.type === 'income' ? 'text-success font-medium' : 'text-error font-medium' }, formatPrice(row.original.amount)),
-    },
-    {
-        id: 'actions',
-        header: 'Ações',
-        enableSorting: false,
-        cell: ({ row }) => (can('financeiro.delete')
-            ? h('div', { class: 'flex justify-end' }, h(ActionIcon, { icon: 'fa-trash', label: 'Remover', color: 'red', onClick: () => destroy(row.original) }))
-            : null),
-    },
+// ---- Resumo -----------------------------------------------------------------
+const ABAS = [
+    { chave: 'resumo', rotulo: 'Resumo' },
+    { chave: 'vendas', rotulo: 'Vendas (custo e comissão)' },
+    { chave: 'lancamentos', rotulo: 'Lançamentos' },
 ];
 
-const salesColumns = [
-    { accessorKey: 'date', header: 'Data pagamento', cell: ({ row }) => new Date(`${row.original.date}T00:00:00`).toLocaleDateString('pt-BR') },
-    {
-        accessorKey: 'product_name',
-        header: 'Produto',
-        cell: ({ row }) => h('div', {}, [
-            h('span', {}, row.original.product_name),
-            !row.original.has_cost
-                ? h('span', { class: 'ml-2 text-xs text-amber-500', title: 'Produto sem custo cadastrado — margem acima do real' }, '⚠ sem custo')
-                : null,
-        ]),
-    },
-    { accessorKey: 'platform', header: 'Plataforma' },
-    {
-        accessorKey: 'product_cost',
-        header: 'Pago ao fornecedor',
-        cell: ({ row }) => h('input', {
-            type: 'number',
-            step: '0.01',
-            min: '0',
-            class: `w-24 rounded-lg border px-2 py-1 text-sm ${row.original.has_cost ? 'border-[var(--surface-border)] text-slate-500' : 'border-amber-400 text-amber-500'}`,
-            value: row.original.product_cost,
-            disabled: savingCostItemId.value === row.original.item_id,
-            title: row.original.has_cost ? 'Custo cadastrado — edite e aperte Enter pra corrigir' : 'Sem custo cadastrado — digite o valor e aperte Enter',
-            onKeydown: (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    event.target.blur();
-                    saveCost(row.original.item_id, event.target.value);
-                }
-            },
-        }),
-    },
-    {
-        accessorKey: 'platform_fee',
-        header: 'Comissão da plataforma',
-        cell: ({ row }) => h('input', {
-            type: 'number',
-            step: '0.01',
-            min: '0',
-            class: `w-24 rounded-lg border px-2 py-1 text-sm ${row.original.has_fee_data ? 'border-[var(--surface-border)] text-slate-500' : 'border-amber-400 text-amber-500'}`,
-            value: row.original.platform_fee,
-            disabled: savingFeeOrderId.value === row.original.order_id,
-            title: row.original.has_fee_data ? 'Comissão registrada — edite e aperte Enter pra corrigir' : 'A plataforma ainda não informou a taxa real desse pedido — digite o valor e aperte Enter',
-            onKeydown: (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    event.target.blur();
-                    saveFee(row.original.order_id, event.target.value);
-                }
-            },
-        }),
-    },
-    {
-        // Frete que a loja pagou (Correios da pré-postagem, Flex), já
-        // descontado o frete recebido do comprador quando é da loja (Amazon).
-        accessorKey: 'shipping_cost',
-        header: 'Frete (loja)',
-        cell: ({ row }) => h('span', { class: 'text-slate-500' }, formatPrice(row.original.shipping_cost ?? 0)),
-    },
-    {
-        accessorKey: 'net_profit',
-        header: 'Margem de contribuição',
-        cell: ({ row }) => h('div', {}, [
-            h('span', { class: row.original.net_profit >= 0 ? 'text-success font-semibold' : 'text-error font-semibold' }, formatPrice(row.original.net_profit)),
-            !row.original.has_fee_data
-                ? h('span', { class: 'ml-2 text-xs text-amber-500', title: 'Calculado sem descontar comissão — dado ainda não disponível' }, '⚠ incompleto')
-                : null,
-        ]),
-    },
-];
+const atual = computed(() => props.resumo?.atual ?? null);
+const comp = computed(() => props.resumo?.comparacao ?? null);
+const rotuloComp = computed(() => (comp.value ? props.filtro.rotuloComparacao : null));
+const vazio = computed(() => atual.value && atual.value.pedidos === 0 && atual.value.receita === 0);
+const pctDe = (parte, todo) => (todo ? formatPercent((parte / todo) * 100) : '0,0%');
+
+// Vencimento do DAS da competência do fim do período: dia 20 do mês seguinte,
+// antecipado para sexta se cair no fim de semana.
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const das = computed(() => {
+    const [ano, mes] = props.filtro.ate.split('-').map(Number);
+    const vence = new Date(Date.UTC(mes === 12 ? ano + 1 : ano, mes === 12 ? 0 : mes, 20, 12));
+    while ([0, 6].includes(vence.getUTCDay())) vence.setUTCDate(vence.getUTCDate() - 1);
+    const dd = String(vence.getUTCDate()).padStart(2, '0');
+    const mm = String(vence.getUTCMonth() + 1).padStart(2, '0');
+    return { mes: MESES[mes - 1], vence: `${dd}/${mm}` };
+});
+
+const adsPct = computed(() => (atual.value?.receita ? (atual.value.ads / atual.value.receita) * 100 : 0));
+const adsDaMargem = computed(() => {
+    const antes = (atual.value?.margem ?? 0) + (atual.value?.ads ?? 0);
+    return antes > 0 ? formatPercent((atual.value.ads / antes) * 100) : '—';
+});
+const escalaAds = computed(() => Math.max((props.resumo?.adsLimite ?? 6) * 2, adsPct.value * 1.1, 1));
+const aliquota = computed(() => (props.resumo?.aliquota ?? 4.5).toLocaleString('pt-BR'));
+
+const AJUDA = {
+    lucro: 'Receita menos custo dos produtos, taxas dos canais, frete pago pela loja, ADS e imposto do Simples, mais o bônus do Flex.',
+    vendas: 'O que os clientes pagaram, com frete.',
+    nota: 'Soma das notas fiscais de venda. É a base do DAS.',
+    receita: 'Valor dos produtos depois dos descontos da loja, sem o frete que o comprador paga ao canal (na Amazon, com frete). É a base do lucro e a primeira barra de "Para onde foi o dinheiro".',
+    ads: 'Gasto real com anúncio no período. Recarga de carteira não entra.',
+    imposto: '4,5% das notas de venda. Estimativa: o valor oficial é a guia do contador.',
+};
+
+const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filtroBase('vendas'), sem_custo: 1 }).toString()}`);
 </script>
 
 <template>
     <Head title="Fluxo de Caixa" />
 
     <AdminLayout>
-        <div class="mb-4 flex items-center justify-between">
-            <h1 class="text-2xl font-bold">Fluxo de Caixa</h1>
+        <header class="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div class="min-w-0">
+                <h1 class="text-2xl font-bold">Fluxo de Caixa</h1>
+                <p class="text-sm text-pretty text-[var(--texto-suave)]">Quanto entrou, quanto sobrou e para onde foi o dinheiro. Conta oficial do lucro (a mesma do painel e do e-mail das 23h50).</p>
+            </div>
             <button v-if="can('financeiro.create')" type="button"
-                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis"
-                @click="showForm = !showForm">
-                <i class="fas fa-plus text-xs"></i> Novo lançamento
+                class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-emphasis"
+                @click="novoLancamento">
+                <i class="fas fa-plus text-xs" aria-hidden="true"></i> Novo lançamento
             </button>
+        </header>
+
+        <nav class="mb-4 flex gap-1 overflow-x-auto border-b border-[var(--surface-border)]" aria-label="Abas do Fluxo de Caixa">
+            <Link v-for="a in ABAS" :key="a.chave" :href="hrefAba(a.chave)" preserve-scroll
+                class="shrink-0 border-b-2 px-3 py-2 text-sm font-semibold whitespace-nowrap transition-colors"
+                :class="filtro.aba === a.chave ? 'border-[var(--color-primary)] text-[var(--surface-foreground)]' : 'border-transparent text-[var(--texto-suave)] hover:text-[var(--surface-foreground)]'"
+                :aria-current="filtro.aba === a.chave ? 'page' : undefined">{{ a.rotulo }}</Link>
+        </nav>
+
+        <FiltrosPeriodo :filtro="filtro" :canais="canaisFiltro" @mudar="visitar" />
+        <p class="sr-only" aria-live="polite">{{ calculando ? 'Calculando…' : '' }}</p>
+        <div v-if="calculando" class="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--texto-suave)] shadow-sm" aria-hidden="true">
+            <i class="fas fa-circle-notch fa-spin"></i> Calculando…
         </div>
 
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <CardStats stat-subtitle="SALDO" :stat-title="formatPrice(summary.balance)" stat-icon-name="fas fa-scale-balanced" variant="primary" />
-            <CardStats stat-subtitle="ENTRADAS" :stat-title="formatPrice(summary.income)" stat-icon-name="fas fa-arrow-trend-up" variant="success" />
-            <CardStats stat-subtitle="SAÍDAS" :stat-title="formatPrice(summary.expense)" stat-icon-name="fas fa-arrow-trend-down" variant="error" />
-            <CardStats stat-subtitle="VALOR EM ESTOQUE" :stat-title="formatPrice(summary.stockValue)" stat-icon-name="fas fa-boxes-stacked" variant="warning" />
+        <!-- ================= Resumo ================= -->
+        <div v-if="filtro.aba === 'resumo' && atual" :class="{ 'opacity-60 transition-opacity': calculando }">
+            <AlertasFinanceiros :alertas="alertas ?? []" />
+
+            <p v-if="vazio" class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 text-sm shadow-sm">Nenhuma venda paga neste período.</p>
+
+            <section class="kpis mb-4 grid gap-3 sm:gap-4" aria-label="Números do período">
+                <KpiResultado class="kpi-lucro" hero rotulo="Lucro líquido" :valor="formatPrice(atual.lucro)"
+                    :apoio="[`${pctDe(atual.lucro, atual.receita)} da receita · antes do imposto: ${formatPrice(atual.margem)}`]"
+                    :ajuda="AJUDA.lucro" :atual="atual.lucro" :anterior="comp?.lucro ?? null" :rotulo-comparacao="rotuloComp" />
+                <KpiResultado rotulo="Vendas brutas" :valor="formatPrice(atual.vendas_brutas)"
+                    :apoio="[
+                        { texto: `Faturamento em nota: ${formatPrice(atual.faturamento_nota)}`, ajuda: AJUDA.nota, rotulo: 'Faturamento em nota' },
+                        { texto: `Receita: ${formatPrice(atual.receita)}`, ajuda: AJUDA.receita, rotulo: 'Receita' },
+                    ]"
+                    :ajuda="AJUDA.vendas" :atual="atual.vendas_brutas" :anterior="comp?.vendas_brutas ?? null" :rotulo-comparacao="rotuloComp" />
+                <KpiResultado rotulo="Pedidos" :valor="String(atual.pedidos)"
+                    :apoio="[
+                        `Ticket médio ${formatPrice(atual.pedidos ? atual.receita / atual.pedidos : 0)}`,
+                        ...(atual.pedidos_site !== null ? [`KazaKora: ${atual.pedidos_site} ${atual.pedidos_site === 1 ? 'pedido pago' : 'pedidos pagos'}`] : []),
+                    ]"
+                    :atual="atual.pedidos" :anterior="comp?.pedidos ?? null" :rotulo-comparacao="rotuloComp" />
+                <KpiResultado rotulo="ADS" :valor="formatPrice(atual.ads)"
+                    :apoio="[`${formatPercent(adsPct)} da receita · ${adsDaMargem} da margem antes do ADS`]"
+                    :ajuda="AJUDA.ads" :atual="atual.ads" :anterior="comp?.ads ?? null" bom="baixo" :rotulo-comparacao="rotuloComp">
+                    <div class="medidor relative mt-2 h-1.5 rounded-full bg-[var(--surface-muted)]" role="img"
+                        :aria-label="`ADS em ${formatPercent(adsPct)} da receita; meta ${resumo.adsMeta}%`">
+                        <i class="absolute inset-y-0 left-0 rounded-full" :class="adsPct > resumo.adsLimite ? 'bg-error' : adsPct > resumo.adsMeta ? 'bg-warning' : 'bg-success'"
+                            :style="{ width: `${Math.min(100, (adsPct / escalaAds) * 100)}%` }"></i>
+                        <b class="absolute -top-1 -bottom-1 w-0.5 bg-[var(--surface-foreground)]" :style="{ left: `${(resumo.adsMeta / escalaAds) * 100}%` }"></b>
+                    </div>
+                    <p class="mt-1 text-[11px] text-[var(--texto-suave)]">meta {{ resumo.adsMeta.toLocaleString('pt-BR') }}% da receita</p>
+                </KpiResultado>
+                <KpiResultado rotulo="Imposto estimado" :valor="formatPrice(atual.imposto)"
+                    :apoio="[`Simples ${aliquota}% · DAS de ${das.mes} vence ${das.vence}`]"
+                    :ajuda="AJUDA.imposto" :atual="atual.imposto" :anterior="comp?.imposto ?? null" bom="baixo" :rotulo-comparacao="rotuloComp" />
+            </section>
+
+            <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <CascataResultado class="lg:col-span-2" :conta="atual" />
+                <DeCadaCem class="order-first lg:order-none" :conta="atual" />
+            </div>
+
+            <div class="mb-4">
+                <LucroPorCanal :canais="canais ?? []" />
+            </div>
+
+            <div class="mb-4">
+                <EvolucaoPeriodo :serie="serie ?? []" :agrupar="filtro.agrupar" :rotulo-comparacao="filtro.rotuloComparacao" @agrupar="visitar({ agrupar: $event })" />
+            </div>
+
+            <div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <ProximosDias :previsao="previsao ?? { itens: [] }" :hoje="filtro.hoje" />
+                <QualidadeDados :qualidade="qualidade ?? { canais: [], pendencias: {} }" :link-sem-custo="linkSemCusto" />
+            </div>
+
+            <p class="text-xs text-[var(--texto-suave)]">
+                Lucro = receita − custo dos produtos − taxas − frete pago pela loja − ADS + bônus do Flex − imposto do Simples ({{ aliquota }}% das notas).
+                Lançamentos manuais não entram no lucro. Comparação: {{ rotuloComp ? `${filtro.rotuloComparacao} (${filtro.compDe.split('-').reverse().slice(0, 2).join('/')} a ${filtro.compAte.split('-').reverse().slice(0, 2).join('/')})` : 'desligada' }}.
+            </p>
         </div>
 
-        <form v-if="showForm" class="mb-6 grid grid-cols-1 gap-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm sm:grid-cols-5" @submit.prevent="submit">
-            <div>
-                <label class="block text-xs font-medium text-slate-400">Tipo</label>
-                <select v-model="form.type" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-                    <option value="income">Entrada</option>
-                    <option value="expense">Saída</option>
-                </select>
-            </div>
-            <div class="sm:col-span-2">
-                <label class="block text-xs font-medium text-slate-400">Descrição</label>
-                <input v-model="form.description" type="text" required class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-400">Valor (R$)</label>
-                <input v-model.number="form.amount" type="number" step="0.01" min="0.01" required class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-400">Data</label>
-                <input v-model="form.entry_date" type="date" required class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-            </div>
-            <div class="sm:col-span-2">
-                <label class="block text-xs font-medium text-slate-400">Centro de custo (opcional)</label>
-                <select v-model="form.cost_center_id" class="mt-1 w-full rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-                    <option value="">Nenhum</option>
-                    <option v-for="cc in props.costCenters" :key="cc.id" :value="cc.id">{{ cc.name }}</option>
-                </select>
-            </div>
-            <div class="sm:col-span-5">
-                <button type="submit" :disabled="form.processing" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis disabled:opacity-50">
-                    Salvar lançamento
-                </button>
-            </div>
-        </form>
+        <!-- ================= Vendas ================= -->
+        <AbaVendas v-else-if="filtro.aba === 'vendas' && sales" :class="{ 'opacity-60 transition-opacity': calculando }"
+            :sales="sales" :sales-totals="salesTotals ?? {}" :sales-filter="salesFilter ?? {}" @visitar="visitar" />
 
-        <DataTable
-            :columns="columns"
-            :data="entryRows"
-            :paginator="entries"
-            :search="entriesFilter.search ?? ''"
-            :sort="toTableSort(entriesFilter.sort, entriesFilter.direction)"
-            search-placeholder="Buscar lançamento..."
-            empty-message="Nenhum lançamento registrado."
-            @update:search="visit({ entries_search: $event })"
-            @update:sort="visit(sortParams($event, 'entries_'))"
-        />
-
-        <div class="mt-8 mb-4">
-            <h2 class="text-lg font-bold">Margem de Contribuição por Venda</h2>
-            <p class="text-sm text-slate-400">Produto a produto: quanto custou no fornecedor, quanto ficou de comissão na plataforma, quanto a loja pagou de frete e quanto sobrou no bolso (sem ADS, que sai no total do mês no Financeiro).</p>
-        </div>
-
-        <div class="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 shadow-sm">
-            <div>
-                <label class="block text-xs font-medium text-slate-400">De</label>
-                <input v-model="salesRangeStart" type="date" class="mt-1 rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-400">Até</label>
-                <input v-model="salesRangeEnd" type="date" class="mt-1 rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm">
-            </div>
-            <button type="button" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis" @click="applySalesRange">
-                Filtrar
-            </button>
-            <div>
-                <label class="block text-xs font-medium text-slate-400">Plataforma</label>
-                <select v-model="platformFilter" class="mt-1 rounded-lg border border-[var(--surface-border)] px-2 py-1.5 text-sm" @change="applyPlatform">
-                    <option value="">Todas</option>
-                    <option v-for="platform in salesPlatforms" :key="platform.value" :value="platform.value">{{ platform.label }}</option>
-                </select>
-            </div>
-            <div class="ml-auto flex gap-2">
-                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--surface-muted)]" @click="applyPreset('all')">Tudo</button>
-                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--surface-muted)]" @click="applyPreset('thisMonth')">Mês atual</button>
-                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--surface-muted)]" @click="applyPreset('lastMonth')">Mês passado</button>
-                <button type="button" class="rounded-lg border border-[var(--surface-border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--surface-muted)]" @click="applyPreset('year')">Ano todo</button>
-            </div>
-        </div>
-
-        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <CardStats stat-subtitle="PAGO AO FORNECEDOR" :stat-title="formatPrice(salesTotals.cost)" stat-icon-name="fas fa-truck-loading" variant="primary" />
-            <CardStats stat-subtitle="COMISSÃO DAS PLATAFORMAS" :stat-title="formatPrice(salesTotals.fee)" stat-icon-name="fas fa-percent" variant="primary" />
-            <CardStats stat-subtitle="FRETE PAGO PELA LOJA" :stat-title="formatPrice(salesTotals.shipping)" stat-icon-name="fas fa-truck" variant="primary" />
-            <CardStats stat-subtitle="MARGEM DE CONTRIBUIÇÃO" :stat-title="formatPrice(salesTotals.netProfit)" stat-icon-name="fas fa-sack-dollar" :variant="salesTotals.netProfit >= 0 ? 'success' : 'error'" />
-        </div>
-
-        <DataTable
-            :columns="salesColumns"
-            :data="salesRows"
-            :paginator="sales"
-            :search="salesFilter.search ?? ''"
-            :sort="toTableSort(salesFilter.sort, salesFilter.direction)"
-            row-key="item_id"
-            search-placeholder="Buscar produto, plataforma ou nº do pedido..."
-            empty-message="Nenhuma venda no período."
-            @update:search="visit({ search: $event })"
-            @update:sort="visit(sortParams($event))"
-        />
+        <!-- ================= Lançamentos ================= -->
+        <AbaLancamentos v-else-if="filtro.aba === 'lancamentos' && entries" ref="abaLancamentos" :class="{ 'opacity-60 transition-opacity': calculando }"
+            :entries="entries" :summary="summary ?? { balance: 0, income: 0, expense: 0 }" :entries-filter="entriesFilter ?? {}"
+            :cost-centers="costCenters" :abrir-formulario="abrirForm" @visitar="visitar" />
     </AdminLayout>
 </template>
+
+<style scoped>
+.kpis { grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1279px) {
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpis :deep(.kpi-lucro) { grid-column: 1 / -1; }
+}
+</style>

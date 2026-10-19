@@ -270,7 +270,9 @@ class ContributionMargin
      */
     public function porItem(Carbon $desde, Carbon $ate, ?string $canal = null): array
     {
-        $taxas = DB::table('order_channel_fees')->selectRaw('order_id, SUM(fee_amount) as total')->groupBy('order_id');
+        $taxas = DB::table('order_channel_fees')
+            ->selectRaw('order_id, SUM(fee_amount) as total, MAX(CASE WHEN source = ? THEN 1 ELSE 0 END) as estimada', [OrderChannelFee::SOURCE_ESTIMATE])
+            ->groupBy('order_id');
         $correios = DB::table('correios_pre_postagens')
             ->where('status', CorreiosPrePostagem::STATUS_GERADA)
             ->selectRaw('order_id, SUM(postage_price) as total')->groupBy('order_id');
@@ -285,7 +287,11 @@ class ContributionMargin
             ->where('orders.created_at', '<', $ate)
             ->when($canal, fn ($q) => Order::filtrarCanal($q, $canal))
             ->tap(fn ($q) => self::semDevolucao($q))
-            ->selectRaw('orders.id as order_id, order_items.id as item_id, order_items.product_id, order_items.product_name,
+            ->selectRaw('orders.id as order_id, orders.created_at as pedido_em, '.Order::canalSql().' as canal_pedido,
+                order_items.id as item_id, order_items.product_id, order_items.product_name,
+                CASE WHEN products.cost_price IS NOT NULL OR order_items.manual_cost_price IS NOT NULL THEN 1 ELSE 0 END as tem_custo,
+                CASE WHEN taxa_pedido.order_id IS NULL THEN 0 ELSE 1 END as tem_taxa,
+                COALESCE(taxa_pedido.estimada, 0) as taxa_estimada,
                 COALESCE(order_items.quantity, 0) as quantidade, COALESCE(order_items.subtotal, 0) as subtotal,
                 '.self::receitaSql().' as receita_pedido,
                 CASE WHEN order_items.id IS NULL THEN 0 ELSE '.self::custoSql().' END as custo,
@@ -312,6 +318,14 @@ class ContributionMargin
 
                     return [
                         'order_id' => (int) $item->order_id,
+                        // Campos de exibição da aba Vendas do Fluxo de Caixa
+                        // (2026-10-19); não entram em nenhuma soma.
+                        'item_id' => $item->item_id !== null ? (int) $item->item_id : null,
+                        'pedido_em' => (string) $item->pedido_em,
+                        'canal' => (string) $item->canal_pedido,
+                        'tem_custo' => (bool) $item->tem_custo,
+                        'tem_taxa' => (bool) $item->tem_taxa,
+                        'taxa_estimada' => (bool) $item->taxa_estimada,
                         'product_id' => $item->product_id !== null ? (int) $item->product_id : null,
                         'product_name' => (string) ($item->product_name ?? ''),
                         'quantidade' => (int) $item->quantidade,
@@ -398,6 +412,28 @@ class ContributionMargin
             return [];
         }
 
+        return array_map(
+            fn (float $base) => round($base * self::aliquotaSimples() / 100, 2),
+            self::basePorCanal($desde, $ate),
+        );
+    }
+
+    /**
+     * Faturamento em nota por canal (Fluxo de Caixa, 2026-10-19): a base do
+     * imposto, ou seja, o valor da NF-e de venda autorizada de cada pedido
+     * (sem nota importada ainda, a receita). imposto() = base × alíquota,
+     * só a partir de LOJA_SIMPLES_DESDE; aqui a base vale para qualquer data.
+     *
+     * @return array<string, float>
+     */
+    public static function baseImposto(Carbon $desde, Carbon $ate): array
+    {
+        return array_map(fn (float $base) => round($base, 2), self::basePorCanal($desde, $ate));
+    }
+
+    /** @return array<string, float> */
+    private static function basePorCanal(Carbon $desde, Carbon $ate): array
+    {
         $nota = 'SELECT i.valor_total FROM invoices i WHERE i.order_id = orders.id AND i.status = \'authorized\''
             ." AND i.operation_type = 'saida' AND i.cancelada_em IS NULL LIMIT 1";
 
@@ -409,7 +445,114 @@ class ContributionMargin
             ->selectRaw(Order::canalSql().' as canal, COALESCE(SUM(COALESCE(('.$nota.'), '.self::receitaSql().')), 0) as base')
             ->groupBy('canal')
             ->pluck('base', 'canal')
-            ->map(fn ($base) => round((float) $base * self::aliquotaSimples() / 100, 2))
+            ->map(fn ($base) => (float) $base)
+            ->all();
+    }
+
+    /**
+     * Vendas brutas (Fluxo de Caixa, 2026-10-19): o que os clientes pagaram,
+     * com frete (orders.total), das mesmas vendas efetivas da receita.
+     */
+    public static function vendasBrutas(Carbon $desde, Carbon $ate, ?string $canal = null): float
+    {
+        return round((float) DB::table('orders')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->when($canal, fn ($q) => Order::filtrarCanal($q, $canal))
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->sum('orders.total'), 2);
+    }
+
+    /**
+     * Linha zerada da conta, para canal ou período sem venda.
+     *
+     * @return array<string, float|int>
+     */
+    public static function contaVazia(): array
+    {
+        return ['pedidos' => 0, 'receita' => 0.0, 'custo_produtos' => 0.0, 'taxas' => 0.0, 'frete' => 0.0, 'ads' => 0.0,
+            'bonificacoes' => 0.0, 'margem' => 0.0, 'imposto' => 0.0, 'lucro' => 0.0];
+    }
+
+    /**
+     * A conta de um intervalo inteiro, ou de um canal só (porCanal()).
+     *
+     * @return array<string, float|int>
+     */
+    public function conta(Carbon $desde, Carbon $ate, ?string $canal = null): array
+    {
+        if ($canal === null) {
+            return $this->periodo($desde, $ate);
+        }
+
+        return array_merge(self::contaVazia(), $this->porCanal($desde, $ate)[$canal] ?? []);
+    }
+
+    /**
+     * Série do Fluxo de Caixa (2026-10-19): a MESMA conta de periodo() (ou de
+     * porCanal() com canal) chamada balde a balde (dia, semana ISO ou mês,
+     * cortados no intervalo). Nenhuma fórmula nova: a soma dos baldes é a
+     * conta do intervalo inteiro. Balde que já fechou fica 10 min em cache;
+     * o que inclui hoje é sempre recalculado.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function serie(Carbon $desde, Carbon $ate, string $agrupamento = 'dia', ?string $canal = null): array
+    {
+        $hoje = Carbon::today();
+        $baldes = [];
+        $cursor = $desde->copy()->startOfDay();
+        while ($cursor->lt($ate)) {
+            $fim = match ($agrupamento) {
+                'mes' => $cursor->copy()->startOfMonth()->addMonthNoOverflow(),
+                'semana' => $cursor->copy()->startOfWeek(Carbon::MONDAY)->addWeek(),
+                default => $cursor->copy()->addDay(),
+            };
+            $fim = $fim->min($ate);
+            $baldes[] = [$cursor->copy(), $fim->copy()];
+            $cursor = $fim;
+        }
+
+        return array_map(function (array $balde) use ($canal, $hoje) {
+            [$inicio, $fim] = $balde;
+            $calcular = fn () => $this->conta($inicio, $fim, $canal);
+            $conta = $fim->lte($hoje)
+                ? \Illuminate\Support\Facades\Cache::remember('cm:serie:'.($canal ?? 'todos').':'.$inicio->toDateTimeString().':'.$fim->toDateTimeString(), now()->addMinutes(10), $calcular)
+                : $calcular();
+
+            return ['inicio' => $inicio->toDateString(), 'fim' => $fim->copy()->subDay()->toDateString()] + $conta;
+        }, $baldes);
+    }
+
+    /**
+     * Quanto da taxa do período já é real (API, relatório, extrato, manual)
+     * e quanto ainda é estimada, por canal (Fluxo de Caixa, 2026-10-19).
+     *
+     * @return array<string, array{real: float, estimada: float, pedidos_real: int, pedidos_estimada: int}>
+     */
+    public static function qualidadeTaxas(Carbon $desde, Carbon $ate): array
+    {
+        return DB::table('orders')
+            ->join('order_channel_fees', 'order_channel_fees.order_id', '=', 'orders.id')
+            ->whereIn('orders.status', self::REVENUE_STATUSES)
+            ->where('orders.created_at', '>=', $desde)
+            ->where('orders.created_at', '<', $ate)
+            ->tap(fn ($q) => self::semDevolucao($q))
+            ->selectRaw(Order::canalSql().' as canal,
+                COALESCE(SUM(CASE WHEN order_channel_fees.source = ? THEN 0 ELSE order_channel_fees.fee_amount END), 0) as real_total,
+                COALESCE(SUM(CASE WHEN order_channel_fees.source = ? THEN order_channel_fees.fee_amount ELSE 0 END), 0) as estimada_total,
+                COUNT(DISTINCT CASE WHEN order_channel_fees.source = ? THEN NULL ELSE orders.id END) as pedidos_real,
+                COUNT(DISTINCT CASE WHEN order_channel_fees.source = ? THEN orders.id ELSE NULL END) as pedidos_estimada',
+                array_fill(0, 4, OrderChannelFee::SOURCE_ESTIMATE))
+            ->groupBy('canal')
+            ->get()
+            ->mapWithKeys(fn ($l) => [$l->canal => [
+                'real' => round((float) $l->real_total, 2),
+                'estimada' => round((float) $l->estimada_total, 2),
+                'pedidos_real' => (int) $l->pedidos_real,
+                'pedidos_estimada' => (int) $l->pedidos_estimada,
+            ]])
             ->all();
     }
 

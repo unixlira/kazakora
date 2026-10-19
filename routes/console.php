@@ -265,6 +265,11 @@ Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverla
 // é a rede de segurança e o que pega a Shopee (sem push de devolução).
 Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverlapping(25);
 
+// Venda cancelada/estornada com NF-e autorizada e sem devolução (DAS de
+// setembro, 2026-10-19): todo dia lista e avisa no sino; emitir é manual,
+// com --pedido, porque há "cancelada" que na verdade valeu.
+Schedule::command('devolucoes:vendas-canceladas --simular --avisar')->dailyAt('08:20');
+
 // Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido
 // no consentimento, MENOS recibo retido como prova ou com pendência aberta
 // (ver PurgeKoraFlexReceiptImages). Existia desde 2026-09-10, mas nunca

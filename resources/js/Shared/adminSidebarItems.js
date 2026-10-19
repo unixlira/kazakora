@@ -107,6 +107,8 @@ export const sidebarSections = [
             { label: 'Envios Flex', href: '/admin/envios-flex', icon: 'fas fa-motorcycle', marca: 'mercado-livre', permission: 'operacional.view', badgeKey: 'flexAlertas' },
             // PAC e SEDEX para as 27 capitais, preço do contrato (2026-10-12).
             { label: 'Fretes por estado', href: '/admin/logistica/fretes-por-estado', icon: 'fas fa-map-location-dot', cor: 'verde', permission: 'operacional.view' },
+            // Rastreio dos Correios (2026-10-19): histórico do SRO Rastro.
+            { label: 'Rastreio', href: '/admin/logistica/rastreio', icon: 'fas fa-route', marca: 'correios', permission: 'operacional.view' },
         ],
     },
     {

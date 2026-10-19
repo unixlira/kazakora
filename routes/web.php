@@ -772,6 +772,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
         Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
+        // Rastreio dos Correios (2026-10-19): objetos acompanhados pelo SRO
+        // Rastro e o histórico de eventos (loja:acompanhar-rastreio grava).
+        Route::get('logistica/rastreio', [\App\Modules\Admin\Http\Controllers\RastreioController::class, 'index'])->name('logistica.rastreio');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

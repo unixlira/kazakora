@@ -108,7 +108,7 @@ class EquipesTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/equipes/alpha-kora/membros', [
             'nome' => 'X', 'slug' => 'x-y', 'funcao' => 'x', 'area' => 'dev', 'status' => 'ativo',
-            'skills' => [['nome' => 'a', 'descricao' => str_repeat('a', 300)]],
+            'skills' => [['nome' => 'a', 'descricao' => str_repeat('a', 2001)]],
         ])->assertSessionHasErrors('skills.0.descricao');
 
         $this->actingAs($admin)->put('/admin/equipes/alpha-kora/membros/bia-atendimento', [

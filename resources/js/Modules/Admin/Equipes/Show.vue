@@ -260,7 +260,7 @@ const flash = computed(() => usePage().props.flash?.success);
                             <ul v-else class="mt-2 space-y-2">
                                 <li v-for="s in aberto.skills" :key="s.nome" class="text-sm">
                                     <code class="font-semibold" translate="no">{{ s.nome }}</code>
-                                    <p v-if="s.descricao" class="text-[var(--texto-suave)]">{{ s.descricao }}</p>
+                                    <p v-if="s.descricao" class="whitespace-pre-line text-[var(--texto-suave)]">{{ s.descricao }}</p>
                                 </li>
                             </ul>
                         </section>

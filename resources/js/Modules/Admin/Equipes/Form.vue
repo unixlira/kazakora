@@ -168,7 +168,7 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
 
             <section class="space-y-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
                 <h2 class="text-base font-bold">Skills</h2>
-                <p class="text-xs text-[var(--texto-suave)]">Nome da skill e, se quiser, uma linha sobre ela.</p>
+                <p class="text-xs text-[var(--texto-suave)]">Nome da skill e, se quiser, o que ela faz, quando usar e o que conferir (até 2000 caracteres).</p>
                 <ul class="space-y-2">
                     <li v-for="(s, i) in form.skills" :key="i" class="grid gap-2 sm:grid-cols-[1fr_2fr_auto] sm:items-start">
                         <div>
@@ -177,7 +177,8 @@ const campo = 'mt-1 w-full rounded-lg border border-[var(--surface-border)] bg-[
                         </div>
                         <div>
                             <label :for="`skill-desc-${i}`" class="sr-only">Descrição da skill {{ i + 1 }}</label>
-                            <input :id="`skill-desc-${i}`" v-model="s.descricao" type="text" maxlength="200" placeholder="Para que serve, em uma linha" autocomplete="off" :class="[campo, 'mt-0']">
+                            <textarea :id="`skill-desc-${i}`" v-model="s.descricao" rows="3" maxlength="2000" placeholder="Para que serve, quando usar, o que conferir" :aria-describedby="`skill-desc-conta-${i}`" :class="[campo, 'mt-0 resize-y']"></textarea>
+                            <p :id="`skill-desc-conta-${i}`" class="mt-0.5 text-right text-xs text-[var(--texto-suave)]">{{ (s.descricao ?? '').length }}/2000</p>
                         </div>
                         <button type="button" class="rounded-lg p-2 text-[var(--texto-suave)] hover:text-error" :aria-label="`Tirar a skill ${s.nome || i + 1}`" @click="removerSkill(i)">
                             <i class="fas fa-trash-can" aria-hidden="true"></i>

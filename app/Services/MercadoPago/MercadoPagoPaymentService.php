@@ -104,7 +104,27 @@ class MercadoPagoPaymentService
             'external_reference' => $externalReference,
             'payer' => $payer,
             'date_of_expiration' => now()->addMinutes(10)->format('Y-m-d\TH:i:s.vP'),
+            ...self::avisoDePagamento(),
         ], $idempotencyKey);
+    }
+
+    /**
+     * Achado real 19/10 (#3283): o Pix era criado sem notification_url e a
+     * conta não tem o tópico "payment" ligado no painel, então o Mercado
+     * Pago nunca avisava a loja. O cliente pagou às 21:14 com a tela fechada
+     * (navegador do Facebook em segundo plano) e o pedido só virou pago às
+     * 21:40, na varredura de abandonados. Com o endereço no próprio
+     * pagamento, o aviso chega no webhook sem depender do painel. Só em
+     * https (o MP recusa localhost/http).
+     *
+     * @return array<string, string>
+     */
+    public static function avisoDePagamento(): array
+    {
+        // Pelo APP_URL, não pela requisição: a fila e o CLI não sabem o domínio.
+        $url = rtrim((string) config('app.url'), '/').route('api.mercadopago.webhook', ['source_news' => 'webhooks'], false);
+
+        return str_starts_with($url, 'https://') ? ['notification_url' => $url] : [];
     }
 
     /**
@@ -126,6 +146,7 @@ class MercadoPagoPaymentService
             'external_reference' => $externalReference,
             'payer' => $payer,
             'date_of_expiration' => self::vencimentoDoBoleto()->format('Y-m-d\TH:i:s.vP'),
+            ...self::avisoDePagamento(),
         ], $idempotencyKey);
     }
 

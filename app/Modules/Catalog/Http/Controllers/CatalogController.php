@@ -338,16 +338,16 @@ class CatalogController extends Controller
 
         // Avaliações (pedido 2026-10-11): do produto E das variações dele (a
         // avaliação importada fica na variação vendida — Power Bank Rosa…).
-        // Ordem: mais estrelas primeiro; dentro da mesma nota, com foto/vídeo
-        // antes (mais fotos primeiro); depois as mais recentes. A última é a
-        // de 1 estrela. A tela mostra 20 e carrega o resto de 12 em 12.
+        // Ordem (pedido 2026-10-20): as com foto/vídeo primeiro e, dentro de
+        // cada grupo, da mais recente para a mais antiga. A tela mostra 20 e
+        // carrega o resto de 12 em 12.
         $reviews = Review::query()
             ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
             ->with(['user:id,name', 'images'])
             ->withCount('images')
-            ->orderByDesc('rating')
-            ->orderByDesc('images_count')
+            ->orderByRaw('images_count > 0 desc')
             ->latest()
+            ->orderByDesc('id')
             ->get();
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).

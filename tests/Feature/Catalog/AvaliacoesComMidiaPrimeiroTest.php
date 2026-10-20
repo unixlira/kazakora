@@ -10,17 +10,18 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
- * Ordem das avaliações (pedido 2026-10-11): mais estrelas primeiro; dentro da
- * mesma nota, com foto antes; a última é a de 1 estrela. Inclui as avaliações
- * gravadas nas variações do produto.
+ * Ordem das avaliações (pedido 2026-10-20): com foto/vídeo primeiro e, dentro
+ * de cada grupo, da mais recente para a mais antiga, sem olhar a nota. Inclui
+ * as avaliações gravadas nas variações do produto.
  */
 class AvaliacoesComMidiaPrimeiroTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function avaliacao(Product $produto, int $nota, bool $foto = false): Review
+    private function avaliacao(Product $produto, int $nota, bool $foto = false, string $data = '2026-10-01 12:00:00'): Review
     {
         $review = Review::create(['user_id' => User::factory()->create()->id, 'product_id' => $produto->id, 'rating' => $nota, 'comment' => "Nota {$nota}"]);
+        $review->forceFill(['created_at' => $data])->save();
         if ($foto) {
             $review->images()->create(['image_url' => 'https://exemplo.com/foto.jpg', 'position' => 0]);
         }
@@ -28,19 +29,19 @@ class AvaliacoesComMidiaPrimeiroTest extends TestCase
         return $review;
     }
 
-    public function test_mais_estrelas_primeiro_e_com_foto_antes_dentro_da_nota(): void
+    public function test_com_foto_primeiro_e_mais_recentes_antes(): void
     {
         $produto = Product::factory()->create(['is_active' => true]);
-        $um = $this->avaliacao($produto, 1, foto: true);
-        $quatroComFoto = $this->avaliacao($produto, 4, foto: true);
-        $cincoSemFoto = $this->avaliacao($produto, 5);
-        $cincoComFoto = $this->avaliacao($produto, 5, foto: true);
+        $fotoAntiga = $this->avaliacao($produto, 5, foto: true, data: '2026-08-01 10:00:00');
+        $semFotoRecente = $this->avaliacao($produto, 5, data: '2026-10-19 10:00:00');
+        $fotoRecenteUmaEstrela = $this->avaliacao($produto, 1, foto: true, data: '2026-10-18 10:00:00');
+        $semFotoAntiga = $this->avaliacao($produto, 4, data: '2026-09-01 10:00:00');
 
         $this->get('/produtos/'.$produto->slug)->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('reviews.0.id', $cincoComFoto->id)
-            ->where('reviews.1.id', $cincoSemFoto->id)
-            ->where('reviews.2.id', $quatroComFoto->id)
-            ->where('reviews.3.id', $um->id));
+            ->where('reviews.0.id', $fotoRecenteUmaEstrela->id)
+            ->where('reviews.1.id', $fotoAntiga->id)
+            ->where('reviews.2.id', $semFotoRecente->id)
+            ->where('reviews.3.id', $semFotoAntiga->id));
     }
 
     public function test_inclui_avaliacoes_das_variacoes(): void

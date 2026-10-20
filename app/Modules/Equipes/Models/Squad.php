@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Squad de agentes de IA (menu Equipes, pedido do Lira 2026-10-20). A
- * primeira é a Alfacora; o submenu lista as squads ativas.
+ * primeira é a Alpha Kora; o submenu lista as squads ativas.
  */
 class Squad extends Model
 {

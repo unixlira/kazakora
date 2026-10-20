@@ -348,7 +348,9 @@ class CatalogController extends Controller
             ->orderByRaw('images_count > 0 desc')
             ->latest()
             ->orderByDesc('id')
-            ->get();
+            ->get()
+            // Nome oculto: o usuário não vai no JSON da página.
+            ->each(fn (Review $review) => $review->ocultar_nome && $review->setRelation('user', null));
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());

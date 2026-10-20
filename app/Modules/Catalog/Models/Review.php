@@ -15,6 +15,7 @@ class Review extends Model
         'product_id',
         'rating',
         'comment',
+        'ocultar_nome',
         'seller_reply',
         'seller_replied_at',
         'seller_reply_attempted_at',
@@ -53,6 +54,7 @@ class Review extends Model
     {
         return [
             'rating' => 'integer',
+            'ocultar_nome' => 'boolean',
             'seller_replied_at' => 'datetime',
             'seller_reply_attempted_at' => 'datetime',
             'seller_reply_payload' => 'array',
@@ -82,6 +84,11 @@ class Review extends Model
      */
     public function getReviewerDisplayNameAttribute(): string
     {
+        // Nome oculto a pedido do cliente (pedido 2026-10-20).
+        if ($this->ocultar_nome) {
+            return 'Cliente KazaKora';
+        }
+
         // Avaliação de outra loja sem autor (ou gravada como "Comprador de outra
         // loja") mostra um nome brasileiro sorteado pelo id: o mesmo para a mesma
         // avaliação (pedido 2026-10-20). O banco continua com o texto genérico.

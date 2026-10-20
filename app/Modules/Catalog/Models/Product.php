@@ -392,6 +392,12 @@ class Product extends Model
     }
 
     /** Conteúdo do anúncio (benefícios + descrição em blocos) — pedido 2026-10-09. */
+    /** Imagens geradas pela IA esperando revisão (2026-10-19). */
+    public function iaImages(): HasMany
+    {
+        return $this->hasMany(ProductIaImage::class)->orderByDesc('lote')->orderBy('ordem');
+    }
+
     public function adContent(): HasOne
     {
         return $this->hasOne(ProductAdContent::class);

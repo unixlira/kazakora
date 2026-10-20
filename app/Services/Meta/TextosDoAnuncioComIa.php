@@ -3,6 +3,7 @@
 namespace App\Services\Meta;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use Illuminate\Support\Str;
@@ -60,6 +61,7 @@ class TextosDoAnuncioComIa
         ]);
         $contexto = implode("\n", $contexto);
         $n = self::ALTERNATIVOS;
+        $semPreco = TextoIaSemPreco::regra();
 
         return <<<TXT
         Escreva os textos de um anúncio da loja KazaKora (kazakora.com) no Facebook e no Instagram para este produto.
@@ -69,6 +71,7 @@ class TextosDoAnuncioComIa
         Regras:
         - Português do Brasil, tom direto, casual e persuasivo, falando com quem rola o feed.
         - Use SÓ as informações acima. Não invente medidas, materiais, garantia, prazo de entrega, frete grátis, brinde, preço, desconto nem selo.
+        - {$semPreco}
         - Sem HTML, sem markdown, sem hashtags, sem travessão. No máximo 2 emojis no texto principal; nenhum no título e na descrição.
         - Texto principal: 2 a 4 frases curtas, gancho na primeira linha (até 125 caracteres), quebra uma objeção e termina com convite para comprar.
         - Título: até 40 caracteres, o benefício principal.
@@ -118,7 +121,7 @@ class TextosDoAnuncioComIa
             }
             $texto = str_replace(['**', '__', '—', '–'], ['', '', ',', ','], strip_tags($valor));
 
-            return Str::limit(trim((string) preg_replace("/\n{3,}/", "\n\n", str_replace("\r", '', $texto))), $limite, '');
+            return Str::limit(TextoIaSemPreco::semPreco(trim((string) preg_replace("/\n{3,}/", "\n\n", str_replace("\r", '', $texto)))), $limite, '');
         };
         $lista = fn ($valores, string $principal, int $limite) => array_values(array_slice(array_unique(array_filter(
             array_map(fn ($v) => $limpo($v, $limite), is_array($valores) ? $valores : []),

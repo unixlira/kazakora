@@ -5,7 +5,7 @@ import { notifyError, notifySuccess, notifyWarning } from '@/Shared/notify';
 import { useClickOutside } from '@/Shared/useClickOutside';
 import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
-import { sidebarSections } from '@/Shared/adminSidebarItems';
+import { secoesComEquipes } from '@/Shared/adminSidebarItems';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
 
@@ -65,8 +65,10 @@ const marcaLogo = computed(() => isDark.value
     : (page.props.marca?.logoNav || '/images/marca/logo-nav.png'));
 const { can } = usePermissions();
 
+// Seção Equipes (2026-10-20): o submenu lista as squads ativas que vêm do servidor.
+const sidebarSections = computed(() => secoesComEquipes(page.props.equipesMenu ?? []));
 const visibleSections = computed(() =>
-    sidebarSections
+    sidebarSections.value
         .map((section) => ({
             ...section,
             items: section.items.filter((item) => !item.permission || can(item.permission)),
@@ -132,7 +134,7 @@ const matchesPath = (href) => urlPath.value === href || urlPath.value.startsWith
 const comFilhos = (item) => [item, ...(item.children ?? [])];
 const activeHref = computed(() => {
     if (urlPath.value === '/admin') return '/admin';
-    return sidebarSections
+    return sidebarSections.value
         .flatMap((section) => section.items.flatMap(comFilhos).map((item) => item.href))
         .filter((href) => href !== '/admin' && matchesPath(href))
         .sort((a, b) => b.length - a.length)[0] ?? null;

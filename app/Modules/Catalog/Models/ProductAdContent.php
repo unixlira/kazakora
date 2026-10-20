@@ -23,6 +23,7 @@ class ProductAdContent extends Model
         'comparativo',
         'beneficios',
         'duvidas',
+        'pratica',
         'fonte',
         'origem_hash',
         'erro',
@@ -39,6 +40,7 @@ class ProductAdContent extends Model
             'comparativo' => 'array',
             'beneficios' => 'array',
             'duvidas' => 'array',
+            'pratica' => 'array',
             'gerado_em' => 'datetime',
         ];
     }

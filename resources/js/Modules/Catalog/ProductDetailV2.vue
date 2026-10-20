@@ -306,6 +306,14 @@ const blocoAntesDosBeneficios = computed(() => {
     const comFoto = blocosAnuncio.value.flatMap((bloco, index) => (imagemDoBloco(bloco.imagem) ? [index] : []));
     return comFoto.length >= 2 ? comFoto[1] : blocosAnuncio.value.length - 1;
 });
+// "Veja na prática": midia é o índice de uma foto do produto ou um caminho em storage.
+const praticaAnuncio = computed(() => (anuncio.value?.pratica ?? [])
+    .map((item) => ({
+        ...item,
+        url: typeof item.midia === 'number' ? imagemDoBloco(item.midia) : (/^(https?:)?\//.test(item.midia ?? '') ? item.midia : (item.midia ? `/storage/${item.midia}` : null)),
+    }))
+    .filter((item) => item.url));
+const ehVideo = (url) => /\.(mp4|webm)(\?|$)/i.test(url);
 
 const highlights = computed(() => {
     if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
@@ -690,18 +698,21 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                                 <div v-if="anuncio.chamada" class="bloco-anuncio chamada-final">
                                     <p class="chamada-frase">{{ anuncio.chamada }}</p>
-                                    <!-- No lugar do COMPRAR, o selo "Compre com tranquilidade" da versão
-                                         anterior (pedido 2026-10-20, Lanterna LED). -->
-                                    <div class="confianca-final">
-                                        <p class="rotulo-amar">Compre com tranquilidade</p>
-                                        <ul>
-                                            <li><i class="fas fa-circle-check"></i> Loja verificada no Reclame Aqui</li>
-                                            <li><i class="fas fa-circle-check"></i> Compra segura</li>
-                                            <li><i class="fas fa-circle-check"></i> Envio rápido e embalagem segura</li>
-                                            <li><i class="fas fa-circle-check"></i> Nota fiscal em toda compra</li>
-                                            <li><i class="fas fa-circle-check"></i> 7 dias para desistir</li>
-                                            <li><i class="fas fa-circle-check"></i> Atendimento no WhatsApp</li>
-                                        </ul>
+                                </div>
+
+                                <!-- Veja na prática: o produto em uso em cartões (gif, webp ou vídeo) no lugar
+                                     do selo "Compre com tranquilidade" (pedido 2026-10-20, Lanterna LED). -->
+                                <div v-if="praticaAnuncio.length" class="bloco-anuncio">
+                                    <p class="rotulo-amar">Veja na prática</p>
+                                    <div class="grade-pratica">
+                                        <article v-for="(item, index) in praticaAnuncio" :key="index" class="pratica-card">
+                                            <video v-if="ehVideo(item.url)" :src="item.url" autoplay muted loop playsinline preload="metadata"></video>
+                                            <img v-else :src="item.url" :alt="item.titulo" loading="lazy">
+                                            <div>
+                                                <h3>{{ item.titulo }}</h3>
+                                                <p>{{ item.texto }}</p>
+                                            </div>
+                                        </article>
                                     </div>
                                 </div>
 
@@ -1140,10 +1151,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .bloco-anuncio .beneficio-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
 .pd2 .chamada-final { text-align: center; }
 .pd2 .bloco-anuncio .chamada-frase { max-width: 640px; margin: 0 auto 18px; font-size: 26px; font-weight: 700; line-height: 1.3; color: var(--ink); }
-.pd2 .confianca-final { max-width: 640px; margin: 0 auto; padding: 20px 22px; border-radius: 18px; background: #111; color: #fff; text-align: left; }
-.dark .pd2 .confianca-final { border: 1px solid var(--line); }
-.pd2 .confianca-final ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; font-size: 15px; }
-.pd2 .confianca-final i { color: #22c55e; margin-right: 6px; }
+.pd2 .bloco-anuncio .chamada-frase:last-child { margin-bottom: 0; }
+.pd2 .grade-pratica { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.pd2 .pratica-card { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.pd2 .pratica-card img, .pd2 .pratica-card video { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: #111; }
+.pd2 .pratica-card > div { padding: 14px 16px 18px; }
+.pd2 .bloco-anuncio .pratica-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
+.pd2 .bloco-anuncio .pratica-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }
@@ -1259,7 +1273,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
     .pd2 .grade-beneficios { grid-template-columns: 1fr; }
     .pd2 .bloco-anuncio .chamada-frase { font-size: 21px; }
-    .pd2 .confianca-final ul { grid-template-columns: 1fr; }
+    .pd2 .grade-pratica { grid-template-columns: 1fr; }
     .pd2 .com-foto, .pd2 .com-foto.foto-direita { grid-template-columns: 1fr; gap: 14px; }
     .pd2 .com-foto.foto-direita .foto-desc { order: 0; }
     .pd2 .foto-desc { max-width: 320px; margin: 0 auto; }

@@ -589,10 +589,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <!-- Mesmos selos com imagem da finalização (pedido 2026-10-10), mantendo
                                  as frases e o negrito azul daqui. -->
                             <ul class="fretefundo">
+                                <!-- Sem a frase do CEP no checkout (pedido 2026-10-20): o prazo pelo CEP
+                                     já fica no campo "Consultar prazo de entrega" logo acima. -->
                                 <li>
                                     <img class="selo-img" src="/images/checkout/entrega-rapida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">
-                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!<br>O prazo é calculado pelo seu CEP no checkout.</span>
-                                    <span v-else><b>Entrega</b> para todo o Brasil.<br>O frete e o prazo são calculados pelo seu CEP no checkout.</span>
+                                    <span v-if="isFreeShipping"><b>Entrega GRÁTIS</b> <span class="selo-full"><i class="fa-solid fa-bolt"></i>FULL</span> para a sua casa!</span>
+                                    <span v-else><b>Entrega</b> para todo o Brasil.</span>
                                 </li>
                                 <li>
                                     <img class="selo-img" src="/images/checkout/satisfacao-garantida-checkout-v4.png" alt="" width="44" height="44" loading="lazy">

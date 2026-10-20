@@ -895,6 +895,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         // log de produção carrega dado de cliente e payload de marketplace.
         Route::get('logs', [SystemLogController::class, 'index'])->name('logs.listar');
 
+        // Alertas do painel (2026-10-16): aviso no sino de notificações (2026-10-17), histórico aqui.
+        Route::get('alertas', [\App\Modules\Admin\Http\Controllers\AlertasAdminController::class, 'index'])->name('alertas.listar');
+        Route::post('alertas/{alerta}/resolver', [\App\Modules\Admin\Http\Controllers\AlertasAdminController::class, 'resolver'])->whereNumber('alerta')->name('alertas.resolver');
+        Route::post('alertas/tipos/{tipo}', [\App\Modules\Admin\Http\Controllers\AlertasAdminController::class, 'tipo'])->name('alertas.tipo');
+
         // Visitas ao site (2026-10-12): páginas abertas na loja e o IP de
         // quem abriu, lidas de site_visits. Admin-only como Logs (IP é dado
         // pessoal).

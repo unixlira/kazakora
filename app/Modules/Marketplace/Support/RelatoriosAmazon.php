@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Models\User;
+use App\Modules\Admin\Support\AlertasAdmin;
 use App\Modules\Financeiro\Support\AlertaColetaFinanceira;
 use App\Notifications\AmazonRelatorioNotification;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +103,9 @@ class RelatoriosAmazon
 
         if (! $sucesso) {
             rescue(fn () => app(AlertaColetaFinanceira::class)->avisar('Amazon', $detalhe), report: false);
+        } else {
+            // Coleta voltou: o alerta do painel do admin some sozinho.
+            rescue(fn () => app(AlertasAdmin::class)->resolver(AlertasAdmin::COLETA_FINANCEIRA, 'amazon'), report: false);
         }
     }
 }

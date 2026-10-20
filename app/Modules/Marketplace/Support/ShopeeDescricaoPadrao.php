@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Support\GatilhosAnuncio;
+use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use Illuminate\Support\Facades\Log;
@@ -113,7 +114,7 @@ class ShopeeDescricaoPadrao
 
     private function prompt(Product $product, string $original): string
     {
-        $gatilhos = GatilhosAnuncio::regras();
+        $gatilhos = GatilhosAnuncio::regras()."\n".TextoIaSemPreco::regra();
 
         return <<<TXT
 Reescreva a descrição do produto abaixo para a Shopee, EXATAMENTE neste padrão (texto puro, uma linha em branco entre seções, sem markdown, sem HTML, sem travessão):
@@ -203,7 +204,7 @@ TXT;
 
     private function limpar(string $texto): string
     {
-        $texto = str_replace(['**', '__', '```', '—', '–'], ['', '', '', ', ', ', '], strip_tags($texto));
+        $texto = TextoIaSemPreco::semPreco(str_replace(['**', '__', '```', '—', '–'], ['', '', '', ', ', ', '], strip_tags($texto)));
         $texto = trim((string) preg_replace("/\n{3,}/", "\n\n", $this->espacarSecoes(str_replace("\r", '', $texto))));
 
         return mb_strlen($texto) > self::LIMITE_SHOPEE ? rtrim(mb_substr($texto, 0, self::LIMITE_SHOPEE)) : $texto;

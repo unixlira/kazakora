@@ -404,6 +404,14 @@ const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
     return { star, count, percent: props.reviews.length ? Math.round((count / props.reviews.length) * 100) : 0 };
 }));
 
+// Resumo da coluna da direita: média com 1 casa, estrelas preenchidas em % da
+// média (4,8 = 96%) e quantas avaliações deram 4 ou 5 estrelas.
+const ratingAvgTexto = computed(() => ratingAvg.value.toFixed(1).replace('.', ','));
+const ratingPercent = computed(() => Math.min(100, Math.max(0, (ratingAvg.value / 5) * 100)));
+const positivasPercent = computed(() => (props.reviews.length
+    ? Math.round((props.reviews.filter((review) => Number(review.rating) >= 4).length / props.reviews.length) * 100)
+    : 0));
+
 const showReviews = computed(() => props.reviews.length > 0 || props.reviewsOutraLoja.length > 0 || (props.canReview && !props.hasReviewed));
 
 // Lista de avaliações (pedido 2026-10-11): já vem ordenada do servidor (mais
@@ -657,6 +665,20 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
+
+                            <!-- Média das avaliações abaixo dos selos (pedido 2026-10-20): nota, estrelas
+                                 preenchidas na proporção da média e % de notas 4 ou 5. Só as da
+                                 KazaKora, como a nota do topo (as de outra loja ficam fora). -->
+                            <a v-if="reviewsCount > 0" href="#avaliacoes" class="resumo-nota" :aria-label="`Nota ${ratingAvgTexto} de 5 em ${reviewsCount} avaliações`">
+                                <strong class="valor">{{ ratingAvgTexto }}</strong>
+                                <span class="lado">
+                                    <span class="estrelas-parciais" aria-hidden="true">
+                                        <span class="vazias"><i v-for="n in 5" :key="n" class="fas fa-star"></i></span>
+                                        <span class="cheias" :style="{ width: `${ratingPercent}%` }"><i v-for="n in 5" :key="n" class="fas fa-star"></i></span>
+                                    </span>
+                                    <span class="legenda"><b>{{ positivasPercent }}%</b> das avaliações com 4 ou 5 estrelas · {{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação' : 'avaliações' }}</span>
+                                </span>
+                            </a>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1114,6 +1136,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fretefundo .selo-icone i { margin: 0; color: #00a650; }
 .pd2 .fretefundo .selo-full i { font-size: 0.9em; margin: 0 1px 0 0; color: inherit; text-align: left; }
 .pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
+.pd2 .resumo-nota { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 14px 15px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); text-decoration: none; color: var(--text); }
+.pd2 .resumo-nota .valor { font-size: 40px; line-height: 1; font-weight: 700; color: var(--ink); }
+.pd2 .resumo-nota .lado { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pd2 .resumo-nota .legenda { font-size: 14px; line-height: 20px; }
+.pd2 .resumo-nota .legenda b { color: var(--blue); }
+.pd2 .estrelas-parciais { position: relative; display: inline-block; font-size: 20px; letter-spacing: 2px; line-height: 1; white-space: nowrap; }
+.pd2 .estrelas-parciais .vazias { color: #d4d4d4; }
+.dark .pd2 .estrelas-parciais .vazias { color: var(--line); }
+.pd2 .estrelas-parciais .cheias { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: var(--star); }
 
 .pd2 .prazo-cep { margin: 0 0 14px; }
 .pd2 .prazo-cep label { display: block; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 6px; }

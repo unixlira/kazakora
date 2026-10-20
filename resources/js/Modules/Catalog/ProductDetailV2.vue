@@ -708,6 +708,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                                 <div v-if="anuncio.chamada" class="bloco-anuncio chamada-final">
                                     <p class="chamada-frase">{{ anuncio.chamada }}</p>
+                                    <!-- Frase de fechamento na caixa do "Veja na prática", no lugar do COMPRAR
+                                         (pedido 2026-10-20, Lanterna LED). -->
+                                    <div v-if="anuncio.fechamento" class="fechamento-final">
+                                        <h3>{{ anuncio.fechamento }}</h3>
+                                    </div>
                                 </div>
 
                                 <!-- Veja na prática: o produto em uso em cartões (gif, webp ou vídeo) no lugar
@@ -1178,6 +1183,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .pratica-card > div { padding: 14px 16px 18px; }
 .pd2 .bloco-anuncio .pratica-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
 .pd2 .bloco-anuncio .pratica-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
+.pd2 .fechamento-final { max-width: 640px; margin: 0 auto; padding: 20px 22px; border-left: 4px solid #f1691b; border-radius: 4px 16px 16px 4px; background: #fff3ec; text-align: left; }
+.dark .pd2 .fechamento-final { background: rgba(241, 105, 27, .12); }
+.pd2 .bloco-anuncio .fechamento-final h3 { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.35; color: var(--ink); }
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }

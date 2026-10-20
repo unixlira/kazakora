@@ -19,6 +19,7 @@ class ProductAdContent extends Model
         'product_id',
         'destaques',
         'chamada',
+        'fechamento',
         'blocos',
         'comparativo',
         'beneficios',

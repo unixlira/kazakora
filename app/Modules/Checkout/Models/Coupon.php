@@ -28,6 +28,7 @@ class Coupon extends Model
 
     protected $fillable = [
         'code',
+        'user_id',
         'name',
         'discount_type',
         'discount_value',
@@ -122,6 +123,10 @@ class Coupon extends Model
     {
         if (! $this->is_active) {
             return 'Este cupom não está mais ativo.';
+        }
+        // Cupom pessoal (Clube de Avaliações): só a conta que ganhou usa.
+        if ($this->user_id && $user?->id !== $this->user_id) {
+            return 'Este cupom é pessoal: entre na conta que ganhou o cupom para usar.';
         }
         if ($this->starts_at && $this->starts_at->isFuture()) {
             return 'Este cupom vale a partir de '.$this->starts_at->format('d/m/Y').'.';

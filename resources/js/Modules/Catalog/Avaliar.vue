@@ -1,24 +1,27 @@
 <script setup>
-// Esboço "Avalie suas compras" (pedido 2026-10-20): produtos já entregues ao
-// cliente, cada um com estrelas e comentário, e um painel de recompensas por
-// pontos. As recompensas são só prévia: nenhum cupom é gerado por esta tela.
+// "Avalie suas compras" (pedido 2026-10-20): produtos já entregues ao cliente,
+// cada um com estrelas, comentário e a opção de ocultar o nome, e o Clube de
+// Avaliações. Pontos, níveis e cupons vêm do servidor (ClubeDeAvaliacoes): o
+// cupom pessoal é gerado lá quando o cliente alcança um nível.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 
 const props = defineProps({
     produtos: { type: Array, required: true },
+    clube: { type: Object, required: true },
+    nomeCliente: { type: String, default: '' },
 });
 
-// Proposta de pontos (a definir): nota vale 10 e comentário com conteúdo vale mais 10.
-const PONTOS_NOTA = 10;
-const PONTOS_COMENTARIO = 10;
-const COMENTARIO_MINIMO = 20;
-const NIVEIS = [
-    { pontos: 30, nome: 'Bronze', premio: 'Cupom de 5% na próxima compra', icone: 'fa-medal', cor: '#b45309' },
-    { pontos: 80, nome: 'Prata', premio: 'Cupom de 8% na próxima compra', icone: 'fa-award', cor: '#64748b' },
-    { pontos: 150, nome: 'Ouro', premio: 'Cupom de 12% e acesso antecipado às ofertas', icone: 'fa-crown', cor: '#ca8a04' },
-];
+const PONTOS_NOTA = props.clube.regras.nota;
+const PONTOS_COMENTARIO = props.clube.regras.comentario;
+const COMENTARIO_MINIMO = props.clube.regras.comentario_minimo;
+const VISUAL = {
+    bronze: { icone: 'fa-medal', cor: '#b45309' },
+    prata: { icone: 'fa-award', cor: '#64748b' },
+    ouro: { icone: 'fa-crown', cor: '#ca8a04' },
+};
+const NIVEIS = computed(() => props.clube.niveis.map((n) => ({ ...n, ...VISUAL[n.chave], premio: `Cupom de ${n.desconto}% na próxima compra` })));
 
 const pontosDe = (avaliacao) => {
     if (!avaliacao?.nota) return 0;
@@ -26,15 +29,14 @@ const pontosDe = (avaliacao) => {
     return PONTOS_NOTA + (comentario.length >= COMENTARIO_MINIMO ? PONTOS_COMENTARIO : 0);
 };
 
-const pontos = computed(() => props.produtos.reduce((total, p) => total + pontosDe(p.avaliacao), 0));
-const avaliados = computed(() => props.produtos.filter((p) => p.avaliacao).length);
+const pontos = computed(() => props.clube.pontos);
 const pendentes = computed(() => props.produtos.filter((p) => !p.avaliacao));
 const feitos = computed(() => props.produtos.filter((p) => p.avaliacao));
-const proximoNivel = computed(() => NIVEIS.find((n) => pontos.value < n.pontos) ?? null);
-const nivelAtual = computed(() => [...NIVEIS].reverse().find((n) => pontos.value >= n.pontos) ?? null);
+const proximoNivel = computed(() => NIVEIS.value.find((n) => pontos.value < n.pontos) ?? null);
+const nivelAtual = computed(() => [...NIVEIS.value].reverse().find((n) => pontos.value >= n.pontos) ?? null);
+const topo = computed(() => NIVEIS.value[NIVEIS.value.length - 1].pontos);
 const progresso = computed(() => {
-    const topo = NIVEIS[NIVEIS.length - 1].pontos;
-    return Math.min(100, Math.round((pontos.value / topo) * 100));
+    return Math.min(100, Math.round((pontos.value / topo.value) * 100));
 });
 
 // Rascunho de cada card: nota, comentário, se está editando e se está enviando.
@@ -45,6 +47,7 @@ const rascunho = (produto) => {
             nota: produto.avaliacao?.nota ?? 0,
             passando: 0,
             comentario: produto.avaliacao?.comentario ?? '',
+            ocultarNome: produto.avaliacao?.ocultar_nome ?? false,
             editando: !produto.avaliacao,
             enviando: false,
             erro: null,
@@ -64,7 +67,7 @@ const enviar = (produto) => {
     }
     r.erro = null;
     r.enviando = true;
-    router.post(`/produtos/${produto.id}/avaliacoes`, { rating: r.nota, comment: r.comentario || null }, {
+    router.post(`/produtos/${produto.id}/avaliacoes`, { rating: r.nota, comment: r.comentario || null, ocultar_nome: r.ocultarNome }, {
         preserveScroll: true,
         onSuccess: () => {
             r.editando = false;
@@ -73,6 +76,15 @@ const enviar = (produto) => {
         onError: (erros) => { r.erro = erros.review ?? erros.rating ?? erros.comment ?? 'Não deu para enviar. Tente de novo.'; },
         onFinish: () => { r.enviando = false; },
     });
+};
+
+const copiado = ref(null);
+const copiar = async (codigo) => {
+    try {
+        await navigator.clipboard.writeText(codigo);
+        copiado.value = codigo;
+        setTimeout(() => { if (copiado.value === codigo) copiado.value = null; }, 2000);
+    } catch { /* sem permissão de área de transferência: o código está visível */ }
 };
 
 const formatDate = (value) => value
@@ -100,13 +112,10 @@ const formatDate = (value) => value
                 <span aria-hidden="true" class="absolute -right-12 -top-16 h-48 w-48 rounded-full bg-[#F27A2A] opacity-20 blur-3xl"></span>
                 <div class="relative flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <p class="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800">
-                            <i class="fas fa-flask"></i> Prévia
-                        </p>
-                        <h2 id="titulo-recompensas" class="mt-2 text-xl font-semibold">Clube de Avaliações KazaKora</h2>
+                        <h2 id="titulo-recompensas" class="text-xl font-semibold">Clube de Avaliações KazaKora</h2>
                         <p class="mt-1 max-w-[520px] text-sm text-store-fg-muted">
                             Cada avaliação vale {{ PONTOS_NOTA }} pontos. Com um comentário de pelo menos {{ COMENTARIO_MINIMO }} letras, vale mais {{ PONTOS_COMENTARIO }}.
-                            Os pontos ainda não viram cupom: o programa está em preparação.
+                            Ao chegar em cada nível você ganha um cupom só seu, de uso único, válido por {{ clube.regras.validade_dias }} dias.
                         </p>
                     </div>
                     <div class="text-right">
@@ -119,7 +128,7 @@ const formatDate = (value) => value
                 </div>
 
                 <div class="relative mt-5">
-                    <div class="h-2.5 overflow-hidden rounded-full bg-store-bg-sunken" role="progressbar" :aria-valuenow="pontos" aria-valuemin="0" :aria-valuemax="NIVEIS[NIVEIS.length - 1].pontos" aria-label="Pontos até o nível Ouro">
+                    <div class="h-2.5 overflow-hidden rounded-full bg-store-bg-sunken" role="progressbar" :aria-valuenow="pontos" aria-valuemin="0" :aria-valuemax="topo" aria-label="Pontos até o nível Ouro">
                         <div class="h-full rounded-full bg-gradient-to-r from-[#F27A2A] to-[#0FB930] transition-all" :style="{ width: `${progresso}%` }"></div>
                     </div>
                     <p class="mt-2 text-xs text-store-fg-muted">
@@ -139,7 +148,20 @@ const formatDate = (value) => value
                             <span class="text-xs font-semibold text-store-fg-muted">{{ nivel.pontos }} pts</span>
                         </div>
                         <p class="mt-1.5 text-sm">{{ nivel.premio }}</p>
-                        <p v-if="pontos >= nivel.pontos" class="mt-2 text-xs font-semibold text-[#0FB930]"><i class="fas fa-check"></i> Alcançado</p>
+                        <template v-if="nivel.cupom">
+                            <div class="mt-2 flex items-center gap-2">
+                                <code class="rounded-lg border border-dashed border-[#0FB930] bg-white px-2 py-1 text-sm font-bold tracking-wide text-store-fg" :class="{ 'line-through opacity-60': nivel.cupom.usado || nivel.cupom.expirado }">{{ nivel.cupom.codigo }}</code>
+                                <button v-if="!nivel.cupom.usado && !nivel.cupom.expirado" type="button" class="text-xs font-semibold text-[#F27A2A] hover:underline" @click="copiar(nivel.cupom.codigo)">
+                                    {{ copiado === nivel.cupom.codigo ? 'Copiado!' : 'Copiar' }}
+                                </button>
+                            </div>
+                            <p class="mt-1 text-xs text-store-fg-muted">
+                                <template v-if="nivel.cupom.usado">Cupom já usado.</template>
+                                <template v-else-if="nivel.cupom.expirado">Cupom vencido em {{ formatDate(nivel.cupom.validade) }}.</template>
+                                <template v-else>Use no checkout até {{ formatDate(nivel.cupom.validade) }}.</template>
+                            </p>
+                        </template>
+                        <p v-else-if="pontos >= nivel.pontos" class="mt-2 text-xs font-semibold text-[#0FB930]"><i class="fas fa-check"></i> Alcançado</p>
                     </li>
                 </ul>
             </section>
@@ -177,6 +199,7 @@ const formatDate = (value) => value
                                         <span class="rounded-full bg-[#0FB930]/10 px-2 py-0.5 text-xs font-semibold text-[#0FB930]">+{{ pontosDe(produto.avaliacao) }} pontos</span>
                                     </div>
                                     <p v-if="produto.avaliacao.comentario" class="mt-1.5 text-sm text-store-fg-muted">“{{ produto.avaliacao.comentario }}”</p>
+                                    <p v-if="produto.avaliacao.ocultar_nome" class="mt-1 text-xs text-store-fg-muted"><i class="fas fa-user-secret"></i> Publicada sem o seu nome</p>
                                     <button type="button" class="mt-2 text-sm font-semibold text-[#F27A2A] hover:underline" @click="rascunho(produto).editando = true">Editar avaliação</button>
                                 </div>
 
@@ -198,6 +221,13 @@ const formatDate = (value) => value
                                     <textarea :id="`comentario-${produto.id}`" v-model="rascunho(produto).comentario" rows="3" maxlength="1000"
                                         class="mt-1 w-full rounded-xl border border-store-border bg-store-bg px-3 py-2 text-sm focus:border-[#F27A2A] focus:outline-none focus:ring-2 focus:ring-[#F27A2A]/30"
                                         placeholder="O que achou? Qualidade, tamanho, se chegou como na foto…"></textarea>
+                                    <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm">
+                                        <input v-model="rascunho(produto).ocultarNome" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-store-border accent-[#F27A2A]">
+                                        <span>
+                                            Ocultar meu nome na avaliação
+                                            <span class="block text-xs text-store-fg-muted">Aparece como: <strong>{{ rascunho(produto).ocultarNome || !nomeCliente ? 'Cliente KazaKora' : nomeCliente }}</strong></span>
+                                        </span>
+                                    </label>
                                     <p v-if="rascunho(produto).erro" class="mt-1 text-sm text-red-600" role="alert">{{ rascunho(produto).erro }}</p>
                                     <div class="mt-3 flex flex-wrap items-center gap-3">
                                         <button type="submit" :disabled="rascunho(produto).enviando"

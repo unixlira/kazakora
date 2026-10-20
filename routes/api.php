@@ -212,6 +212,12 @@ Route::post('/correios/webhook', [\App\Http\Controllers\Api\CorreiosWebhookContr
     ->middleware('throttle:120,1')
     ->name('api.correios.webhook');
 
+// Instruções extras dos agentes da equipe (menu Equipes, 2026-10-20). Bearer EQUIPE_AGENTES_TOKEN.
+Route::get('/equipe/{slug}/instrucoes', [\App\Http\Controllers\Api\EquipeInstrucoesController::class, 'show'])
+    ->where('slug', '[a-z0-9-]+')
+    ->middleware('throttle:120,1')
+    ->name('api.equipe.instrucoes');
+
 // Relatórios do TikTok para a auditoria financeira (app "KazaKora TikTok
 // Reports", 2026-10-11). Autenticação por Bearer TIKTOK_REPORTS_TOKEN.
 Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import'])

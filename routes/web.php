@@ -882,6 +882,22 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('whatsapp/conversas/{conversation}', [WhatsAppInboxController::class, 'destroy'])->whereNumber('conversation')->name('whatsapp.conversas.apagar');
     });
 
+    // Equipes de agentes de IA (pedido do Lira 2026-10-20): menu Equipes ›
+    // <squad>. Só admin. As instruções extras salvas aqui saem pela API
+    // GET /api/equipe/{slug}/instrucoes para os agentes do Claude Code.
+    Route::middleware('admin')->prefix('equipes')->name('equipes.')->group(function () {
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'inicio'])->name('inicio');
+        Route::get('{squad}', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'show'])->name('ver');
+        Route::get('{squad}/membros/nova', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'create'])->name('membros.nova');
+        Route::post('{squad}/membros', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'store'])->name('membros.armazenar');
+        Route::get('{squad}/membros/{membro:slug}/editar', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'edit'])->name('membros.editar');
+        Route::put('{squad}/membros/{membro:slug}', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'update'])->name('membros.atualizar');
+        Route::patch('{squad}/membros/{membro:slug}/status', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'status'])->name('membros.status');
+        Route::post('{squad}/membros/{membro:slug}/instrucoes', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'storeInstrucao'])->name('membros.instrucoes.armazenar');
+        Route::patch('{squad}/membros/{membro:slug}/instrucoes/{instrucao}', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'alternarInstrucao'])->whereNumber('instrucao')->name('membros.instrucoes.alternar');
+        Route::delete('{squad}/membros/{membro:slug}/instrucoes/{instrucao}', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'destroyInstrucao'])->whereNumber('instrucao')->name('membros.instrucoes.excluir');
+    });
+
     Route::middleware('admin')->group(function () {
         Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');
         Route::patch('usuarios-permissoes/usuarios/{user}', [UserPermissionController::class, 'updateRole'])->name('usuarios-permissoes.papel.atualizar');

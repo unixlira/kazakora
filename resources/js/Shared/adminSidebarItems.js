@@ -210,3 +210,24 @@ export const sidebarSections = [
         ],
     },
 ];
+
+/**
+ * Equipes (pedido do Lira 2026-10-20): uma seção com um item por squad de
+ * agentes de IA ativa (a primeira é a Alfacora). A lista vem do servidor em
+ * page.props.equipesMenu, só para admin; entra antes de Configurações.
+ */
+export function secoesComEquipes(squads) {
+    if (!squads?.length) return sidebarSections;
+    const equipes = {
+        heading: 'Equipes',
+        items: squads.map((s) => ({
+            label: s.nome,
+            href: `/admin/equipes/${s.slug}`,
+            icon: 'fas fa-people-group',
+            cor: 'violeta',
+            permission: 'configuracoes.usuarios',
+        })),
+    };
+    const i = sidebarSections.findIndex((s) => s.heading === 'Configurações');
+    return i < 0 ? [...sidebarSections, equipes] : [...sidebarSections.slice(0, i), equipes, ...sidebarSections.slice(i)];
+}

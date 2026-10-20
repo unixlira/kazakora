@@ -513,6 +513,12 @@ return [
         'token' => env('TIKTOK_REPORTS_TOKEN'),
     ],
 
+    // Equipes de agentes (2026-10-20): token do GET /api/equipe/{slug}/instrucoes,
+    // lido pelos agentes do Claude Code no PC do Lira.
+    'equipe_agentes' => [
+        'token' => env('EQUIPE_AGENTES_TOKEN'),
+    ],
+
     // Site FerraKora (2026-10-12): domínios que podem avisar visita em
     // POST /api/ferrakora/visita (lista separada por vírgula, sem www).
     'ferrakora' => [

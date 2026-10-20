@@ -353,7 +353,14 @@ class Product extends Model
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(2)])
             // Estrela do card só com avaliação da KazaKora: as de outra loja
             // (selo "Avaliação feita em outra loja") não entram na nota.
-            ->withAvg(['reviews' => fn ($reviews) => $reviews->daLoja()], 'rating');
+            // Soma as variações, como a nota da página do produto (pedido
+            // 2026-10-20: estrelas e nota média em todo card).
+            ->addSelect(['reviews_avg_rating' => Review::query()
+                ->daLoja()
+                ->selectRaw('AVG(reviews.rating)')
+                ->whereIn('reviews.product_id', fn ($sub) => $sub->select('variacoes.id')->from('products as variacoes')
+                    ->whereColumn('variacoes.id', 'products.id')
+                    ->orWhereColumn('variacoes.parent_product_id', 'products.id'))]);
     }
 
     public function images(): HasMany

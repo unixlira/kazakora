@@ -98,6 +98,25 @@ class AvaliacoesOutraLojaTest extends TestCase
             ->has('reviewsOutraLoja', 1));
     }
 
+    public function test_nota_do_card_e_das_lojas_irmas_soma_variacoes_sem_outra_loja(): void
+    {
+        $pai = Product::factory()->create(['is_active' => true, 'sku' => 'PAI-NOTA']);
+        $filho = Product::factory()->create(['is_active' => true, 'parent_product_id' => $pai->id]);
+        $this->daLoja($pai, 5);
+        $this->daLoja($filho, 4);
+        $this->deOutraLoja($filho, 1);
+
+        // Card da KazaKora: mesma nota da página do produto (pai + variações).
+        $this->assertEquals(4.5, (float) Product::query()->forCard()->find($pai->id)->reviews_avg_rating);
+
+        // FerraKora e Beauty Kora recebem a nota no reviewsAnalytics da vitrine.
+        config(['services.ferrakora.catalogo_token' => 'token']);
+        $this->postJson('/api/ferrakora/produtos', ['produtos' => [['sku' => 'PAI-NOTA']]], ['Authorization' => 'Bearer token'])->assertOk();
+        $this->getJson('/api/ferrakora/produtos')->assertOk()
+            ->assertJsonPath('products.0.reviewsAnalytics.total_reviews', 2)
+            ->assertJsonPath('products.0.reviewsAnalytics.average_rating', 4.5);
+    }
+
     public function test_json_ld_nao_usa_as_de_outra_loja(): void
     {
         $produto = Product::factory()->create(['is_active' => true]);

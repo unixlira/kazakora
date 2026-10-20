@@ -5,6 +5,7 @@ namespace Tests\Unit\Catalog;
 use App\Console\Commands\ImportarAvaliacoesOutraLoja;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Support\NomeBrasileiro;
 use Illuminate\Database\ConnectionResolver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\MySqlConnection;
@@ -79,9 +80,38 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
     public function test_exibicao_preserva_autor_da_origem_ou_usa_fallback(?string $autor, string $esperado): void
     {
         $review = new Review(['outra_loja' => true, 'reviewer_name' => $autor]);
+        $review->id = 77;
+
+        // Sem autor, a tela mostra nome brasileiro sorteado (fixo pelo id), nunca o genérico.
+        if ($esperado === Review::NOME_OUTRA_LOJA) {
+            $esperado = NomeBrasileiro::gerar(77);
+        }
 
         $this->assertSame($esperado, $review->reviewer_display_name);
         $this->assertSame($esperado, $review->toArray()['reviewer_display_name']);
+    }
+
+    public function test_nome_brasileiro_fixo_por_avaliacao_e_vindo_das_listas(): void
+    {
+        $review = new Review(['outra_loja' => true, 'reviewer_name' => Review::NOME_OUTRA_LOJA]);
+        $review->id = 501;
+
+        $nome = $review->reviewer_display_name;
+        $this->assertNotSame(Review::NOME_OUTRA_LOJA, $nome);
+        $this->assertSame($nome, $review->reviewer_display_name);
+        $this->assertSame($nome, NomeBrasileiro::gerar(501));
+
+        [$primeiro, $sobrenome] = explode(' ', $nome);
+        $this->assertContains($primeiro, NomeBrasileiro::NOMES);
+        $this->assertContains($sobrenome, NomeBrasileiro::SOBRENOMES);
+
+        $sorteado = explode(' ', NomeBrasileiro::gerar());
+        $this->assertContains($sorteado[0], NomeBrasileiro::NOMES);
+        $this->assertContains($sorteado[1], NomeBrasileiro::SOBRENOMES);
+
+        // Avaliações diferentes não ficam todas com o mesmo nome.
+        $nomes = array_map(fn ($id) => NomeBrasileiro::gerar($id), range(1, 50));
+        $this->assertGreaterThan(30, count(array_unique($nomes)));
     }
 
     #[DataProvider('autores')]

@@ -181,6 +181,14 @@ return [
         // Rastreio (SRO): usa o mesmo token do Preço/Prazo; o da pré-postagem
         // é recusado (GTW-012, API 87).
         'rastro_base_url' => env('CORREIOS_RASTRO_BASE_URL', 'https://api.correios.com.br/srorastro'),
+        // Avisos de WhatsApp ao cliente pelo rastreio (postado, saiu para
+        // entrega, aguardando retirada, entregue) em loja:acompanhar-rastreio.
+        // Desligado por padrão (2026-10-19): o homolog não manda mensagem a
+        // cliente real. Produção precisa de CORREIOS_RASTREIO_WHATSAPP=true
+        // no .env para continuar avisando. Ver docs/correios-rastro.md.
+        'rastreio_whatsapp' => (bool) env('CORREIOS_RASTREIO_WHATSAPP', false),
+        // Segredo do webhook de rastreio (POST /api/correios/webhook). Vazio = webhook desligado.
+        'webhook_token' => env('CORREIOS_WEBHOOK_TOKEN'),
     ],
 
     // Ponte pro TikTok Shop via Bling (pedido explícito 2026-08-31 — integração
@@ -415,6 +423,17 @@ return [
             'template' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE'),
             'template_idioma' => env('ALERTA_COLETA_WHATSAPP_TEMPLATE_IDIOMA', 'pt_BR'),
             'intervalo_minutos' => (int) env('ALERTA_COLETA_WHATSAPP_INTERVALO', 60),
+        ],
+
+        // Rastreio do site em texto da Manuela (2026-10-18): cada etapa dos
+        // Correios (postado, saiu para entrega, aguardando retirada, entregue)
+        // sem template aprovado na Meta vira mensagem de texto. Texto livre
+        // só chega dentro da janela de 24 h. Fora do kazakora.com (o homolog
+        // usa o mesmo WhatsApp) tudo vai para o número abaixo, nunca para o
+        // cliente, com o pedido e o cliente no começo.
+        'rastreio_texto' => [
+            'ativo' => (bool) env('WHATSAPP_RASTREIO_TEXTO', true),
+            'redirecionar_para' => env('WHATSAPP_RASTREIO_TEXTO_PARA', parse_url((string) env('APP_URL'), PHP_URL_HOST) === 'kazakora.com' ? null : '5511990253050'),
         ],
 
         'templates' => [

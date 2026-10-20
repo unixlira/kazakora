@@ -62,6 +62,13 @@ class Order extends Model
     {
         static::saving(function (Order $order) {
             $order->projeto_origem = self::projetoDoSite($order->site_origem);
+
+            // Quando chegou ao cliente: base do pedido de avaliação
+            // (avaliacoes:solicitar). O rastreio grava a hora dos Correios
+            // antes; troca manual para "concluído" fica com a hora da troca.
+            if ($order->isDirty('status') && $order->status === self::STATUS_COMPLETED && $order->entregue_em === null) {
+                $order->entregue_em = now();
+            }
         });
     }
 
@@ -215,9 +222,13 @@ class Order extends Model
         $this->loadMissing('invoice', 'channelShipment', 'latestCorreiosPrePostagem');
 
         $pago = in_array($this->status, [self::STATUS_PAID, self::STATUS_SHIPPED, self::STATUS_COMPLETED], true);
-        $enviado = in_array($this->status, [self::STATUS_SHIPPED, self::STATUS_COMPLETED], true) || filled($this->trackingCode());
-        // Em preparação: separado/embalado no KoraSync ou com etiqueta pronta.
-        $emPreparacao = $enviado || ($pago && ($this->packed_at !== null || filled($this->channelShipment?->label_path)));
+        // Enviado só com a postagem confirmada pelos Correios (status "enviado",
+        // hoje pelo loja:acompanhar-rastreio, depois pelo webhook). Código de
+        // rastreio sozinho não basta: ele nasce na pré-postagem/etiqueta,
+        // antes do pacote sair (pedido do Lira, 2026-10-19).
+        $enviado = in_array($this->status, [self::STATUS_SHIPPED, self::STATUS_COMPLETED], true);
+        // Em preparação: separado/embalado no KoraSync ou com etiqueta/código pronto.
+        $emPreparacao = $enviado || ($pago && ($this->packed_at !== null || filled($this->channelShipment?->label_path) || filled($this->trackingCode())));
 
         return [
             ['titulo' => 'Pedido recebido', 'feito' => true],
@@ -264,6 +275,8 @@ class Order extends Model
         // Cliente do FerraKora (2026-10-15): conta separada, user_id fica nulo.
         'ferrakora_cliente_id',
         'ferrakora_endereco_id',
+        // Pedido feito pelo app nativo (2026-10-18): ios, android ou web. Só marcação.
+        'app_plataforma',
         'external_order_id',
         'channel_pack_id',
         'fiscal_operation_type',
@@ -277,6 +290,8 @@ class Order extends Model
         'disputed_at',
         'stock_restored_at',
         'packed_at',
+        'conferido_em',
+        'conferido_por',
         'auto_print_blocked',
         'ready_for_pickup_at',
         'collected_at',
@@ -336,12 +351,16 @@ class Order extends Model
             'whatsapp_confirmacao_em' => 'datetime',
             'whatsapp_enviado_em' => 'datetime',
             'whatsapp_entregue_em' => 'datetime',
+            'entregue_em' => 'datetime',
+            'whatsapp_saiu_entrega_em' => 'datetime',
+            'whatsapp_retirada_em' => 'datetime',
             'whatsapp_nao_recebi_em' => 'datetime',
             'projeto_origem' => 'integer',
             'disputed_at' => 'datetime',
             'stock_restored_at' => 'datetime',
             'cancelado_em' => 'datetime',
             'packed_at' => 'datetime',
+            'conferido_em' => 'datetime',
             'auto_print_blocked' => 'boolean',
             'ready_for_pickup_at' => 'datetime',
             'collected_at' => 'datetime',
@@ -358,6 +377,12 @@ class Order extends Model
     public function ferrakoraCliente(): BelongsTo
     {
         return $this->belongsTo(FerraKoraCliente::class, 'ferrakora_cliente_id');
+    }
+
+    /** E-mail "Avalie sua compra" deste pedido (avaliacoes:solicitar). */
+    public function avaliacaoSolicitacao(): HasOne
+    {
+        return $this->hasOne(\App\Modules\Catalog\Models\AvaliacaoSolicitacao::class);
     }
 
     public function items(): HasMany

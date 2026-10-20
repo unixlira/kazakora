@@ -2,10 +2,11 @@
 // Meta ADS (pedido do Lira 2026-10-19): conjunto novo dentro de campanha que
 // já está na Meta. Monta nome, orçamento (quando é por conjunto), público e
 // os anúncios do conjunto; salvar não fala com a Meta. O envio é um botão na
-// tela da campanha e sobe só este conjunto, pausado. Com soAnuncios
+// tela da campanha e sobe só este conjunto, já ativo (2026-10-20). Com soAnuncios
 // ("Acrescentar novos anúncios" em conjunto que já existe), só os anúncios
 // novos mudam; nome e público do conjunto ficam como estão.
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import AguardeModal from '@/Shared/Components/AguardeModal.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
@@ -146,9 +147,22 @@ const pendencias = computed(() => {
 const salvando = ref(false);
 const erroGeral = ref('');
 
+// Modal único de espera (2026-10-20): andamento dos arquivos no salvar.
+const arquivos = ref({ atual: null, n: 0, total: 0 });
+const progressoGeral = computed(() => {
+    const { atual, n, total } = arquivos.value;
+    return total ? ((Math.max(n - 1, 0) + (atual?.progresso ?? 0) / 100) / total) * 100 : 0;
+});
+const detalheArquivos = computed(() => {
+    const { atual, n, total } = arquivos.value;
+    if (!total) return 'Salvando o rascunho…';
+    return `Enviando arquivo ${n} de ${total}${atual?.arquivo ? ` (${atual.progresso ?? 0}%)` : ''}`;
+});
+
 const salvar = async () => {
     if (salvando.value) return;
     salvando.value = true;
+    arquivos.value = { atual: null, n: 0, total: 0 };
     erros.value = {};
     erroGeral.value = '';
 
@@ -180,6 +194,7 @@ const salvar = async () => {
         }
     }
 
+    arquivos.value.total = anuncios.value.filter((a) => !a.id).length;
     for (const a of anuncios.value) {
         a.erro = '';
         const extras = { ...a.campos, conjunto_id: conjuntoId.value };
@@ -188,6 +203,7 @@ const salvar = async () => {
                 await pedirJson('PUT', `${BASE}/videos/${a.id}`, extras);
                 continue;
             }
+            arquivos.value = { ...arquivos.value, atual: a, n: arquivos.value.n + 1 };
             a.estado = 'subindo';
             const resposta = await enviarArquivo(`${BASE}/videos`, 'video', a.arquivo, (p) => { a.progresso = p; }, extras);
             URL.revokeObjectURL(a.previa);
@@ -230,11 +246,11 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
             </h1>
             <p v-if="soAnuncios" class="mt-1 text-sm text-slate-500">
                 No conjunto <strong>{{ conjunto.nome }}</strong> da campanha <strong>{{ c.nome }}</strong>.
-                Salvar não manda nada: o envio é na tela da campanha e os anúncios novos nascem pausados, sem mexer nos que já rodam.
+                Salvar não manda nada: o envio é na tela da campanha e os anúncios novos nascem ativos, sem mexer nos que já rodam.
             </p>
             <p v-else class="mt-1 text-sm text-slate-500">
                 Na campanha <strong>{{ c.nome }}</strong>, que já está na Meta.
-                Salvar não manda nada: o envio é na tela da campanha e o conjunto nasce pausado, sem mexer nos outros conjuntos.
+                Salvar não manda nada: o envio é na tela da campanha e o conjunto nasce ativo, sem mexer nos outros conjuntos.
             </p>
         </div>
 
@@ -392,5 +408,8 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                 </div>
             </div>
         </form>
+        <AguardeModal :open="salvando" titulo="Aguarde enquanto o anúncio é preparado"
+            mensagem="Salvando no servidor. Não feche esta tela; a janela fecha sozinha quando terminar."
+            :progresso="arquivos.total ? progressoGeral : null" :detalhe="detalheArquivos" />
     </AdminLayout>
 </template>

@@ -396,6 +396,7 @@ class ProductController extends Controller
             'is_active' => ['boolean'],
             'is_featured' => ['boolean'],
             'is_new_release' => ['boolean'],
+            'is_daily_offer' => ['boolean'],
         ];
 
         if ($includeStock) {

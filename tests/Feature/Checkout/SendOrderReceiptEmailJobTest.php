@@ -11,6 +11,7 @@ use App\Modules\Fiscal\Models\Invoice;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SendOrderReceiptEmailJobTest extends TestCase
@@ -93,5 +94,42 @@ class SendOrderReceiptEmailJobTest extends TestCase
 
         Mail::assertNothingSent();
         $this->assertSame(1, OrderEmailLog::where('order_id', $order->id)->count());
+    }
+
+    public static function marketplaces(): array
+    {
+        return [
+            'amazon' => [Order::ORIGIN_AMAZON],
+            'tiktok' => [Order::ORIGIN_TIKTOK_SHOP],
+        ];
+    }
+
+    #[DataProvider('marketplaces')]
+    public function test_does_not_send_the_receipt_to_marketplace_buyers(string $origin): void
+    {
+        Mail::fake();
+
+        $order = $this->makeOrder();
+        $order->update(['origin' => $origin, 'user_id' => null, 'shipping_email' => 'comprador@marketplace.amazon.com.br']);
+
+        SendOrderReceiptEmailJob::dispatchSync($order->id);
+
+        Mail::assertNothingSent();
+        $this->assertDatabaseHas('order_email_logs', [
+            'order_id' => $order->id,
+            'status' => OrderEmailLog::STATUS_SKIPPED,
+        ]);
+    }
+
+    public function test_still_sends_the_receipt_for_store_orders(): void
+    {
+        Mail::fake();
+
+        $order = $this->makeOrder();
+        $order->update(['origin' => Order::ORIGIN_STORE]);
+
+        SendOrderReceiptEmailJob::dispatchSync($order->id);
+
+        Mail::assertSent(OrderConfirmation::class);
     }
 }

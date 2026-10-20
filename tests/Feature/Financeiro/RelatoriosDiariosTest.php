@@ -2,14 +2,22 @@
 
 namespace Tests\Feature\Financeiro;
 
+use App\Console\Commands\TaxasReaisAmazon;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
+use App\Modules\Checkout\Models\OrderFulfillmentEvent;
 use App\Modules\Checkout\Models\OrderItem;
+use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Financeiro\Mail\ResultadoDoDia;
 use App\Modules\Financeiro\Support\ResultadoDiario;
+use App\Modules\Marketplace\Models\ChannelShipment;
+use App\Modules\Marketplace\Models\MarketplaceClaim;
 use App\Modules\Operacional\Mail\CanceladosSeparados;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -94,8 +102,61 @@ class RelatoriosDiariosTest extends TestCase
         Mail::assertSent(CanceladosSeparados::class, fn ($mail) => count($mail->pedidos) === 1 && $mail->pedidos[0]['external_order_id'] === 'SHP1');
     }
 
+    public function test_alerta_ignora_pacote_que_ja_saiu(): void
+    {
+        Mail::fake();
+        $base = ['origin' => 'shopee', 'status' => 'cancelled', 'packed_at' => now()->subDays(4)];
+        $this->pedido([...$base, 'external_order_id' => 'NA_EXPEDICAO']);
+        $devolucao = $this->pedido([...$base, 'external_order_id' => 'TO_RETURN']);
+        MarketplaceClaim::create(['order_id' => $devolucao->id, 'channel' => 'shopee', 'external_claim_id' => 'TO_RETURN', 'type' => 'return', 'stage' => 'to_return', 'status' => 'to_return', 'claim_created_at' => now()]);
+        $coletado = $this->pedido([...$base, 'external_order_id' => 'COLETADO']);
+        app(OrderFulfillmentTimeline::class)->record($coletado, OrderFulfillmentEvent::STEP_WEBHOOK_RECEIVED, OrderFulfillmentEvent::STATUS_SUCCESS, 'Pedido saiu da fila de preparação do KoraSync — shopee confirmou "shipped" (coleta/despacho real do pacote).');
+        $emRota = $this->pedido([...$base, 'origin' => 'mercado_livre', 'external_order_id' => 'EM_ROTA']);
+        ChannelShipment::create(['order_id' => $emRota->id, 'channel' => 'mercado_livre', 'channel_shipped_at' => now()->subDays(3)]);
+        $this->pedido([...$base, 'origin' => 'mercado_livre', 'external_order_id' => 'FLEX', 'collected_at' => now()->subDays(3)]);
+
+        $this->artisan('loja:cancelados-separados')->assertSuccessful();
+
+        Mail::assertSent(CanceladosSeparados::class, fn ($mail) => array_column($mail->pedidos, 'external_order_id') === ['NA_EXPEDICAO']);
+    }
+
     public function test_estao_na_agenda(): void
     {
         $this->artisan('schedule:list')->expectsOutputToContain('loja:resultado-diario')->expectsOutputToContain('loja:cancelados-separados');
+    }
+
+    /** @return list<Event> */
+    private function agendados(string $comando): array
+    {
+        return array_values(array_filter(app(Schedule::class)->events(), fn (Event $e) => str_contains((string) $e->command, $comando)));
+    }
+
+    /** Ordem da noite (Lira 2026-10-18): coleta 23:30, Amazon 23:35, retomada 23:45, e-mail 23:50. */
+    public function test_ordem_da_noite_coleta_retomada_e_email(): void
+    {
+        $email = $this->agendados('loja:resultado-diario');
+        $this->assertCount(1, $email);
+        $this->assertSame('50 23 * * *', $email[0]->expression);
+
+        $amazon = array_column(array_map(fn (Event $e) => ['expr' => $e->expression], $this->agendados('amazon:taxas-reais')), 'expr');
+        $this->assertEqualsCanonicalizing(['35 * * * *', '45 23 * * *'], $amazon);
+    }
+
+    public function test_retomada_da_amazon_so_roda_se_a_das_23_35_nao_deu_certo(): void
+    {
+        $retomada = collect($this->agendados('amazon:taxas-reais'))->firstWhere('expression', '45 23 * * *');
+        Carbon::setTestNow('2026-10-10 23:45:00');
+
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => true, 'em' => '2026-10-10T23:35:04-03:00']);
+        $this->assertFalse($retomada->filtersPass(app()));
+
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => false, 'em' => '2026-10-10T23:35:04-03:00']);
+        $this->assertTrue($retomada->filtersPass(app()));
+
+        Cache::put(TaxasReaisAmazon::CACHE_ULTIMA, ['ok' => true, 'em' => '2026-10-10T22:35:04-03:00']);
+        $this->assertTrue($retomada->filtersPass(app()));
+
+        Cache::forget(TaxasReaisAmazon::CACHE_ULTIMA);
+        $this->assertTrue($retomada->filtersPass(app()));
     }
 }

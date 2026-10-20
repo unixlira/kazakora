@@ -192,7 +192,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
 </script>
 
 <template>
-    <article class="group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
+    <article class="card-produto group flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-store-border bg-store-bg-raised shadow-[0_10px_28px_rgba(43,22,65,0.06)] transition hover:-translate-y-0.5 hover:border-store-border-strong hover:shadow-[0_18px_44px_rgba(43,22,65,0.12)]">
         <div class="relative aspect-square cursor-pointer bg-white"
             @mouseenter="onPointerEnter" @mouseleave="isHovering = false" @touchstart.passive="prefetchProduct" @click="goToProduct">
             <template v-if="primaryImage(product)">
@@ -283,9 +283,10 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 </div>
                 <div class="mt-1.5 flex h-5 items-center gap-2">
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->
-                    <p v-if="product.stock <= 0" class="flex h-5 min-w-0 flex-1 items-center text-xs font-semibold text-red-600 md:text-sm">Esgotado</p>
-                    <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte. -->
-                    <p v-else class="flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650] md:text-sm">
+                    <p v-if="product.stock <= 0" class="frete-card flex h-5 min-w-0 flex-1 items-center text-xs font-semibold text-red-600">Esgotado</p>
+                    <!-- Frete como no Mercado Livre: "Frete grátis ⚡FULL" em verde, mesma fonte.
+                         No computador a letra acompanha a largura do card (.frete-card no app.css). -->
+                    <p v-else class="frete-card flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650]">
                         Frete grátis
                         <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
                         <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
@@ -298,14 +299,16 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                          computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL
                          (margem negativa: o botão é mais alto que a linha e não muda a altura
                          do card); no celular vira a última linha do card. Menor no computador
-                         (pedido 2026-10-17): era 30px de altura e ficava grande no card. -->
+                         (pedido 2026-10-17): era 30px de altura e ficava grande no card.
+                         Tamanho proporcional ao card e card estreito no computador mandando o
+                         botão para baixo: .detalhes-card e .detalhes-baixo no app.css. -->
                     <Link :href="`/produtos/${product.slug}`" @mouseenter="prefetchProduct"
-                        class="-my-[2px] hidden h-6 shrink-0 items-center rounded-md bg-[#f27a2a] px-2.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:inline-flex">
+                        class="detalhes-card -my-[2px] hidden shrink-0 items-center rounded-md bg-[#f27a2a] font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00]">
                         Detalhes
                     </Link>
                 </div>
-                <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct"
-                    class="mt-3 flex w-full items-center justify-center rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00] md:hidden">
+                <Link :href="`/produtos/${product.slug}`" @touchstart.passive="prefetchProduct" @mouseenter="prefetchProduct"
+                    class="detalhes-baixo mt-3 flex w-full items-center justify-center rounded-lg bg-[#f27a2a] px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-[#ff5f00]">
                     Ver detalhes
                 </Link>
             </div>

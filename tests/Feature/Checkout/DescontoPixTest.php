@@ -107,6 +107,17 @@ class DescontoPixTest extends TestCase
         $this->assertEqualsWithDelta(3.3333, DescontoPix::percentualDo($fixo), 0.0001);
     }
 
+    public function test_maior_percentual_conta_o_valor_fixo_e_o_app_usa_o_preco_da_unidade(): void
+    {
+        Product::factory()->create(['is_active' => true, 'price' => 100, 'checkout_discount_percentage' => 5]);
+        $fixo = Product::factory()->create(['is_active' => true, 'price' => 200, 'checkout_discount_percentage' => null, 'checkout_discount_amount' => 16]);
+
+        // R$ 16 em R$ 200 = 8%, maior que os 5%.
+        $this->assertSame(8.0, DescontoPix::maiorPercentual());
+        // Sobre R$ 160 (preço da unidade passado), R$ 16 = 10%.
+        $this->assertSame(10.0, round(DescontoPix::percentualDo($fixo, 160), 4));
+    }
+
     public function test_tela_de_pagamento_recebe_o_desconto_do_pix(): void
     {
         PaymentGateway::setActive(PaymentGateway::MERCADOPAGO);

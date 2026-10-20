@@ -45,7 +45,7 @@ class ClonarKikoolTest extends TestCase
             'nome' => 'Jogo de Soquete Catraca 12 Peças com Extensão Kicool',
             'descricao' => "Jogo de soquetes com catraca.\n- 12 peças\n- Extensão",
             'categoria_loja' => 'Ferramentas e Automotivo',
-            'categoria_ferrakora' => 'Ferramentas Manuais',
+            'categoria_ferrakora' => 'Chaves, Kits e Maletas',
             'ncm' => '8204.20.00',
             'peso_kg' => 0.8,
             'altura_cm' => 6,
@@ -80,7 +80,7 @@ class ClonarKikoolTest extends TestCase
         $this->assertSame('caixa', $produto->fiscalData->formato_embalagem);
 
         $ferra = FerraKoraProduto::query()->where('product_id', $produto->id)->firstOrFail();
-        $this->assertSame('Ferramentas Manuais', $ferra->categoria);
+        $this->assertSame('Chaves, Kits e Maletas', $ferra->categoria);
         $this->assertTrue($ferra->ativo);
     }
 

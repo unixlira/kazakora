@@ -90,8 +90,8 @@ class SendOrderShippedWhatsAppJob implements ShouldQueue
             throw $exception;
         }
 
-        $conversation = WhatsAppConversation::query()->firstOrCreate(
-            ['wa_id' => $phone],
+        $conversation = WhatsAppConversation::doNumeroOuCria(
+            $phone,
             ['phone' => $phone, 'profile_name' => $order->shipping_name, 'last_message_at' => now(), 'unread_count' => 0],
         );
         $message = WhatsAppMessage::query()->create([

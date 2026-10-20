@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Services;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Support\GatilhosAnuncio;
+use App\Modules\Catalog\Support\PerfilDoCliente;
 use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
@@ -41,6 +42,9 @@ use Throwable;
  * Desde 2026-10-19 (pedido do Lira) os textos da KazaKora usam os gatilhos
  * psicológicos e levam emojis (GatilhosAnuncio). Desde 2026-10-20 nenhum
  * texto (de nenhuma loja) fala de preço ou parcelamento (TextoIaSemPreco).
+ * Também desde 2026-10-20 as frases finais da KazaKora seguem o padrão que o
+ * Lira escreveu à mão (GatilhosAnuncio::fechamento), no tom da categoria
+ * (PerfilDoCliente).
  */
 class AnuncioConteudoService
 {
@@ -144,7 +148,7 @@ class AnuncioConteudoService
      */
     public function descricaoPelasFotos(Product $product): array
     {
-        $product->loadMissing('images');
+        $product->loadMissing(['images', 'category']);
 
         if ($product->images->isEmpty()) {
             throw new RuntimeException('Cadastre pelo menos uma foto antes de gerar a descrição.');
@@ -154,7 +158,7 @@ class AnuncioConteudoService
             throw new RuntimeException('Gemini não configurado.');
         }
 
-        $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true);
+        $dados = $this->gerarViaGemini('KazaKora', $product->name, '', $this->imagensDoProduto($product), min(self::MAX_IMAGENS, $product->images->count()), comDescricao: true, categoriaSlug: $product->category?->slug);
         $descricao = (string) ($dados['descricao'] ?? '');
         unset($dados['descricao']);
 
@@ -189,9 +193,10 @@ class AnuncioConteudoService
     /** @return array<string, mixed> */
     private function viaGemini(Product $product): array
     {
+        $product->loadMissing('category');
         $imagens = $this->imagensDoProduto($product);
 
-        return $this->gerarViaGemini('KazaKora', $product->name, (string) $product->description, $imagens, count($imagens));
+        return $this->gerarViaGemini('KazaKora', $product->name, (string) $product->description, $imagens, count($imagens), categoriaSlug: $product->category?->slug);
     }
 
     /**
@@ -201,11 +206,12 @@ class AnuncioConteudoService
      * quando o Gemini falha; quem chama decide o plano B (automaticoDe).
      * Descrição vazia = o Gemini trabalha só com o nome e as fotos.
      * $comDescricao devolve também "descricao" (texto para o cadastro).
+     * $categoriaSlug define o tom das frases finais (PerfilDoCliente).
      *
      * @param  array<int, string|null>  $imagens
      * @return array<string, mixed>
      */
-    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens, bool $comDescricao = false): array
+    public function gerarViaGemini(string $loja, string $nome, string $descricao, array $imagens, int $totalImagens, bool $comDescricao = false, ?string $categoriaSlug = null): array
     {
         $partes = [];
 
@@ -222,7 +228,7 @@ class AnuncioConteudoService
             throw new RuntimeException('Sem descrição e nenhuma foto pôde ser lida.');
         }
 
-        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens, $comDescricao)];
+        $partes[] = ['text' => $this->prompt($loja, $nome, $descricao, $totalImagens, $comDescricao, $categoriaSlug)];
 
         $resposta = $this->gemini->generate(
             (string) config('services.gemini.chat_model'),
@@ -265,7 +271,7 @@ class AnuncioConteudoService
         };
     }
 
-    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens, bool $comDescricao = false): string
+    private function prompt(string $loja, string $nome, string $descricao, int $totalImagens, bool $comDescricao = false, ?string $categoriaSlug = null): string
     {
         $ultimaImagem = max(0, $totalImagens - 1);
         $temDescricao = trim($descricao) !== '';
@@ -281,7 +287,9 @@ class AnuncioConteudoService
         $kazakora = $loja === 'KazaKora';
         $semPreco = TextoIaSemPreco::regra();
         $estilo = $kazakora ? 'Sem HTML e sem markdown; emojis pertinentes em todos os textos (regra abaixo).' : 'Sem HTML, sem emojis, sem markdown.';
-        $gatilhos = $kazakora ? "\n".GatilhosAnuncio::regras()."\n" : '';
+        $gatilhos = $kazakora
+            ? "\n".GatilhosAnuncio::regras()."\n".GatilhosAnuncio::fechamento(PerfilDoCliente::tom($categoriaSlug), PerfilDoCliente::tituloBeneficios($categoriaSlug))."\n"
+            : '';
         $etapas = $kazakora
             ? [' Gatilhos: necessidade, vontade e curiosidade.', ' Gatilhos: autoridade, prova social e reciprocidade.', ' Gatilhos: urgência e escassez.']
             : ['', '', ''];

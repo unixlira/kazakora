@@ -418,6 +418,8 @@ class CancelamentoDoPedido
         $order->loadMissing('payments');
         $aEstornar = $order->payments->filter(fn (Payment $pagamento) => $pagamento->boletoPendente()
             || in_array($pagamento->status, [Payment::STATUS_CAPTURED, Payment::STATUS_AUTHORIZED], true));
+        // Pix ainda aguardando: só entra na conta se estava pago no MP e foi estornado agora.
+        $pixPendentes = $order->payments->filter(fn (Payment $pagamento) => $pagamento->pixPendente())->pluck('id');
 
         // Sem gate por status anterior: refundOrder() só age em Payment
         // já capturado/autorizado (nunca existe nenhum pra um pedido que
@@ -433,6 +435,10 @@ class CancelamentoDoPedido
 
             return ['etapa' => 'Estorno', 'ok' => false, 'texto' => $aviso.' Faça o estorno pelo painel do pagamento.', 'aviso' => $aviso];
         }
+
+        $aEstornar = $aEstornar->merge($order->payments->filter(
+            fn (Payment $pagamento) => $pixPendentes->contains($pagamento->id) && $pagamento->status === Payment::STATUS_REFUNDED,
+        ));
 
         if ($aEstornar->isEmpty()) {
             return ['etapa' => 'Estorno', 'ok' => true, 'texto' => $order->origin === Order::ORIGIN_STORE

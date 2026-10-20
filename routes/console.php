@@ -1,7 +1,10 @@
 <?php
 
+use App\Console\Commands\TaxasReaisAmazon;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -10,6 +13,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+// Pix pago com a tela fechada (19/10, #3283): confirma em até 1 min, sem esperar os 30 da varredura acima.
+Schedule::command('mercadopago:conferir-pix')->everyMinute()->withoutOverlapping(5);
 // Boleto do Mercado Pago (2026-10-14): pago dias depois → pedido pago; vencido → cancela.
 Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->withoutOverlapping(25);
 // Ofertas do dia da loja: a escolha automática das 00:05 (loja:ofertas-do-dia)
@@ -18,8 +23,12 @@ Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->without
 // 1 por dia por 7 dias (manhã, tarde e noite) — ver LembreteCarrinho.
 Schedule::command('loja:carrinho-abandonado')->everyTenMinutes()->withoutOverlapping(10);
 // Pedido do site: rastreio dos Correios (sem webhook) marca enviado/entregue
-// e manda o WhatsApp "saiu para entrega" e "foi entregue" (AcompanharRastreioLoja).
-Schedule::command('loja:acompanhar-rastreio')->everyThirtyMinutes()->withoutOverlapping(25);
+// e avisa cada etapa no WhatsApp (AcompanharRastreioLoja). De 5 em 5 minutos
+// desde 2026-10-18: só quem saiu para entrega é consultado em toda rodada.
+Schedule::command('loja:acompanhar-rastreio')->everyFiveMinutes()->withoutOverlapping(10);
+// Pedido de avaliação com cupom N dias depois da entrega (pedido 2026-10-18):
+// liga/desliga e texto na tela de Avaliações; só envia das 9h às 20h.
+Schedule::command('avaliacoes:solicitar')->hourlyAt(20)->withoutOverlapping(30);
 // Prazos de guarda da LGPD/Marco Civil (docs/privacidade-e-cookies.md).
 Schedule::command('privacidade:limpar')->dailyAt('03:50');
 // Limpeza do banco (pedido 2026-10-18): failed_jobs e notifications eram
@@ -41,10 +50,16 @@ Schedule::command('notificacoes:limpar')->dailyAt('03:57')->withoutOverlapping(6
 // por fora do Laravel — sem ele a impressão automática para. Agora fica aqui.
 Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoMinutes()->withoutOverlapping(5);
 // Relatórios por e-mail (pedido 2026-10-10; antes eram rotinas da Naia por
-// fora, no homolog): resultado do dia às 23:50 e pedidos separados que foram
+// fora, no homolog): resultado do dia e pedidos separados que foram
 // cancelados às 11h. Destinatários em LOJA_EMAIL_RELATORIOS.
+// Resultado às 23:50 (Lira 2026-10-18; antes 23:55): depois da coleta
+// financeira das 23:30 (TikTok na Cora Box), da Amazon pela SP-API às 23:35 e
+// da retomada das 23:45. Ordem completa em docs/financeiro-email-resultado-diario.md.
 Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
+// Sugestões do dia (pedido do Lira 2026-10-20): de madrugada lê o Meta Ads,
+// pesquisa preço de concorrente e monta o board de Indicadores › Sugestões.
+Schedule::command('sugestoes:gerar')->dailyAt('02:30')->withoutOverlapping(60);
 // Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
 // de hora em hora, e-mail só quando aparece pedido novo travado.
 Schedule::command('loja:nota-etiqueta-pendentes')->hourlyAt(10)->withoutOverlapping(30);
@@ -120,6 +135,15 @@ Schedule::command('amazon:pagamentos-pendentes')->hourly()->withoutOverlapping(3
 // em hora aos 35 min: a última do dia (23:35) entra antes do resultado das
 // 23:50, e a vigia (aos 15) já vê a execução anterior. Idempotente.
 Schedule::command('amazon:taxas-reais --dias=30')->hourlyAt(35)->withoutOverlapping(30);
+// Retomada das 23:45: se a das 23:35 falhou (ex.: limite da API) ou não
+// terminou, roda de novo antes do e-mail das 23:50. Deu certo, não repete.
+Schedule::command('amazon:taxas-reais --dias=30')->dailyAt('23:45')->withoutOverlapping(30)
+    ->when(function () {
+        $ultima = Cache::get(TaxasReaisAmazon::CACHE_ULTIMA, []);
+
+        return ! ($ultima['ok'] ?? false) || ! isset($ultima['em'])
+            || Carbon::parse($ultima['em'])->lt(today()->setTime(23, 30));
+    });
 
 // Garantia específica pro Mercado Livre (pedido explícito 2026-08-29,
 // "pedido embalado continua na fila mesmo depois do ponto de coleta
@@ -249,6 +273,11 @@ Schedule::command('flex:acompanhar-envios')->everyThirtyMinutes()->withoutOverla
 // é a rede de segurança e o que pega a Shopee (sem push de devolução).
 Schedule::command('devolucoes:sincronizar')->everyThirtyMinutes()->withoutOverlapping(25);
 
+// Venda cancelada/estornada com NF-e autorizada e sem devolução (DAS de
+// setembro, 2026-10-19): todo dia lista e avisa no sino; emitir é manual,
+// com --pedido, porque há "cancelada" que na verdade valeu.
+Schedule::command('devolucoes:vendas-canceladas --simular --avisar')->dailyAt('08:20');
+
 // Retenção das imagens do comprovante do KoraFlex: cumpre o prazo prometido
 // no consentimento, MENOS recibo retido como prova ou com pendência aberta
 // (ver PurgeKoraFlexReceiptImages). Existia desde 2026-09-10, mas nunca
@@ -295,6 +324,9 @@ Schedule::command('marketplace:release-scheduled-mercadolivre')
 // Roda a cada 4 minutos porque resposta pública atrasada prejudica a loja;
 // falhas ficam registradas no banco, em log PT-BR e notificam administradores.
 Schedule::command('reviews:sync')->cron('*/4 * * * *');
+// Avaliações › Cadastro e controle (2026-10-18): contagem real dos anúncios
+// da Shopee e do ML, só leitura, uma vez por dia.
+Schedule::command('avaliacoes:contar-canais')->dailyAt('06:15')->withoutOverlapping(30);
 Schedule::command('video-downloads:clean')->hourly();
 // Fechamento fiscal do mês anterior por e-mail, pro contador (pedido
 // 2026-10-09: "todo primeiro dia após o final do mês quero o email").
@@ -322,6 +354,16 @@ Schedule::command('mercadopago:conciliar')->dailyAt('05:40')->withoutOverlapping
 // no WhatsApp com o motivo (2026-10-16). Falha que o próprio agente relata
 // já avisa na hora (RelatoriosTikTok::avisar e /api/financeiro/coletas/falha).
 Schedule::command('financeiro:vigiar-coletas')->hourlyAt(15)->withoutOverlapping(10);
+
+// ADS de um canal acima de 6% da receita (mês ou 7 dias): aviso no sino do
+// admin, mesma regra e cadência do vigia do Homer (2026-10-19). Das 8h às 22h.
+Schedule::command('financeiro:vigiar-ads')->hourlyAt(25)->between('8:00', '22:00')->withoutOverlapping(10);
+
+// Saldo e repasses a receber de Shopee, Mercado Livre, TikTok e Amazon,
+// uma foto por hora para a aba "Saldos nos canais" do Fluxo de Caixa
+// (2026-10-19). Aos 10 minutos: o ads:sync-wallet-balance (hora cheia) já
+// deixou o saldo do Mercado Pago pronto. Fuso do app (America/Sao_Paulo).
+Schedule::command('financeiro:coletar-saldos')->hourlyAt(10)->withoutOverlapping(30);
 
 // Beauty Kora (2026-10-12): pedido pago no checkout da Hostinger vira
 // "pago" aqui. Sem token configurado o comando só avisa e sai.

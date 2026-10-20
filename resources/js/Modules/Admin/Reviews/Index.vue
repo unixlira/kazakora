@@ -3,7 +3,7 @@ import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
 import { DataTable, StatusBadge } from '@/Shared/Components/DataTable';
 import ActionIcon from '@/Shared/Components/ActionIcon.vue';
 import { usePermissions } from '@/Shared/usePermissions';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, h, ref } from 'vue';
 import { confirmDelete } from '@/Shared/notify';
 
@@ -26,7 +26,13 @@ const contagem = computed(() => {
 const media = computed(() => props.reviews.length
     ? (props.reviews.reduce((soma, review) => soma + Number(review.rating), 0) / props.reviews.length).toFixed(2).replace('.', ',')
     : '0');
-const reviewsFiltradas = computed(() => (notaFiltro.value ? props.reviews.filter((review) => Number(review.rating) === notaFiltro.value) : props.reviews));
+// Filtro "Outra loja" (pedido 2026-10-18): 'loja' = só KazaKora (as que contam
+// na nota do site), 'outra' = só as de outra loja (selo no site), null = todas.
+const lojaFiltro = ref(null);
+const totalOutraLoja = computed(() => props.reviews.filter((review) => review.outra_loja).length);
+const reviewsFiltradas = computed(() => props.reviews
+    .filter((review) => (notaFiltro.value ? Number(review.rating) === notaFiltro.value : true))
+    .filter((review) => (lojaFiltro.value === 'outra' ? review.outra_loja : lojaFiltro.value === 'loja' ? !review.outra_loja : true)));
 const filtrarNota = (nota) => { notaFiltro.value = notaFiltro.value === nota ? null : nota; };
 const corNota = { 5: '#16a34a', 4: '#65a30d', 3: '#ca8a04', 2: '#ea580c', 1: '#dc2626' };
 
@@ -35,6 +41,9 @@ const channelBadge = {
     shopee: { color: 'processing', label: 'Shopee' },
     tiktok_shop: { color: 'completed', label: 'TikTok Shop' },
     amazon: { color: 'shipped', label: 'Amazon' },
+    manual: { color: 'purple', label: 'Cadastro manual' },
+    outra_loja: { color: 'outra_loja', label: 'Outra loja' },
+    marketplace_reference: { color: 'outra_loja', label: 'Outra loja (referência)' },
 };
 
 const originLabel = (review) => (review.channel ? (channelBadge[review.channel]?.label ?? review.channel) : 'KazaKora');
@@ -77,15 +86,26 @@ const columns = [
     },
     {
         id: 'images',
-        header: 'Fotos',
+        header: 'Fotos/vídeos',
         accessorFn: (row) => row.images_count ?? 0,
-        cell: ({ row }) => (row.original.images_count ? `${row.original.images_count} foto(s)` : '—'),
+        cell: ({ row }) => (row.original.images_count ? `${row.original.images_count} mídia(s)` : '—'),
     },
     {
         id: 'origin',
         header: 'Origem',
         accessorFn: (row) => originLabel(row),
         cell: ({ row }) => h(StatusBadge, { status: originColor(row.original), label: originLabel(row.original) }),
+    },
+    {
+        id: 'outra_loja',
+        header: 'Outra loja',
+        accessorFn: (row) => (row.outra_loja ? `Sim ${row.origem_loja ?? ''}` : 'Não'),
+        cell: ({ row }) => (row.original.outra_loja
+            ? h('div', { class: 'max-w-[16rem]' }, [
+                h('span', { class: 'inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-900/50 dark:text-amber-100' }, 'Sim, com selo'),
+                h('span', { class: 'mt-0.5 block truncate text-xs text-slate-500', title: row.original.origem_loja ?? '' }, row.original.origem_loja ?? '—'),
+            ])
+            : h('span', { class: 'text-xs text-slate-500' }, 'Não')),
     },
     {
         id: 'created_at',
@@ -117,9 +137,15 @@ const columns = [
     <Head title="Avaliações" />
 
     <AdminLayout>
-        <h1 class="mb-4 text-2xl font-bold">Avaliações</h1>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-2xl font-bold">Avaliações</h1>
+            <Link href="/admin/avaliacoes/controle"
+                class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-emphasis">
+                <i class="fas fa-plus mr-1"></i> Cadastro e controle
+            </Link>
+        </div>
         <p class="mb-4 text-sm text-slate-500">
-            Avaliações reais dos clientes no site e importadas automaticamente dos marketplaces conectados (nota, comentário, fotos e nome do comprador).
+            Avaliações reais dos clientes no site, importadas automaticamente dos marketplaces conectados e cadastradas à mão (nota, comentário, fotos, vídeos e nome do comprador).
         </p>
 
         <div class="mb-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
@@ -141,6 +167,14 @@ const columns = [
                 <span class="block text-2xl font-bold">{{ contagem[nota] }}</span>
                 <span class="block text-xs text-slate-500">{{ props.reviews.length ? Math.round(contagem[nota] / props.reviews.length * 100) : 0 }}% do total</span>
             </button>
+        </div>
+
+        <div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
+            <span class="font-medium">Outra loja:</span>
+            <button v-for="opcao in [{ v: null, t: 'Todas' }, { v: 'loja', t: 'Só KazaKora' }, { v: 'outra', t: `Só de outra loja (${totalOutraLoja})` }]" :key="String(opcao.v)" type="button"
+                class="rounded-full border px-3 py-1 transition"
+                :class="lojaFiltro === opcao.v ? 'border-primary bg-primary text-white' : 'border-[var(--surface-border)] hover:border-slate-400'"
+                @click="lojaFiltro = opcao.v">{{ opcao.t }}</button>
         </div>
 
         <DataTable

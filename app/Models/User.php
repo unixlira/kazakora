@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\Mail;
 
 #[Fillable(['name', 'email', 'password', 'role', 'phone', 'cpf', 'birth_date', 'avatar_path'])]
@@ -23,7 +24,9 @@ use Illuminate\Support\Facades\Mail;
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use Auditable, HasFactory, NomeCapitalizado, Notifiable, SoftDeletes;
+    // HasApiTokens (2026-10-18): login do app nativo da KazaKora (/api/app).
+    // O token só vale nas rotas do app (AuthenticateAppCliente, ability "app").
+    use Auditable, HasApiTokens, HasFactory, NomeCapitalizado, Notifiable, SoftDeletes;
 
     public const ROLE_ADMIN = 'admin';
 
@@ -95,6 +98,12 @@ class User extends Authenticatable
             ->count();
 
         return $finalizados > config('loja.selo_cliente.pedidos') ? 'cinco_estrelas' : 'super_cliente';
+    }
+
+    /** Aparelhos do app nativo (token de notificação, 2026-10-18). */
+    public function pushTokens(): HasMany
+    {
+        return $this->hasMany(\App\Modules\App\Models\AppPushToken::class);
     }
 
     public function addresses(): HasMany

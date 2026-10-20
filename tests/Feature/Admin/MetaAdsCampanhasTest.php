@@ -864,6 +864,33 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertLessThan(array_search('act_123/campaigns', $ordem), array_search('act_123/adcreatives', $ordem));
     }
 
+    /** 2026-10-19: o botão de IA gera 5 opções; a Meta aceita 5 de cada contando a principal. */
+    public function test_cinco_opcoes_ficam_salvas_e_a_meta_recebe_cinco_de_cada(): void
+    {
+        $chamadas = [];
+        $this->fakeMeta($chamadas);
+
+        $id = $this->actingAs($this->admin())->postJson(self::BASE, $this->dados([
+            'texto_principal' => 'Texto 1',
+            'textos_alternativos' => ['textos' => ['Texto 2', 'Texto 3', 'Texto 4', 'Texto 5', 'Texto 6'], 'titulos' => [], 'descricoes' => []],
+        ]))->assertCreated()->json('id');
+
+        $campanha = MetaAdsCampanha::findOrFail($id);
+        $this->assertCount(5, $campanha->textos_alternativos['textos']);
+
+        $path = "meta-ads/campanha-{$id}/v0.mp4";
+        Storage::disk('local')->put($path, 'video');
+        $campanha->videos()->create(['conjunto_id' => $campanha->conjuntos()->value('id'), 'ordem' => 0, 'nome_original' => 'arvore.mp4', 'path' => $path, 'tamanho' => 10]);
+
+        $this->enviarAteTerminar($campanha);
+
+        $criativo = array_values(array_filter($chamadas, fn (HttpRequest $r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), '/adcreatives')))[0];
+        $this->assertSame(
+            [['text' => 'Texto 1'], ['text' => 'Texto 2'], ['text' => 'Texto 3'], ['text' => 'Texto 4'], ['text' => 'Texto 5']],
+            json_decode($criativo['asset_feed_spec'], true)['bodies'],
+        );
+    }
+
     public function test_sem_textos_extras_o_texto_vai_no_proprio_criativo(): void
     {
         $chamadas = [];
@@ -1334,4 +1361,3 @@ class MetaAdsCampanhasTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('conjuntos.0.pode.ativar', false)->where('conjuntos.0.pode.enviar', false));
     }
 }
-

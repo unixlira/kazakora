@@ -59,8 +59,12 @@ class MetaAdsCampanha extends Model
         self::STATUS_GERENCIADOR => 'Assumida no Gerenciador',
     ];
 
-    /** Opções além do texto, título e descrição principais (a Meta aceita 5 de cada no total). */
-    public const MAX_TEXTOS_ALTERNATIVOS = 4;
+    /**
+     * Opções além do texto, título e descrição principais. A Meta aceita 5 de
+     * cada no total: no envio vão a principal e as 4 primeiras; a 5ª (desde
+     * 2026-10-19, para caber o que o botão de IA gera) fica de reserva.
+     */
+    public const MAX_TEXTOS_ALTERNATIVOS = 5;
 
     public const OBJETIVOS = [
         'OUTCOME_SALES' => 'Vendas',

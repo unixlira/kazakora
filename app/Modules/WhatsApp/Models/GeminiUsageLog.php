@@ -25,6 +25,9 @@ class GeminiUsageLog extends Model
     /** Imagens do anúncio geradas na edição do produto (2026-10-19). */
     public const PURPOSE_AD_IMAGE = 'imagem_anuncio';
 
+    /** Textos do anúncio da campanha Meta ADS (2026-10-19). */
+    public const PURPOSE_META_ADS = 'meta_ads';
+
     protected $fillable = ['model', 'purpose', 'prompt_tokens', 'output_tokens', 'total_tokens'];
 
     protected function casts(): array

@@ -54,7 +54,8 @@ const form = useForm({
     texto_principal: c.texto_principal ?? '',
     titulo: c.titulo ?? '',
     descricao: c.descricao ?? '',
-    // Outras opções que a Meta testa junto com a principal (até 4 de cada).
+    // Outras opções que a Meta testa junto com a principal (até 5 de cada;
+    // vão a principal e as 4 primeiras, a 5ª fica de reserva).
     textos_alternativos: {
         textos: [...(c.textos_alternativos?.textos ?? [])],
         titulos: [...(c.textos_alternativos?.titulos ?? [])],
@@ -63,7 +64,7 @@ const form = useForm({
     chamada: c.chamada ?? 'SHOP_NOW',
 });
 
-const MAX_ALTERNATIVOS = 4;
+const MAX_ALTERNATIVOS = 5;
 const ALTERNATIVOS = [
     { chave: 'textos', rotulo: 'Outros textos principais', area: true, max: 2000 },
     { chave: 'titulos', rotulo: 'Outros títulos', max: 255 },
@@ -266,6 +267,44 @@ const aoEscolherProdutoDoAnuncio = (a) => {
     if (!p) return;
     a.campos.link_destino = p.link;
     if (!a.campos.titulo) a.campos.titulo = p.nome.slice(0, 255);
+};
+
+// Gerar textos com IA (2026-10-19): o Gemini lê o produto escolhido nos
+// padrões (ou o do primeiro anúncio que tiver produto) e preenche texto,
+// título, descrição e 5 opções de cada. Sobrescreve o que estava escrito,
+// com "Desfazer" no rodapé.
+const gerandoTextos = ref(false);
+const erroTextos = ref('');
+const produtoDosTextos = computed(() => {
+    const id = Number(form.produto_id) || Number(todosAnuncios.value.find(({ a }) => Number(a.campos.produto_id))?.a.campos.produto_id) || null;
+    return id ? props.produtos.find((p) => p.id === id) ?? null : null;
+});
+
+const gerarTextos = async () => {
+    if (gerandoTextos.value) return;
+    erroTextos.value = '';
+    if (!produtoDosTextos.value) {
+        erroTextos.value = 'Escolha o produto acima para a IA saber do que falar.';
+        return;
+    }
+    gerandoTextos.value = true;
+    try {
+        const r = await pedirJson('POST', `${BASE}/textos-ia`, { produto_id: produtoDosTextos.value.id, campanha: form.nome });
+        const antes = {
+            texto_principal: form.texto_principal, titulo: form.titulo, descricao: form.descricao,
+            textos_alternativos: JSON.parse(JSON.stringify(form.textos_alternativos)),
+        };
+        Object.assign(form, {
+            texto_principal: r.texto_principal, titulo: r.titulo, descricao: r.descricao,
+            textos_alternativos: { textos: [...r.textos], titulos: [...r.titulos], descricoes: [...r.descricoes] },
+        });
+        const tinhaTexto = [antes.texto_principal, antes.titulo, antes.descricao, ...Object.values(antes.textos_alternativos).flat()].some(preenchido);
+        if (tinhaTexto) oferecerDesfazer('Textos trocados pelos da IA.', () => Object.assign(form, antes));
+    } catch (erro) {
+        erroTextos.value = erro.message;
+    } finally {
+        gerandoTextos.value = false;
+    }
 };
 
 // Público próprio: ao ligar, começa com uma cópia do público da campanha.
@@ -626,10 +665,21 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                         </div>
 
                         <div class="space-y-4 border-t border-[var(--surface-border)] pt-4">
-                            <div>
-                                <h3 class="text-sm font-semibold">Texto</h3>
-                                <p class="text-xs text-slate-500">Todo anúncio que deixar o campo vazio usa este. Se cada anúncio tem o seu texto, pode deixar em branco.</p>
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <h3 class="text-sm font-semibold">Texto</h3>
+                                    <p class="text-xs text-slate-500">Todo anúncio que deixar o campo vazio usa este. Se cada anúncio tem o seu texto, pode deixar em branco.</p>
+                                </div>
+                                <button type="button" :disabled="gerandoTextos || salvando"
+                                    class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-primary px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                    :title="produtoDosTextos ? `Escreve a partir de: ${produtoDosTextos.nome}` : 'Escolha o produto primeiro'"
+                                    @click="gerarTextos">
+                                    <i class="fas" :class="gerandoTextos ? 'fa-spinner animate-spin' : 'fa-wand-magic-sparkles'" aria-hidden="true"></i>
+                                    {{ gerandoTextos ? 'Escrevendo…' : 'Gerar textos com IA' }}
+                                </button>
                             </div>
+                            <p v-if="erroTextos" class="text-sm text-red-600" role="alert">{{ erroTextos }}</p>
+                            <p v-else-if="gerandoTextos" class="text-xs text-slate-500" role="status">A IA está lendo {{ produtoDosTextos?.nome }}. Leva uns 10 segundos.</p>
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label for="produto" class="block text-sm font-medium">Produto (opcional)</label>
@@ -668,7 +718,7 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                                 </div>
                             </div>
                             <div class="space-y-3">
-                                <p class="text-xs text-slate-500">Opções extras (até {{ MAX_ALTERNATIVOS }} de cada): valem para todos os anúncios e a Meta testa as combinações com o texto do anúncio. Pode deixar vazio.</p>
+                                <p class="text-xs text-slate-500">Opções extras (até {{ MAX_ALTERNATIVOS }} de cada): valem para todos os anúncios e a Meta testa as combinações com o texto do anúncio. A Meta aceita 5 de cada contando a principal, então a {{ MAX_ALTERNATIVOS }}ª opção fica de reserva. Pode deixar vazio.</p>
                                 <div v-for="alt in ALTERNATIVOS" :key="alt.chave">
                                     <span class="block text-sm font-medium">{{ alt.rotulo }}</span>
                                     <div v-for="(_, i) in form.textos_alternativos[alt.chave]" :key="i" class="mt-1 flex items-start gap-2">

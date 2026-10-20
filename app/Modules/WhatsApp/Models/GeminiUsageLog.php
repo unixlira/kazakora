@@ -22,9 +22,6 @@ class GeminiUsageLog extends Model
     /** Separação das buscas do Google Trends por assunto no Radar (2026-10-12). */
     public const PURPOSE_RADAR = 'radar';
 
-    /** Imagens do anúncio geradas na edição do produto (2026-10-19). */
-    public const PURPOSE_AD_IMAGE = 'imagem_anuncio';
-
     /** Textos do anúncio da campanha Meta ADS (2026-10-19). */
     public const PURPOSE_META_ADS = 'meta_ads';
 

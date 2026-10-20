@@ -5,7 +5,6 @@ import FiscalForm from '@/Modules/Admin/Products/FiscalForm.vue';
 import LogisticsForm from '@/Modules/Admin/Products/LogisticsForm.vue';
 import QuantityDiscountsManager from '@/Modules/Admin/Products/QuantityDiscountsManager.vue';
 import ImagesManager from '@/Modules/Admin/Products/ImagesManager.vue';
-import ImagensIaManager from '@/Modules/Admin/Products/ImagensIaManager.vue';
 import VideoManager from '@/Modules/Admin/Products/VideoManager.vue';
 import ChannelsManager from '@/Modules/Admin/Products/ChannelsManager.vue';
 import StockHistory from '@/Modules/Admin/Products/StockHistory.vue';
@@ -32,11 +31,6 @@ const props = defineProps({
         default: null,
     },
     images: {
-        type: Array,
-        default: () => [],
-    },
-    // Imagens do anúncio geradas pela IA esperando revisão (2026-10-19).
-    iaImages: {
         type: Array,
         default: () => [],
     },
@@ -218,7 +212,6 @@ const formatarData = (valor) => (valor ? new Date(valor).toLocaleString('pt-BR')
                             <p class="text-xs text-slate-500">"Usar esta descrição" coloca o texto no campo Descrição abaixo; ele só vale depois de "Salvar alterações".</p>
                         </div>
                     </div>
-                    <ImagensIaManager :product="product" :tem-fotos="images.length > 0" :ia-images="iaImages" />
                     <ProductForm :form="form" :categories="categories" :is-edit="true"
                         submit-label="Salvar alterações" @submit="submit" />
                 </div>

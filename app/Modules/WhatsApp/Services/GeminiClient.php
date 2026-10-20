@@ -148,60 +148,6 @@ class GeminiClient
     }
 
     /**
-     * Gera uma imagem (imagens do anúncio, 2026-10-19). $parts leva as fotos
-     * de referência (inline_data) e o pedido em texto. Devolve os bytes e o
-     * tipo. Sem fallback para outro modelo: só os modelos "-image" desenham.
-     * Cota zerada do plano gratuito (429 com "limit: 0") não é sobrecarga
-     * passageira: vira RuntimeException com o motivo, e não
-     * GeminiUnavailableException.
-     *
-     * @param  array<int, array<string, mixed>>  $parts
-     * @return array{0: string, 1: string}
-     */
-    public function image(string $model, array $parts, string $aspectRatio = '1:1', string $purpose = GeminiUsageLog::PURPOSE_AD_IMAGE): array
-    {
-        $response = Http::withHeaders(['x-goog-api-key' => (string) config('services.gemini.api_key')])
-            ->acceptJson()
-            ->timeout(max(20, (int) config('services.gemini.image_timeout', 55)))
-            ->post(self::BASE_URL.$model.':generateContent', [
-                'contents' => [['role' => 'user', 'parts' => $parts]],
-                'generationConfig' => [
-                    'responseModalities' => ['IMAGE'],
-                    'imageConfig' => ['aspectRatio' => $aspectRatio],
-                ],
-            ]);
-
-        if ($response->status() === 429 && str_contains($response->body(), 'limit: 0')) {
-            throw new RuntimeException('A chave do Gemini está no plano gratuito, que não gera imagens. É preciso ligar o faturamento da API no Google AI Studio.');
-        }
-
-        if (in_array($response->status(), [429, 500, 502, 503, 504], true)) {
-            throw new GeminiUnavailableException("Gemini ({$model}) respondeu HTTP {$response->status()}: ".Str::limit($response->body(), 200));
-        }
-
-        if ($response->failed()) {
-            throw new RuntimeException("Gemini ({$model}) respondeu HTTP {$response->status()}: ".Str::limit($response->body(), 300));
-        }
-
-        $this->recordUsage($model, $purpose, $response->json('usageMetadata') ?? []);
-
-        $imagem = collect($response->json('candidates.0.content.parts') ?? [])
-            ->first(fn ($part) => filled($part['inlineData']['data'] ?? null));
-
-        if (! $imagem) {
-            throw new RuntimeException("Gemini ({$model}) não devolveu imagem (".($response->json('candidates.0.finishReason') ?? $response->json('promptFeedback.blockReason') ?? 'sem motivo').').');
-        }
-
-        $bytes = base64_decode((string) $imagem['inlineData']['data'], true);
-
-        if (! $bytes) {
-            throw new RuntimeException('Gemini devolveu imagem inválida.');
-        }
-
-        return [$bytes, (string) ($imagem['inlineData']['mimeType'] ?? 'image/png')];
-    }
-
-    /**
      * @param  array<int, array{role: string, parts: array<int, array<string, mixed>>}>  $contents
      * @param  array<int, array<string, mixed>>  $functionDeclarations
      * @return array<int, array<string, mixed>>

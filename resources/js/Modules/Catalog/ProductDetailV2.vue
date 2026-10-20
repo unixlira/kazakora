@@ -9,7 +9,7 @@ import { novoEventId, rastrearAddToCart } from '@/Shared/pixelMeta';
 // (ProductDetail.vue) segue no código; o CatalogController escolhe qual mostrar.
 import AppLayout from '@/Shared/Layouts/AppLayout.vue';
 import Modal from '@/Shared/Modal.vue';
-import ProductCard from '@/Shared/Components/ProductCard.vue';
+import CarrosselProdutos from '@/Shared/Components/CarrosselProdutos.vue';
 import { COMPANY } from '@/Shared/company';
 import { formatPrice, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
@@ -789,11 +789,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <section v-if="relatedProducts.length" class="relacionados">
                     <h2>Você também pode gostar de</h2>
-                    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 lg:gap-6">
-                        <ProductCard v-for="related in relatedProducts" :key="related.id" :product="related"
-                            :is-favorite="relatedFavoriteIds.includes(related.id)" :is-authenticated="isAuthenticated"
-                            :can-review="relatedReviewableIds.includes(related.id)" :has-reviewed="relatedReviewedIds.includes(related.id)" />
-                    </div>
+                    <CarrosselProdutos :produtos="relatedProducts" :favorite-ids="relatedFavoriteIds"
+                        :reviewable-product-ids="relatedReviewableIds" :reviewed-product-ids="relatedReviewedIds" />
                 </section>
             </div>
 

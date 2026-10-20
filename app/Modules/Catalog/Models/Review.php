@@ -3,25 +3,12 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Models\User;
-use App\Support\NomeBrasileiro;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Review extends Model
 {
-    /** Cadastrada à mão no admin (Avaliações › Cadastro e controle, 2026-10-18). */
-    public const CHANNEL_MANUAL = 'manual';
-
-    /** Importada de outra loja (reviews:importar-outra-loja, 2026-10-18). */
-    public const CHANNEL_OUTRA_LOJA = 'outra_loja';
-
-    /** Selo obrigatório da avaliação de outra loja (sem ele seria avaliação falsa, CDC). */
-    public const SELO_OUTRA_LOJA = 'Avaliação feita em outra loja';
-
-    public const NOME_OUTRA_LOJA = 'Comprador de outra loja';
-
     protected $fillable = [
         'user_id',
         'product_id',
@@ -37,8 +24,6 @@ class Review extends Model
         'reviewer_name',
         'channel',
         'external_id',
-        'outra_loja',
-        'origem_loja',
     ];
 
     /**
@@ -52,8 +37,6 @@ class Review extends Model
     protected $hidden = [
         'channel',
         'external_id',
-        // Loja e anúncio de origem da avaliação de outra loja: só o admin vê.
-        'origem_loja',
         'seller_reply',
         'seller_replied_at',
         'seller_reply_attempted_at',
@@ -69,7 +52,6 @@ class Review extends Model
     {
         return [
             'rating' => 'integer',
-            'outra_loja' => 'boolean',
             'seller_replied_at' => 'datetime',
             'seller_reply_attempted_at' => 'datetime',
             'seller_reply_payload' => 'array',
@@ -99,56 +81,6 @@ class Review extends Model
      */
     public function getReviewerDisplayNameAttribute(): string
     {
-        // Preserva o nome/apelido como veio da origem, inclusive se já mascarado.
-        // Sem autor (ou gravado como "Comprador de outra loja"), mostra um nome
-        // brasileiro sorteado pelo id: sempre o mesmo para a mesma avaliação
-        // (pedido 2026-10-20). O banco continua com o texto genérico.
-        if ($this->outra_loja) {
-            $nome = trim((string) $this->reviewer_name);
-
-            return $nome === '' || $nome === self::NOME_OUTRA_LOJA
-                ? NomeBrasileiro::gerar($this->getKey() ?? $this->external_id)
-                : $this->reviewer_name;
-        }
-
         return $this->user?->name ?? $this->reviewer_name ?? 'Cliente KazaKora';
-    }
-
-    /** Só as avaliações da KazaKora: as que contam na nota, na contagem e no JSON-LD. */
-    public function scopeDaLoja(Builder $query): Builder
-    {
-        return $query->where($query->qualifyColumn('outra_loja'), false);
-    }
-
-    public function scopeDeOutraLoja(Builder $query): Builder
-    {
-        return $query->where($query->qualifyColumn('outra_loja'), true);
-    }
-
-    /**
-     * "j_lucas_oliveira" vira "j***a". Idempotente ("J***a" continua "J***a")
-     * para poder rodar de novo na exibição; já mascarado pela origem
-     * ("g*****o") vira "g***o". Nome curto demais, vazio ou que cita a
-     * plataforma (ex.: "AliExpress Shopper") vira o texto genérico.
-     */
-    public static function anonimizarNome(?string $nome): string
-    {
-        $limpo = trim(ltrim((string) $nome, '@'));
-
-        if ($limpo === self::NOME_OUTRA_LOJA) {
-            return self::NOME_OUTRA_LOJA;
-        }
-
-        if (preg_match('/^([\p{L}\p{N}])\*+([\p{L}\p{N}])$/u', $limpo, $m)) {
-            return $m[1].'***'.$m[2];
-        }
-
-        $letras = preg_replace('/[^\p{L}\p{N}]/u', '', $limpo);
-
-        if (mb_strlen($letras) < 3 || preg_match('/shopee|mercado|aliexpress|amazon|tiktok|shein|magalu|kicool/i', $limpo)) {
-            return self::NOME_OUTRA_LOJA;
-        }
-
-        return mb_substr($letras, 0, 1).'***'.mb_substr($letras, -1);
     }
 }

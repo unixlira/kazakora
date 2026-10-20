@@ -17,8 +17,8 @@ use Illuminate\Support\Collection;
  * (MetaAdsConjunto, cada um com nome e, opcional, público próprio) > vários
  * anúncios em cada (MetaAdsVideo: vídeo ou imagem, com produto e texto
  * próprios). O orçamento é da campanha (a Meta distribui entre os
- * conjuntos) ou de cada conjunto. Desde 2026-10-20 tudo nasce ATIVO na
- * Meta (a campanha liga no fim do envio), com confirmação do gasto na tela.
+ * conjuntos) ou de cada conjunto. Tudo nasce PAUSADO na Meta; ativar é um
+ * passo separado, com confirmação do gasto na tela.
  *
  * Os ids meta_* são gravados a cada passo do envio: se a Meta recusar no
  * meio, o reenvio continua do passo que faltou em vez de duplicar campanha.
@@ -59,12 +59,8 @@ class MetaAdsCampanha extends Model
         self::STATUS_GERENCIADOR => 'Assumida no Gerenciador',
     ];
 
-    /**
-     * Opções além do texto, título e descrição principais. A Meta aceita 5 de
-     * cada no total: no envio vão a principal e as 4 primeiras; a 5ª (desde
-     * 2026-10-19, para caber o que o botão de IA gera) fica de reserva.
-     */
-    public const MAX_TEXTOS_ALTERNATIVOS = 5;
+    /** Opções além do texto, título e descrição principais (a Meta aceita 5 de cada no total). */
+    public const MAX_TEXTOS_ALTERNATIVOS = 4;
 
     public const OBJETIVOS = [
         'OUTCOME_SALES' => 'Vendas',
@@ -247,7 +243,7 @@ class MetaAdsCampanha extends Model
     /**
      * Conjunto novo dentro de campanha que já está na Meta (pedido do Lira
      * 2026-10-19). Vale também para campanha assumida no Gerenciador: o
-     * conjunto sobe sozinho, já ativo, sem reenviar o resto.
+     * conjunto sobe sozinho, pausado, sem reenviar o resto.
      */
     public function podeAdicionarConjunto(): bool
     {
@@ -284,38 +280,6 @@ class MetaAdsCampanha extends Model
     public function podePausar(): bool
     {
         return $this->status === self::STATUS_ATIVA && $this->envioCompleto();
-    }
-
-    /**
-     * Acompanha o status que a Meta informa (effective_status da campanha).
-     * Lira 2026-10-19: campanha ligada ou pausada direto no Gerenciador
-     * aparecia com o status antigo no admin, porque o KazaKora só mudava o
-     * status pelos próprios botões. Só mexe em campanha já enviada; rascunho,
-     * envio em andamento e erro ficam como estão.
-     */
-    public function acompanharStatusDaMeta(string $statusMeta): bool
-    {
-        if (blank($this->meta_campaign_id)
-            || ! in_array($this->status, [self::STATUS_ENVIADA_PAUSADA, self::STATUS_ATIVA, self::STATUS_GERENCIADOR], true)) {
-            return false;
-        }
-
-        $novo = match ($statusMeta) {
-            'ACTIVE' => self::STATUS_ATIVA,
-            'PAUSED' => self::STATUS_ENVIADA_PAUSADA,
-            default => null,
-        };
-
-        if ($novo === null || $novo === $this->status) {
-            return false;
-        }
-
-        $this->forceFill([
-            'status' => $novo,
-            'ativada_em' => $novo === self::STATUS_ATIVA ? ($this->ativada_em ?? now()) : $this->ativada_em,
-        ])->save();
-
-        return true;
     }
 
     /**

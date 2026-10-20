@@ -73,8 +73,8 @@ class AlertaColetaFinanceira
             return 'sem_credencial';
         }
 
-        $conversa = WhatsAppConversation::doNumeroOuCria(
-            $para,
+        $conversa = WhatsAppConversation::query()->firstOrCreate(
+            ['wa_id' => $para],
             ['phone' => $para, 'profile_name' => 'Lira', 'last_message_at' => now(), 'unread_count' => 0],
         );
 

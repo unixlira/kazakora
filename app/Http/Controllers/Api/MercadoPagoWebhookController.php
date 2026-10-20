@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\BoletoMercadoPago;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
-use App\Modules\Checkout\Support\PixMercadoPago;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,20 +23,14 @@ class MercadoPagoWebhookController extends Controller
 
     public function handle(Request $request): JsonResponse
     {
-        $type = $request->input('type');
-        $resourceId = $request->input('data.id') ?? $request->query('data_id');
-
-        // Tópico "payment" (Pix/boleto com notification_url, 19/10): o aviso
-        // só serve de gatilho; o status vem sempre de GET /v1/payments/{id}
-        // e só pagamento que já existe aqui é mexido. Por isso não depende
-        // da assinatura, que o MP nem sempre manda nesse aviso.
-        $assinaturaValida = $this->hasValidSignature($request);
-
-        if (! $assinaturaValida && ! ($type === 'payment' && $resourceId)) {
+        if (! $this->hasValidSignature($request)) {
             Log::channel('mercadopago')->warning('mercadopago.webhook.invalid_signature');
 
             return response()->json(['error' => 'invalid_signature'], 400);
         }
+
+        $type = $request->input('type');
+        $resourceId = $request->input('data.id') ?? $request->query('data_id');
 
         Log::channel('mercadopago')->info('mercadopago.webhook.received', ['type' => $type, 'resource_id' => $resourceId]);
 
@@ -106,7 +100,7 @@ class MercadoPagoWebhookController extends Controller
         try {
             $payment->method_type === Payment::METHOD_BOLETO
                 ? app(BoletoMercadoPago::class)->sincronizar($payment)
-                : app(PixMercadoPago::class)->sincronizar($payment);
+                : $this->syncPix($payment);
         } catch (Throwable $exception) {
             Log::channel('mercadopago')->error('mercadopago.webhook.payment_failed', [
                 'payment_id' => $paymentId,
@@ -117,6 +111,37 @@ class MercadoPagoWebhookController extends Controller
         }
 
         return response()->json(['status' => 'received']);
+    }
+
+    private function syncPix(Payment $payment): void
+    {
+        if ($payment->status !== Payment::STATUS_REQUIRES_CONFIRMATION) {
+            return;
+        }
+
+        $status = $this->mercadoPago->retrievePayment((string) $payment->mercadopago_payment_id)['status'] ?? null;
+
+        if ($status !== 'approved') {
+            return;
+        }
+
+        $payment->update(['status' => Payment::STATUS_CAPTURED]);
+        $order = $payment->order()->with('payments')->first();
+
+        if ($order?->status === Order::STATUS_CANCELLED) {
+            // Mesma regra do boleto: não ressuscita pedido cancelado (o
+            // estoque já voltou). Fica no log para devolver ou refazer à mão.
+            Log::channel('mercadopago')->critical('mercadopago.pix.pago_com_pedido_cancelado', [
+                'order_id' => $order->id,
+                'payment_id' => $payment->mercadopago_payment_id,
+            ]);
+
+            return;
+        }
+
+        if ($order) {
+            $this->finalizer->finalize($order);
+        }
     }
 
     private function handleSuccess(Payment $payment): void

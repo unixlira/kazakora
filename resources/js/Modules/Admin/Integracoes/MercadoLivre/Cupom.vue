@@ -70,8 +70,7 @@ const rotulo = 'mb-1 block text-xs font-medium text-slate-500 dark:text-slate-40
     <Head title="Criar cupom — Mercado Livre" />
 
     <AdminLayout>
-        <!-- Dentro de Marketplaces › Mercado Livre › Cupom as abas do marketplace já ficam em cima. -->
-        <SubNav v-if="!$page.props.marketplaceNav" />
+        <SubNav />
 
         <div class="mb-6">
             <h1 class="mb-1 text-2xl font-bold">Criar cupom</h1>

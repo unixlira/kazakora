@@ -19,12 +19,10 @@ class ProductAdContent extends Model
         'product_id',
         'destaques',
         'chamada',
-        'fechamento',
         'blocos',
         'comparativo',
         'beneficios',
         'duvidas',
-        'pratica',
         'fonte',
         'origem_hash',
         'erro',
@@ -41,7 +39,6 @@ class ProductAdContent extends Model
             'comparativo' => 'array',
             'beneficios' => 'array',
             'duvidas' => 'array',
-            'pratica' => 'array',
             'gerado_em' => 'datetime',
         ];
     }

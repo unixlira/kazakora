@@ -213,7 +213,7 @@ export const sidebarSections = [
 
 /**
  * Equipes (pedido do Lira 2026-10-20): uma seção com um item por squad de
- * agentes de IA ativa (a primeira é a Alfacora). A lista vem do servidor em
+ * agentes de IA ativa (a primeira é a Alpha Kora). A lista vem do servidor em
  * page.props.equipesMenu, só para admin; entra antes de Configurações.
  */
 export function secoesComEquipes(squads) {

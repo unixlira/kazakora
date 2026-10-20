@@ -5,6 +5,7 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Jobs\EnviarCampanhaMetaAds;
+use App\Modules\Marketplace\Jobs\TrocarCriativoMetaAds;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
@@ -80,6 +81,9 @@ class MetaAdsController extends Controller
             'periodo' => $periodo,
             'periodos' => MetaAdsService::PERIODOS,
             'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $this->noKazaKora())),
+            // Editar anúncio pelo espelho (2026-10-19).
+            'produtos' => $this->listaDeProdutos(),
+            'chamadas' => MetaAdsCampanha::CHAMADAS,
         ]);
     }
 
@@ -147,7 +151,7 @@ class MetaAdsController extends Controller
             'periodo' => $periodo,
             'periodos' => MetaAdsService::PERIODOS,
             'espelho' => Inertia::defer(fn () => filled($campanha->meta_campaign_id)
-                ? $this->espelho($meta, $periodo, (string) $campanha->meta_campaign_id)
+                ? $this->espelho($meta, $periodo, (string) $campanha->meta_campaign_id, $this->noKazaKora($campanha->id))
                 : ['campanhas' => [], 'erro' => null]),
             'config' => $this->estadoConfig($meta),
             'problemas' => $campanha->podeEnviar() ? $meta->problemasParaEnviar($campanha) : [],
@@ -164,6 +168,7 @@ class MetaAdsController extends Controller
             'chamadas' => MetaAdsCampanha::CHAMADAS,
             'generos' => MetaAdsCampanha::GENEROS,
             'orcamentoTipos' => MetaAdsCampanha::ORCAMENTO_TIPOS,
+            'produtos' => $this->listaDeProdutos(),
         ]);
     }
 
@@ -212,7 +217,7 @@ class MetaAdsController extends Controller
         }
 
         Storage::disk('local')->deleteDirectory(self::pastaDosVideos($campanha));
-        $campanha->delete();
+        $campanha->forceDelete();
 
         return redirect()->route('admin.publicidade.meta-ads.campanhas.listar')->with('success', 'Rascunho excluído.');
     }
@@ -341,23 +346,195 @@ class MetaAdsController extends Controller
         return response()->json(['video' => $this->dadosDoVideo($campanha, $video)], 201);
     }
 
-    /** Produto e texto próprios de um anúncio já guardado (vazio = padrão da campanha). */
-    public function videoUpdate(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video): JsonResponse
+    /**
+     * Editar um anúncio (2026-10-19): nome, produto, link, texto, título,
+     * descrição, botão e, opcional, o arquivo (multipart com _method=PUT).
+     * O conjunto não muda depois que o anúncio foi enviado.
+     *
+     * - Só no KazaKora: grava direto (arquivo novo zera o que já tinha subido
+     *   dele, para o envio subir o novo).
+     * - Na Meta: só o nome = POST no ad com name; texto, link, botão ou
+     *   arquivo = criativo novo e o ad passa a usar ele (volta para a análise
+     *   da Meta). Os campos locais só mudam depois que a Meta aceita. Vídeo
+     *   novo espera a Meta processar, em segundo plano (TrocarCriativoMetaAds).
+     */
+    public function videoUpdate(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsService $meta, DuracaoDeVideo $duracao, FormatoDeVideo $formato): JsonResponse
     {
         abort_unless($video->campanha_id === $campanha->id, 404);
+        $campanha->loadMissing(['conjuntos', 'videos']);
 
-        if ($video->temObjetoNoMeta() || ! $this->podeMexerNoConjunto($campanha, $video->conjunto_id)
-            || ($request->filled('conjunto_id') && ! $this->podeMexerNoConjunto($campanha, $request->input('conjunto_id')))) {
-            return response()->json(['message' => 'Anúncio já enviado à Meta: edite pelo Gerenciador de Anúncios.'], 409);
+        if ($bloqueio = $this->bloqueioDoAnuncio($campanha, $video, $meta)) {
+            return response()->json(['message' => $bloqueio], 409);
         }
 
-        $dados = $this->comErrosEmJson($request, fn () => $this->validarAnuncio($request));
-        if ($request->filled('conjunto_id')) {
-            $dados['conjunto_id'] = $this->conjuntoDoAnuncio($request, $campanha)->id;
+        $trocaConjunto = $request->filled('conjunto_id') && (int) $request->input('conjunto_id') !== (int) $video->conjunto_id;
+        if ($trocaConjunto && ($video->temObjetoNoMeta() || ! $this->podeMexerNoConjunto($campanha, $request->input('conjunto_id')))) {
+            return response()->json(['message' => 'O conjunto não muda depois que o anúncio foi enviado à Meta.'], 409);
         }
-        $video->update($dados);
 
-        return response()->json(['video' => $this->dadosDoVideo($campanha, $video)]);
+        $campos = $this->comErrosEmJson($request, function () use ($request) {
+            $request->validate([
+                'nome' => ['nullable', 'string', 'max:255'],
+                'arquivo' => ['nullable', 'file', 'mimetypes:'.implode(',', [...self::TIPOS_VIDEO, ...self::TIPOS_IMAGEM]), 'max:'.self::MAX_KILOBYTES],
+                'confirmo_analise' => ['nullable', 'boolean'],
+            ], [
+                'arquivo.mimetypes' => 'Use vídeo MP4 ou MOV, ou imagem JPG ou PNG.',
+                'arquivo.max' => 'O arquivo passa de 60 MB. Comprima antes de enviar.',
+                'arquivo.uploaded' => 'O arquivo não chegou inteiro (limite de 60 MB). Comprima antes de enviar.',
+            ]);
+
+            return $this->validarAnuncio($request);
+        });
+
+        $nomeNovo = $request->has('nome') ? (trim((string) $request->input('nome')) ?: null) : false;
+        $arquivo = $request->file('arquivo');
+
+        if (! $video->estaNaMeta()) {
+            return $this->editarSoNoKazaKora($request, $campanha, $video, $campos, $nomeNovo, $arquivo, $trocaConjunto, $duracao, $formato);
+        }
+
+        $editado = $video->replicate();
+        $editado->fill($campos);
+        $mudaCriativo = $arquivo !== null || $editado->criativo($campanha) !== $video->criativo($campanha);
+        $mudaNome = is_string($nomeNovo) && $nomeNovo !== $meta->nomeDoAnuncio($campanha, $video);
+
+        if (! $mudaCriativo && ! $mudaNome) {
+            // Nada muda na Meta (ex.: só o produto, com o mesmo link).
+            $video->update($campos);
+
+            return response()->json(['message' => 'Anúncio atualizado.', 'video' => $this->dadosDoVideo($campanha, $video->fresh())]);
+        }
+
+        if ($mudaCriativo && ! $request->boolean('confirmo_analise')) {
+            $mensagem = 'Confirme que o anúncio volta para a análise da Meta.';
+
+            return response()->json(['message' => $mensagem, 'errors' => ['confirmo_analise' => [$mensagem]]], 422);
+        }
+
+        $midia = null;
+        if ($arquivo) {
+            $midia = $this->guardarArquivo($campanha, $arquivo, $duracao, $formato);
+            if ($midia === null) {
+                return response()->json(['message' => 'Não consegui guardar o arquivo no servidor.'], 500);
+            }
+        }
+
+        $video->forceFill(['edicao_pendente' => [
+            'campos' => $campos,
+            'nome' => $mudaNome ? $nomeNovo : null,
+            'muda_criativo' => $mudaCriativo,
+            'midia' => $midia,
+        ]])->save();
+
+        if ($midia && $midia['tipo'] === MetaAdsVideo::TIPO_VIDEO) {
+            TrocarCriativoMetaAds::dispatch($video->id);
+
+            return response()->json([
+                'message' => 'Vídeo novo recebido. Quando a Meta terminar de processar, o criativo novo entra no anúncio e vai para a análise. Até lá, o anúncio segue como está.',
+                'video' => $this->dadosDoVideo($campanha, $video->fresh()),
+            ], 202);
+        }
+
+        try {
+            $meta->avancarEdicao($campanha, $video);
+        } catch (MetaAdsException $erro) {
+            return response()->json(['message' => 'Não deu para salvar na Meta: '.rtrim($erro->getMessage(), '.').'. Nada foi alterado.'], 422);
+        }
+
+        return response()->json([
+            'message' => $mudaCriativo ? 'Anúncio atualizado. A Meta está analisando o criativo novo.' : 'Anúncio atualizado.',
+            'video' => $this->dadosDoVideo($campanha, $video->fresh()),
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $campos
+     * @param  string|null|false  $nomeNovo  false = a tela não mandou o nome
+     */
+    private function editarSoNoKazaKora(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video, array $campos, string|null|false $nomeNovo, mixed $arquivo, bool $trocaConjunto, DuracaoDeVideo $duracao, FormatoDeVideo $formato): JsonResponse
+    {
+        if ($trocaConjunto) {
+            $campos['conjunto_id'] = $this->conjuntoDoAnuncio($request, $campanha)->id;
+        }
+        if ($nomeNovo !== false) {
+            $campos['nome'] = $nomeNovo;
+        }
+
+        $criativoAntes = $video->criativo($campanha);
+        $antigos = [];
+
+        if ($arquivo) {
+            $midia = $this->guardarArquivo($campanha, $arquivo, $duracao, $formato);
+            if ($midia === null) {
+                return response()->json(['message' => 'Não consegui guardar o arquivo no servidor.'], 500);
+            }
+            $antigos = array_filter([$video->path, $video->path_vertical]);
+            // O que já tinha subido do arquivo antigo não serve mais.
+            $campos += $midia + ['path_vertical' => null, 'meta_video_id' => null, 'meta_image_hash' => null, 'meta_thumbnail_url' => null, 'meta_creative_id' => null, 'ultimo_erro' => null];
+        }
+
+        $video->fill($campos);
+        if (! $arquivo && filled($video->meta_creative_id) && $video->criativo($campanha) !== $criativoAntes) {
+            $video->meta_creative_id = null;
+        }
+        $video->save();
+
+        if ($antigos !== []) {
+            Storage::disk('local')->delete(array_values($antigos));
+        }
+
+        return response()->json(['message' => 'Anúncio atualizado.', 'video' => $this->dadosDoVideo($campanha, $video->fresh())]);
+    }
+
+    /**
+     * Arquivo novo de um anúncio no disco local, com tipo, tamanho e formato.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function guardarArquivo(MetaAdsCampanha $campanha, mixed $arquivo, DuracaoDeVideo $duracao, FormatoDeVideo $formato): ?array
+    {
+        $imagem = in_array($arquivo->getMimeType(), self::TIPOS_IMAGEM, true);
+        $path = $arquivo->store(self::pastaDosVideos($campanha), 'local');
+
+        if ($path === false) {
+            return null;
+        }
+
+        $caminho = Storage::disk('local')->path($path);
+
+        return [
+            'tipo' => $imagem ? MetaAdsVideo::TIPO_IMAGEM : MetaAdsVideo::TIPO_VIDEO,
+            'nome_original' => mb_substr($arquivo->getClientOriginalName() ?: ($imagem ? 'imagem.jpg' : 'video.mp4'), 0, 250),
+            'path' => $path,
+            'tamanho' => (int) $arquivo->getSize(),
+            'duracao_segundos' => $imagem ? null : $duracao->segundos($caminho),
+        ] + ($imagem ? [] : ($formato->medir($caminho) ?? [])) + ['largura' => null, 'altura' => null];
+    }
+
+    /**
+     * Por que o anúncio não pode ser editado nem excluído agora (null = pode).
+     * Vai também para o title dos botões desabilitados.
+     */
+    private function bloqueioDoAnuncio(MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsService $meta): ?string
+    {
+        if ($campanha->status === MetaAdsCampanha::STATUS_ENVIANDO) {
+            return 'A campanha está sendo enviada para a Meta. Espere terminar.';
+        }
+
+        $conjunto = $campanha->relationLoaded('conjuntos') ? $campanha->conjuntos->firstWhere('id', $video->conjunto_id) : $video->conjunto;
+        if ($conjunto?->enviando) {
+            return 'Este conjunto está sendo enviado para a Meta. Espere terminar.';
+        }
+
+        if ($video->temEdicaoPendente()) {
+            return 'A Meta está processando o arquivo novo deste anúncio. Espere terminar.';
+        }
+
+        if ($video->estaNaMeta() && ! $meta->configurado()) {
+            return 'Meta não configurada no servidor.';
+        }
+
+        return null;
     }
 
     /**
@@ -403,20 +580,79 @@ class MetaAdsController extends Controller
         return response()->json(['video' => $this->dadosDoVideo($campanha, $copia)], 201);
     }
 
-    public function videoDestroy(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video): JsonResponse|RedirectResponse
+    /**
+     * Excluir anúncio (2026-10-19). Só no KazaKora: sai de vez, com o
+     * arquivo. Na Meta: exige confirmar que é definitivo (e, se for o último
+     * anúncio ativo do conjunto, confirmar que o conjunto fica sem nenhum);
+     * vira DELETED na Meta e aqui fica marcado como excluído (soft delete),
+     * para não perder o vínculo com o gasto.
+     */
+    public function videoDestroy(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsService $meta): JsonResponse|RedirectResponse
     {
         abort_unless($video->campanha_id === $campanha->id, 404);
+        $campanha->loadMissing(['conjuntos', 'videos']);
+        $responder = fn (string $mensagem, int $status, array $extra = []) => $request->wantsJson()
+            ? response()->json(['message' => $mensagem] + $extra, $status)
+            : back()->with($status < 300 ? 'success' : 'error', $mensagem);
 
-        if ($video->temObjetoNoMeta() || ! $this->podeMexerNoConjunto($campanha, $video->conjunto_id)) {
-            $mensagem = 'Anúncio já enviado à Meta: tire pelo Gerenciador de Anúncios.';
-
-            return $request->wantsJson() ? response()->json(['message' => $mensagem], 409) : back()->with('error', $mensagem);
+        if ($bloqueio = $this->bloqueioDoAnuncio($campanha, $video, $meta)) {
+            return $responder($bloqueio, 409);
         }
 
-        Storage::disk('local')->delete(array_filter([$video->path, $video->path_vertical]));
+        if (! $video->estaNaMeta()) {
+            Storage::disk('local')->delete(array_values(array_filter([$video->path, $video->path_vertical])));
+            $video->forceDelete();
+
+            return $responder('Anúncio excluído do KazaKora.', 200, ['ok' => true]);
+        }
+
+        if (! $request->boolean('confirmo_exclusao')) {
+            $mensagem = 'Confirme que a exclusão na Meta é definitiva.';
+
+            return $responder($mensagem, 422, ['errors' => ['confirmo_exclusao' => [$mensagem]]]);
+        }
+
+        try {
+            if (! $request->boolean('sem_anuncio_ativo') && $meta->ultimoAtivoDoConjunto($video)) {
+                $nome = $campanha->conjuntos->firstWhere('id', $video->conjunto_id)?->nome ?? '';
+                $mensagem = "É o último anúncio ativo do conjunto \"{$nome}\". Sem ele o conjunto para de entregar.";
+
+                return $responder($mensagem, 422, ['errors' => ['sem_anuncio_ativo' => [$mensagem]], 'ultimo_ativo' => true]);
+            }
+
+            $meta->excluirAnuncio($campanha, $video);
+        } catch (MetaAdsException $erro) {
+            return $responder('A Meta recusou a exclusão: '.rtrim($erro->getMessage(), '.').'. O anúncio continua como estava.', 422);
+        }
+
+        Storage::disk('local')->delete(array_values(array_filter([$video->path, $video->path_vertical])));
+        $video->forceFill(['ativado_em' => null])->save();
         $video->delete();
 
-        return $request->wantsJson() ? response()->json(['ok' => true]) : back()->with('success', 'Anúncio removido.');
+        return $responder('Anúncio excluído na Meta.', 200, ['ok' => true]);
+    }
+
+    /** "Pausar em vez de excluir": para a entrega do anúncio e mantém tudo. */
+    public function videoPausar(Request $request, MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsService $meta): JsonResponse
+    {
+        abort_unless($video->campanha_id === $campanha->id, 404);
+        $campanha->loadMissing(['conjuntos', 'videos']);
+
+        if (! $video->estaNaMeta()) {
+            return response()->json(['message' => 'Este anúncio ainda não está na Meta.'], 409);
+        }
+
+        if ($bloqueio = $this->bloqueioDoAnuncio($campanha, $video, $meta)) {
+            return response()->json(['message' => $bloqueio], 409);
+        }
+
+        try {
+            $meta->pausarAnuncio($campanha, $video);
+        } catch (MetaAdsException $erro) {
+            return response()->json(['message' => 'A Meta não pausou o anúncio: '.rtrim($erro->getMessage(), '.').'. O anúncio continua como estava.'], 422);
+        }
+
+        return response()->json(['message' => 'Anúncio pausado na Meta.', 'ok' => true]);
     }
 
     /** Toca o vídeo guardado no servidor (prévia na tela). */
@@ -534,10 +770,10 @@ class MetaAdsController extends Controller
 
         DB::transaction(function () use ($campanha, $conjunto) {
             foreach ($campanha->videos->where('conjunto_id', $conjunto->id) as $video) {
-                Storage::disk('local')->delete(array_filter([$video->path, $video->path_vertical]));
-                $video->delete();
+                Storage::disk('local')->delete(array_values(array_filter([$video->path, $video->path_vertical])));
+                $video->forceDelete();
             }
-            $conjunto->delete();
+            $conjunto->forceDelete();
             $this->somarOrcamentoDosConjuntos($campanha);
         });
 
@@ -939,7 +1175,7 @@ class MetaAdsController extends Controller
             $saindo = $campanha->conjuntos()->whereNotIn('id', $manter)->pluck('id');
             if ($saindo->isNotEmpty()) {
                 $this->apagarAnuncios($campanha->videos()->whereIn('conjunto_id', $saindo)->get());
-                $campanha->conjuntos()->whereIn('id', $saindo)->delete();
+                $campanha->conjuntos()->whereIn('id', $saindo)->forceDelete();
             }
         } elseif (! $campanha->conjuntos()->exists()) {
             $mapa['1'] = $campanha->conjuntos()->create(['nome' => 'Conjunto 1', 'ordem' => 0])->id;
@@ -967,8 +1203,8 @@ class MetaAdsController extends Controller
             if ($video->temObjetoNoMeta()) {
                 throw ValidationException::withMessages(['anuncios' => 'Anúncio já enviado à Meta não sai por aqui: use o Gerenciador de Anúncios.']);
             }
-            Storage::disk('local')->delete($video->path);
-            $video->delete();
+            Storage::disk('local')->delete(array_values(array_filter([$video->path, $video->path_vertical])));
+            $video->forceDelete();
         }
     }
 
@@ -1047,9 +1283,10 @@ class MetaAdsController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function dadosDoFormulario(MetaAdsService $meta, ?MetaAdsCampanha $campanha): array
+    /** Produtos da loja para o seletor do anúncio (o link sai da página do produto). */
+    private function listaDeProdutos(): \Illuminate\Support\Collection
     {
-        $produtos = Product::query()
+        return Product::query()
             ->where('is_active', true)
             ->whereNull('parent_product_id')
             ->orderBy('name')
@@ -1059,6 +1296,11 @@ class MetaAdsController extends Controller
                 'nome' => $p->name,
                 'link' => self::linkDoProduto($p),
             ]);
+    }
+
+    private function dadosDoFormulario(MetaAdsService $meta, ?MetaAdsCampanha $campanha): array
+    {
+        $produtos = $this->listaDeProdutos();
 
         return [
             'campanha' => $campanha?->makeHidden(['videos', 'conjuntos']),
@@ -1103,10 +1345,17 @@ class MetaAdsController extends Controller
         }
 
         try {
-            $campanhas = array_map(function (array $c) use ($noKazaKora) {
+            $campanhas = array_map(function (array $c) use ($noKazaKora, $meta) {
                 $local = $noKazaKora['campanhas'][$c['id']] ?? null;
-                $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local) {
+                $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local, $meta) {
                     $conjunto = $local ? ($noKazaKora['conjuntos'][$s['id']] ?? null) : null;
+                    $ativos = collect($s['anuncios'] ?? [])->where('status', 'ACTIVE')->count();
+                    // Editar e excluir (2026-10-19): só anúncio que nasceu no KazaKora.
+                    $s['anuncios'] = array_map(fn (array $a) => $a + [
+                        'local' => $noKazaKora['anuncios'][$a['id']] ?? null,
+                        'gerenciador' => $meta->linkAnuncioGerenciador((string) $a['id']),
+                        'ultimo_ativo' => $a['status'] === 'ACTIVE' && $ativos === 1,
+                    ], $s['anuncios'] ?? []);
 
                     return $s + [
                         'local_id' => $conjunto['id'] ?? null,
@@ -1133,15 +1382,17 @@ class MetaAdsController extends Controller
      *
      * @return array{campanhas: array<string, array{id: int, novo_conjunto: bool}>, conjuntos: array<string, array{id: int, novo_anuncio: bool}>}
      */
-    private function noKazaKora(): array
+    private function noKazaKora(?int $soCampanha = null): array
     {
-        $mapa = ['campanhas' => [], 'conjuntos' => []];
+        $mapa = ['campanhas' => [], 'conjuntos' => [], 'anuncios' => []];
+        $meta = app(MetaAdsService::class);
 
         MetaAdsCampanha::query()
             ->whereNotNull('meta_campaign_id')
-            ->with('conjuntos')
+            ->when($soCampanha, fn ($q) => $q->whereKey($soCampanha))
+            ->with(['conjuntos', 'videos'])
             ->get()
-            ->each(function (MetaAdsCampanha $c) use (&$mapa) {
+            ->each(function (MetaAdsCampanha $c) use (&$mapa, $meta) {
                 $mapa['campanhas'][(string) $c->meta_campaign_id] = [
                     'id' => $c->id,
                     'novo_conjunto' => $c->podeAdicionarConjunto() && $c->conjuntos->count() < MetaAdsCampanha::MAX_CONJUNTOS,
@@ -1151,9 +1402,44 @@ class MetaAdsController extends Controller
                         $mapa['conjuntos'][(string) $s->meta_adset_id] = ['id' => $s->id, 'novo_anuncio' => $s->aceitaAnuncioNovo($c)];
                     }
                 }
+                // Anúncio da Meta que existe aqui (casado pelo meta_ad_id): ganha Editar e Excluir.
+                foreach ($c->videos as $v) {
+                    if ($v->estaNaMeta()) {
+                        $mapa['anuncios'][(string) $v->meta_ad_id] = $this->dadosParaEditar($c, $v, $meta);
+                    }
+                }
             });
 
         return $mapa;
+    }
+
+    /**
+     * O que o modal de editar e excluir precisa: valores efetivos (os que
+     * vão no criativo), conjunto e se pode mexer agora.
+     *
+     * @return array<string, mixed>
+     */
+    private function dadosParaEditar(MetaAdsCampanha $campanha, MetaAdsVideo $video, MetaAdsService $meta): array
+    {
+        $criativo = $video->criativo($campanha);
+
+        return [
+            'id' => $video->id,
+            'campanha_id' => $campanha->id,
+            'conjunto' => $campanha->conjuntos->firstWhere('id', $video->conjunto_id)?->nome,
+            'nome' => $meta->nomeDoAnuncio($campanha, $video),
+            'tipo' => $video->tipo,
+            'arquivo' => $video->nome_original,
+            'na_meta' => $video->estaNaMeta(),
+            'produto_id' => $video->produto_id ?? $campanha->produto_id,
+            'link_destino' => $criativo['link'],
+            'texto_principal' => $criativo['texto'],
+            'titulo' => $criativo['titulo'],
+            'descricao' => $criativo['descricao'],
+            'chamada' => $criativo['chamada'],
+            'trocando_arquivo' => $video->temEdicaoPendente(),
+            'bloqueio' => $this->bloqueioDoAnuncio($campanha, $video, $meta),
+        ];
     }
 
     private function estadoConfig(MetaAdsService $meta): array
@@ -1231,6 +1517,9 @@ class MetaAdsController extends Controller
             'criativo' => $video->criativo($campanha),
             'adicionado_depois' => $video->adicionado_depois,
             'ativado_em' => $video->ativado_em?->toIso8601String(),
+            'meta_ad_id' => $video->meta_ad_id,
+            // Modal de editar e excluir (2026-10-19).
+            'editar' => $this->dadosParaEditar($campanha, $video, app(MetaAdsService::class)),
         ];
     }
 }

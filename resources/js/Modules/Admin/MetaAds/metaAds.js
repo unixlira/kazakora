@@ -18,6 +18,21 @@ export const STATUS_ESTILOS = {
     gerenciador: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
 };
 
+// effective_status da Meta => [rótulo, cores] (espelho e modais de anúncio).
+export const STATUS_META = {
+    ACTIVE: ['Ativo', 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'],
+    PAUSED: ['Pausado', 'bg-slate-500/15 text-slate-600 dark:text-slate-300'],
+    CAMPAIGN_PAUSED: ['Campanha pausada', 'bg-slate-500/15 text-slate-600 dark:text-slate-300'],
+    ADSET_PAUSED: ['Conjunto pausado', 'bg-slate-500/15 text-slate-600 dark:text-slate-300'],
+    IN_PROCESS: ['Em processamento', 'bg-sky-500/15 text-sky-700 dark:text-sky-300'],
+    PENDING_REVIEW: ['Em análise', 'bg-sky-500/15 text-sky-700 dark:text-sky-300'],
+    WITH_ISSUES: ['Com problema', 'bg-red-500/15 text-red-700 dark:text-red-300'],
+    DISAPPROVED: ['Reprovado', 'bg-red-500/15 text-red-700 dark:text-red-300'],
+    ARCHIVED: ['Arquivado', 'bg-slate-500/15 text-slate-500'],
+};
+
+export const statusMeta = (s) => STATUS_META[s] ?? [s || '-', 'bg-slate-500/15 text-slate-600 dark:text-slate-300'];
+
 const xsrf = () => decodeURIComponent((document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) ?? [])[1] ?? '');
 
 const erroDaResposta = (status, corpo) => {

@@ -5,7 +5,9 @@ import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
 import { Deferred, Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import AnuncioModais from './AnuncioModais.vue';
 import EspelhoMeta from './EspelhoMeta.vue';
+import GerenciarModais from './GerenciarModais.vue';
 import { formatarData, formatarNumero, formatarReais, STATUS_ESTILOS } from './metaAds';
 
 const props = defineProps({
@@ -25,7 +27,55 @@ const props = defineProps({
     // Prop adiada (2026-10-18): a campanha como está na Meta, com conjuntos e
     // anúncios feitos direto no Gerenciador também.
     espelho: { type: Object, default: null },
+    produtos: { type: Array, default: () => [] },
 });
+
+// Editar e excluir anúncio (2026-10-19): no card usa o que a Meta diz agora
+// (nome, status, gasto no período, último ativo do conjunto), se já carregou.
+const modais = ref(null);
+const naMetaPorId = computed(() => {
+    const mapa = {};
+    (props.espelho?.campanhas ?? []).forEach((camp) => camp.conjuntos.forEach((s) => s.anuncios.forEach((a) => { mapa[a.id] = a; })));
+    return mapa;
+});
+const alvoDoCard = (v) => {
+    const a = v.meta_ad_id ? naMetaPorId.value[v.meta_ad_id] : null;
+    return {
+        local: v.editar,
+        nome: a?.nome ?? v.editar.nome,
+        status: a?.status ?? null,
+        gasto: a?.metricas?.gasto ?? v.desempenho?.gasto ?? 0,
+        ultimoAtivo: Boolean(a?.ultimo_ativo),
+    };
+};
+const recarregarTudo = (mudanca) => (mudanca?.nivel === 'campanha' && mudanca?.acao === 'excluir'
+    ? router.visit('/admin/publicidade/meta-ads/campanhas')
+    : router.reload({ only: ['campanha', 'conjuntos', 'videos', 'pode', 'problemas', 'espelho'] }));
+
+// Editar e excluir campanha e conjunto que já estão na Meta (2026-10-20), com
+// o que a Meta diz agora (nome, status, orçamento, gasto no período).
+const gerenciar = ref(null);
+const conjuntoNaMetaPorId = computed(() => Object.fromEntries((naMeta.value?.conjuntos ?? []).map((s) => [s.id, s])));
+const alvoDaCampanha = () => {
+    const m = naMeta.value;
+    const anuncios = m.conjuntos.reduce((t, s) => t + s.anuncios.length, 0);
+    return {
+        nivel: 'campanha', id: m.id, nome: m.nome, status: m.status, gasto: m.metricas?.gasto ?? 0,
+        orcamento_diario: m.orcamento_nivel === 'campanha' ? m.orcamento_diario : null,
+        dentro: `${plural(m.conjuntos.length, 'conjunto', 'conjuntos')} e ${plural(anuncios, 'anúncio', 'anúncios')}`,
+    };
+};
+const alvoDoConjunto = (cj) => {
+    const s = conjuntoNaMetaPorId.value[cj.meta_adset_id];
+    return {
+        nivel: 'conjunto', id: s.id, nome: s.nome, status: s.status, gasto: s.metricas?.gasto ?? 0,
+        orcamento_diario: naMeta.value.orcamento_nivel === 'conjunto' ? s.orcamento_diario : null,
+        dentro: s.anuncios.length ? plural(s.anuncios.length, 'anúncio', 'anúncios') : '',
+        ultimoAtivo: s.status === 'ACTIVE' && naMeta.value.conjuntos.filter((x) => x.status === 'ACTIVE').length === 1,
+    };
+};
+const gerenciaCampanha = computed(() => can('financeiro.create') && Boolean(naMeta.value) && c.value.status !== 'enviando');
+const gerenciaConjunto = (cj) => can('financeiro.create') && Boolean(conjuntoNaMetaPorId.value[cj.meta_adset_id]) && !cj.enviando && c.value.status !== 'enviando';
 
 const naMeta = computed(() => props.espelho?.campanhas?.[0] ?? null);
 const carregandoMeta = ref(false);
@@ -84,7 +134,7 @@ const excluir = async () => {
 // Enquanto envia (a campanha ou um conjunto novo), a tela se atualiza
 // sozinha a cada 5 s para mostrar o andamento de cada vídeo.
 let timer = null;
-const enviandoAlgo = computed(() => c.value.status === 'enviando' || props.conjuntos.some((cj) => cj.enviando));
+const enviandoAlgo = computed(() => c.value.status === 'enviando' || props.conjuntos.some((cj) => cj.enviando) || props.videos.some((v) => v.editar?.trocando_arquivo));
 const acompanhar = (enviando) => {
     clearInterval(timer);
     if (enviando) {
@@ -154,6 +204,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']">
                     <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
                 </Link>
+                <button v-else-if="gerenciaCampanha" type="button"
+                    :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="gerenciar.editar(alvoDaCampanha())">
+                    <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
+                </button>
                 <button v-if="pode.enviar && can('financeiro.create')" type="button" :disabled="processando || problemas.length > 0"
                     :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="c.status === 'erro' ? enviar() : (modalEnviar = true)">
                     <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i>
@@ -173,6 +227,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 </Link>
                 <button v-if="pode.excluir && can('financeiro.create')" type="button"
                     :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="excluir">
+                    <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir
+                </button>
+                <button v-else-if="gerenciaCampanha" type="button"
+                    :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="gerenciar.excluir(alvoDaCampanha())">
                     <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir
                 </button>
             </div>
@@ -261,7 +319,8 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 <p v-if="espelho?.erro" class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
                     Não deu para ler a Meta agora: {{ espelho.erro }}
                 </p>
-                <EspelhoMeta v-else :campanhas="espelho?.campanhas ?? []" abrir-tudo :class="{ 'opacity-60': carregandoMeta }" />
+                <EspelhoMeta v-else :campanhas="espelho?.campanhas ?? []" abrir-tudo sem-link-local :editar-anuncios="can('financeiro.create')"
+                    :produtos="produtos" :chamadas="chamadas" :class="{ 'opacity-60': carregandoMeta }" @mudou="recarregarTudo" />
             </Deferred>
             <p class="mt-2 text-xs text-slate-500">Resultado que a própria Meta atribui. O lucro de verdade fica em Resultado e margem.</p>
         </section>
@@ -286,10 +345,18 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 </span>
             </div>
 
-            <div v-if="can('financeiro.create') && cj.pode.acrescentarAnuncios && !cj.pode.editar" class="mb-3">
-                <Link :href="`${base}/conjuntos/${cj.id}/anuncios`" :class="[botao, 'border border-primary text-primary hover:bg-primary/10']">
+            <div v-if="can('financeiro.create') && ((cj.pode.acrescentarAnuncios && !cj.pode.editar) || gerenciaConjunto(cj))" class="mb-3 flex flex-wrap gap-2">
+                <Link v-if="cj.pode.acrescentarAnuncios && !cj.pode.editar" :href="`${base}/conjuntos/${cj.id}/anuncios`" :class="[botao, 'border border-primary text-primary hover:bg-primary/10']">
                     <i class="fas fa-plus text-xs" aria-hidden="true"></i> Acrescentar novos anúncios
                 </Link>
+                <template v-if="gerenciaConjunto(cj)">
+                    <button type="button" :aria-label="`Editar conjunto ${cj.nome}`" :class="[botao, 'border border-[var(--surface-border)] hover:bg-[var(--surface-muted)]']" @click="gerenciar.editar(alvoDoConjunto(cj))">
+                        <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar conjunto
+                    </button>
+                    <button type="button" :aria-label="`Excluir conjunto ${cj.nome}`" :class="[botao, 'border border-red-300 text-red-700 hover:bg-red-50']" @click="gerenciar.excluir(alvoDoConjunto(cj))">
+                        <i class="fas fa-trash text-xs" aria-hidden="true"></i> Excluir conjunto
+                    </button>
+                </template>
             </div>
 
             <div v-if="cj.pode.editar || cj.pode.enviar || cj.pode.ativar || cj.enviando"
@@ -355,6 +422,21 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                             <dt class="text-slate-500">Compras</dt><dd class="text-right">{{ formatarNumero(v.desempenho.compras) }}</dd>
                             <dt class="text-slate-500">ROAS</dt><dd class="text-right font-medium">{{ roas(v.desempenho) }}</dd>
                         </dl>
+                        <p v-if="v.editar?.trocando_arquivo" class="flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-300" role="status" aria-live="polite">
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> A Meta está processando o arquivo novo
+                        </p>
+                    </div>
+                    <div v-if="can('financeiro.create') && v.editar" class="flex flex-wrap gap-1.5 border-t border-[var(--surface-border)] px-3 py-2">
+                        <button type="button" :disabled="processando || Boolean(v.editar.bloqueio)" :title="v.editar.bloqueio ?? undefined" :aria-label="`Editar anúncio ${alvoDoCard(v).nome}`"
+                            class="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                            @click="modais.editar(alvoDoCard(v))">
+                            <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar
+                        </button>
+                        <button type="button" :disabled="processando || Boolean(v.editar.bloqueio)" :title="v.editar.bloqueio ?? undefined" :aria-label="`Excluir anúncio ${alvoDoCard(v).nome}`"
+                            class="inline-flex items-center gap-1 rounded-md border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-500/10"
+                            @click="modais.excluir(alvoDoCard(v))">
+                            <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
+                        </button>
                     </div>
                 </li>
             </ul>
@@ -422,5 +504,7 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             <p class="text-sm">A campanha para de gastar. Dá para ativar de novo depois.</p>
         </ConfirmModal>
 
+        <AnuncioModais ref="modais" :produtos="produtos" :chamadas="chamadas" @mudou="recarregarTudo" />
+        <GerenciarModais ref="gerenciar" @mudou="recarregarTudo" />
     </AdminLayout>
 </template>

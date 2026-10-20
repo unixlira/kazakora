@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
 /**
@@ -21,9 +22,15 @@ use Illuminate\Support\Collection;
  *
  * Os ids meta_* são gravados a cada passo do envio: se a Meta recusar no
  * meio, o reenvio continua do passo que faltou em vez de duplicar campanha.
+ *
+ * Desde 2026-10-20 a campanha que já está na Meta pode ser editada (nome e
+ * orçamento) e excluída pelo admin. Excluída na Meta sai da tela mas fica
+ * no banco (SoftDeletes), como o anúncio; rascunho sai de vez (forceDelete).
  */
 class MetaAdsCampanha extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'meta_ads_campanhas';
 
     public const STATUS_RASCUNHO = 'rascunho';

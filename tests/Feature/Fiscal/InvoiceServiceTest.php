@@ -7,10 +7,13 @@ use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\Fiscal\Services\InvoiceService;
 use App\Services\NFe\NFeCertificateService;
+use App\Services\NFe\NFeDanfeService;
+use App\Services\NFe\NFeWebserviceService;
 use App\Services\NFe\NFeXmlBuilderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
+use NFePHP\Common\Certificate;
 use Tests\TestCase;
 
 class InvoiceServiceTest extends TestCase
@@ -265,5 +268,144 @@ class InvoiceServiceTest extends TestCase
 
         $this->assertSame($invoice->id, $result->id);
         $this->assertSame(Invoice::STATUS_DENIED, $result->status);
+    }
+
+    /**
+     * BUG REAL 2026-10-19 (pedido #3279, Rubens): a 1ª tentativa caiu em
+     * "Empty reply from server" com a nota 2-3154 já autorizada na SEFAZ.
+     * O retry reenviou a mesma chave, voltou 204 (duplicidade da MESMA
+     * chave), o 204 foi tratado como 539 e o pedido ganhou a nota 2-3156.
+     */
+    private const CHAVE_3154 = '35261065604590000107550020000031541965208610';
+
+    private function notaAssinada(): string
+    {
+        return '<NFe xmlns="http://www.portalfiscal.inf.br/nfe"><infNFe Id="NFe'.self::CHAVE_3154.'" versao="4.00"><ide><nNF>3154</nNF></ide></infNFe>'
+            .'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><Reference><DigestValue>T22uRleIhvSw1BYDjgYRF8Hg7x0=</DigestValue></Reference></SignedInfo></Signature></NFe>';
+    }
+
+    private function consultaAutorizada(): string
+    {
+        return '<retConsSitNFe xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo>'
+            .'<protNFe versao="4.00"><infProt><tpAmb>1</tpAmb><chNFe>'.self::CHAVE_3154.'</chNFe><dhRecbto>2026-10-19T17:26:20-03:00</dhRecbto>'
+            .'<nProt>135264443167997</nProt><digVal>T22uRleIhvSw1BYDjgYRF8Hg7x0=</digVal><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe></retConsSitNFe>';
+    }
+
+    private function notaDoRubens(string $status, ?string $motivo = null): array
+    {
+        Storage::fake('local');
+        $order = $this->makeOrder(['origin' => Order::ORIGIN_SHOPEE]);
+
+        $invoice = Invoice::create([
+            'order_id' => $order->id,
+            'status' => $status,
+            'serie' => 2,
+            'numero' => 3154,
+            'ambiente' => config('nfe.ambiente'),
+            'chave_acesso' => self::CHAVE_3154,
+            'xml_path' => "invoices/{$order->id}/nfe-".self::CHAVE_3154.'.xml',
+            'motivo_rejeicao' => $motivo,
+        ]);
+        Storage::disk('local')->put($invoice->xml_path, $this->notaAssinada());
+
+        $xmlBuilder = Mockery::mock(NFeXmlBuilderService::class);
+        $xmlBuilder->shouldNotReceive('build');
+        $this->app->instance(NFeXmlBuilderService::class, $xmlBuilder);
+
+        $certificateService = Mockery::mock(NFeCertificateService::class);
+        $certificateService->shouldReceive('isConfigured')->andReturn(true);
+        $certificateService->shouldReceive('load')->andReturn(Mockery::mock(Certificate::class));
+        $this->app->instance(NFeCertificateService::class, $certificateService);
+
+        $danfe = Mockery::mock(NFeDanfeService::class);
+        $danfe->shouldReceive('generate')->andReturn('%PDF');
+        $this->app->instance(NFeDanfeService::class, $danfe);
+
+        return [$order, $invoice];
+    }
+
+    private function assertAdotouANota3154(Invoice $result, Invoice $invoice): void
+    {
+        $this->assertSame($invoice->id, $result->id);
+        $this->assertSame(Invoice::STATUS_AUTHORIZED, $result->status);
+        $this->assertSame(3154, (int) $result->numero);
+        $this->assertSame(self::CHAVE_3154, $result->chave_acesso);
+        $this->assertSame('135264443167997', $result->protocolo_autorizacao);
+        $this->assertNull($result->motivo_rejeicao);
+        $this->assertDatabaseCount('nfe_numeracao_ocorrencias', 0);
+        $this->assertStringContainsString('<nProt>135264443167997</nProt>', Storage::disk('local')->get($result->xml_path));
+    }
+
+    public function test_a_204_rejection_adopts_the_authorized_key_instead_of_issuing_a_second_invoice(): void
+    {
+        [$order, $invoice] = $this->notaDoRubens(Invoice::STATUS_REJECTED, '204 - Rejeição: Duplicidade de NF-e');
+
+        $sefaz = Mockery::mock(NFeWebserviceService::class);
+        $sefaz->shouldReceive('consultarChave')->once()->with(self::CHAVE_3154, Mockery::any())->andReturn($this->consultaAutorizada());
+        $sefaz->shouldNotReceive('enviarESincronizar');
+        $this->app->instance(NFeWebserviceService::class, $sefaz);
+
+        $this->assertAdotouANota3154(app(InvoiceService::class)->issue($order->fresh()), $invoice);
+    }
+
+    public function test_a_signed_invoice_whose_send_failed_is_checked_at_sefaz_before_resending(): void
+    {
+        [$order, $invoice] = $this->notaDoRubens(Invoice::STATUS_SIGNED);
+
+        $sefaz = Mockery::mock(NFeWebserviceService::class);
+        $sefaz->shouldReceive('consultarChave')->once()->andReturn($this->consultaAutorizada());
+        $sefaz->shouldNotReceive('enviarESincronizar');
+        $this->app->instance(NFeWebserviceService::class, $sefaz);
+
+        $this->assertAdotouANota3154(app(InvoiceService::class)->issue($order->fresh()), $invoice);
+    }
+
+    public function test_a_204_answer_on_send_is_resolved_on_the_spot(): void
+    {
+        // Pendente (não passa pela consulta prévia) e com o XML já gerado:
+        // o rebuild devolve o mesmo XML, como na reemissão de uma nota
+        // cuja tentativa anterior não ficou registrada.
+        [$order, $invoice] = $this->notaDoRubens(Invoice::STATUS_PENDING);
+        $xmlBuilder = Mockery::mock(NFeXmlBuilderService::class);
+        $xmlBuilder->shouldReceive('build')->andReturn(['xml' => $this->notaAssinada(), 'chave' => self::CHAVE_3154]);
+        $this->app->instance(NFeXmlBuilderService::class, $xmlBuilder);
+
+        $sefaz = Mockery::mock(NFeWebserviceService::class);
+        $sefaz->shouldReceive('sign')->andReturnUsing(fn ($xml) => $xml);
+        $sefaz->shouldReceive('enviarESincronizar')->once()->andReturn(
+            '<retEnviNFe xmlns="http://www.portalfiscal.inf.br/nfe"><cStat>104</cStat><xMotivo>Lote processado</xMotivo><protNFe versao="4.00"><infProt>'
+            .'<chNFe>'.self::CHAVE_3154.'</chNFe><cStat>204</cStat><xMotivo>Rejeição: Duplicidade de NF-e</xMotivo></infProt></protNFe></retEnviNFe>'
+        );
+        $sefaz->shouldReceive('consultarChave')->once()->andReturn($this->consultaAutorizada());
+        $this->app->instance(NFeWebserviceService::class, $sefaz);
+
+        $this->assertAdotouANota3154(app(InvoiceService::class)->issue($order->fresh()), $invoice);
+    }
+
+    public function test_a_signed_invoice_that_never_reached_sefaz_is_resent_with_the_same_number(): void
+    {
+        [$order, $invoice] = $this->notaDoRubens(Invoice::STATUS_SIGNED);
+        $xmlBuilder = Mockery::mock(NFeXmlBuilderService::class);
+        $xmlBuilder->shouldReceive('build')->once()->with(Mockery::any(), 3154)->andReturn(['xml' => '<xml>nova</xml>', 'chave' => self::CHAVE_3154]);
+        $this->app->instance(NFeXmlBuilderService::class, $xmlBuilder);
+
+        $sefaz = Mockery::mock(NFeWebserviceService::class);
+        $sefaz->shouldReceive('consultarChave')->once()->andReturn(
+            '<retConsSitNFe xmlns="http://www.portalfiscal.inf.br/nfe"><cStat>217</cStat><xMotivo>Rejeição: NF-e não consta na base de dados da SEFAZ</xMotivo></retConsSitNFe>'
+        );
+        $sefaz->shouldReceive('sign')->once()->andReturn('<xml>assinada</xml>');
+        $sefaz->shouldReceive('enviarESincronizar')->once()->andThrow(new \RuntimeException('Empty reply from server'));
+        $this->app->instance(NFeWebserviceService::class, $sefaz);
+
+        try {
+            app(InvoiceService::class)->issue($order->fresh());
+            $this->fail('Esperava a falha de comunicação.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Empty reply from server', $e->getMessage());
+        }
+
+        // Mesmo número, e fica `signed` pra próxima rodada consultar de novo.
+        $this->assertSame(3154, (int) $invoice->fresh()->numero);
+        $this->assertSame(Invoice::STATUS_SIGNED, $invoice->fresh()->status);
     }
 }

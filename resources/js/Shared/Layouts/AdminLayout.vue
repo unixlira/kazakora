@@ -377,10 +377,10 @@ watch(
                             </Link>
                         </li>
                         <li>
-                            <Link href="/" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
+                            <a href="/" target="_blank" rel="noopener" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
                                 <i class="fas fa-store icone-marca icone-kazakora w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
-                            </Link>
+                            </a>
                         </li>
                         <li>
                             <button type="button" class="flex w-full items-center gap-2 border-l-[3px] border-transparent py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">

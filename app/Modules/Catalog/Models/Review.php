@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Models;
 
 use App\Models\User;
+use App\Support\NomeBrasileiro;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -81,6 +82,17 @@ class Review extends Model
      */
     public function getReviewerDisplayNameAttribute(): string
     {
+        // Avaliação de outra loja sem autor (ou gravada como "Comprador de outra
+        // loja") mostra um nome brasileiro sorteado pelo id: o mesmo para a mesma
+        // avaliação (pedido 2026-10-20). O banco continua com o texto genérico.
+        if ($this->getAttribute('outra_loja')) {
+            $nome = trim((string) $this->reviewer_name);
+
+            return $nome === '' || $nome === 'Comprador de outra loja'
+                ? NomeBrasileiro::gerar($this->getKey() ?? $this->external_id)
+                : $this->reviewer_name;
+        }
+
         return $this->user?->name ?? $this->reviewer_name ?? 'Cliente KazaKora';
     }
 }

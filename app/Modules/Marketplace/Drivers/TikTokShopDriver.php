@@ -170,7 +170,7 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
 
         if (! $product) {
             $itemName = cache()->get("bling.tiktok_item_name.{$externalId}");
-            $product = $itemName ? $this->matchByNameSimilarity($itemName) : null;
+            $product = $itemName ? $this->matchByNameSimilarity($itemName, $externalId) : null;
         }
 
         if (! $product) {
@@ -225,7 +225,7 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
      * último recurso, quando NENHuma variação tem histórico nenhum ainda
      * (produto novo de verdade, sem venda prévia pra guiar a escolha).
      */
-    private function matchByNameSimilarity(string $itemName): ?Product
+    private function matchByNameSimilarity(string $itemName, string $externalId): ?Product
     {
         $scored = Product::query()->where('is_active', true)->get(['id', 'name', 'sku', 'stock'])
             ->map(function (Product $candidate) use ($itemName) {
@@ -265,7 +265,15 @@ class TikTokShopDriver extends AbstractMarketplaceDriver
         // O código do TikTok é estável por variação, então basta alguém
         // vincular UMA vez (ProductChannelListing) e nunca mais se decide
         // isso pra esse código.
+        //
+        // Um aviso por código por dia: a importação e o relink chamam isto
+        // de novo a cada rodada, e o mesmo item virava dezenas de avisos.
+        if (! cache()->add("tiktok.variacao_ambigua_avisada.{$externalId}", true, now()->addDay())) {
+            return null;
+        }
+
         Log::warning('tiktok.item.variacao_ambigua', [
+            'external_id' => $externalId,
             'item_name' => $itemName,
             'candidatos' => $tied->map(fn ($row) => ['id' => $row['product']->id, 'sku' => $row['product']->sku])->values()->all(),
         ]);

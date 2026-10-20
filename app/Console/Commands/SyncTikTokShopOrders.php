@@ -7,6 +7,7 @@ use App\Modules\Marketplace\Support\OrderImportService;
 use App\Services\Bling\BlingOrderService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -60,6 +61,13 @@ class SyncTikTokShopOrders extends Command
             } catch (Throwable $exception) {
                 $failed++;
                 $this->warn("Pedido {$number}: {$exception->getMessage()}");
+                // O agendador manda a saída do console pro /dev/null: sem
+                // isto a falha de um pedido não ficava registrada em lugar
+                // nenhum.
+                Log::warning('tiktok.order_import.failed', [
+                    'external_order_id' => $number,
+                    'error' => $exception->getMessage(),
+                ]);
             }
         }
 

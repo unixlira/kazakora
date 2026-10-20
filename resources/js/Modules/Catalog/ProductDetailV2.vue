@@ -30,7 +30,6 @@ const props = defineProps({
     relatedFavoriteIds: { type: Array, default: () => [] },
     relatedReviewableIds: { type: Array, default: () => [] },
     relatedReviewedIds: { type: Array, default: () => [] },
-    salesCount: { type: Number, default: 0 },
 });
 
 const page = usePage();
@@ -492,13 +491,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </button>
                             </div>
 
-                            <!-- Só as estrelas (pedido 2026-10-20: sem "X vendidos" e sem o fogo). -->
+                            <!-- Estrelas em destaque. Total de vendidos saiu da loja (pedido 2026-10-20). -->
                             <div v-if="reviewsCount > 0" class="nota">
-                                <template v-if="reviewsCount > 0">
-                                    <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
-                                    <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                    <a href="#avaliacoes">({{ reviewsCount }})</a>
-                                </template>
+                                <strong class="media">{{ ratingAvg.toFixed(1).replace('.', ',') }}</strong>
+                                <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= stars(ratingAvg) ? 'fas fa-star' : 'far fa-star'"></i></span>
+                                <a href="#avaliacoes">({{ reviewsCount }})</a>
                             </div>
 
                             <ul v-if="highlights.length" class="checks">

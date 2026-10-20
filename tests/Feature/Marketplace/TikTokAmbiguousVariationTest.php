@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Marketplace;
 
+use App\Models\User;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Drivers\TikTokShopDriver;
 use App\Modules\Marketplace\Models\MarketplaceAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 /**
@@ -56,6 +59,46 @@ class TikTokAmbiguousVariationTest extends TestCase
         $escolhido = app(TikTokShopDriver::class)->autoImportProduct('1736780989365650766');
 
         $this->assertNull($escolhido, 'Sem saber a cor, não pode escolher nenhuma — quem decide é uma pessoa, uma vez só.');
+    }
+
+    /**
+     * 2026-10-20: a importação e o relink chamam isto a cada rodada, e o
+     * mesmo item virava dezenas de avisos por dia. Um aviso por código.
+     */
+    public function test_warns_only_once_per_code_about_the_same_ambiguous_item(): void
+    {
+        Notification::fake();
+        User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->powerBank('CAR-CAR-SEM-POW-PRE-0001', 53);
+        $this->powerBank('CAR-CAR-SEM-POW-ROS-0001', 31);
+        Cache::put('bling.tiktok_item_name.1737312503565354318', 'Mini Carregador Portátil Power Bank 10000mAh 2 em 1 para iPhone e Tipo C com Suporte');
+
+        $this->assertNull(app(TikTokShopDriver::class)->autoImportProduct('1737312503565354318'));
+        $this->assertNull(app(TikTokShopDriver::class)->autoImportProduct('1737312503565354318'));
+
+        Notification::assertCount(1);
+    }
+
+    /** Pedido cancelado não vai ser embalado nem ter nota: o relink deixa quieto. */
+    public function test_relink_skips_items_of_cancelled_orders(): void
+    {
+        Notification::fake();
+        User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->powerBank('CAR-CAR-SEM-POW-PRE-0001', 53);
+        $this->powerBank('CAR-CAR-SEM-POW-ROS-0001', 31);
+        Cache::put('bling.tiktok_item_name.1737312503565354318', 'Mini Carregador Portátil Power Bank 10000mAh 2 em 1 para iPhone e Tipo C com Suporte');
+
+        $order = Order::create([
+            'status' => Order::STATUS_CANCELLED, 'origin' => Order::ORIGIN_TIKTOK_SHOP, 'external_order_id' => '585912079829272486',
+            'shipping_name' => 'Maria', 'shipping_phone' => '1', 'shipping_zip' => '13010000', 'shipping_street' => 'Rua',
+            'shipping_number' => '1', 'shipping_neighborhood' => 'Centro', 'shipping_city' => 'Campinas', 'shipping_state' => 'SP',
+            'subtotal' => 39, 'total' => 39,
+        ]);
+        $order->items()->create(['product_id' => null, 'external_item_id' => '1737312503565354318', 'product_name' => 'Mini Carregador Portátil Power Bank', 'product_price' => 39, 'quantity' => 1, 'subtotal' => 39]);
+
+        $this->artisan('marketplace:relink-unmapped-items')->expectsOutputToContain('Nenhum item pendente de vínculo.');
+
+        Notification::assertNothingSent();
     }
 
     /**

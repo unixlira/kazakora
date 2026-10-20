@@ -65,7 +65,12 @@ class RelinkUnmappedMarketplaceItems extends Command
                 Order::ORIGIN_AMAZON,
                 Order::ORIGIN_TIKTOK_SHOP,
                 Order::ORIGIN_SHEIN,
-            ]))
+            ])
+                // 2026-10-20: pedido cancelado não vai ser embalado nem ter
+                // nota. O #1514 (TikTok, Power Bank sem cor) e o #2482
+                // (Carregador 35W sem produto) geravam aviso de variação
+                // ambígua duas vezes por hora sem nada a fazer.
+                ->where('status', '!=', Order::STATUS_CANCELLED))
             ->with('order:id,origin,external_order_id')
             ->get();
 

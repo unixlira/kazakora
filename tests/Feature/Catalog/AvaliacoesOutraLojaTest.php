@@ -5,6 +5,7 @@ namespace Tests\Feature\Catalog;
 use App\Models\User;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Support\NomeBrasileiro;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -213,7 +214,9 @@ class AvaliacoesOutraLojaTest extends TestCase
         $this->assertStringContainsString('/storage/avaliacoes/outra-loja/', $primeira->images[0]->image_url);
         Storage::disk('public')->assertExists('avaliacoes/outra-loja/'.sha1('https://img.exemplo.com/a').'.jpg');
 
-        $this->assertSame('Comprador de outra loja', $reviews->firstWhere('external_id', 'mercado_livre:4')->reviewer_display_name);
+        $anonima = $reviews->firstWhere('external_id', 'mercado_livre:4');
+        $this->assertSame('Comprador de outra loja', $anonima->reviewer_name);
+        $this->assertSame(NomeBrasileiro::gerar($anonima->id), $anonima->reviewer_display_name);
     }
 
     private function fakeMidia(): void

@@ -299,22 +299,13 @@ const SELOS_VERIFICADOS = [
 const anuncio = computed(() => props.product.ad_content ?? null);
 const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
 const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.media_url ?? props.product.images?.[indice]?.url ?? null);
-
-// Layout da página com conteúdo do anúncio (pedido 2026-10-20, Lanterna LED):
-// cabeçalho preto no topo, galeria e compra como em produção, "Por que você
-// vai amar", "Veja na prática", a sequência de fotos de sempre e o fechamento
-// com o comparativo. "Veja na prática": um bloco inicial sem foto vira a
-// chamada; os 2 seguintes com foto viram os cartões do produto em uso.
+// "Por que você vai amar" entra no meio da sequência, entre a 2ª e a 3ª foto
+// (pedido 2026-10-20, Lanterna LED); com menos de 2 fotos, no fim dos blocos.
 const ICONES_BENEFICIO = ['fa-bolt', 'fa-hand-sparkles', 'fa-shield-heart', 'fa-clock', 'fa-star', 'fa-thumbs-up'];
-const praticaChamada = computed(() => {
-    const primeiro = blocosAnuncio.value[0];
-    return primeiro && !imagemDoBloco(primeiro.imagem) ? primeiro : null;
+const blocoAntesDosBeneficios = computed(() => {
+    const comFoto = blocosAnuncio.value.flatMap((bloco, index) => (imagemDoBloco(bloco.imagem) ? [index] : []));
+    return comFoto.length >= 2 ? comFoto[1] : blocosAnuncio.value.length - 1;
 });
-const praticaFotos = computed(() => blocosAnuncio.value
-    .filter((bloco) => bloco !== praticaChamada.value && imagemDoBloco(bloco.imagem))
-    .slice(0, 2));
-const blocosSequencia = computed(() => blocosAnuncio.value
-    .filter((bloco) => bloco !== praticaChamada.value && !praticaFotos.value.includes(bloco)));
 
 const highlights = computed(() => {
     if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
@@ -486,16 +477,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     </template>
                     &nbsp;/&nbsp;<span>{{ product.name }}</span>
                 </nav>
-
-                <!-- Cabeçalho preto do topo (pedido 2026-10-20): chamada e destaques do anúncio. -->
-                <header v-if="anuncio?.chamada" class="topo-oferta">
-                    <p class="topo-eyebrow"><span class="topo-icone"><i class="fas fa-wand-magic-sparkles"></i></span> Por que esse produto merece atenção?</p>
-                    <h2>{{ anuncio.chamada }}</h2>
-                    <p class="topo-sub">{{ product.name }}</p>
-                    <ul v-if="anuncio.destaques?.length" class="topo-pilulas">
-                        <li v-for="(item, index) in anuncio.destaques.slice(0, 3)" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
-                    </ul>
-                </header>
 
                 <div class="grade">
                     <!-- COLUNA PRINCIPAL (60%) -->
@@ -671,48 +652,63 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                         </aside>
 
-                        <!-- POR QUE VOCÊ VAI AMAR: benefícios do anúncio em cartões com ícone. -->
-                        <section v-if="anuncio?.beneficios?.length" class="card secao-oferta">
-                            <p class="rotulo-oferta">Por que você vai amar</p>
-                            <div class="grade-beneficios">
-                                <div v-for="(item, index) in anuncio.beneficios" :key="index" class="beneficio-card">
-                                    <span class="beneficio-icone"><i class="fas" :class="ICONES_BENEFICIO[index % ICONES_BENEFICIO.length]"></i></span>
-                                    <h3>{{ item[0] }}</h3>
-                                    <p v-if="item[1]">{{ item[1] }}</p>
+                        <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
+                             conteúdo no formato da referência: blocos de título + imagem + texto
+                             persuasivo, comparativo, benefícios e dúvidas. -->
+                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
+                            <header class="desc-cabecalho">
+                                <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
+                                <p class="desc-eyebrow">Por que esse produto merece atenção?</p>
+                                <!-- A chamada do anúncio fecha a página, antes do comparativo (pedido 2026-10-20). -->
+                                <h2 v-if="!blocosAnuncio.length || !anuncio?.chamada">Descrição</h2>
+                            </header>
+
+                            <div v-if="blocosAnuncio.length" class="descricao">
+                                <!-- Foto pequena ao lado do texto, alternando o lado a cada bloco, na
+                                     estrutura da página do FerraKora (pedido 2026-10-19). -->
+                                <template v-for="(bloco, index) in blocosAnuncio" :key="index">
+                                    <article class="bloco-anuncio"
+                                        :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
+                                        <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
+                                        <div>
+                                            <h3>{{ bloco.titulo }}</h3>
+                                            <p>{{ bloco.texto }}</p>
+                                        </div>
+                                    </article>
+
+                                    <div v-if="index === blocoAntesDosBeneficios && anuncio.beneficios?.length" class="bloco-anuncio">
+                                        <p class="rotulo-amar">Por que você vai amar</p>
+                                        <div class="grade-beneficios">
+                                            <div v-for="(item, itemIndex) in anuncio.beneficios" :key="itemIndex" class="beneficio-card">
+                                                <span class="beneficio-icone"><i class="fas" :class="ICONES_BENEFICIO[itemIndex % ICONES_BENEFICIO.length]"></i></span>
+                                                <h3>{{ item[0] }}</h3>
+                                                <p v-if="item[1]">{{ item[1] }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <div v-if="anuncio.chamada" class="bloco-anuncio chamada-final">
+                                    <p class="chamada-frase">{{ anuncio.chamada }}</p>
+                                    <button v-if="inStock" type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
                                 </div>
-                            </div>
-                        </section>
 
-                        <!-- VEJA NA PRÁTICA: a chamada e o produto em uso, com as fotos do próprio produto. -->
-                        <section v-if="praticaChamada || praticaFotos.length" class="card secao-oferta">
-                            <p class="rotulo-oferta">Veja na prática</p>
-                            <div v-if="praticaChamada" class="pratica-chamada">
-                                <h3>{{ praticaChamada.titulo }}</h3>
-                                <p>{{ praticaChamada.texto }}</p>
-                            </div>
-                            <div v-if="praticaFotos.length" class="pratica-fotos">
-                                <article v-for="(bloco, index) in praticaFotos" :key="index" class="pratica-card">
-                                    <img :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
-                                    <div>
-                                        <h3>{{ bloco.titulo }}</h3>
-                                        <p>{{ bloco.texto }}</p>
+                                <div v-if="anuncio.comparativo?.linhas?.length" class="bloco-anuncio">
+                                    <h3>{{ anuncio.comparativo.titulo }}</h3>
+                                    <p v-if="anuncio.comparativo.intro">{{ anuncio.comparativo.intro }}</p>
+                                    <div class="tabela-wrap">
+                                        <table class="comparativo">
+                                            <thead><tr><th>Critério</th><th>Solução comum</th><th>Com este produto</th></tr></thead>
+                                            <tbody>
+                                                <tr v-for="(linha, index) in anuncio.comparativo.linhas" :key="index">
+                                                    <td>{{ linha[0] }}</td>
+                                                    <td class="ruim">✕ {{ linha[1] }}</td>
+                                                    <td class="bom">✓ {{ linha[2] }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
-                                </article>
-                            </div>
-                        </section>
-
-                        <!-- Sequência de fotos e textos como em produção: foto pequena ao lado do texto,
-                             alternando o lado a cada bloco; depois as dúvidas. -->
-                        <section v-if="blocosSequencia.length || anuncio?.duvidas?.length" class="card descricao-card">
-                            <div class="descricao">
-                                <article v-for="(bloco, index) in blocosSequencia" :key="index" class="bloco-anuncio"
-                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
-                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
-                                    <div>
-                                        <h3>{{ bloco.titulo }}</h3>
-                                        <p>{{ bloco.texto }}</p>
-                                    </div>
-                                </article>
+                                </div>
 
                                 <div v-if="anuncio.duvidas?.length" class="bloco-anuncio">
                                     <h3>Dúvidas comuns antes de escolher o seu</h3>
@@ -722,40 +718,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </div>
                                 </div>
                             </div>
-                        </section>
 
-                        <!-- Fechamento: "Por que ter este produto?" com o comparativo e o mesmo "Comprar" do box. -->
-                        <section v-if="blocosAnuncio.length" class="card fechamento">
-                            <h2>{{ anuncio.comparativo?.titulo || 'Por que ter este produto?' }}</h2>
-                            <p v-if="anuncio.comparativo?.intro" class="fechamento-intro">{{ anuncio.comparativo.intro }}</p>
-                            <div v-if="anuncio.comparativo?.linhas?.length" class="tabela-wrap">
-                                <table class="comparativo">
-                                    <thead><tr><th scope="col">Critério</th><th scope="col">Solução comum</th><th scope="col">Com este produto</th></tr></thead>
-                                    <tbody>
-                                        <tr v-for="(linha, index) in anuncio.comparativo.linhas" :key="index">
-                                            <td>{{ linha[0] }}</td>
-                                            <td class="ruim">✕ {{ linha[1] }}</td>
-                                            <td class="bom">✓ {{ linha[2] }}</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="fechamento-compra">
-                                <p><strong>{{ aPartirDe ? 'A partir de ' : '' }}{{ formatPrice(precoPor) }}</strong> <span>ou {{ PARCELAS }}x de {{ formatPrice(installmentValue) }}</span></p>
-                                <button v-if="inStock" type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
-                                <p v-else class="esgotado">Produto esgotado</p>
-                            </div>
-                        </section>
-
-                        <!-- Sem conteúdo do anúncio: a descrição livre em seções, no visual da v1. -->
-                        <section v-if="!blocosAnuncio.length && descriptionSections.length" class="card descricao-card">
-                            <header class="desc-cabecalho">
-                                <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
-                                <p class="desc-eyebrow">Por que esse produto merece atenção?</p>
-                                <h2>Descrição</h2>
-                            </header>
-
-                            <div class="descricao">
+                            <div v-else class="descricao">
                                 <div v-for="(section, index) in descriptionSections" :key="index" class="bloco">
                                     <h3 v-if="section.heading">{{ section.heading }}</h3>
                                     <template v-for="(part, partIndex) in section.parts" :key="partIndex">
@@ -1138,16 +1102,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: #f59a62; color: #fff; }
 .pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 13px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; color: #f1691b; }
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
-
-/* conteúdo */
-.pd2 .descricao { color: #000; }
-.dark .pd2 .descricao { color: var(--text); }
-.pd2 .descricao h3 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
-.pd2 .bloco + .bloco { margin-top: 22px; }
-.pd2 .lista { margin: 0 0 14px; padding-left: 22px; list-style: disc; }
-.pd2 .lista li { margin-bottom: 4px; }
-.pd2 .linhas { list-style: none; margin: 0 0 14px; padding: 0; }
-.pd2 .bloco > :last-child { margin-bottom: 0; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }
 .pd2 .bloco-anuncio p { font-size: 16px; line-height: 1.7; }
@@ -1165,45 +1119,29 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .comparativo .bom { color: #16803c; font-weight: 700; }
 .dark .pd2 .comparativo .ruim { color: #f87171; }
 .dark .pd2 .comparativo .bom { color: #4ade80; }
-.pd2 .duvida { margin-top: 14px; }
-.pd2 .duvida strong { display: block; color: var(--ink); }
-.pd2 .duvida p { margin: 2px 0 0; }
-/* Layout com conteúdo do anúncio (pedido 2026-10-20): laranja do logo (#F1691B) e preto. */
-.pd2 .topo-oferta { position: relative; overflow: hidden; margin-bottom: 20px; padding: 30px 34px 28px; border-radius: 20px; background: linear-gradient(135deg, #1d1d1d 0%, #111 70%, #2a1a10 100%); color: #fff; }
-.pd2 .topo-oferta::after { content: ''; position: absolute; top: -70px; right: -50px; width: 190px; height: 190px; border-radius: 50%; background: rgba(255, 255, 255, .08); pointer-events: none; }
-.pd2 .topo-eyebrow { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #f1691b; }
-.pd2 .topo-icone { display: inline-flex; flex: none; width: 34px; height: 34px; border-radius: 50%; align-items: center; justify-content: center; font-size: 14px; background: #f59a62; color: #fff; }
-.pd2 .topo-oferta h2 { position: relative; max-width: 760px; margin: 0; font-size: 34px; font-weight: 700; line-height: 1.22; color: #fff; }
-.pd2 .topo-sub { margin: 12px 0 0; font-size: 15px; color: #d4d4d4; }
-.pd2 .topo-pilulas { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
-.pd2 .topo-pilulas li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #fff; color: #f1691b; font-size: 14px; font-weight: 600; }
-.pd2 .rotulo-oferta { margin: 0 0 16px; font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #f1691b; }
+.pd2 .rotulo-amar { margin: 0 0 16px; font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #f1691b; }
 .pd2 .grade-beneficios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .pd2 .beneficio-card { padding: 18px 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
 .pd2 .beneficio-icone { display: inline-flex; width: 40px; height: 40px; border-radius: 10px; align-items: center; justify-content: center; margin-bottom: 12px; background: #fff3ec; color: #f1691b; font-size: 17px; }
 .dark .pd2 .beneficio-icone { background: rgba(241, 105, 27, .16); }
-.pd2 .beneficio-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
-.pd2 .beneficio-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
-.pd2 .pratica-chamada { padding: 20px 22px; border-left: 4px solid #f1691b; border-radius: 4px 16px 16px 4px; background: #fff3ec; }
-.dark .pd2 .pratica-chamada { background: rgba(241, 105, 27, .12); }
-.pd2 .pratica-chamada h3 { margin: 0 0 8px; font-size: 20px; font-weight: 700; color: var(--ink); }
-.pd2 .pratica-chamada p { margin: 0; font-size: 16px; line-height: 1.7; color: var(--text); }
-.pd2 .pratica-fotos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
-.pd2 .pratica-chamada + .pratica-fotos { margin-top: 16px; }
-.pd2 .pratica-fotos:first-child { margin-top: 0; }
-.pd2 .pratica-card { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
-.pd2 .pratica-card img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: #fff; }
-.pd2 .pratica-card > div { padding: 14px 16px 18px; }
-.pd2 .pratica-card h3 { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--ink); }
-.pd2 .pratica-card p { margin: 0; font-size: 15px; line-height: 1.6; color: var(--text); }
-.pd2 .fechamento h2 { font-size: 26px; }
-.pd2 .fechamento-intro { margin: 0 0 12px; }
-.pd2 .fechamento-compra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin-top: 18px; padding: 16px 18px; border-radius: 14px; background: #111; color: #fff; }
-.pd2 .fechamento-compra p { margin: 0; }
-.pd2 .fechamento-compra strong { font-size: 24px; }
-.pd2 .fechamento-compra span { color: #d4d4d4; font-size: 14px; }
-.pd2 .fechamento-compra .btn { flex: 0 0 auto; min-width: 200px; }
-.pd2 .fechamento-compra .esgotado { color: #fca5a5; }
+.pd2 .bloco-anuncio .beneficio-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
+.pd2 .bloco-anuncio .beneficio-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
+.pd2 .chamada-final { text-align: center; }
+.pd2 .bloco-anuncio .chamada-frase { max-width: 640px; margin: 0 auto 18px; font-size: 26px; font-weight: 700; line-height: 1.3; color: var(--ink); }
+.pd2 .chamada-final .btn { display: inline-flex; flex: none; min-width: 240px; }
+.pd2 .duvida { margin-top: 14px; }
+.pd2 .duvida strong { display: block; color: var(--ink); }
+.pd2 .duvida p { margin: 2px 0 0; }
+
+/* conteúdo */
+.pd2 .descricao { color: #000; }
+.dark .pd2 .descricao { color: var(--text); }
+.pd2 .descricao h3 { font-size: 20px; font-weight: 600; margin: 0 0 10px; }
+.pd2 .bloco + .bloco { margin-top: 22px; }
+.pd2 .lista { margin: 0 0 14px; padding-left: 22px; list-style: disc; }
+.pd2 .lista li { margin-bottom: 4px; }
+.pd2 .linhas { list-style: none; margin: 0 0 14px; padding: 0; }
+.pd2 .bloco > :last-child { margin-bottom: 0; }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
@@ -1304,15 +1242,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 h2 { font-size: 24px; }
     .pd2 .desc-cabecalho h2 { font-size: 22px; }
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
+    .pd2 .grade-beneficios { grid-template-columns: 1fr; }
+    .pd2 .bloco-anuncio .chamada-frase { font-size: 21px; }
+    .pd2 .chamada-final .btn { width: 100%; }
     .pd2 .com-foto, .pd2 .com-foto.foto-direita { grid-template-columns: 1fr; gap: 14px; }
     .pd2 .com-foto.foto-direita .foto-desc { order: 0; }
     .pd2 .foto-desc { max-width: 320px; margin: 0 auto; }
-    .pd2 .topo-oferta { padding: 22px 18px 20px; border-radius: 16px; margin-bottom: 12px; }
-    .pd2 .topo-oferta h2 { font-size: 24px; }
-    .pd2 .topo-pilulas li { font-size: 13px; padding: 5px 12px; }
-    .pd2 .grade-beneficios, .pd2 .pratica-fotos { grid-template-columns: 1fr; }
-    .pd2 .fechamento h2 { font-size: 21px; }
-    .pd2 .fechamento-compra .btn { width: 100%; }
     .pd2 .compra h1 { font-size: 20px; }
     .pd2 .nota { font-size: 14px; }
     .pd2 .galeria { flex-direction: column; gap: 10px; }

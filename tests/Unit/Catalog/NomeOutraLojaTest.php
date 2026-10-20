@@ -3,7 +3,7 @@
 namespace Tests\Unit\Catalog;
 
 use App\Modules\Catalog\Models\Review;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class NomeOutraLojaTest extends TestCase
 {

@@ -3,6 +3,7 @@
 namespace App\Modules\Catalog\Services;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\Review;
 use App\Support\SiteAtual;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -271,8 +272,36 @@ abstract class CatalogoOutroSite
             'origem' => 'kazakora',
             'updated_at' => $grupo->max('updated_at')?->toIso8601String(),
             'oferta_relampago' => $pai->relampagoNoAr()?->paraApi(),
+            'reviewsAnalytics' => $this->avaliacoes()[$pai->id] ?? null,
             ...$this->camposExtras($registro, $pai),
         ];
+    }
+
+    /** @var array<int, array{total_reviews: int, average_rating: float}>|null */
+    private ?array $avaliacoes = null;
+
+    /**
+     * Nota média por produto pai, no campo reviewsAnalytics da vitrine da
+     * Hostinger (estrelas e nota em todo card, pedido 2026-10-20). Mesma conta
+     * da página do produto no KazaKora: pai + variações, só avaliações da
+     * KazaKora (as de outra loja não entram). Uma consulta para o catálogo todo.
+     *
+     * @return array<int, array{total_reviews: int, average_rating: float}>
+     */
+    private function avaliacoes(): array
+    {
+        return $this->avaliacoes ??= Review::query()
+            ->daLoja()
+            ->join('products', 'products.id', '=', 'reviews.product_id')
+            ->selectRaw('COALESCE(products.parent_product_id, products.id) as pai_id, COUNT(*) as total, AVG(reviews.rating) as media')
+            ->groupByRaw('COALESCE(products.parent_product_id, products.id)')
+            ->toBase()
+            ->get()
+            ->mapWithKeys(fn ($linha) => [(int) $linha->pai_id => [
+                'total_reviews' => (int) $linha->total,
+                'average_rating' => round((float) $linha->media, 1),
+            ]])
+            ->all();
     }
 
     /**

@@ -10,12 +10,6 @@ const props = defineProps({
         type: Object,
         required: true,
     },
-    // Estrelas da avaliação ao lado do "Frete grátis FULL" — só no slide das
-    // Ofertas do Dia no celular (pedido 2026-10-10).
-    estrelas: {
-        type: Boolean,
-        default: false,
-    },
     isFavorite: {
         type: Boolean,
         default: false,
@@ -103,6 +97,7 @@ const submitReview = () => {
 
 // Média das avaliações (0 = sem avaliação, aí não mostra estrela nenhuma).
 const nota = computed(() => Number(props.product.reviews_avg_rating ?? 0));
+const notaTexto = computed(() => nota.value.toFixed(1).replace('.', ','));
 const estrelaClasse = (n) => (nota.value >= n ? 'fas fa-star' : nota.value >= n - 0.5 ? 'fas fa-star-half-stroke' : 'far fa-star');
 
 // Selo da campanha na faixa do celular (pedido 2026-10-11): "Black November",
@@ -249,6 +244,16 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                 <h4 ref="tituloEl" class="titulo-card cursor-pointer overflow-hidden font-semibold hover:text-store-accent" :title="product.name" @click="goToProduct">{{ titulo.texto }}<template v-if="titulo.cortado">… <span class="titulo-ver-mais">Ver mais</span></template></h4>
                 <div ref="medidorEl" class="titulo-card pointer-events-none invisible absolute left-0 top-0 font-semibold" aria-hidden="true" style="height: auto"></div>
             </div>
+            <!-- Estrelas da média e a nota em negrito ao lado, em todo card (pedido
+                 2026-10-20). Sem avaliação a linha fica vazia com a mesma altura. -->
+            <div class="flex h-4 items-center gap-px text-[11px] text-amber-400">
+                <template v-if="nota > 0">
+                    <span class="flex items-center gap-px" role="img" :aria-label="`Nota ${notaTexto} de 5`">
+                        <i v-for="n in 5" :key="n" :class="estrelaClasse(n)" aria-hidden="true"></i>
+                    </span>
+                    <span class="ml-1 text-xs font-bold text-store-fg" aria-hidden="true">{{ notaTexto }}</span>
+                </template>
+            </div>
             <!-- Envio Express (pedido 2026-10-10): menor e no centro do card (celular e
                  computador), laterais inclinadas "/ texto /", parte cinza do caminhão
                  arredondada à direita e mais larga. -->
@@ -261,7 +266,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
             <div class="mt-auto pt-1">
                 <!-- Preço no estilo do Mercado Livre (pedido 2026-10-10): pílula verde
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
-                     centavos pequenos no alto. Estrelas ficam só na página do produto. -->
+                     centavos pequenos no alto. -->
                 <!-- Altura fixa em todas as linhas (pedido 2026-10-11): com ou sem
                      desconto/vendidos, todo card tem o mesmo tamanho e o preço fica
                      sempre na mesma posição. -->
@@ -289,11 +294,6 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                     <p v-else class="frete-card flex h-5 min-w-0 flex-1 items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#00A650]">
                         Frete grátis
                         <span class="font-extrabold italic"><i class="fa-solid fa-bolt"></i>FULL</span>
-                        <!-- Só no slide das Ofertas do Dia e só se já tiver avaliação. -->
-                        <span v-if="estrelas && nota > 0" class="ml-auto flex items-center gap-px text-[11px] text-amber-400" :aria-label="`Nota ${nota.toFixed(1)} de 5`">
-                            <i v-for="n in 5" :key="n" :class="estrelaClasse(n)"></i>
-                            <span class="ml-1 font-semibold text-store-fg-muted">{{ nota.toFixed(1).replace('.', ',') }}</span>
-                        </span>
                     </p>
                     <!-- Detalhes (pedido 2026-10-15, mesmo comportamento do FerraKora): no
                          computador fica na linha do "Frete grátis ⚡FULL", alinhado com o FULL

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Equipes de agentes de IA (pedido do Lira 2026-10-20, validado com o
  * Jonathan): menu Equipes › <squad>. A squad é uma entidade para dar para ter
- * outras no futuro; a primeira é a Alfacora. Cada membro é um agente do
+ * outras no futuro; a primeira é a Alpha Kora. Cada membro é um agente do
  * Claude Code (slug = nome do arquivo .claude/agents/<slug>.md) e as
  * instruções extras ativas dele saem pela API GET /api/equipe/{slug}/instrucoes,
  * que o agente lê no começo de toda tarefa. Nada é apagado de verdade:

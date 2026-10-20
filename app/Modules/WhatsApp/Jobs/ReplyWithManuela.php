@@ -41,7 +41,9 @@ class ReplyWithManuela
 
     public function handle(ManuelaAutoReplyService $manuela, WhatsAppOutbox $outbox, ManuelaAgentClient $agent, GeminiClient $gemini, WhatsAppMediaDownloader $media): void
     {
-        @set_time_limit(150);
+        if (! app()->runningUnitTests()) {
+            @set_time_limit(150);
+        }
 
         // Achado real 2026-10-13: 16 mensagens do Lira em 5s geraram 14
         // respostas, porque cada uma checava "tem mensagem depois?" antes das

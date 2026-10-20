@@ -18,7 +18,10 @@ class BeautyKoraProdutoController extends Controller
     public function conteudo(string $id, ConteudoProdutoBeautyKora $servico): JsonResponse
     {
         // Primeira visita depois de mudar o produto espera o Gemini (texto + fotos).
-        @set_time_limit(120);
+        // Nos testes não: o limite valeria para o resto da suíte no mesmo processo.
+        if (! app()->runningUnitTests()) {
+            @set_time_limit(120);
+        }
 
         try {
             $conteudo = $servico->conteudo($id);

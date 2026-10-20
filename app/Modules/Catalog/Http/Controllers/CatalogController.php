@@ -336,13 +336,6 @@ class CatalogController extends Controller
         $product->loadCount('reviews');
         $product->loadAvg('reviews', 'rating');
 
-        // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
-        // todos os canais (loja e marketplaces), somando as variações.
-        $salesCount = OrderItem::query()
-            ->whereIn('product_id', Product::query()->where('id', $product->id)->orWhere('parent_product_id', $product->id)->select('id'))
-            ->whereHas('order', fn ($query) => $query->whereIn('status', [Order::STATUS_PAID, Order::STATUS_SHIPPED, Order::STATUS_COMPLETED]))
-            ->sum('quantity');
-
         // Avaliações (pedido 2026-10-11): do produto E das variações dele (a
         // avaliação importada fica na variação vendida — Power Bank Rosa…).
         // Ordem (pedido 2026-10-20): as com foto/vídeo primeiro e, dentro de
@@ -514,7 +507,6 @@ class CatalogController extends Controller
             'relatedReviewedIds' => $user
                 ? Review::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
                 : [],
-            'salesCount' => (int) $salesCount,
         ]);
     }
 

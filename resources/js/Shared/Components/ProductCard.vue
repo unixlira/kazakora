@@ -2,7 +2,7 @@
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Modal from '@/Shared/Modal.vue';
-import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite, vendidosTexto } from '@/Shared/productCard';
+import { addToCart, cardImageUrl, formatPrice, primaryImage, specLine, toggleFavorite } from '@/Shared/productCard';
 import { ehFavorito } from '@/Shared/favoritos';
 
 const props = defineProps({
@@ -268,7 +268,7 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                      "X% OFF" + preço antigo riscado; embaixo o preço grande com os
                      centavos pequenos no alto. -->
                 <!-- Altura fixa em todas as linhas (pedido 2026-10-11): com ou sem
-                     desconto/vendidos, todo card tem o mesmo tamanho e o preço fica
+                     desconto, todo card tem o mesmo tamanho e o preço fica
                      sempre na mesma posição. -->
                 <div class="flex h-[18px] items-center gap-1.5 overflow-hidden">
                     <span v-if="aPartirDe" class="shrink-0 text-[11px] text-store-fg-muted md:text-xs">A partir de</span>
@@ -284,8 +284,6 @@ const comprarPeloCard = () => (aPartirDe.value ? goToProduct() : addToCart(props
                         <span class="text-[22px] font-semibold tracking-tight md:text-2xl">{{ precoPartes.inteiro }}</span>
                         <span class="ml-px mt-[3px] text-[11px] font-semibold md:text-xs">{{ precoPartes.centavos }}</span>
                     </div>
-                    <!-- Vendidos como no Mercado Livre: só aparece se já vendeu. -->
-                    <span v-if="vendidosTexto(product.vendidos)" class="truncate pb-0.5 text-[11px] text-store-fg-muted md:text-xs">{{ vendidosTexto(product.vendidos) }}</span>
                 </div>
                 <div class="mt-1.5 flex h-5 items-center gap-2">
                     <!-- Mesmo tamanho/peso do "Frete grátis", em vermelho (pedido 2026-10-10). -->

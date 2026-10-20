@@ -57,6 +57,9 @@ Schedule::command('marketplace:poll-labels --no-interaction --quiet')->everyTwoM
 // da retomada das 23:45. Ordem completa em docs/financeiro-email-resultado-diario.md.
 Schedule::command('loja:resultado-diario')->dailyAt('23:50')->withoutOverlapping(30);
 Schedule::command('loja:cancelados-separados')->dailyAt('11:00')->withoutOverlapping(30);
+// Sugestões do dia (pedido do Lira 2026-10-20): de madrugada lê o Meta Ads,
+// pesquisa preço de concorrente e monta o board de Indicadores › Sugestões.
+Schedule::command('sugestoes:gerar')->dailyAt('02:30')->withoutOverlapping(60);
 // Pedido pago sem NF-e autorizada e sem etiqueta impressa (pedido 2026-10-19):
 // de hora em hora, e-mail só quando aparece pedido novo travado.
 Schedule::command('loja:nota-etiqueta-pendentes')->hourlyAt(10)->withoutOverlapping(30);

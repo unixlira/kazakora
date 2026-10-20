@@ -10,6 +10,7 @@ use App\Modules\Analytics\Models\SiteVisit;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Support\ContributionMargin;
+use App\Modules\Marketplace\Support\Sugestoes\BoardDeSugestoes;
 use App\Support\Rbac\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -26,8 +27,10 @@ class KpiController extends Controller
      * A aba "Acessos ao site" saiu em 2026-10-19 (pedido do Lira); os
      * acessos continuam em Visão geral (visitantes e conversão do site) e no
      * Log de visitas (/admin/visitas-site). A coleta não mudou.
+     * "Sugestões do dia" (2026-10-20): o board da rotina da madrugada
+     * (comando sugestoes:gerar).
      */
-    public const ABAS = ['visao-geral', 'hoje-e-mes', 'caue-diego', 'produtos'];
+    public const ABAS = ['visao-geral', 'sugestoes', 'hoje-e-mes', 'caue-diego', 'produtos'];
 
     public function index(Request $request, PainelDeAlertas $painel, SerieDiaria $serie, ContributionMargin $margem, PainelGerencial $gerencial): Response
     {
@@ -35,6 +38,7 @@ class KpiController extends Controller
         $aba = in_array($aba, self::ABAS, true) ? $aba : 'visao-geral';
 
         $props = match ($aba) {
+            'sugestoes' => ['sugestoes' => fn () => app(BoardDeSugestoes::class)->montar(Permissions::has($request->user(), 'financeiro.view'))],
             'hoje-e-mes' => ['hojeMes' => fn () => $gerencial->hojeEMes(Permissions::has($request->user(), 'financeiro.view'))],
             'caue-diego' => ['diagnosticos' => fn () => $gerencial->diagnosticos()],
             'produtos' => ['produtos' => fn () => $gerencial->produtos()],

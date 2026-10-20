@@ -216,7 +216,7 @@ class InteligenciaMercadoLivre
      * cada nome aparece no outro e há pelo menos 2 palavras em comum. Nesse
      * caso a nota sobe para o mínimo.
      */
-    private function similaridade(array $a, array $b): float
+    public static function similaridade(array $a, array $b): float
     {
         if (! $a || ! $b) {
             return 0.0;
@@ -250,7 +250,7 @@ class InteligenciaMercadoLivre
     }
 
     /** Tokens significativos, sem acento, sem stopword, sem número/medida, no singular simples. @return list<string> */
-    private function tokens(string $nome): array
+    public static function tokens(string $nome): array
     {
         $partes = preg_split('/[^a-z0-9]+/', Str::lower(Str::ascii($nome)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $tokens = [];

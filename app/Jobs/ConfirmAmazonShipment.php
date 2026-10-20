@@ -8,6 +8,7 @@ use App\Modules\Checkout\Support\OrderFulfillmentTimeline;
 use App\Modules\Marketplace\Drivers\AmazonDriver;
 use App\Modules\Marketplace\Models\ChannelShipment;
 use App\Modules\Marketplace\Support\CorreiosAutoShipping;
+use App\Services\Amazon\Exceptions\AmazonException;
 use App\Services\Correios\CorreiosPrePostagemService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -79,7 +80,22 @@ class ConfirmAmazonShipment implements ShouldQueue, ShouldBeUnique
 
         $servico = $prePostagem->service_code === CorreiosPrePostagemService::SERVICO_SEDEX ? 'SEDEX' : 'PAC';
 
-        $driver->confirmarEnvio($order, $prePostagem->codigo_objeto, $servico);
+        try {
+            $driver->confirmarEnvio($order, $prePostagem->codigo_objeto, $servico);
+        } catch (AmazonException $exception) {
+            // Envio já confirmado à mão no Seller Central: a Amazon recusa
+            // ("order already fulfilled") e a rotina de hora em hora
+            // repetiria a falha pra sempre. Visto em 16/10/2026 nos 9
+            // pedidos pendentes quando a SP-API foi conectada.
+            if (! $driver->jaEnviado($order)) {
+                throw $exception;
+            }
+
+            $prePostagem->update(['amazon_confirmado_em' => now()]);
+            $timeline->record($order, OrderFulfillmentEvent::STEP_HANDED_TO_CARRIER, OrderFulfillmentEvent::STATUS_SUCCESS, 'Pedido já estava como enviado na Amazon (confirmado no Seller Central).');
+
+            return;
+        }
 
         $prePostagem->update(['amazon_confirmado_em' => now()]);
 

@@ -201,7 +201,7 @@ class AmazonDriver extends AbstractMarketplaceDriver
      * prontos pra expedir, não "aguardando pagamento" como em outros
      * canais.
      */
-    private function mapOrderStatus(string $status): string
+    public static function mapOrderStatus(string $status): string
     {
         return match ($status) {
             'Unshipped', 'PartiallyShipped' => Order::STATUS_PAID,
@@ -805,6 +805,19 @@ class AmazonDriver extends AbstractMarketplaceDriver
                 'orderItems' => $itens,
             ],
         ]);
+    }
+
+    /**
+     * O pedido já está "Enviado" (ou entregue) na Amazon? Usado quando a
+     * confirmação de envio é recusada por já ter sido feita à mão.
+     */
+    public function jaEnviado(Order $order): bool
+    {
+        $this->ensureConfigured();
+
+        $status = $this->client->get("/orders/v0/orders/{$order->external_order_id}")['payload']['OrderStatus'] ?? null;
+
+        return in_array($status, ['Shipped', 'InvoiceUnconfirmed'], true);
     }
 
     protected function blingBuyerFallbackName(): string

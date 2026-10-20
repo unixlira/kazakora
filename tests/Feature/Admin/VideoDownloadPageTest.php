@@ -57,6 +57,10 @@ class VideoDownloadPageTest extends TestCase
     // "download" é o que vem com marca).
     public function test_tiktok_download_never_picks_the_watermarked_format(): void
     {
+        // Só monta o comando: qualquer executável serve no lugar do yt-dlp
+        // (o runner do GitHub não tem yt-dlp instalado).
+        config(['video-downloads.binary' => PHP_BINARY]);
+
         $command = (fn (string $url) => $this->downloadCommand($url, '/tmp/x'))
             ->call(app(VideoDownloadService::class), 'https://www.tiktok.com/@loja/video/123');
 

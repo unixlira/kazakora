@@ -35,6 +35,8 @@ class SquadMembro extends Model
         'copy' => ['rotulo' => 'Copy e UX', 'cor' => '#db2777'],
         'dev' => ['rotulo' => 'Dev', 'cor' => '#0d6efd'],
         'operacao' => ['rotulo' => 'Operação', 'cor' => '#059669'],
+        'atendimento' => ['rotulo' => 'Atendimento', 'cor' => '#16a34a'],
+        'criacao' => ['rotulo' => 'Criação', 'cor' => '#f59e0b'],
         'outra' => ['rotulo' => 'Outra', 'cor' => '#64748b'],
     ];
 

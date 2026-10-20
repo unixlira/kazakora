@@ -471,6 +471,11 @@ return [
         'tts_model' => env('GEMINI_TTS_MODEL', 'gemini-2.5-flash-preview-tts'),
         'tts_voice' => env('GEMINI_TTS_VOICE', 'Algenib'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 30),
+        // Imagens do anúncio (2026-10-19). Os modelos de imagem não têm cota
+        // no plano gratuito da API (429 "limit: 0" em 19/10): precisa do
+        // faturamento ligado no Google AI Studio.
+        'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-3.1-flash-image'),
+        'image_timeout' => (int) env('GEMINI_IMAGE_TIMEOUT', 55),
     ],
 
     // Pra quem manda o e-mail de fechamento quinzenal do Mercado Envios

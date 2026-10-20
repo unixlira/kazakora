@@ -191,6 +191,9 @@ class ProductController extends Controller
             'categories' => Category::query()->orderBy('name')->get(['id', 'name']),
             'fiscalData' => $product->fiscalData,
             'images' => $product->images,
+            'iaImages' => $product->iaImages()
+                ->where(fn ($query) => $query->where('status', '!=', 'aprovada')->orWhere('aprovada_em', '>=', now()->subDays(7)))
+                ->get(),
             'channels' => $this->drivers->channels(),
             'channelListings' => $product->channelListings,
             'stockMovements' => $product->stockMovements()->latest()->limit(10)->get(),

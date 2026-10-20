@@ -92,6 +92,11 @@ class SequenciaPsicologicaImagens
             ->all();
     }
 
+    public static function rotulo(string $etapa): string
+    {
+        return self::ROTULOS[$etapa] ?? $etapa;
+    }
+
     public function orientacao(string $etapa): string
     {
         return self::ORIENTACAO[$etapa] ?? '';

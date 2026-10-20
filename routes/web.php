@@ -51,6 +51,7 @@ use App\Modules\Admin\Http\Controllers\WhatsAppInboxController;
 use App\Modules\Admin\Http\Controllers\WhatsAppSettingsController;
 use App\Modules\Admin\Http\Controllers\ProductController;
 use App\Modules\Admin\Http\Controllers\ProductFiscalController;
+use App\Modules\Admin\Http\Controllers\ProductIaImageController;
 use App\Modules\Admin\Http\Controllers\ProductImageController;
 use App\Modules\Admin\Http\Controllers\ProductLogisticsController;
 use App\Modules\Admin\Http\Controllers\ProductQuantityDiscountController;
@@ -439,6 +440,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::put('produtos/{product}/fiscal', [ProductFiscalController::class, 'update'])->name('produtos.fiscal.atualizar');
     Route::post('produtos/{product}/conteudo-anuncio', [ProductController::class, 'regenerateAdContent'])->middleware('throttle:10,1')->name('produtos.conteudo-anuncio.gerar');
     Route::post('produtos/{product}/descricao-ia', [ProductController::class, 'descricaoPelasFotos'])->middleware('throttle:10,1')->name('produtos.descricao-ia');
+    Route::post('produtos/{product}/imagens-ia', [ProductIaImageController::class, 'planejar'])->middleware('throttle:10,1')->name('produtos.imagens-ia.planejar');
+    Route::post('produtos/{product}/imagens-ia/{imagem}/gerar', [ProductIaImageController::class, 'gerar'])->middleware('throttle:30,1')->name('produtos.imagens-ia.gerar');
+    Route::post('produtos/{product}/imagens-ia/{imagem}/aprovar', [ProductIaImageController::class, 'aprovar'])->name('produtos.imagens-ia.aprovar');
+    Route::delete('produtos/{product}/imagens-ia/{imagem}', [ProductIaImageController::class, 'descartar'])->name('produtos.imagens-ia.descartar');
     Route::put('produtos/{product}/logistica', [ProductLogisticsController::class, 'update'])->name('produtos.logistica.atualizar');
     Route::put('produtos/{product}/descontos-quantidade', [ProductQuantityDiscountController::class, 'update'])->name('produtos.descontos-quantidade.atualizar');
     Route::post('produtos/{product}/imagens', [ProductImageController::class, 'store'])->name('produtos.imagens.adicionar');

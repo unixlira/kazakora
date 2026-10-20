@@ -187,6 +187,8 @@ return [
         // cliente real. Produção precisa de CORREIOS_RASTREIO_WHATSAPP=true
         // no .env para continuar avisando. Ver docs/correios-rastro.md.
         'rastreio_whatsapp' => (bool) env('CORREIOS_RASTREIO_WHATSAPP', false),
+        // Segredo do webhook de rastreio (POST /api/correios/webhook). Vazio = webhook desligado.
+        'webhook_token' => env('CORREIOS_WEBHOOK_TOKEN'),
     ],
 
     // Ponte pro TikTok Shop via Bling (pedido explícito 2026-08-31 — integração

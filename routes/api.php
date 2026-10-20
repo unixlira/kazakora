@@ -206,6 +206,12 @@ Route::prefix('v1')->group(function () {
     require __DIR__.'/api_v1.php';
 });
 
+// Webhook de rastreio dos Correios (2026-10-19): entrega vira "Entregue" na
+// hora e vai para a linha do tempo do pedido. Bearer CORREIOS_WEBHOOK_TOKEN.
+Route::post('/correios/webhook', [\App\Http\Controllers\Api\CorreiosWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->name('api.correios.webhook');
+
 // Relatórios do TikTok para a auditoria financeira (app "KazaKora TikTok
 // Reports", 2026-10-11). Autenticação por Bearer TIKTOK_REPORTS_TOKEN.
 Route::post('/tiktok/reports/import', [TikTokReportsController::class, 'import'])

@@ -50,6 +50,10 @@ const FULFILLMENT_STEP_LABELS = {
     shipping_confirmed: 'Frete confirmado',
     label_generated: 'Etiqueta gerada',
     label_printed: 'Etiqueta impressa',
+    order_packed: 'Embalado',
+    ready_for_pickup: 'Pronto para coleta',
+    handed_to_carrier: 'Entregue ao entregador',
+    delivered: 'Entregue',
 };
 
 const formatPrice = (value) =>

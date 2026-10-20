@@ -43,7 +43,10 @@ contrato da KazaKora.
 - Objeto não encontrado vem dentro da lista com `mensagem` (ex.:
   `SRO-020: Objeto não encontrado...`) e sem eventos; a chamada continua 200.
 - O SRO do nosso contrato não traz o nome de quem recebeu (conferido em
-  17/10 e 19/10/2026).
+  17/10 e 19/10/2026). O campo existe no swagger (`recebedor{nome,
+  documento, celular, email, comentario}`); quando vier, vai para a linha do
+  tempo do pedido.
+- O SRO Rastro (swagger 3.8.2) não tem cadastro de webhook: só consulta.
 
 ## Códigos de evento usados
 
@@ -86,6 +89,29 @@ o cliente, chama os admins).
   **Produção precisa da variável `true` antes do deploy desta versão**, senão
   os avisos que já saem hoje param.
 
+## Entrega na linha do tempo do pedido e webhook (2026-10-19)
+
+- Toda entrega (BDE/BDI/BDR tipo 01) vira a etapa **Entregue** na linha do
+  tempo do pedido (`order_fulfillment_events`, step `delivered`), em
+  qualquer canal: data e hora, descrição, unidade, cidade/UF, quem recebeu
+  ("não informado pelos Correios" quando não vem), comentário do recebedor
+  (porteiro, vizinho) e documento mascarado (`***1234`). Celular, e-mail e
+  coordenadas não são gravados. Devolução ao remetente fica como falha, sem
+  concluir o pedido. Consulta e webhook da mesma entrega gravam uma linha só.
+- Pedido do site em `pago`/`enviado` entregue vira `concluído` (Entregue);
+  pedido de outro canal só ganha o histórico, o status continua com o canal.
+- Webhook: `POST https://kazakora.com/api/correios/webhook`, com
+  `Authorization: Bearer <CORREIOS_WEBHOOK_TOKEN>` (ou `X-Webhook-Token`, ou
+  `?token=`). Sem a variável no `.env`, recusa tudo (401). Aceita o formato
+  do próprio SRO: `{"objetos":[{"codObjeto":"...","eventos":[...]}]}`, um
+  objeto só, um evento só (`{"codObjeto":"...","evento":{...}}` ou com os
+  campos soltos) ou só o código (`{"codObjeto":"..."}`, a loja consulta o
+  SRO na hora). Objeto sem pedido responde 200 "ignorado". Mesmo caminho da
+  consulta agendada (`AtualizacaoPeloRastreio`): status, WhatsApp e histórico
+  iguais.
+
 Código: `app/Services/Correios/CorreiosRastroService.php` (chamada e leitura
 das etapas), `app/Modules/Marketplace/Support/RegistroDeRastreio.php`
-(histórico e situação), `app/Console/Commands/AcompanharRastreioLoja.php`.
+(histórico e situação), `app/Modules/Marketplace/Support/AtualizacaoPeloRastreio.php`
+(status, avisos e entrega no pedido), `app/Console/Commands/AcompanharRastreioLoja.php`,
+`app/Http/Controllers/Api/CorreiosWebhookController.php`.

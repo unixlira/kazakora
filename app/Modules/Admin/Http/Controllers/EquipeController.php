@@ -193,7 +193,7 @@ class EquipeController extends Controller
             'o_que_faz' => ['nullable', 'string', 'max:2000'],
             'skills' => ['nullable', 'array', 'max:30'],
             'skills.*.nome' => ['nullable', 'string', 'max:80'],
-            'skills.*.descricao' => ['nullable', 'string', 'max:200'],
+            'skills.*.descricao' => ['nullable', 'string', 'max:2000'],
             'responde_para_id' => ['nullable', 'integer', Rule::exists('squad_membros', 'id')->where('squad_id', $squad->id)],
             'precisa_ok' => ['nullable', 'array'],
             'precisa_ok.*' => [Rule::in(array_keys(SquadMembro::PRECISA_OK))],

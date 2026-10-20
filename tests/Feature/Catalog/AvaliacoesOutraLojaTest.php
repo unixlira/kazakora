@@ -170,7 +170,7 @@ class AvaliacoesOutraLojaTest extends TestCase
             'anuncio' => 'https://shopee.com.br/product/1224304136/18497998841',
             'id_avaliacao' => $id, 'autor' => 'comprador_'.$id, 'anonimo' => false,
             'nota' => $nota, 'texto' => "Texto {$id}", 'variacao' => null,
-            'data' => '2026-09-10 14:30', 'fotos' => [], 'videos' => [],
+            'data' => '2026-09-10 14:30', 'fotos' => ["https://img.exemplo.com/{$id}"], 'videos' => [],
         ], $extra);
     }
 
@@ -216,9 +216,39 @@ class AvaliacoesOutraLojaTest extends TestCase
         $this->assertSame('Comprador de outra loja', $reviews->firstWhere('external_id', 'mercado_livre:4')->reviewer_display_name);
     }
 
+    private function fakeMidia(): void
+    {
+        Storage::fake('public');
+        Http::fake([
+            'img.exemplo.com/*' => Http::response("\xFF\xD8\xFF\xE0fakejpeg", 200, ['Content-Type' => 'image/jpeg']),
+            'video.exemplo.com/*' => Http::response("\x00\x00\x00\x18ftypmp42", 200, ['Content-Type' => 'video/mp4']),
+            '*' => Http::response('', 404),
+        ]);
+    }
+
+    public function test_import_so_grava_com_foto_ou_video(): void
+    {
+        $this->fakeMidia();
+        $produto = Product::factory()->create(['is_active' => true]);
+
+        $arquivo = $this->arquivo([
+            $this->item('foto', 5),
+            $this->item('video', 1, ['fotos' => [], 'videos' => ['https://video.exemplo.com/v.mp4']]),
+            $this->item('sem', 5, ['fotos' => []]),
+            $this->item('so-stream', 4, ['fotos' => [], 'videos' => ['https://video.exemplo.com/stream/master.m3u8']]),
+            $this->item('falhou', 3, ['fotos' => ['https://quebrado.exemplo.com/x.jpg']]),
+        ], $produto->id);
+
+        $this->artisan('reviews:importar-outra-loja', ['arquivo' => $arquivo])->assertSuccessful();
+
+        $reviews = Review::query()->withCount('images')->get();
+        $this->assertEqualsCanonicalizing(['shopee:foto', 'shopee:video'], $reviews->pluck('external_id')->all());
+        $this->assertTrue($reviews->every(fn ($r) => $r->images_count > 0));
+    }
+
     public function test_import_com_produto_por_item_e_override(): void
     {
-        Http::fake();
+        $this->fakeMidia();
         $p177 = Product::factory()->create(['is_active' => true]);
         $p178 = Product::factory()->create(['is_active' => true, 'parent_product_id' => $p177->id]);
         $p999 = Product::factory()->create(['is_active' => true]);
@@ -243,7 +273,7 @@ class AvaliacoesOutraLojaTest extends TestCase
 
     public function test_limite_pega_as_mais_recentes_e_min_texto(): void
     {
-        Http::fake();
+        $this->fakeMidia();
         $produto = Product::factory()->create(['is_active' => true]);
         $arquivo = $this->arquivo([
             $this->item('a', 5, ['data' => '2026-01-01 10:00']),

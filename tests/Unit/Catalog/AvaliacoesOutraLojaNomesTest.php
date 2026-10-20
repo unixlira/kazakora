@@ -9,8 +9,11 @@ use Illuminate\Database\ConnectionResolver;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\MySqlConnection;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Mockery\Adapter\Phpunit\MockeryPHPUnitIntegration;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -49,6 +52,8 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
     protected function tearDown(): void
     {
         Facade::clearResolvedInstance('db');
+        Facade::clearResolvedInstance(HttpFactory::class);
+        Facade::clearResolvedInstance('filesystem');
         Facade::setFacadeApplication($this->appAnterior);
         if ($this->resolverAnterior) {
             Model::setConnectionResolver($this->resolverAnterior);
@@ -94,7 +99,19 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
 
             return [];
         });
-        $this->conexao->shouldReceive('insert')->once()->andReturnUsing(function (string $sql, array $bindings) use (&$gravados) {
+        // Só entra avaliação com mídia: a foto "baixa" de um Http falso e vai
+        // para um disco falso; o insert da review_images não interessa aqui.
+        Http::swap(new HttpFactory);
+        Http::fake(['img.exemplo.com/*' => Http::response("\xFF\xD8\xFF\xE0fakejpeg", 200, ['Content-Type' => 'image/jpeg'])]);
+        $disco = Mockery::mock();
+        $disco->shouldReceive('put')->once()->andReturnTrue();
+        $disco->shouldReceive('url')->andReturnUsing(fn ($caminho) => "https://kazakora.test/storage/{$caminho}");
+        Storage::swap($discos = Mockery::mock());
+        $discos->shouldReceive('disk')->with('public')->andReturn($disco);
+        $this->conexao->shouldReceive('insert')->twice()->andReturnUsing(function (string $sql, array $bindings) use (&$gravados) {
+            if (! str_contains($sql, 'into `reviews`')) {
+                return true;
+            }
             preg_match('/\((.*?)\) values/', $sql, $colunas);
             $gravados = array_combine(explode(', ', str_replace('`', '', $colunas[1])), $bindings);
 
@@ -111,6 +128,7 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
                 'avaliacoes' => [[
                     'origem' => 'outra_loja', 'canal' => 'shopee', 'id_avaliacao' => 'teste-ficticio',
                     'autor' => $autor, 'nota' => 1, 'texto' => 'Avaliação fictícia.',
+                    'fotos' => ['https://img.exemplo.com/ficticia.jpg'],
                 ]],
             ], JSON_THROW_ON_ERROR));
             $comando = new ImportarAvaliacoesOutraLoja;

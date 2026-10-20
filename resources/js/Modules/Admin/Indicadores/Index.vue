@@ -3,7 +3,8 @@
  * Indicadores em abas (2026-10-19). Quando /admin virou o Fluxo de Caixa,
  * tudo o que o Gerenciador mostrava veio para cá: "Visão geral" é o
  * Indicadores de antes; "Hoje e mês", "Cauê e Diego" e "Produtos" são os
- * blocos do Gerenciador. "Acessos ao site" saiu em 2026-10-19 (pedido do
+ * blocos do Gerenciador. "Sugestões do dia" (2026-10-20) é o board da rotina
+ * da madrugada. "Acessos ao site" saiu em 2026-10-19 (pedido do
  * Lira); visitantes seguem na Visão geral e no Log de visitas. A aba fica na URL
  * (?aba=) e o servidor calcula só a aba aberta (KpiController).
  */
@@ -12,6 +13,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import CaueDiego from './CaueDiego.vue';
 import HojeEMes from './HojeEMes.vue';
 import Produtos from './Produtos.vue';
+import Sugestoes from './Sugestoes.vue';
 import VisaoGeral from './VisaoGeral.vue';
 
 defineProps({
@@ -26,10 +28,13 @@ defineProps({
     hojeMes: { type: Object, default: null },
     diagnosticos: { type: Object, default: null },
     produtos: { type: Object, default: null },
+    // Sugestões do dia (2026-10-20)
+    sugestoes: { type: Object, default: null },
 });
 
 const ABAS = [
     { chave: 'visao-geral', rotulo: 'Visão geral', icone: 'fas fa-square-poll-vertical' },
+    { chave: 'sugestoes', rotulo: 'Sugestões do dia', icone: 'fas fa-lightbulb' },
     { chave: 'hoje-e-mes', rotulo: 'Hoje e mês', icone: 'fas fa-calendar-day' },
     { chave: 'caue-diego', rotulo: 'Cauê e Diego', icone: 'fas fa-list-check' },
     { chave: 'produtos', rotulo: 'Produtos', icone: 'fas fa-fire' },
@@ -54,6 +59,7 @@ const ABAS = [
         </nav>
 
         <VisaoGeral v-if="aba === 'visao-geral' && painel" :painel="painel" :paineis="paineis" :composicao="composicao" :serie="serie" :kpis="kpis" />
+        <Sugestoes v-else-if="aba === 'sugestoes'" :sugestoes="sugestoes ?? undefined" />
         <HojeEMes v-else-if="aba === 'hoje-e-mes' && hojeMes" :hoje-mes="hojeMes" />
         <CaueDiego v-else-if="aba === 'caue-diego'" :diagnosticos="diagnosticos ?? { shopee: null, mercado_livre: null }" />
         <Produtos v-else-if="aba === 'produtos' && produtos" :produtos="produtos" />

@@ -13,6 +13,7 @@ use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\DiagnosticoAcaoController;
+use App\Modules\Admin\Http\Controllers\SugestaoController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
@@ -593,6 +594,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
         Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
+        // Sugestões do dia (2026-10-20): marcar feita/ignorada; rodar de novo só admin.
+        Route::post('sugestoes/{sugestao}/status', [SugestaoController::class, 'status'])->name('sugestoes.status');
+        Route::post('sugestoes/rodar', [SugestaoController::class, 'rodar'])->middleware('admin')->name('sugestoes.rodar');
         // Radar (2026-10-12): uma tela só, no grupo Oportunidades do menu.
         // Submenu TikTok / Mercado Livre / Google (pedido do Lira 2026-10-12):
         // a mesma tela mostrando só o bloco daquela fonte.

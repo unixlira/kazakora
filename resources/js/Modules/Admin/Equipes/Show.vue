@@ -30,6 +30,32 @@ const STATUS = {
     desativado: { rotulo: 'Desativado', classe: 'bg-[var(--surface-muted)] text-[var(--texto-suave)]', icone: 'fas fa-circle-minus' },
 };
 
+// Leia-me do ícone de informação (texto do Jonathan, 2026-10-20).
+const LEIA_ME = [
+    { titulo: 'Cards', itens: [
+        ['Adicionar membro', 'abre o cadastro de um novo especialista.'],
+        ['Card', 'clique para abrir o painel. Mostra status, skills e instruções extras ligadas.'],
+        ['Membros desativados', 'lista recolhida no fim. Clique num membro para reativar.'],
+    ] },
+    { titulo: 'Painel', itens: [
+        ['Responde para', 'a quem ele presta conta, junto com o identificador do agente.'],
+        ['O que faz', 'descrição do trabalho dele.'],
+        ['Skills', 'o que ele sabe fazer. Só muda em Editar.'],
+        ['Precisa de OK do Lira', 'só registro. As regras de OK do Lira valem sempre, para todos.'],
+    ] },
+    { titulo: 'Instruções extras', itens: [
+        ['Instrução', 'regra que o agente segue em toda tarefa, a partir da próxima.'],
+        ['Ligada/Desligada', 'desligada fica guardada, mas o agente não segue.'],
+        ['Excluir', 'tira a instrução. Pede confirmação antes.'],
+        ['Adicionar instrução', 'cria uma regra nova para este membro.'],
+    ] },
+    { titulo: 'Rodapé', itens: [
+        ['Editar', 'nome, função, área, foto, skills e status.'],
+        ['Pausar/Retomar', 'pausado não recebe tarefa nova.'],
+        ['Desativar membro', 'tira da equipe, com confirmação. Dá para reativar depois.'],
+    ] },
+];
+
 const inicial = (nome) => (nome ?? '?').trim().charAt(0).toUpperCase();
 const dataBr = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' }) : '');
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
@@ -148,7 +174,24 @@ const flash = computed(() => usePage().props.flash?.success);
                 <p class="text-sm font-semibold text-[var(--texto-suave)]">Equipes</p>
                 <h1 class="text-2xl font-bold">{{ squad.nome }}</h1>
                 <p class="mt-0.5 max-w-[65ch] text-sm text-[var(--texto-suave)]">
-                    Os especialistas de IA que trabalham para o Homer. Clique num membro para ver o que ele faz e mudar as instruções extras dele.
+                    Os especialistas de IA que trabalham para o Lira. Clique num membro para ver o que ele faz e mudar as instruções extras dele.
+                    <!-- Leia-me da tela (texto do Jonathan): abre no hover e no foco do teclado -->
+                    <span class="group relative inline-block align-middle">
+                        <button type="button" class="ml-1 rounded-full text-[var(--texto-suave)] hover:text-[var(--color-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                            aria-label="Como usar esta tela" aria-describedby="leia-me-equipes">
+                            <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        </button>
+                        <span id="leia-me-equipes" role="tooltip"
+                            class="invisible absolute top-full left-1/2 z-40 mt-2 block max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 overflow-y-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-4 text-left text-xs leading-relaxed text-[var(--surface-foreground)] opacity-0 shadow-xl transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 motion-reduce:transition-none">
+                            <template v-for="bloco in LEIA_ME" :key="bloco.titulo">
+                                <strong class="mt-3 block text-sm first:mt-0">{{ bloco.titulo }}</strong>
+                                <span v-for="[rotulo, texto] in bloco.itens" :key="rotulo" class="mt-1 block text-[var(--texto-suave)]">
+                                    <strong class="text-[var(--surface-foreground)]">{{ rotulo }}:</strong> {{ texto }}
+                                </span>
+                            </template>
+                            <span class="mt-3 block border-t border-[var(--surface-border)] pt-2 font-semibold">Nada aqui é apagado de verdade.</span>
+                        </span>
+                    </span>
                 </p>
             </div>
             <Link v-if="naEquipe.length" :href="`${base}/membros/nova`"

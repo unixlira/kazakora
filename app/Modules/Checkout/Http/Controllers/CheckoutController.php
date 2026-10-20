@@ -496,7 +496,7 @@ class CheckoutController extends Controller
         $subtotal = round($cartItems->sum('subtotal'), 2);
         $email = $request->user()?->email ?? ($draft['guest']['email'] ?? null);
 
-        if ($motivo = $coupon->motivoInvalido($subtotal, $request->user(), $email, $draft['guest']['cpf'] ?? null)) {
+        if ($motivo = $coupon->motivoInvalido($subtotal, $request->user(), $email)) {
             return ['erro' => $motivo];
         }
         if ($subtotal > 0 && $this->subtotalParaCupom($cartItems) <= 0) {
@@ -541,7 +541,7 @@ class CheckoutController extends Controller
             return [null, 'Este cupom não existe mais.'];
         }
 
-        $motivo = $coupon->motivoInvalido($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null), $draft['guest']['cpf'] ?? null);
+        $motivo = $coupon->motivoInvalido($subtotal, $user, $user?->email ?? ($draft['guest']['email'] ?? null));
 
         return $motivo ? [null, $motivo] : [$coupon, null];
     }

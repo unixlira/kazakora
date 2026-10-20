@@ -226,22 +226,6 @@ class OrderPaymentFinalizer
             };
 
             try {
-                if ($payment->pixPendente()) {
-                    // Achado 19/10: Pix ainda aguardando ficava vivo no MP
-                    // depois de o admin ou o cliente cancelar o pedido; quem
-                    // pagasse nos minutos seguintes pagava um pedido que não
-                    // existia mais. Pergunta antes: já pago vira capturado e
-                    // cai no estorno abaixo; senão, cancela lá.
-                    if (($this->mercadoPago->retrievePayment($reference)['status'] ?? null) === 'approved') {
-                        $payment->update(['status' => Payment::STATUS_CAPTURED]);
-                    } else {
-                        $this->mercadoPago->cancelPayment($reference);
-                        $payment->update(['status' => Payment::STATUS_CANCELED]);
-
-                        continue;
-                    }
-                }
-
                 if ($payment->boletoPendente()) {
                     // Boleto ainda não pago: cancela no Mercado Pago para o
                     // cliente não pagar um pedido cancelado (2026-10-14).

@@ -22,10 +22,6 @@ const props = defineProps({
     variations: { type: Array, default: () => [] },
     galeria: { type: Array, default: null },
     reviews: { type: Array, default: () => [] },
-    // Avaliações do mesmo produto feitas em outra loja (pedido 2026-10-18):
-    // bloco próprio, com selo e média separada; não entram na nota da loja.
-    reviewsOutraLoja: { type: Array, default: () => [] },
-    outraLojaResumo: { type: Object, default: () => ({ total: 0, media: null, selo: 'Avaliação feita em outra loja' }) },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
     canReview: { type: Boolean, default: false },
@@ -284,14 +280,6 @@ const descriptionSections = computed(() => {
         .filter((item) => item.heading || item.parts.length);
 });
 
-// Selos abaixo do nome (padrão de todo produto desde 2026-10-19): empresa com
-// CNPJ e RA Verificada, e pagamento pelo checkout da loja.
-const SELOS_VERIFICADOS = [
-    ['Loja verificada', 'Empresa com CNPJ ativo e selo RA Verificada no Reclame Aqui'],
-    ['Compra segura', 'Pagamento processado com segurança; não guardamos dados do cartão'],
-    ['Nota fiscal', 'Toda compra sai com nota fiscal eletrônica (NF-e)'],
-];
-
 // Destaques do box de compra: os 3 primeiros itens da primeira lista da
 // própria descrição (nada inventado à parte).
 // Conteúdo do anúncio gerado (Gemini ou regra automática) — pedido
@@ -299,21 +287,6 @@ const SELOS_VERIFICADOS = [
 const anuncio = computed(() => props.product.ad_content ?? null);
 const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
 const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.media_url ?? props.product.images?.[indice]?.url ?? null);
-// Os cartões de benefícios ("Por que você precisa", "Por que você vai amar"...) entram no meio da sequência, entre a 2ª e a 3ª foto
-// (pedido 2026-10-20, Lanterna LED); com menos de 2 fotos, no fim dos blocos.
-const ICONES_BENEFICIO = ['fa-bolt', 'fa-hand-sparkles', 'fa-shield-heart', 'fa-clock', 'fa-star', 'fa-thumbs-up'];
-const blocoAntesDosBeneficios = computed(() => {
-    const comFoto = blocosAnuncio.value.flatMap((bloco, index) => (imagemDoBloco(bloco.imagem) ? [index] : []));
-    return comFoto.length >= 2 ? comFoto[1] : blocosAnuncio.value.length - 1;
-});
-// "Veja na prática": midia é o índice de uma foto do produto ou um caminho em storage.
-const praticaAnuncio = computed(() => (anuncio.value?.pratica ?? [])
-    .map((item) => ({
-        ...item,
-        url: typeof item.midia === 'number' ? imagemDoBloco(item.midia) : (/^(https?:)?\//.test(item.midia ?? '') ? item.midia : (item.midia ? `/storage/${item.midia}` : null)),
-    }))
-    .filter((item) => item.url));
-const ehVideo = (url) => /\.(mp4|webm)(\?|$)/i.test(url);
 
 const highlights = computed(() => {
     if (anuncio.value?.destaques?.length) return anuncio.value.destaques.slice(0, 3);
@@ -332,6 +305,7 @@ const specs = computed(() => {
     if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
     if (props.product.category) list.push(['Categoria', props.product.category.name]);
     if (selecionada.value.sku) list.push(['SKU', selecionada.value.sku]);
+    list.push(['Estoque disponível', `${selecionada.value.stock} unidade${selecionada.value.stock === 1 ? '' : 's'}`]);
     return list;
 });
 
@@ -404,15 +378,7 @@ const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
     return { star, count, percent: props.reviews.length ? Math.round((count / props.reviews.length) * 100) : 0 };
 }));
 
-// Resumo da coluna da direita: média com 1 casa, estrelas preenchidas em % da
-// média (4,8 = 96%) e quantas avaliações deram 4 ou 5 estrelas.
-const ratingAvgTexto = computed(() => ratingAvg.value.toFixed(1).replace('.', ','));
-const ratingPercent = computed(() => Math.min(100, Math.max(0, (ratingAvg.value / 5) * 100)));
-const positivasPercent = computed(() => (props.reviews.length
-    ? Math.round((props.reviews.filter((review) => Number(review.rating) >= 4).length / props.reviews.length) * 100)
-    : 0));
-
-const showReviews = computed(() => props.reviews.length > 0 || props.reviewsOutraLoja.length > 0 || (props.canReview && !props.hasReviewed));
+const showReviews = computed(() => props.reviews.length > 0 || (props.canReview && !props.hasReviewed));
 
 // Lista de avaliações (pedido 2026-10-11): já vem ordenada do servidor (mais
 // estrelas primeiro, com foto antes). Mostra 20 no computador e 6 no celular;
@@ -422,13 +388,6 @@ const avaliacoesVisiveis = ref(ehCelular ? 6 : 20);
 const reviewsNaTela = computed(() => props.reviews.slice(0, avaliacoesVisiveis.value));
 const avaliacoesRestantes = computed(() => Math.max(0, props.reviews.length - avaliacoesVisiveis.value));
 const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
-
-// Outras lojas: mesma paginação, contada à parte (começa com menos na tela
-// para as da KazaKora continuarem em destaque).
-const outraLojaVisiveis = ref(ehCelular ? 4 : 8);
-const outraLojaNaTela = computed(() => props.reviewsOutraLoja.slice(0, outraLojaVisiveis.value));
-const outraLojaRestantes = computed(() => Math.max(0, props.reviewsOutraLoja.length - outraLojaVisiveis.value));
-const carregarMaisOutraLoja = () => { outraLojaVisiveis.value += 12; };
 
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
 const fotoAberta = ref(null);
@@ -449,12 +408,6 @@ onMounted(() => window.addEventListener('keydown', teclaFoto));
 onUnmounted(() => window.removeEventListener('keydown', teclaFoto));
 const showReviewModal = ref(false);
 const reviewForm = useForm({ rating: 5, comment: '' });
-// Link "Avaliar" do e-mail pós-compra (/avaliar/{slug} → ?avaliar=1): já abre a janela.
-onMounted(() => {
-    if (new URLSearchParams(window.location.search).get('avaliar') === '1' && props.canReview && !props.hasReviewed) {
-        showReviewModal.value = true;
-    }
-});
 const submitReview = () => {
     reviewForm.post(`/produtos/${props.product.id}/avaliacoes`, {
         preserveScroll: true,
@@ -472,7 +425,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     <Head :title="product.name">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@800&family=Poppins:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     </Head>
 
     <AppLayout>
@@ -540,17 +493,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <i :class="ehFavorito(product.id) ? 'fas fa-check' : 'far fa-heart'"></i>
                                 </button>
                             </div>
-
-                            <!-- Selos de confiança abaixo do nome, em todo produto (padrão desde
-                                 2026-10-19, como no FerraKora): só fatos de toda compra na loja. -->
-                            <ul class="selos-verificados" aria-label="Selos de verificação">
-                                <li v-for="[rotulo, dica] in SELOS_VERIFICADOS" :key="rotulo" :title="dica">
-                                    <svg class="icone" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M12 2l2.4 1.8 3-.1.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.1L12 22l-2.4-1.8-3 .1-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .1zM8.5 12l2.5 2.5 4.5-5" />
-                                    </svg>
-                                    {{ rotulo }}
-                                </li>
-                            </ul>
 
                             <!-- Estrelas e vendidos em destaque (pedido 2026-10-10: saem do card e
                                  ficam aqui). Vendidos no formato do Mercado Livre: +5, +10, +50, +100... -->
@@ -665,93 +607,29 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     <span><b>Empresa 100% legal</b><br>CNPJ: {{ COMPANY.cnpj }}<br>Vendido e enviado por {{ COMPANY.nomeFantasia }}, de São Paulo/SP.</span>
                                 </li>
                             </ul>
-
-                            <!-- Média das avaliações abaixo dos selos (pedido 2026-10-20): nota, estrelas
-                                 preenchidas na proporção da média e % de notas 4 ou 5. Só as da
-                                 KazaKora, como a nota do topo (as de outra loja ficam fora). -->
-                            <a v-if="reviewsCount > 0" href="#avaliacoes" class="resumo-nota" :aria-label="`Nota ${ratingAvgTexto} de 5 em ${reviewsCount} avaliações`">
-                                <strong class="valor">{{ ratingAvgTexto }}</strong>
-                                <span class="lado">
-                                    <span class="estrelas-parciais" aria-hidden="true">
-                                        <span class="vazias"><i v-for="n in 5" :key="n" class="fas fa-star"></i></span>
-                                        <span class="cheias" :style="{ width: `${ratingPercent}%` }"><i v-for="n in 5" :key="n" class="fas fa-star"></i></span>
-                                    </span>
-                                    <span class="legenda"><b>{{ positivasPercent }}%</b> das avaliações com 4 ou 5 estrelas · {{ reviewsCount }} {{ reviewsCount === 1 ? 'avaliação' : 'avaliações' }}</span>
-                                </span>
-                            </a>
                         </aside>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
-                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card" :class="{ 'com-topo-preto': blocosAnuncio.length && anuncio?.chamada }">
-                            <!-- Teste de contraste (pedido 2026-10-20, Lanterna LED): o cabeçalho preto do #698
-                                 no lugar do cabeçalho branco, de ponta a ponta no topo do cartão. -->
-                            <header v-if="blocosAnuncio.length && anuncio?.chamada" class="topo-oferta">
-                                <p class="topo-eyebrow"><span class="topo-icone"><i class="fas fa-wand-magic-sparkles"></i></span> Por que esse produto merece atenção?</p>
-                                <h2>{{ anuncio.chamada }}</h2>
-                                <p class="topo-sub">{{ product.name }}</p>
-                                <ul v-if="anuncio.destaques?.length" class="topo-pilulas">
-                                    <li v-for="(item, index) in anuncio.destaques.slice(0, 3)" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
-                                </ul>
-                            </header>
-                            <header v-else class="desc-cabecalho">
+                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
+                            <header class="desc-cabecalho">
                                 <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
                                 <p class="desc-eyebrow">Por que esse produto merece atenção?</p>
-                                <!-- A chamada do anúncio fecha a página, antes do comparativo (pedido 2026-10-20). -->
-                                <h2 v-if="!blocosAnuncio.length || !anuncio?.chamada">Descrição</h2>
+                                <h2>{{ anuncio?.chamada || 'Descrição' }}</h2>
                             </header>
 
                             <div v-if="blocosAnuncio.length" class="descricao">
                                 <!-- Foto pequena ao lado do texto, alternando o lado a cada bloco, na
                                      estrutura da página do FerraKora (pedido 2026-10-19). -->
-                                <template v-for="(bloco, index) in blocosAnuncio" :key="index">
-                                    <article class="bloco-anuncio"
-                                        :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
-                                        <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
-                                        <div>
-                                            <h3>{{ bloco.titulo }}</h3>
-                                            <p>{{ bloco.texto }}</p>
-                                        </div>
-                                    </article>
-
-                                    <div v-if="index === blocoAntesDosBeneficios && anuncio.beneficios?.length" class="bloco-anuncio">
-                                        <!-- Título pelo tipo de cliente, vem do backend (PerfilDoCliente, pedido 2026-10-20). -->
-                                        <p class="rotulo-amar">{{ anuncio.titulo_beneficios || 'Por que vale a pena' }}</p>
-                                        <div class="grade-beneficios">
-                                            <div v-for="(item, itemIndex) in anuncio.beneficios" :key="itemIndex" class="beneficio-card">
-                                                <span class="beneficio-icone"><i class="fas" :class="ICONES_BENEFICIO[itemIndex % ICONES_BENEFICIO.length]"></i></span>
-                                                <h3>{{ item[0] }}</h3>
-                                                <p v-if="item[1]">{{ item[1] }}</p>
-                                            </div>
-                                        </div>
+                                <article v-for="(bloco, index) in blocosAnuncio" :key="index" class="bloco-anuncio"
+                                    :class="{ 'com-foto': imagemDoBloco(bloco.imagem), 'foto-direita': index % 2 === 1 }">
+                                    <img v-if="imagemDoBloco(bloco.imagem)" class="foto-desc" :src="imagemDoBloco(bloco.imagem)" :alt="bloco.titulo" loading="lazy">
+                                    <div>
+                                        <h3>{{ bloco.titulo }}</h3>
+                                        <p>{{ bloco.texto }}</p>
                                     </div>
-                                </template>
-
-                                <div v-if="anuncio.chamada" class="bloco-anuncio chamada-final">
-                                    <p class="chamada-frase">{{ anuncio.chamada }}</p>
-                                    <!-- Frase de fechamento na caixa do "Veja na prática", no lugar do COMPRAR
-                                         (pedido 2026-10-20, Lanterna LED). -->
-                                    <div v-if="anuncio.fechamento" class="fechamento-final">
-                                        <h3>{{ anuncio.fechamento }}</h3>
-                                    </div>
-                                </div>
-
-                                <!-- Veja na prática: o produto em uso em cartões (gif, webp ou vídeo) no lugar
-                                     do selo "Compre com tranquilidade" (pedido 2026-10-20, Lanterna LED). -->
-                                <div v-if="praticaAnuncio.length" class="bloco-anuncio">
-                                    <p class="rotulo-amar">Veja na prática</p>
-                                    <div class="grade-pratica">
-                                        <article v-for="(item, index) in praticaAnuncio" :key="index" class="pratica-card">
-                                            <video v-if="ehVideo(item.url)" :src="item.url" autoplay muted loop playsinline preload="metadata"></video>
-                                            <img v-else :src="item.url" :alt="item.titulo" loading="lazy">
-                                            <div>
-                                                <h3>{{ item.titulo }}</h3>
-                                                <p>{{ item.texto }}</p>
-                                            </div>
-                                        </article>
-                                    </div>
-                                </div>
+                                </article>
 
                                 <div v-if="anuncio.comparativo?.linhas?.length" class="bloco-anuncio">
                                     <h3>{{ anuncio.comparativo.titulo }}</h3>
@@ -768,6 +646,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
+
+                                <div v-if="anuncio.beneficios?.length" class="bloco-anuncio">
+                                    <h3>Benefícios que fazem diferença na rotina</h3>
+                                    <ul class="beneficios">
+                                        <li v-for="(item, index) in anuncio.beneficios" :key="index">
+                                            <i class="fas fa-circle-check"></i>
+                                            <span><strong>{{ item[0] }}</strong><template v-if="item[1]">: {{ item[1] }}</template></span>
+                                        </li>
+                                    </ul>
                                 </div>
 
                                 <div v-if="anuncio.duvidas?.length" class="bloco-anuncio">
@@ -858,8 +746,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div v-if="review.images?.length" class="fotos-avaliacao">
                                 <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
                                     :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                    <video v-if="image.media_type === 'video'" :src="image.image_url" muted playsinline preload="metadata"></video>
-                                    <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
+                                    <img :src="image.image_url" alt="" loading="lazy" decoding="async">
                                 </button>
                             </div>
                         </div>
@@ -869,40 +756,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             Carregar mais avaliações <span>({{ avaliacoesRestantes }} restantes)</span>
                         </button>
                     </div>
-                    <p v-else-if="!reviews.length" class="sem-margem">Este produto ainda não recebeu avaliações na KazaKora.<template v-if="canReview && !hasReviewed"> Seja o primeiro a avaliar.</template></p>
-
-                    <!-- Avaliações feitas em outra loja: separadas, com selo em cada uma. -->
-                    <div v-if="reviewsOutraLoja.length" class="aval-outras" data-teste="avaliacoes-outra-loja">
-                        <h3>Avaliações deste produto em outras lojas</h3>
-                        <p class="aval-outras-resumo">
-                            <span class="estrelas" aria-hidden="true"><i v-for="n in 5" :key="n" :class="n <= stars(Number(outraLojaResumo.media ?? 0)) ? 'fas fa-star' : 'far fa-star'"></i></span>
-                            <strong>{{ Number(outraLojaResumo.media ?? 0).toFixed(1).replace('.', ',') }} de 5</strong>
-                            em {{ outraLojaResumo.total }} avaliaç{{ outraLojaResumo.total === 1 ? 'ão' : 'ões' }} de compradores deste mesmo produto em outras lojas. Não entram na nota da KazaKora.
-                        </p>
-                        <div class="aval-grade">
-                            <div v-for="review in outraLojaNaTela" :key="review.id" class="aval-item">
-                                <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}</div>
-                                <span class="selo-outra-loja"><i class="fas fa-store" aria-hidden="true"></i> {{ outraLojaResumo.selo }}</span>
-                                <div class="nota-data">
-                                    <span class="estrelas" :aria-label="`Nota ${review.rating} de 5`"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
-                                    <small>{{ formatDate(review.created_at) }}</small>
-                                </div>
-                                <p v-if="review.comment">{{ review.comment }}</p>
-                                <div v-if="review.images?.length" class="fotos-avaliacao">
-                                    <button v-for="(image, indice) in review.images" :key="image.id" type="button" class="foto-btn"
-                                        :aria-label="`Ver foto ${indice + 1} da avaliação`" @click="abrirFoto(review.images, indice)">
-                                        <video v-if="image.media_type === 'video'" :src="image.image_url" muted playsinline preload="metadata"></video>
-                                        <img v-else :src="image.image_url" alt="" loading="lazy" decoding="async">
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div v-if="outraLojaRestantes > 0" class="aval-mais">
-                            <button type="button" class="btn-sec" @click="carregarMaisOutraLoja">
-                                Ver mais avaliações de outras lojas <span>({{ outraLojaRestantes }} restantes)</span>
-                            </button>
-                        </div>
-                    </div>
+                    <p v-else class="sem-margem">Este produto ainda não recebeu avaliações. Seja o primeiro a avaliar.</p>
                 </section>
 
                 <!-- Foto da avaliação ampliada -->
@@ -910,8 +764,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div v-if="fotoAberta" class="aval-lightbox" role="dialog" aria-modal="true" aria-label="Foto da avaliação" @click.self="fecharFoto">
                         <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
-                        <video v-if="fotoAberta.imagens[fotoAberta.indice].media_type === 'video'" :key="fotoAberta.indice" :src="fotoAberta.imagens[fotoAberta.indice].image_url" controls autoplay playsinline></video>
-                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
+                        <img :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
                         <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
                     </div>
@@ -1060,13 +913,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .nota .separador { color: var(--line); }
 .pd2 .nota .media { font-size: 15px; }
 .pd2 .estrelas { color: var(--star); font-size: 15px; letter-spacing: 1px; white-space: nowrap; }
-/* Selos de verificação abaixo do nome (padrão desde 2026-10-19): Poppins Black,
-   check azul e texto sem fundo próprio; branco no tema escuro, cor do título no claro
-   (o box é branco e o texto branco sumiria). */
-.pd2 .selos-verificados { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 10px 0 0; padding: 0; font-size: 13px; font-weight: 900; color: var(--ink); }
-.dark .pd2 .selos-verificados { color: #fff; }
-.pd2 .selos-verificados li { display: inline-flex; align-items: center; gap: 5px; }
-.pd2 .selos-verificados .icone { width: 18px; height: 18px; fill: #1d9bf0; stroke: #fff; }
 .pd2 .checks { list-style: none; margin: 14px 0 0; padding: 0; font-size: 16px; color: var(--text); }
 /* Check sempre verde (o emoji ✔️ mudava de cor conforme o aparelho) — pedido 2026-10-10. */
 .pd2 .checks li i { color: #00a650; margin-right: 6px; font-size: 1.1em; -webkit-text-stroke: 0.8px #00a650; }
@@ -1136,15 +982,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .fretefundo .selo-icone i { margin: 0; color: #00a650; }
 .pd2 .fretefundo .selo-full i { font-size: 0.9em; margin: 0 1px 0 0; color: inherit; text-align: left; }
 .pd2 .fretefundo a { color: var(--blue); text-decoration: underline; }
-.pd2 .resumo-nota { display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 14px 15px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); text-decoration: none; color: var(--text); }
-.pd2 .resumo-nota .valor { font-size: 40px; line-height: 1; font-weight: 700; color: var(--ink); }
-.pd2 .resumo-nota .lado { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.pd2 .resumo-nota .legenda { font-size: 14px; line-height: 20px; }
-.pd2 .resumo-nota .legenda b { color: var(--blue); }
-.pd2 .estrelas-parciais { position: relative; display: inline-block; font-size: 20px; letter-spacing: 2px; line-height: 1; white-space: nowrap; }
-.pd2 .estrelas-parciais .vazias { color: #d4d4d4; }
-.dark .pd2 .estrelas-parciais .vazias { color: var(--line); }
-.pd2 .estrelas-parciais .cheias { position: absolute; inset: 0 auto 0 0; overflow: hidden; color: var(--star); }
 
 .pd2 .prazo-cep { margin: 0 0 14px; }
 .pd2 .prazo-cep label { display: block; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 6px; }
@@ -1171,16 +1008,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: #f59a62; color: #fff; }
 .pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 13px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; color: #f1691b; }
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
-/* Cabeçalho preto no topo da descrição (pedido 2026-10-20): laranja do logo (#F1691B) e preto. */
-.pd2 .descricao-card.com-topo-preto { padding-top: 0; }
-.pd2 .topo-oferta { position: relative; overflow: hidden; margin: 0 -20px 26px; padding: 30px 34px 28px; background: linear-gradient(135deg, #1d1d1d 0%, #111 70%, #2a1a10 100%); color: #fff; }
-.pd2 .topo-oferta::after { content: ''; position: absolute; top: -70px; right: -50px; width: 190px; height: 190px; border-radius: 50%; background: rgba(255, 255, 255, .08); pointer-events: none; }
-.pd2 .topo-eyebrow { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #f1691b; }
-.pd2 .topo-icone { display: inline-flex; flex: none; width: 34px; height: 34px; border-radius: 50%; align-items: center; justify-content: center; font-size: 14px; background: #f59a62; color: #fff; }
-.pd2 .topo-oferta h2 { position: relative; max-width: 760px; margin: 0; font-size: 34px; font-weight: 700; line-height: 1.22; color: #fff; }
-.pd2 .topo-sub { margin: 12px 0 0; font-size: 15px; color: #d4d4d4; }
-.pd2 .topo-pilulas { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
-.pd2 .topo-pilulas li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #fff; color: #f1691b; font-size: 14px; font-weight: 600; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }
 .pd2 .bloco-anuncio p { font-size: 16px; line-height: 1.7; }
@@ -1198,25 +1025,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .comparativo .bom { color: #16803c; font-weight: 700; }
 .dark .pd2 .comparativo .ruim { color: #f87171; }
 .dark .pd2 .comparativo .bom { color: #4ade80; }
-.pd2 .rotulo-amar { margin: 0 0 16px; font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #f1691b; }
-.pd2 .grade-beneficios { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.pd2 .beneficio-card { padding: 18px 18px 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
-.pd2 .beneficio-icone { display: inline-flex; width: 40px; height: 40px; border-radius: 10px; align-items: center; justify-content: center; margin-bottom: 12px; background: #fff3ec; color: #f1691b; font-size: 17px; }
-.dark .pd2 .beneficio-icone { background: rgba(241, 105, 27, .16); }
-.pd2 .bloco-anuncio .beneficio-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
-.pd2 .bloco-anuncio .beneficio-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
-.pd2 .chamada-final { text-align: center; }
-.pd2 .bloco-anuncio .chamada-frase { max-width: 640px; margin: 0 auto 18px; font-size: 26px; font-weight: 700; line-height: 1.3; color: var(--ink); }
-.pd2 .bloco-anuncio .chamada-frase:last-child { margin-bottom: 0; }
-.pd2 .grade-pratica { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.pd2 .pratica-card { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
-.pd2 .pratica-card img, .pd2 .pratica-card video { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: #111; }
-.pd2 .pratica-card > div { padding: 14px 16px 18px; }
-.pd2 .bloco-anuncio .pratica-card h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--ink); }
-.pd2 .bloco-anuncio .pratica-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
-.pd2 .fechamento-final { max-width: 640px; margin: 0 auto; padding: 20px 22px; border-left: 4px solid #f1691b; border-radius: 4px 16px 16px 4px; background: #fff3ec; text-align: left; }
-.dark .pd2 .fechamento-final { background: rgba(241, 105, 27, .12); }
-.pd2 .bloco-anuncio .fechamento-final h3 { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+.pd2 .beneficios { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pd2 .beneficios li { display: flex; gap: 10px; align-items: flex-start; }
+.pd2 .beneficios i { color: #10b981; margin-top: 4px; }
+.pd2 .beneficios strong { color: var(--ink); }
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }
@@ -1263,22 +1075,14 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .aval-item .nota-data { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .pd2 .fotos-avaliacao { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.pd2 .fotos-avaliacao img, .pd2 .fotos-avaliacao video { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; }
+.pd2 .fotos-avaliacao img { width: 60px; height: 60px; border-radius: 6px; object-fit: cover; }
 .pd2 .foto-btn { padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
 .pd2 .aval-mais { margin-top: 18px; text-align: center; }
 .pd2 .aval-mais .btn-sec { display: inline-flex; width: auto; min-width: 260px; padding: 0 22px; }
 .pd2 .aval-mais span { opacity: .7; font-weight: 400; }
 @media (max-width: 767px) { .pd2 .aval-mais .btn-sec { width: 100%; min-width: 0; } }
-/* avaliações de outra loja (pedido 2026-10-18): bloco à parte e selo legível */
-.pd2 .aval-outras { margin-top: 34px; padding-top: 24px; border-top: 1px solid rgba(0, 0, 0, .1); }
-.dark .pd2 .aval-outras { border-top-color: var(--line); }
-.pd2 .aval-outras h3 { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
-.pd2 .aval-outras-resumo { margin: 0 0 18px; font-size: 14px; color: var(--text); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-.pd2 .selo-outra-loja { display: inline-flex; align-items: center; gap: 5px; margin: 4px 0 2px; padding: 2px 8px; border-radius: 999px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #1e293b; font-size: 12px; font-weight: 600; line-height: 1.5; }
-.pd2 .selo-outra-loja i { font-size: 10px; }
-.dark .pd2 .selo-outra-loja { border-color: #475569; background: #1e293b; color: #f1f5f9; }
 .aval-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); padding: 48px 12px; }
-.aval-lightbox img, .aval-lightbox video { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
+.aval-lightbox img { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
 .aval-lightbox button { position: absolute; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; cursor: pointer; }
 .aval-lightbox button:hover { background: rgba(255,255,255,.28); }
 .aval-lightbox .lb-fechar { top: 14px; right: 14px; }
@@ -1308,7 +1112,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 @media (max-width: 1024px) {
     .pd2 .card { padding: 30px; }
-    .pd2 .topo-oferta { margin: 0 -30px 26px; }
     .pd2 .galeria-card { padding: 10px; }
     .pd2 .confianca { grid-template-columns: repeat(2, 1fr); }
     .pd2 .aval-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1330,13 +1133,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .card { padding: 20px; }
     .pd2 h2 { font-size: 24px; }
     .pd2 .desc-cabecalho h2 { font-size: 22px; }
-    .pd2 .topo-oferta { margin: 0 -20px 22px; padding: 22px 18px 20px; }
-    .pd2 .topo-oferta h2 { font-size: 24px; }
-    .pd2 .topo-pilulas li { font-size: 13px; padding: 5px 12px; }
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
-    .pd2 .grade-beneficios { grid-template-columns: 1fr; }
-    .pd2 .bloco-anuncio .chamada-frase { font-size: 21px; }
-    .pd2 .grade-pratica { grid-template-columns: 1fr; }
     .pd2 .com-foto, .pd2 .com-foto.foto-direita { grid-template-columns: 1fr; gap: 14px; }
     .pd2 .com-foto.foto-direita .foto-desc { order: 0; }
     .pd2 .foto-desc { max-width: 320px; margin: 0 auto; }

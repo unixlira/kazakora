@@ -38,8 +38,6 @@ defineProps({
                         <div class="osso h-3.5 w-4/5"></div>
                         <div class="osso hidden h-3.5 w-3/5 md:block"></div>
                     </div>
-                    <!-- Estrelas e nota média -->
-                    <div class="osso h-3 w-24"></div>
                     <!-- Selo Envio Express (centralizado) -->
                     <div class="osso mx-auto h-6 w-28 rounded-full"></div>
                     <!-- Preço (+ "Detalhes" no computador), frete e "Ver detalhes" no celular -->

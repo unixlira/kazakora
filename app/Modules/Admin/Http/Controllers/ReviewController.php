@@ -26,7 +26,7 @@ class ReviewController extends Controller
             ->withCount('images')
             ->latest()
             ->get()
-            ->makeVisible(['channel', 'external_id', 'origem_loja']);
+            ->makeVisible(['channel', 'external_id']);
 
         return Inertia::render('Admin/Reviews/Index', [
             'reviews' => $reviews,
@@ -36,7 +36,7 @@ class ReviewController extends Controller
     public function show(Review $review): Response
     {
         $review->load(['product:id,name,slug', 'user:id,name', 'images']);
-        $review->makeVisible(['channel', 'external_id', 'origem_loja']);
+        $review->makeVisible(['channel', 'external_id']);
 
         return Inertia::render('Admin/Reviews/Show', [
             'review' => $review,
@@ -46,7 +46,7 @@ class ReviewController extends Controller
     public function edit(Review $review): Response
     {
         $review->load(['product:id,name,slug', 'user:id,name', 'images']);
-        $review->makeVisible(['channel', 'external_id', 'origem_loja']);
+        $review->makeVisible(['channel', 'external_id']);
 
         return Inertia::render('Admin/Reviews/Edit', [
             'review' => $review,

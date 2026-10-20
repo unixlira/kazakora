@@ -4,7 +4,6 @@ namespace App\Modules\WhatsApp\Jobs;
 
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
-use App\Modules\Fiscal\Models\Invoice;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Services\WhatsAppOutbox;
 use App\Modules\WhatsApp\Support\WhatsAppPhone;
@@ -65,8 +64,6 @@ class ResponderConfirmacaoPedido implements ShouldQueue
         if (! $order || ! WhatsAppPhone::mesmoNumero($conversation->wa_id, [$order?->shipping_whatsapp, $order?->shipping_phone, $order?->user?->phone])) {
             Log::warning('whatsapp_confirmacao_pedido_numero_diferente', ['conversation_id' => $conversation->id, 'order_id' => $orderId]);
 
-            ReplyWithManuela::passarAdiante($conversation);
-
             return;
         }
 
@@ -88,15 +85,7 @@ class ResponderConfirmacaoPedido implements ShouldQueue
             return;
         }
 
-        // Achado real 19/10, #3274: o "Corrigir" chegou depois da nota e da
-        // etiqueta (o toque anterior foi perdido pelo nono dígito); prometer
-        // "antes do faturamento" seria mentira.
-        $order->loadMissing('invoice', 'channelShipment', 'latestCorreiosPrePostagem');
-        $jaSaiu = $order->invoice?->status === Invoice::STATUS_AUTHORIZED || filled($order->trackingCode());
-        $texto = $jaSaiu
-            ? "Claro{$saudacao}! A nota e a etiqueta do pedido #{$order->numero} já foram geradas, mas me conta aqui o que precisa corrigir (nome, e-mail ou endereço) que o nosso time verifica na hora o que ainda dá para ajustar."
-            : "Claro{$saudacao}! Me conta aqui o que precisa corrigir no pedido #{$order->numero} (nome, e-mail ou endereço) que o nosso time ajusta antes do faturamento e do envio.";
-        $outbox->sendText($conversation, $texto, 'manuela', null, ['confirmacao_pedido' => 'corrigir', 'order_id' => $order->id]);
+        $outbox->sendText($conversation, "Claro{$saudacao}! Me conta aqui o que precisa corrigir no pedido #{$order->numero} (nome, e-mail ou endereço) que o nosso time ajusta antes do faturamento e do envio.", 'manuela', null, ['confirmacao_pedido' => 'corrigir', 'order_id' => $order->id]);
         $conversation->update(['needs_human' => true, 'status' => 'needs_human']);
 
         $admins = User::query()->where('role', User::ROLE_ADMIN)->get();

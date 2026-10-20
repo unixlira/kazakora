@@ -23,7 +23,7 @@ const submit = () => {
 <template>
     <Head title="Criar conta" />
 
-    <AuthLayout modo="cadastro">
+    <AuthLayout>
         <!-- E-mail já cadastrado (pedido 2026-10-12): alerta vermelho no topo. -->
         <div v-if="form.errors.email?.includes('em uso')" role="alert" class="mb-4 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             <i class="fa-solid fa-circle-exclamation mt-0.5"></i>

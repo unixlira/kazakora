@@ -482,27 +482,9 @@ const acompanhar = (orderId) => {
         }
         if (estado.value === 'processing' && Date.now() - pollInicio > 60000) estado.value = 'timeout';
     };
-    consultarAgora = consultar;
     consultar();
     pollTimer = setInterval(consultar, 4000);
 };
-
-// Achado real 19/10 (#3283): no navegador do Facebook/Instagram a tela para
-// de consultar quando o cliente vai ao app do banco pagar o Pix. Ao voltar,
-// consulta na hora, inclusive depois de o contador do Pix zerar (ele pode
-// ter pago no último minuto).
-let consultarAgora = null;
-const aoVoltarParaTela = () => {
-    if (document.visibilityState !== 'visible' || !consultarAgora || !props.order) return;
-    if (estado.value === 'failed' && props.mercadoPagoPix) {
-        estado.value = 'awaiting_pix';
-        acompanhar(props.order.id);
-        return;
-    }
-    if (['awaiting_pix', 'processing', 'timeout'].includes(estado.value)) consultarAgora();
-};
-document.addEventListener('visibilitychange', aoVoltarParaTela);
-onUnmounted(() => document.removeEventListener('visibilitychange', aoVoltarParaTela));
 
 watch(() => props.mercadoPagoPix, (pix) => {
     if (!pix || !props.order) return;
@@ -516,7 +498,6 @@ watch(() => props.mercadoPagoPix, (pix) => {
             pixSegundos.value = Math.max(0, Math.round((expira - Date.now()) / 1000));
             if (pixSegundos.value === 0 && estado.value === 'awaiting_pix') {
                 pararTimers();
-                consultarAgora?.();
                 motivoFalha.value = 'O tempo para pagar esse Pix acabou.';
                 estado.value = 'failed';
             }

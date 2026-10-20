@@ -282,17 +282,6 @@ class ManuelaAgentClient
             return (string) $message->body;
         }
 
-        // Modelos da Meta (confirmação, enviado, entregue) e os botões deles.
-        // Antes iam como "[cliente enviou 📣 Modelo…]": a Manuela achava que
-        // o aviso do pedido tinha sido escrito pelo cliente.
-        if ($message->type === 'template') {
-            return "[mensagem automática da loja enviada ao cliente] {$message->body}";
-        }
-
-        if (in_array($message->type, ['button', 'interactive'], true)) {
-            return "[cliente tocou no botão \"{$message->body}\" da mensagem automática da loja]";
-        }
-
         if ($transcription = $message->payload['transcription'] ?? null) {
             return "[áudio do cliente, transcrito] {$transcription}";
         }

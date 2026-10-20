@@ -36,7 +36,6 @@ class AlertasFinanceiros
      *   semCusto: int,
      *   linkSemCusto: string,
      *   notasCanceladas: array{quantidade: int, valor: float},
-     *   adsNoRadar?: list<string>,
      * } $c
      * @return list<array{chave: string, nivel: string, rotulo: string, texto: string, links: list<array{href: string, rotulo: string}>}>
      */
@@ -70,9 +69,7 @@ class AlertasFinanceiros
             [$nome, $de] = self::CANAIS[$canal] ?? [$canal, 'de'];
             $receita = (float) ($conta['receita'] ?? 0);
             $ads = (float) ($conta['ads'] ?? 0);
-            // Canal que já está no alerta de ADS do topo (RadarDeAds, mês e
-            // 7 dias) não repete aqui.
-            if ($receita > 0 && $ads / $receita * 100 > $limiteAds && ! in_array($canal, $c['adsNoRadar'] ?? [], true)) {
+            if ($receita > 0 && $ads / $receita * 100 > $limiteAds) {
                 $antesDoAds = (float) $conta['margem'] + $ads;
                 $levou = $antesDoAds > 0 ? ' e levou '.$this->pct(min(999, $ads / $antesDoAds * 100)).' do que sobrava antes do anúncio' : ', mais do que sobrava antes do anúncio';
                 $alertas[] = [

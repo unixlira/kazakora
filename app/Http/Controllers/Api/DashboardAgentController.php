@@ -741,8 +741,6 @@ class DashboardAgentController extends Controller
             // SHIPPED/COMPLETED do whereNotIn acima, que depende do nosso
             // status; esta olha o que o canal respondeu.
             ->whereDoesntHave('channelShipment', fn ($query) => $query->jaSaiu())
-            // "Conferido" no KoraSync (2026-10-19): o operador tirou da fila.
-            ->whereNull('conferido_em')
             ->where(function ($query) use ($ehFull) {
                 $query->whereNotNull('packed_at')
                     ->orWhere('status', '!=', Order::STATUS_PAID)
@@ -844,9 +842,6 @@ class DashboardAgentController extends Controller
             // fora da conta de estoque e de "falta separar".
             ->whereDoesntHave('channelShipment', $ehFull)
             ->whereDoesntHave('channelShipment', fn ($query) => $query->jaSaiu())
-            // Conferido sai da fila, da conta de estoque e do contador de
-            // separação pendente (ver markChecked()).
-            ->whereNull('conferido_em')
             ->where(function ($query) use ($actionableSince) {
                 $query->where('created_at', '>=', $actionableSince)
                     ->orWhereHas('channelShipment', function ($query) {
@@ -890,8 +885,6 @@ class DashboardAgentController extends Controller
             ->semCheckoutAbandonado()
             ->where('status', Order::STATUS_CANCELLED)
             ->whereBetween('updated_at', [$yesterday, $tomorrow])
-            // Cancelado já conferido pelo operador sai da aba e do alerta.
-            ->whereNull('conferido_em')
             ->with($relations)
             ->withSum('items as units_count', 'quantity')
             ->get();
@@ -2167,44 +2160,6 @@ class DashboardAgentController extends Controller
      * carrinho desfaz os irmãos que iam no mesmo pacote. Sem isso o irmão
      * continuaria embalado e o card voltaria pra fila pela metade.
      */
-    /**
-     * Botão "Conferido" do KoraSync (pedido do Lira, 2026-10-19), nas abas
-     * Aguardando separação e Cancelados: o pedido sai da fila e do contador
-     * do alerta, sem apagar nada. NÃO mexe em status, packed_at, etiqueta
-     * nem nota: só grava quem/quando conferiu. Continua achável na busca do
-     * KoraSync (histórico) e no admin. Marca a caixa inteira (carrinho do ML
-     * agrupado num card só, ver ordersShippedWith()). Idempotente: conferir
-     * de novo mantém a data da primeira vez.
-     */
-    public function markChecked(Request $request, Order $order): JsonResponse
-    {
-        $por = mb_substr(trim((string) $request->input('por', '')) ?: 'KoraSync', 0, 60);
-
-        foreach ($this->ordersShippedWith($order) as $pedido) {
-            if ($pedido->conferido_em === null) {
-                $pedido->forceFill(['conferido_em' => now(), 'conferido_por' => $por])->save();
-            }
-        }
-
-        $order->refresh();
-
-        return response()->json([
-            'result' => 'ok',
-            'conferido_em' => $order->conferido_em?->toIso8601String(),
-            'conferido_por' => $order->conferido_por,
-        ]);
-    }
-
-    /** Desfaz o "Conferido": o pedido volta para a fila em que estava. */
-    public function unmarkChecked(Order $order): JsonResponse
-    {
-        foreach ($this->ordersShippedWith($order) as $pedido) {
-            $pedido->forceFill(['conferido_em' => null, 'conferido_por' => null])->save();
-        }
-
-        return response()->json(['result' => 'ok', 'conferido_em' => null]);
-    }
-
     private function markUnpacked(Order $order): void
     {
         foreach ($this->ordersShippedWith($order) as $packOrder) {

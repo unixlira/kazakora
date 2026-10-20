@@ -16,17 +16,15 @@ use Illuminate\Http\Request;
  * Indicadores (relatorios.view) ou Pedidos (toda a equipe vê). O conteúdo
  * do Gerenciador foi para Indicadores, em abas (ver
  * Support\Indicadores\PainelGerencial). A query string vai junto; o link
- * antigo dos acessos (/admin?mes=AAAA-MM) abre Indicadores.
+ * antigo dos acessos (/admin?mes=AAAA-MM) abre a aba Acessos ao site.
  */
 class DashboardController extends Controller
 {
     public function index(Request $request): RedirectResponse
     {
         $user = $request->user();
-        // Link antigo dos acessos (/admin?mes=AAAA-MM): a aba saiu em
-        // 2026-10-19; cai em Indicadores, onde estão os visitantes do site.
         if ($request->filled('mes') && Permissions::has($user, 'relatorios.view')) {
-            return redirect()->to('/admin/indicadores');
+            return redirect()->to('/admin/indicadores?'.http_build_query(['aba' => 'acessos', 'mes' => (string) $request->query('mes')]));
         }
 
         $destino = match (true) {

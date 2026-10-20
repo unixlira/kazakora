@@ -21,9 +21,8 @@ use Tests\TestCase;
 /**
  * Meta ADS (2026-10-13; conjuntos em 2026-10-18): Lira monta a campanha
  * como no Gerenciador, Campanha > vários conjuntos > vários anúncios, e ela
- * vai para a Meta com o orçamento na campanha ou em cada conjunto. Desde
- * 2026-10-20 conjuntos e anúncios nascem ativos e a campanha liga no fim
- * do envio; enviar exige confirmação do gasto.
+ * vai para a Meta com o orçamento na campanha ou em cada conjunto. Tudo
+ * nasce pausado; ativar exige confirmação do gasto.
  */
 class MetaAdsCampanhasTest extends TestCase
 {
@@ -139,12 +138,6 @@ class MetaAdsCampanhasTest extends TestCase
         });
     }
 
-    /** Confirmação do gasto que a tela manda ao enviar ou ativar. */
-    private function confirmo(float $orcamentoDiario): array
-    {
-        return ['confirmo_gasto' => true, 'orcamento_diario' => $orcamentoDiario];
-    }
-
     private function enviarAteTerminar(MetaAdsCampanha $campanha): void
     {
         $meta = app(MetaAdsService::class);
@@ -226,26 +219,21 @@ class MetaAdsCampanhasTest extends TestCase
         $admin = $this->admin();
 
         $baixo = $this->campanhaComVideos(5, 20); // R$ 4 por vídeo
-        $this->actingAs($admin)->post(self::BASE."/{$baixo->id}/enviar", $this->confirmo(20))->assertSessionHas('error');
+        $this->actingAs($admin)->post(self::BASE."/{$baixo->id}/enviar")->assertSessionHas('error');
         $this->assertSame(MetaAdsCampanha::STATUS_RASCUNHO, $baixo->fresh()->status);
 
         $semVideo = $this->campanhaComVideos(0);
-        $this->actingAs($admin)->post(self::BASE."/{$semVideo->id}/enviar", $this->confirmo(50))->assertSessionHas('error');
+        $this->actingAs($admin)->post(self::BASE."/{$semVideo->id}/enviar")->assertSessionHas('error');
 
         $ok = $this->campanhaComVideos(5, 50);
-        // Nasce ativa: sem a confirmação do gasto (ou com outro valor) não envia.
-        $this->actingAs($admin)->post(self::BASE."/{$ok->id}/enviar", ['orcamento_diario' => 50])->assertSessionHasErrors('confirmo_gasto');
-        $this->actingAs($admin)->post(self::BASE."/{$ok->id}/enviar", $this->confirmo(500))->assertSessionHasErrors('orcamento_diario');
-        $this->assertSame(MetaAdsCampanha::STATUS_RASCUNHO, $ok->fresh()->status);
-
-        $this->actingAs($admin)->post(self::BASE."/{$ok->id}/enviar", $this->confirmo(50))->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $this->actingAs($admin)->post(self::BASE."/{$ok->id}/enviar")->assertSessionHas('success');
         $this->assertSame(MetaAdsCampanha::STATUS_ENVIANDO, $ok->fresh()->status);
 
         Queue::assertPushed(EnviarCampanhaMetaAds::class, 1);
         Queue::assertPushed(EnviarCampanhaMetaAds::class, fn ($job) => $job->campanhaId === $ok->id);
     }
 
-    public function test_orcamento_por_conjunto_cria_cada_conjunto_com_o_seu_valor_tudo_ativo(): void
+    public function test_orcamento_por_conjunto_cria_cada_conjunto_com_o_seu_valor_tudo_pausado(): void
     {
         $chamadas = [];
         $this->fakeMeta($chamadas);
@@ -254,11 +242,8 @@ class MetaAdsCampanhasTest extends TestCase
 
         $this->enviarAteTerminar($campanha);
 
-        $campanha->refresh()->load(['conjuntos', 'videos']);
-        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->status);
-        $this->assertNotNull($campanha->ativada_em);
-        $this->assertTrue($campanha->videos->every(fn ($v) => $v->ativado_em !== null));
-        $this->assertTrue($campanha->conjuntos->every(fn ($c) => $c->ativado_em !== null));
+        $campanha->refresh()->load('videos');
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->status);
         $this->assertSame('camp1', $campanha->meta_campaign_id);
         $this->assertTrue($campanha->envioCompleto());
         $this->assertSame(['vid1', 'vid2', 'vid3'], $campanha->videos->pluck('meta_video_id')->all());
@@ -267,19 +252,18 @@ class MetaAdsCampanhasTest extends TestCase
 
         $porCaminho = fn (string $fim) => array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH), $fim)));
 
-        // Uma campanha só, sem orçamento nela (fica nos conjuntos). Nasce
-        // pausada e só liga no fim, depois de tudo criado.
+        // Uma campanha só, sem orçamento nela (fica nos conjuntos).
         $this->assertCount(1, $porCaminho('/campaigns'));
         $this->assertSame('PAUSED', $porCaminho('/campaigns')[0]['status']);
         $this->assertSame('false', $porCaminho('/campaigns')[0]['is_adset_budget_sharing_enabled']);
         $this->assertArrayNotHasKey('daily_budget', $porCaminho('/campaigns')[0]->data());
 
-        // Um conjunto por vídeo, cada um com a sua parte em centavos, ativo.
+        // Um conjunto por vídeo, cada um com a sua parte em centavos, pausado.
         $conjuntos = $porCaminho('/adsets');
         $this->assertCount(3, $conjuntos);
         $this->assertSame([1667, 1667, 1666], array_map(fn ($r) => (int) $r['daily_budget'], $conjuntos));
         foreach ($conjuntos as $conjunto) {
-            $this->assertSame('ACTIVE', $conjunto['status']);
+            $this->assertSame('PAUSED', $conjunto['status']);
             $this->assertSame('camp1', $conjunto['campaign_id']);
         }
 
@@ -293,12 +277,7 @@ class MetaAdsCampanhasTest extends TestCase
 
         $anuncios = $porCaminho('/ads');
         $this->assertCount(3, $anuncios);
-        $this->assertSame(['ACTIVE', 'ACTIVE', 'ACTIVE'], array_map(fn ($r) => $r['status'], $anuncios));
-
-        // A última chamada liga a campanha.
-        $ultima = end($chamadas);
-        $this->assertSame('camp1', Str::after(parse_url($ultima->url(), PHP_URL_PATH), '/v23.0/'));
-        $this->assertSame('ACTIVE', $ultima['status']);
+        $this->assertSame(['PAUSED', 'PAUSED', 'PAUSED'], array_map(fn ($r) => $r['status'], $anuncios));
 
         // Nenhum pedido carrega o token na URL.
         foreach ($chamadas as $chamada) {
@@ -368,7 +347,7 @@ class MetaAdsCampanhasTest extends TestCase
         $this->enviarAteTerminar($campanha);
 
         $this->assertSame(1, $campanhasCriadas, 'O reenvio não pode criar outra campanha.');
-        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->fresh()->status);
     }
 
     public function test_ativar_exige_confirmacao_e_liga_anuncios_conjuntos_e_campanha(): void
@@ -377,8 +356,6 @@ class MetaAdsCampanhasTest extends TestCase
         $this->fakeMeta($chamadas);
         $campanha = $this->campanhaComVideos(2, 30);
         $this->enviarAteTerminar($campanha);
-        // Campanha pausada depois (no Gerenciador ou pelo botão Pausar).
-        $campanha->forceFill(['status' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA])->save();
         $chamadas = [];
         $admin = $this->admin();
 
@@ -475,7 +452,7 @@ class MetaAdsCampanhasTest extends TestCase
         $this->enviarAteTerminar($campanha);
 
         $campanha->refresh()->load(['conjuntos', 'videos']);
-        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->status);
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->status);
         $this->assertSame('set1', $campanha->conjuntos[0]->meta_adset_id);
         $this->assertSame(['set1', 'set1', 'set1'], $campanha->videos->pluck('meta_adset_id')->all());
         $this->assertSame(['hash1', null, 'hash2'], $campanha->videos->pluck('meta_image_hash')->all());
@@ -556,11 +533,11 @@ class MetaAdsCampanhasTest extends TestCase
         $this->assertSame([], app(MetaAdsService::class)->problemasParaEnviar($campanha));
 
         Queue::fake();
-        $this->actingAs($admin)->post(self::BASE."/{$id}/enviar", $this->confirmo(60))->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $this->actingAs($admin)->post(self::BASE."/{$id}/enviar")->assertSessionHas('success');
         $this->enviarAteTerminar($campanha);
 
         $campanha->refresh()->load(['conjuntos', 'videos']);
-        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->status);
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->status);
         $this->assertTrue($campanha->envioCompleto());
 
         $porCaminho = fn (string $fim) => array_values(array_filter($chamadas, fn (HttpRequest $r) => $r->method() === 'POST' && str_ends_with(parse_url($r->url(), PHP_URL_PATH), $fim)));
@@ -791,8 +768,6 @@ class MetaAdsCampanhasTest extends TestCase
                     ['id' => 'ad-outro', 'effective_status' => 'ACTIVE', 'creative' => ['id' => 'cri-outro', 'object_story_spec' => ['video_data' => ['video_id' => 'vid-outro']]]],
                     ['id' => 'ad-manual', 'effective_status' => 'ACTIVE', 'creative' => ['id' => 'cri-manual', 'object_story_spec' => ['video_data' => ['video_id' => 'vid1']]]],
                 ]]),
-                // No fim, só liga a campanha.
-                $caminho === 'camp1' => Http::response(['success' => true]),
                 default => Http::response(['error' => ['message' => 'não devia chamar '.$caminho]], 400),
             };
         });
@@ -807,8 +782,8 @@ class MetaAdsCampanhasTest extends TestCase
         $video = $campanha->videos()->first();
         $this->assertSame('ad-manual', $video->meta_ad_id);
         $this->assertSame('cri-manual', $video->meta_creative_id);
-        $this->assertSame(['camp1'], $posts, 'Não pode criar criativo nem anúncio repetido.');
-        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
+        $this->assertSame([], $posts, 'Não pode criar criativo nem anúncio repetido.');
+        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->fresh()->status);
     }
 
     /** Como a campanha manual da Árvore: vários textos, UTM, atribuição e melhorias ditas. */
@@ -862,33 +837,6 @@ class MetaAdsCampanhasTest extends TestCase
         $ordem = array_map(fn (HttpRequest $r) => Str::after(parse_url($r->url(), PHP_URL_PATH), '/v23.0/'), array_filter($chamadas, fn ($r) => $r->method() === 'POST'));
         $ordem = array_values($ordem);
         $this->assertLessThan(array_search('act_123/campaigns', $ordem), array_search('act_123/adcreatives', $ordem));
-    }
-
-    /** 2026-10-19: o botão de IA gera 5 opções; a Meta aceita 5 de cada contando a principal. */
-    public function test_cinco_opcoes_ficam_salvas_e_a_meta_recebe_cinco_de_cada(): void
-    {
-        $chamadas = [];
-        $this->fakeMeta($chamadas);
-
-        $id = $this->actingAs($this->admin())->postJson(self::BASE, $this->dados([
-            'texto_principal' => 'Texto 1',
-            'textos_alternativos' => ['textos' => ['Texto 2', 'Texto 3', 'Texto 4', 'Texto 5', 'Texto 6'], 'titulos' => [], 'descricoes' => []],
-        ]))->assertCreated()->json('id');
-
-        $campanha = MetaAdsCampanha::findOrFail($id);
-        $this->assertCount(5, $campanha->textos_alternativos['textos']);
-
-        $path = "meta-ads/campanha-{$id}/v0.mp4";
-        Storage::disk('local')->put($path, 'video');
-        $campanha->videos()->create(['conjunto_id' => $campanha->conjuntos()->value('id'), 'ordem' => 0, 'nome_original' => 'arvore.mp4', 'path' => $path, 'tamanho' => 10]);
-
-        $this->enviarAteTerminar($campanha);
-
-        $criativo = array_values(array_filter($chamadas, fn (HttpRequest $r) => str_ends_with(parse_url($r->url(), PHP_URL_PATH), '/adcreatives')))[0];
-        $this->assertSame(
-            [['text' => 'Texto 1'], ['text' => 'Texto 2'], ['text' => 'Texto 3'], ['text' => 'Texto 4'], ['text' => 'Texto 5']],
-            json_decode($criativo['asset_feed_spec'], true)['bodies'],
-        );
     }
 
     public function test_sem_textos_extras_o_texto_vai_no_proprio_criativo(): void
@@ -994,31 +942,6 @@ class MetaAdsCampanhasTest extends TestCase
     }
 
     /**
-     * Caixa Sanfonada 168 (2026-10-19): ligada no Gerenciador, aparecia
-     * "Enviada (pausada)" no admin. O status acompanha a Meta.
-     */
-    public function test_status_acompanha_a_meta(): void
-    {
-        $campanha = MetaAdsCampanha::create($this->dados([
-            'status' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
-            'meta_campaign_id' => 'c1',
-        ]));
-
-        $this->assertTrue($campanha->acompanharStatusDaMeta('ACTIVE'));
-        $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
-        $this->assertNotNull($campanha->fresh()->ativada_em);
-        $this->assertFalse($campanha->acompanharStatusDaMeta('ACTIVE'));
-
-        $this->assertTrue($campanha->acompanharStatusDaMeta('PAUSED'));
-        $this->assertSame(MetaAdsCampanha::STATUS_ENVIADA_PAUSADA, $campanha->fresh()->status);
-        $this->assertFalse($campanha->acompanharStatusDaMeta('IN_PROCESS'));
-
-        $rascunho = MetaAdsCampanha::create($this->dados(['status' => MetaAdsCampanha::STATUS_RASCUNHO]));
-        $this->assertFalse($rascunho->acompanharStatusDaMeta('ACTIVE'));
-        $this->assertSame(MetaAdsCampanha::STATUS_RASCUNHO, $rascunho->fresh()->status);
-    }
-
-    /**
      * Árvore de Natal (2026-10-18): na Meta a campanha tem 1 conjunto e 3
      * criativos (2 feitos no Gerenciador), e a tela mostrava só o que o
      * banco conhecia. O espelho lê a estrutura e as métricas da Meta.
@@ -1077,7 +1000,6 @@ class MetaAdsCampanhasTest extends TestCase
                 ->missing('espelho')
                 ->loadDeferredProps(fn ($reload) => $reload
                     ->where('espelho.erro', null)
-                    ->where('espelho.status_atualizado', false)
                     ->has('espelho.campanhas', 2)
                     ->where('espelho.campanhas.0.nome', 'Vendas | Árvores Natal | Out26')
                     ->where('espelho.campanhas.0.local_id', $local->id)
@@ -1141,10 +1063,10 @@ class MetaAdsCampanhasTest extends TestCase
 
     /**
      * Pedido do Lira (2026-10-19): conjunto novo dentro de campanha que já
-     * está rodando. Sobe sozinho, já ativo (2026-10-20), dentro da campanha
-     * que existe; a campanha segue ativa e o resto não é reenviado.
+     * está rodando. Sobe sozinho, pausado, dentro da campanha que existe;
+     * a campanha segue ativa e o resto não é reenviado.
      */
-    public function test_conjunto_novo_em_campanha_ativa_sobe_sozinho_ativo(): void
+    public function test_conjunto_novo_em_campanha_ativa_sobe_sozinho_pausado(): void
     {
         $chamadas = [];
         $this->fakeMeta($chamadas);
@@ -1188,10 +1110,7 @@ class MetaAdsCampanhasTest extends TestCase
                 ->where('conjuntos.1.problemas', []));
 
         Queue::fake();
-        // Nasce ativo: o envio pede a confirmação do gasto da campanha.
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar", ['orcamento_diario' => 30])->assertSessionHasErrors('confirmo_gasto');
-        Queue::assertNothingPushed();
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar", $this->confirmo(30))->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar")->assertSessionHas('success');
         Queue::assertPushed(EnviarCampanhaMetaAds::class, fn ($job) => $job->campanhaId === $campanha->id && $job->conjuntoId === $id);
         $this->assertTrue($novo->fresh()->enviando);
         $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
@@ -1203,8 +1122,8 @@ class MetaAdsCampanhasTest extends TestCase
         $posts = $this->posts($chamadas);
         $this->assertSame(['act_123/advideos', 'act_123/adcreatives', 'act_123/adsets', 'act_123/ads'], array_map(fn ($r) => $this->caminho($r), $posts));
         $this->assertSame('camp1', $posts[2]['campaign_id']);
-        $this->assertSame('ACTIVE', $posts[2]['status']);
-        $this->assertSame('ACTIVE', $posts[3]['status']);
+        $this->assertSame('PAUSED', $posts[2]['status']);
+        $this->assertSame('PAUSED', $posts[3]['status']);
         $this->assertStringContainsString('Ferramentas', $posts[2]['name']);
         $targeting = json_decode($posts[2]['targeting'], true);
         $this->assertSame(30, $targeting['age_min']);
@@ -1217,10 +1136,16 @@ class MetaAdsCampanhasTest extends TestCase
         $campanha->refresh();
         $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->status);
         $this->assertNull($campanha->ultimo_erro);
-        // Já nasceu ativo: não sobra nada para ativar.
-        $this->assertNotNull($novo->ativado_em);
-        $this->assertNotNull($campanha->videos()->where('conjunto_id', $id)->value('ativado_em'));
-        $this->assertFalse(collect($posts)->contains(fn ($r) => $this->caminho($r) === 'camp1'), 'Conjunto novo não mexe na campanha.');
+
+        // Ativar o conjunto pede confirmação e liga só ele.
+        $chamadas = [];
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/ativar", ['orcamento_diario' => 30])
+            ->assertSessionHasErrors('confirmo_gasto');
+        $this->assertSame([], $chamadas);
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/ativar", ['confirmo_gasto' => true, 'orcamento_diario' => 30])
+            ->assertSessionHas('success');
+        $this->assertSame(['ad2', 'set2'], array_map(fn ($r) => $this->caminho($r), $chamadas));
+        $this->assertNotNull($novo->fresh()->ativado_em);
 
         $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")->assertOk()
             ->assertInertia(fn ($page) => $page->where('conjuntos.1.pode.ativar', false)->where('conjuntos.1.pode.enviar', false));
@@ -1253,7 +1178,7 @@ class MetaAdsCampanhasTest extends TestCase
 
         // Sem anúncio não envia.
         Queue::fake();
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar", $this->confirmo(10))->assertSessionHas('error');
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$id}/enviar")->assertSessionHas('error');
         Queue::assertNothingPushed();
 
         $this->actingAs($admin)
@@ -1305,8 +1230,8 @@ class MetaAdsCampanhasTest extends TestCase
 
     /**
      * Pedido do Lira (2026-10-19): "acrescentar novos anúncios" dentro de
-     * conjunto que já está na Meta. Só os anúncios novos sobem, já ativos
-     * (2026-10-20), no ad set que já existe.
+     * conjunto que já está na Meta. Só os anúncios novos sobem, pausados, no
+     * ad set que já existe; ativar liga só eles.
      */
     public function test_acrescentar_anuncio_em_conjunto_que_ja_esta_na_meta(): void
     {
@@ -1341,7 +1266,7 @@ class MetaAdsCampanhasTest extends TestCase
                 ->where('conjuntos.0.problemas', []));
 
         Queue::fake();
-        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$conjunto->id}/enviar", $this->confirmo(30))->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$conjunto->id}/enviar")->assertSessionHas('success');
         Queue::assertPushed(EnviarCampanhaMetaAds::class, fn ($job) => $job->conjuntoId === $conjunto->id);
 
         $chamadas = [];
@@ -1351,13 +1276,18 @@ class MetaAdsCampanhasTest extends TestCase
         $posts = $this->posts($chamadas);
         $this->assertSame(['act_123/advideos', 'act_123/adcreatives', 'act_123/ads'], array_map(fn ($r) => $this->caminho($r), $posts));
         $this->assertSame('set1', $posts[2]['adset_id']);
-        $this->assertSame('ACTIVE', $posts[2]['status']);
+        $this->assertSame('PAUSED', $posts[2]['status']);
         $this->assertSame(MetaAdsCampanha::STATUS_ATIVA, $campanha->fresh()->status);
 
-        // Já nasceu ativo: nem o conjunto nem o anúncio antigo foram mexidos.
+        // Ativar liga só o anúncio novo (nem o conjunto, nem o anúncio antigo).
+        $chamadas = [];
+        $this->actingAs($admin)->post(self::BASE."/{$campanha->id}/conjuntos/{$conjunto->id}/ativar", ['confirmo_gasto' => true, 'orcamento_diario' => 30])
+            ->assertSessionHas('success');
+        $this->assertSame(['ad2'], array_map(fn ($r) => $this->caminho($r), $chamadas));
         $this->assertNotNull(\App\Modules\Marketplace\Models\MetaAdsVideo::find($novoId)->ativado_em);
 
         $this->actingAs($admin)->get(self::BASE."/{$campanha->id}")->assertOk()
             ->assertInertia(fn ($page) => $page->where('conjuntos.0.pode.ativar', false)->where('conjuntos.0.pode.enviar', false));
     }
 }
+

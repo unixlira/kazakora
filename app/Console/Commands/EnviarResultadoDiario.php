@@ -10,11 +10,9 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * E-mail de resultado do dia às 23:50 (pedido 2026-10-10; horário
- * confirmado em 2026-10-18, depois da coleta e da retomada das 23:45): lucro
- * líquido do dia, do mês e impostos do mês a pagar. Substitui o e-mail de
- * margem que a Naia mandava por fora (mesmo arquivo de controle, não repete
- * o dia). Regra completa: docs/financeiro-email-resultado-diario.md.
+ * E-mail de resultado do dia às 23:50 (pedido 2026-10-10): lucro líquido do
+ * dia, do mês e impostos do mês a pagar. Substitui o e-mail de margem que a
+ * Naia mandava por fora (mesmo arquivo de controle, não repete o dia).
  */
 class EnviarResultadoDiario extends Command
 {

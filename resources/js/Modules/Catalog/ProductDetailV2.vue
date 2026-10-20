@@ -299,7 +299,7 @@ const SELOS_VERIFICADOS = [
 const anuncio = computed(() => props.product.ad_content ?? null);
 const blocosAnuncio = computed(() => anuncio.value?.blocos ?? []);
 const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : props.product.images?.[indice]?.media_url ?? props.product.images?.[indice]?.url ?? null);
-// "Por que você vai amar" entra no meio da sequência, entre a 2ª e a 3ª foto
+// Os cartões de benefícios ("Por que você precisa", "Por que você vai amar"...) entram no meio da sequência, entre a 2ª e a 3ª foto
 // (pedido 2026-10-20, Lanterna LED); com menos de 2 fotos, no fim dos blocos.
 const ICONES_BENEFICIO = ['fa-bolt', 'fa-hand-sparkles', 'fa-shield-heart', 'fa-clock', 'fa-star', 'fa-thumbs-up'];
 const blocoAntesDosBeneficios = computed(() => {
@@ -677,7 +677,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                     </article>
 
                                     <div v-if="index === blocoAntesDosBeneficios && anuncio.beneficios?.length" class="bloco-anuncio">
-                                        <p class="rotulo-amar">Por que você vai amar</p>
+                                        <!-- Título pelo tipo de cliente, vem do backend (PerfilDoCliente, pedido 2026-10-20). -->
+                                        <p class="rotulo-amar">{{ anuncio.titulo_beneficios || 'Por que vale a pena' }}</p>
                                         <div class="grade-beneficios">
                                             <div v-for="(item, itemIndex) in anuncio.beneficios" :key="itemIndex" class="beneficio-card">
                                                 <span class="beneficio-icone"><i class="fas" :class="ICONES_BENEFICIO[itemIndex % ICONES_BENEFICIO.length]"></i></span>

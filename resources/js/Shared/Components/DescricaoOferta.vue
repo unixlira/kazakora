@@ -33,8 +33,12 @@ const props = defineProps({
 defineEmits(['comprar']);
 
 const urlDaImagem = (imagem) => imagem?.media_url ?? imagem?.url ?? null;
-const imagemDoBloco = (indice) => (indice === null || indice === undefined ? null : urlDaImagem(props.imagens[indice]));
 const fotoPrincipal = computed(() => urlDaImagem(props.imagens.find((i) => i.is_primary) ?? props.imagens[0]));
+// A foto do topo não se repete logo abaixo: o bloco que usaria a mesma fica só com o texto.
+const imagemDoBloco = (indice) => {
+    const url = indice === null || indice === undefined ? null : urlDaImagem(props.imagens[indice]);
+    return url && url !== fotoPrincipal.value ? url : null;
+};
 
 const blocos = computed(() => props.anuncio.blocos ?? []);
 const beneficios = computed(() => props.anuncio.beneficios ?? []);

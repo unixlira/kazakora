@@ -222,9 +222,13 @@ class Order extends Model
         $this->loadMissing('invoice', 'channelShipment', 'latestCorreiosPrePostagem');
 
         $pago = in_array($this->status, [self::STATUS_PAID, self::STATUS_SHIPPED, self::STATUS_COMPLETED], true);
-        $enviado = in_array($this->status, [self::STATUS_SHIPPED, self::STATUS_COMPLETED], true) || filled($this->trackingCode());
-        // Em preparação: separado/embalado no KoraSync ou com etiqueta pronta.
-        $emPreparacao = $enviado || ($pago && ($this->packed_at !== null || filled($this->channelShipment?->label_path)));
+        // Enviado só com a postagem confirmada pelos Correios (status "enviado",
+        // hoje pelo loja:acompanhar-rastreio, depois pelo webhook). Código de
+        // rastreio sozinho não basta: ele nasce na pré-postagem/etiqueta,
+        // antes do pacote sair (pedido do Lira, 2026-10-19).
+        $enviado = in_array($this->status, [self::STATUS_SHIPPED, self::STATUS_COMPLETED], true);
+        // Em preparação: separado/embalado no KoraSync ou com etiqueta/código pronto.
+        $emPreparacao = $enviado || ($pago && ($this->packed_at !== null || filled($this->channelShipment?->label_path) || filled($this->trackingCode())));
 
         return [
             ['titulo' => 'Pedido recebido', 'feito' => true],

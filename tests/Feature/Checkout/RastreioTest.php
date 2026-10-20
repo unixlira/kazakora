@@ -102,9 +102,27 @@ class RastreioTest extends TestCase
                 ->where('pedido.etapas.1.feito', true)
                 ->where('pedido.etapas.3.titulo', 'Em preparação')
                 ->where('pedido.etapas.3.feito', true)
-                ->where('pedido.etapas.4.feito', true)
+                ->where('pedido.etapas.4.titulo', 'Pedido enviado')
+                ->where('pedido.etapas.4.feito', false)
                 ->where('pedido.etapas.5.feito', false)
                 ->where('pedido.itens.0.nome', 'Organizador'));
+    }
+
+    public function test_pedido_enviado_so_fica_verde_com_a_postagem_confirmada(): void
+    {
+        // Código de rastreio nasce na pré-postagem, antes do pacote sair: não conta como enviado.
+        $order = $this->pedido();
+        CorreiosPrePostagem::query()->forceCreate([
+            'order_id' => $order->id, 'codigo_objeto' => 'AB123456789BR', 'customer_name' => 'Maria',
+            'zip' => '03187040', 'street' => 'Rua X', 'number' => '1', 'neighborhood' => 'Mooca', 'city' => 'São Paulo',
+            'state' => 'SP', 'service_code' => '03298', 'weight_grams' => 300, 'content_items' => json_encode([]),
+        ]);
+        $this->assertFalse($order->fresh()->etapas()[4]['feito']);
+
+        // Correios confirmaram a postagem: status vira enviado.
+        $order->update(['status' => Order::STATUS_SHIPPED]);
+        $this->assertTrue($order->fresh()->etapas()[4]['feito']);
+        $this->assertFalse($order->fresh()->etapas()[5]['feito']);
     }
 
     public function test_meus_pedidos_traz_o_link_de_rastreio(): void

@@ -3,9 +3,11 @@
 namespace Tests\Feature\Catalog;
 
 use App\Models\User;
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
+use App\Modules\Catalog\Support\PerfilDoCliente;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -123,6 +125,46 @@ class ConteudoAnuncioTest extends TestCase
         });
     }
 
+    public function test_frases_finais_seguem_o_padrao_e_o_tom_da_categoria(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'blocos' => [['titulo' => 'Luz forte', 'texto' => 'Ilumina tudo.', 'imagem' => 0]],
+        ]))]);
+        $categoria = Category::query()->create(['name' => 'Ferramentas', 'slug' => 'ferramentas-e-automotivo']);
+        $product = $this->produto();
+        $product->update(['category_id' => $categoria->id]);
+
+        app(AnuncioConteudoService::class)->gerar($product->fresh());
+
+        Http::assertSent(function ($request) {
+            $prompt = end($request->data()['contents'][0]['parts'])['text'];
+
+            return str_contains($prompt, 'Frases finais (obrigatório')
+                && str_contains($prompt, 'Ilumine qualquer situação com a potência profissional que você precisa!')
+                && str_contains($prompt, 'sob o título "Por que você precisa"')
+                && str_contains($prompt, 'quem trabalha com as mãos');
+        });
+    }
+
+    public function test_titulo_dos_beneficios_varia_pelo_tipo_de_cliente(): void
+    {
+        $this->assertSame('Por que você precisa', PerfilDoCliente::tituloBeneficios('ferramentas-e-automotivo'));
+        $this->assertSame('Por que você vai amar', PerfilDoCliente::tituloBeneficios('beleza-e-bem-estar'));
+        $this->assertSame('Por que vale a pena', PerfilDoCliente::tituloBeneficios('eletroportateis-e-casa'));
+        $this->assertSame('Por que vale a pena', PerfilDoCliente::tituloBeneficios(null));
+
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+        $categoria = Category::query()->create(['name' => 'Ferramentas', 'slug' => 'ferramentas-e-automotivo']);
+        $product = $this->produto();
+        $product->update(['category_id' => $categoria->id]);
+        app(AnuncioConteudoService::class)->gerar($product->fresh());
+
+        $this->get("/produtos/{$product->slug}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('product.ad_content.titulo_beneficios', 'Por que você precisa'));
+    }
+
     public function test_beauty_kora_continua_sem_emojis_e_sem_gatilhos(): void
     {
         Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
@@ -219,6 +261,21 @@ class ConteudoAnuncioTest extends TestCase
                 ->where('product.ad_content.fonte', 'automatico')
                 ->has('product.ad_content.blocos', 2)
                 ->missing('product.ad_content.erro'));
+    }
+
+    public function test_produto_novo_sem_conteudo_ganha_o_conteudo_na_primeira_visita(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('timeout'));
+        $product = $this->produto();
+        $this->assertNull($product->adContent);
+
+        $this->get("/produtos/{$product->slug}")->assertOk();
+
+        $conteudo = $product->fresh()->adContent;
+        $this->assertNotNull($conteudo, 'a visita gera o conteúdo depois de responder (homolog não roda o agendador)');
+        $this->assertCount(3, $conteudo->destaques);
+        $this->assertNotEmpty($conteudo->blocos);
+        $this->assertNotEmpty($conteudo->beneficios);
     }
 
     public function test_admin_gera_de_novo_pelo_botao(): void

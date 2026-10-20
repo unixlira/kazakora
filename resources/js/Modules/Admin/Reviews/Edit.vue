@@ -67,10 +67,14 @@ const submit = () => {
             </div>
 
             <div v-if="review.images?.length">
-                <p class="mb-2 text-sm font-medium">Fotos do cliente</p>
+                <p class="mb-2 text-sm font-medium">Fotos e vídeos do cliente</p>
                 <div class="flex flex-wrap gap-3">
-                    <img v-for="image in review.images" :key="image.id" :src="image.image_url" alt=""
-                        class="h-20 w-20 rounded-lg border border-[var(--surface-border)] object-cover">
+                    <template v-for="image in review.images" :key="image.id">
+                        <video v-if="image.media_type === 'video'" :src="image.image_url" controls preload="metadata"
+                            class="h-20 w-20 rounded-lg border border-[var(--surface-border)] object-cover"></video>
+                        <img v-else :src="image.image_url" alt=""
+                            class="h-20 w-20 rounded-lg border border-[var(--surface-border)] object-cover">
+                    </template>
                 </div>
             </div>
 

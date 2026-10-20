@@ -5,6 +5,8 @@ namespace Tests\Feature\WhatsApp;
 use App\Models\User;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Fiscal\Jobs\GenerateInvoiceJob;
+use App\Modules\Fiscal\Models\Invoice;
+use App\Modules\WhatsApp\Services\ManuelaAutoReplyService;
 use App\Modules\WhatsApp\Jobs\ReplyWithManuela;
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\WhatsApp\Models\WhatsAppMessage;
@@ -120,5 +122,64 @@ class ConfirmacaoPedidoBotoesTest extends TestCase
 
         $this->assertNull($order->fresh()->whatsapp_confirmacao);
         Http::assertNothingSent();
+    }
+
+    /**
+     * Achado real 19/10, #3274: confirmação foi para o número com o 9 e o
+     * toque voltou sem o 9, abrindo outra conversa sem o histórico.
+     */
+    public function test_toque_sem_nono_digito_cai_na_conversa_da_confirmacao(): void
+    {
+        Notification::fake();
+        Bus::fake([GenerateInvoiceJob::class]);
+        $order = $this->pedido();
+        $conversa = WhatsAppConversation::create(['wa_id' => '5511988887777', 'phone' => '5511988887777', 'last_message_at' => now()]);
+
+        $this->toque('551188887777', "confirmacao_pedido:corrigir:{$order->id}", 'Corrigir Informações', 'wamid.G');
+
+        $this->assertSame(1, WhatsAppConversation::query()->count());
+        $this->assertSame(1, $conversa->messages()->where('direction', 'inbound')->count());
+        $this->assertSame('corrigir', $order->fresh()->whatsapp_confirmacao);
+    }
+
+    public function test_corrigir_depois_da_nota_nao_promete_ajustar_antes_do_faturamento(): void
+    {
+        Notification::fake();
+        $order = $this->pedido();
+        Invoice::create(['order_id' => $order->id, 'serie' => 2, 'numero' => 3001, 'status' => Invoice::STATUS_AUTHORIZED, 'origem' => Invoice::ORIGEM_PEDIDO, 'ambiente' => Invoice::AMBIENTE_PRODUCAO]);
+
+        $this->toque('5511988887777', "confirmacao_pedido:corrigir:{$order->id}", 'Corrigir Informações', 'wamid.H');
+
+        Http::assertSent(fn ($r) => str_contains($r['text']['body'], 'já foram geradas'));
+        Http::assertNotSent(fn ($r) => str_contains($r['text']['body'] ?? '', 'antes do faturamento'));
+    }
+
+    public function test_botao_que_o_sistema_nao_trata_passa_para_a_manuela(): void
+    {
+        Bus::fake([ReplyWithManuela::class]);
+        $order = $this->pedido();
+        WhatsAppConversation::create(['wa_id' => '5521977776666', 'phone' => '5521977776666', 'ai_enabled' => true]);
+
+        $this->toque('5521977776666', "confirmacao_pedido:ok:{$order->id}", 'Tudo Certo', 'wamid.I');
+
+        Bus::assertDispatchedSync(ReplyWithManuela::class);
+        $this->assertNull($order->fresh()->whatsapp_confirmacao);
+    }
+
+    public function test_manuela_ve_o_aviso_como_da_loja_e_o_pedido_da_conversa(): void
+    {
+        $order = $this->pedido();
+        $conversa = WhatsAppConversation::create(['wa_id' => '5511988887777', 'phone' => '5511988887777']);
+        WhatsAppMessage::create(['conversation_id' => $conversa->id, 'direction' => 'outbound', 'type' => 'template', 'status' => 'read', 'sent_by' => 'system',
+            'body' => "Pedido #{$order->numero} confirmado. [Tudo Certo] [Corrigir Informações]", 'payload' => ['order_id' => $order->id]]);
+
+        $pedidos = ManuelaAutoReplyService::pedidosDaConversa($conversa);
+        $prompt = app(ManuelaAutoReplyService::class)->systemPrompt($conversa);
+
+        $this->assertSame($order->numero, $pedidos[0]['numero']);
+        $this->assertSame('ainda não respondeu', $pedidos[0]['confirmacao_do_cliente']);
+        $this->assertStringContainsString('Rua X, 1', $pedidos[0]['endereco']);
+        $this->assertStringContainsString('Corrigir Informações', $prompt);
+        $this->assertStringContainsString($order->numero, $prompt);
     }
 }

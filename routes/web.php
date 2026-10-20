@@ -13,6 +13,7 @@ use App\Modules\Admin\Http\Controllers\CorreiosController;
 use App\Modules\Admin\Http\Controllers\CostCenterController;
 use App\Modules\Admin\Http\Controllers\DashboardController;
 use App\Modules\Admin\Http\Controllers\DiagnosticoAcaoController;
+use App\Modules\Admin\Http\Controllers\SugestaoController;
 use App\Modules\Admin\Http\Controllers\ConversionPageController;
 use App\Modules\Admin\Http\Controllers\DigitalMarketingController;
 use App\Modules\Admin\Http\Controllers\PdfOpportunityController;
@@ -60,6 +61,8 @@ use App\Modules\Admin\Http\Controllers\PurchaseOrderController;
 use App\Modules\Admin\Http\Controllers\RadarController;
 use App\Modules\Admin\Http\Controllers\ReportController;
 use App\Modules\Admin\Http\Controllers\ReviewController as AdminReviewController;
+use App\Modules\Admin\Http\Controllers\ReviewControleController;
+use App\Modules\Admin\Http\Controllers\AvaliacaoPosCompraController;
 use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
@@ -75,6 +78,7 @@ use App\Modules\Admin\Http\Controllers\VideosEmbalagemController;
 use App\Modules\Admin\Http\Controllers\SystemLogController;
 use App\Modules\Admin\Http\Controllers\UserPermissionController;
 use App\Modules\Cart\Http\Controllers\CartController;
+use App\Modules\Catalog\Http\Controllers\AvaliacaoPedidoController;
 use App\Modules\Catalog\Http\Controllers\CatalogController;
 use App\Modules\Catalog\Http\Controllers\FavoriteController;
 use App\Modules\Catalog\Http\Controllers\ReviewController;
@@ -171,6 +175,19 @@ Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
     ->middleware('auth')
     ->name('avaliacoes.armazenar');
+// Botão "Avaliar" do e-mail pós-compra do modelo antigo (pedido 2026-10-18).
+Route::get('/avaliar/{product:slug}', [ReviewController::class, 'avaliar'])
+    ->middleware('auth')
+    ->name('avaliacoes.avaliar');
+// Página própria de avaliação do pedido (e-mail pós-compra, 2026-10-18): sem
+// login, o token do e-mail identifica o pedido; cupom pela nota em estrelas.
+Route::get('/avaliar-pedido/{token}', [AvaliacaoPedidoController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{20,64}')
+    ->name('avaliacoes.pedido');
+Route::post('/avaliar-pedido/{token}', [AvaliacaoPedidoController::class, 'store'])
+    ->where('token', '[A-Za-z0-9]{20,64}')
+    ->middleware('throttle:10,1')
+    ->name('avaliacoes.pedido.enviar');
 
 // "Comprar" na página do produto: finalização só com aquele item (pedido 2026-10-11).
 Route::post('/comprar-agora', [CartController::class, 'comprarAgora'])->name('comprar-agora');
@@ -310,6 +327,21 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         ->middlewareFor('store', 'permission:cadastros.create')
         ->middlewareFor(['edit', 'update'], 'permission:cadastros.edit')
         ->middlewareFor('destroy', 'permission:cadastros.delete');
+
+    // Avaliações › Cadastro e controle (pedido do Lira 2026-10-18). Antes do
+    // resource: senão "controle" vira {review}.
+    Route::get('avaliacoes/controle', [ReviewControleController::class, 'index'])->middleware('permission:cadastros.view')->name('avaliacoes.controle');
+    Route::post('avaliacoes/controle', [ReviewControleController::class, 'store'])->middleware('permission:cadastros.create')->name('avaliacoes.controle.armazenar');
+    Route::post('avaliacoes/controle/atualizar-contagem', [ReviewControleController::class, 'atualizarContagem'])->middleware('permission:cadastros.view')->name('avaliacoes.controle.contagem');
+
+    // Pedido de avaliação pós-compra (pedido 2026-10-18): painel da tela de Avaliações.
+    // Antes do resource: senão "pos-compra" vira o {review} do avaliacoes.exibir.
+    Route::prefix('avaliacoes/pos-compra')->name('avaliacoes.pos-compra.')->group(function () {
+        Route::get('/', [AvaliacaoPosCompraController::class, 'show'])->middleware('permission:cadastros.view')->name('ver');
+        Route::put('/', [AvaliacaoPosCompraController::class, 'update'])->middleware('permission:cadastros.edit')->name('salvar');
+        Route::post('previa', [AvaliacaoPosCompraController::class, 'previa'])->middleware('permission:cadastros.view')->name('previa');
+        Route::post('teste', [AvaliacaoPosCompraController::class, 'teste'])->middleware(['permission:cadastros.edit', 'throttle:10,1'])->name('teste');
+    });
 
     Route::resource('avaliacoes', AdminReviewController::class)->only(['index', 'show', 'edit', 'update', 'destroy'])
         ->parameters(['avaliacoes' => 'review'])
@@ -562,6 +594,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::middleware('permission:relatorios.view')->group(function () {
         Route::get('relatorios', [ReportController::class, 'index'])->name('relatorios.ver');
         Route::get('indicadores', [KpiController::class, 'index'])->name('indicadores.ver');
+        // Sugestões do dia (2026-10-20): marcar feita/ignorada; rodar de novo só admin.
+        Route::post('sugestoes/{sugestao}/status', [SugestaoController::class, 'status'])->name('sugestoes.status');
+        Route::post('sugestoes/rodar', [SugestaoController::class, 'rodar'])->middleware('admin')->name('sugestoes.rodar');
         // Radar (2026-10-12): uma tela só, no grupo Oportunidades do menu.
         // Submenu TikTok / Mercado Livre / Google (pedido do Lira 2026-10-12):
         // a mesma tela mostrando só o bloco daquela fonte.
@@ -597,6 +632,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::patch('marketplaces/fotos-anuncio/{brief}/aprovar', [MarketplaceAdPhotoController::class, 'approve'])->name('marketplaces.fotos-anuncio.aprovar');
         Route::patch('marketplaces/fotos-anuncio/{brief}/reprovar', [MarketplaceAdPhotoController::class, 'reject'])->name('marketplaces.fotos-anuncio.reprovar');
         Route::post('marketplaces/fotos-anuncio/{brief}/gerar-criativos', [MarketplaceAdPhotoController::class, 'startGeneration'])->name('marketplaces.fotos-anuncio.gerar-criativos');
+        // Menu Marketplaces (Lira 2026-10-17): lista e abas de cada marketplace.
+        // As abas com tela pronta chamam o controller antigo (que tem a sua
+        // própria checagem de permissão no MarketplacesController). Vem depois
+        // de fotos-anuncio; o whereIn impede conflito com ela.
+        Route::get('marketplaces', [\App\Modules\Admin\Http\Controllers\MarketplacesController::class, 'index'])->name('marketplaces.index');
+        Route::get('marketplaces/{marketplace}/{aba?}', [\App\Modules\Admin\Http\Controllers\MarketplacesController::class, 'show'])
+            ->whereIn('marketplace', \App\Modules\Admin\Support\CatalogoMarketplaces::slugs())
+            ->whereIn('aba', array_keys(\App\Modules\Admin\Support\CatalogoMarketplaces::ABAS))
+            ->middleware('throttle:60,1')
+            ->name('marketplaces.ver');
         Route::get('mkt-digital', [DigitalMarketingController::class, 'index'])->name('mkt-digital');
         Route::post('mkt-digital/atualizar', [DigitalMarketingController::class, 'refresh'])
             ->middleware('throttle:4,1')
@@ -639,6 +684,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'index'])->name('listar')->middleware('permission:financeiro.view');
         Route::get('nova', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'create'])->name('criar')->middleware('permission:financeiro.create');
         Route::post('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'store'])->name('armazenar')->middleware('permission:financeiro.create');
+        Route::post('textos-ia', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'textosComIa'])->name('textos-ia')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::get('localizacoes', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'localizacoes'])->name('localizacoes')->middleware(['permission:financeiro.create', 'throttle:30,1']);
         Route::get('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'show'])->whereNumber('campanha')->name('ver')->middleware('permission:financeiro.view');
         Route::get('{campanha}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'edit'])->whereNumber('campanha')->name('editar')->middleware('permission:financeiro.create');
@@ -695,6 +741,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::post('download-videos', [VideoDownloadController::class, 'store'])
         ->middleware(['permission:operacional.create', 'throttle:5,1'])
         ->name('download-videos.store');
+    Route::post('download-videos/preview', [VideoDownloadController::class, 'preview'])
+        ->middleware(['permission:operacional.create', 'throttle:20,1'])
+        ->name('download-videos.preview');
 
     Route::resource('pedidos-de-compra', PurchaseOrderController::class)->except(['edit', 'update'])
         ->parameters(['pedidos-de-compra' => 'purchase_order'])
@@ -734,6 +783,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('logistica/fretes-por-estado', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'index'])->name('logistica.fretes-por-estado');
         Route::post('logistica/fretes-por-estado/cotar', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotar'])->name('logistica.fretes-por-estado.cotar');
         Route::post('logistica/fretes-por-estado/cotar-melhor-envio', [\App\Modules\Admin\Http\Controllers\FretesPorEstadoController::class, 'cotarMelhorEnvio'])->name('logistica.fretes-por-estado.cotar-melhor-envio');
+        // Rastreio dos Correios (2026-10-19): objetos acompanhados pelo SRO
+        // Rastro e o histórico de eventos (loja:acompanhar-rastreio grava).
+        Route::get('logistica/rastreio', [\App\Modules\Admin\Http\Controllers\RastreioController::class, 'index'])->name('logistica.rastreio');
     });
     Route::post('logistica', [ShippingMethodController::class, 'store'])->name('logistica.armazenar')->middleware('permission:operacional.create');
     Route::put('logistica/{shipping_method}', [ShippingMethodController::class, 'update'])->name('logistica.atualizar')->middleware('permission:operacional.edit');

@@ -13,6 +13,7 @@ import { formatPercent, formatPrice } from '@/Shared/graficos';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import AbaLancamentos from './AbaLancamentos.vue';
 import AbaVendas from './AbaVendas.vue';
+import AlertaAds from '../Financeiro/AlertaAds.vue';
 import AlertasFinanceiros from './AlertasFinanceiros.vue';
 import CascataResultado from './CascataResultado.vue';
 import DeCadaCem from './DeCadaCem.vue';
@@ -22,6 +23,7 @@ import KpiResultado from './KpiResultado.vue';
 import LucroPorCanal from './LucroPorCanal.vue';
 import ProximosDias from './ProximosDias.vue';
 import QualidadeDados from './QualidadeDados.vue';
+import SaldosCanais from './SaldosCanais.vue';
 
 const props = defineProps({
     filtro: { type: Object, required: true },
@@ -29,11 +31,14 @@ const props = defineProps({
     costCenters: { type: Array, default: () => [] },
     // Resumo
     resumo: { type: Object, default: null },
+    radarAds: { type: Object, default: null },
     canais: { type: Array, default: null },
     serie: { type: Array, default: null },
     previsao: { type: Object, default: null },
     qualidade: { type: Object, default: null },
     alertas: { type: Array, default: null },
+    // Saldos nos canais
+    saldos: { type: Object, default: null },
     // Vendas
     sales: { type: Object, default: null },
     salesTotals: { type: Object, default: null },
@@ -95,6 +100,7 @@ const novoLancamento = () => {
 // ---- Resumo -----------------------------------------------------------------
 const ABAS = [
     { chave: 'resumo', rotulo: 'Resumo' },
+    { chave: 'saldos', rotulo: 'Saldos nos canais' },
     { chave: 'vendas', rotulo: 'Vendas (custo e comissão)' },
     { chave: 'lancamentos', rotulo: 'Lançamentos' },
 ];
@@ -160,7 +166,7 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
                 :aria-current="filtro.aba === a.chave ? 'page' : undefined">{{ a.rotulo }}</Link>
         </nav>
 
-        <FiltrosPeriodo :filtro="filtro" :canais="canaisFiltro" @mudar="visitar" />
+        <FiltrosPeriodo v-if="filtro.aba !== 'saldos'" :filtro="filtro" :canais="canaisFiltro" @mudar="visitar" />
         <p class="sr-only" aria-live="polite">{{ calculando ? 'Calculando…' : '' }}</p>
         <div v-if="calculando" class="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--texto-suave)] shadow-sm" aria-hidden="true">
             <i class="fas fa-circle-notch fa-spin"></i> Calculando…
@@ -168,6 +174,7 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
 
         <!-- ================= Resumo ================= -->
         <div v-if="filtro.aba === 'resumo' && atual" :class="{ 'opacity-60 transition-opacity': calculando }">
+            <AlertaAds :radar="radarAds" />
             <AlertasFinanceiros :alertas="alertas ?? []" />
 
             <p v-if="vazio" class="mb-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] px-4 py-3 text-sm shadow-sm">Nenhuma venda paga neste período.</p>
@@ -227,6 +234,9 @@ const linkSemCusto = computed(() => `${URL_BASE}?${new URLSearchParams({ ...filt
                 Lançamentos manuais não entram no lucro. Comparação: {{ rotuloComp ? `${filtro.rotuloComparacao} (${filtro.compDe.split('-').reverse().slice(0, 2).join('/')} a ${filtro.compAte.split('-').reverse().slice(0, 2).join('/')})` : 'desligada' }}.
             </p>
         </div>
+
+        <!-- ================= Saldos nos canais ================= -->
+        <SaldosCanais v-else-if="filtro.aba === 'saldos' && saldos" :saldos="saldos" />
 
         <!-- ================= Vendas ================= -->
         <AbaVendas v-else-if="filtro.aba === 'vendas' && sales" :class="{ 'opacity-60 transition-opacity': calculando }"

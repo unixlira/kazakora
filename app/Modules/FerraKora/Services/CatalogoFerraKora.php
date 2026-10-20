@@ -6,6 +6,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Services\CatalogoOutroSite;
 use App\Modules\Checkout\Support\FreteEmbutido;
 use App\Modules\Catalog\Models\ProductAdContent;
+use App\Modules\Catalog\Support\PerfilDoCliente;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Support\DescontoPix;
 use App\Support\SiteAtual;
@@ -58,7 +59,7 @@ class CatalogoFerraKora extends CatalogoOutroSite
             'categoria' => $registro->categoria,
             'kazakora_url' => filled($pai->slug) ? route('produtos.ver', $pai->slug) : null,
             'frete_gratis' => app(FreteEmbutido::class)->ligado(),
-            'desconto_pix' => DescontoPix::percentualDo($pai),
+            'desconto_pix' => round(DescontoPix::percentualDo($pai), 2),
         ];
     }
 
@@ -71,7 +72,7 @@ class CatalogoFerraKora extends CatalogoOutroSite
             return null;
         }
 
-        $pai = Product::query()->with(['images', 'adContent'])->find((int) Str::after($produto['id'], self::PREFIXO_PRODUTO));
+        $pai = Product::query()->with(['images', 'adContent', 'category:id,slug'])->find((int) Str::after($produto['id'], self::PREFIXO_PRODUTO));
 
         return [...$produto, 'conteudo' => $pai ? $this->conteudoDaPagina($pai) : null];
     }
@@ -104,6 +105,7 @@ class CatalogoFerraKora extends CatalogoOutroSite
             ])->values()->all(),
             'comparativo' => $conteudo->comparativo,
             'beneficios' => $conteudo->beneficios ?? [],
+            'titulo_beneficios' => PerfilDoCliente::tituloBeneficios($pai->category?->slug),
             'duvidas' => $conteudo->duvidas ?? [],
             'fonte' => $conteudo->fonte,
             'gerado_em' => $conteudo->gerado_em?->toIso8601String(),
@@ -116,7 +118,7 @@ class CatalogoFerraKora extends CatalogoOutroSite
         return Product::query()
             ->where('is_active', true)
             ->whereIn('id', FerraKoraProduto::query()->where('ativo', true)->select('product_id'))
-            ->with(['images', 'adContent'])
+            ->with(['images', 'adContent', 'category:id,slug'])
             ->orderBy(FerraKoraProduto::query()->select('ordem')->whereColumn('ferrakora_produtos.product_id', 'products.id')->limit(1))
             ->orderBy('id');
     }

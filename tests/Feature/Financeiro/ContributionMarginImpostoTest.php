@@ -111,9 +111,8 @@ class ContributionMarginImpostoTest extends TestCase
             ->where('resumo.atual.lucro', $conta['lucro'])
             ->where('resumo.atual.imposto', $conta['imposto']));
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk()->assertInertia(fn ($page) => $page
-            ->where('summary.profitMonth', $conta['lucro'])
-            ->where('netProfit.netProfitMonth', $conta['lucro'])
-            ->where('summary.taxMonth', $conta['imposto']));
+            ->where('conta.lucro', $conta['lucro'])
+            ->where('conta.imposto', $conta['imposto']));
 
         $this->assertEqualsWithDelta(139.65, $conta['lucro'], 0.001); // 230 − 80 − 10,35
         $this->assertEqualsWithDelta($conta['lucro'], $email['lucro'], 0.001);

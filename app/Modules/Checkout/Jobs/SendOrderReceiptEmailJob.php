@@ -63,6 +63,24 @@ class SendOrderReceiptEmailJob implements ShouldQueue, ShouldBeUnique
             && $order->invoice->danfe_path
             && Storage::disk('local')->exists($order->invoice->danfe_path);
 
+        // Pedido do Lira 2026-10-16 (pedido Amazon #3181): o recibo é só da
+        // loja própria. A Amazon e o TikTok passam um e-mail do comprador e
+        // o recibo saía com links do kazakora.com e WhatsApp, o que as
+        // regras de mensagem dos marketplaces não permitem. O canal já
+        // avisa o comprador sozinho.
+        if ($order->origin && $order->origin !== Order::ORIGIN_STORE) {
+            OrderEmailLog::create([
+                'order_id' => $order->id,
+                'mailable' => 'order_confirmation',
+                'attempt' => $this->attempts(),
+                'status' => OrderEmailLog::STATUS_SKIPPED,
+                'invoice_attached' => $invoiceAttached,
+                'error_message' => 'Pedido de marketplace: recibo da loja não é enviado ao comprador do canal.',
+            ]);
+
+            return;
+        }
+
         // Achado real 2026-08-08 (pedido #189, mesma investigação da
         // correção de CPF): pedido de marketplace nunca tem Order::user
         // (user_id fica null nesse fluxo) — Mail::to($order->user) mandava

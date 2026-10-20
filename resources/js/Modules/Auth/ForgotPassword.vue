@@ -28,7 +28,8 @@ const submit = () => {
             Informe seu e-mail e enviaremos um link para redefinir sua senha.
         </p>
 
-        <p v-if="flashSuccess" class="mt-4 rounded-lg bg-store-accent-soft p-3 text-sm text-store-accent-strong">
+        <!-- Sucesso no verde de alerta, sem borda, fonte verde escura (pedido 2026-10-17). -->
+        <p v-if="flashSuccess" role="status" class="mt-4 rounded-lg bg-green-100 p-3 text-sm text-green-800">
             {{ flashSuccess }}
         </p>
 

@@ -3,6 +3,7 @@
 namespace Tests\Unit\Support;
 
 use App\Models\User;
+use App\Modules\Checkout\Models\Address;
 use App\Modules\BeautyKora\Models\BeautyKoraCliente;
 use App\Modules\FerraKora\Models\FerraKoraCliente;
 use Tests\TestCase;
@@ -24,5 +25,6 @@ class NomeCapitalizadoTest extends TestCase
         $this->assertSame('João Silva', (new User(['name' => 'JOÃO SILVA']))->name);
         $this->assertSame('João Silva', (new FerraKoraCliente(['name' => 'joão silva']))->name);
         $this->assertSame('João Silva', (new BeautyKoraCliente(['name' => 'jOãO sILVA']))->name);
+        $this->assertSame('Giovanna Lira', (new Address(['recipient_name' => 'Giovanna lira']))->recipient_name);
     }
 }

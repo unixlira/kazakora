@@ -41,7 +41,8 @@ const form = reactive({
 });
 
 const applyFilters = () => {
-    router.get('/admin/marketplaces/fotos-anuncio', { ...form }, {
+    // Dentro de Marketplaces › <marketplace> › Imagens o filtro fica na aba.
+    router.get(page.props.marketplaceNav?.url ?? '/admin/marketplaces/fotos-anuncio', { ...form }, {
         preserveScroll: true,
         preserveState: true,
         replace: true,

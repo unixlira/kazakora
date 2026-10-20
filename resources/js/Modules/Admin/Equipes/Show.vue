@@ -212,8 +212,11 @@ const flash = computed(() => usePage().props.flash?.success);
             </ul>
         </details>
 
-        <!-- Painel lateral -->
+        <!-- Painel lateral. O Teleport tira o painel de dentro do AdminLayout:
+             o .admin-shell aqui traz de volta as cores do tema (sem ele o
+             --surface não existe e o painel fica transparente no escuro). -->
         <Teleport to="body">
+          <div class="admin-shell contents">
             <Transition enter-active-class="transition-opacity duration-200 motion-reduce:transition-none" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150 motion-reduce:transition-none" leave-to-class="opacity-0">
                 <div v-if="aberto" class="fixed inset-0 z-50 bg-black/40" aria-hidden="true" @click="fechar"></div>
             </Transition>
@@ -363,6 +366,7 @@ const flash = computed(() => usePage().props.flash?.success);
                     </footer>
                 </aside>
             </Transition>
+          </div>
         </Teleport>
     </AdminLayout>
 </template>

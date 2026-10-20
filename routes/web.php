@@ -168,6 +168,11 @@ Route::post('/favoritos/{product}', [FavoriteController::class, 'toggle'])
     ->middleware('auth')
     ->name('favoritos.alternar');
 
+// Esboço "Avalie suas compras" com recompensas (pedido 2026-10-20).
+Route::get('/avaliar', [ReviewController::class, 'index'])
+    ->middleware('auth')
+    ->name('avaliacoes.minhas');
+
 Route::post('/produtos/{product}/avaliacoes', [ReviewController::class, 'store'])
     ->middleware('auth')
     ->name('avaliacoes.armazenar');

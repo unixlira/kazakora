@@ -534,7 +534,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                     <div class="absolute inset-x-0 top-0 h-1.5 bg-store-accent"></div>
                     <div class="mx-auto max-w-3xl text-center">
                         <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-store-accent-soft text-store-accent-strong"><i class="fas fa-sparkles"></i></span>
-                        <p class="mt-4 font-store-mono text-xs uppercase tracking-[0.22em] text-store-fg-muted">Por que esse produto merece atenção</p>
                         <h2 class="mt-2 font-display text-3xl font-semibold text-store-fg md:text-4xl">Detalhes que fazem diferença no uso diário</h2>
                     </div>
 

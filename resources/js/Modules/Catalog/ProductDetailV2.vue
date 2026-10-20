@@ -616,8 +616,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                              persuasivo, comparativo, benefícios e dúvidas. -->
                         <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
                             <header class="desc-cabecalho">
-                                <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
-                                <p class="desc-eyebrow">Por que esse produto merece atenção?</p>
+                                <!-- Sem "Por que esse produto merece atenção?" (pedido 2026-10-20, definitivo). -->
                                 <h2>{{ anuncio?.chamada || 'Descrição' }}</h2>
                             </header>
 
@@ -846,6 +845,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 }
 .pd2 img { max-width: 100%; display: block; }
 .pd2 a { color: inherit; }
+/* Botões dos cards (Ver detalhes / Detalhes) ficam brancos: o inherit acima deixava cinza (pedido 2026-10-20). */
+.pd2 .card-produto a.text-white { color: #fff; }
 .pd2 h1, .pd2 h2, .pd2 h3 { color: var(--ink); font-family: inherit; margin: 0; line-height: 1.2; }
 .pd2 h2 { font-size: 28px; font-weight: 500; margin-bottom: 16px; }
 .pd2 p { margin: 0 0 14px; }

@@ -53,7 +53,7 @@ const irPara = (indice) => {
         <div v-if="slider" class="relative md:hidden">
             <div ref="trilho" class="no-scrollbar flex snap-x snap-mandatory overflow-x-auto scroll-smooth" @scroll.passive="aoRolar">
                 <div v-for="product in produtos" :key="product.id" class="w-full shrink-0 snap-center px-1">
-                    <ProductCard :product="product" estrelas
+                    <ProductCard :product="product"
                         :is-favorite="favoriteIds.includes(product.id)" :is-authenticated="isAuthenticated"
                         :can-review="reviewableProductIds.includes(product.id)" :has-reviewed="reviewedProductIds.includes(product.id)" />
                 </div>

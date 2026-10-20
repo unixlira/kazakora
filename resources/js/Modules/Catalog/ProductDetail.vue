@@ -23,7 +23,6 @@ const props = defineProps({
     relatedFavoriteIds: { type: Array, default: () => [] },
     relatedReviewableIds: { type: Array, default: () => [] },
     relatedReviewedIds: { type: Array, default: () => [] },
-    salesCount: { type: Number, default: 0 },
 });
 
 const page = usePage();

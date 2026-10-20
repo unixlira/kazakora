@@ -139,7 +139,7 @@ const columns = [
         <h2 class="mb-1 text-lg font-bold">Montadas no KazaKora</h2>
         <p class="mb-4 text-sm text-slate-500">
             Monte a campanha como no Gerenciador da Meta: vários conjuntos e vários anúncios em cada, de uma vez.
-            Tudo vai para a Meta <strong>pausado</strong>; só começa a gastar quando você clicar em Ativar.
+            Tudo vai para a Meta <strong>ativo</strong>: ao enviar, você confirma o gasto por dia e a campanha começa a rodar assim que a Meta aprovar.
         </p>
 
         <DataTable

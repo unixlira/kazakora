@@ -36,8 +36,10 @@ use Illuminate\Support\Facades\Storage;
  * primeiro, a recusa não deixa campanha e conjunto vazios na conta.
  *
  * Regras que não podem quebrar:
- * - Tudo é criado PAUSADO (campanha, conjuntos e anúncios). Ativar é outro
- *   passo (alterarStatus), disparado só com confirmação do gasto na tela.
+ * - Conjuntos e anúncios nascem ATIVOS (pedido do Lira 2026-10-20). A
+ *   campanha nova nasce pausada e só liga no fim do envio, depois que tudo
+ *   foi criado: se um passo falhar no meio, nada fica gastando pela metade.
+ *   O gasto é confirmado na tela antes de enviar.
  * - O token vai no cabeçalho Authorization, nunca na URL, e nunca é logado
  *   nem aparece em mensagem de erro.
  * - Cada id é salvo assim que a Meta devolve: se um passo falhar, o
@@ -162,14 +164,15 @@ class MetaAdsService
     public const ENVIO_AGUARDANDO = 'aguardando';
 
     /**
-     * Avança o envio da campanha para a Meta, tudo PAUSADO, continuando do
-     * passo que faltou. Sobe no máximo um vídeo por chamada, para cada
+     * Avança o envio da campanha para a Meta, continuando do passo que
+     * faltou. Conjuntos e anúncios nascem ativos; a campanha liga no fim. Sobe no máximo um vídeo por chamada, para cada
      * rodada da fila caber no tempo limite do worker.
      *
      * Com $somente (conjunto novo em campanha que já está na Meta, pedido do
      * Lira 2026-10-19), sobe só esse conjunto e os anúncios dele, dentro da
-     * campanha que já existe, e não mexe no status da campanha: ela pode
-     * estar gastando. O erro fica no conjunto.
+     * campanha que já existe, e não mexe no status da campanha: se ela está
+     * rodando, o conjunto e os anúncios novos já começam a rodar; se está
+     * pausada, eles ligam quando ela for ativada. O erro fica no conjunto.
      *
      * @return self::ENVIO_*
      *
@@ -293,9 +296,17 @@ class MetaAdsService
                     $passo = "{$this->rotuloDoAnuncio($video)} ({$conjunto->nome})";
                     if (blank($video->meta_ad_id)) {
                         $resposta = $this->post($this->conta().'/ads', $this->payloadAnuncio($campanha, $video, $conjunto));
-                        $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ultimo_erro' => null])->save();
+                        $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ativado_em' => now(), 'ultimo_erro' => null])->save();
                     }
                 }
+
+                $conjunto->forceFill(['ativado_em' => $conjunto->ativado_em ?? now()])->save();
+            }
+
+            // 5. Tudo criado: liga a campanha (só no envio da campanha inteira).
+            if (! $alvo) {
+                $passo = 'ativação da campanha';
+                $this->post((string) $campanha->meta_campaign_id, ['status' => 'ACTIVE']);
             }
         } catch (MetaAdsException $erro) {
             $mensagem = "Falhou no passo {$passo}: {$erro->getMessage()}";
@@ -321,9 +332,10 @@ class MetaAdsService
         }
 
         $campanha->forceFill([
-            'status' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
+            'status' => MetaAdsCampanha::STATUS_ATIVA,
             'ultimo_erro' => null,
             'enviada_em' => now(),
+            'ativada_em' => now(),
         ])->save();
 
         return self::ENVIO_PRONTO;
@@ -1032,6 +1044,7 @@ class MetaAdsService
         $payload = [
             'name' => $campanha->nome,
             'objective' => $campanha->objetivo,
+            // Nasce pausada e liga no fim do envio (avancarEnvio, passo 5).
             'status' => 'PAUSED',
             'special_ad_categories' => json_encode([]),
         ];
@@ -1059,7 +1072,7 @@ class MetaAdsService
             // Sem publisher_platforms = posicionamentos automáticos.
             'targeting' => json_encode($this->targeting($campanha, $conjunto)),
             'start_time' => $this->inicioDoConjunto($campanha)->toIso8601String(),
-            'status' => 'PAUSED',
+            'status' => 'ACTIVE',
         ];
 
         if (! $campanha->orcamentoDaCampanha()) {
@@ -1304,7 +1317,7 @@ class MetaAdsService
             'name' => $this->nomeDoAnuncio($campanha, $video, $conjunto),
             'adset_id' => $video->meta_adset_id,
             'creative' => json_encode(['creative_id' => $video->meta_creative_id]),
-            'status' => 'PAUSED',
+            'status' => 'ACTIVE',
         ];
     }
 

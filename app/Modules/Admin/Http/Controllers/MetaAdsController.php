@@ -33,12 +33,13 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * público próprio, opcional) e vários anúncios em cada, cada anúncio com
  * vídeo ou imagem, produto e texto próprios. Salvar grava campanha,
  * conjuntos e texto de todos os anúncios num pedido só (transação); os
- * arquivos novos sobem um por um depois, com barra de progresso. Envio cria
- * tudo PAUSADO; ativar é outro botão, com confirmação explícita do gasto.
+ * arquivos novos sobem um por um depois, com barra de progresso. Desde
+ * 2026-10-20 (pedido do Lira) o envio cria tudo ATIVO, com a confirmação
+ * explícita do gasto no botão de enviar.
  *
  * Desde 2026-10-19 (pedido do Lira) dá para criar conjunto novo dentro de
  * campanha que já está na Meta: o conjunto é montado à parte e sobe
- * sozinho, pausado, sem reenviar nem pausar o resto da campanha. Do mesmo
+ * sozinho, já ativo, sem reenviar nem pausar o resto da campanha. Do mesmo
  * jeito, dá para acrescentar anúncio novo em conjunto que já está na Meta.
  */
 class MetaAdsController extends Controller
@@ -222,8 +223,12 @@ class MetaAdsController extends Controller
         return redirect()->route('admin.publicidade.meta-ads.campanhas.listar')->with('success', 'Rascunho excluído.');
     }
 
-    public function enviar(MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse
+    public function enviar(Request $request, MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse
     {
+        // A campanha nasce ativa: a tela manda o orçamento diário que a
+        // pessoa viu no aviso, e ele tem que bater com o da campanha.
+        $this->confirmarGasto($request, (float) $campanha->orcamento_diario, 'Confirme que a campanha vai começar a gastar.');
+
         if (! $campanha->podeEnviar()) {
             return back()->with('error', 'Esta campanha já foi enviada.');
         }
@@ -238,7 +243,8 @@ class MetaAdsController extends Controller
         $campanha->videos()->update(['ultimo_erro' => null]);
         EnviarCampanhaMetaAds::dispatch($campanha->id);
 
-        return back()->with('success', 'Enviando para a Meta. A campanha, os conjuntos e os anúncios são criados um por um e a Meta leva alguns minutos para processar os vídeos. Tudo fica PAUSADO até você ativar.');
+        // Sem aviso de sucesso: a tela mostra o andamento num modal só.
+        return back();
     }
 
     public function ativar(Request $request, MetaAdsCampanha $campanha, MetaAdsService $meta): RedirectResponse
@@ -780,11 +786,15 @@ class MetaAdsController extends Controller
         return redirect()->route('admin.publicidade.meta-ads.campanhas.ver', $campanha)->with('success', 'Conjunto novo excluído.');
     }
 
-    public function conjuntoEnviar(MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): RedirectResponse
+    public function conjuntoEnviar(Request $request, MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): RedirectResponse
     {
         abort_unless($conjunto->campanha_id === $campanha->id, 404);
         $campanha->load(['conjuntos', 'videos']);
         $conjunto = $campanha->conjuntos->firstWhere('id', $conjunto->id);
+
+        // Nasce ativo: confirma o orçamento do conjunto; da campanha, o total.
+        $this->confirmarGasto($request, $campanha->orcamentoDaCampanha() ? (float) $campanha->orcamento_diario : (float) $conjunto->orcamento_diario,
+            'Confirme que o conjunto vai começar a gastar.');
 
         if (! $conjunto->podeEnviar($campanha)) {
             return back()->with('error', 'Nada novo para enviar neste conjunto, ou o envio já está rodando.');
@@ -798,9 +808,7 @@ class MetaAdsController extends Controller
         $campanha->videos()->where('conjunto_id', $conjunto->id)->update(['ultimo_erro' => null]);
         EnviarCampanhaMetaAds::dispatch($campanha->id, $conjunto->id);
 
-        $oQue = blank($conjunto->meta_adset_id) ? "o conjunto {$conjunto->nome} e os anúncios dele" : "os anúncios novos do conjunto {$conjunto->nome}";
-
-        return back()->with('success', "Enviando {$oQue} para a Meta. Nascem PAUSADOS; o resto da campanha não muda.");
+        return back();
     }
 
     public function conjuntoAtivar(Request $request, MetaAdsCampanha $campanha, MetaAdsConjunto $conjunto, MetaAdsService $meta): RedirectResponse
@@ -856,6 +864,24 @@ class MetaAdsController extends Controller
     }
 
     // ------------------------------------------------------------------------
+
+    /**
+     * Confirmação explícita do gasto: caixa marcada e o orçamento diário que
+     * a pessoa viu no aviso, que tem que bater com o de agora.
+     */
+    private function confirmarGasto(Request $request, float $esperado, string $mensagem): void
+    {
+        $request->validate([
+            'confirmo_gasto' => ['accepted'],
+            'orcamento_diario' => ['required', 'numeric'],
+        ], [
+            'confirmo_gasto.accepted' => $mensagem,
+        ]);
+
+        if (round((float) $request->input('orcamento_diario'), 2) !== round($esperado, 2)) {
+            throw ValidationException::withMessages(['orcamento_diario' => 'O orçamento mudou. Recarregue a tela e confirme de novo.']);
+        }
+    }
 
     /**
      * No admin, erro de validação vira redirecionamento até em pedido JSON

@@ -305,7 +305,6 @@ const specs = computed(() => {
     if (selecionada.value.variation) list.push(['Variação', selecionada.value.variation]);
     if (props.product.category) list.push(['Categoria', props.product.category.name]);
     if (selecionada.value.sku) list.push(['SKU', selecionada.value.sku]);
-    list.push(['Estoque disponível', `${selecionada.value.stock} unidade${selecionada.value.stock === 1 ? '' : 's'}`]);
     return list;
 });
 

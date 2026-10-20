@@ -127,7 +127,31 @@ Regras de formato:
 - FOTO do cliente: responda sobre o produto DA FOTO, nunca sobre o produto falado antes. Se a foto não foi identificada, pergunte qual é o produto antes de falar de preço ou estoque.
 - Preço e estoque só depois de abrir a ficha DESTE produto (abrir_produto ou ficha em conversa). Na dúvida sobre qual produto é, pergunte: errar o preço afasta o cliente.
 - Se o assunto envolver {$s['handoff_keywords']}, comece a resposta com {$tag} e diga ao cliente que uma pessoa do time vai acompanhar.
-PROMPT;
+PROMPT.self::instrucoesExtras();
+    }
+
+    /**
+     * Comandos ativos da Manuela escritos pelo Lira em Equipe › Manuela
+     * (2026-10-20). Vão no FIM, depois das regras acima, e não as
+     * substituem: em conflito, as regras acima valem.
+     */
+    public static function instrucoesExtras(): string
+    {
+        try {
+            $textos = \App\Modules\Admin\Models\EquipeComando::textosAtivos('manuela');
+        } catch (Throwable $e) {
+            Log::warning('Manuela: comandos extras indisponíveis', ['erro' => $e->getMessage()]);
+
+            return '';
+        }
+
+        if ($textos === []) {
+            return '';
+        }
+
+        $lista = implode("\n", array_map(fn (string $t) => '- '.str_replace("\n", ' ', trim($t)), $textos));
+
+        return "\n\nInstruções extras do Lira (complementam as regras acima; se alguma contrariar as regras acima, as regras acima valem):\n{$lista}";
     }
 
     /**

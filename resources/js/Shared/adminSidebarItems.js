@@ -178,6 +178,23 @@ export const sidebarSections = [
         ],
     },
     {
+        // Equipe (pedido do Lira 2026-10-20): um item por agente, com a
+        // inicial num círculo da cor dele (`avatar`); o ícone próprio de cada
+        // um aparece nos cards da página. Mesmos slugs de config/equipe.php.
+        heading: 'Equipe',
+        items: [
+            { label: 'Visão geral', href: '/admin/equipe', icon: 'fas fa-people-group', cor: 'cinza-azul', permission: 'configuracoes.usuarios' },
+            { label: 'Juliana', href: '/admin/equipe/juliana', icon: 'fas fa-clipboard-check', cor: 'ciano', avatar: 'J', permission: 'configuracoes.usuarios' },
+            { label: 'Paulo', href: '/admin/equipe/paulo', icon: 'fas fa-code', cor: 'azul', avatar: 'P', permission: 'configuracoes.usuarios' },
+            { label: 'Jonathan', href: '/admin/equipe/jonathan', icon: 'fas fa-pen-nib', cor: 'rosa', avatar: 'J', permission: 'configuracoes.usuarios' },
+            { label: 'Giovanna', href: '/admin/equipe/giovanna', icon: 'fas fa-palette', cor: 'violeta', avatar: 'G', permission: 'configuracoes.usuarios' },
+            { label: 'Cauê', href: '/admin/equipe/caue', icon: 'fas fa-store', cor: 'laranja', avatar: 'C', permission: 'configuracoes.usuarios' },
+            { label: 'Diego', href: '/admin/equipe/diego', icon: 'fas fa-tags', cor: 'ambar', avatar: 'D', permission: 'configuracoes.usuarios' },
+            { label: 'Rafael', href: '/admin/equipe/rafael', icon: 'fas fa-satellite-dish', cor: 'indigo', avatar: 'R', permission: 'configuracoes.usuarios' },
+            { label: 'Manuela', href: '/admin/equipe/manuela', icon: 'fas fa-comment-dots', cor: 'verde', avatar: 'M', permission: 'configuracoes.usuarios' },
+        ],
+    },
+    {
         heading: 'Configurações',
         items: [
             { label: 'Empresa', href: '/admin/empresa', icon: 'fas fa-building', cor: 'azul', permission: null },

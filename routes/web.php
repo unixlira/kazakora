@@ -882,8 +882,18 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('whatsapp/conversas/{conversation}', [WhatsAppInboxController::class, 'destroy'])->whereNumber('conversation')->name('whatsapp.conversas.apagar');
     });
 
+    // Equipe (pedido do Lira 2026-10-20): os agentes, as skills de cada um
+    // e os comandos extras. configuracoes.usuarios = só admin.
+    Route::middleware('permission:configuracoes.usuarios')->prefix('equipe')->name('equipe.')->group(function () {
+        $membro = implode('|', array_keys(config('equipe.membros', [])));
+        Route::get('/', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'index'])->name('listar');
+        Route::get('{membro}', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'show'])->where('membro', $membro)->name('ver');
+        Route::post('{membro}/comandos', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'store'])->where('membro', $membro)->name('comandos.armazenar');
+        Route::patch('{membro}/comandos/{comando}', [\App\Modules\Admin\Http\Controllers\EquipeController::class, 'update'])->where('membro', $membro)->whereNumber('comando')->name('comandos.atualizar');
+    });
+
     Route::middleware('admin')->group(function () {
-        Route::get('usuarios-permissoes', [UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');
+        Route::get('usuarios-permissoes',[UserPermissionController::class, 'index'])->name('usuarios-permissoes.listar');
         Route::patch('usuarios-permissoes/usuarios/{user}', [UserPermissionController::class, 'updateRole'])->name('usuarios-permissoes.papel.atualizar');
         Route::delete('usuarios-permissoes/usuarios/{user}', [UserPermissionController::class, 'destroy'])->name('usuarios-permissoes.usuarios.excluir');
         Route::put('usuarios-permissoes/matriz', [UserPermissionController::class, 'updatePermissions'])->name('usuarios-permissoes.matriz.atualizar');

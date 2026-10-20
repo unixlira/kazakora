@@ -330,7 +330,11 @@ watch(
                                             ? 'border-transparent bg-[var(--menu-ativo)] font-semibold text-[var(--destaque)]'
                                             : 'border-transparent text-[var(--sidebar-foreground)] hover:bg-[var(--surface-border)]/30']"
                                         :aria-current="isActive(item.href) ? 'page' : undefined" @click="dispensarBadge(item)">
-                                        <i class="w-8 text-center" :class="[item.icon, classeIcone(item), !sidebarCollapsed && !section.direto ? 'text-xs' : 'text-sm']"></i>
+                                        <!-- Equipe (2026-10-20): inicial num círculo da cor do membro. -->
+                                        <span v-if="item.avatar" class="flex w-8 shrink-0 justify-center" aria-hidden="true">
+                                            <span class="avatar-cor flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold" :class="`icone-cor-${item.cor ?? 'azul'}`">{{ item.avatar }}</span>
+                                        </span>
+                                        <i v-else class="w-8 text-center" :class="[item.icon, classeIcone(item), !sidebarCollapsed && !section.direto ? 'text-xs' : 'text-sm']"></i>
                                         <span v-if="!sidebarCollapsed" class="truncate">{{ item.label }}</span>
                                         <span v-if="sidebarBadge(item) > 0"
                                             class="ml-auto mr-2 min-w-[1.25rem] rounded-full bg-error px-1.5 text-center text-xs font-bold leading-5 text-white"

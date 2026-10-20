@@ -197,6 +197,11 @@
 .dark .admin-shell .icone-cor-verde { --cor-icone: #34d399; }
 .dark .admin-shell .icone-cor-ciano { --cor-icone: #22d3ee; }
 .dark .admin-shell .icone-cor-cinza-azul { --cor-icone: #94a3b8; }
+/* Equipe (2026-10-20): círculo com a inicial do membro, fundo na cor dele.
+   No escuro o tom 400 é claro, então a letra fica escura. */
+.admin-shell .avatar-cor { background-color: var(--cor-icone); color: #fff; }
+.dark .admin-shell .avatar-cor { color: #0f172a; }
+.admin-shell .fundo-cor-suave { background-color: color-mix(in srgb, var(--cor-icone) 12%, transparent); }
 
 /*
  * Fundo da página do admin em degradê (Lira, 2026-10-14) agora é sólido (Calcite):

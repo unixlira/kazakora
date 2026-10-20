@@ -9,7 +9,6 @@ use App\Modules\Checkout\Models\Payment;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 /**
@@ -151,12 +150,9 @@ class BoletoMercadoPago
 
         if ($order->status === Order::STATUS_CANCELLED) {
             // Pago depois de o pedido já ter sido cancelado por outro motivo:
-            // não ressuscita o pedido sozinho (o estoque já voltou). Fica no
-            // log para devolver o dinheiro ou refazer o pedido à mão.
-            Log::channel('mercadopago')->critical('mercadopago.boleto.pago_com_pedido_cancelado', [
-                'order_id' => $order->id,
-                'payment_id' => $payment->mercadopago_payment_id,
-            ]);
+            // não ressuscita o pedido sozinho (o estoque já voltou). Log e
+            // sino dos admins para devolver o dinheiro ou refazer o pedido.
+            PixMercadoPago::avisarPagoComPedidoCancelado($order, $payment);
 
             return self::PAGO;
         }

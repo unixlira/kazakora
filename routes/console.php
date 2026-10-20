@@ -13,6 +13,8 @@ Artisan::command('inspire', function () {
 
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
+// Pix pago com a tela fechada (19/10, #3283): confirma em até 1 min, sem esperar os 30 da varredura acima.
+Schedule::command('mercadopago:conferir-pix')->everyMinute()->withoutOverlapping(5);
 // Boleto do Mercado Pago (2026-10-14): pago dias depois → pedido pago; vencido → cancela.
 Schedule::command('mercadopago:conferir-boletos')->everyThirtyMinutes()->withoutOverlapping(25);
 // Ofertas do dia da loja: a escolha automática das 00:05 (loja:ofertas-do-dia)

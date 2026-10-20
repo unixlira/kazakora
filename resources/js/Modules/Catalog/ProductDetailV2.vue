@@ -663,8 +663,18 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
-                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card">
-                            <header class="desc-cabecalho">
+                        <section v-if="blocosAnuncio.length || descriptionSections.length" class="card descricao-card" :class="{ 'com-topo-preto': blocosAnuncio.length && anuncio?.chamada }">
+                            <!-- Teste de contraste (pedido 2026-10-20, Lanterna LED): o cabeçalho preto do #698
+                                 no lugar do cabeçalho branco, de ponta a ponta no topo do cartão. -->
+                            <header v-if="blocosAnuncio.length && anuncio?.chamada" class="topo-oferta">
+                                <p class="topo-eyebrow"><span class="topo-icone"><i class="fas fa-wand-magic-sparkles"></i></span> Por que esse produto merece atenção?</p>
+                                <h2>{{ anuncio.chamada }}</h2>
+                                <p class="topo-sub">{{ product.name }}</p>
+                                <ul v-if="anuncio.destaques?.length" class="topo-pilulas">
+                                    <li v-for="(item, index) in anuncio.destaques.slice(0, 3)" :key="index"><i class="fas fa-check"></i> {{ item }}</li>
+                                </ul>
+                            </header>
+                            <header v-else class="desc-cabecalho">
                                 <span class="desc-icone"><i class="fas fa-wand-magic-sparkles"></i></span>
                                 <p class="desc-eyebrow">Por que esse produto merece atenção?</p>
                                 <!-- A chamada do anúncio fecha a página, antes do comparativo (pedido 2026-10-20). -->
@@ -1125,6 +1135,16 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .desc-icone { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; font-size: 18px; background: #f59a62; color: #fff; }
 .pd2 .desc-eyebrow { margin: 12px 0 6px; font-size: 13px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; color: #f1691b; }
 .pd2 .desc-cabecalho h2 { margin: 0; font-size: 28px; }
+/* Cabeçalho preto no topo da descrição (pedido 2026-10-20): laranja do logo (#F1691B) e preto. */
+.pd2 .descricao-card.com-topo-preto { padding-top: 0; }
+.pd2 .topo-oferta { position: relative; overflow: hidden; margin: 0 -20px 26px; padding: 30px 34px 28px; background: linear-gradient(135deg, #1d1d1d 0%, #111 70%, #2a1a10 100%); color: #fff; }
+.pd2 .topo-oferta::after { content: ''; position: absolute; top: -70px; right: -50px; width: 190px; height: 190px; border-radius: 50%; background: rgba(255, 255, 255, .08); pointer-events: none; }
+.pd2 .topo-eyebrow { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: #f1691b; }
+.pd2 .topo-icone { display: inline-flex; flex: none; width: 34px; height: 34px; border-radius: 50%; align-items: center; justify-content: center; font-size: 14px; background: #f59a62; color: #fff; }
+.pd2 .topo-oferta h2 { position: relative; max-width: 760px; margin: 0; font-size: 34px; font-weight: 700; line-height: 1.22; color: #fff; }
+.pd2 .topo-sub { margin: 12px 0 0; font-size: 15px; color: #d4d4d4; }
+.pd2 .topo-pilulas { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+.pd2 .topo-pilulas li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #fff; color: #f1691b; font-size: 14px; font-weight: 600; }
 .pd2 .bloco-anuncio + .bloco-anuncio { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
 .pd2 .bloco-anuncio h3 { font-size: 22px; font-weight: 600; margin: 0 0 14px; }
 .pd2 .bloco-anuncio p { font-size: 16px; line-height: 1.7; }
@@ -1249,6 +1269,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
 @media (max-width: 1024px) {
     .pd2 .card { padding: 30px; }
+    .pd2 .topo-oferta { margin: 0 -30px 26px; }
     .pd2 .galeria-card { padding: 10px; }
     .pd2 .confianca { grid-template-columns: repeat(2, 1fr); }
     .pd2 .aval-grade { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1270,6 +1291,9 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .card { padding: 20px; }
     .pd2 h2 { font-size: 24px; }
     .pd2 .desc-cabecalho h2 { font-size: 22px; }
+    .pd2 .topo-oferta { margin: 0 -20px 22px; padding: 22px 18px 20px; }
+    .pd2 .topo-oferta h2 { font-size: 24px; }
+    .pd2 .topo-pilulas li { font-size: 13px; padding: 5px 12px; }
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
     .pd2 .grade-beneficios { grid-template-columns: 1fr; }
     .pd2 .bloco-anuncio .chamada-frase { font-size: 21px; }

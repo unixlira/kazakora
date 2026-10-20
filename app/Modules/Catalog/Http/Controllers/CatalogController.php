@@ -404,6 +404,10 @@ class CatalogController extends Controller
 
         $user = $request->user();
 
+        // "Você também pode gostar" virou carrossel (pedido 2026-10-20):
+        // 12 sugestões para ter o que passar para o lado no computador.
+        $totalRelacionados = 12;
+
         $relatedProducts = Product::query()
             ->forCard()
             ->where('is_active', true)
@@ -412,10 +416,10 @@ class CatalogController extends Controller
             ->where('id', '!=', $product->id)
             ->when($product->category_id, fn ($query) => $query->where('category_id', $product->category_id))
             ->inRandomOrder()
-            ->take(5)
+            ->take($totalRelacionados)
             ->get();
 
-        if ($relatedProducts->count() < 5) {
+        if ($relatedProducts->count() < $totalRelacionados) {
             $excludeIds = $relatedProducts->pluck('id')->push($product->id);
 
             $relatedProducts = $relatedProducts->concat(
@@ -426,7 +430,7 @@ class CatalogController extends Controller
                     ->whereNull('parent_product_id')
                     ->whereNotIn('id', $excludeIds)
                     ->latest()
-                    ->take(5 - $relatedProducts->count())
+                    ->take($totalRelacionados - $relatedProducts->count())
                     ->get()
             );
         }

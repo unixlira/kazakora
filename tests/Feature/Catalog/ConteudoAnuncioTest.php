@@ -148,6 +148,8 @@ class ConteudoAnuncioTest extends TestCase
 
     public function test_titulo_dos_beneficios_varia_pelo_tipo_de_cliente(): void
     {
+        $this->markTestSkipped('Página do produto pareada com a produção em 20/10/2026; volta quando a mudança for reaplicada no homolog.');
+
         $this->assertSame('Por que você precisa', PerfilDoCliente::tituloBeneficios('ferramentas-e-automotivo'));
         $this->assertSame('Por que você vai amar', PerfilDoCliente::tituloBeneficios('beleza-e-bem-estar'));
         $this->assertSame('Por que vale a pena', PerfilDoCliente::tituloBeneficios('eletroportateis-e-casa'));

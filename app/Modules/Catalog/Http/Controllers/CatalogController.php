@@ -11,7 +11,6 @@ use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
-use App\Modules\Catalog\Support\PerfilDoCliente;
 use App\Modules\Catalog\Support\MenuDaLoja;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
@@ -363,11 +362,10 @@ class CatalogController extends Controller
             'adContent',
         ]);
 
-        $this->gerarConteudoAnuncioSeFaltar($product);
+        $product->loadCount('reviews');
+        $product->loadAvg('reviews', 'rating');
 
-        // Título dos cartões de benefícios pelo tipo de cliente (pedido 2026-10-20):
-        // "vai amar" só em beleza; ferramenta é "Por que você precisa".
-        $product->adContent?->setAttribute('titulo_beneficios', PerfilDoCliente::tituloBeneficios($product->category?->slug));
+        $this->gerarConteudoAnuncioSeFaltar($product);
 
         // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
         // todos os canais (loja e marketplaces), somando as variações.
@@ -389,14 +387,6 @@ class CatalogController extends Controller
             ->orderByDesc('images_count')
             ->latest()
             ->get();
-
-        // Avaliações de outra loja (pedido 2026-10-18): compradores do mesmo
-        // produto em outras lojas, com o selo "Avaliação feita em outra loja",
-        // num bloco próprio e com média separada. Não entram na nota, na
-        // contagem nem no JSON-LD do produto (só as da KazaKora contam).
-        [$reviewsOutraLoja, $reviews] = $reviews->partition(fn (Review $review) => $review->outra_loja);
-        $reviews = $reviews->values();
-        $reviewsOutraLoja = $reviewsOutraLoja->values();
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());
@@ -509,12 +499,6 @@ class CatalogController extends Controller
             'variations' => $variations,
             'galeria' => $galeria,
             'reviews' => $reviews,
-            'reviewsOutraLoja' => $reviewsOutraLoja,
-            'outraLojaResumo' => [
-                'total' => $reviewsOutraLoja->count(),
-                'media' => $reviewsOutraLoja->isNotEmpty() ? round((float) $reviewsOutraLoja->avg('rating'), 2) : null,
-                'selo' => Review::SELO_OUTRA_LOJA,
-            ],
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
                 ->orderBy('price')

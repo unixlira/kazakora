@@ -214,7 +214,6 @@ const keySpecs = computed(() => {
 const fullSpecs = computed(() => {
     const specs = [...keySpecs.value];
     if (props.product.sku) specs.push({ label: 'SKU', value: props.product.sku });
-    specs.push({ label: 'Estoque disponível', value: `${props.product.stock} unidade${props.product.stock === 1 ? '' : 's'}` });
     return specs;
 });
 

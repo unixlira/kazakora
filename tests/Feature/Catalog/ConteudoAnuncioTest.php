@@ -139,6 +139,22 @@ class ConteudoAnuncioTest extends TestCase
         });
     }
 
+    public function test_texto_da_ia_nunca_fala_de_preco_nem_parcelamento(): void
+    {
+        Http::fake(['generativelanguage.googleapis.com/*' => Http::response($this->respostaGemini([
+            'chamada' => 'Leve hoje por apenas R$ 89,90!',
+            'blocos' => [['titulo' => '🧺 Chega de bagunça?', 'texto' => 'Tudo no lugar. Em até 10x sem juros no cartão. Garanta o seu! 🛒', 'imagem' => 0]],
+            'beneficios' => [['Preço que cabe no bolso', 'Barato.'], ['Bambu natural', 'Resistente e bonito.']],
+        ]))]);
+
+        $conteudo = app(AnuncioConteudoService::class)->gerar($this->produto());
+
+        $this->assertNull($conteudo->chamada);
+        $this->assertSame('Tudo no lugar. Garanta o seu! 🛒', $conteudo->blocos[0]['texto']);
+        $this->assertSame([['Bambu natural', 'Resistente e bonito.']], $conteudo->beneficios);
+        Http::assertSent(fn ($request) => str_contains(end($request->data()['contents'][0]['parts'])['text'], 'nunca mencione preço'));
+    }
+
     public function test_erro_de_conexao_cai_na_regra_automatica_sem_quebrar(): void
     {
         Http::fake(fn () => throw new ConnectionException('timeout'));

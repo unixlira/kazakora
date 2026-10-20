@@ -7,6 +7,7 @@ use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Services\CompletarFotosProduto;
 use App\Modules\Catalog\Support\ProductImageOptimizer;
+use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\FerraKora\Models\FerraKoraProduto;
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
@@ -201,6 +202,7 @@ class ClonagemKikool
         $loja = implode(' | ', self::CATEGORIAS_LOJA);
         $ferra = implode(' | ', self::CATEGORIAS_FERRAKORA);
         $foto = $temFoto ? 'A imagem anexada é a foto principal do anúncio.' : 'Não há foto.';
+        $semPreco = TextoIaSemPreco::regra();
         $descricao = filled($descricao) ? "Descrição do fornecedor:\n".Str::limit($descricao, 3000) : 'Sem descrição do fornecedor.';
 
         return <<<TXT
@@ -214,6 +216,7 @@ class ClonagemKikool
         - Português do Brasil. Sem HTML, sem emojis, sem markdown.
         - "nome": título de venda claro, até 100 caracteres, sem a marca do fornecedor (Kicool), sem "envio imediato", "promoção", "oferta" nem preço.
         - "descricao": 3 a 6 parágrafos curtos (pode usar linhas começando com "- " para características). Use SÓ o que está no título, na descrição e na foto. Não invente medidas, potência, garantia, certificação, brindes nem números.
+        - {$semPreco}
         - "categoria_loja": exatamente uma destas: {$loja}.
         - "categoria_ferrakora": exatamente uma destas, ou null se o produto não for ferramenta, medição ou organizador de ferramentas: {$ferra}.
         - "ncm": código NCM de 8 dígitos mais provável para o produto (só números).

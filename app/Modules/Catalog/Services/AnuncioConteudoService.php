@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Services;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
 use App\Modules\Catalog\Support\GatilhosAnuncio;
+use App\Modules\Catalog\Support\TextoIaSemPreco;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Modules\WhatsApp\Services\GeminiUnavailableException;
@@ -38,7 +39,8 @@ use Throwable;
  * para quem cadastra revisar antes de salvar.
  *
  * Desde 2026-10-19 (pedido do Lira) os textos da KazaKora usam os gatilhos
- * psicológicos e levam emojis (GatilhosAnuncio).
+ * psicológicos e levam emojis (GatilhosAnuncio). Desde 2026-10-20 nenhum
+ * texto (de nenhuma loja) fala de preço ou parcelamento (TextoIaSemPreco).
  */
 class AnuncioConteudoService
 {
@@ -250,7 +252,7 @@ class AnuncioConteudoService
         $texto = str_replace(['**', '__', '#'], '', strip_tags($valor));
         $texto = preg_replace("/\n{3,}/", "\n\n", str_replace("\r", '', $texto));
 
-        return Str::limit(trim((string) $texto), 4000, '');
+        return Str::limit(TextoIaSemPreco::semPreco(trim((string) $texto)), 4000, '');
     }
 
     /** Tipo da imagem pelos primeiros bytes (a URL da Hostinger nem sempre tem extensão). */
@@ -277,6 +279,7 @@ class AnuncioConteudoService
         // Gatilhos e emojis valem só para a KazaKora (pedido do Lira, 2026-10-19);
         // a Beauty Kora usa o mesmo serviço e continua sem emoji.
         $kazakora = $loja === 'KazaKora';
+        $semPreco = TextoIaSemPreco::regra();
         $estilo = $kazakora ? 'Sem HTML e sem markdown; emojis pertinentes em todos os textos (regra abaixo).' : 'Sem HTML, sem emojis, sem markdown.';
         $gatilhos = $kazakora ? "\n".GatilhosAnuncio::regras()."\n" : '';
         $etapas = $kazakora
@@ -295,6 +298,7 @@ class AnuncioConteudoService
         - Português do Brasil, tom persuasivo e direto, focado em quebrar objeções de compra.
         - Use SÓ informações {$fonte}. Não invente medidas, materiais, garantias, prazos, brindes nem números.
         - {$estilo}
+        - {$semPreco}
         - Em cada bloco escolha a imagem que melhor ilustra o texto (índice), sem repetir imagem entre blocos quando der; use null se nenhuma servir.
         - Use todas as imagens: um bloco para cada foto (até 10), na ordem que conta a história de venda, não na ordem das fotos.
         - "destaques" são as 3 promessas que aparecem com um check logo abaixo do nome do produto: o principal resultado, a principal facilidade e o que acompanha o produto.
@@ -344,7 +348,7 @@ class AnuncioConteudoService
      */
     private function validar(array $dados, int $totalImagens): array
     {
-        $texto = fn ($valor, int $limite) => is_string($valor) ? Str::limit(trim(strip_tags($valor)), $limite, '…') : '';
+        $texto = fn ($valor, int $limite) => is_string($valor) ? Str::limit(TextoIaSemPreco::semPreco(trim(strip_tags($valor))), $limite, '…') : '';
 
         $blocos = collect($dados['blocos'] ?? [])
             ->filter(fn ($bloco) => is_array($bloco) && $texto($bloco['titulo'] ?? null, 140) !== '' && $texto($bloco['texto'] ?? null, 900) !== '')

@@ -690,7 +690,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                                 <div v-if="anuncio.chamada" class="bloco-anuncio chamada-final">
                                     <p class="chamada-frase">{{ anuncio.chamada }}</p>
-                                    <button v-if="inStock" type="button" class="btn" :aria-disabled="faltaVariacao" :disabled="buyingNow" @click="buyNow">COMPRAR</button>
+                                    <!-- No lugar do COMPRAR, o selo "Compre com tranquilidade" da versão
+                                         anterior (pedido 2026-10-20, Lanterna LED). -->
+                                    <div class="confianca-final">
+                                        <p class="rotulo-amar">Compre com tranquilidade</p>
+                                        <ul>
+                                            <li><i class="fas fa-circle-check"></i> Loja verificada no Reclame Aqui</li>
+                                            <li><i class="fas fa-circle-check"></i> Compra segura</li>
+                                            <li><i class="fas fa-circle-check"></i> Envio rápido e embalagem segura</li>
+                                            <li><i class="fas fa-circle-check"></i> Nota fiscal em toda compra</li>
+                                            <li><i class="fas fa-circle-check"></i> 7 dias para desistir</li>
+                                            <li><i class="fas fa-circle-check"></i> Atendimento no WhatsApp</li>
+                                        </ul>
+                                    </div>
                                 </div>
 
                                 <div v-if="anuncio.comparativo?.linhas?.length" class="bloco-anuncio">
@@ -1128,7 +1140,10 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .bloco-anuncio .beneficio-card p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
 .pd2 .chamada-final { text-align: center; }
 .pd2 .bloco-anuncio .chamada-frase { max-width: 640px; margin: 0 auto 18px; font-size: 26px; font-weight: 700; line-height: 1.3; color: var(--ink); }
-.pd2 .chamada-final .btn { display: inline-flex; flex: none; min-width: 240px; }
+.pd2 .confianca-final { max-width: 640px; margin: 0 auto; padding: 20px 22px; border-radius: 18px; background: #111; color: #fff; text-align: left; }
+.dark .pd2 .confianca-final { border: 1px solid var(--line); }
+.pd2 .confianca-final ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; font-size: 15px; }
+.pd2 .confianca-final i { color: #22c55e; margin-right: 6px; }
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }
@@ -1244,7 +1259,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .bloco-anuncio h3 { font-size: 19px; }
     .pd2 .grade-beneficios { grid-template-columns: 1fr; }
     .pd2 .bloco-anuncio .chamada-frase { font-size: 21px; }
-    .pd2 .chamada-final .btn { width: 100%; }
+    .pd2 .confianca-final ul { grid-template-columns: 1fr; }
     .pd2 .com-foto, .pd2 .com-foto.foto-direita { grid-template-columns: 1fr; gap: 14px; }
     .pd2 .com-foto.foto-direita .foto-desc { order: 0; }
     .pd2 .foto-desc { max-width: 320px; margin: 0 auto; }

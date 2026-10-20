@@ -183,9 +183,7 @@ class FluxoDeCaixaTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('alertas', function ($alertas) {
                 $chaves = collect($alertas)->pluck('chave')->all();
                 // ADS Shopee 40 ÷ 350 = 11,4% (> 6%); ML 9 ÷ 300 = 3% (ok).
-                // A Shopee também está acima no mês, então o aviso fica só no
-                // alerta de ADS do topo (radarAds), sem repetir aqui.
-                $this->assertNotContains('ads:shopee', $chaves);
+                $this->assertContains('ads:shopee', $chaves);
                 $this->assertNotContains('ads:mercado_livre', $chaves);
                 // Taxa estimada do TikTok: 20 de 148 = 13,5% (> 10%).
                 $this->assertContains('taxa-estimada', $chaves);
@@ -196,8 +194,7 @@ class FluxoDeCaixaTest extends TestCase
                 $this->assertSame('/admin/notas-fiscais/fechamento', $das['links'][0]['href']);
 
                 return true;
-            })->where('radarAds.acima', fn ($acima) => collect($acima)->pluck('canal')->contains('shopee')
-                && ! collect($acima)->pluck('canal')->contains('mercado_livre')));
+            }));
     }
 
     public function test_alertas_de_prejuizo_queda_sem_custo_e_nota_pendente(): void
@@ -298,7 +295,7 @@ class FluxoDeCaixaTest extends TestCase
     {
         $this->actingAs($this->admin())->get('/admin')->assertRedirect('/admin/fluxo-de-caixa');
         $this->actingAs($this->admin())->get('/admin?de=2026-10-01&ate=2026-10-05')->assertRedirect('/admin/fluxo-de-caixa?de=2026-10-01&ate=2026-10-05');
-        $this->actingAs($this->admin())->get('/admin?mes=2026-09')->assertRedirect('/admin/indicadores');
+        $this->actingAs($this->admin())->get('/admin?mes=2026-09')->assertRedirect('/admin/indicadores?aba=acessos&mes=2026-09');
 
         $assinante = User::factory()->create(['role' => User::ROLE_SUBSCRIBER]);
         DB::table('role_permissions')->where('role', User::ROLE_SUBSCRIBER)->where('permission', 'financeiro.view')->update(['granted' => false]);
@@ -321,7 +318,7 @@ class FluxoDeCaixaTest extends TestCase
         $this->assertSame(url('/admin/fluxo-de-caixa'), route('admin.fluxo-de-caixa.listar'));
     }
 
-    public function test_indicadores_tem_as_quatro_abas_e_cada_uma_traz_so_o_seu(): void
+    public function test_indicadores_tem_as_cinco_abas_e_cada_uma_traz_so_o_seu(): void
     {
         $this->cenario();
         $admin = $this->admin();
@@ -330,6 +327,7 @@ class FluxoDeCaixaTest extends TestCase
             'hoje-e-mes' => 'hojeMes',
             'caue-diego' => 'diagnosticos',
             'produtos' => 'produtos',
+            'acessos' => 'visitantes',
         ];
 
         foreach ($esperado as $aba => $prop) {
@@ -350,8 +348,6 @@ class FluxoDeCaixaTest extends TestCase
         // Sem ?aba= abre a Visão geral; aba desconhecida também.
         $this->actingAs($admin)->get('/admin/indicadores')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral')->has('painel'));
         $this->actingAs($admin)->get('/admin/indicadores?aba=xyz')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral'));
-        // "Acessos ao site" saiu (pedido do Lira 2026-10-19): link antigo abre a Visão geral.
-        $this->actingAs($admin)->get('/admin/indicadores?aba=acessos')->assertInertia(fn ($page) => $page->where('aba', 'visao-geral')->missing('visitantes'));
 
         // Lucro do mês na aba "Hoje e mês" = conta oficial.
         $conta = app(ContributionMargin::class)->periodo(Carbon::today()->startOfMonth(), Carbon::tomorrow());

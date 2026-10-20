@@ -97,10 +97,5 @@ return [
     */
     'ads_alerta_percentual' => (float) env('LOJA_ADS_ALERTA_PERCENTUAL', 6),
     'ads_meta_percentual' => (float) env('LOJA_ADS_META_PERCENTUAL', 4),
-
-    // Sugestões do dia (2026-10-20): quantos produtos a rotina da madrugada
-    // pesquisa e a pausa entre as buscas no Zoom (não martelar o site).
-    'sugestoes_max_produtos' => (int) env('LOJA_SUGESTOES_MAX_PRODUTOS', 25),
-    'sugestoes_pausa_ms' => (int) env('LOJA_SUGESTOES_PAUSA_MS', 1500),
     'queda_vendas_percentual' => (float) env('LOJA_QUEDA_VENDAS_PERCENTUAL', 30),
 ];

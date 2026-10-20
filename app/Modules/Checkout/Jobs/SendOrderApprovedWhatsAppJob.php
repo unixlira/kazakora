@@ -125,8 +125,8 @@ class SendOrderApprovedWhatsAppJob implements ShouldQueue
         FaturarPedidoSemResposta::agendar($order->id);
 
         // Aparece no histórico da conversa no painel do WhatsApp.
-        $conversation = WhatsAppConversation::doNumeroOuCria(
-            $phone,
+        $conversation = WhatsAppConversation::query()->firstOrCreate(
+            ['wa_id' => $phone],
             ['phone' => $phone, 'profile_name' => $order->shipping_name, 'last_message_at' => now(), 'unread_count' => 0],
         );
         $message = WhatsAppMessage::query()->create([

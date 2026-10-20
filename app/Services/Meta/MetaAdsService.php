@@ -36,10 +36,8 @@ use Illuminate\Support\Facades\Storage;
  * primeiro, a recusa não deixa campanha e conjunto vazios na conta.
  *
  * Regras que não podem quebrar:
- * - Conjuntos e anúncios nascem ATIVOS (pedido do Lira 2026-10-20). A
- *   campanha nova nasce pausada e só liga no fim do envio, depois que tudo
- *   foi criado: se um passo falhar no meio, nada fica gastando pela metade.
- *   O gasto é confirmado na tela antes de enviar.
+ * - Tudo é criado PAUSADO (campanha, conjuntos e anúncios). Ativar é outro
+ *   passo (alterarStatus), disparado só com confirmação do gasto na tela.
  * - O token vai no cabeçalho Authorization, nunca na URL, e nunca é logado
  *   nem aparece em mensagem de erro.
  * - Cada id é salvo assim que a Meta devolve: se um passo falhar, o
@@ -164,15 +162,14 @@ class MetaAdsService
     public const ENVIO_AGUARDANDO = 'aguardando';
 
     /**
-     * Avança o envio da campanha para a Meta, continuando do passo que
-     * faltou. Conjuntos e anúncios nascem ativos; a campanha liga no fim. Sobe no máximo um vídeo por chamada, para cada
+     * Avança o envio da campanha para a Meta, tudo PAUSADO, continuando do
+     * passo que faltou. Sobe no máximo um vídeo por chamada, para cada
      * rodada da fila caber no tempo limite do worker.
      *
      * Com $somente (conjunto novo em campanha que já está na Meta, pedido do
      * Lira 2026-10-19), sobe só esse conjunto e os anúncios dele, dentro da
-     * campanha que já existe, e não mexe no status da campanha: se ela está
-     * rodando, o conjunto e os anúncios novos já começam a rodar; se está
-     * pausada, eles ligam quando ela for ativada. O erro fica no conjunto.
+     * campanha que já existe, e não mexe no status da campanha: ela pode
+     * estar gastando. O erro fica no conjunto.
      *
      * @return self::ENVIO_*
      *
@@ -296,17 +293,9 @@ class MetaAdsService
                     $passo = "{$this->rotuloDoAnuncio($video)} ({$conjunto->nome})";
                     if (blank($video->meta_ad_id)) {
                         $resposta = $this->post($this->conta().'/ads', $this->payloadAnuncio($campanha, $video, $conjunto));
-                        $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ativado_em' => now(), 'ultimo_erro' => null])->save();
+                        $video->forceFill(['meta_ad_id' => (string) $resposta['id'], 'ultimo_erro' => null])->save();
                     }
                 }
-
-                $conjunto->forceFill(['ativado_em' => $conjunto->ativado_em ?? now()])->save();
-            }
-
-            // 5. Tudo criado: liga a campanha (só no envio da campanha inteira).
-            if (! $alvo) {
-                $passo = 'ativação da campanha';
-                $this->post((string) $campanha->meta_campaign_id, ['status' => 'ACTIVE']);
             }
         } catch (MetaAdsException $erro) {
             $mensagem = "Falhou no passo {$passo}: {$erro->getMessage()}";
@@ -332,10 +321,9 @@ class MetaAdsService
         }
 
         $campanha->forceFill([
-            'status' => MetaAdsCampanha::STATUS_ATIVA,
+            'status' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
             'ultimo_erro' => null,
             'enviada_em' => now(),
-            'ativada_em' => now(),
         ])->save();
 
         return self::ENVIO_PRONTO;
@@ -929,124 +917,6 @@ class MetaAdsService
     }
 
     /**
-     * Gasto da conta inteira num intervalo de dias (Resultado e margem e
-     * alerta de ADS, 2026-10-19): o gasto da Meta não fica gravado no banco
-     * (não está em channel_ad_spends nem na conta oficial do lucro), então
-     * vem da Marketing API. Vendas = valor das compras que o pixel atribuiu.
-     * Timeout curto: a tela que chama não pode ficar presa na Meta.
-     *
-     * @return array{gasto: float, vendas: float}
-     *
-     * @throws MetaAdsException
-     */
-    public function gastoNoPeriodo(Carbon $desde, Carbon $ate): array
-    {
-        $resposta = $this->get($this->conta().'/insights', [
-            'level' => 'account',
-            'time_range' => json_encode(['since' => $desde->toDateString(), 'until' => $ate->toDateString()]),
-            'fields' => 'spend,action_values',
-        ], 10);
-        $linha = $resposta['data'][0] ?? [];
-
-        return [
-            'gasto' => round((float) ($linha['spend'] ?? 0), 2),
-            'vendas' => round($this->valorDeCompra($linha['action_values'] ?? []), 2),
-        ];
-    }
-
-    /** Tipos de ação da Meta para cada elo do funil (o primeiro que vier vale). */
-    private const ACOES_DO_FUNIL = [
-        'chegadas' => ['landing_page_view', 'omni_landing_page_view'],
-        'visualizacoes' => ['omni_view_content', 'view_content', 'offsite_conversion.fb_pixel_view_content'],
-        'carrinhos' => ['omni_add_to_cart', 'add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'],
-        'checkouts' => ['omni_initiated_checkout', 'initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'],
-        'video_3s' => ['video_view'],
-    ];
-
-    /**
-     * Funil de cada anúncio com gasto no período (Sugestões do dia,
-     * 2026-10-20). Além do que a tela já mostra, pede o clique NO LINK (o
-     * "clique" de todos inclui curtida e perfil e infla o CTR: 3,3% todos x
-     * 2,5% link na Caixa 168), CPM, frequência, chegada na página, carrinho,
-     * checkout e vídeo de 3 s. Junta o status e o tipo do criativo (vídeo,
-     * imagem ou carrossel) e o link de destino, para achar o produto.
-     *
-     * @return list<array<string, mixed>>
-     *
-     * @throws MetaAdsException
-     */
-    public function funilPorAnuncio(string $periodo = 'last_7d'): array
-    {
-        $periodo = array_key_exists($periodo, self::PERIODOS) ? $periodo : 'last_7d';
-
-        $linhas = $this->getPaginado($this->conta().'/insights', [
-            'level' => 'ad',
-            'date_preset' => $periodo,
-            'fields' => 'ad_id,ad_name,campaign_id,campaign_name,spend,impressions,reach,frequency,cpm,clicks,'
-                .'inline_link_clicks,cost_per_inline_link_click,actions,action_values',
-            'limit' => 500,
-        ]);
-        $linhas = array_values(array_filter($linhas, fn ($l) => (float) ($l['spend'] ?? 0) > 0));
-        if ($linhas === []) {
-            return [];
-        }
-
-        $anuncios = collect($this->getPaginado($this->conta().'/ads', [
-            'fields' => 'id,effective_status,creative{object_type,thumbnail_url,object_story_spec,asset_feed_spec}',
-            'filtering' => json_encode([['field' => 'id', 'operator' => 'IN', 'value' => array_column($linhas, 'ad_id')]]),
-            'limit' => 200,
-        ]))->keyBy(fn ($a) => (string) $a['id']);
-
-        return array_map(function (array $linha) use ($anuncios) {
-            $id = (string) $linha['ad_id'];
-            $criativo = $anuncios[$id]['creative'] ?? [];
-            $impressoes = (int) ($linha['impressions'] ?? 0);
-            $cliquesLink = (int) ($linha['inline_link_clicks'] ?? 0);
-            $acoes = $linha['actions'] ?? [];
-            $funil = array_map(fn (array $tipos) => (int) round($this->valorDaAcao($acoes, $tipos)), self::ACOES_DO_FUNIL);
-
-            return [
-                'ad_id' => $id,
-                'nome' => (string) ($linha['ad_name'] ?? $id),
-                'campanha_id' => (string) ($linha['campaign_id'] ?? ''),
-                'campanha' => (string) ($linha['campaign_name'] ?? ''),
-                'status' => (string) ($anuncios[$id]['effective_status'] ?? ''),
-                'formato' => $this->formatoDoCriativo($criativo),
-                'link' => $this->linkDoCriativo($criativo),
-                'miniatura' => $criativo['thumbnail_url'] ?? null,
-                'frequencia' => isset($linha['frequency']) ? round((float) $linha['frequency'], 2) : null,
-                'cpm' => isset($linha['cpm']) ? round((float) $linha['cpm'], 2) : null,
-                'cliques_link' => $cliquesLink,
-                'ctr_link' => $impressoes > 0 ? round($cliquesLink / $impressoes * 100, 2) : null,
-                'cpc_link' => isset($linha['cost_per_inline_link_click']) ? round((float) $linha['cost_per_inline_link_click'], 2) : null,
-            ] + $funil + $this->metricas($linha);
-        }, $linhas);
-    }
-
-    /** video, carrossel ou imagem (anúncio de link com foto). */
-    private function formatoDoCriativo(array $criativo): string
-    {
-        $historia = $criativo['object_story_spec'] ?? [];
-
-        return match (true) {
-            isset($historia['video_data']) || ($criativo['object_type'] ?? '') === 'VIDEO' || ! empty($criativo['asset_feed_spec']['videos']) => 'video',
-            ! empty($historia['link_data']['child_attachments']) => 'carrossel',
-            default => 'imagem',
-        };
-    }
-
-    private function linkDoCriativo(array $criativo): ?string
-    {
-        $historia = $criativo['object_story_spec'] ?? [];
-
-        return $historia['link_data']['link']
-            ?? $historia['video_data']['call_to_action']['value']['link']
-            ?? $historia['link_data']['child_attachments'][0]['link']
-            ?? $criativo['asset_feed_spec']['link_urls'][0]['website_url']
-            ?? null;
-    }
-
-    /**
      * Métricas de uma linha de insights. CPC = gasto ÷ cliques (todos os
      * cliques, a coluna "CPC (todos)" do Gerenciador); ROAS = valor das
      * compras ÷ gasto.
@@ -1136,7 +1006,6 @@ class MetaAdsService
         $payload = [
             'name' => $campanha->nome,
             'objective' => $campanha->objetivo,
-            // Nasce pausada e liga no fim do envio (avancarEnvio, passo 5).
             'status' => 'PAUSED',
             'special_ad_categories' => json_encode([]),
         ];
@@ -1164,7 +1033,7 @@ class MetaAdsService
             // Sem publisher_platforms = posicionamentos automáticos.
             'targeting' => json_encode($this->targeting($campanha, $conjunto)),
             'start_time' => $this->inicioDoConjunto($campanha)->toIso8601String(),
-            'status' => 'ACTIVE',
+            'status' => 'PAUSED',
         ];
 
         if (! $campanha->orcamentoDaCampanha()) {
@@ -1409,7 +1278,7 @@ class MetaAdsService
             'name' => $this->nomeDoAnuncio($campanha, $video, $conjunto),
             'adset_id' => $video->meta_adset_id,
             'creative' => json_encode(['creative_id' => $video->meta_creative_id]),
-            'status' => 'ACTIVE',
+            'status' => 'PAUSED',
         ];
     }
 
@@ -1559,11 +1428,11 @@ class MetaAdsService
         return str_starts_with($conta, 'act_') ? $conta : 'act_'.$conta;
     }
 
-    private function cliente(int $timeout = 60): PendingRequest
+    private function cliente(): PendingRequest
     {
         return Http::withToken((string) config('services.meta_ads.access_token'))
             ->acceptJson()
-            ->timeout($timeout);
+            ->timeout(60);
     }
 
     private function url(string $caminho): string
@@ -1596,12 +1465,12 @@ class MetaAdsService
      *
      * @throws MetaAdsException
      */
-    private function get(string $caminho, array $params, int $timeout = 60): array
+    private function get(string $caminho, array $params): array
     {
         $this->exigirConfiguracao();
 
         try {
-            $resposta = $this->cliente($timeout)->get($this->url($caminho), $params);
+            $resposta = $this->cliente()->get($this->url($caminho), $params);
         } catch (ConnectionException) {
             throw new MetaAdsException('Sem conexão com a Meta. Tente de novo em alguns minutos.');
         }
@@ -1692,18 +1561,9 @@ class MetaAdsService
     /** @param  list<array{action_type?: string, value?: mixed}>  $acoes */
     private function valorDeCompra(array $acoes): float
     {
-        return $this->valorDaAcao($acoes, self::ACOES_DE_COMPRA);
-    }
-
-    /**
-     * @param  list<array{action_type?: string, value?: mixed}>  $acoes
-     * @param  list<string>  $tipos  em ordem de preferência (a Meta repete a mesma ação com nomes diferentes)
-     */
-    private function valorDaAcao(array $acoes, array $tipos): float
-    {
         $porTipo = collect($acoes)->keyBy('action_type');
 
-        foreach ($tipos as $tipo) {
+        foreach (self::ACOES_DE_COMPRA as $tipo) {
             if ($porTipo->has($tipo)) {
                 return (float) ($porTipo[$tipo]['value'] ?? 0);
             }

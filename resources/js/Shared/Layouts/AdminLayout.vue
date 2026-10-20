@@ -6,7 +6,6 @@ import { useClickOutside } from '@/Shared/useClickOutside';
 import { useDarkMode } from '@/Shared/useDarkMode';
 import { usePermissions } from '@/Shared/usePermissions';
 import { sidebarSections } from '@/Shared/adminSidebarItems';
-import MarketplaceAbas from '@/Shared/Components/MarketplaceAbas.vue';
 import LowStockAlertModal from '@/Shared/Components/LowStockAlertModal.vue';
 import WhatsAppToasts from '@/Shared/Components/WhatsAppToasts.vue';
 
@@ -376,10 +375,10 @@ watch(
                             </Link>
                         </li>
                         <li>
-                            <a href="/" target="_blank" rel="noopener" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
+                            <Link href="/" class="flex items-center gap-2 rounded-lg border-l-[3px] border-transparent py-2.5 text-sm font-medium text-[var(--sidebar-foreground)] transition-colors hover:bg-[var(--surface-border)]/30" title="Ver loja">
                                 <i class="fas fa-store icone-marca icone-kazakora w-8 text-center text-sm"></i>
                                 <span v-if="!sidebarCollapsed">Ver loja</span>
-                            </a>
+                            </Link>
                         </li>
                         <li>
                             <button type="button" class="flex w-full items-center gap-2 border-l-[3px] border-transparent py-2.5 text-left text-sm font-medium text-[var(--sidebar-foreground)] hover:text-error" title="Sair" @click="logout">
@@ -529,9 +528,6 @@ watch(
             </nav>
 
             <div class="admin-conteudo relative mx-auto mt-4 w-full max-w-[1600px] flex-1 p-4 md:p-6" :aria-busy="navegando">
-                <!-- Marketplaces (Lira, 2026-10-17): logotipo e abas do marketplace
-                em cima de qualquer tela aberta dentro de uma aba. -->
-                <MarketplaceAbas v-if="page.props.marketplaceNav" :nav="page.props.marketplaceNav" />
                 <slot />
 
                 <!-- Loader de troca de tela: só a área de conteúdo, menu e topo

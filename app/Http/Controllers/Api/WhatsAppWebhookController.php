@@ -112,7 +112,7 @@ class WhatsAppWebhookController extends Controller
 
     private function handleUnsupported(array $message, array $contact, array $payload, WhatsAppSettings $settings): void
     {
-        if (! WhatsAppConversation::doNumero($message['from'] ?? null)) {
+        if (! WhatsAppConversation::query()->where('wa_id', $message['from'] ?? null)->exists()) {
             return;
         }
 
@@ -156,10 +156,9 @@ class WhatsAppWebhookController extends Controller
         $receivedAt = isset($message['timestamp']) ? Carbon::createFromTimestamp((int) $message['timestamp'], config('app.timezone')) : now();
         $waId = $message['from'];
 
-        // Com ou sem o nono dígito é a mesma conversa (e o mesmo histórico do pedido).
-        $conversation = WhatsAppConversation::doNumero($waId) ?? new WhatsAppConversation(['wa_id' => $waId]);
+        $conversation = WhatsAppConversation::query()->firstOrNew(['wa_id' => $waId]);
         $conversation->fill([
-            'phone' => $conversation->phone ?: $waId,
+            'phone' => $waId,
             'profile_name' => $contact['profile']['name'] ?? $conversation->profile_name,
             'last_customer_message_at' => $receivedAt,
             // Mescla: o metadata também guarda o produto que a Manuela abriu.
@@ -209,8 +208,8 @@ class WhatsAppWebhookController extends Controller
             return;
         }
 
-        $conversation = WhatsAppConversation::doNumeroOuCria(
-            $status['recipient_id'] ?? 'unknown',
+        $conversation = WhatsAppConversation::query()->firstOrCreate(
+            ['wa_id' => $status['recipient_id'] ?? 'unknown'],
             ['phone' => $status['recipient_id'] ?? null, 'last_message_at' => now()],
         );
 

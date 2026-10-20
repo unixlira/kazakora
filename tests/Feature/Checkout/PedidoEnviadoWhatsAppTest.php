@@ -30,7 +30,6 @@ class PedidoEnviadoWhatsAppTest extends TestCase
     {
         parent::setUp();
         config([
-            'services.correios.rastreio_whatsapp' => true,
             'services.whatsapp.access_token' => 'meta-token',
             'services.whatsapp.phone_number_id' => '123',
             'services.whatsapp.templates.pedido_enviado' => 'pedido_enviado',
@@ -95,43 +94,6 @@ class PedidoEnviadoWhatsAppTest extends TestCase
         $this->assertSame(['quick_reply', "pedido_enviado:atendente:{$order->id}"], [$c[3]['sub_type'], $c[3]['parameters'][0]['payload']]);
     }
 
-    public function test_postagem_manda_email_de_pedido_enviado_uma_vez(): void
-    {
-        Mail::fake();
-        $order = $this->comObjeto($this->pedido(['shipping_email' => 'maria@exemplo.com']));
-        $this->rastro([
-            ['codigo' => 'PO', 'tipo' => '01', 'descricao' => 'Objeto postado', 'dtHrCriado' => now()->subHour()->format('Y-m-d\TH:i:s')],
-        ], '2026-10-22T23:59:59');
-
-        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
-        $this->travel(31)->minutes();
-        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
-
-        Mail::assertSent(PedidoEnviado::class, 1);
-        Mail::assertSent(PedidoEnviado::class, fn (PedidoEnviado $mail) => $mail->hasTo('maria@exemplo.com')
-            && $mail->order->is($order) && $mail->previsao === 'até 22/10 (quinta-feira)');
-        $this->assertSame(1, OrderEmailLog::query()->where('order_id', $order->id)->where('mailable', PedidoEnviado::class)->where('status', OrderEmailLog::STATUS_SENT)->count());
-
-        $html = (new PedidoEnviado($order->fresh(), 'até 22/10 (quinta-feira)'))->render();
-        $this->assertStringContainsString('/rastreio/'.$order->trackingRef(), $html);
-        $this->assertStringContainsString('AE000000000BR', $html);
-    }
-
-    public function test_data_da_postagem_vem_do_evento_po(): void
-    {
-        $this->rastro([
-            ['codigo' => 'RO', 'tipo' => '01', 'descricao' => 'Objeto em transferência', 'dtHrCriado' => '2026-10-16T08:00:00'],
-            ['codigo' => 'PO', 'tipo' => '01', 'descricao' => 'Objeto postado', 'dtHrCriado' => '2026-10-15T14:35:19'],
-            ['codigo' => 'FC', 'tipo' => '82', 'descricao' => 'Etiqueta emitida', 'dtHrCriado' => '2026-10-14T10:00:00'],
-        ]);
-
-        $r = app(\App\Services\Correios\CorreiosRastroService::class)->consultar('AE000000000BR');
-
-        $this->assertTrue($r['postado']);
-        $this->assertSame('2026-10-15 14:35', $r['postado_em']->format('Y-m-d H:i'));
-        $this->assertFalse($r['entregue']);
-    }
-
     public function test_so_etiqueta_nao_muda_nada_e_entregue_conclui(): void
     {
         $order = $this->comObjeto($this->pedido());
@@ -139,8 +101,6 @@ class PedidoEnviadoWhatsAppTest extends TestCase
         $this->artisan('loja:acompanhar-rastreio');
         $this->assertSame(Order::STATUS_PAID, $order->fresh()->status);
 
-        // Fora da rota de entrega o pacote só é reconsultado depois de 30 min.
-        $this->travel(31)->minutes();
         $this->objeto['eventos'] = [['codigo' => 'BDE', 'tipo' => '01', 'descricao' => 'Objeto entregue ao destinatário', 'dtHrCriado' => now()->format('Y-m-d\TH:i:s')]];
         $this->artisan('loja:acompanhar-rastreio');
         $this->assertSame(Order::STATUS_COMPLETED, $order->fresh()->status);
@@ -169,5 +129,27 @@ class PedidoEnviadoWhatsAppTest extends TestCase
 
         $this->assertTrue($conversa->fresh()->needs_human);
         Http::assertSentCount(1);
+    }
+
+    public function test_postagem_manda_email_de_pedido_enviado_uma_vez(): void
+    {
+        Mail::fake();
+        $order = $this->comObjeto($this->pedido(['shipping_email' => 'maria@exemplo.com']));
+        $this->rastro([
+            ['codigo' => 'PO', 'tipo' => '01', 'descricao' => 'Objeto postado', 'dtHrCriado' => now()->subHour()->format('Y-m-d\TH:i:s')],
+        ], '2026-10-22T23:59:59');
+
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+        $this->travel(31)->minutes();
+        $this->artisan('loja:acompanhar-rastreio')->assertSuccessful();
+
+        Mail::assertSent(PedidoEnviado::class, 1);
+        Mail::assertSent(PedidoEnviado::class, fn (PedidoEnviado $mail) => $mail->hasTo('maria@exemplo.com')
+            && $mail->order->is($order) && $mail->previsao === 'até 22/10 (quinta-feira)');
+        $this->assertSame(1, OrderEmailLog::query()->where('order_id', $order->id)->where('mailable', PedidoEnviado::class)->where('status', OrderEmailLog::STATUS_SENT)->count());
+
+        $html = (new PedidoEnviado($order->fresh(), 'até 22/10 (quinta-feira)'))->render();
+        $this->assertStringContainsString('/rastreio/'.$order->trackingRef(), $html);
+        $this->assertStringContainsString('AE000000000BR', $html);
     }
 }

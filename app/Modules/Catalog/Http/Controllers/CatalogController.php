@@ -5,14 +5,13 @@ namespace App\Modules\Catalog\Http\Controllers;
 use App\Http\Controllers\Concerns\HandlesShopeeAuthorizationLanding;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Banner;
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Models\Favorite;
 use App\Modules\Catalog\Models\OfertaDoDia;
 use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Models\ProductImage;
 use App\Modules\Catalog\Models\Review;
-use App\Modules\Catalog\Services\AnuncioConteudoService;
-use App\Modules\Catalog\Support\PerfilDoCliente;
-use App\Modules\Catalog\Support\MenuDaLoja;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
@@ -197,7 +196,7 @@ class CatalogController extends Controller
     }
 
     /** Busca (pedido 2026-10-10): cada palavra no nome, marca, modelo, SKU ou departamento, em qualquer ordem. */
-    public static function filtrarBusca($query, string $search): void
+    private static function filtrarBusca($query, string $search): void
     {
         foreach (preg_split('/\s+/', trim($search)) as $palavra) {
             $termo = '%'.str_replace(['%', '_'], ['\%', '\_'], $palavra).'%';
@@ -210,7 +209,7 @@ class CatalogController extends Controller
     }
 
     /** O "X% OFF" do card (ProductCard.vue): preço final contra o riscado. */
-    public static function descontoDoCard(Product $produto): int
+    private static function descontoDoCard(Product $produto): int
     {
         $antes = $produto->emOferta()
             ? (float) $produto->preco_sem_oferta
@@ -320,35 +319,7 @@ class CatalogController extends Controller
     /** Departamentos da home — os mesmos do mega menu (ver MenuDaLoja). */
     private function departamentos(): array
     {
-        return MenuDaLoja::departamentos();
-    }
-
-    /**
-     * Todo produto novo nasce com o conteúdo da página (3 destaques, blocos
-     * com foto, benefícios), padrão desde 2026-10-19: se ainda não tem ou se
-     * nome/descrição/fotos mudaram (foto enviada sem salvar o cadastro,
-     * produto importado de canal), gera depois de responder. Cobre o homolog,
-     * que não roda o agendador de 15 minutos; no máximo 1 tentativa a cada
-     * 10 minutos por produto.
-     */
-    private function gerarConteudoAnuncioSeFaltar(Product $product): void
-    {
-        $servico = app(AnuncioConteudoService::class);
-
-        if (! $servico->precisaGerar($product) || ! Cache::add("conteudo-anuncio-visita:{$product->id}", 1, now()->addMinutes(10))) {
-            return;
-        }
-
-        $id = $product->id;
-
-        dispatch(static function () use ($id) {
-            $product = Product::query()->find($id);
-            $servico = app(AnuncioConteudoService::class);
-
-            if ($product && $servico->precisaGerar($product)) {
-                $servico->gerar($product);
-            }
-        })->afterResponse();
+        return \App\Modules\Catalog\Support\MenuDaLoja::departamentos();
     }
 
     public function show(Request $request, Product $product): Response
@@ -362,12 +333,8 @@ class CatalogController extends Controller
             // Benefícios + descrição em blocos (pedido 2026-10-09).
             'adContent',
         ]);
-
-        $this->gerarConteudoAnuncioSeFaltar($product);
-
-        // Título dos cartões de benefícios pelo tipo de cliente (pedido 2026-10-20):
-        // "vai amar" só em beleza; ferramenta é "Por que você precisa".
-        $product->adContent?->setAttribute('titulo_beneficios', PerfilDoCliente::tituloBeneficios($product->category?->slug));
+        $product->loadCount('reviews');
+        $product->loadAvg('reviews', 'rating');
 
         // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
         // todos os canais (loja e marketplaces), somando as variações.
@@ -389,14 +356,6 @@ class CatalogController extends Controller
             ->orderByDesc('images_count')
             ->latest()
             ->get();
-
-        // Avaliações de outra loja (pedido 2026-10-18): compradores do mesmo
-        // produto em outras lojas, com o selo "Avaliação feita em outra loja",
-        // num bloco próprio e com média separada. Não entram na nota, na
-        // contagem nem no JSON-LD do produto (só as da KazaKora contam).
-        [$reviewsOutraLoja, $reviews] = $reviews->partition(fn (Review $review) => $review->outra_loja);
-        $reviews = $reviews->values();
-        $reviewsOutraLoja = $reviewsOutraLoja->values();
 
         // Nota e contagem do topo batendo com a lista (variações incluídas).
         $product->setAttribute('reviews_count', $reviews->count());
@@ -454,7 +413,7 @@ class CatalogController extends Controller
             // Trocar de variação é na própria página, sem recarregar (pedido
             // 2026-10-15): cada uma leva preço final, SKU, estoque e desconto
             // por quantidade. Custo é dado interno.
-            ->each(fn (Product $variation) => $variation->makeHidden(['cost_price', 'min_profit']));
+            ->each(fn (Product $variation) => $variation->makeHidden('cost_price'));
 
         // Galeria única do grupo de variações (pedido 2026-10-15): todas as
         // variações mostram as mesmas fotos, na mesma ordem (as do produto
@@ -504,17 +463,11 @@ class CatalogController extends Controller
             : self::PRODUCT_PAGE_VERSION;
 
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
-            // Custo e lucro mínimo são dados internos: não vão no JSON da página pública.
-            'product' => $product->makeHidden(['cost_price', 'min_profit']),
+            // Custo é dado interno: não vai no JSON da página pública.
+            'product' => $product->makeHidden('cost_price'),
             'variations' => $variations,
             'galeria' => $galeria,
             'reviews' => $reviews,
-            'reviewsOutraLoja' => $reviewsOutraLoja,
-            'outraLojaResumo' => [
-                'total' => $reviewsOutraLoja->count(),
-                'media' => $reviewsOutraLoja->isNotEmpty() ? round((float) $reviewsOutraLoja->avg('rating'), 2) : null,
-                'selo' => Review::SELO_OUTRA_LOJA,
-            ],
             'shippingMethods' => ShippingMethod::query()
                 ->where('is_active', true)
                 ->orderBy('price')

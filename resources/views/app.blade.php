@@ -27,26 +27,6 @@
                     ? \Illuminate\Support\Str::limit(trim(preg_replace('/\s+/u', ' ', strip_tags(html_entity_decode($seoProduto['description'])))), 155)
                     : 'KazaKora: eletrônicos, gadgets e utilidades para a casa com frete rápido, compra segura e 5% de desconto no Pix.';
                 $imagens = collect($seoProduto['images'] ?? [])->pluck('url')->filter()->take(5)->values()->all();
-                // Nota no Google (pedido 2026-10-18): só avaliações da KazaKora. A prop
-                // `reviews` já vem sem as de outra loja (essas vão em `reviewsOutraLoja`
-                // e nunca entram aqui); o filtro por outra_loja é só uma segunda trava.
-                $seoAvaliacoes = $seoProduto
-                    ? collect(json_decode(json_encode($page['props']['reviews'] ?? []), true) ?: [])->reject(fn ($r) => ! empty($r['outra_loja']))->values()
-                    : collect();
-                $seoNota = $seoAvaliacoes->isNotEmpty() ? [
-                    '@type' => 'AggregateRating',
-                    'ratingValue' => number_format((float) $seoAvaliacoes->avg('rating'), 1, '.', ''),
-                    'reviewCount' => $seoAvaliacoes->count(),
-                    'bestRating' => 5,
-                    'worstRating' => 1,
-                ] : null;
-                $seoReviews = $seoAvaliacoes->take(5)->map(fn ($r) => array_filter([
-                    '@type' => 'Review',
-                    'reviewRating' => ['@type' => 'Rating', 'ratingValue' => (int) $r['rating'], 'bestRating' => 5, 'worstRating' => 1],
-                    'author' => ['@type' => 'Person', 'name' => $r['reviewer_display_name'] ?? 'Cliente KazaKora'],
-                    'reviewBody' => filled($r['comment'] ?? null) ? \Illuminate\Support\Str::limit($r['comment'], 500) : null,
-                    'datePublished' => ! empty($r['created_at']) ? substr($r['created_at'], 0, 10) : null,
-                ]))->values()->all();
             @endphp
             <link rel="canonical" href="{{ $canonical }}">
             <meta name="description" content="{{ $descricao }}">
@@ -76,8 +56,6 @@
                         'availability' => ((int) ($seoProduto['stock'] ?? 0)) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
                         'itemCondition' => 'https://schema.org/NewCondition',
                     ],
-                    'aggregateRating' => $seoNota,
-                    'review' => $seoReviews ?: null,
                 ]), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) !!}</script>
                 {{-- Vídeo com miniatura (pedido 2026-10-15: Search Console, "Nenhum URL de miniatura enviado"). --}}
                 @php($video = \App\Modules\Catalog\Support\VideoParaGoogle::dados($seoProduto['video_path'] ?? null, $seoProduto['video_duration_seconds'] ?? null, $seoProduto['name'], $seoProduto['description'] ?? null, $seoProduto['images'][0]['media_url'] ?? $imagens[0] ?? null, $seoProduto['created_at'] ?? null))

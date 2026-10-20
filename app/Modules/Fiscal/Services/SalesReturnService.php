@@ -111,13 +111,6 @@ class SalesReturnService
             $desconto = (float) $original->subtotal > 0
                 ? round((float) $original->discount_amount * $subtotal / (float) $original->subtotal, 2)
                 : 0.0;
-            // Frete que saiu NA NOTA de venda (vFrete do XML), na mesma
-            // proporção (2026-10-19: #1725 e #1872 tinham frete na nota e a
-            // devolução sairia menor que a venda). O frete do pedido não serve:
-            // na Shopee ele existe no pedido e não vai na nota.
-            $frete = (float) $original->subtotal > 0
-                ? round($this->freteDaNotaDeVenda($venda) * $subtotal / (float) $original->subtotal, 2)
-                : 0.0;
 
             $order = Order::query()->create([
                 'user_id' => $original->user_id,
@@ -143,9 +136,9 @@ class SalesReturnService
                 'shipping_city' => $original->shipping_city,
                 'shipping_state' => $original->shipping_state,
                 'subtotal' => $subtotal,
-                'shipping_cost' => $frete,
+                'shipping_cost' => 0,
                 'discount_amount' => $desconto,
-                'total' => round($subtotal - $desconto + $frete, 2),
+                'total' => round($subtotal - $desconto, 2),
             ]);
 
             $fiscalDaVenda = $this->fiscalDoXmlDaVenda($venda);
@@ -239,14 +232,6 @@ class SalesReturnService
         }
 
         return $resultado;
-    }
-
-    /** vFrete do total da nota de venda autorizada (0 sem XML). */
-    private function freteDaNotaDeVenda(Invoice $venda): float
-    {
-        $xml = $venda->xml_path ? rescue(fn () => \Illuminate\Support\Facades\Storage::disk('local')->get($venda->xml_path), null, false) : null;
-
-        return $xml && preg_match('/<ICMSTot>.*?<vFrete>([\d.]+)<\/vFrete>/s', $xml, $m) ? (float) $m[1] : 0.0;
     }
 
     private function chaveDoNome(string $nome): string

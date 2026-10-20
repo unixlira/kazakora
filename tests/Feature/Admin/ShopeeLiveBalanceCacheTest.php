@@ -50,18 +50,6 @@ class ShopeeLiveBalanceCacheTest extends TestCase
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk();
     }
 
-    public function test_wallet_ip_block_shows_the_reason(): void
-    {
-        $wallet = Mockery::mock(ShopeeWalletService::class);
-        $wallet->shouldReceive('currentBalance')->once()->andThrow(new RuntimeException('Request Source IP (1.2.3.4) is undeclared. Please declare all your IP addresses'));
-        $this->app->instance(ShopeeWalletService::class, $wallet);
-
-        $this->actingAs($this->admin())->get('/admin/dashboard-financeiro')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('receber.disponivel.0.valor', null)
-                ->where('receber.disponivel.0.motivo', 'A Shopee bloqueou o IP deste servidor (lista branca do app).'));
-    }
-
     public function test_wallet_failure_is_not_cached_and_refresh_forces_a_new_call(): void
     {
         $wallet = Mockery::mock(ShopeeWalletService::class);
@@ -75,17 +63,15 @@ class ShopeeLiveBalanceCacheTest extends TestCase
         // Falha: página abre normal (fallback de sempre), nada em cache.
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('receber.disponivel.0.valor', null)
-                ->where('receber.disponivel.0.motivo', 'A Shopee não respondeu agora. Tente atualizar.'));
+            ->assertInertia(fn ($page) => $page->where('walletBalances.shopee', null));
         // Tenta de novo e grava o sucesso.
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')->assertOk();
         // Vem do cache — não chama a Shopee.
         $this->actingAs($admin)->get('/admin/dashboard-financeiro')
-            ->assertInertia(fn ($page) => $page->where('receber.disponivel.0.valor', 100.25)
-                ->where('receber.disponivel.0.quando', fn ($quando) => $quando !== null));
+            ->assertInertia(fn ($page) => $page->where('walletBalances.shopee', 100.25));
         // ?refresh=1 ignora o cache.
         $this->actingAs($admin)->get('/admin/dashboard-financeiro?refresh=1')
-            ->assertInertia(fn ($page) => $page->where('receber.disponivel.0.valor', 200.75));
+            ->assertInertia(fn ($page) => $page->where('walletBalances.shopee', 200.75));
     }
 
     public function test_ads_balance_is_cached_failure_is_not_and_refresh_refetches(): void

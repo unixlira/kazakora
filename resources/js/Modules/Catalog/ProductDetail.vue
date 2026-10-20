@@ -15,10 +15,6 @@ const props = defineProps({
     // estilo Shopee/Mercado Livre — pedido explícito 2026-08-17.
     variations: { type: Array, default: () => [] },
     reviews: { type: Array, default: () => [] },
-    // Avaliações do mesmo produto feitas em outra loja (pedido 2026-10-18):
-    // bloco próprio, com selo e média separada; não entram na nota da loja.
-    reviewsOutraLoja: { type: Array, default: () => [] },
-    outraLojaResumo: { type: Object, default: () => ({ total: 0, media: null, selo: 'Avaliação feita em outra loja' }) },
     shippingMethods: { type: Array, default: () => [] },
     isFavorite: { type: Boolean, default: false },
     canReview: { type: Boolean, default: false },
@@ -593,46 +589,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <p v-if="review.comment" class="mt-2 text-sm leading-relaxed text-store-fg-muted">{{ review.comment }}</p>
                             <div v-if="review.images?.length" class="mt-3 flex flex-wrap gap-2">
                                 <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                                    <video v-if="image.media_type === 'video'" :src="image.image_url" muted playsinline preload="metadata" class="h-16 w-16 rounded-lg border border-store-border object-cover"></video>
-                                    <img v-else :src="image.image_url" alt="" class="h-16 w-16 rounded-lg border border-store-border object-cover">
+                                    <img :src="image.image_url" alt="" class="h-16 w-16 rounded-lg border border-store-border object-cover">
                                 </a>
                             </div>
                         </div>
                     </article>
-                </div>
-
-                <!-- Avaliações feitas em outra loja: separadas, com selo em cada uma. -->
-                <div v-if="reviewsOutraLoja.length" class="mt-12" data-teste="avaliacoes-outra-loja">
-                    <h3 class="font-display text-xl font-semibold text-store-fg">Avaliações deste produto em outras lojas</h3>
-                    <p class="mt-1 text-sm text-store-fg-muted">
-                        Média {{ Number(outraLojaResumo.media ?? 0).toFixed(1).replace('.', ',') }} de 5 em {{ outraLojaResumo.total }} avaliaç{{ outraLojaResumo.total === 1 ? 'ão' : 'ões' }} de compradores deste mesmo produto em outras lojas. Não entram na nota da KazaKora.
-                    </p>
-                    <div class="mt-6 flex flex-col gap-4">
-                        <article v-for="review in reviewsOutraLoja" :key="review.id" class="flex gap-4 rounded-2xl border border-store-border bg-store-bg-raised p-5 shadow-sm">
-                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-store-bg-sunken font-display text-sm font-semibold text-store-fg" aria-hidden="true"><i class="fas fa-store text-xs"></i></span>
-                            <div class="min-w-0 flex-1">
-                                <div class="flex flex-wrap items-center justify-between gap-2">
-                                    <span class="flex flex-wrap items-center gap-2">
-                                        <span class="font-medium text-store-fg">{{ review.reviewer_display_name }}</span>
-                                        <span class="selo-outra-loja inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-                                            <i class="fas fa-store text-[10px]" aria-hidden="true"></i>{{ outraLojaResumo.selo }}
-                                        </span>
-                                    </span>
-                                    <span class="text-xs text-store-fg-faint">{{ formatDate(review.created_at) }}</span>
-                                </div>
-                                <div class="mt-1 flex items-center gap-0.5" :aria-label="`Nota ${review.rating} de 5`">
-                                    <i v-for="star in 5" :key="star" class="text-xs" :class="star <= review.rating ? 'fas fa-star text-amber-400' : 'far fa-star text-store-fg-faint'"></i>
-                                </div>
-                                <p v-if="review.comment" class="mt-2 text-sm leading-relaxed text-store-fg-muted">{{ review.comment }}</p>
-                                <div v-if="review.images?.length" class="mt-3 flex flex-wrap gap-2">
-                                    <a v-for="image in review.images" :key="image.id" :href="image.image_url" target="_blank" rel="noopener">
-                                        <video v-if="image.media_type === 'video'" :src="image.image_url" muted playsinline preload="metadata" class="h-16 w-16 rounded-lg border border-store-border object-cover"></video>
-                                        <img v-else :src="image.image_url" alt="" loading="lazy" class="h-16 w-16 rounded-lg border border-store-border object-cover">
-                                    </a>
-                                </div>
-                            </div>
-                        </article>
-                    </div>
                 </div>
             </section>
 

@@ -3,9 +3,7 @@
 namespace App\Modules\Admin\Http\Requests;
 
 use App\Support\Rbac\Permissions;
-use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Validator;
 
 class VideoDownloadRequest extends FormRequest
@@ -49,23 +47,6 @@ class VideoDownloadRequest extends FormRequest
                 }
             },
         ];
-    }
-
-    /**
-     * A prévia é chamada por fetch e lê errors.url do 422. Fora de /api o app
-     * responde validação com redirect (bootstrap/app.php), então o JSON sai
-     * daqui.
-     */
-    protected function failedValidation(ValidatorContract $validator): void
-    {
-        if ($this->expectsJson()) {
-            throw new HttpResponseException(response()->json([
-                'message' => $validator->errors()->first(),
-                'errors' => $validator->errors()->toArray(),
-            ], 422));
-        }
-
-        parent::failedValidation($validator);
     }
 
     private function normalizedHost(string $url): ?string

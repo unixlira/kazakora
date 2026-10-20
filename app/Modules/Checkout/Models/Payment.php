@@ -72,14 +72,6 @@ class Payment extends Model
             && $this->status === self::STATUS_REQUIRES_CONFIRMATION;
     }
 
-    public function pixPendente(): bool
-    {
-        return $this->method_type === self::METHOD_PIX
-            && $this->provider === self::PROVIDER_MERCADOPAGO
-            && $this->status === self::STATUS_REQUIRES_CONFIRMATION
-            && filled($this->mercadopago_payment_id);
-    }
-
     /**
      * Pagamento recusado pelo Mercado Pago depois de criado (webhook, polling,
      * varredura): cancela e guarda o status_detail para a tela do pedido.

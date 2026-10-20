@@ -2,8 +2,7 @@
 
 Criado em 10/10/2026. **Uma conta só** para lucro em todo o sistema:
 `App\Modules\Marketplace\Support\ContributionMargin::periodo()`. Painel
-financeiro, KoraSync e o e-mail "Resultado do dia" (23:50, regra e ordem da
-noite em `docs/financeiro-email-resultado-diario.md`) usam ela. Tela ou relatório
+financeiro, KoraSync e o e-mail "Resultado do dia" usam ela. Tela ou relatório
 novo que mostre lucro **tem que usar essa classe**, nunca refazer a conta.
 
 ```

@@ -168,7 +168,7 @@ class MetaAdsVideo extends Model
     public function etapa(): string
     {
         return match (true) {
-            $this->envioCompleto() => 'Anúncio criado',
+            $this->envioCompleto() => 'Anúncio criado (pausado)',
             filled($this->ultimo_erro) => 'Erro',
             filled($this->meta_creative_id) => 'Criativo pronto',
             $this->ehImagem() && filled($this->meta_image_hash) => 'Imagem enviada',

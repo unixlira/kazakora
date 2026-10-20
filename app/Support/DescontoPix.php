@@ -25,22 +25,6 @@ class DescontoPix
             return 0.0;
         }
 
-        return self::percentualConfigurado($produto, $preco);
-    }
-
-    /** Desconto do Pix em R$ numa unidade vendida a $preco. */
-    public static function descontoUnitario(Product $produto, float $preco): float
-    {
-        return self::desconto($preco, self::percentualDo($produto, $preco));
-    }
-
-    /**
-     * "Desconto Checkout" como foi cadastrado, em %. Desde 2026-10-18 pode ser
-     * em valor fixo (checkout_discount_amount, R$ por unidade): vira o %
-     * equivalente sobre o preço da unidade ($preco; sem ele, o final_price da loja).
-     */
-    private static function percentualConfigurado(Product $produto, ?float $preco): float
-    {
         if ((float) $produto->checkout_discount_percentage <= 0 && (float) $produto->checkout_discount_amount > 0) {
             $preco ??= (float) $produto->final_price;
 
@@ -81,12 +65,6 @@ class DescontoPix
     /** Maior "Desconto Checkout" entre os produtos ativos (chamada "até X% no Pix"). */
     public static function maiorPercentual(): float
     {
-        $percentual = (float) Product::query()->where('is_active', true)->max('checkout_discount_percentage');
-        // Valor fixo entra pelo % equivalente sobre o preço do cadastro.
-        $fixo = (float) Product::query()->where('is_active', true)
-            ->where('checkout_discount_amount', '>', 0)->where('price', '>', 0)
-            ->selectRaw('MAX(checkout_discount_amount * 100 / price) as maior')->value('maior');
-
-        return round(max($percentual, min(100.0, $fixo)), 2);
+        return (float) Product::query()->where('is_active', true)->max('checkout_discount_percentage');
     }
 }

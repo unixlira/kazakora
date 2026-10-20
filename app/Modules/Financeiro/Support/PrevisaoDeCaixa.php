@@ -10,7 +10,6 @@ use App\Services\Shopee\ShopeeWalletService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -38,49 +37,25 @@ class PrevisaoDeCaixa
      * não fica em cache, ?refresh=1 busca de novo); Mercado Livre pelo saldo
      * do Mercado Pago que o ads:sync-wallet-balance deixa pronto.
      *
-     * @return array{shopee: float|null, shopee_erro: string|null, shopee_consultado_em: string|null, mercado_livre: float|null, mercado_livre_as_of: string|null}
+     * @return array{shopee: float|null, mercado_livre: float|null, mercado_livre_as_of: string|null}
      */
     public function walletBalances(): array
     {
         $shopeeAccount = MarketplaceAccount::query()->where('channel', MarketplaceAccount::CHANNEL_SHOPEE)->first();
         $shopee = null;
-        $shopeeErro = null;
-        $shopeeConsultadoEm = null;
 
-        if (! $shopeeAccount?->isConnected()) {
-            $shopeeErro = 'Loja da Shopee não conectada.';
-        } else {
+        if ($shopeeAccount?->isConnected()) {
             try {
-                // Guarda o valor com o horário da consulta (Resultado e
-                // margem mostra "consultado às HH:MM", 2026-10-19).
-                $cacheKey = 'shopee:wallet_balance:v2:'.$shopeeAccount->seller_id;
+                $cacheKey = 'shopee:wallet_balance:'.$shopeeAccount->seller_id;
 
                 if (request()->boolean('refresh')) {
                     Cache::forget($cacheKey);
                 }
 
-                $consulta = Cache::remember($cacheKey, now()->addMinutes(self::WALLET_CACHE_MINUTES), fn () => [
-                    'valor' => $this->shopeeWallet->currentBalance(),
-                    'em' => now()->toDateTimeString(),
-                ]);
-                $shopee = $consulta['valor'];
-                $shopeeConsultadoEm = $consulta['em'];
-
-                if ($shopee === null) {
-                    // Sem movimento não fica guardado: a próxima visita consulta de novo.
-                    Cache::forget($cacheKey);
-                    $shopeeErro = 'Nenhuma movimentação na carteira nos últimos 7 dias.';
-                }
-            } catch (Throwable $e) {
-                // A tela não pode cair porque a consulta ao vivo falhou, mas o
-                // motivo fica no log e na tela (antes era engolido e só
-                // aparecia "Indisponível"; 19/10: no homolog era o IP do
-                // servidor fora da lista branca do app na Shopee).
-                Log::warning('shopee.wallet_balance.failed', ['erro' => mb_substr($e->getMessage(), 0, 300)]);
+                $shopee = Cache::remember($cacheKey, now()->addMinutes(self::WALLET_CACHE_MINUTES), fn () => $this->shopeeWallet->currentBalance());
+            } catch (Throwable) {
+                // A tela não pode cair porque a consulta ao vivo falhou.
                 $shopee = null;
-                $shopeeErro = str_contains($e->getMessage(), 'is undeclared')
-                    ? 'A Shopee bloqueou o IP deste servidor (lista branca do app).'
-                    : 'A Shopee não respondeu agora. Tente atualizar.';
             }
         }
 
@@ -88,8 +63,6 @@ class PrevisaoDeCaixa
 
         return [
             'shopee' => $shopee,
-            'shopee_erro' => $shopeeErro,
-            'shopee_consultado_em' => $shopeeConsultadoEm,
             'mercado_livre' => $mlBalance?->balance !== null ? (float) $mlBalance->balance : null,
             'mercado_livre_as_of' => $mlBalance?->balance_as_of?->toDateTimeString(),
         ];
@@ -128,7 +101,14 @@ class PrevisaoDeCaixa
         })->values()->all();
 
         if (Schema::hasTable('marketplace_settlement_details')) {
-            $rows = $this->aLiberarQuery($today, $today->copy()->addDays(59))
+            $horizon = $today->copy()->addDays(59);
+            $rows = DB::table('marketplace_settlement_details')
+                ->whereNotNull('settlement_date')
+                ->where('settlement_date', '<=', $horizon->toDateString())
+                ->where(function ($query) {
+                    $query->whereNull('status')
+                        ->orWhere('status', '<>', 'Pagos');
+                })
                 ->selectRaw('channel, settlement_date, COALESCE(SUM(payout_amount), 0) as amount')
                 ->groupBy('channel', 'settlement_date')
                 ->get();
@@ -173,76 +153,6 @@ class PrevisaoDeCaixa
             'periods' => $periods->values()->all(),
             'source' => Schema::hasTable('marketplace_settlement_details') ? 'Extratos financeiros importados + carteiras disponíveis' : 'Carteiras disponíveis',
         ];
-    }
-
-    /**
-     * Status de linha de extrato que já virou dinheiro na conta: "Pagos" no
-     * TikTok; na Amazon RELEASED (e o par DEFERRED_RELEASED). Antes de
-     * 2026-10-19 a regra só olhava "Pagos" e a Amazon liberada aparecia
-     * como a receber.
-     */
-    public const STATUS_PAGOS = ['Pagos', 'RELEASED', 'DEFERRED_RELEASED'];
-
-    /** Amazon: venda enviada com o dinheiro retido até a entrega, sem data de liberação no extrato. */
-    public const STATUS_RETIDO = 'DEFERRED';
-
-    /**
-     * Linhas de extrato ainda não pagas com data de liquidação de hoje em
-     * diante (data passada sem pagamento não é previsão: ou atrasou ou o
-     * extrato ainda não marcou o pagamento).
-     */
-    private function aLiberarQuery(Carbon $hoje, ?Carbon $ate = null)
-    {
-        return DB::table('marketplace_settlement_details')
-            ->whereNotNull('settlement_date')
-            ->where('settlement_date', '>=', $hoje->toDateString())
-            ->when($ate, fn ($q) => $q->where('settlement_date', '<=', $ate->toDateString()))
-            ->where(fn ($q) => $q->whereNull('status')->orWhereNotIn('status', [...self::STATUS_PAGOS, self::STATUS_RETIDO]));
-    }
-
-    /**
-     * "Dinheiro para receber" do Resultado e margem (2026-10-19): por canal,
-     * o que os extratos dizem que ainda vai cair, só com data de hoje em
-     * diante. Canal sem extrato importado fica "sem previsão". A Amazon
-     * retida (DEFERRED) sai à parte: é dinheiro a receber, mas sem data.
-     *
-     * @return list<array{canal: string, nome: string, temExtrato: bool, total: float, datas: list<array{data: string, valor: float}>, retido: float, retidoPedidos: int}>
-     */
-    public function aLiberar(?Carbon $hoje = null): array
-    {
-        $hoje = ($hoje ?? Carbon::today())->copy()->startOfDay();
-        $tem = Schema::hasTable('marketplace_settlement_details');
-
-        $comExtrato = $tem ? DB::table('marketplace_settlement_details')->distinct()->pluck('channel')->flip() : collect();
-        $datas = $tem ? $this->aLiberarQuery($hoje)
-            ->selectRaw('channel, settlement_date, COALESCE(SUM(payout_amount), 0) as valor')
-            ->groupBy('channel', 'settlement_date')
-            ->orderBy('settlement_date')
-            ->get()
-            ->groupBy('channel') : collect();
-        $retido = $tem ? DB::table('marketplace_settlement_details')
-            ->where('status', self::STATUS_RETIDO)
-            ->selectRaw('channel, COALESCE(SUM(payout_amount), 0) as valor, COUNT(DISTINCT external_order_id) as pedidos')
-            ->groupBy('channel')
-            ->get()
-            ->keyBy('channel') : collect();
-
-        return collect(self::CANAIS)->map(function (string $nome, string $canal) use ($comExtrato, $datas, $retido) {
-            $linhas = collect($datas->get($canal, []))->map(fn ($l) => [
-                'data' => Carbon::parse($l->settlement_date)->toDateString(),
-                'valor' => round((float) $l->valor, 2),
-            ])->filter(fn ($l) => $l['valor'] != 0.0)->values();
-
-            return [
-                'canal' => $canal,
-                'nome' => $nome,
-                'temExtrato' => $comExtrato->has($canal),
-                'total' => round((float) $linhas->sum('valor'), 2),
-                'datas' => $linhas->all(),
-                'retido' => round((float) ($retido->get($canal)?->valor ?? 0), 2),
-                'retidoPedidos' => (int) ($retido->get($canal)?->pedidos ?? 0),
-            ];
-        })->values()->all();
     }
 
     /**

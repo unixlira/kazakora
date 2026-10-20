@@ -39,7 +39,6 @@ const form = useForm({
     is_active: true,
     is_featured: false,
     is_new_release: false,
-    is_daily_offer: false,
 });
 
 const submit = () => {

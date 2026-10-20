@@ -2,8 +2,7 @@
 
 namespace App\Modules\Catalog\Models;
 
-use App\Modules\Checkout\Models\OrderItem;
-use App\Modules\Checkout\Support\FreteEmbutido;
+
 use App\Modules\Fiscal\Models\ProductFiscalData;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Marketplace\Models\ProductChannelListing;
@@ -45,7 +44,6 @@ class Product extends Model
         'is_active',
         'is_featured',
         'is_new_release',
-        'is_daily_offer',
     ];
 
     protected $appends = ['video_url', 'final_price', 'has_discount', 'oferta_do_dia', 'oferta_relampago', 'preco_sem_oferta', 'preco_de', 'preco_vitrine'];
@@ -67,7 +65,6 @@ class Product extends Model
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
             'is_new_release' => 'boolean',
-            'is_daily_offer' => 'boolean',
             'video_duration_seconds' => 'integer',
         ];
     }
@@ -103,7 +100,7 @@ class Product extends Model
      */
     public function freteEmbutido(): float
     {
-        return $this->id ? app(FreteEmbutido::class)->acrescimo($this) : 0.0;
+        return $this->id ? app(\App\Modules\Checkout\Support\FreteEmbutido::class)->acrescimo($this) : 0.0;
     }
 
     /** Preço "de" riscado no card quando há desconto, com o mesmo frete embutido do final_price. */
@@ -342,7 +339,7 @@ class Product extends Model
             // de toda vitrine à toa (velocidade, pedido 2026-10-10).
             // Vendidos (pedido 2026-10-10, como no Mercado Livre): pedidos pagos,
             // enviados ou entregues de todos os canais, somando as variações.
-            ->addSelect(['vendidos' => OrderItem::query()
+            ->addSelect(['vendidos' => \App\Modules\Checkout\Models\OrderItem::query()
                 ->selectRaw('COALESCE(SUM(order_items.quantity), 0)')
                 ->join('orders', 'orders.id', '=', 'order_items.order_id')
                 ->whereIn('orders.status', ['paid', 'shipped', 'completed'])
@@ -351,9 +348,7 @@ class Product extends Model
                     ->orWhereColumn('variacoes.parent_product_id', 'products.id'))])
             ->with(['images' => fn ($images) => $images->select(['id', 'product_id', 'path', 'thumb_path', 'position', 'is_primary'])
                 ->reorder()->orderByDesc('is_primary')->orderBy('position')->limit(2)])
-            // Estrela do card só com avaliação da KazaKora: as de outra loja
-            // (selo "Avaliação feita em outra loja") não entram na nota.
-            ->withAvg(['reviews' => fn ($reviews) => $reviews->daLoja()], 'rating');
+            ->withAvg('reviews', 'rating');
     }
 
     public function images(): HasMany

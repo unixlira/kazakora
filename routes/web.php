@@ -685,6 +685,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'index'])->name('listar')->middleware('permission:financeiro.view');
         Route::get('nova', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'create'])->name('criar')->middleware('permission:financeiro.create');
         Route::post('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'store'])->name('armazenar')->middleware('permission:financeiro.create');
+        Route::post('textos-ia', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'textosComIa'])->name('textos-ia')->middleware(['permission:financeiro.create', 'throttle:10,1']);
         Route::get('localizacoes', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'localizacoes'])->name('localizacoes')->middleware(['permission:financeiro.create', 'throttle:30,1']);
         Route::get('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'show'])->whereNumber('campanha')->name('ver')->middleware('permission:financeiro.view');
         Route::get('{campanha}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'edit'])->whereNumber('campanha')->name('editar')->middleware('permission:financeiro.create');

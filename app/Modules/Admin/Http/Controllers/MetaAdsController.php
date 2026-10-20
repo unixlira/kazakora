@@ -11,8 +11,10 @@ use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
 use App\Modules\Marketplace\Support\DuracaoDeVideo;
 use App\Modules\Marketplace\Support\FormatoDeVideo;
+use App\Modules\WhatsApp\Services\GeminiUnavailableException;
 use App\Services\Meta\MetaAdsException;
 use App\Services\Meta\MetaAdsService;
+use App\Services\Meta\TextosDoAnuncioComIa;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -91,6 +93,31 @@ class MetaAdsController extends Controller
     public function create(MetaAdsService $meta): Response
     {
         return Inertia::render('Admin/MetaAds/Form', $this->dadosDoFormulario($meta, null));
+    }
+
+    /**
+     * Botão "Gerar textos com IA" (2026-10-19): texto, título e descrição
+     * principais e 5 opções de cada, a partir do produto. Nada é gravado.
+     */
+    public function textosComIa(Request $request, TextosDoAnuncioComIa $ia): JsonResponse
+    {
+        $dados = $this->comErrosEmJson($request, fn () => $request->validate([
+            'produto_id' => ['required', 'integer', 'exists:products,id'],
+            'campanha' => ['nullable', 'string', 'max:200'],
+        ], [
+            'produto_id.required' => 'Escolha o produto para a IA escrever os textos.',
+            'produto_id.exists' => 'Produto não encontrado.',
+        ]));
+
+        try {
+            return response()->json($ia->gerar(Product::query()->findOrFail($dados['produto_id']), (string) ($dados['campanha'] ?? '')));
+        } catch (GeminiUnavailableException) {
+            return response()->json(['message' => 'A IA está sem cota ou ocupada agora. Tente de novo em 1 minuto.'], 503);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json(['message' => Str::limit($exception->getMessage(), 300)], 422);
+        }
     }
 
     /**

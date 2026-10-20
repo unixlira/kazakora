@@ -11,6 +11,7 @@ use App\Modules\Catalog\Models\OfertaRelampago;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
 use App\Modules\Catalog\Services\AnuncioConteudoService;
+use App\Modules\Catalog\Support\PerfilDoCliente;
 use App\Modules\Catalog\Support\MenuDaLoja;
 use App\Modules\Catalog\Support\VitrineHome;
 use App\Modules\Checkout\Models\Order;
@@ -363,6 +364,10 @@ class CatalogController extends Controller
         ]);
 
         $this->gerarConteudoAnuncioSeFaltar($product);
+
+        // Título dos cartões de benefícios pelo tipo de cliente (pedido 2026-10-20):
+        // "vai amar" só em beleza; ferramenta é "Por que você precisa".
+        $product->adContent?->setAttribute('titulo_beneficios', PerfilDoCliente::tituloBeneficios($product->category?->slug));
 
         // Vendidos (pedido 2026-10-10): pedidos pagos, enviados ou entregues de
         // todos os canais (loja e marketplaces), somando as variações.

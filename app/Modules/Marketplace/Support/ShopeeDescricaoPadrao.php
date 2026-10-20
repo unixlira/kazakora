@@ -3,6 +3,7 @@
 namespace App\Modules\Marketplace\Support;
 
 use App\Modules\Catalog\Models\Product;
+use App\Modules\Catalog\Support\GatilhosAnuncio;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +21,9 @@ use Throwable;
  * Ordem de tentativa: já conforme → Gemini reescreve (só com fatos do
  * cadastro) → montagem própria a partir do texto do cadastro. Nunca lança
  * exceção e nunca devolve texto sem emoji.
+ *
+ * Desde 2026-10-19 o Gemini também aplica os gatilhos psicológicos e emojis
+ * em todas as linhas (GatilhosAnuncio).
  */
 class ShopeeDescricaoPadrao
 {
@@ -109,6 +113,8 @@ class ShopeeDescricaoPadrao
 
     private function prompt(Product $product, string $original): string
     {
+        $gatilhos = GatilhosAnuncio::regras();
+
         return <<<TXT
 Reescreva a descrição do produto abaixo para a Shopee, EXATAMENTE neste padrão (texto puro, uma linha em branco entre seções, sem markdown, sem HTML, sem travessão):
 
@@ -139,6 +145,7 @@ Rótulo: valor
 🛒 Chamada final para a compra.
 
 Regras: use somente fatos do cadastro; não invente medida, potência, voltagem, garantia ou certificação; nada de promessa não comprovada; português do Brasil; no máximo 2800 caracteres; emojis obrigatórios em todos os títulos de seção.
+{$gatilhos}
 
 Nome: {$product->name}
 Cadastro atual:

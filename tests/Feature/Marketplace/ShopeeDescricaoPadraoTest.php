@@ -77,4 +77,16 @@ class ShopeeDescricaoPadraoTest extends TestCase
         $this->assertTrue($this->servico(null, false)->conforme($this->servico(null, false)->padronizar($this->produto('Texto simples.'))));
         $this->assertTrue($this->servico(null, false)->conforme($this->servico(null, false)->padronizar($this->produto(''))));
     }
+
+    public function test_prompt_da_shopee_pede_gatilhos_e_emojis(): void
+    {
+        $gemini = Mockery::mock(GeminiClient::class);
+        $gemini->shouldReceive('isConfigured')->andReturn(true);
+        $gemini->shouldReceive('generate')->once()
+            ->withArgs(fn ($modelo, $conteudo) => str_contains($conteudo[0]['parts'][0]['text'], 'Gatilhos psicológicos (obrigatório)')
+                && str_contains($conteudo[0]['parts'][0]['text'], 'Emojis (obrigatório)'))
+            ->andReturn(self::NO_PADRAO);
+
+        $this->assertSame(self::NO_PADRAO, (new ShopeeDescricaoPadrao($gemini))->padronizar($this->produto('Lixeira de inox.')));
+    }
 }

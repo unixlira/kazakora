@@ -4,6 +4,7 @@ namespace App\Modules\Catalog\Services;
 
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\ProductAdContent;
+use App\Modules\Catalog\Support\GatilhosAnuncio;
 use App\Modules\WhatsApp\Models\GeminiUsageLog;
 use App\Modules\WhatsApp\Services\GeminiClient;
 use App\Modules\WhatsApp\Services\GeminiUnavailableException;
@@ -35,6 +36,9 @@ use Throwable;
  * às três lojas do grupo (KazaKora, FerraKora pela API do catálogo e Beauty
  * Kora). descricaoPelasFotos() é o botão do admin que escreve a descrição
  * para quem cadastra revisar antes de salvar.
+ *
+ * Desde 2026-10-19 (pedido do Lira) os textos da KazaKora usam os gatilhos
+ * psicológicos e levam emojis (GatilhosAnuncio).
  */
 class AnuncioConteudoService
 {
@@ -270,6 +274,14 @@ class AnuncioConteudoService
         $campoDescricao = $comDescricao
             ? "\n          \"descricao\": \"descrição completa para o cadastro do produto, em texto puro: um parágrafo de abertura, depois seções com um título terminado em ':' numa linha e o texto abaixo, e uma seção 'Características:' com itens começando por '- '\","
             : '';
+        // Gatilhos e emojis valem só para a KazaKora (pedido do Lira, 2026-10-19);
+        // a Beauty Kora usa o mesmo serviço e continua sem emoji.
+        $kazakora = $loja === 'KazaKora';
+        $estilo = $kazakora ? 'Sem HTML e sem markdown; emojis pertinentes em todos os textos (regra abaixo).' : 'Sem HTML, sem emojis, sem markdown.';
+        $gatilhos = $kazakora ? "\n".GatilhosAnuncio::regras()."\n" : '';
+        $etapas = $kazakora
+            ? [' Gatilhos: necessidade, vontade e curiosidade.', ' Gatilhos: autoridade, prova social e reciprocidade.', ' Gatilhos: urgência e escassez.']
+            : ['', '', ''];
 
         return <<<TXT
         Monte o conteúdo da página de venda deste produto da loja {$loja}.
@@ -282,15 +294,15 @@ class AnuncioConteudoService
         Regras:
         - Português do Brasil, tom persuasivo e direto, focado em quebrar objeções de compra.
         - Use SÓ informações {$fonte}. Não invente medidas, materiais, garantias, prazos, brindes nem números.
-        - Sem HTML, sem emojis, sem markdown.
+        - {$estilo}
         - Em cada bloco escolha a imagem que melhor ilustra o texto (índice), sem repetir imagem entre blocos quando der; use null se nenhuma servir.
         - Use todas as imagens: um bloco para cada foto (até 10), na ordem que conta a história de venda, não na ordem das fotos.
         - "destaques" são as 3 promessas que aparecem com um check logo abaixo do nome do produto: o principal resultado, a principal facilidade e o que acompanha o produto.
         - Ordem dos blocos (estrutura de venda):
-          1) Desejo: 2 a 3 blocos que mostram o resultado e a cena de uso (antes e depois, o problema resolvido no dia a dia).
-          2) Quebra de objeção: os blocos do meio respondem, cada um, a uma dúvida real de quem está para comprar (funciona mesmo, potência, tamanho, manutenção, durabilidade), com título em forma de pergunta ou de resposta.
-          3) CTA: o último bloco fecha a venda com o que vem na caixa e um convite direto para comprar, sem prometer prazo, brinde, garantia ou desconto que não esteja nas informações acima.
-
+          1) Desejo: 2 a 3 blocos que mostram o resultado e a cena de uso (antes e depois, o problema resolvido no dia a dia).{$etapas[0]}
+          2) Quebra de objeção: os blocos do meio respondem, cada um, a uma dúvida real de quem está para comprar (funciona mesmo, potência, tamanho, manutenção, durabilidade), com título em forma de pergunta ou de resposta.{$etapas[1]}
+          3) CTA: o último bloco fecha a venda com o que vem na caixa e um convite direto para comprar, sem prometer prazo, brinde, garantia ou desconto que não esteja nas informações acima.{$etapas[2]}
+        {$gatilhos}
         Formato (JSON):
         {{$campoDescricao}
           "destaques": ["3 benefícios curtos, até 60 caracteres cada"],

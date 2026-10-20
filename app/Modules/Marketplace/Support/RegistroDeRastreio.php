@@ -16,7 +16,8 @@ use Illuminate\Support\Str;
  * sai da consulta agendada.
  *
  * LGPD: recebedor, destinatário, remetente, carteiro e coordenadas que a API
- * devolve não são gravados.
+ * devolve não são gravados aqui. O nome de quem recebeu vai só para a linha
+ * do tempo do pedido (AtualizacaoPeloRastreio::registrarEntrega).
  */
 class RegistroDeRastreio
 {

@@ -2,24 +2,15 @@
 
 namespace App\Console\Commands;
 
-use App\Models\User;
-use App\Modules\Checkout\Jobs\EnviarEmailPedidoEnviadoJob;
-use App\Modules\Checkout\Jobs\SendOrderDeliveredWhatsAppJob;
-use App\Modules\Checkout\Jobs\SendOrderShippedWhatsAppJob;
-use App\Modules\Checkout\Jobs\SendOrderTrackingTextWhatsAppJob;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Marketplace\Models\CorreiosPrePostagem;
 use App\Modules\Marketplace\Models\Rastreio;
-use App\Modules\Marketplace\Support\OrderImportService;
+use App\Modules\Marketplace\Support\AtualizacaoPeloRastreio;
 use App\Modules\Marketplace\Support\RegistroDeRastreio;
-use App\Notifications\EntregaForaDoDestinoNotification;
 use App\Services\Correios\CorreiosRastroService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -56,13 +47,10 @@ class AcompanharRastreioLoja extends Command
 
     protected $description = 'Atualiza pedidos do site pelo rastreio dos Correios e avisa envio e entrega no WhatsApp';
 
-    /** Postagem ou entrega mais antiga que isso não gera aviso (primeira rodada, atrasos). */
-    private const AVISO_ATE_HORAS = 72;
-
     /** Pacote fora da rota de entrega é reconsultado só depois disso. */
     private const INTERVALO_FORA_DA_ENTREGA_MINUTOS = 30;
 
-    public function handle(CorreiosRastroService $rastro, OrderImportService $pedidos, RegistroDeRastreio $registro): int
+    public function handle(CorreiosRastroService $rastro, RegistroDeRastreio $registro, AtualizacaoPeloRastreio $atualizacao): int
     {
         $simular = (bool) $this->option('simular');
         $pedido = $this->option('pedido');
@@ -76,7 +64,7 @@ class AcompanharRastreioLoja extends Command
             ->where('created_at', '>=', now()->subDays((int) $this->option('dias')))
             ->whereHas('latestCorreiosPrePostagem', fn ($q) => $q->whereNotNull('codigo_objeto'))
             ->when($pedido, fn ($q) => $q->whereKey((int) $pedido))
-            ->chunkById(CorreiosRastroService::LOTE_MAXIMO, function ($lote) use ($rastro, $pedidos, $registro, $simular, $pedido, $whatsapp, &$contagem) {
+            ->chunkById(CorreiosRastroService::LOTE_MAXIMO, function ($lote) use ($rastro, $registro, $atualizacao, $simular, $pedido, $whatsapp, &$contagem) {
                 $codigos = $lote->mapWithKeys(fn (Order $o) => [$o->id => strtoupper(trim((string) $o->latestCorreiosPrePostagem->codigo_objeto))]);
                 $encerrados = Rastreio::query()->whereIn('codigo', $codigos->values())->whereNotNull('encerrado_em')->pluck('codigo')->all();
 
@@ -121,7 +109,7 @@ class AcompanharRastreioLoja extends Command
                     $contagem['consultados']++;
                     $objeto = $objetos[$codigo] ?? ['mensagem' => 'Objeto não veio na resposta dos Correios'];
                     $r = CorreiosRastroService::interpretar($objeto);
-                    $foraDoDestino = $r['entregue'] && self::foraDoDestino($r['entregue_cidade'], $order->shipping_city);
+                    $foraDoDestino = $r['entregue'] && AtualizacaoPeloRastreio::foraDoDestino($r['entregue_cidade'], $order->shipping_city);
 
                     if (! $simular) {
                         $contagem['eventos_novos'] += $registro->registrar($codigo, $order->id, $objeto, $foraDoDestino);
@@ -134,64 +122,8 @@ class AcompanharRastreioLoja extends Command
                         Cache::put($chave, true, now()->addMinutes(self::INTERVALO_FORA_DA_ENTREGA_MINUTOS)->subSeconds(30));
                     }
 
-                    if ($simular || ! $r['postado']) {
-                        continue;
-                    }
-
-                    if ($foraDoDestino) {
-                        $contagem['fora_do_destino']++;
-                        $this->avisarForaDoDestino($order, $r['entregue_cidade']);
-
-                        continue;
-                    }
-
-                    if ($r['entregue']) {
-                        if ($order->entregue_em === null) {
-                            $order->forceFill(['entregue_em' => $r['entregue_em'] ?? now()]);
-                        }
-                        $pedidos->syncStatus($order, Order::STATUS_COMPLETED, 'correios:entregue');
-                        $contagem['entregues']++;
-
-                        if ($order->whatsapp_entregue_em === null && self::recente($r['entregue_em']) && $this->whatsappLigado($whatsapp, $order, 'entregue', $contagem)) {
-                            filled(config('services.whatsapp.templates.pedido_entregue'))
-                                ? SendOrderDeliveredWhatsAppJob::dispatch($order->id, $r['entregue_em']?->toIso8601String(), $r['recebedor'])
-                                : SendOrderTrackingTextWhatsAppJob::dispatchSync($order->id, SendOrderTrackingTextWhatsAppJob::ENTREGUE, ['quando' => $r['entregue_em']?->toIso8601String()]);
-                        }
-
-                        continue;
-                    }
-
-                    if ($order->status === Order::STATUS_PAID) {
-                        $pedidos->syncStatus($order, Order::STATUS_SHIPPED, 'correios:postado');
-                        $contagem['enviados']++;
-
-                        // E-mail "Seu pedido foi enviado" (2026-10-19), uma vez, na virada para enviado.
-                        // Mesma chave dos avisos de WhatsApp: desligada, o cliente não recebe nada.
-                        if ($whatsapp && self::recente($r['postado_em'])) {
-                            EnviarEmailPedidoEnviadoJob::dispatch($order->id, $r['previsao']?->toDateString());
-                        }
-                    }
-
-                    // Texto sai na hora, sem fila: as etapas chegam em ordem e o
-                    // homolog não tem worker (fila parada desde 07/10).
-                    if ($order->whatsapp_enviado_em === null && self::recente($r['postado_em']) && $this->whatsappLigado($whatsapp, $order, 'postado', $contagem)) {
-                        filled(config('services.whatsapp.templates.pedido_enviado'))
-                            ? SendOrderShippedWhatsAppJob::dispatch($order->id, $r['previsao']?->toDateString())
-                            : SendOrderTrackingTextWhatsAppJob::dispatchSync($order->id, SendOrderTrackingTextWhatsAppJob::POSTADO, ['previsao' => $r['previsao']?->toDateString()]);
-                    }
-
-                    if ($r['em_entrega']) {
-                        $contagem['em_entrega']++;
-                        if ($order->whatsapp_saiu_entrega_em === null && self::recente($r['saiu_em']) && $this->whatsappLigado($whatsapp, $order, 'saiu_para_entrega', $contagem)) {
-                            SendOrderTrackingTextWhatsAppJob::dispatchSync($order->id, SendOrderTrackingTextWhatsAppJob::SAIU_PARA_ENTREGA, ['quando' => $r['saiu_em']?->toIso8601String()]);
-                        }
-                    }
-
-                    if ($r['aguardando_retirada']) {
-                        $contagem['retirada']++;
-                        if ($order->whatsapp_retirada_em === null && self::recente($r['retirada_em']) && $this->whatsappLigado($whatsapp, $order, 'aguardando_retirada', $contagem)) {
-                            SendOrderTrackingTextWhatsAppJob::dispatchSync($order->id, SendOrderTrackingTextWhatsAppJob::AGUARDANDO_RETIRADA, ['local' => $r['retirada_local']]);
-                        }
+                    if (! $simular) {
+                        $atualizacao->aplicarNaLoja($order, $codigo, $objeto, $whatsapp, $contagem);
                     }
                 }
             });
@@ -199,25 +131,10 @@ class AcompanharRastreioLoja extends Command
         $this->info(json_encode($contagem));
 
         if (! $pedido && ! $this->option('sem-outros-canais')) {
-            $this->info(json_encode(['outros_canais' => $this->historicoOutrosCanais($rastro, $registro, $simular)]));
+            $this->info(json_encode(['outros_canais' => $this->historicoOutrosCanais($rastro, $registro, $atualizacao, $simular)]));
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * Aviso ao cliente só com CORREIOS_RASTREIO_WHATSAPP=true. Desligado, a
-     * etapa fica sem aviso (o campo whatsapp_*_em continua vazio) e, se ligar
-     * depois, só etapa das últimas AVISO_ATE_HORAS horas é avisada.
-     */
-    private function whatsappLigado(bool $ligado, Order $order, string $etapa, array &$contagem): bool
-    {
-        if (! $ligado) {
-            $contagem['whatsapp_desligado']++;
-            Log::info('loja.rastreio_whatsapp_desligado', ['order_id' => $order->id, 'etapa' => $etapa]);
-        }
-
-        return $ligado;
     }
 
     /**
@@ -229,7 +146,7 @@ class AcompanharRastreioLoja extends Command
      *
      * @return array{consultados: int, eventos_novos: int, falhas: int}
      */
-    private function historicoOutrosCanais(CorreiosRastroService $rastro, RegistroDeRastreio $registro, bool $simular): array
+    private function historicoOutrosCanais(CorreiosRastroService $rastro, RegistroDeRastreio $registro, AtualizacaoPeloRastreio $atualizacao, bool $simular): array
     {
         $contagem = ['consultados' => 0, 'eventos_novos' => 0, 'falhas' => 0];
 
@@ -264,8 +181,13 @@ class AcompanharRastreioLoja extends Command
 
             foreach ($lote as $codigo => $orderId) {
                 $contagem['consultados']++;
+                $objeto = $objetos[$codigo] ?? ['mensagem' => 'Objeto não veio na resposta dos Correios'];
                 if (! $simular) {
-                    $contagem['eventos_novos'] += $registro->registrar($codigo, $orderId, $objetos[$codigo] ?? ['mensagem' => 'Objeto não veio na resposta dos Correios']);
+                    $contagem['eventos_novos'] += $registro->registrar($codigo, $orderId, $objeto);
+                    // Entrega vai para a linha do tempo do pedido; o status fica com o canal.
+                    if (($order = Order::query()->find($orderId)) !== null) {
+                        $atualizacao->registrarEntrega($order, $codigo, $objeto);
+                    }
                 }
             }
         }
@@ -273,35 +195,9 @@ class AcompanharRastreioLoja extends Command
         return $contagem;
     }
 
-    /** Evento sem data ou dos últimos AVISO_ATE_HORAS: avisa o cliente. */
-    private static function recente(?Carbon $quando): bool
-    {
-        return ! $quando || $quando->gt(now()->subHours(self::AVISO_ATE_HORAS));
-    }
-
     /** Cidade da entrega conhecida e diferente da cidade do pedido. */
     public static function foraDoDestino(?string $entregueEm, ?string $destino): bool
     {
-        if (! filled($entregueEm) || ! filled($destino)) {
-            return false;
-        }
-
-        $normaliza = fn (string $c) => (string) Str::of($c)->ascii()->upper()->replaceMatches('/[^A-Z]/', '');
-
-        return $normaliza($entregueEm) !== $normaliza($destino);
-    }
-
-    private function avisarForaDoDestino(Order $order, string $cidade): void
-    {
-        Log::warning('loja.rastreio_entrega_fora_do_destino', ['order_id' => $order->id, 'entregue_em' => $cidade, 'destino' => $order->shipping_city]);
-
-        if (! Cache::add("loja:rastreio:fora-do-destino:{$order->id}", true, now()->addDays(60))) {
-            return;
-        }
-
-        $admins = User::query()->where('role', User::ROLE_ADMIN)->get();
-        if ($admins->isNotEmpty()) {
-            Notification::send($admins, new EntregaForaDoDestinoNotification($order, $cidade));
-        }
+        return AtualizacaoPeloRastreio::foraDoDestino($entregueEm, $destino);
     }
 }

@@ -59,7 +59,8 @@ const formatDate = (value) => (value ? new Date(value).toLocaleString('pt-BR') :
             <div class="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-3">
                 <div>
                     <p class="text-xs font-medium uppercase text-slate-400">Cliente</p>
-                    <p class="mt-1 text-sm">{{ review.reviewer_display_name }}</p>
+                    <p class="mt-1 text-sm">{{ review.ocultar_nome && review.user ? review.user.name : review.reviewer_display_name }}</p>
+                    <p v-if="review.ocultar_nome" class="text-xs text-slate-400">Nome oculto na loja (aparece como Cliente KazaKora)</p>
                 </div>
                 <div>
                     <p class="text-xs font-medium uppercase text-slate-400">Nota</p>

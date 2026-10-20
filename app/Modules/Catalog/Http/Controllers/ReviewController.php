@@ -5,6 +5,7 @@ namespace App\Modules\Catalog\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Catalog\Models\Product;
 use App\Modules\Catalog\Models\Review;
+use App\Modules\Catalog\Support\ClubeDeAvaliacoes;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\OrderItem;
 use Illuminate\Http\RedirectResponse;
@@ -16,10 +17,10 @@ class ReviewController extends Controller
 {
     /**
      * Esboço da tela "Avalie suas compras" (pedido 2026-10-20): cada produto
-     * já entregue ao cliente, com a avaliação dele se já existir. As
-     * recompensas são só prévia na tela: nada de cupom é gerado ainda.
+     * já entregue ao cliente, com a avaliação dele se já existir, e o Clube
+     * de Avaliações (pontos, níveis e cupons ganhos).
      */
-    public function index(Request $request): Response
+    public function index(Request $request, ClubeDeAvaliacoes $clube): Response
     {
         $user = $request->user();
 
@@ -34,7 +35,7 @@ class ReviewController extends Controller
         $avaliacoes = Review::query()
             ->where('user_id', $user->id)
             ->whereIn('product_id', $itens->pluck('product_id'))
-            ->get(['product_id', 'rating', 'comment', 'updated_at'])
+            ->get(['product_id', 'rating', 'comment', 'ocultar_nome', 'updated_at'])
             ->keyBy('product_id');
 
         $produtos = $itens->filter(fn (OrderItem $item) => $item->product)->map(fn (OrderItem $item) => [
@@ -47,13 +48,18 @@ class ReviewController extends Controller
             'avaliacao' => ($a = $avaliacoes->get($item->product_id)) ? [
                 'nota' => (int) $a->rating,
                 'comentario' => $a->comment,
+                'ocultar_nome' => (bool) $a->ocultar_nome,
             ] : null,
         ])->values();
 
-        return Inertia::render('Catalog/Avaliar', ['produtos' => $produtos]);
+        return Inertia::render('Catalog/Avaliar', [
+            'produtos' => $produtos,
+            'clube' => $clube->resumo($user),
+            'nomeCliente' => $user->name,
+        ]);
     }
 
-    public function store(Request $request, Product $product): RedirectResponse
+    public function store(Request $request, Product $product, ClubeDeAvaliacoes $clube): RedirectResponse
     {
         $purchased = $request->user()->orders()
             ->where('status', Order::STATUS_COMPLETED)
@@ -67,12 +73,21 @@ class ReviewController extends Controller
         $validated = $request->validate([
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:1000'],
+            'ocultar_nome' => ['sometimes', 'boolean'],
         ]);
 
         Review::updateOrCreate(
             ['user_id' => $request->user()->id, 'product_id' => $product->id],
             $validated,
         );
+
+        // Clube de Avaliações: nível novo gera o cupom pessoal na hora.
+        $novos = $clube->conceder($request->user());
+        if ($novos->isNotEmpty()) {
+            $codigos = $novos->map(fn ($cupom) => "{$cupom->code} ({$cupom->descricaoDesconto()})")->join(', ', ' e ');
+
+            return back()->with('success', "Avaliação enviada, obrigado! Você ganhou o cupom {$codigos}. Ele fica guardado em Avalie suas compras.");
+        }
 
         return back()->with('success', 'Avaliação enviada, obrigado!');
     }

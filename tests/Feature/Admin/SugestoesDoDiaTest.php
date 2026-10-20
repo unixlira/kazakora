@@ -100,13 +100,19 @@ class SugestoesDoDiaTest extends TestCase
     {
         $produto = $this->caixa();
         $regras = new RegrasDePreco;
-        $oferta = fn (float $preco, string $loja = 'Magazine Luiza') => ['fonte' => 'zoom', 'loja' => $loja, 'titulo' => 'x', 'preco' => $preco, 'link' => null];
+        $oferta = fn (float $preco, string $loja = 'Magazine Luiza', float $sim = 0.8) => ['fonte' => 'zoom', 'loja' => $loja, 'titulo' => 'x', 'preco' => $preco, 'link' => null, 'similaridade' => $sim];
 
         // Concorrente 10% mais barato e acima do piso (250 / 0,56 = 446,43): baixar.
         $baixar = $regras->avaliar($produto, [$oferta(452.00)]);
         $this->assertSame('baixar', $baixar[0]['tipo']);
         $this->assertSame(451.9, $baixar[0]['valor']);
         $this->assertStringContainsString('Magazine Luiza vende por R$ 452,00', $baixar[0]['acao']);
+
+        // Modelo genérico mais barato, sozinho e só "parecido": não manda baixar por ele.
+        $this->assertSame([], $regras->avaliar($produto, [$oferta(300.00, 'Genérico', 0.5), $oferta(520.00, 'Amazon', 0.5)]));
+        // Duas ofertas parecidas e próximas confirmam o preço.
+        $confirmado = $regras->avaliar($produto, [$oferta(300.00, 'Genérico', 0.5), $oferta(452.00, 'Magalu', 0.5), $oferta(470.00, 'Amazon', 0.5)]);
+        $this->assertSame(451.9, $confirmado[0]['valor']);
 
         // Abaixo do piso: não acompanhar.
         $piso = $regras->avaliar($produto, [$oferta(400.00)]);
@@ -168,6 +174,12 @@ class SugestoesDoDiaTest extends TestCase
         $this->assertSame(1, $pagina['nao_compram']['prioridade']);
 
         // Com concorrente mais barato, é preço (mesma chave da regra de preço).
+        // Sem venda no site a margem é estimada: não manda pausar por falta de margem.
+        $estimada = collect($diag->doProduto($this->produtoMeta(['roas_empate' => 0.0, 'margem_estimada' => true])))->keyBy('tipo');
+        $this->assertArrayNotHasKey('sem_margem', $estimada->all());
+        $real = collect($diag->doProduto($this->produtoMeta(['roas_empate' => 0.0])))->keyBy('tipo');
+        $this->assertArrayHasKey('sem_margem', $real->all());
+
         $preco = collect($diag->doProduto($this->produtoMeta(['mais_barato' => ['loja' => 'Magalu', 'preco' => 430.0]])))->keyBy('tipo');
         $this->assertSame('preco:baixar:1', $preco['nao_compram_preco']['chave']);
         $this->assertStringContainsString('Magalu vende por R$ 430,00', $preco['nao_compram_preco']['acao']);

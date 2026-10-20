@@ -35,8 +35,12 @@ use Throwable;
  */
 class GeradorDeSugestoes
 {
-    /** Custos do canal sem o ADS (taxa, imposto, frete) quando o produto ainda não vendeu no site. */
-    public const CUSTOS_VARIAVEIS_ESTIMADOS = 0.29;
+    /**
+     * Custos do site sem o ADS quando o produto ainda não vendeu lá: imposto
+     * do Simples + ~10% (Mercado Pago e frete/embalagem) ⚪. Na estimativa a
+     * rotina não manda pausar por falta de margem (DiagnosticoMetaAds).
+     */
+    public const CUSTOS_SITE_ESTIMADOS = 0.10;
 
     public const DIAS_MARGEM = 60;
 
@@ -185,7 +189,8 @@ class GeradorDeSugestoes
             $preco = $produto->precoSemOferta();
             $daqui = $vendas7->whereIn('product_id', $grupo);
             [$empate, $estimada] = $this->roasEmpate($produto, $vendas60->whereIn('product_id', $grupo));
-            $mais = collect($ofertas[$produto->id] ?? [])->first(fn ($o) => $o['preco'] < $preco * RegrasDePreco::BAIXAR_SE_ABAIXO);
+            $referencia = RegrasDePreco::referencia($ofertas[$produto->id] ?? []);
+            $mais = $referencia !== null && $referencia['preco'] < $preco * RegrasDePreco::BAIXAR_SE_ABAIXO ? $referencia : null;
             $visitas = SiteVisit::query()->daLoja()
                 ->where('origem', 'meta_ads')
                 ->where('created_at', '>=', $desde)->where('created_at', '<', $dia)
@@ -217,7 +222,7 @@ class GeradorDeSugestoes
     /**
      * ROAS de empate = 1 ÷ margem antes do ADS (pela ContributionMargin das
      * vendas do produto no site nos últimos 60 dias). Sem venda, estima com
-     * o custo do cadastro e CUSTOS_VARIAVEIS_ESTIMADOS. null sem custo.
+     * o custo do cadastro, o Simples e CUSTOS_SITE_ESTIMADOS. null sem custo.
      *
      * @return array{0: ?float, 1: bool}
      */
@@ -235,7 +240,7 @@ class GeradorDeSugestoes
         if ($custo <= 0 || $preco <= 0) {
             return [null, true];
         }
-        $margem = 1 - $custo / $preco - self::CUSTOS_VARIAVEIS_ESTIMADOS;
+        $margem = 1 - $custo / $preco - ContributionMargin::aliquotaSimples() / 100 - self::CUSTOS_SITE_ESTIMADOS;
 
         return [$margem > 0 ? round(1 / $margem, 2) : 0.0, true];
     }

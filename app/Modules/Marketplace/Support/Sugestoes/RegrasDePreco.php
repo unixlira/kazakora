@@ -10,11 +10,16 @@ use App\Modules\Marketplace\Support\Oportunidades\InteligenciaMercadoLivre;
  * Preço do site x concorrentes (Sugestões do dia, 2026-10-20). Só sugere:
  * quem muda o preço é o Lira.
  *
- * - Concorrente mais de 5% abaixo: baixar para logo abaixo dele, se não
- *   furar o piso de 15% de margem (regra do Rafael: custo ÷ 0,56). Se furar,
- *   avisa para não acompanhar.
+ * - Preço de referência mais de 5% abaixo: baixar para logo abaixo dele, se
+ *   não furar o piso de 15% de margem (regra do Rafael: custo ÷ 0,56). Se
+ *   furar, avisa para não acompanhar. Referência (referencia()) e não o
+ *   menor de todos: a busca por nome às vezes traz um modelo genérico mais
+ *   barato (homolog 2026-10-20: pistola de água de R$ 380 x outra de
+ *   R$ 208). Vale o menor preço confirmado por outra oferta até 10% acima
+ *   dele, ou de uma oferta muito parecida (catálogo do ML ou semelhança alta).
  * - Todo mundo mais de 10% acima (com pelo menos 2 ofertas): dá para subir
- *   até um pouco abaixo do mais barato.
+ *   até um pouco abaixo do mais barato de todos (aqui o cuidado é o
+ *   contrário: qualquer oferta mais barata segura a subida).
  * - Site mais caro que a nossa própria Shopee: o cliente que compara vai
  *   para lá.
  *
@@ -30,6 +35,31 @@ class RegrasDePreco
 
     /** Diferença que torna a baixa urgente. */
     public const DIFERENCA_URGENTE = 0.15;
+
+    /** Duas ofertas até 10% uma da outra confirmam o preço. */
+    public const CONFIRMA_ATE = 1.10;
+
+    /** Semelhança de nome que basta sozinha (1,0 = mesmo produto de catálogo do ML). */
+    public const SEMELHANCA_FORTE = 0.6;
+
+    /**
+     * Menor preço confiável entre as ofertas (do mais barato para o mais caro).
+     *
+     * @param  list<array<string, mixed>>  $ofertas
+     * @return array<string, mixed>|null
+     */
+    public static function referencia(array $ofertas): ?array
+    {
+        foreach ($ofertas as $i => $o) {
+            $proxima = $ofertas[$i + 1] ?? null;
+            if ((float) ($o['similaridade'] ?? 0) >= self::SEMELHANCA_FORTE
+                || ($proxima !== null && $proxima['preco'] <= $o['preco'] * self::CONFIRMA_ATE)) {
+                return $o;
+            }
+        }
+
+        return null;
+    }
 
     /**
      * @param  list<array{fonte: string, loja: string, titulo: string, preco: float, link: ?string}>  $ofertas  do mais barato para o mais caro
@@ -61,7 +91,9 @@ class RegrasDePreco
         $sugestoes = [];
 
         $menor = $ofertas[0] ?? null;
-        if ($menor !== null && $menor['preco'] < $nosso * self::BAIXAR_SE_ABAIXO) {
+        $referencia = self::referencia($ofertas);
+        if ($referencia !== null && $referencia['preco'] < $nosso * self::BAIXAR_SE_ABAIXO) {
+            $menor = $referencia;
             $alvo = self::terminaEm90($menor['preco']);
             if ($piso !== null && $alvo < $piso) {
                 $sugestoes[] = $base([

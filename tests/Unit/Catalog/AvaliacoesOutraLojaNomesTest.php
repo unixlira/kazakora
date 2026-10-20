@@ -27,8 +27,6 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
 
     private $appAnterior;
 
-    private $dbAnterior;
-
     private MySqlConnection $conexao;
 
     protected function setUp(): void
@@ -37,8 +35,10 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
 
         $this->resolverAnterior = Model::getConnectionResolver();
         $this->appAnterior = Facade::getFacadeApplication();
-        $this->dbAnterior = DB::getFacadeRoot();
+        // Sem resolver o "db" do app anterior: depois de um teste de Feature
+        // o container já foi esvaziado e DB::getFacadeRoot() estoura.
         Facade::setFacadeApplication(null);
+        Facade::clearResolvedInstance('db');
         // Só compila SQL; qualquer tentativa de abrir um banco falha.
         $this->conexao = Mockery::mock(MySqlConnection::class.'[select,insert,getLastInsertId]', [fn () => throw new RuntimeException('Banco proibido neste teste')]);
         $resolver = new ConnectionResolver(['teste' => $this->conexao]);
@@ -48,7 +48,7 @@ class AvaliacoesOutraLojaNomesTest extends TestCase
 
     protected function tearDown(): void
     {
-        DB::swap($this->dbAnterior);
+        Facade::clearResolvedInstance('db');
         Facade::setFacadeApplication($this->appAnterior);
         if ($this->resolverAnterior) {
             Model::setConnectionResolver($this->resolverAnterior);

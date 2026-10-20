@@ -5,6 +5,7 @@
 // (copy/UX) para o cenário do Lira: Black November com Árvore de Natal (3),
 // Ferramentas (2) e Caixa de Ferramentas (2).
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import AguardeModal from '@/Shared/Components/AguardeModal.vue';
 import InputError from '@/Shared/Components/InputError.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
@@ -397,9 +398,22 @@ const salvando = ref(false);
 const salvoAs = ref('');
 const erroGeral = ref('');
 
+// Modal único de espera (2026-10-20): andamento dos arquivos no salvar.
+const arquivos = ref({ atual: null, n: 0, total: 0 });
+const progressoGeral = computed(() => {
+    const { atual, n, total } = arquivos.value;
+    return total ? ((Math.max(n - 1, 0) + (atual?.progresso ?? 0) / 100) / total) * 100 : 0;
+});
+const detalheArquivos = computed(() => {
+    const { atual, n, total } = arquivos.value;
+    if (!total) return 'Salvando o rascunho…';
+    return `Enviando arquivo ${n} de ${total}${atual?.arquivo ? ` (${atual.progresso ?? 0}%)` : ''}`;
+});
+
 const salvar = async (depois = 'ficar') => {
     if (salvando.value) return;
     salvando.value = true;
+    arquivos.value = { atual: null, n: 0, total: 0 };
     form.clearErrors();
     erroGeral.value = '';
     desfazer.value = null;
@@ -458,7 +472,10 @@ const salvar = async (depois = 'ficar') => {
     conjuntos.value.forEach((cj) => { if (mapa[cj.chave]) cj.id = mapa[cj.chave]; });
 
     let falhou = false;
-    for (const { a, cj, ordem: o } of comOrdem.filter(({ a }) => !a.id)) {
+    const fila = comOrdem.filter(({ a }) => !a.id);
+    arquivos.value.total = fila.length;
+    for (const [i, { a, cj, ordem: o }] of fila.entries()) {
+        arquivos.value = { ...arquivos.value, atual: a, n: i + 1 };
         a.estado = 'subindo';
         a.erro = '';
         try {
@@ -931,5 +948,8 @@ const botaoIcone = 'inline-flex h-8 w-8 items-center justify-center rounded-lg t
                 </div>
             </div>
         </form>
+        <AguardeModal :open="salvando" titulo="Aguarde enquanto o anúncio é preparado"
+            mensagem="Salvando no servidor. Não feche esta tela; a janela fecha sozinha quando terminar."
+            :progresso="arquivos.total ? progressoGeral : null" :detalhe="detalheArquivos" />
     </AdminLayout>
 </template>

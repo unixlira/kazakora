@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Shared/Layouts/AdminLayout.vue';
+import AguardeModal from '@/Shared/Components/AguardeModal.vue';
 import ConfirmModal from '@/Shared/Components/ConfirmModal.vue';
 import { usePermissions } from '@/Shared/usePermissions';
 import { confirmDelete } from '@/Shared/notify';
@@ -105,10 +106,18 @@ const locais = computed(() => {
 });
 
 const processando = ref(false);
-const opcoes = { preserveScroll: true, onStart: () => { processando.value = true; }, onFinish: () => { processando.value = false; } };
+// onFinish: se o pedido de envio voltou sem começar (erro), o modal de espera fecha.
+const opcoes = { preserveScroll: true, onStart: () => { processando.value = true; }, onFinish: () => { processando.value = false; preparando.value = false; } };
 
+// Desde 2026-10-20 tudo nasce ativo: enviar já é começar a gastar, então
+// pede a mesma confirmação que o Ativar pedia.
 const modalEnviar = ref(false);
-const enviar = () => router.post(`${base.value}/enviar`, {}, { ...opcoes, onSuccess: () => { modalEnviar.value = false; } });
+const confirmoEnvio = ref(false);
+const abrirEnvio = () => { confirmoEnvio.value = false; modalEnviar.value = true; };
+const enviar = () => router.post(`${base.value}/enviar`, {
+    confirmo_gasto: confirmoEnvio.value,
+    orcamento_diario: Number(c.value.orcamento_diario),
+}, { ...opcoes, onStart: () => { processando.value = true; preparando.value = true; }, onSuccess: () => { modalEnviar.value = false; confirmoEnvio.value = false; } });
 const totalPrevisto = computed(() => {
     if (!c.value.fim) return null;
     const dias = Math.round((new Date(`${c.value.fim}T00:00:00`) - new Date(`${c.value.inicio}T00:00:00`)) / 86400000) + 1;
@@ -134,7 +143,31 @@ const excluir = async () => {
 // Enquanto envia (a campanha ou um conjunto novo), a tela se atualiza
 // sozinha a cada 5 s para mostrar o andamento de cada vídeo.
 let timer = null;
-const enviandoAlgo = computed(() => c.value.status === 'enviando' || props.conjuntos.some((cj) => cj.enviando) || props.videos.some((v) => v.editar?.trocando_arquivo));
+const conjuntoEnviando = computed(() => props.conjuntos.find((cj) => cj.enviando) ?? null);
+const enviandoAlgo = computed(() => c.value.status === 'enviando' || Boolean(conjuntoEnviando.value) || props.videos.some((v) => v.editar?.trocando_arquivo));
+
+// Modal único de espera (2026-10-20): abre no clique de enviar, mostra o
+// andamento e fecha sozinho quando a Meta termina (ou quando dá erro, que
+// aparece na tela). "Continuar usando a tela" esconde até o próximo envio.
+const preparando = ref(false);
+const escondido = ref(false);
+const enviandoParaMeta = computed(() => c.value.status === 'enviando' || Boolean(conjuntoEnviando.value));
+watch(enviandoParaMeta, (agora, antes) => {
+    if (agora) preparando.value = false;
+    if (antes && !agora) escondido.value = false;
+});
+const aguardeAberto = computed(() => (preparando.value || enviandoParaMeta.value) && !escondido.value);
+const andamento = computed(() => {
+    const lista = conjuntoEnviando.value ? novos(conjuntoEnviando.value) : props.videos;
+    const prontos = lista.filter((v) => v.enviado).length;
+    return { prontos, total: lista.length };
+});
+const aguardeDetalhe = computed(() => (enviandoParaMeta.value && andamento.value.total
+    ? `${andamento.value.prontos} de ${plural(andamento.value.total, 'anúncio criado', 'anúncios criados')} na Meta`
+    : 'Mandando para a Meta…'));
+const aguardeProgresso = computed(() => (enviandoParaMeta.value && andamento.value.total
+    ? (andamento.value.prontos / andamento.value.total) * 100
+    : null));
 const acompanhar = (enviando) => {
     clearInterval(timer);
     if (enviando) {
@@ -149,7 +182,13 @@ watch(() => props.espelho?.status_atualizado, (mudou) => {
 
 // Conjunto novo em campanha que já está na Meta (2026-10-19).
 const conjuntoEmEnvio = ref(null);
-const enviarConjunto = () => router.post(`${base.value}/conjuntos/${conjuntoEmEnvio.value.id}/enviar`, {}, { ...opcoes, onSuccess: () => { conjuntoEmEnvio.value = null; } });
+const confirmoEnvioConjunto = ref(false);
+const abrirEnvioConjunto = (cj) => { confirmoEnvioConjunto.value = false; conjuntoEmEnvio.value = cj; };
+const gastoDoEnvio = computed(() => Number(porConjunto.value ? conjuntoEmEnvio.value?.orcamento_diario : c.value.orcamento_diario));
+const enviarConjunto = () => router.post(`${base.value}/conjuntos/${conjuntoEmEnvio.value.id}/enviar`, {
+    confirmo_gasto: confirmoEnvioConjunto.value,
+    orcamento_diario: gastoDoEnvio.value,
+}, { ...opcoes, onStart: () => { processando.value = true; preparando.value = true; }, onSuccess: () => { conjuntoEmEnvio.value = null; confirmoEnvioConjunto.value = false; } });
 const conjuntoEmAtivacao = ref(null);
 const confirmoGastoConjunto = ref(false);
 const gastoDoConjunto = computed(() => Number(porConjunto.value ? conjuntoEmAtivacao.value?.orcamento_diario : c.value.orcamento_diario));
@@ -213,9 +252,9 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                     <i class="fas fa-pen text-xs" aria-hidden="true"></i> Editar
                 </button>
                 <button v-if="pode.enviar && can('financeiro.create')" type="button" :disabled="processando || problemas.length > 0"
-                    :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="c.status === 'erro' ? enviar() : (modalEnviar = true)">
+                    :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="abrirEnvio">
                     <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i>
-                    {{ c.status === 'erro' ? 'Tentar enviar de novo' : 'Enviar para a Meta (pausada)' }}
+                    {{ c.status === 'erro' ? 'Tentar enviar de novo' : 'Enviar e ativar na Meta' }}
                 </button>
                 <button v-if="pode.ativar && can('financeiro.create')" type="button" :disabled="processando || !config.configurado"
                     :class="[botao, 'bg-emerald-600 text-white hover:bg-emerald-700']" @click="modalAtivar = true">
@@ -257,7 +296,6 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
         </div>
         <div v-if="c.status === 'enviada_pausada'" class="mb-4 rounded-xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900" role="status">
             Campanha na Meta e <strong>pausada</strong>. Não gasta nada até você clicar em Ativar.
-            Antes, dá para conferir os anúncios no Gerenciador.
         </div>
 
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -367,18 +405,18 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
                 class="mb-3 space-y-2 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-500/10 dark:text-sky-200">
                 <p v-if="cj.enviando" class="flex items-center gap-2" role="status" aria-live="polite">
                     <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-                    Enviando {{ conjuntoNaMeta(cj) ? 'os anúncios novos' : 'este conjunto' }} para a Meta, pausado. O resto da campanha não muda. Pode sair desta tela.
+                    Enviando {{ conjuntoNaMeta(cj) ? 'os anúncios novos' : 'este conjunto' }} para a Meta, já ativo. O resto da campanha não muda. Pode sair desta tela.
                 </p>
                 <p v-else-if="cj.pode.ativar">{{ ligaConjunto(cj) ? 'Conjunto novo' : 'Anúncios novos' }} já na Meta e <strong>pausados</strong>. A campanha está rodando; ative quando quiser que comecem a rodar.</p>
-                <p v-else-if="cj.pode.enviar && !conjuntoNaMeta(cj)">Conjunto novo, ainda <strong>não está na Meta</strong>. Ao enviar, ele e os anúncios dele nascem pausados dentro da campanha.</p>
-                <p v-else-if="cj.pode.enviar">Anúncios novos, ainda <strong>não estão na Meta</strong>. Ao enviar, eles nascem pausados dentro deste conjunto; os que já rodam não mudam.</p>
+                <p v-else-if="cj.pode.enviar && !conjuntoNaMeta(cj)">Conjunto novo, ainda <strong>não está na Meta</strong>. Ao enviar, ele e os anúncios dele nascem ativos dentro da campanha.</p>
+                <p v-else-if="cj.pode.enviar">Anúncios novos, ainda <strong>não estão na Meta</strong>. Ao enviar, eles nascem ativos dentro deste conjunto; os que já rodam não mudam.</p>
                 <ul v-if="cj.problemas?.length" class="ml-5 list-disc text-amber-800 dark:text-amber-300">
                     <li v-for="p in cj.problemas" :key="p">{{ p }}</li>
                 </ul>
                 <div v-if="can('financeiro.create')" class="flex flex-wrap gap-2">
                     <button v-if="cj.pode.enviar" type="button" :disabled="processando || cj.problemas?.length > 0 || !config.configurado"
-                        :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="conjuntoEmEnvio = cj">
-                        <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i> {{ cj.ultimo_erro ? 'Tentar enviar de novo' : (conjuntoNaMeta(cj) ? 'Enviar anúncios novos para a Meta (pausados)' : 'Enviar conjunto para a Meta (pausado)') }}
+                        :class="[botao, 'bg-primary text-white hover:bg-primary-emphasis']" @click="abrirEnvioConjunto(cj)">
+                        <i class="fas fa-paper-plane text-xs" aria-hidden="true"></i> {{ cj.ultimo_erro ? 'Tentar enviar de novo' : (conjuntoNaMeta(cj) ? 'Enviar anúncios novos e ativar' : 'Enviar conjunto e ativar') }}
                     </button>
                     <button v-if="cj.pode.ativar" type="button" :disabled="processando || !config.configurado"
                         :class="[botao, 'bg-emerald-600 text-white hover:bg-emerald-700']" @click="conjuntoEmAtivacao = cj">
@@ -450,14 +488,17 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             Resultado que a própria Meta atribui ao anúncio, desde o início. O lucro de verdade fica em Resultado e margem.
         </p>
 
-        <ConfirmModal :open="modalEnviar" title="Enviar para a Meta pausado" confirm-label="Criar pausado na Meta" cancel-label="Voltar"
-            :loading="processando" @close="modalEnviar = false" @confirm="enviar">
+        <ConfirmModal :open="modalEnviar" title="Enviar e ativar na Meta?" confirm-label="Enviar e começar a gastar" cancel-label="Voltar"
+            :loading="processando" :confirm-disabled="!confirmoEnvio" @close="modalEnviar = false" @confirm="enviar">
             <p class="text-sm">
-                Vamos criar 1 campanha, {{ estrutura.replace(' · ', ' e ') }}, tudo pausado. Nada é gasto até você ativar.
+                Vamos criar 1 campanha, {{ estrutura.replace(' · ', ' e ') }}, tudo <strong>ativo</strong>. Assim que a Meta aprovar os anúncios, começa a gastar
+                <strong>{{ orcamento }}/dia</strong>, {{ periodo }}{{ divisao }}<template v-if="totalPrevisto !== null">, até {{ formatarReais(totalPrevisto) }} no total</template>.
             </p>
-            <p class="mt-2 text-sm text-slate-500">
-                Depois de ativar, o gasto pode chegar a {{ orcamento }} por dia<template v-if="totalPrevisto !== null">, até {{ formatarReais(totalPrevisto) }} no total</template>.
-            </p>
+            <p class="mt-2 text-sm text-slate-500">O valor é cobrado na conta de anúncio da Meta. Dá para pausar depois pelo botão Pausar.</p>
+            <label class="mt-4 flex items-start gap-2 text-sm">
+                <input v-model="confirmoEnvio" type="checkbox" class="mt-0.5">
+                <span>Confirmo que a campanha vai gastar até {{ orcamento }} por dia.</span>
+            </label>
         </ConfirmModal>
 
         <ConfirmModal :open="modalAtivar" title="Ativar campanha na Meta?" confirm-label="Ativar e começar a gastar"
@@ -472,16 +513,26 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             </label>
         </ConfirmModal>
 
-        <ConfirmModal :open="conjuntoEmEnvio !== null" :title="conjuntoNaMeta(conjuntoEmEnvio) ? 'Enviar anúncios novos para a Meta' : 'Enviar conjunto novo para a Meta'" confirm-label="Criar pausado na Meta" cancel-label="Voltar"
-            :loading="processando" @close="conjuntoEmEnvio = null" @confirm="enviarConjunto">
+        <ConfirmModal :open="conjuntoEmEnvio !== null" :title="conjuntoNaMeta(conjuntoEmEnvio) ? 'Enviar e ativar os anúncios novos?' : 'Enviar e ativar o conjunto novo?'" confirm-label="Enviar e ativar" cancel-label="Voltar"
+            :loading="processando" :confirm-disabled="!confirmoEnvioConjunto" @close="conjuntoEmEnvio = null" @confirm="enviarConjunto">
             <p v-if="conjuntoNaMeta(conjuntoEmEnvio)" class="text-sm">
                 Vamos criar {{ plural(novos(conjuntoEmEnvio).filter((v) => !v.enviado).length, 'anúncio novo', 'anúncios novos') }} dentro do conjunto
-                <strong>{{ conjuntoEmEnvio?.nome }}</strong>, pausados. Os anúncios que já rodam não mudam e nada novo é gasto até você ativar.
+                <strong>{{ conjuntoEmEnvio?.nome }}</strong>, já ativos. Eles dividem o orçamento do conjunto ({{ formatarReais(gastoDoEnvio) }}/dia{{ porConjunto ? '' : ', da campanha' }}); os que já rodam não mudam.
+            </p>
+            <p v-else-if="porConjunto" class="text-sm">
+                Vamos criar o conjunto <strong>{{ conjuntoEmEnvio?.nome }}</strong> com {{ conjuntoEmEnvio ? plural(anunciosDe(conjuntoEmEnvio).length, 'anúncio', 'anúncios') : '' }}
+                dentro da campanha {{ c.nome }}, já ativo: <strong>{{ formatarReais(gastoDoEnvio) }}/dia</strong> além do que a campanha já gasta.
             </p>
             <p v-else class="text-sm">
                 Vamos criar o conjunto <strong>{{ conjuntoEmEnvio?.nome }}</strong> com {{ conjuntoEmEnvio ? plural(anunciosDe(conjuntoEmEnvio).length, 'anúncio', 'anúncios') : '' }}
-                dentro da campanha {{ c.nome }}, tudo pausado. Os outros conjuntos não mudam e nada é gasto até você ativar.
+                dentro da campanha {{ c.nome }}, já ativo. Ele entra na divisão do orçamento da campanha, <strong>{{ formatarReais(gastoDoEnvio) }}/dia</strong> no total.
             </p>
+            <p v-if="!['ativa', 'gerenciador'].includes(c.status)" class="mt-2 text-sm text-slate-500">A campanha está pausada: só gasta quando ela for ativada.</p>
+            <label class="mt-4 flex items-start gap-2 text-sm">
+                <input v-model="confirmoEnvioConjunto" type="checkbox" class="mt-0.5">
+                <span v-if="conjuntoNaMeta(conjuntoEmEnvio) || !porConjunto">Confirmo que vai rodar dentro do orçamento de {{ formatarReais(gastoDoEnvio) }} por dia.</span>
+                <span v-else>Confirmo que o conjunto vai gastar até {{ formatarReais(gastoDoEnvio) }} por dia.</span>
+            </label>
         </ConfirmModal>
 
         <ConfirmModal :open="conjuntoEmAtivacao !== null" :title="ligaConjunto(conjuntoEmAtivacao) ? 'Ativar conjunto na Meta?' : 'Ativar anúncios novos na Meta?'" confirm-label="Ativar"
@@ -507,6 +558,10 @@ const botao = 'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-
             :loading="processando" @close="modalPausar = false" @confirm="pausar">
             <p class="text-sm">A campanha para de gastar. Dá para ativar de novo depois.</p>
         </ConfirmModal>
+
+        <AguardeModal :open="aguardeAberto" titulo="Aguarde enquanto o anúncio é preparado"
+            mensagem="A Meta leva alguns minutos para processar cada vídeo. Esta janela fecha sozinha quando terminar."
+            :progresso="aguardeProgresso" :detalhe="aguardeDetalhe" :pode-sair="enviandoParaMeta" @sair="escondido = true" />
 
         <AnuncioModais ref="modais" :produtos="produtos" :chamadas="chamadas" @mudou="recarregarTudo" />
         <GerenciarModais ref="gerenciar" @mudou="recarregarTudo" />

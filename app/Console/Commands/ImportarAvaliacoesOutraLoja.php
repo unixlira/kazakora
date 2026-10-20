@@ -20,6 +20,8 @@ use Throwable;
  *
  * Regras:
  * - Itens com origem "kazakora" são ignorados (já vêm pelo reviews:sync).
+ * - Só entra avaliação com foto ou vídeo (pedido do Lira 2026-10-20): sem
+ *   mídia no arquivo, ou se nenhuma mídia baixar, a avaliação fica de fora.
  * - NÃO filtra por nota: entra de 1 a 5 (escolher só as boas seria enganoso).
  *   Por isso o --limite pega as MAIS RECENTES, não a ordem do arquivo (que
  *   vem com as nota 5 com foto primeiro).
@@ -74,7 +76,7 @@ class ImportarAvaliacoesOutraLoja extends Command
             ->map(fn ($v) => (int) trim($v))->filter()->unique()->values();
         $produtosTopo = collect((array) ($json['produto_kazakora'] ?? []))->map(fn ($v) => (int) $v)->filter()->values();
 
-        $resumo = ['no_arquivo' => count($json['avaliacoes']), 'origem_kazakora' => 0, 'duplicadas_no_arquivo' => 0, 'sem_produto' => 0, 'texto_curto' => 0, 'invalidas' => 0, 'fora_do_limite' => 0];
+        $resumo = ['no_arquivo' => count($json['avaliacoes']), 'origem_kazakora' => 0, 'duplicadas_no_arquivo' => 0, 'sem_produto' => 0, 'texto_curto' => 0, 'sem_midia' => 0, 'invalidas' => 0, 'fora_do_limite' => 0];
         $vistos = [];
         $candidatas = collect();
 
@@ -121,6 +123,14 @@ class ImportarAvaliacoesOutraLoja extends Command
                 continue;
             }
 
+            $fotos = array_values(array_filter((array) ($item['fotos'] ?? []), 'is_string'));
+            $videos = array_values(array_filter((array) ($item['videos'] ?? []), fn ($u) => is_string($u) && $this->videoBaixavel($u)));
+            if ($fotos === [] && $videos === []) {
+                $resumo['sem_midia']++;
+
+                continue;
+            }
+
             try {
                 $data = filled($item['data'] ?? null) ? Carbon::parse($item['data'], 'America/Sao_Paulo') : null;
             } catch (Throwable) {
@@ -135,8 +145,8 @@ class ImportarAvaliacoesOutraLoja extends Command
                 'reviewer_name' => filled($item['autor'] ?? null) ? $item['autor'] : Review::NOME_OUTRA_LOJA,
                 'origem_loja' => mb_substr(trim(($item['loja'] ?? '').' '.($item['anuncio'] ?? '')), 0, 500) ?: null,
                 'data' => $data,
-                'fotos' => array_values(array_filter((array) ($item['fotos'] ?? []), 'is_string')),
-                'videos' => array_values(array_filter((array) ($item['videos'] ?? []), fn ($u) => is_string($u) && $this->videoBaixavel($u))),
+                'fotos' => $fotos,
+                'videos' => $videos,
             ]);
         }
 
@@ -160,8 +170,8 @@ class ImportarAvaliacoesOutraLoja extends Command
             ->whereIn('external_id', $candidatas->pluck('external_id'))->pluck('external_id')->flip();
 
         $this->line(sprintf(
-            'No arquivo: %d | origem KazaKora (ignoradas): %d | repetidas no arquivo: %d | sem produto: %d | texto curto: %d | inválidas: %d | fora do limite: %d',
-            $resumo['no_arquivo'], $resumo['origem_kazakora'], $resumo['duplicadas_no_arquivo'], $resumo['sem_produto'], $resumo['texto_curto'], $resumo['invalidas'], $resumo['fora_do_limite'],
+            'No arquivo: %d | origem KazaKora (ignoradas): %d | repetidas no arquivo: %d | sem produto: %d | texto curto: %d | sem foto/vídeo: %d | inválidas: %d | fora do limite: %d',
+            $resumo['no_arquivo'], $resumo['origem_kazakora'], $resumo['duplicadas_no_arquivo'], $resumo['sem_produto'], $resumo['texto_curto'], $resumo['sem_midia'], $resumo['invalidas'], $resumo['fora_do_limite'],
         ));
         $this->table(['Produto', 'Avaliações', 'Novas', 'Já existiam', 'Média', '5★', '4★', '3★', '2★', '1★', 'Fotos', 'Vídeos MP4'],
             $candidatas->groupBy('product_id')->sortKeys()->map(fn (Collection $lista, $produto) => [
@@ -185,10 +195,36 @@ class ImportarAvaliacoesOutraLoja extends Command
         $atualizadas = 0;
         $midias = 0;
         $midiasFalharam = 0;
+        $semMidiaBaixada = 0;
 
         foreach ($candidatas as $c) {
             $review = Review::query()->firstOrNew(['channel' => Review::CHANNEL_OUTRA_LOJA, 'external_id' => $c['external_id']]);
             $nova = ! $review->exists;
+
+            // Mídia só na primeira vez (ou se ainda não tem nenhuma): rodar de
+            // novo não baixa nem duplica. Baixa antes de gravar: se nenhuma
+            // vier, a avaliação não entra.
+            $baixadas = [];
+            if (! $review->exists || ! $review->images()->exists()) {
+                $lista = array_merge(
+                    array_map(fn ($u) => [$u, 'image'], $c['fotos']),
+                    array_map(fn ($u) => [$u, 'video'], $c['videos']),
+                );
+                foreach (array_slice($lista, 0, self::MAX_MIDIAS) as [$url, $tipo]) {
+                    $caminho = $this->baixar($url, $tipo);
+                    if ($caminho === null) {
+                        $midiasFalharam++;
+
+                        continue;
+                    }
+                    $baixadas[] = [$caminho, $tipo];
+                }
+                if ($baixadas === []) {
+                    $semMidiaBaixada++;
+
+                    continue;
+                }
+            }
 
             $review->fill([
                 'product_id' => $c['product_id'],
@@ -202,31 +238,14 @@ class ImportarAvaliacoesOutraLoja extends Command
                 $review->created_at = $c['data'];
             }
 
-            DB::transaction(function () use ($review, $c, &$midias, &$midiasFalharam) {
+            DB::transaction(function () use ($review, $baixadas, &$midias) {
                 $review->save();
 
-                // Mídia só na primeira vez (ou se ainda não tem nenhuma): rodar
-                // de novo não baixa nem duplica.
-                if ($review->images()->exists()) {
-                    return;
-                }
-
-                $posicao = 0;
-                $lista = array_merge(
-                    array_map(fn ($u) => [$u, 'image'], $c['fotos']),
-                    array_map(fn ($u) => [$u, 'video'], $c['videos']),
-                );
-                foreach (array_slice($lista, 0, self::MAX_MIDIAS) as [$url, $tipo]) {
-                    $caminho = $this->baixar($url, $tipo);
-                    if ($caminho === null) {
-                        $midiasFalharam++;
-
-                        continue;
-                    }
+                foreach ($baixadas as $posicao => [$caminho, $tipo]) {
                     $review->images()->create([
                         'image_url' => Storage::disk('public')->url($caminho),
                         'media_type' => $tipo,
-                        'position' => $posicao++,
+                        'position' => $posicao,
                     ]);
                     $midias++;
                 }
@@ -235,7 +254,7 @@ class ImportarAvaliacoesOutraLoja extends Command
             $nova ? $criadas++ : $atualizadas++;
         }
 
-        $this->info('Gravadas com o selo "'.Review::SELO_OUTRA_LOJA."\": {$criadas} novas, {$atualizadas} atualizadas. Mídias baixadas: {$midias}".($midiasFalharam ? " ({$midiasFalharam} falharam e ficaram de fora)" : '').'.');
+        $this->info('Gravadas com o selo "'.Review::SELO_OUTRA_LOJA."\": {$criadas} novas, {$atualizadas} atualizadas. Mídias baixadas: {$midias}".($midiasFalharam ? " ({$midiasFalharam} falharam e ficaram de fora)" : '').'.'.($semMidiaBaixada ? " Sem nenhuma mídia baixada (não gravadas): {$semMidiaBaixada}." : ''));
 
         return self::SUCCESS;
     }

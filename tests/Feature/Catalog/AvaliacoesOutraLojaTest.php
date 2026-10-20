@@ -13,7 +13,7 @@ use Tests\TestCase;
 
 /**
  * Avaliação feita em outra loja (pedido do Lira 2026-10-18): aparece com o
- * selo, em bloco próprio, com nome anonimizado, e NÃO entra na nota, na
+ * selo, em bloco próprio, com nome como recebido da origem, e NÃO entra na nota, na
  * contagem, na estrela do card nem no JSON-LD do produto.
  */
 class AvaliacoesOutraLojaTest extends TestCase
@@ -39,7 +39,7 @@ class AvaliacoesOutraLojaTest extends TestCase
         ]);
     }
 
-    public function test_pagina_separa_as_de_outra_loja_com_selo_e_nome_anonimizado(): void
+    public function test_pagina_separa_as_de_outra_loja_com_selo_e_nome_da_origem(): void
     {
         $produto = Product::factory()->create(['is_active' => true]);
         $loja = $this->daLoja($produto, 5);
@@ -52,7 +52,7 @@ class AvaliacoesOutraLojaTest extends TestCase
             ->has('reviewsOutraLoja', 1)
             ->where('reviewsOutraLoja.0.id', $outra->id)
             ->where('reviewsOutraLoja.0.outra_loja', true)
-            ->where('reviewsOutraLoja.0.reviewer_display_name', 'j***a')
+            ->where('reviewsOutraLoja.0.reviewer_display_name', 'j_lucas_oliveira')
             ->missing('reviewsOutraLoja.0.origem_loja')
             ->missing('reviewsOutraLoja.0.channel')
             ->missing('reviewsOutraLoja.0.external_id')
@@ -142,7 +142,7 @@ class AvaliacoesOutraLojaTest extends TestCase
             ->assertJsonPath('produto.avaliacoes.outras_lojas.total', 1)
             ->assertJsonPath('produto.avaliacoes.outras_lojas.media', 2)
             ->assertJsonPath('produto.avaliacoes.outras_lojas.itens.0.selo', 'Avaliação feita em outra loja')
-            ->assertJsonPath('produto.avaliacoes.outras_lojas.itens.0.nome', 'j***a');
+            ->assertJsonPath('produto.avaliacoes.outras_lojas.itens.0.nome', 'j_lucas_oliveira');
     }
 
     public function test_anonimizar_nome(): void
@@ -205,7 +205,7 @@ class AvaliacoesOutraLojaTest extends TestCase
         $this->assertEqualsCanonicalizing(['shopee:1', 'shopee:2', 'mercado_livre:4'], $reviews->pluck('external_id')->all());
 
         $primeira = $reviews->firstWhere('external_id', 'shopee:1');
-        $this->assertSame('c***1', $primeira->reviewer_name);
+        $this->assertSame('comprador_1', $primeira->reviewer_name);
         $this->assertSame('KICOOL COMERCIAL (Shopee) https://shopee.com.br/product/1224304136/18497998841', $primeira->origem_loja);
         $this->assertSame('2026-09-10 14:30', $primeira->created_at->format('Y-m-d H:i'));
         // Foto e vídeo MP4 baixados uma vez só; o m3u8 (streaming) fica de fora.

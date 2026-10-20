@@ -24,7 +24,7 @@ use Throwable;
  *   Por isso o --limite pega as MAIS RECENTES, não a ordem do arquivo (que
  *   vem com as nota 5 com foto primeiro).
  * - Idempotente: updateOrCreate por (channel 'outra_loja', '<canal>:<id>').
- * - Nome anonimizado (Review::anonimizarNome), nunca o @ completo (LGPD).
+ * - Autor preservado como recebido da origem, inclusive quando já mascarado.
  * - Loja e link do anúncio só em origem_loja (oculto do público).
  * - Fotos e vídeos MP4 baixados para o disco public (avaliacoes/outra-loja);
  *   vídeo em streaming (m3u8 do ML) é ignorado. Mídia que falha no download
@@ -132,7 +132,7 @@ class ImportarAvaliacoesOutraLoja extends Command
                 'product_id' => $produtoId,
                 'rating' => $nota,
                 'comment' => $texto !== '' ? $texto : null,
-                'reviewer_name' => Review::anonimizarNome($item['autor'] ?? null),
+                'reviewer_name' => filled($item['autor'] ?? null) ? $item['autor'] : Review::NOME_OUTRA_LOJA,
                 'origem_loja' => mb_substr(trim(($item['loja'] ?? '').' '.($item['anuncio'] ?? '')), 0, 500) ?: null,
                 'data' => $data,
                 'fotos' => array_values(array_filter((array) ($item['fotos'] ?? []), 'is_string')),

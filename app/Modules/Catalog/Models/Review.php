@@ -98,10 +98,10 @@ class Review extends Model
      */
     public function getReviewerDisplayNameAttribute(): string
     {
-        // Avaliação de outra loja nunca mostra o @ do autor (LGPD) nem diz
-        // "Cliente KazaKora": iniciais tipo "J***a" ou "Comprador de outra loja".
+        // Preserva o nome/apelido como veio da origem, inclusive se já mascarado.
+        // Sem autor, não apresenta o comprador de outra loja como cliente KazaKora.
         if ($this->outra_loja) {
-            return self::anonimizarNome($this->reviewer_name);
+            return filled($this->reviewer_name) ? $this->reviewer_name : self::NOME_OUTRA_LOJA;
         }
 
         return $this->user?->name ?? $this->reviewer_name ?? 'Cliente KazaKora';

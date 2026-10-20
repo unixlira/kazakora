@@ -225,13 +225,17 @@ class DiagnosticoMetaAds
             return $sugestoes;
         }
         if ($empate <= 0) {
+            // Pela estimativa não manda pausar: sem venda no site, a margem não é conhecida.
+            if ($p['margem_estimada']) {
+                return $sugestoes;
+            }
             $sugestoes[] = $base([
                 'chave' => 'orcamento:sem_margem:'.$id,
                 'area' => Sugestao::AREA_ORCAMENTO,
                 'tipo' => 'sem_margem',
                 'prioridade' => 1,
                 'acao' => 'Este produto não dá lucro nem antes do ADS. Pause os anúncios até rever o preço ou o custo.',
-                'motivo' => 'Preço '.Texto::reais($p['preco']).' não cobre custo, taxas e frete'.($p['margem_estimada'] ? ' (estimado)' : '').'.',
+                'motivo' => 'Nas vendas do site dos últimos 60 dias, o preço de '.Texto::reais($p['preco']).' não cobriu custo, taxas e frete.',
             ]);
 
             return $sugestoes;

@@ -121,6 +121,10 @@ class HandleInertiaRequests extends Middleware
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],
+            // Submenu Equipes do admin (2026-10-20): squads ativas, só para admin.
+            'equipesMenu' => fn () => $request->is('admin*') && $request->user()?->isAdmin()
+                ? rescue(fn () => \App\Modules\Equipes\Models\Squad::doMenu(), [], false)
+                : [],
             'flash' => fn () => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

@@ -732,9 +732,35 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </div>
                         </section>
 
+                        <section class="card">
+                            <h2>Garantia Total De Satisfação</h2>
+                            <div class="garantia">
+                                <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.png" alt="Garantia de 100% de satisfação" loading="lazy">
+                                <p>
+                                    Confiamos tanto no produto que você tem 30 dias para testar e comprovar a qualidade, sem risco nenhum!
+                                </p>
+                            </div>
+                        </section>
+
+                        <section class="card">
+                            <h2>Pagamento Seguro</h2>
+                            <div class="bandeiras esquerda">
+                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
+                            </div>
+                            <p v-if="DESCONTO_PIX">No Pix você tem {{ DESCONTO_PIX }} de desconto, com aprovação imediata.</p>
+                            <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
+                        </section>
+
+                        <section class="card">
+                            <h2>Informação adicional</h2>
+                            <table class="ficha">
+                                <tr v-for="[label, value] in specs" :key="label"><th>{{ label }}</th><td>{{ value }}</td></tr>
+                            </table>
+                        </section>
+
                         <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
-                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). No fim da
-                             descrição, não mais abaixo do carrossel de imagens (pedido 2026-10-21). -->
+                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). Bem no fim
+                             da coluna, abaixo de Garantia, Pagamento Seguro e Informação adicional (pedido 2026-10-21). -->
                         <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
                             <div class="promo-texto">
                                 <h2>{{ sorteio.titulo }}</h2>
@@ -761,32 +787,6 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                 </p>
                                 <p class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
                             </div>
-                        </section>
-
-                        <section class="card">
-                            <h2>Garantia Total De Satisfação</h2>
-                            <div class="garantia">
-                                <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.png" alt="Garantia de 100% de satisfação" loading="lazy">
-                                <p>
-                                    Confiamos tanto no produto que você tem 30 dias para testar e comprovar a qualidade, sem risco nenhum!
-                                </p>
-                            </div>
-                        </section>
-
-                        <section class="card">
-                            <h2>Pagamento Seguro</h2>
-                            <div class="bandeiras esquerda">
-                                <img v-for="brand in PAYMENT_BRANDS" :key="brand" :src="`/images/payments/novas/${brand}.png`" :alt="brand" loading="lazy">
-                            </div>
-                            <p v-if="DESCONTO_PIX">No Pix você tem {{ DESCONTO_PIX }} de desconto, com aprovação imediata.</p>
-                            <p class="sem-margem">Suas informações de pagamento são processadas com segurança. Nós não armazenamos dados do cartão de crédito nem temos acesso aos números do seu cartão.</p>
-                        </section>
-
-                        <section class="card">
-                            <h2>Informação adicional</h2>
-                            <table class="ficha">
-                                <tr v-for="[label, value] in specs" :key="label"><th>{{ label }}</th><td>{{ value }}</td></tr>
-                            </table>
                         </section>
                     </main>
                 </div>

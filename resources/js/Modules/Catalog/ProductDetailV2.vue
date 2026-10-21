@@ -30,6 +30,9 @@ const props = defineProps({
     relatedFavoriteIds: { type: Array, default: () => [] },
     relatedReviewableIds: { type: Array, default: () => [] },
     relatedReviewedIds: { type: Array, default: () => [] },
+    // Entregáveis do admin (pedido 2026-10-20).
+    sorteios: { type: Array, default: () => [] },
+    livrosDigitais: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -615,19 +618,26 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                         </aside>
 
-                        <!-- Banners promocionais no formato da referência (izeshop): sorteio da AirFryer
-                             e 3 livros digitais de brinde (pedido 2026-10-20). -->
-                        <section class="card promo">
+                        <!-- Banners promocionais no formato da referência (izeshop), cadastrados no admin em
+                             Entregáveis › Sorteios e Livros Digitais (pedido 2026-10-20; antes eram fixos). -->
+                        <section v-for="sorteio in sorteios" :key="`sorteio-${sorteio.id}`" class="card promo">
                             <div class="promo-texto">
-                                <h2>Compre e Concorra a uma AirFryer de Última Geração!</h2>
-                                <p class="sem-margem"><strong>Pedidos realizados e pagos até 20/10/2026</strong> participam automaticamente.</p>
+                                <h2>{{ sorteio.titulo }}</h2>
+                                <p :class="{ 'sem-margem': !sorteio.paragrafo_2 }">{{ sorteio.paragrafo_1 }}</p>
+                                <p v-if="sorteio.paragrafo_2" class="sem-margem">{{ sorteio.paragrafo_2 }}</p>
                             </div>
-                            <img class="promo-img promo-airfryer" src="/images/promocoes/airfryer.jpg" alt="AirFryer de última geração" width="380" height="440" loading="lazy">
+                            <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
                         </section>
 
-                        <section class="card promo promo-livros">
-                            <h2>Compre Hoje E Receba 3 Livros Digitais GRÁTIS!</h2>
-                            <img class="promo-img" src="/images/promocoes/livros-digitais.jpg" alt="3 livros digitais grátis" width="750" height="420" loading="lazy">
+                        <section v-if="livrosDigitais.length" class="card promo promo-livros">
+                            <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
+                            <ul class="livros">
+                                <li v-for="livro in livrosDigitais" :key="livro.id">
+                                    <img v-if="livro.capa_url" :src="livro.capa_url" :alt="livro.titulo" loading="lazy">
+                                    <span v-else class="livro-sem-capa" aria-hidden="true"><i class="fa-solid fa-book-open"></i></span>
+                                    <span>{{ livro.titulo }}</span>
+                                </li>
+                            </ul>
                         </section>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1083,10 +1093,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .promo h2 { margin-bottom: 12px; }
 .pd2 .promo-texto { flex: 1 1 auto; }
 .pd2 .promo-img { flex: 0 0 auto; height: auto; border-radius: 12px; }
-.pd2 .promo-airfryer { width: 190px; }
-.pd2 .promo-livros { flex-direction: column; align-items: flex-start; }
+.pd2 .promo-sorteio { width: 190px; }
+.pd2 .promo-livros { flex-direction: column; align-items: stretch; }
 .pd2 .promo-livros h2 { margin-bottom: 4px; }
-.pd2 .promo-livros .promo-img { width: 100%; max-width: 420px; align-self: center; }
+.pd2 .livros { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+.pd2 .livros li { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; font-size: 14px; font-weight: 600; color: var(--ink); }
+.pd2 .livros img { width: 100%; max-width: 150px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 8px; box-shadow: var(--shadow-strong); }
+.pd2 .livro-sem-capa { display: grid; place-items: center; width: 100%; max-width: 150px; aspect-ratio: 3 / 4; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font-size: 36px; color: var(--ink); }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
@@ -1196,7 +1209,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .fretefundo i { color: #7b7b7b; }
     .pd2 .garantia { grid-template-columns: 30% 70%; }
     .pd2 .promo { flex-direction: column; align-items: flex-start; }
-    .pd2 .promo-airfryer { width: 160px; align-self: center; }
+    .pd2 .promo-sorteio { width: 160px; align-self: center; }
+    .pd2 .promo-livros { align-items: stretch; }
     .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }

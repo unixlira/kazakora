@@ -20,6 +20,7 @@ use App\Modules\Admin\Http\Controllers\FinancialDashboardController;
 use App\Http\Controllers\Api\DashboardAgentController;
 use App\Modules\Admin\Http\Controllers\IntegrationController;
 use App\Modules\Admin\Http\Controllers\KoraSyncController;
+use App\Modules\Admin\Http\Controllers\LivroDigitalController;
 use App\Modules\Admin\Http\Controllers\EnviosFlexController;
 use App\Modules\Admin\Http\Controllers\DevolucoesController;
 use App\Modules\Admin\Http\Controllers\MercadoLivreClaimsController;
@@ -64,6 +65,7 @@ use App\Modules\Admin\Http\Controllers\PromotionalNotificationController;
 use App\Modules\Admin\Http\Controllers\ServiceOrderController;
 use App\Modules\Admin\Http\Controllers\ShippingMethodController;
 use App\Modules\Admin\Http\Controllers\StockMovementController;
+use App\Modules\Admin\Http\Controllers\SorteioController;
 use App\Modules\Admin\Http\Controllers\SupplierController;
 use App\Modules\Admin\Http\Controllers\SiteVisitLogController;
 use App\Modules\Admin\Http\Controllers\FerraKoraProdutoController;
@@ -350,6 +352,20 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::put('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'update'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.atualizar');
     Route::patch('ofertas-relampago/{oferta}/ativo', [OfertaRelampagoController::class, 'alternar'])->whereNumber('oferta')->middleware('permission:cadastros.edit')->name('ofertas-relampago.alternar');
     Route::delete('ofertas-relampago/{oferta}', [OfertaRelampagoController::class, 'destroy'])->whereNumber('oferta')->middleware('permission:cadastros.delete')->name('ofertas-relampago.excluir');
+
+    // Entregáveis (pedido 2026-10-20): livros digitais (PDF) e sorteios na página do produto.
+    Route::get('entregaveis/produtos', [LivroDigitalController::class, 'produtos'])->middleware('permission:cadastros.view')->name('entregaveis.produtos');
+    Route::get('entregaveis/livros-digitais', [LivroDigitalController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.livros.listar');
+    Route::post('entregaveis/livros-digitais', [LivroDigitalController::class, 'store'])->middleware('permission:cadastros.create')->name('entregaveis.livros.armazenar');
+    Route::put('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'update'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.atualizar');
+    Route::patch('entregaveis/livros-digitais/{livro}/ativo', [LivroDigitalController::class, 'alternar'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.alternar');
+    Route::get('entregaveis/livros-digitais/{livro}/pdf', [LivroDigitalController::class, 'baixar'])->whereNumber('livro')->middleware('permission:cadastros.view')->name('entregaveis.livros.baixar');
+    Route::delete('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'destroy'])->whereNumber('livro')->middleware('permission:cadastros.delete')->name('entregaveis.livros.excluir');
+    Route::get('entregaveis/sorteios', [SorteioController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.sorteios.listar');
+    Route::post('entregaveis/sorteios', [SorteioController::class, 'store'])->middleware('permission:cadastros.create')->name('entregaveis.sorteios.armazenar');
+    Route::put('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'update'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.atualizar');
+    Route::patch('entregaveis/sorteios/{sorteio}/ativo', [SorteioController::class, 'alternar'])->whereNumber('sorteio')->middleware('permission:cadastros.edit')->name('entregaveis.sorteios.alternar');
+    Route::delete('entregaveis/sorteios/{sorteio}', [SorteioController::class, 'destroy'])->whereNumber('sorteio')->middleware('permission:cadastros.delete')->name('entregaveis.sorteios.excluir');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

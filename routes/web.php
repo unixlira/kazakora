@@ -99,9 +99,12 @@ Route::get('/busca/sugestoes', [CatalogController::class, 'sugestoes'])->middlew
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
     ->name('produtos.ver')
-    // Link antigo da Nuvemshop (/produtos/<slug>-<id>/): 301 para o produto atual, se houver par.
+    // Slug que o produto já teve (renomeado no admin, 2026-10-20) ou link
+    // antigo da Nuvemshop (/produtos/<slug>-<id>/): 301 para o produto atual, se houver par.
     ->missing(function (\Illuminate\Http\Request $request) {
-        $produto = \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar((string) $request->route('product'));
+        $slug = (string) $request->route('product');
+        $produto = \App\Modules\Catalog\Models\ProductSlugAntigo::query()->where('slug', $slug)->first()?->product
+            ?? \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar($slug);
         abort_unless($produto, 404);
 
         return redirect()->route('produtos.ver', $produto->slug, 301);
@@ -825,6 +828,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::delete('suporte/{chamado}', [\App\Modules\Suporte\Http\Controllers\AdminSuporteController::class, 'excluir'])->whereNumber('chamado')->name('suporte.excluir');
         // Perguntas MK Place (pedido 2026-10-20): Manuela atende, humano assume quando precisa.
         Route::get('perguntas-marketplace', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'index'])->name('perguntas-marketplace.index');
+        Route::get('perguntas-marketplace/chegando', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'chegando'])->name('perguntas-marketplace.chegando');
         Route::get('perguntas-marketplace/pendentes', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'pendentes'])->name('perguntas-marketplace.pendentes');
         Route::post('perguntas-marketplace/auto-resposta', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'autoResposta'])->name('perguntas-marketplace.auto-resposta');
         Route::post('perguntas-marketplace/{pergunta}/enviar', [\App\Modules\Admin\Http\Controllers\PerguntasMarketplaceController::class, 'enviar'])->whereNumber('pergunta')->middleware('throttle:30,1')->name('perguntas-marketplace.enviar');

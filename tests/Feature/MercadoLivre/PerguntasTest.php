@@ -24,12 +24,14 @@ class PerguntasTest extends TestCase
             'id' => 555, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'text' => 'Tem garantia?',
             'from' => ['id' => 9], 'date_created' => '2026-10-20T17:31:00.000-03:00', 'answer' => null,
         ]);
+        $client->shouldReceive('get')->once()->with('users/9')->andReturn(['id' => 9, 'nickname' => 'JOAO.SILVA']);
 
         (new QuestionService($client))->processWebhook(['topic' => 'questions', 'resource' => '/questions/555']);
 
         $p = MercadoLivrePergunta::where('question_id', 555)->firstOrFail();
         $this->assertSame('UNANSWERED', $p->status);
         $this->assertSame('Tem garantia?', $p->pergunta);
+        $this->assertSame('JOAO.SILVA', $p->comprador_nome);
         Queue::assertPushed(RascunharRespostaPerguntaMercadoLivre::class);
     }
 
@@ -157,5 +159,51 @@ class PerguntasTest extends TestCase
 
         $this->actingAs($admin)->postJson('/admin/perguntas-marketplace/auto-resposta', ['ligado' => true])->assertJson(['ligado' => true]);
         $this->assertTrue(MercadoLivrePergunta::manuelaRespondeSozinha());
+    }
+
+    public function test_aviso_em_tempo_real_traz_so_a_pergunta_nova_sem_dono(): void
+    {
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+
+        $inicio = $this->actingAs($admin)->getJson('/admin/perguntas-marketplace/chegando')->assertOk()->json();
+        $this->assertSame([], $inicio['perguntas']);
+
+        MercadoLivrePergunta::create(['question_id' => 21, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Tem nota?', 'precisa_humano' => true, 'rascunho_em' => now()]);
+        MercadoLivrePergunta::create(['question_id' => 22, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Já assumida', 'precisa_humano' => true, 'rascunho_em' => now(), 'humano_assumiu_em' => now(), 'humano_assumiu_por' => $admin->id]);
+
+        $novas = $this->actingAs($admin)->getJson('/admin/perguntas-marketplace/chegando?desde='.urlencode($inicio['desde']))->assertOk()->json();
+
+        $this->assertSame(2, $novas['total']);
+        $this->assertCount(1, $novas['perguntas']);
+        $this->assertSame('Tem nota?', $novas['perguntas'][0]['pergunta']);
+    }
+
+    public function test_lista_perguntas_de_varios_marketplaces_e_so_envia_onde_tem_api(): void
+    {
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+        MercadoLivrePergunta::create(['question_id' => 20, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Cor?', 'precisa_humano' => true]);
+        // Mesmo número em outro canal não colide.
+        $shopee = MercadoLivrePergunta::create(['canal' => MercadoLivrePergunta::CANAL_SHOPEE, 'question_id' => 20, 'item_id' => '123', 'status' => 'UNANSWERED', 'pergunta' => 'Tem azul?', 'precisa_humano' => true]);
+
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace')
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->component('Admin/PerguntasMarketplace/Index', false)
+                ->has('perguntas', 2)->where('canais', fn ($c) => collect($c)->sort()->values()->all() === ['mercado_livre', 'shopee']));
+
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace?canal=shopee')
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('perguntas', 1)
+                ->where('perguntas.0.canal', 'shopee')->where('perguntas.0.pode_enviar', false));
+
+        // Nome do cliente e link direto para responder no painel do marketplace.
+        MercadoLivrePergunta::where('canal', 'mercado_livre')->update(['comprador_nome' => 'JOAO.SILVA']);
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace?canal=mercado_livre')
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('perguntas.0.comprador', 'JOAO.SILVA')
+                ->where('perguntas.0.link_pergunta', 'https://www.mercadolivre.com.br/perguntas/vendedor'));
+
+        $ml = Mockery::mock(MercadoLivreClient::class);
+        $ml->shouldNotReceive('postOnce');
+        $this->app->instance(MercadoLivreClient::class, $ml);
+
+        $this->actingAs($admin)->postJson("/admin/perguntas-marketplace/{$shopee->id}/enviar", ['texto' => 'Tem sim.'])->assertStatus(422);
+        $this->assertNull($shopee->fresh()->respondida_em);
     }
 }

@@ -69,6 +69,26 @@ class Product extends Model
         ];
     }
 
+    /**
+     * Renomear troca o slug (ProductController::update): o slug velho fica em
+     * product_slugs_antigos para o link antigo responder 301 (2026-10-20).
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (Product $product) {
+            if (! $product->wasChanged('slug')) {
+                return;
+            }
+
+            $antigo = $product->getOriginal('slug');
+            if ($antigo) {
+                ProductSlugAntigo::query()->updateOrCreate(['slug' => $antigo], ['product_id' => $product->id]);
+            }
+            // O slug novo é do produto agora: não pode redirecionar para outro.
+            ProductSlugAntigo::query()->where('slug', $product->slug)->delete();
+        });
+    }
+
     public function getVideoUrlAttribute(): ?string
     {
         return $this->video_path ? asset('storage/'.$this->video_path) : null;

@@ -13,6 +13,7 @@ import { ref } from 'vue';
 
 const props = defineProps({
     livros: { type: Array, default: () => [] },
+    emailPedido: { type: Boolean, default: false },
 });
 
 const { can } = usePermissions();
@@ -67,6 +68,9 @@ const salvar = () => {
     form.post(editando.value ? `/admin/entregaveis/livros-digitais/${editando.value.id}` : '/admin/entregaveis/livros-digitais', opcoes);
 };
 
+// Chave da promoção (pedido 2026-10-21): livros ativos anexados no e-mail de confirmação do pedido.
+const alternarEmail = () => router.patch('/admin/entregaveis/livros-digitais/email-pedido', {}, { preserveScroll: true });
+
 const alternar = (livro) => router.patch(`/admin/entregaveis/livros-digitais/${livro.id}/ativo`, {}, { preserveScroll: true });
 
 const excluir = async (livro) => {
@@ -88,6 +92,20 @@ const campo = 'w-full rounded-lg border border-[var(--surface-border)] bg-transp
             <p class="text-sm text-slate-500 dark:text-slate-400">
                 PDFs de brinde que aparecem na página do produto ("Compre hoje e receba … livros digitais grátis"). Ative ou desative a qualquer momento e escolha em quais produtos cada livro aparece.
             </p>
+        </div>
+
+        <div class="mb-6 flex max-w-2xl items-start gap-4 rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] p-5 shadow-sm">
+            <div class="min-w-0 flex-1">
+                <h2 id="ld-email-titulo" class="text-base font-semibold">Enviar os livros no e-mail de confirmação do pedido</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Ligada: o e-mail de pedido confirmado do kazakora.com leva uma mensagem de presente e os PDFs dos livros ativos dos produtos comprados. Desligada: o e-mail sai sem os livros.
+                </p>
+            </div>
+            <button type="button" role="switch" :aria-checked="props.emailPedido" aria-labelledby="ld-email-titulo" :disabled="!can('cadastros.edit')"
+                class="relative mt-1 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50"
+                :class="props.emailPedido ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'" @click="alternarEmail">
+                <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition-transform" :class="props.emailPedido ? 'translate-x-5' : 'translate-x-0.5'"></span>
+            </button>
         </div>
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">

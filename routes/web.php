@@ -358,6 +358,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     Route::get('entregaveis/livros-digitais', [LivroDigitalController::class, 'index'])->middleware('permission:cadastros.view')->name('entregaveis.livros.listar');
     Route::post('entregaveis/livros-digitais', [LivroDigitalController::class, 'store'])->middleware('permission:cadastros.create')->name('entregaveis.livros.armazenar');
     Route::put('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'update'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.atualizar');
+    Route::patch('entregaveis/livros-digitais/email-pedido', [LivroDigitalController::class, 'alternarEmail'])->middleware('permission:cadastros.edit')->name('entregaveis.livros.email');
     Route::patch('entregaveis/livros-digitais/{livro}/ativo', [LivroDigitalController::class, 'alternar'])->whereNumber('livro')->middleware('permission:cadastros.edit')->name('entregaveis.livros.alternar');
     Route::get('entregaveis/livros-digitais/{livro}/pdf', [LivroDigitalController::class, 'baixar'])->whereNumber('livro')->middleware('permission:cadastros.view')->name('entregaveis.livros.baixar');
     Route::delete('entregaveis/livros-digitais/{livro}', [LivroDigitalController::class, 'destroy'])->whereNumber('livro')->middleware('permission:cadastros.delete')->name('entregaveis.livros.excluir');

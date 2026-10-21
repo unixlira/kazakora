@@ -33,6 +33,13 @@ class MetaAdsDiagnostico
 
     private const VENDAS = 'OUTCOME_SALES';
 
+    /**
+     * Sugestões de desempenho do anúncio: o cartão ganha o botão "Pausar
+     * criativo" (Lira 2026-10-21). Fora: botão de CTA (R5), anúncio
+     * vendendo bem (R9) e anúncio que nem está entregando (R10).
+     */
+    private const PAUSAVEIS = ['R1', 'R2', 'R3', 'R4', 'R7', 'R8', 'R13'];
+
     /** @var array<string, mixed> */
     private array $l;
 
@@ -320,6 +327,7 @@ class MetaAdsDiagnostico
             'prova' => array_values($prova),
             'acao' => $acao,
             'gasto' => (float) ($alvo['metricas']['gasto'] ?? 0),
+            'pausar' => $tipo === 'anuncio' && in_array($regra, self::PAUSAVEIS, true),
             'alvo' => [
                 'tipo' => $tipo,
                 'id' => (string) $alvo['id'],

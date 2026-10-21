@@ -300,4 +300,69 @@ class MetaAdsGerenciarTest extends TestCase
 
         $this->assertSame([], $this->posts());
     }
+
+    public function test_pausar_criativo_do_gerenciador(): void
+    {
+        $this->actingAs($this->admin())
+            ->postJson(self::BASE.'/anuncio/3009/pausar')
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertSame([['3009', ['status' => 'PAUSED']]], $this->posts());
+    }
+
+    public function test_pausar_criativo_do_kazakora_limpa_o_ativado_em(): void
+    {
+        $campanha = $this->campanhaLocal();
+        $video = $campanha->videos->first();
+        $video->forceFill(['ativado_em' => now()])->save();
+
+        $this->actingAs($this->admin())
+            ->postJson(self::BASE.'/anuncio/3001/pausar')
+            ->assertOk();
+
+        $this->assertSame([['3001', ['status' => 'PAUSED']]], $this->posts());
+        $this->assertNull($video->fresh()->ativado_em);
+    }
+
+    public function test_pausar_ultimo_anuncio_ativo_pede_confirmacao_extra(): void
+    {
+        $this->ativos['2001/ads'] = ['3009'];
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->postJson(self::BASE.'/anuncio/3009/pausar')
+            ->assertStatus(422)
+            ->assertJson(['ultimo_ativo' => true]);
+        $this->assertSame([], $this->posts());
+
+        $this->actingAs($admin)
+            ->postJson(self::BASE.'/anuncio/3009/pausar', ['sem_ativo' => true])
+            ->assertOk();
+        $this->assertSame([['3009', ['status' => 'PAUSED']]], $this->posts());
+    }
+
+    public function test_pausar_anuncio_que_nao_esta_ativo_nao_mexe(): void
+    {
+        $this->objetos['3009']['effective_status'] = 'PAUSED';
+
+        $this->actingAs($this->admin())
+            ->postJson(self::BASE.'/anuncio/3009/pausar')
+            ->assertStatus(409);
+
+        $this->assertSame([], $this->posts());
+    }
+
+    public function test_pausar_anuncio_de_outra_conta_e_sem_permissao_nao_mexe(): void
+    {
+        $this->actingAs($this->admin())
+            ->postJson(self::BASE.'/anuncio/9999/pausar')
+            ->assertStatus(422);
+
+        $this->actingAs(User::factory()->create(['role' => 'customer']))
+            ->postJson(self::BASE.'/anuncio/3009/pausar')
+            ->assertForbidden();
+
+        $this->assertSame([], $this->posts());
+    }
 }

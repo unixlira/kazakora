@@ -83,6 +83,20 @@ const resumoDaCampanha = (id) => {
     return ORDEM.map((p) => [p, lista.filter((x) => x.prioridade === p).length]).filter(([, n]) => n > 0);
 };
 const verMais = reactive({});
+const visiveis = (id) => (verMais[id] ? daLinha(id) : daLinha(id).slice(0, 2));
+
+// "Pausar criativo" (Lira 2026-10-21): uma vez por anúncio, na primeira
+// sugestão de desempenho, só com o anúncio ativo na Meta agora.
+const BOTAO_PAUSAR = 'mt-1 inline-flex items-center gap-1 rounded-md border border-amber-400 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 dark:text-amber-300 dark:hover:bg-amber-500/10';
+const pausavel = (a) => {
+    if (!props.editarAnuncios || (props.aoVivo?.anuncios?.[a.id] ?? a.status) !== 'ACTIVE' || !daLinha(a.id).some((x) => x.pausar)) return null;
+    // Sugestão de desempenho escondida no "mais": o botão fica na primeira visível.
+    return (visiveis(a.id).find((x) => x.pausar) ?? visiveis(a.id)[0]).id;
+};
+const pausar = (id) => {
+    const achado = acharLinha('anuncio', id);
+    if (achado && props.editarAnuncios) gerenciar.value.pausar(alvoAnuncio(achado.a));
+};
 const ROTULO_RESUMO = { urgente: ['urgente', 'urgentes'], atencao: ['atenção', 'atenção'], oportunidade: ['oportunidade', 'oportunidades'], aviso: ['aviso', 'avisos'] };
 const abrirSugestoes = (c) => {
     abertos[c.id] = true;
@@ -140,7 +154,7 @@ const editar = (tipo, id) => {
         gerenciar.value.editar(alvoConjunto(achado.c, achado.s));
     }
 };
-defineExpose({ mostrar, editar });
+defineExpose({ mostrar, editar, pausar });
 const classeDestaque = (id) => (destacado.value === id ? 'bg-primary/10 outline outline-2 outline-primary/50' : '');
 const cta = ctaDoAnuncio;
 
@@ -252,7 +266,7 @@ const COLUNAS = [
                                 <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{{ fmt(s.metricas) }}</td>
                                 <td class="px-3 py-2.5 align-top">
                                     <ul v-if="daLinha(s.id).length" class="space-y-1.5">
-                                        <li v-for="cartao in (verMais[s.id] ? daLinha(s.id) : daLinha(s.id).slice(0, 2))" :key="cartao.id" class="text-xs leading-snug">
+                                        <li v-for="cartao in visiveis(s.id)" :key="cartao.id" class="text-xs leading-snug">
                                             <span class="mr-1 rounded-full px-1.5 py-px text-[10px] font-bold uppercase" :class="PRIORIDADES[cartao.prioridade][1]">{{ PRIORIDADES[cartao.prioridade][0] }}</span>
                                             <strong>{{ cartao.titulo }}</strong>
                                             <span class="block text-slate-600 dark:text-slate-300">{{ cartao.acao }}</span>
@@ -312,10 +326,14 @@ const COLUNAS = [
                                     <td v-for="[chave, , fmt] in COLUNAS" :key="chave" class="whitespace-nowrap px-3 py-2 text-right tabular-nums">{{ fmt(a.metricas) }}</td>
                                     <td class="px-3 py-2 align-top">
                                         <ul v-if="daLinha(a.id).length" class="space-y-1.5">
-                                            <li v-for="cartao in (verMais[a.id] ? daLinha(a.id) : daLinha(a.id).slice(0, 2))" :key="cartao.id" class="text-xs leading-snug">
+                                            <li v-for="cartao in visiveis(a.id)" :key="cartao.id" class="text-xs leading-snug">
                                                 <span class="mr-1 rounded-full px-1.5 py-px text-[10px] font-bold uppercase" :class="PRIORIDADES[cartao.prioridade][1]">{{ PRIORIDADES[cartao.prioridade][0] }}</span>
                                                 <strong>{{ cartao.titulo }}</strong>
                                                 <span class="block text-slate-600 dark:text-slate-300">{{ cartao.acao }}</span>
+                                                <button v-if="cartao.id === pausavel(a)" type="button" :aria-label="`Pausar criativo ${a.nome}`" :class="BOTAO_PAUSAR"
+                                                    @click="gerenciar.pausar(alvoAnuncio(a))">
+                                                    <i class="fas fa-pause text-[10px]" aria-hidden="true"></i> Pausar criativo
+                                                </button>
                                             </li>
                                             <li v-if="daLinha(a.id).length > 2">
                                                 <button type="button" class="text-xs text-primary hover:underline" @click="verMais[a.id] = !verMais[a.id]">{{ verMais[a.id] ? 'menos' : `mais ${daLinha(a.id).length - 2}` }}</button>

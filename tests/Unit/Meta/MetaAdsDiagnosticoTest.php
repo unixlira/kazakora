@@ -73,6 +73,7 @@ class MetaAdsDiagnosticoTest extends TestCase
         $this->assertSame(MetaAdsDiagnostico::URGENTE, $r['cartoes'][0]['prioridade']);
         $this->assertSame('R$ 62,40 gastos e nenhuma venda', $r['cartoes'][0]['titulo']);
         $this->assertSame('anuncio', $r['cartoes'][0]['alvo']['tipo']);
+        $this->assertTrue($r['cartoes'][0]['pausar'], 'sugestão de desempenho ganha o Pausar criativo');
     }
 
     public function test_r1_nao_vale_para_campanha_de_trafego(): void
@@ -132,6 +133,7 @@ class MetaAdsDiagnosticoTest extends TestCase
         $this->assertSame(['R5'], $this->regras($r));
         $this->assertSame(MetaAdsDiagnostico::AVISO, $r['cartoes'][0]['prioridade']);
         $this->assertSame('Campanha de vendas com botão "Saiba mais"', $r['cartoes'][0]['titulo']);
+        $this->assertFalse($r['cartoes'][0]['pausar'], 'botão de CTA se resolve duplicando, não pausando');
 
         // ROAS abaixo do mínimo: Atenção.
         $r = $this->analisar([$this->campanha([$this->anuncio('a1', ['gasto' => 40.0, 'impressoes' => 2000, 'compras' => 1, 'vendas' => 80.0, 'roas' => 2.0, 'ctr_link' => 2.0], ['cta' => $cta])])]);
@@ -206,6 +208,7 @@ class MetaAdsDiagnosticoTest extends TestCase
         $r = $this->analisar([$this->campanha([$anuncio])]);
         $this->assertSame(['R9'], $this->regras($r));
         $this->assertSame(MetaAdsDiagnostico::OPORTUNIDADE, $r['cartoes'][0]['prioridade']);
+        $this->assertFalse($r['cartoes'][0]['pausar'], 'anúncio vendendo bem não ganha Pausar');
 
         $r = $this->analisar([$this->campanha([$anuncio], ['aprendizado' => 'LEARNING'])]);
         $this->assertSame(['R11'], $this->regras($r), 'em aprendizado: só o aviso de não mexer');

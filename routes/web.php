@@ -137,7 +137,7 @@ Route::get('/politica-de-cookies', fn () => \Inertia\Inertia::render('Legal/Cook
 Route::post('/cookies/aceitar', [\App\Modules\Analytics\Http\Controllers\CookiesController::class, 'aceitar'])->middleware('throttle:20,1')->name('cookies.aceitar');
 Route::inertia('/termos-de-uso', 'Legal/Termos')->name('legal.termos');
 // Página pública da promoção (pedido 2026-10-21): título e descrição de Vender › Promoções.
-Route::get('/promocoes/{slug}', [\App\Modules\Catalog\Http\Controllers\PromocaoPublicaController::class, 'show'])->whereIn('slug', ['airfryer', 'pdfs'])->name('promocoes.ver');
+Route::get('/promocoes/{slug}', [\App\Modules\Catalog\Http\Controllers\PromocaoPublicaController::class, 'show'])->where('slug', '[a-z0-9-]+')->name('promocoes.ver');
 
 // URLs da loja antiga (Nuvemshop) que o Google ainda mostra nos resultados
 // (pedido 2026-10-12: clicar em "kazakora.com › quem-somos" dava 404).
@@ -374,13 +374,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Vender › Promoções (pedido 2026-10-21): regras da Promoção Airfryer e da Promoção PDFs.
     // Tela inicial (2026-10-21): Airfryer e PDFs lado a lado, com a chave, a imagem e os produtos da página do produto.
     Route::get('promocoes', [PromocaoController::class, 'index'])->middleware('permission:cadastros.view')->name('promocoes.listar');
+    // Nova promoção pela lista (2026-10-21): o menu abre direto a lista, que cria outras além de Airfryer e PDFs.
+    Route::post('promocoes', [PromocaoController::class, 'store'])->middleware('permission:cadastros.edit')->name('promocoes.armazenar');
     Route::patch('promocoes/{slug}/pagina-produto', [PromocaoController::class, 'paginaProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.pagina-produto');
     Route::post('promocoes/{slug}/imagem', [PromocaoController::class, 'imagem'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.imagem');
     Route::post('promocoes/{slug}/produtos', [PromocaoController::class, 'adicionarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.produtos.adicionar');
     Route::patch('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'alternarProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.alternar');
     Route::delete('promocoes/{slug}/produtos/{ligacao}', [PromocaoController::class, 'removerProduto'])->whereIn('slug', ['airfryer', 'pdfs'])->whereNumber('ligacao')->middleware('permission:cadastros.edit')->name('promocoes.produtos.remover');
-    Route::get('promocoes/{slug}', [PromocaoController::class, 'show'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.view')->name('promocoes.exibir');
-    Route::put('promocoes/{slug}', [PromocaoController::class, 'update'])->whereIn('slug', ['airfryer', 'pdfs'])->middleware('permission:cadastros.edit')->name('promocoes.atualizar');
+    Route::get('promocoes/{slug}', [PromocaoController::class, 'show'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.view')->name('promocoes.exibir');
+    Route::put('promocoes/{slug}', [PromocaoController::class, 'update'])->where('slug', '[a-z0-9-]+')->middleware('permission:cadastros.edit')->name('promocoes.atualizar');
 
     Route::get('notificacoes-promocionais', [PromotionalNotificationController::class, 'index'])
         ->middleware('permission:cadastros.view')

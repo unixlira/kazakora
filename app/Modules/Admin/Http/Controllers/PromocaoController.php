@@ -12,6 +12,7 @@ use App\Modules\Catalog\Support\PromocoesDoProduto;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,12 +23,18 @@ use Inertia\Response;
  * ativa/inativa, período, valor mínimo do pedido, observações e
  * chaves/regras livres que o Lira define.
  *
+ * O menu abre direto esta lista (2026-10-21), que também cria promoções
+ * novas (só texto, período e regras, sem quadro na página do produto).
+ *
  * Tela inicial (2026-10-21): as duas lado a lado, cada uma com a chave
  * "mostrar na página do produto", a imagem do quadro (pronta, enviada ou a
  * de Entregáveis) e os produtos onde aparece (tabela promocao_produto).
  */
 class PromocaoController extends Controller
 {
+    /** Caminhos que não podem virar promoção (/promocoes/sair, /admin/promocoes/nova). */
+    private const SLUGS_RESERVADOS = ['nova', 'sair', 'editar'];
+
     public function index(): Response
     {
         $promocoes = Promocao::query()
@@ -38,11 +45,47 @@ class PromocaoController extends Controller
             ->map(fn (Promocao $promocao) => $this->card($promocao))
             ->values();
 
+        // As criadas pela lista (2026-10-21): só texto, período e regras; o
+        // quadro da página do produto é só do Airfryer e dos PDFs.
+        $outras = Promocao::query()
+            ->whereNotIn('slug', [Promocao::AIRFRYER, Promocao::PDFS])
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (Promocao $promocao) => [
+                'slug' => $promocao->slug,
+                'nome' => $promocao->nome,
+                'ativa' => $promocao->ativa,
+                'no_ar' => $promocao->noAr(),
+                'inicio' => $promocao->inicio?->format('d/m/Y H:i'),
+                'fim' => $promocao->fim?->format('d/m/Y H:i'),
+            ]);
+
         return Inertia::render('Admin/Promocoes/Index', [
             'promocoes' => $promocoes,
+            'outras' => $outras,
             'formatos' => PromocoesDoProduto::FORMATOS,
             'maxKb' => PromocoesDoProduto::MAX_KB,
         ]);
+    }
+
+    /** Nova promoção (2026-10-21): nasce inativa e abre na tela de texto e regras. */
+    public function store(Request $request): RedirectResponse
+    {
+        $dados = $request->validate(
+            ['nome' => ['required', 'string', 'max:255']],
+            ['nome.required' => 'Dê um nome para a promoção.'],
+        );
+        $nome = trim($dados['nome']);
+
+        $base = Str::limit(Str::slug($nome), 34, '') ?: 'promocao';
+        $slug = $base;
+        for ($n = 2; in_array($slug, self::SLUGS_RESERVADOS, true) || Promocao::query()->where('slug', $slug)->exists(); $n++) {
+            $slug = "{$base}-{$n}";
+        }
+
+        $promocao = Promocao::query()->create(['slug' => $slug, 'nome' => $nome, 'ativa' => false]);
+
+        return redirect("/admin/promocoes/{$promocao->slug}")->with('success', "{$promocao->nome} criada. Preencha o texto e as regras e ative quando quiser.");
     }
 
     /** Chaves "mostrar na página do produto" e "todos os produtos". */

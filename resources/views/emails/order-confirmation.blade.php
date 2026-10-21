@@ -31,6 +31,21 @@
         </table>
     @endif
 
+    @if (! empty($brindes) && $brindes->isNotEmpty())
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px;">
+            <tr>
+                <td style="padding: 14px 18px; font-size: 13px; color: #7c2d12;">
+                    <strong>&#127873; Um presente para você!</strong> Como agradecimento pela sua compra, separamos {{ $brindes->count() === 1 ? 'um livro digital' : $brindes->count().' livros digitais' }} de presente. {{ $brindes->count() === 1 ? 'Ele está anexado' : 'Estão anexados' }} a este e-mail em PDF, é só abrir e aproveitar a leitura:
+                    <ul style="margin: 8px 0 0; padding-left: 18px;">
+                        @foreach ($brindes as $livro)
+                            <li>{{ $livro->titulo }}</li>
+                        @endforeach
+                    </ul>
+                </td>
+            </tr>
+        </table>
+    @endif
+
     @include('emails.partials.itens', ['linhas' => $linhas])
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px; color: #374151;">

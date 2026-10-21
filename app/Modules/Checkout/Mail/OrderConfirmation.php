@@ -2,9 +2,11 @@
 
 namespace App\Modules\Checkout\Mail;
 
+use App\Modules\Catalog\Models\LivroDigital;
 use App\Modules\Checkout\Models\Order;
 use App\Support\MarcaDoEmail;
 use Illuminate\Mail\Mailable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Support\Facades\Storage;
 
@@ -16,10 +18,15 @@ use Illuminate\Support\Facades\Storage;
  */
 class OrderConfirmation extends Mailable
 {
+    /** Livros digitais de brinde anexados (chave da promoção em Entregáveis › Livros Digitais). */
+    public readonly Collection $brindes;
 
     public function __construct(public readonly Order $order)
     {
         $this->order->loadMissing('items', 'invoice');
+        $this->brindes = LivroDigital::doPedido($this->order)
+            ->filter(fn (LivroDigital $livro) => Storage::disk('local')->exists($livro->arquivo))
+            ->values();
     }
 
     public function build(): self
@@ -31,7 +38,7 @@ class OrderConfirmation extends Mailable
             // Remetente com o nome do site só no FerraKora; KazaKora segue o MAIL_FROM_NAME.
             ->when($this->order->site_origem === Order::SITE_FERRAKORA, fn (self $mail) => $mail->from((string) config('mail.from.address'), $marca['nome']))
             ->subject("Pedido {$this->order->numero} confirmado - {$marca['nome']}")
-            ->view('emails.order-confirmation', ['marcaEmail' => $marca]);
+            ->view('emails.order-confirmation', ['marcaEmail' => $marca, 'brindes' => $this->brindes]);
     }
 
     /**
@@ -55,6 +62,13 @@ class OrderConfirmation extends Mailable
             $anexos[] = Attachment::fromStorageDisk('local', $invoice->xml_path)
                 ->as("nfe-pedido-{$this->order->id}.xml")
                 ->withMime('application/xml');
+        }
+
+        // Pedido 2026-10-21: com a chave da promoção ligada, os livros de brinde.
+        foreach ($this->brindes as $livro) {
+            $anexos[] = Attachment::fromStorageDisk('local', $livro->arquivo)
+                ->as($livro->nome_arquivo)
+                ->withMime('application/pdf');
         }
 
         return $anexos;

@@ -649,6 +649,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::get('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'index'])->name('listar')->middleware('permission:financeiro.view');
         Route::get('nova', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'create'])->name('criar')->middleware('permission:financeiro.create');
         Route::post('/', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'store'])->name('armazenar')->middleware('permission:financeiro.create');
+        Route::post('sincronizar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'sincronizar'])->name('sincronizar')->middleware(['permission:financeiro.create', 'throttle:6,1']);
         Route::get('localizacoes', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'localizacoes'])->name('localizacoes')->middleware(['permission:financeiro.create', 'throttle:30,1']);
         Route::get('{campanha}', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'show'])->whereNumber('campanha')->name('ver')->middleware('permission:financeiro.view');
         Route::get('{campanha}/editar', [\App\Modules\Admin\Http\Controllers\MetaAdsController::class, 'edit'])->whereNumber('campanha')->name('editar')->middleware('permission:financeiro.create');
@@ -677,6 +678,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
     // Editar e excluir campanha, conjunto e anúncio pelo id da Meta (Lira
     // 2026-10-20), inclusive os criados direto no Gerenciador.
     Route::prefix('publicidade/meta-ads/gerenciar')->name('publicidade.meta-ads.gerenciar.')->group(function () {
+        Route::get('status', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'status'])->name('status')->middleware(['permission:financeiro.view', 'throttle:60,1']);
+        Route::put('anuncio/{metaId}/link', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'link'])->whereNumber('metaId')->name('link')->middleware(['permission:financeiro.create', 'throttle:20,1']);
         Route::put('{nivel}/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'update'])->whereIn('nivel', ['campanha', 'conjunto', 'anuncio'])->whereNumber('metaId')->name('atualizar')->middleware(['permission:financeiro.create', 'throttle:20,1']);
         Route::delete('{nivel}/{metaId}', [\App\Modules\Admin\Http\Controllers\MetaAdsGerenciarController::class, 'destroy'])->whereIn('nivel', ['campanha', 'conjunto', 'anuncio'])->whereNumber('metaId')->name('excluir')->middleware(['permission:financeiro.create', 'throttle:20,1']);
     });

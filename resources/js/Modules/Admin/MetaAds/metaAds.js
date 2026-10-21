@@ -85,3 +85,59 @@ export const enviarArquivo = (url, campo, arquivo, aoProgredir, extras = {}) => 
     xhr.onerror = () => reject(new Error('A conexão caiu durante o envio. Tente de novo.'));
     xhr.send(dados);
 });
+
+// "O que fazer agora" (2026-10-21): prioridade => [rótulo, selo, faixa à esquerda].
+export const PRIORIDADES = {
+    urgente: ['Urgente', 'bg-red-500/15 text-red-700 dark:text-red-300', 'bg-red-500'],
+    atencao: ['Atenção', 'bg-amber-500/15 text-amber-800 dark:text-amber-300', 'bg-amber-500'],
+    oportunidade: ['Oportunidade', 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', 'bg-emerald-500'],
+    aviso: ['Aviso', 'bg-primary/15 text-primary', 'bg-primary'],
+};
+
+/**
+ * Coluna "Botão (CTA)": { texto, dica, mono, alerta, vazio } a partir do
+ * cta do espelho (null = sem dado; codigos vazio = sem botão).
+ */
+export const ctaDoAnuncio = (cta) => {
+    if (!cta) return { texto: '-', dica: 'Sem dado do botão', mono: false, alerta: false, vazio: true };
+    const rotulo = (c) => cta.rotulos?.[c] ?? c;
+    const alerta = Boolean(cta.desalinhado);
+    if (cta.sem_botao) return { texto: 'Sem botão', dica: cta.codigos.join(', ') || 'NO_BUTTON', mono: false, alerta, vazio: true };
+    if (cta.codigos.length > 1) {
+        return { texto: `Vários (${cta.codigos.length})`, dica: cta.codigos.map((c) => `${rotulo(c)} (${c})`).join(', '), mono: false, alerta, vazio: false };
+    }
+    const codigo = cta.codigos[0];
+    const conhecido = Boolean(cta.rotulos?.[codigo]);
+    return {
+        texto: conhecido ? `${rotulo(codigo)}${cta.dinamico ? ' · dinâmico' : ''}` : codigo,
+        dica: codigo,
+        mono: !conhecido,
+        alerta,
+        vazio: false,
+    };
+};
+
+// Status ao vivo (pedido do Lira 2026-10-21) ---------------------------------
+
+/**
+ * Status da campanha montada no KazaKora como o Lira lê: antes de ir para a
+ * Meta é "Aguardando", durante o envio é "Publicando" e, depois, o que a
+ * Meta diz agora (effective_status). => [rótulo, cores, dica]
+ */
+export const statusDaCampanhaLocal = (status, statusMetaAgora, rotuloLocal, ultimoErro) => {
+    if (status === 'rascunho') return ['Aguardando', STATUS_ESTILOS.rascunho, 'Ainda não foi para a Meta'];
+    if (status === 'enviando') return ['Publicando', STATUS_ESTILOS.enviando, 'Enviando para a Meta agora'];
+    if (status === 'erro') return ['Erro no envio', STATUS_ESTILOS.erro, ultimoErro ?? undefined];
+    const daMeta = {
+        ACTIVE: ['Ativa', STATUS_ESTILOS.ativa],
+        PAUSED: ['Pausada', STATUS_ESTILOS.enviada_pausada],
+        IN_PROCESS: ['Em análise', STATUS_ESTILOS.enviando],
+        PENDING_REVIEW: ['Em análise', STATUS_ESTILOS.enviando],
+        WITH_ISSUES: ['Com problema', STATUS_ESTILOS.erro],
+        DISAPPROVED: ['Reprovada', STATUS_ESTILOS.erro],
+        ARCHIVED: ['Arquivada', STATUS_ESTILOS.rascunho],
+        DELETED: ['Excluída na Meta', STATUS_ESTILOS.rascunho],
+    }[statusMetaAgora];
+    if (daMeta) return [...daMeta, 'Status agora na Meta'];
+    return [rotuloLocal ?? status, STATUS_ESTILOS[status] ?? '', ultimoErro ?? undefined];
+};

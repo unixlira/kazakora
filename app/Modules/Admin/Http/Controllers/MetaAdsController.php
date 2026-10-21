@@ -152,7 +152,7 @@ class MetaAdsController extends Controller
             'periodos' => MetaAdsService::PERIODOS,
             'espelho' => Inertia::defer(fn () => filled($campanha->meta_campaign_id)
                 ? $this->espelho($meta, $periodo, (string) $campanha->meta_campaign_id, $this->noKazaKora($campanha->id))
-                : ['campanhas' => [], 'erro' => null]),
+                : ['campanhas' => [], 'erro' => null, 'diagnostico' => null]),
             'config' => $this->estadoConfig($meta),
             'problemas' => $campanha->podeEnviar() ? $meta->problemasParaEnviar($campanha) : [],
             'pode' => [
@@ -294,6 +294,40 @@ class MetaAdsController extends Controller
         }
 
         return back()->with('success', 'Campanha pausada na Meta.');
+    }
+
+    /**
+     * Botão "Sincronizar com a Meta" (pedido do Lira 2026-10-20): traz
+     * nomes, orçamento, status, criativo e links de destino mudados direto
+     * no Gerenciador para o banco (MetaAdsService::sincronizar). Só lê a Meta.
+     */
+    public function sincronizar(MetaAdsService $meta): RedirectResponse
+    {
+        if (! $meta->configurado()) {
+            return back()->with('error', 'Meta não configurado.');
+        }
+
+        try {
+            $r = $meta->sincronizar();
+        } catch (MetaAdsException $erro) {
+            return back()->with('error', 'Não deu para ler a Meta: '.$erro->getMessage());
+        }
+
+        $partes = array_filter([
+            $r['campanhas'] ? "{$r['campanhas']} campanha(s)" : null,
+            $r['conjuntos'] ? "{$r['conjuntos']} conjunto(s)" : null,
+            $r['anuncios'] ? "{$r['anuncios']} anúncio(s)" : null,
+        ]);
+        $mensagem = $partes ? 'Sincronizado com a Meta: '.implode(', ', $partes).' atualizado(s)' : 'Tudo já estava igual à Meta';
+        $mensagem .= $r['links'] ? ", {$r['links']} link(s) de destino corrigido(s)." : '.';
+        if ($r['pulados']) {
+            $mensagem .= " {$r['pulados']} item(ns) em envio ficou(aram) para depois.";
+        }
+        if ($r['fora_da_meta']) {
+            $mensagem .= " {$r['fora_da_meta']} item(ns) não existe(m) mais na Meta.";
+        }
+
+        return back()->with('success', $mensagem);
     }
 
     /**
@@ -1341,10 +1375,11 @@ class MetaAdsController extends Controller
     private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = []): array
     {
         if (! $meta->configurado()) {
-            return ['campanhas' => [], 'erro' => null];
+            return ['campanhas' => [], 'erro' => null, 'diagnostico' => null];
         }
 
         try {
+            $completo = $meta->espelhoCompleto($periodo, $campaignId);
             $campanhas = array_map(function (array $c) use ($noKazaKora, $meta) {
                 $local = $noKazaKora['campanhas'][$c['id']] ?? null;
                 $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local, $meta) {
@@ -1367,11 +1402,16 @@ class MetaAdsController extends Controller
                     'local_id' => $local['id'] ?? null,
                     'novo_conjunto' => (bool) ($local['novo_conjunto'] ?? false),
                 ];
-            }, $meta->espelho($periodo, $campaignId));
+            }, $completo['campanhas']);
 
-            return ['campanhas' => $campanhas, 'erro' => null];
+            // "O que fazer agora" (2026-10-21): só leitura, sobre o mesmo espelho.
+            return [
+                'campanhas' => $campanhas,
+                'erro' => null,
+                'diagnostico' => $meta->diagnosticar(['campanhas' => $campanhas] + $completo, $periodo),
+            ];
         } catch (MetaAdsException $erro) {
-            return ['campanhas' => [], 'erro' => $erro->getMessage()];
+            return ['campanhas' => [], 'erro' => $erro->getMessage(), 'diagnostico' => null];
         }
     }
 

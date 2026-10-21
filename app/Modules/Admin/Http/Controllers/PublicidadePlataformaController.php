@@ -5,6 +5,8 @@ namespace App\Modules\Admin\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Admin\Support\Publicidade\PlataformaDeAnuncio;
 use App\Modules\Marketplace\Models\ChannelAdSpend;
+use App\Services\Meta\MetaAdsException;
+use App\Services\Meta\MetaAdsService;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -40,7 +42,13 @@ class PublicidadePlataformaController extends Controller
 
         $ultimaSincronizacao = ChannelAdSpend::query()->where('channel', $canal)->max('date');
 
-        return Inertia::render('Admin/Publicidade/Plataforma', [
+        // Meta: versão compacta do "O que fazer agora" (2026-10-21), últimos
+        // 7 dias, lida ao vivo da Meta (prop adiada para não travar a tela).
+        $extras = $canal === PlataformaDeAnuncio::META && app(MetaAdsService::class)->configurado()
+            ? ['diagnostico' => Inertia::defer(fn () => $this->diagnosticoMeta()), 'temDiagnostico' => true]
+            : ['temDiagnostico' => false];
+
+        return Inertia::render('Admin/Publicidade/Plataforma', $extras + [
             'plataforma' => PlataformaDeAnuncio::dados($canal),
             'conectado' => $ultimaSincronizacao !== null,
             'ultimaSincronizacao' => $ultimaSincronizacao ? Carbon::parse($ultimaSincronizacao)->toDateString() : null,
@@ -60,6 +68,20 @@ class PublicidadePlataformaController extends Controller
             ],
         ]);
     }
+
+    /** @return array<string, mixed> */
+    private function diagnosticoMeta(): array
+    {
+        $meta = app(MetaAdsService::class);
+
+        try {
+            return $meta->diagnosticar($meta->espelhoCompleto(self::PERIODO_DIAGNOSTICO), self::PERIODO_DIAGNOSTICO) + ['erro' => null];
+        } catch (MetaAdsException $erro) {
+            return ['erro' => $erro->getMessage(), 'cartoes' => [], 'total' => 0];
+        }
+    }
+
+    private const PERIODO_DIAGNOSTICO = 'last_7d';
 
     /**
      * @return array{gasto: float, impressoes: int, cliques: int, pedidos: int, vendas: float, roas: float|null}

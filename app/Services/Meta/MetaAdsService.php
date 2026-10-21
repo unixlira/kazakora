@@ -2,6 +2,7 @@
 
 namespace App\Services\Meta;
 
+use App\Modules\Catalog\Models\Product;
 use App\Modules\Marketplace\Models\MetaAdsCampanha;
 use App\Modules\Marketplace\Models\MetaAdsConjunto;
 use App\Modules\Marketplace\Models\MetaAdsVideo;
@@ -12,6 +13,7 @@ use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
@@ -694,6 +696,129 @@ class MetaAdsService
         return $ativos->count() === 1 && $ativos->first() === $objeto['id'];
     }
 
+    // Status ao vivo e troca de link (pedido do Lira 2026-10-21) --------------
+
+    /**
+     * effective_status de todas as campanhas, conjuntos e anúncios da conta,
+     * por id. Três leituras leves (só id e status), guardadas 15 segundos:
+     * a tela pergunta a cada 20 s sem pesar na cota da Meta.
+     *
+     * @return array{campanhas: array<string, string>, conjuntos: array<string, string>, anuncios: array<string, string>, lido_em: string}
+     *
+     * @throws MetaAdsException
+     */
+    public function statusAoVivo(): array
+    {
+        return Cache::remember('meta_ads:status_ao_vivo:'.md5($this->conta()), 15, function () {
+            $ler = fn (string $borda) => collect($this->getPaginado($this->conta().'/'.$borda, ['fields' => 'id,effective_status', 'limit' => 500]))
+                ->mapWithKeys(fn (array $item) => [(string) $item['id'] => (string) ($item['effective_status'] ?? '')])
+                ->all();
+
+            return [
+                'campanhas' => $ler('campaigns'),
+                'conjuntos' => $ler('adsets'),
+                'anuncios' => $ler('ads'),
+                'lido_em' => now(self::FUSO)->toIso8601String(),
+            ];
+        });
+    }
+
+    public function esquecerStatusAoVivo(): void
+    {
+        Cache::forget('meta_ads:status_ao_vivo:'.md5($this->conta()));
+    }
+
+    /**
+     * Dá para trocar o link pelo admin? Só criativo com object_story_spec
+     * (imagem ou vídeo com link). Catálogo (product_set_id) e anúncio feito
+     * de publicação existente ficam no Gerenciador.
+     *
+     * @param  array<string, mixed>  $criativo
+     */
+    public static function linkTrocavel(array $criativo): bool
+    {
+        $spec = $criativo['object_story_spec'] ?? null;
+
+        return is_array($spec) && blank($criativo['product_set_id'] ?? null)
+            && (isset($spec['link_data']) || isset($spec['video_data']['call_to_action']));
+    }
+
+    /**
+     * Criativo da Meta com o link trocado em todo lugar onde ele aparece
+     * (link_data.link, botão e link_urls do asset_feed_spec), pronto para
+     * POST em adcreatives. Os campos que a Meta devolve na leitura mas
+     * recusa na criação saem (imagem por hash e por url juntas).
+     *
+     * @param  array<string, mixed>  $criativo  lido com object_story_spec, asset_feed_spec, url_tags e name
+     * @return array<string, string>
+     */
+    public static function criativoComLinkNovo(array $criativo, string $link): array
+    {
+        $spec = $criativo['object_story_spec'];
+        foreach (['link_data', 'video_data'] as $chave) {
+            if (! isset($spec[$chave])) {
+                continue;
+            }
+            if ($chave === 'link_data') {
+                $spec[$chave]['link'] = $link;
+                if (filled($spec[$chave]['image_hash'] ?? null)) {
+                    unset($spec[$chave]['picture']);
+                }
+            }
+            if ($chave === 'video_data' && filled($spec[$chave]['image_hash'] ?? null)) {
+                unset($spec[$chave]['image_url']);
+            }
+            if (isset($spec[$chave]['call_to_action'])) {
+                $spec[$chave]['call_to_action']['value']['link'] = $link;
+            }
+        }
+
+        $payload = [
+            'name' => mb_substr(((string) ($criativo['name'] ?? 'Criativo')).' | link novo', 0, 255),
+            'object_story_spec' => json_encode($spec),
+        ];
+
+        if (! empty($criativo['asset_feed_spec'])) {
+            $feed = $criativo['asset_feed_spec'];
+            if (isset($feed['link_urls'])) {
+                $feed['link_urls'] = array_map(fn (array $l) => array_merge($l, ['website_url' => $link]), $feed['link_urls']);
+            }
+            $payload['asset_feed_spec'] = json_encode($feed);
+        }
+
+        if (filled($criativo['url_tags'] ?? null)) {
+            $payload['url_tags'] = (string) $criativo['url_tags'];
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Troca o link de um anúncio feito no Gerenciador: criativo novo igual
+     * ao atual com o link novo, e o anúncio passa a usar ele (volta para a
+     * análise da Meta). Se a Meta recusar o criativo, nada muda no anúncio.
+     *
+     * @param  array{id: string, campanha_id: ?string}  $objeto  (ver objeto('anuncio', ...))
+     *
+     * @throws MetaAdsException
+     */
+    public function trocarLinkDoAnuncio(array $objeto, string $link): string
+    {
+        $ad = $this->get($objeto['id'], ['fields' => 'creative{id,name,object_story_spec,asset_feed_spec,url_tags,product_set_id}']);
+        $criativo = $ad['creative'] ?? [];
+
+        if (! self::linkTrocavel($criativo)) {
+            throw new MetaAdsException('Este anúncio não tem link próprio (catálogo ou publicação existente). Troque pelo Gerenciador');
+        }
+
+        $novo = (string) $this->post($this->conta().'/adcreatives', self::criativoComLinkNovo($criativo, $link))['id'];
+        $this->post($objeto['id'], ['creative' => json_encode(['creative_id' => $novo])]);
+        $this->esquecerEspelho($objeto['campanha_id']);
+        $this->esquecerStatusAoVivo();
+
+        return $novo;
+    }
+
     /** O espelho fica guardado 2 minutos: depois de mudar algo, lê a Meta de novo. */
     public function esquecerEspelho(MetaAdsCampanha|string|null $campanha = null): void
     {
@@ -701,7 +826,7 @@ class MetaAdsService
 
         foreach (array_keys(self::PERIODOS) as $periodo) {
             foreach (array_unique([null, $campanhaId]) as $id) {
-                Cache::forget('meta-ads:espelho:'.md5($this->conta().'|'.$periodo.'|'.$id));
+                Cache::forget(self::CHAVE_ESPELHO.md5($this->conta().'|'.$periodo.'|'.$id));
             }
         }
     }
@@ -838,39 +963,103 @@ class MetaAdsService
      */
     public function espelho(string $periodo = 'maximum', ?string $campaignId = null): array
     {
+        return $this->espelhoCompleto($periodo, $campaignId)['campanhas'];
+    }
+
+    /**
+     * O espelho com o que o "O que fazer agora" (2026-10-21) precisa além
+     * das campanhas: a média da conta (CPC do clique no link), a hora em que
+     * a Meta foi lida e os campos extras que a Meta recusou (a regra que
+     * depende deles fica de fora em vez de quebrar a tela).
+     *
+     * @return array{campanhas: list<array<string, mixed>>, conta: ?array<string, mixed>, gerado_em: string, faltando: list<string>}
+     *
+     * @throws MetaAdsException
+     */
+    public function espelhoCompleto(string $periodo = 'maximum', ?string $campaignId = null): array
+    {
         $periodo = array_key_exists($periodo, self::PERIODOS) ? $periodo : 'maximum';
 
         return Cache::remember(
-            'meta-ads:espelho:'.md5($this->conta().'|'.$periodo.'|'.$campaignId),
+            self::CHAVE_ESPELHO.md5($this->conta().'|'.$periodo.'|'.$campaignId),
             now()->addMinutes(2),
             fn () => $this->montarEspelho($periodo, $campaignId),
         );
     }
 
-    /** @return list<array<string, mixed>> */
+    /**
+     * "O que fazer agora" (2026-10-21) do espelho já lido: liga o espelho,
+     * a média da conta e o ROAS mínimo de cada campanha às regras puras de
+     * MetaAdsDiagnostico. Só leitura.
+     *
+     * @param  array{campanhas: list<array<string, mixed>>, conta: ?array<string, mixed>, gerado_em: string}  $completo
+     * @return array<string, mixed>
+     */
+    public function diagnosticar(array $completo, string $periodo): array
+    {
+        $ids = array_map(fn ($c) => (string) $c['id'], $completo['campanhas']);
+
+        return (new MetaAdsDiagnostico((array) config('meta_ads_diagnostico', [])))->analisar($completo['campanhas'], [
+            'periodo' => $periodo,
+            'gerado_em' => $completo['gerado_em'] ?? null,
+            'cpc_conta' => $completo['conta']['cpc_link'] ?? null,
+            'roas' => app(MetaRoasMinimo::class)->metas($ids),
+        ]) + ['faltando' => $completo['faltando'] ?? []];
+    }
+
+    private const CHAVE_ESPELHO = 'meta-ads:espelho-v2:';
+
+    /** Campos de insights de cada nível (os extras alimentam o diagnóstico). */
+    private const INSIGHTS_BASE = 'spend,impressions,reach,clicks,actions,action_values';
+
+    private const INSIGHTS_EXTRAS = ',frequency,inline_link_clicks,inline_link_click_ctr,cpm';
+
+    /** @return array{campanhas: list<array<string, mixed>>, conta: ?array<string, mixed>, gerado_em: string, faltando: list<string>} */
     private function montarEspelho(string $periodo, ?string $campaignId): array
     {
         $filtro = $campaignId ? ['filtering' => json_encode([['field' => 'campaign.id', 'operator' => 'EQUAL', 'value' => $campaignId]])] : [];
+        $faltando = [];
 
         $campanhas = $campaignId
             ? [$this->get($campaignId, ['fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time'])]
             : $this->getPaginado($this->conta().'/campaigns', ['fields' => 'id,name,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time', 'limit' => 100]);
-        $conjuntos = $this->getPaginado($this->conta().'/adsets', $filtro + ['fields' => 'id,name,campaign_id,effective_status,daily_budget,lifetime_budget', 'limit' => 200]);
-        $anuncios = $this->getPaginado($this->conta().'/ads', $filtro + ['fields' => 'id,name,adset_id,campaign_id,effective_status,creative{thumbnail_url}', 'limit' => 200]);
+        $conjuntos = $this->getPaginadoComExtras($this->conta().'/adsets', $filtro + ['limit' => 200],
+            'id,name,campaign_id,effective_status,daily_budget,lifetime_budget', ',learning_stage_info', 'aprendizado', $faltando);
+        // Botão do anúncio (2026-10-21): no criativo simples vem em
+        // call_to_action_type / object_story_spec; no dinâmico, em
+        // asset_feed_spec.call_to_action_types (pode ter vários).
+        $anuncios = $this->getPaginadoComExtras($this->conta().'/ads', $filtro + ['limit' => 200],
+            'id,name,adset_id,campaign_id,effective_status,creative{thumbnail_url}',
+            ',created_time,creative{thumbnail_url,call_to_action_type,object_story_spec,asset_feed_spec{call_to_action_types,link_urls},product_set_id}',
+            'botao', $faltando, substituir: true);
 
         $metricas = [];
         foreach (['campaign', 'adset', 'ad'] as $nivel) {
-            $linhas = $this->getPaginado($this->conta().'/insights', $filtro + [
+            $linhas = $this->getPaginadoComExtras($this->conta().'/insights', $filtro + [
                 'level' => $nivel,
                 'date_preset' => $periodo,
-                'fields' => $nivel.'_id,spend,impressions,reach,clicks,actions,action_values',
                 'limit' => 500,
-            ]);
+            ], $nivel.'_id,'.self::INSIGHTS_BASE, self::INSIGHTS_EXTRAS, 'insights_extras', $faltando);
             foreach ($linhas as $linha) {
                 $metricas[$nivel][(string) $linha[$nivel.'_id']] = $this->metricas($linha);
             }
         }
 
+        // Média da conta inteira (CPC do clique no link, regra R4), mesmo
+        // na tela de uma campanha só. Se a Meta recusar, a regra usa o teto fixo.
+        try {
+            $conta = $this->get($this->conta().'/insights', [
+                'level' => 'account',
+                'date_preset' => $periodo,
+                'fields' => 'spend,impressions,inline_link_clicks',
+            ])['data'][0] ?? null;
+            $conta = $conta ? $this->metricas($conta) : null;
+        } catch (MetaAdsException) {
+            $conta = null;
+            $faltando[] = 'media_da_conta';
+        }
+
+        $objetivoDe = collect($campanhas)->mapWithKeys(fn ($c) => [(string) $c['id'] => (string) ($c['objective'] ?? '')]);
         $anunciosPorConjunto = collect($anuncios)->groupBy(fn ($a) => (string) $a['adset_id']);
 
         $conjuntosPorCampanha = collect($conjuntos)->groupBy(fn ($c) => (string) $c['campaign_id'])
@@ -880,17 +1069,27 @@ class MetaAdsService
                 'status' => (string) ($c['effective_status'] ?? ''),
                 'orcamento_diario' => $this->centavosEmReais($c['daily_budget'] ?? null),
                 'orcamento_total' => $this->centavosEmReais($c['lifetime_budget'] ?? null),
+                // LEARNING, SUCCESS ou FAIL; null quando a Meta não informa.
+                'aprendizado' => isset($c['learning_stage_info']['status']) ? (string) $c['learning_stage_info']['status'] : null,
+                'gerenciador_conjunto' => $this->linkConjuntoGerenciador((string) $c['id']),
                 'metricas' => $metricas['adset'][(string) $c['id']] ?? $this->metricas([]),
                 'anuncios' => $anunciosPorConjunto->get((string) $c['id'], collect())->map(fn (array $a) => [
                     'id' => (string) $a['id'],
                     'nome' => (string) $a['name'],
                     'status' => (string) ($a['effective_status'] ?? ''),
                     'miniatura' => $a['creative']['thumbnail_url'] ?? null,
+                    'gerenciador' => $this->linkAnuncioGerenciador((string) $a['id']),
+                    'criado_em' => isset($a['created_time']) ? Carbon::parse($a['created_time'])->setTimezone(self::FUSO)->toIso8601String() : null,
+                    'cta' => in_array('botao', $faltando, true) ? null
+                        : self::ctaDoCriativo($a['creative'] ?? null, $objetivoDe->get((string) $a['campaign_id'], '')),
+                    // Link de destino e se dá para trocar pelo admin (2026-10-21).
+                    'link' => in_array('botao', $faltando, true) ? null : self::textoDoCriativo($a['creative'] ?? [])['link'],
+                    'link_editavel' => ! in_array('botao', $faltando, true) && self::linkTrocavel($a['creative'] ?? []),
                     'metricas' => $metricas['ad'][(string) $a['id']] ?? $this->metricas([]),
                 ])->sortBy('nome', SORT_NATURAL)->values()->all(),
             ])->sortBy('nome', SORT_NATURAL)->values()->all());
 
-        return collect($campanhas)
+        $lista = collect($campanhas)
             ->map(function (array $c) use ($conjuntosPorCampanha, $metricas) {
                 $sets = $conjuntosPorCampanha->get((string) $c['id'], []);
                 $daCampanha = $this->centavosEmReais($c['daily_budget'] ?? null);
@@ -900,6 +1099,7 @@ class MetaAdsService
                     'nome' => (string) $c['name'],
                     'status' => (string) ($c['effective_status'] ?? ''),
                     'objetivo' => MetaAdsCampanha::OBJETIVOS[$c['objective'] ?? ''] ?? (string) ($c['objective'] ?? ''),
+                    'objetivo_codigo' => (string) ($c['objective'] ?? ''),
                     'orcamento_nivel' => $daCampanha !== null ? 'campanha' : 'conjunto',
                     // Orçamento por conjunto: o diário da campanha é a soma dos conjuntos ativos.
                     'orcamento_diario' => $daCampanha ?? round(collect($sets)
@@ -914,31 +1114,123 @@ class MetaAdsService
             ->sortBy(fn ($c) => [$c['status'] === 'ACTIVE' ? 0 : 1, -$c['metricas']['gasto']])
             ->values()
             ->all();
+
+        return [
+            'campanhas' => $lista,
+            'conta' => $conta,
+            'gerado_em' => now(self::FUSO)->toIso8601String(),
+            'faltando' => array_values(array_unique($faltando)),
+        ];
     }
+
+    /**
+     * Lê com os campos extras; se a Meta recusar (campo que não existe na
+     * versão da API, permissão), lê de novo só com os básicos e anota o que
+     * ficou de fora. Com $substituir, os extras trocam os básicos em vez de
+     * somar (o criativo é uma expansão só).
+     *
+     * @param  array<string, mixed>  $params
+     * @param  list<string>  $faltando
+     * @return list<array<string, mixed>>
+     *
+     * @throws MetaAdsException
+     */
+    private function getPaginadoComExtras(string $caminho, array $params, string $base, string $extras, string $nome, array &$faltando, bool $substituir = false): array
+    {
+        if (! in_array($nome, $faltando, true)) {
+            $completo = $substituir ? preg_replace('/,?creative\{thumbnail_url\}/', '', $base).$extras : $base.$extras;
+            try {
+                return $this->getPaginado($caminho, $params + ['fields' => $completo]);
+            } catch (MetaAdsException) {
+                $faltando[] = $nome;
+            }
+        }
+
+        return $this->getPaginado($caminho, $params + ['fields' => $base]);
+    }
+
+    /**
+     * Botão (CTA) do criativo, como o Gerenciador mostra. Dinâmico (vários
+     * botões no asset_feed_spec ou catálogo): a Meta escolhe na hora.
+     * null = criativo não veio (sem dado); codigos vazio = sem botão.
+     *
+     * @param  array<string, mixed>|null  $criativo
+     * @return array{codigos: list<string>, rotulos: array<string, ?string>, dinamico: bool, grupo: ?string, sem_botao: bool, desalinhado: bool}|null
+     */
+    public static function ctaDoCriativo(?array $criativo, string $objetivo = ''): ?array
+    {
+        if ($criativo === null) {
+            return null;
+        }
+
+        $spec = $criativo['object_story_spec'] ?? [];
+        $dados = $spec['video_data'] ?? $spec['link_data'] ?? $spec['template_data'] ?? [];
+        $doFeed = array_values(array_filter((array) ($criativo['asset_feed_spec']['call_to_action_types'] ?? []), 'is_string'));
+        $codigos = $doFeed !== [] ? $doFeed : array_values(array_filter([$criativo['call_to_action_type'] ?? $dados['call_to_action']['type'] ?? null], 'is_string'));
+        $codigos = array_values(array_unique(array_map('strtoupper', $codigos)));
+        $semBotao = $codigos === [] || $codigos === ['NO_BUTTON'];
+
+        $grupos = array_map(fn ($c) => MetaAdsCampanha::GRUPOS_CHAMADA[$c] ?? null, $codigos);
+        $grupo = match (true) {
+            $semBotao => 'pouca_intencao',
+            in_array('compra', $grupos, true) => 'compra',
+            default => $grupos[0] ?? null,
+        };
+
+        return [
+            'codigos' => $codigos,
+            'rotulos' => array_combine($codigos, array_map(fn ($c) => MetaAdsCampanha::ROTULOS_CHAMADA[$c] ?? null, $codigos)) ?: [],
+            'dinamico' => $doFeed !== [] || filled($criativo['product_set_id'] ?? null) || isset($spec['template_data']),
+            'grupo' => $grupo,
+            'sem_botao' => $semBotao,
+            // Campanha de Vendas com botão de pouca intenção de compra (regra R5).
+            'desalinhado' => $objetivo === 'OUTCOME_SALES' && in_array($grupo, ['pouca_intencao', 'conversa'], true),
+        ];
+    }
+
+    /** Ações do funil, do tipo mais completo para o mais restrito. */
+    private const ACOES_PAGINA = ['omni_landing_page_view', 'landing_page_view'];
+
+    private const ACOES_CARRINHO = ['omni_add_to_cart', 'add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
+
+    private const ACOES_CHECKOUT = ['omni_initiated_checkout', 'initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'];
 
     /**
      * Métricas de uma linha de insights. CPC = gasto ÷ cliques (todos os
      * cliques, a coluna "CPC (todos)" do Gerenciador); ROAS = valor das
-     * compras ÷ gasto.
+     * compras ÷ gasto. O diagnóstico usa o clique NO LINK (cliques_link,
+     * ctr_link, cpc_link); null quando a Meta não mandou o campo.
      *
      * @param  array<string, mixed>  $linha
-     * @return array{gasto: float, impressoes: int, alcance: int, cliques: int, cpc: ?float, compras: int, vendas: float, roas: ?float}
+     * @return array<string, mixed>
      */
     private function metricas(array $linha): array
     {
         $gasto = round((float) ($linha['spend'] ?? 0), 2);
+        $impressoes = (int) ($linha['impressions'] ?? 0);
         $cliques = (int) ($linha['clicks'] ?? 0);
         $vendas = round($this->valorDeCompra($linha['action_values'] ?? []), 2);
+        $cliquesLink = isset($linha['inline_link_clicks']) ? (int) $linha['inline_link_clicks'] : null;
+        $acoes = $linha['actions'] ?? [];
 
         return [
             'gasto' => $gasto,
-            'impressoes' => (int) ($linha['impressions'] ?? 0),
+            'impressoes' => $impressoes,
             'alcance' => (int) ($linha['reach'] ?? 0),
             'cliques' => $cliques,
             'cpc' => $cliques > 0 ? round($gasto / $cliques, 2) : null,
-            'compras' => (int) round($this->valorDeCompra($linha['actions'] ?? [])),
+            'compras' => (int) round($this->valorDeCompra($acoes)),
             'vendas' => $vendas,
             'roas' => $gasto > 0 ? round($vendas / $gasto, 2) : null,
+            'frequencia' => isset($linha['frequency']) ? round((float) $linha['frequency'], 2) : null,
+            'cpm' => isset($linha['cpm']) ? round((float) $linha['cpm'], 2) : null,
+            'cliques_link' => $cliquesLink,
+            'ctr_link' => isset($linha['inline_link_click_ctr']) ? round((float) $linha['inline_link_click_ctr'], 2)
+                : ($cliquesLink !== null && $impressoes > 0 ? round($cliquesLink / $impressoes * 100, 2) : null),
+            'cpc_link' => $cliquesLink ? round($gasto / $cliquesLink, 2) : null,
+            'visualizacoes_pagina' => (int) round($this->valorDaAcao($acoes, self::ACOES_PAGINA)),
+            'carrinho' => (int) round($this->valorDaAcao($acoes, self::ACOES_CARRINHO)),
+            'checkout' => (int) round($this->valorDaAcao($acoes, self::ACOES_CHECKOUT)),
         ];
     }
 
@@ -989,6 +1281,15 @@ class MetaAdsService
             : $url;
     }
 
+    /** Conjunto aberto no Gerenciador (cartões do "O que fazer agora"). */
+    public function linkConjuntoGerenciador(string $adsetId): ?string
+    {
+        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+
+        return $conta === '' ? null
+            : 'https://adsmanager.facebook.com/adsmanager/manage/adsets?act='.urlencode($conta).'&selected_adset_ids='.urlencode($adsetId);
+    }
+
     /** Anúncio aberto no Gerenciador (espelho, anúncio criado direto lá). */
     public function linkAnuncioGerenciador(string $adId): ?string
     {
@@ -996,6 +1297,195 @@ class MetaAdsService
 
         return $conta === '' ? null
             : 'https://adsmanager.facebook.com/adsmanager/manage/ads?act='.urlencode($conta).'&selected_ad_ids='.urlencode($adId);
+    }
+
+    // Sincronizar com a Meta (pedido do Lira 2026-10-20) --------------------
+
+    /**
+     * Traz da Meta para o banco o que foi mudado direto no Gerenciador:
+     * nome da campanha, do conjunto e do anúncio, orçamento diário, status
+     * (ativa/pausada), criativo em uso e o texto e o LINK DE DESTINO de cada
+     * anúncio (a Caixa Sanfonada e a Parafusadeira tiveram o link corrigido
+     * lá e o banco seguia com o antigo). Só LÊ a Meta; nada é enviado.
+     *
+     * Atualiza só o que já existe no KazaKora (casado pelos ids meta_*).
+     * Campanha sendo enviada, conjunto subindo e anúncio com troca de
+     * arquivo pendente ficam de fora, para não brigar com o envio. O link
+     * comum a todos os anúncios da campanha vira o link padrão dela (e o
+     * produto, quando o link é de um produto da loja); o anúncio só guarda
+     * link próprio quando é diferente do padrão.
+     *
+     * @return array{campanhas: int, conjuntos: int, anuncios: int, links: int, pulados: int, fora_da_meta: int}
+     *
+     * @throws MetaAdsException
+     */
+    public function sincronizar(): array
+    {
+        $resumo = ['campanhas' => 0, 'conjuntos' => 0, 'anuncios' => 0, 'links' => 0, 'pulados' => 0, 'fora_da_meta' => 0];
+
+        $locais = MetaAdsCampanha::query()
+            ->whereNotNull('meta_campaign_id')
+            ->with(['conjuntos', 'videos'])
+            ->get();
+        if ($locais->isEmpty()) {
+            return $resumo;
+        }
+
+        $filtro = ['filtering' => json_encode([[
+            'field' => 'campaign.id', 'operator' => 'IN', 'value' => $locais->pluck('meta_campaign_id')->map(fn ($id) => (string) $id)->values()->all(),
+        ]])];
+        $campanhas = collect($this->getPaginado($this->conta().'/campaigns', $filtro + ['fields' => 'id,name,status,effective_status,daily_budget', 'limit' => 100]))
+            ->keyBy(fn ($c) => (string) $c['id']);
+        $conjuntos = collect($this->getPaginado($this->conta().'/adsets', $filtro + ['fields' => 'id,name,campaign_id,daily_budget', 'limit' => 200]))
+            ->keyBy(fn ($s) => (string) $s['id']);
+        $anuncios = collect($this->getPaginado($this->conta().'/ads', $filtro + [
+            'fields' => 'id,name,adset_id,effective_status,creative{id,object_story_spec,asset_feed_spec}',
+            'limit' => 200,
+        ]))->keyBy(fn ($a) => (string) $a['id']);
+
+        $produtos = [];
+        $produtoDoLink = function (?string $link) use (&$produtos): ?int {
+            $slug = preg_match('#^https?://(www\.)?kazakora\.com/produtos/([^/?\#]+)#', (string) $link, $m) ? $m[2] : null;
+
+            return $slug === null ? null
+                : ($produtos[$slug] ??= Product::query()->where('slug', $slug)->value('id'));
+        };
+
+        foreach ($locais as $campanha) {
+            $naMeta = $campanhas->get((string) $campanha->meta_campaign_id);
+            if (! $naMeta) {
+                $resumo['fora_da_meta']++;
+
+                continue;
+            }
+            if ($campanha->status === MetaAdsCampanha::STATUS_ENVIANDO) {
+                $resumo['pulados']++;
+
+                continue;
+            }
+
+            DB::transaction(function () use ($campanha, $naMeta, $conjuntos, $anuncios, $produtoDoLink, &$resumo) {
+                // Anúncios que dá para sincronizar, com o criativo lido da Meta.
+                $pares = $campanha->videos
+                    ->filter(fn (MetaAdsVideo $v) => $v->estaNaMeta())
+                    ->map(fn (MetaAdsVideo $v) => [$v, $anuncios->get((string) $v->meta_ad_id)]);
+                $resumo['fora_da_meta'] += $pares->filter(fn ($p) => $p[1] === null)->count();
+                $pares = $pares->filter(fn ($p) => $p[1] !== null);
+                $resumo['pulados'] += $pares->filter(fn ($p) => $p[0]->temEdicaoPendente())->count();
+                $pares = $pares->reject(fn ($p) => $p[0]->temEdicaoPendente());
+                $textos = $pares->mapWithKeys(fn ($p) => [$p[0]->id => self::textoDoCriativo($p[1]['creative'] ?? [])]);
+
+                // Campanha: nome, orçamento, status e o link padrão.
+                $mudou = ['nome' => (string) $naMeta['name']];
+                $diario = $this->centavosEmReais($naMeta['daily_budget'] ?? null);
+                if ($diario !== null && $campanha->orcamentoDaCampanha()) {
+                    $mudou['orcamento_diario'] = $diario;
+                }
+                if (in_array($campanha->status, [MetaAdsCampanha::STATUS_ATIVA, MetaAdsCampanha::STATUS_ENVIADA_PAUSADA], true)) {
+                    $mudou['status'] = match ($naMeta['status'] ?? null) {
+                        'ACTIVE' => MetaAdsCampanha::STATUS_ATIVA,
+                        'PAUSED' => MetaAdsCampanha::STATUS_ENVIADA_PAUSADA,
+                        default => $campanha->status,
+                    };
+                }
+                $links = $textos->pluck('link')->filter()->unique();
+                if ($links->count() === 1 && $links->first() !== $campanha->link_destino) {
+                    $mudou['link_destino'] = $links->first();
+                    $mudou['produto_id'] = $produtoDoLink($links->first()) ?? $campanha->produto_id;
+                    $resumo['links']++;
+                }
+                if ($this->gravarSeMudou($campanha, $mudou)) {
+                    $resumo['campanhas']++;
+                }
+
+                // Conjuntos: na Meta o nome é "campanha | conjunto"; aqui fica só o do conjunto.
+                foreach ($campanha->conjuntos as $conjunto) {
+                    $set = $conjuntos->get((string) $conjunto->meta_adset_id);
+                    if (! $set || $conjunto->enviando) {
+                        continue;
+                    }
+                    $prefixo = $campanha->nome.' | ';
+                    $nome = (string) $set['name'];
+                    $mudou = ['nome' => mb_substr(str_starts_with($nome, $prefixo) ? mb_substr($nome, mb_strlen($prefixo)) : $nome, 0, 120)];
+                    $diario = $this->centavosEmReais($set['daily_budget'] ?? null);
+                    if ($diario !== null && ! $campanha->orcamentoDaCampanha()) {
+                        $mudou['orcamento_diario'] = $diario;
+                    }
+                    if ($this->gravarSeMudou($conjunto, $mudou)) {
+                        $resumo['conjuntos']++;
+                    }
+                }
+                if (! $campanha->orcamentoDaCampanha()) {
+                    $this->gravarSeMudou($campanha, ['orcamento_diario' => round((float) $campanha->conjuntos()->sum('orcamento_diario'), 2)]);
+                }
+
+                // Anúncios: nome, criativo e o que está nele (vazio = padrão da campanha).
+                foreach ($pares as [$video, $ad]) {
+                    $texto = $textos[$video->id];
+                    $mudou = [];
+                    if ((string) $ad['name'] !== $this->nomeDoAnuncio($campanha, $video)) {
+                        $mudou['nome'] = mb_substr((string) $ad['name'], 0, 255);
+                    }
+                    if (filled($ad['creative']['id'] ?? null)) {
+                        $mudou['meta_creative_id'] = (string) $ad['creative']['id'];
+                    }
+                    $atual = $video->criativo($campanha);
+                    foreach (['link' => 'link_destino', 'texto' => 'texto_principal', 'titulo' => 'titulo', 'descricao' => 'descricao', 'chamada' => 'chamada'] as $chave => $coluna) {
+                        if (filled($texto[$chave]) && $texto[$chave] !== $atual[$chave]) {
+                            $mudou[$coluna] = $texto[$chave];
+                        }
+                    }
+                    if (isset($mudou['link_destino'])) {
+                        $mudou['produto_id'] = $produtoDoLink($mudou['link_destino']) ?? $video->produto_id;
+                        $resumo['links']++;
+                    }
+                    if ($this->gravarSeMudou($video, $mudou)) {
+                        $resumo['anuncios']++;
+                    }
+                }
+            });
+        }
+
+        $this->esquecerEspelho();
+
+        return $resumo;
+    }
+
+    /**
+     * Link, texto, título, descrição e botão do criativo como a Meta guarda:
+     * no video_data/link_data ou, com várias opções, no asset_feed_spec (a
+     * primeira de cada é a principal).
+     *
+     * @param  array<string, mixed>  $criativo
+     * @return array{link: ?string, texto: ?string, titulo: ?string, descricao: ?string, chamada: ?string}
+     */
+    public static function textoDoCriativo(array $criativo): array
+    {
+        $spec = $criativo['object_story_spec'] ?? [];
+        $dados = $spec['video_data'] ?? $spec['link_data'] ?? [];
+        $feed = $criativo['asset_feed_spec'] ?? [];
+        $primeiro = fn (string $chave) => $feed[$chave][0]['text'] ?? null;
+        $limpo = fn ($valor) => is_string($valor) && trim($valor) !== '' ? trim($valor) : null;
+
+        return [
+            'link' => $limpo($dados['call_to_action']['value']['link'] ?? $dados['link'] ?? $feed['link_urls'][0]['website_url'] ?? null),
+            'texto' => $limpo($dados['message'] ?? $primeiro('bodies')),
+            'titulo' => $limpo($dados['title'] ?? $dados['name'] ?? $primeiro('titles')),
+            'descricao' => $limpo($dados['link_description'] ?? $dados['description'] ?? $primeiro('descriptions')),
+            'chamada' => $limpo($dados['call_to_action']['type'] ?? $feed['call_to_action_types'][0] ?? null),
+        ];
+    }
+
+    /** Grava só os campos que mudaram; devolve se algo mudou. */
+    private function gravarSeMudou(MetaAdsCampanha|MetaAdsConjunto|MetaAdsVideo $modelo, array $campos): bool
+    {
+        $modelo->forceFill($campos);
+        if (! $modelo->isDirty()) {
+            return false;
+        }
+        $modelo->save();
+
+        return true;
     }
 
     // Payloads ---------------------------------------------------------------
@@ -1561,9 +2051,20 @@ class MetaAdsService
     /** @param  list<array{action_type?: string, value?: mixed}>  $acoes */
     private function valorDeCompra(array $acoes): float
     {
+        return $this->valorDaAcao($acoes, self::ACOES_DE_COMPRA);
+    }
+
+    /**
+     * Primeiro tipo da lista que a Meta mandou (não soma: omni_* já inclui os outros).
+     *
+     * @param  list<array{action_type?: string, value?: mixed}>  $acoes
+     * @param  list<string>  $tipos
+     */
+    private function valorDaAcao(array $acoes, array $tipos): float
+    {
         $porTipo = collect($acoes)->keyBy('action_type');
 
-        foreach (self::ACOES_DE_COMPRA as $tipo) {
+        foreach ($tipos as $tipo) {
             if ($porTipo->has($tipo)) {
                 return (float) ($porTipo[$tipo]['value'] ?? 0);
             }

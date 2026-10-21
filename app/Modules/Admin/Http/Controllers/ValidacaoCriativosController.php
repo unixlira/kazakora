@@ -66,6 +66,7 @@ class ValidacaoCriativosController extends Controller
             ->when($busca !== '', function (Builder $q) use ($busca) {
                 $like = '%'.addcslashes($busca, '\\%_').'%';
                 $q->where(fn (Builder $w) => $w->where('titulo', 'like', $like)
+                    ->orWhere('identificacao', 'like', $like)
                     ->orWhere('nome_original', 'like', $like)
                     ->orWhere('observacao', 'like', $like)
                     ->orWhereHas('produto', fn (Builder $p) => $p->where('name', 'like', $like)));
@@ -173,6 +174,7 @@ class ValidacaoCriativosController extends Controller
         $absoluto = $disco->path($final);
         $criativo = CriativoValidacao::create([
             'titulo' => $dados['titulo'],
+            'identificacao' => $dados['identificacao'] ?? null,
             'plataforma' => $dados['plataforma'],
             'produto_id' => $dados['produto_id'] ?? null,
             'observacao' => $dados['observacao'] ?? null,
@@ -191,6 +193,16 @@ class ValidacaoCriativosController extends Controller
         $criativo->update($request->validate($this->regrasDosDados(), $this->mensagens()));
 
         return back()->with('success', 'Criativo atualizado.');
+    }
+
+    /** Texto embaixo do vídeo (do que se trata, qual campanha), salvo ao sair do campo. */
+    public function identificar(Request $request, CriativoValidacao $criativo): RedirectResponse
+    {
+        $dados = $request->validate(['identificacao' => ['nullable', 'string', 'max:255']]);
+        $texto = trim((string) ($dados['identificacao'] ?? ''));
+        $criativo->update(['identificacao' => $texto !== '' ? $texto : null]);
+
+        return back();
     }
 
     /** Aprovar, pedir ajuste ou reprovar: só administrador (o Lira). */
@@ -265,6 +277,7 @@ class ValidacaoCriativosController extends Controller
     {
         return [
             'titulo' => ['required', 'string', 'max:150'],
+            'identificacao' => ['nullable', 'string', 'max:255'],
             'plataforma' => ['required', Rule::in(array_keys(CriativoValidacao::PLATAFORMAS))],
             'produto_id' => ['nullable', 'integer', 'exists:products,id'],
             'observacao' => ['nullable', 'string', 'max:2000'],

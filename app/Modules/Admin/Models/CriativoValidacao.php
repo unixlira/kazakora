@@ -45,6 +45,7 @@ class CriativoValidacao extends Model
 
     protected $fillable = [
         'titulo',
+        'identificacao',
         'plataforma',
         'produto_id',
         'observacao',
@@ -113,6 +114,7 @@ class CriativoValidacao extends Model
         return [
             'id' => $this->id,
             'titulo' => $this->titulo,
+            'identificacao' => $this->identificacao,
             'plataforma' => $this->plataforma,
             'produto' => $this->produto ? ['id' => $this->produto->id, 'nome' => $this->produto->name] : null,
             'observacao' => $this->observacao,

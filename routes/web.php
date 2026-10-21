@@ -750,6 +750,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'staff'])->group(fun
         Route::post('parte', [ValidacaoCriativosController::class, 'enviarParte'])->name('parte')->middleware(['permission:cadastros.create', 'throttle:600,1']);
         Route::post('/', [ValidacaoCriativosController::class, 'store'])->name('armazenar')->middleware(['permission:cadastros.create', 'throttle:30,1']);
         Route::patch('{criativo}', [ValidacaoCriativosController::class, 'update'])->whereNumber('criativo')->name('atualizar')->middleware('permission:cadastros.edit');
+        Route::patch('{criativo}/identificacao', [ValidacaoCriativosController::class, 'identificar'])->whereNumber('criativo')->name('identificar')->middleware('permission:cadastros.edit');
         Route::patch('{criativo}/avaliar', [ValidacaoCriativosController::class, 'avaliar'])->whereNumber('criativo')->name('avaliar')->middleware('permission:cadastros.edit');
         Route::delete('{criativo}', [ValidacaoCriativosController::class, 'destroy'])->whereNumber('criativo')->name('excluir')->middleware('permission:cadastros.delete');
         Route::patch('{criativo}/restaurar', [ValidacaoCriativosController::class, 'restaurar'])->whereNumber('criativo')->withTrashed()->name('restaurar')->middleware('permission:cadastros.delete');

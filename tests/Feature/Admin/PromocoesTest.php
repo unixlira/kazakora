@@ -171,4 +171,80 @@ class PromocoesTest extends TestCase
 
         $this->get('/promocoes/airfryer')->assertNotFound();
     }
+
+    public function test_salva_regras_de_negocio_e_mostra_ao_cliente(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->put('/admin/promocoes/pdfs', [
+            'titulo' => 'Ganhe os PDFs',
+            'ativa' => true,
+            'inicio' => now()->subDay()->format('Y-m-d\\TH:i'),
+            'fim' => '2099-12-31T23:59',
+            'valor_minimo' => '99.90',
+            'itens_minimos' => 2,
+            'limite_por_cliente' => 1,
+            'primeira_compra' => true,
+            'acumula_cupom' => false,
+        ])->assertSessionHasNoErrors();
+
+        $p = Promocao::query()->where('slug', 'pdfs')->first();
+        $this->assertSame(2, $p->itens_minimos);
+        $this->assertSame(1, $p->limite_por_cliente);
+        $this->assertTrue($p->primeira_compra);
+        $this->assertFalse($p->acumula_cupom);
+
+        $this->actingAs($admin)->get('/admin/promocoes/pdfs')->assertInertia(fn ($page) => $page
+            ->component('Admin/Promocoes/Editar', false)
+            ->where('promocao.itens_minimos', 2)
+            ->where('promocao.acumula_cupom', false));
+
+        auth()->logout();
+        $this->get('/promocoes/pdfs')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('promocao.regras.1', 'Pedido mínimo de R$ 99,90.')
+            ->where('promocao.regras.2', 'Mínimo de 2 itens no pedido.')
+            ->where('promocao.regras.3', 'Uma participação por cliente.')
+            ->where('promocao.regras.4', 'Só na primeira compra na loja.')
+            ->where('promocao.regras.5', 'Não vale junto com cupom de desconto.'));
+
+        // O que falta para um pedido entrar.
+        $this->assertSame([], $p->pendencias(100, 2));
+        $this->assertCount(5, $p->pendencias(50, 1, 1, false, true));
+    }
+
+    public function test_sem_os_campos_novos_a_promocao_continua_acumulando_cupom(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->put('/admin/promocoes/airfryer', ['ativa' => true, 'itens_minimos' => 0])
+            ->assertSessionHasErrors('itens_minimos');
+        $this->actingAs($admin)->put('/admin/promocoes/airfryer', ['ativa' => true])->assertSessionHasNoErrors();
+
+        $p = Promocao::query()->where('slug', 'airfryer')->first();
+        $this->assertTrue($p->acumula_cupom);
+        $this->assertFalse($p->primeira_compra);
+        $this->assertNull($p->itens_minimos);
+        $this->assertSame([], $p->regrasParaCliente());
+    }
+
+    public function test_pagina_publica_vem_do_cache_e_atualiza_ao_salvar(): void
+    {
+        $p = Promocao::query()->where('slug', 'airfryer')->first();
+        $p->update(['ativa' => true, 'titulo' => 'Antes']);
+        $this->get('/promocoes/airfryer')->assertOk();
+
+        // Na segunda visita não vai ao banco atrás da promoção.
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        $this->get('/promocoes/airfryer')->assertOk();
+        $this->assertEmpty(array_filter(
+            \Illuminate\Support\Facades\DB::getQueryLog(),
+            fn (array $q) => str_contains($q['query'], 'from `promocoes`'),
+        ));
+
+        // Salvar pelo admin limpa o cache na hora.
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->put('/admin/promocoes/airfryer', ['titulo' => 'Depois', 'ativa' => true]);
+        auth()->logout();
+        $this->get('/promocoes/airfryer')->assertOk()->assertInertia(fn ($page) => $page->where('promocao.titulo', 'Depois'));
+    }
 }

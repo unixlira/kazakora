@@ -53,6 +53,7 @@ class MetaAdsController extends Controller
     public function index(Request $request, MetaAdsService $meta): Response
     {
         $periodo = $this->periodo($request);
+        $status = $this->filtroStatus($request);
 
         $campanhas = MetaAdsCampanha::query()
             ->with('user:id,name')
@@ -80,7 +81,10 @@ class MetaAdsController extends Controller
             'config' => $this->estadoConfig($meta),
             'periodo' => $periodo,
             'periodos' => MetaAdsService::PERIODOS,
-            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $this->noKazaKora())),
+            // Filtro de status (pedido do Lira 2026-10-21), abre em "Ativos".
+            'status' => $status,
+            'statusFiltros' => array_map(fn (array $f) => $f[0], MetaAdsService::FILTROS_STATUS),
+            'espelho' => Inertia::defer(fn () => $this->espelho($meta, $periodo, null, $this->noKazaKora(), $status)),
             // Editar anúncio pelo espelho (2026-10-19).
             'produtos' => $this->listaDeProdutos(),
             'chamadas' => MetaAdsCampanha::CHAMADAS,
@@ -1365,6 +1369,13 @@ class MetaAdsController extends Controller
         return array_key_exists($periodo, MetaAdsService::PERIODOS) ? $periodo : 'maximum';
     }
 
+    private function filtroStatus(Request $request): string
+    {
+        $status = (string) $request->query('status', MetaAdsService::FILTRO_STATUS_PADRAO);
+
+        return array_key_exists($status, MetaAdsService::FILTROS_STATUS) ? $status : MetaAdsService::FILTRO_STATUS_PADRAO;
+    }
+
     /**
      * Estrutura real da Meta (Campanha > Conjuntos > Anúncios) com métricas.
      * Erro da Meta não derruba a tela: volta a mensagem para mostrar.
@@ -1372,14 +1383,14 @@ class MetaAdsController extends Controller
      * @param  array<string, array<string, array<string, mixed>>>  $noKazaKora  ids da Meta => registro local (ver noKazaKora())
      * @return array{campanhas: list<array<string, mixed>>, erro: ?string}
      */
-    private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = []): array
+    private function espelho(MetaAdsService $meta, string $periodo, ?string $campaignId, array $noKazaKora = [], string $status = 'todos'): array
     {
         if (! $meta->configurado()) {
             return ['campanhas' => [], 'erro' => null, 'diagnostico' => null];
         }
 
         try {
-            $completo = $meta->espelhoCompleto($periodo, $campaignId);
+            $completo = $meta->espelhoCompleto($periodo, $campaignId, MetaAdsService::filtroLeArquivados($status));
             $campanhas = array_map(function (array $c) use ($noKazaKora, $meta) {
                 $local = $noKazaKora['campanhas'][$c['id']] ?? null;
                 $c['conjuntos'] = array_map(function (array $s) use ($noKazaKora, $local, $meta) {
@@ -1404,9 +1415,10 @@ class MetaAdsController extends Controller
                 ];
             }, $completo['campanhas']);
 
-            // "O que fazer agora" (2026-10-21): só leitura, sobre o mesmo espelho.
+            // "O que fazer agora" (2026-10-21): só leitura, sobre o espelho
+            // inteiro; o filtro de status só escolhe o que a tabela mostra.
             return [
-                'campanhas' => $campanhas,
+                'campanhas' => MetaAdsService::filtrarPorStatus($campanhas, $status),
                 'erro' => null,
                 'diagnostico' => $meta->diagnosticar(['campanhas' => $campanhas] + $completo, $periodo),
             ];

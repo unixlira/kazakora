@@ -730,7 +730,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <div class="garantia">
                                 <img class="selo-garantia" src="/images/selo-garantia-100-satisfacao.png" alt="Garantia de 100% de satisfação" loading="lazy">
                                 <p>
-                                    Confiamos tanto no produto que você tem 30 dias para testar e comprovar a qualidade, sem risco nenhum!
+                                    Confiamos tanto no produto que você tem 30 dias para testar e comprovar a qualidade: se vier com defeito, trocamos ou devolvemos o seu dinheiro. E se mudar de ideia, são 7 dias para desistir, sem risco nenhum!
                                 </p>
                             </div>
                         </section>

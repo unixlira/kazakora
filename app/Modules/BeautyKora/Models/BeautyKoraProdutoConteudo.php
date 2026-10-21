@@ -20,6 +20,7 @@ class BeautyKoraProdutoConteudo extends Model
         'comparativo',
         'beneficios',
         'duvidas',
+        'cta',
         'fonte',
         'origem_hash',
         'erro',
@@ -36,6 +37,7 @@ class BeautyKoraProdutoConteudo extends Model
             'comparativo' => 'array',
             'beneficios' => 'array',
             'duvidas' => 'array',
+            'cta' => 'array',
             'gerado_em' => 'datetime',
         ];
     }

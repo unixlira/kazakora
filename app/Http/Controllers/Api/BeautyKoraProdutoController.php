@@ -38,7 +38,7 @@ class BeautyKoraProdutoController extends Controller
 
         return response()->json([
             'imagens' => $produto['imagens'],
-            'conteudo' => $conteudo?->only(['destaques', 'chamada', 'blocos', 'comparativo', 'beneficios', 'duvidas', 'fonte']),
+            'conteudo' => $conteudo?->only(['destaques', 'chamada', 'blocos', 'comparativo', 'beneficios', 'duvidas', 'cta', 'fonte']),
         ]);
     }
 }

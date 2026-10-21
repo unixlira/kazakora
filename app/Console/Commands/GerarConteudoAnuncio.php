@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
  * ativos que ainda não têm ou cujo nome/descrição/fotos mudaram — pedido
  * 2026-10-09. Roda pelo agendador em lotes pequenos (cada produto é uma
  * chamada ao Gemini); --produto=ID gera um só, --forcar refaz mesmo sem
- * mudança.
+ * mudança. Conteúdo gerado antes do CTA (2026-10-20) ganha só o CTA.
  */
 class GerarConteudoAnuncio extends Command
 {
@@ -43,6 +43,13 @@ class GerarConteudoAnuncio extends Command
             }
 
             if (! $forcar && ! $servico->precisaGerar($product)) {
+                // Conteúdo de antes do CTA (2026-10-20): gera só a chamada final.
+                if ($servico->faltaCta($product->adContent)) {
+                    $conteudo = $servico->completarCta($product);
+                    $feitos++;
+                    $this->line(sprintf('#%d %s → CTA %s', $product->id, $product->name, empty($conteudo?->cta) ? 'falhou' : 'gerado'));
+                }
+
                 continue;
             }
 

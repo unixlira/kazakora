@@ -41,12 +41,41 @@ use Throwable;
  * Desde 2026-10-19 (pedido do Lira) os textos da KazaKora usam os gatilhos
  * psicológicos e levam emojis (GatilhosAnuncio). Desde 2026-10-20 nenhum
  * texto (de nenhuma loja) fala de preço ou parcelamento (TextoIaSemPreco).
+ *
+ * Desde 2026-10-20 (pedido do Lira) o conteúdo traz também o "cta": a
+ * chamada para a compra logo depois das dúvidas comuns, com emojis, que
+ * desperta desejo e derruba as últimas objeções com as políticas reais da
+ * loja (POLITICAS). Conteúdo antigo sem CTA ganha só ele (ctaViaGemini),
+ * sem refazer o resto.
  */
 class AnuncioConteudoService
 {
     private const MAX_IMAGENS = 10;
 
     private const MAX_BYTES_IMAGEM = 1_500_000;
+
+    /**
+     * Políticas reais de cada loja (as mesmas das Perguntas Frequentes da
+     * página): é o que o CTA pode usar para quebrar objeção, nada além disso.
+     */
+    private const POLITICAS = [
+        'KazaKora' => [
+            'frete grátis para a residência do cliente',
+            '7 dias após o recebimento para desistir da compra',
+            '30 dias para trocar produto com defeito',
+            'compra segura: recebe o produto ou o dinheiro volta',
+            'empresa com CNPJ, vendido e enviado de São Paulo/SP',
+            'código de rastreio em "Meus Pedidos" assim que o pedido é postado',
+        ],
+        'Beauty Kora' => [
+            'frete grátis para todo o Brasil',
+            '7 dias após o recebimento para desistir da compra',
+            '30 dias para trocar produto com defeito',
+            'compra segura: recebe o produto ou o dinheiro volta',
+            'empresa com CNPJ, vendido e enviado de São Paulo/SP',
+            'código de rastreio em "Minhas Compras" assim que o pedido é postado',
+        ],
+    ];
 
     /** Prévia do botão do admin guardada para não pagar o Gemini de novo ao salvar. */
     private const PREVIA_HORAS = 6;
@@ -70,6 +99,146 @@ class AnuncioConteudoService
         $product->loadMissing('adContent');
 
         return ! $product->adContent || $product->adContent->origem_hash !== $this->hash($product);
+    }
+
+    /** Conteúdo do Gemini gerado antes do CTA existir (2026-10-20). */
+    public function faltaCta(?object $conteudo): bool
+    {
+        return $conteudo !== null && $conteudo->fonte === ProductAdContent::FONTE_GEMINI && empty($conteudo->cta);
+    }
+
+    /**
+     * Gera só o CTA de um conteúdo que já existe (chamada leve, sem fotos).
+     * $lancarSeIndisponivel como em gerar(); outros erros só ficam no log.
+     */
+    public function completarCta(Product $product, bool $lancarSeIndisponivel = false): ?ProductAdContent
+    {
+        $product->loadMissing('adContent');
+        $conteudo = $product->adContent;
+
+        if (! $this->faltaCta($conteudo) || ! $this->gemini->isConfigured()) {
+            return $conteudo;
+        }
+
+        try {
+            $cta = $this->ctaViaGemini('KazaKora', $product->name, (string) $product->description, (array) $conteudo->duvidas);
+        } catch (GeminiUnavailableException $exception) {
+            if ($lancarSeIndisponivel) {
+                throw $exception;
+            }
+            Log::warning('anuncio.cta_falhou', ['product_id' => $product->id, 'erro' => $exception->getMessage()]);
+
+            return $conteudo;
+        } catch (Throwable $exception) {
+            Log::warning('anuncio.cta_falhou', ['product_id' => $product->id, 'erro' => $exception->getMessage()]);
+
+            return $conteudo;
+        }
+
+        $conteudo->update(['cta' => $cta]);
+
+        return $conteudo;
+    }
+
+    /**
+     * Só o CTA, a partir do nome, da descrição e das dúvidas já geradas.
+     * Lança exceção se o Gemini falhar ou não devolver um CTA válido.
+     *
+     * @param  array<int, array{0: string, 1: string}>  $duvidas
+     * @return array{titulo: string, texto: string, garantias: array<int, string>, botao: string}
+     */
+    public function ctaViaGemini(string $loja, string $nome, string $descricao, array $duvidas): array
+    {
+        $listaDuvidas = collect($duvidas)
+            ->filter(fn ($duvida) => is_array($duvida) && filled($duvida[0] ?? null))
+            ->map(fn ($duvida) => '- '.$duvida[0].' '.($duvida[1] ?? ''))
+            ->implode("\n") ?: '(nenhuma)';
+        $base = trim($descricao) !== '' ? "Descrição cadastrada:\n{$descricao}" : 'Não há descrição cadastrada: use só o nome.';
+
+        $prompt = <<<TXT
+        Escreva a chamada final para a compra (CTA) da página deste produto da loja {$loja}. Ela aparece logo depois das dúvidas comuns abaixo, quando o cliente já entendeu o produto e só falta decidir.
+
+        Produto: {$nome}
+        {$base}
+
+        Dúvidas comuns já respondidas na página:
+        {$listaDuvidas}
+
+        {$this->regrasCta($loja)}
+
+        Formato (JSON):
+        {{$this->formatoCta()}}
+        TXT;
+
+        $resposta = $this->gemini->generate(
+            (string) config('services.gemini.chat_model'),
+            [['role' => 'user', 'parts' => [['text' => $prompt]]]],
+            'Você é redator de e-commerce brasileiro. Responde SOMENTE com um JSON válido, sem markdown e sem comentários.',
+            1500,
+            GeminiUsageLog::PURPOSE_AD_CONTENT,
+        );
+
+        $json = $this->extrairJson($resposta);
+        $cta = $this->validarCta($json['cta'] ?? $json);
+
+        if ($cta === null) {
+            throw new RuntimeException('Gemini não devolveu um CTA válido.');
+        }
+
+        return $cta;
+    }
+
+    private function regrasCta(string $loja): string
+    {
+        // A Beauty Kora chega como "Beauty Kora (beleza e skincare)".
+        $chave = collect(array_keys(self::POLITICAS))->first(fn ($nome) => str_starts_with($loja, $nome)) ?? 'KazaKora';
+        $politicas = collect(self::POLITICAS[$chave])->map(fn ($p) => "  - {$p}")->implode("\n");
+        $semPreco = TextoIaSemPreco::regra();
+
+        return <<<TXT
+        Regras do CTA ("cta"):
+        - Português do Brasil, tom confiante e caloroso, frases curtas. Desperte desejo pelo resultado que o produto entrega e derrube as últimas objeções (vale a pena? chega bem? e se não gostar? é seguro comprar?).
+        - Emojis pertinentes são obrigatórios no CTA, mesmo que o resto do conteúdo não leve: 1 ou 2 no título, 1 a 3 no texto, 1 no começo de cada garantia e 1 no botão.
+        - Use gatilhos de vontade, urgência e segurança, sem inventar prazo, contador, quantidade em estoque, desconto, brinde, número de vendas, nota ou depoimento.
+        - Nas garantias use SÓ estas políticas reais da loja (escolha as 3 ou 4 que mais quebram objeção para este produto, reescritas de forma curta e forte):
+        {$politicas}
+        - {$semPreco}
+        - Sem HTML e sem markdown.
+        TXT;
+    }
+
+    private function formatoCta(): string
+    {
+        return <<<'TXT'
+        "cta": {"titulo": "frase de impacto até 80 caracteres", "texto": "2 a 3 frases que fazem o cliente se imaginar usando e decidir agora", "garantias": ["3 a 4 itens curtos (até 70 caracteres)"], "botao": "convite para comprar, até 28 caracteres"}
+        TXT;
+    }
+
+    /**
+     * @return array{titulo: string, texto: string, garantias: array<int, string>, botao: string}|null
+     */
+    private function validarCta(mixed $cta): ?array
+    {
+        if (! is_array($cta)) {
+            return null;
+        }
+
+        $texto = fn ($valor, int $limite) => is_string($valor) ? Str::limit(TextoIaSemPreco::semPreco(trim(strip_tags($valor))), $limite, '…') : '';
+        $titulo = $texto($cta['titulo'] ?? null, 120);
+        $corpo = $texto($cta['texto'] ?? null, 500);
+
+        if ($titulo === '' || $corpo === '') {
+            return null;
+        }
+
+        return [
+            'titulo' => $titulo,
+            'texto' => $corpo,
+            'garantias' => collect(is_array($cta['garantias'] ?? null) ? $cta['garantias'] : [])
+                ->map(fn ($g) => $texto($g, 90))->filter()->take(4)->values()->all(),
+            // Botão vazio ou comprido demais vira o padrão, com emoji.
+            'botao' => ($botao = $texto($cta['botao'] ?? null, 40)) !== '' && mb_strlen($botao) <= 36 ? $botao : '🛒 Quero o meu agora',
+        ];
     }
 
     /**
@@ -307,6 +476,8 @@ class AnuncioConteudoService
           2) Quebra de objeção: os blocos do meio respondem, cada um, a uma dúvida real de quem está para comprar (funciona mesmo, potência, tamanho, manutenção, durabilidade), com título em forma de pergunta ou de resposta.{$etapas[1]}
           3) CTA: o último bloco fecha a venda com o que vem na caixa e um convite direto para comprar, sem prometer prazo, brinde, garantia ou desconto que não esteja nas informações acima.{$etapas[2]}
         {$gatilhos}
+        {$this->regrasCta($loja)}
+
         Formato (JSON):
         {{$campoDescricao}
           "destaques": ["3 benefícios curtos, até 60 caracteres cada"],
@@ -314,7 +485,8 @@ class AnuncioConteudoService
           "blocos": [{"titulo": "título forte", "texto": "2 a 3 frases persuasivas", "imagem": 1}],
           "comparativo": {"titulo": "...", "intro": "uma frase", "linhas": [["critério", "limitação da solução comum", "vantagem deste produto"]]},
           "beneficios": [["benefício curto", "explicação em uma linha"]],
-          "duvidas": [["pergunta que o cliente faria", "resposta objetiva com base no que se sabe do produto"]]
+          "duvidas": [["pergunta que o cliente faria", "resposta objetiva com base no que se sabe do produto"]],
+          {$this->formatoCta()}
         }
         Quantidades: um bloco por imagem (mínimo 3, máximo 10, o último é o CTA), 3 a 4 linhas no comparativo, 4 a 6 benefícios, 3 a 4 dúvidas.
         TXT;
@@ -400,6 +572,7 @@ class AnuncioConteudoService
             'comparativo' => $comparativo,
             'beneficios' => $pares($dados['beneficios'] ?? [], 80, 200, 8),
             'duvidas' => $pares($dados['duvidas'] ?? [], 160, 500, 6),
+            'cta' => $this->validarCta($dados['cta'] ?? null),
         ];
     }
 
@@ -487,6 +660,7 @@ class AnuncioConteudoService
             'comparativo' => null,
             'beneficios' => $beneficios,
             'duvidas' => [],
+            'cta' => null,
         ];
     }
 }

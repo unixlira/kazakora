@@ -369,6 +369,17 @@ const buyNow = () => {
     });
 };
 
+// Botão do CTA da descrição: sem variação escolhida, leva ao box de compra
+// para escolher (o alerta aparece lá); com variação, compra direto.
+const comprarPeloCta = () => {
+    if (faltaVariacao.value) {
+        document.getElementById('comprar')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        exigirVariacao();
+        return;
+    }
+    buyNow();
+};
+
 // Barras por estrela (5 → 1) a partir das avaliações reais.
 const ratingRows = computed(() => [5, 4, 3, 2, 1].map((star) => {
     const count = props.reviews.filter((review) => Number(review.rating) === star).length;
@@ -673,6 +684,17 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                                         <strong>{{ duvida[0] }}</strong>
                                         <p>{{ duvida[1] }}</p>
                                     </div>
+                                </div>
+
+                                <!-- CTA depois das dúvidas (pedido 2026-10-20): texto do Gemini com
+                                     emojis e as garantias reais da loja para a última objeção. -->
+                                <div v-if="anuncio.cta?.titulo" class="cta-anuncio">
+                                    <h3>{{ anuncio.cta.titulo }}</h3>
+                                    <p>{{ anuncio.cta.texto }}</p>
+                                    <ul v-if="anuncio.cta.garantias?.length">
+                                        <li v-for="(garantia, index) in anuncio.cta.garantias" :key="index">{{ garantia }}</li>
+                                    </ul>
+                                    <button v-if="inStock" type="button" class="btn" :disabled="buyingNow" @click="comprarPeloCta">{{ anuncio.cta.botao }}</button>
                                 </div>
                             </div>
 
@@ -1040,6 +1062,12 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .duvida { margin-top: 14px; }
 .pd2 .duvida strong { display: block; color: var(--ink); }
 .pd2 .duvida p { margin: 2px 0 0; }
+.pd2 .cta-anuncio { margin-top: 28px; padding: 22px 20px; border-radius: 14px; background: var(--soft); border: 1px solid var(--line); text-align: center; }
+.pd2 .cta-anuncio h3 { font-size: 22px; font-weight: 700; margin: 0 0 10px; }
+.pd2 .cta-anuncio p { margin: 0 auto; max-width: 620px; color: var(--ink); font-size: 16px; }
+.pd2 .cta-anuncio ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.pd2 .cta-anuncio li { padding: 6px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink); font-size: 14px; font-weight: 500; }
+.pd2 .cta-anuncio .btn { margin: 18px auto 0; max-width: 420px; width: 100%; font-size: 20px; text-transform: none; }
 
 /* conteúdo */
 .pd2 .descricao { color: #000; }

@@ -641,15 +641,26 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             <img class="promo-img promo-sorteio" :src="sorteio.imagem_url" :alt="sorteio.titulo" loading="lazy">
                         </section>
 
-                        <section v-if="livrosDigitais.length" class="card promo promo-livros">
-                            <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
-                            <ul class="livros">
-                                <li v-for="livro in livrosDigitais" :key="livro.id">
-                                    <img v-if="livro.capa_url" :src="livro.capa_url" :alt="livro.titulo" loading="lazy">
-                                    <span v-else class="livro-sem-capa" aria-hidden="true"><i class="fa-solid fa-book-open"></i></span>
-                                    <span>{{ livro.titulo }}</span>
-                                </li>
-                            </ul>
+                        <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e capas
+                             dentro de tablets à esquerda, oferta à direita. Sem "preço vendido separadamente":
+                             os guias não são vendidos, seria preço inventado. -->
+                        <section v-if="livrosDigitais.length" class="card promo-livros">
+                            <div class="livros-vitrine">
+                                <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
+                                <ul class="livros">
+                                    <li v-for="livro in livrosDigitais" :key="livro.id" class="tablet">
+                                        <img v-if="livro.capa_url" :src="livro.capa_url" :alt="livro.titulo" loading="lazy">
+                                        <span v-else class="livro-sem-capa"><i class="fa-solid fa-book-open" aria-hidden="true"></i>{{ livro.titulo }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="livros-oferta">
+                                <p>Você recebe {{ livrosDigitais.length === 1 ? 'o guia' : 'os guias' }} em PDF com dicas práticas para ter mais saúde e qualidade de vida!</p>
+                                <p class="livros-lista">
+                                    <span v-for="livro in livrosDigitais" :key="`t-${livro.id}`"><i class="fa-solid fa-check" aria-hidden="true"></i> {{ livro.titulo }}</span>
+                                </p>
+                                <p class="livros-gratis">Adquirindo hoje: <b>100% GRÁTIS</b></p>
+                            </div>
                         </section>
 
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
@@ -1102,12 +1113,19 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .promo-texto { flex: 1 1 auto; }
 .pd2 .promo-img { flex: 0 0 auto; height: auto; border-radius: 12px; }
 .pd2 .promo-sorteio { width: 190px; }
-.pd2 .promo-livros { flex-direction: column; align-items: stretch; }
-.pd2 .promo-livros h2 { margin-bottom: 4px; }
-.pd2 .livros { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
-.pd2 .livros li { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; font-size: 14px; font-weight: 600; color: var(--ink); }
-.pd2 .livros img { width: 100%; max-width: 150px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 8px; box-shadow: var(--shadow-strong); }
-.pd2 .livro-sem-capa { display: grid; place-items: center; width: 100%; max-width: 150px; aspect-ratio: 3 / 4; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font-size: 36px; color: var(--ink); }
+.pd2 .promo-livros { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; align-items: center; }
+.pd2 .promo-livros h2 { margin-bottom: 18px; }
+.pd2 .livros { display: flex; justify-content: center; margin: 0; padding: 0; list-style: none; }
+.pd2 .livros .tablet { flex: 0 1 150px; padding: 9px 7px 14px; background: #1c1f24; border-radius: 12px; box-shadow: 0 8px 18px rgba(0, 0, 0, .22); }
+.pd2 .livros .tablet + .tablet { margin-left: -6px; }
+.pd2 .livros img, .pd2 .livro-sem-capa { display: block; width: 100%; aspect-ratio: 909 / 1287; object-fit: cover; border-radius: 3px; background: #fff; }
+.pd2 .livro-sem-capa { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px; text-align: center; font-size: 13px; font-weight: 600; color: #18212e; }
+.pd2 .livro-sem-capa i { font-size: 30px; }
+.pd2 .livros-oferta p { margin: 0 0 14px; font-size: 17px; line-height: 1.5; }
+.pd2 .livros-lista { display: flex; flex-direction: column; gap: 6px; font-size: 14px !important; color: var(--ink); }
+.pd2 .livros-lista i { color: var(--green); }
+.pd2 .livros-oferta .livros-gratis { margin: 0; color: var(--ink); }
+.pd2 .livros-gratis b { color: var(--green); font-weight: 700; }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
@@ -1219,7 +1237,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .garantia { grid-template-columns: 30% 70%; }
     .pd2 .promo { flex-direction: column; align-items: flex-start; }
     .pd2 .promo-sorteio { width: 160px; align-self: center; }
-    .pd2 .promo-livros { align-items: stretch; }
+    .pd2 .promo-livros { grid-template-columns: 1fr; gap: 20px; }
+    .pd2 .livros .tablet { padding: 6px 5px 10px; border-radius: 9px; }
     .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }

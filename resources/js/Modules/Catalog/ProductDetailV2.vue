@@ -604,6 +604,21 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                             </ul>
                         </aside>
 
+                        <!-- Banners promocionais no formato da referência (izeshop): sorteio da AirFryer
+                             e 3 livros digitais de brinde (pedido 2026-10-20). -->
+                        <section class="card promo">
+                            <div class="promo-texto">
+                                <h2>Compre e Concorra a uma AirFryer de Última Geração!</h2>
+                                <p class="sem-margem"><strong>Pedidos realizados e pagos até 20/10/2026</strong> participam automaticamente.</p>
+                            </div>
+                            <img class="promo-img promo-airfryer" src="/images/promocoes/airfryer.jpg" alt="AirFryer de última geração" width="380" height="440" loading="lazy">
+                        </section>
+
+                        <section class="card promo promo-livros">
+                            <h2>Compre Hoje E Receba 3 Livros Digitais GRÁTIS!</h2>
+                            <img class="promo-img" src="/images/promocoes/livros-digitais.jpg" alt="3 livros digitais grátis" width="750" height="420" loading="lazy">
+                        </section>
+
                         <!-- Descrição: visual da v1 (cabeçalho centralizado; sem a faixa roxa, pedido 2026-10-10) com o
                              conteúdo no formato da referência: blocos de título + imagem + texto
                              persuasivo, comparativo, benefícios e dúvidas. -->
@@ -867,7 +882,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 /* grade 60/40: o box de compra ocupa a coluna da direita, fixo */
 .pd2 .col-principal { display: grid; grid-template-columns: minmax(0, 60fr) minmax(0, 40fr); gap: 20px; align-items: start; }
 .pd2 .col-principal > .card { grid-column: 1; }
-.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 5; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
+.pd2 .col-principal > .compra { grid-column: 2; grid-row: 1 / span 7; position: sticky; top: 10px; box-shadow: var(--shadow-strong); }
 .pd2 .galeria-card { box-shadow: var(--shadow-strong); padding: 10px; }
 
 /* galeria: miniaturas à esquerda (20%), foto à direita (80%) */
@@ -1035,6 +1050,15 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .lista li { margin-bottom: 4px; }
 .pd2 .linhas { list-style: none; margin: 0 0 14px; padding: 0; }
 .pd2 .bloco > :last-child { margin-bottom: 0; }
+/* banners promocionais (sorteio AirFryer e livros digitais) */
+.pd2 .promo { display: flex; align-items: center; gap: 24px; }
+.pd2 .promo h2 { margin-bottom: 12px; }
+.pd2 .promo-texto { flex: 1 1 auto; }
+.pd2 .promo-img { flex: 0 0 auto; height: auto; border-radius: 12px; }
+.pd2 .promo-airfryer { width: 190px; }
+.pd2 .promo-livros { flex-direction: column; align-items: flex-start; }
+.pd2 .promo-livros h2 { margin-bottom: 4px; }
+.pd2 .promo-livros .promo-img { width: 100%; max-width: 420px; align-self: center; }
 .pd2 .garantia { display: grid; grid-template-columns: 20% 80%; gap: 10px; align-items: center; }
 .pd2 .garantia p { margin: 0 0 0 10px; }
 .pd2 .selo-garantia { width: 100%; max-width: 160px; height: auto; }
@@ -1143,6 +1167,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
     .pd2 .fretefundo li { font-size: 14px; }
     .pd2 .fretefundo i { color: #7b7b7b; }
     .pd2 .garantia { grid-template-columns: 30% 70%; }
+    .pd2 .promo { flex-direction: column; align-items: flex-start; }
+    .pd2 .promo-airfryer { width: 160px; align-self: center; }
     .pd2 .aval-topo { grid-template-columns: 1fr; gap: 16px; }
     .pd2 .aval-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .pd2 summary { font-size: 17px; padding: 12px; }

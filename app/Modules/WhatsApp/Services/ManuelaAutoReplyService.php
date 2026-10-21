@@ -3,6 +3,7 @@
 namespace App\Modules\WhatsApp\Services;
 
 use App\Modules\WhatsApp\Models\WhatsAppConversation;
+use App\Modules\WhatsApp\Support\ManuelaSaudacao;
 use App\Modules\WhatsApp\Support\WhatsAppSettings;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -79,6 +80,7 @@ class ManuelaAutoReplyService
     {
         $s = $this->settings->all();
         $tag = ManuelaAgentClient::HANDOFF_TAG;
+        $saudacao = ManuelaSaudacao::REGRA;
         $product = $conversation ? ManuelaAgentClient::productInContext($conversation) : null;
         $productBlock = $product
             ? "Produto em conversa com este cliente (ficha completa, é daqui que saem as respostas):\n".json_encode($product, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
@@ -106,6 +108,7 @@ Você trabalha com vendas: o assunto da conversa são os produtos da loja. Siga 
 
 Regras de formato:
 - Responda SOMENTE com o texto que vai para o cliente no WhatsApp: curto, em português do Brasil, sem markdown, sem travessões.
+- {$saudacao}
 - Preço, estoque, link e características só da ficha ou da busca. Nunca invente.
 - FOTO do cliente: responda sobre o produto DA FOTO, nunca sobre o produto falado antes. Se a foto não foi identificada, pergunte qual é o produto antes de falar de preço ou estoque.
 - Preço e estoque só depois de abrir a ficha DESTE produto (abrir_produto ou ficha em conversa). Na dúvida sobre qual produto é, pergunte: errar o preço afasta o cliente.
@@ -144,7 +147,7 @@ PROMPT;
             'troca_garantia' => 'Vou te orientar com cuidado. Me manda o número do pedido e uma foto ou vídeo curto mostrando o problema, por favor.',
             'lead_compra' => $settings['closing_template'],
             'produto_duvida' => 'Me fala qual modelo ou produto você está olhando. Se tiver o link ou uma foto, melhor ainda, que eu te digo o caminho certo sem chutar informação.',
-            default => $settings['welcome_message'],
+            default => ManuelaSaudacao::espelhar($settings['welcome_message'], $message),
         };
 
         return [

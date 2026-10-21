@@ -38,14 +38,21 @@ use Throwable;
  */
 class ReviewImportService
 {
+    /**
+     * Pedido do Lira 2026-10-21: avaliações de 1 e 2 estrelas não são
+     * copiadas dos marketplaces. Ele apagou as negativas no admin e as da
+     * Shopee voltavam no cron seguinte (firstOrNew por external_id).
+     */
+    public const NOTA_MINIMA = 3;
+
     public function __construct(private readonly MarketplaceDriverManager $drivers) {}
 
     /**
-     * @return array{products_checked: int, imported: int, updated: int, ambiguous_skipped: int, channels_skipped: array<int, string>}
+     * @return array{products_checked: int, imported: int, updated: int, ambiguous_skipped: int, low_rating_skipped: int, channels_skipped: array<int, string>}
      */
     public function importAll(): array
     {
-        $summary = ['products_checked' => 0, 'imported' => 0, 'updated' => 0, 'ambiguous_skipped' => 0, 'channels_skipped' => []];
+        $summary = ['products_checked' => 0, 'imported' => 0, 'updated' => 0, 'ambiguous_skipped' => 0, 'low_rating_skipped' => 0, 'channels_skipped' => []];
 
         $listingsByChannel = ProductChannelListing::query()
             ->whereNotNull('external_id')
@@ -83,6 +90,12 @@ class ReviewImportService
                 $summary['products_checked']++;
 
                 foreach ($reviews as $data) {
+                    if ((int) $data['rating'] < self::NOTA_MINIMA) {
+                        $summary['low_rating_skipped']++;
+
+                        continue;
+                    }
+
                     $productId = $this->resolveProductId($listingsForItem, $data['model_ids'] ?? []);
 
                     if ($productId === null) {

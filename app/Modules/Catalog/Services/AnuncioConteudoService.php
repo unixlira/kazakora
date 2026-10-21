@@ -60,7 +60,7 @@ class AnuncioConteudoService
      */
     private const POLITICAS = [
         'KazaKora' => [
-            'frete grátis para a residência do cliente',
+            'frete grátis até a sua casa',
             '7 dias após o recebimento para desistir da compra',
             '30 dias para trocar produto com defeito',
             'compra segura: recebe o produto ou o dinheiro volta',
@@ -68,7 +68,7 @@ class AnuncioConteudoService
             'código de rastreio em "Meus Pedidos" assim que o pedido é postado',
         ],
         'Beauty Kora' => [
-            'frete grátis para todo o Brasil',
+            'frete grátis para todo o Brasil, até a sua casa',
             '7 dias após o recebimento para desistir da compra',
             '30 dias para trocar produto com defeito',
             'compra segura: recebe o produto ou o dinheiro volta',
@@ -201,7 +201,7 @@ class AnuncioConteudoService
         - Português do Brasil, tom confiante e caloroso, frases curtas. Desperte desejo pelo resultado que o produto entrega e derrube as últimas objeções (vale a pena? chega bem? e se não gostar? é seguro comprar?).
         - Emojis pertinentes são obrigatórios no CTA, mesmo que o resto do conteúdo não leve: 1 ou 2 no título, 1 a 3 no texto, 1 no começo de cada garantia e 1 no botão.
         - Use gatilhos de vontade, urgência e segurança, sem inventar prazo, contador, quantidade em estoque, desconto, brinde, número de vendas, nota ou depoimento.
-        - Nas garantias use SÓ estas políticas reais da loja (escolha as 3 ou 4 que mais quebram objeção para este produto, reescritas de forma curta e forte):
+        - Nas garantias use SÓ estas políticas reais da loja (escolha as 3 ou 4 que mais quebram objeção para este produto, reescritas de forma curta e forte, falando com o cliente por "você"):
         {$politicas}
         - {$semPreco}
         - Sem HTML e sem markdown.

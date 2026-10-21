@@ -156,7 +156,9 @@ export const sidebarSections = [
         items: [
             { label: 'WhatsApp', href: '/admin/whatsapp/conversas', icon: 'fas fa-comments', marca: 'whatsapp', permission: 'pedidos.view', badgeKey: 'whatsappNaoLidas' },
             { label: 'E-mails do site', href: '/admin/mensagens-site', icon: 'fas fa-envelope', cor: 'azul', permission: 'pedidos.view', badgeKey: 'emailsSiteNaoLidos' },
-            { label: 'Perguntas Mercado Livre', href: '/admin/perguntas-mercado-livre', icon: 'fas fa-circle-question', marca: 'mercado-livre', permission: 'pedidos.view', badgeKey: 'mlPerguntasPendentes' },
+            // Perguntas MK Place (2026-10-20): perguntas dos anúncios; a Manuela
+            // atende e o contador mostra as que esperam uma pessoa.
+            { label: 'Perguntas MK Place', href: '/admin/perguntas-marketplace', icon: 'fas fa-circle-question', cor: 'ambar', permission: 'pedidos.view', badgeKey: 'perguntasMkplace' },
             { label: 'Chamados', href: '/admin/suporte', icon: 'fas fa-headset', cor: 'violeta', permission: 'pedidos.view', badgeKey: 'suporteAbertos' },
             { label: 'Clientes', href: '/admin/clientes', icon: 'fas fa-users', cor: 'ciano', permission: 'pedidos.view' },
         ],

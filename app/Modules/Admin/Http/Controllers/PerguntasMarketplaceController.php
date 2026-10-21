@@ -1,0 +1,153 @@
+<?php
+
+namespace App\Modules\Admin\Http\Controllers;
+
+use App\Http\Controllers\Controller;
+use App\Jobs\RascunharRespostaPerguntaMercadoLivre;
+use App\Models\Setting;
+use App\Models\User;
+use App\Modules\Marketplace\Models\MarketplaceAccount;
+use App\Modules\Marketplace\Models\MercadoLivrePergunta;
+use App\Modules\Marketplace\Models\ProductChannelListing;
+use App\Services\MercadoLivre\Services\RespostaPerguntaService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+use RuntimeException;
+
+/**
+ * Atendimento > Perguntas MK Place (pedido do Lira 2026-10-20): perguntas dos
+ * anúncios dos marketplaces (hoje o Mercado Livre; a Shopee não tem perguntas
+ * públicas na API). A Manuela atende primeiro; o que ela não sabe fica
+ * marcado para uma pessoa, com aviso no topo do admin. O atendente pode
+ * assumir qualquer pergunta, editar o rascunho e enviar, ou devolver para ela.
+ */
+class PerguntasMarketplaceController extends Controller
+{
+    private const FILTROS = ['humano', 'rascunho', 'abertas', 'respondidas', 'todas'];
+
+    public function index(Request $request): Response
+    {
+        $filtro = in_array($request->query('filtro'), self::FILTROS, true) ? $request->query('filtro') : 'humano';
+        $busca = trim((string) $request->query('busca', ''));
+
+        $perguntas = $this->filtrar(MercadoLivrePergunta::query(), $filtro)
+            ->when($busca !== '', fn ($q) => $q->where(fn ($w) => $w->where('pergunta', 'like', "%{$busca}%")->orWhere('item_id', 'like', "%{$busca}%")))
+            ->orderByRaw('respondida_em is null desc')
+            ->orderByDesc('perguntada_em')->orderByDesc('id')
+            ->limit(200)
+            ->get();
+
+        $produtos = ProductChannelListing::query()
+            ->where('channel', MarketplaceAccount::CHANNEL_MERCADO_LIVRE)
+            ->whereIn('external_id', $perguntas->pluck('item_id')->unique())
+            ->with('product:id,name')
+            ->get()
+            ->mapWithKeys(fn ($l) => [$l->external_id => $l->product?->name]);
+
+        $atendentes = User::query()->whereIn('id', $perguntas->pluck('humano_assumiu_por')->merge($perguntas->pluck('respondida_por_user_id'))->filter()->unique())->pluck('name', 'id');
+
+        return Inertia::render('Admin/PerguntasMarketplace/Index', [
+            'perguntas' => $perguntas->map(fn (MercadoLivrePergunta $p) => $this->linha($p, $produtos, $atendentes))->values(),
+            'filtro' => $filtro,
+            'busca' => $busca,
+            'contagem' => collect(self::FILTROS)->mapWithKeys(fn ($f) => [$f => $this->filtrar(MercadoLivrePergunta::query(), $f)->count()]),
+            'autoResposta' => MercadoLivrePergunta::manuelaRespondeSozinha(),
+            'podeConfigurar' => (bool) $request->user()?->isAdmin(),
+        ]);
+    }
+
+    /** Contador do alerta do topo do admin (consultado a cada minuto). */
+    public function pendentes(): JsonResponse
+    {
+        return response()->json(['total' => MercadoLivrePergunta::query()->aguardandoHumano()->count()]);
+    }
+
+    public function enviar(Request $request, MercadoLivrePergunta $pergunta, RespostaPerguntaService $respostas): JsonResponse
+    {
+        $dados = $request->validate(['texto' => ['required', 'string', 'max:'.RespostaPerguntaService::LIMITE]]);
+
+        try {
+            $respostas->enviar($pergunta, $dados['texto'], MercadoLivrePergunta::POR_HUMANO, $request->user()->id);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Atendimento humano: a Manuela não envia mais nada nessa pergunta. */
+    public function assumir(Request $request, MercadoLivrePergunta $pergunta): JsonResponse
+    {
+        abort_unless($pergunta->aberta(), 422, 'Essa pergunta já foi respondida.');
+
+        $pergunta->update(['humano_assumiu_por' => $request->user()->id, 'humano_assumiu_em' => now()]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Devolve para a Manuela: ela escreve um rascunho novo (e envia, se o automático estiver ligado). */
+    public function devolver(MercadoLivrePergunta $pergunta): JsonResponse
+    {
+        abort_unless($pergunta->aberta(), 422, 'Essa pergunta já foi respondida.');
+
+        $pergunta->update([
+            'humano_assumiu_por' => null,
+            'humano_assumiu_em' => null,
+            'precisa_humano' => false,
+            'resposta_rascunho' => null,
+            'rascunho_em' => null,
+            'erro_envio' => null,
+        ]);
+
+        RascunharRespostaPerguntaMercadoLivre::dispatch($pergunta->id);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Liga/desliga "Manuela responde sozinha" (só admin). */
+    public function autoResposta(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $ligar = $request->validate(['ligado' => ['required', 'boolean']])['ligado'];
+        Setting::set(MercadoLivrePergunta::SETTING_AUTO, $ligar ? '1' : '0');
+
+        return response()->json(['ligado' => (bool) $ligar]);
+    }
+
+    private function filtrar($query, string $filtro)
+    {
+        return match ($filtro) {
+            'humano' => $query->aguardandoHumano(),
+            'rascunho' => $query->pendentes()->where('precisa_humano', false)->whereNull('humano_assumiu_em'),
+            'abertas' => $query->pendentes(),
+            'respondidas' => $query->whereNotNull('respondida_em'),
+            default => $query,
+        };
+    }
+
+    private function linha(MercadoLivrePergunta $p, $produtos, $atendentes): array
+    {
+        return [
+            'id' => $p->id,
+            'canal' => 'mercado_livre',
+            'item_id' => $p->item_id,
+            'produto' => $produtos[$p->item_id] ?? null,
+            'link' => $p->linkNoMercadoLivre(),
+            'pergunta' => $p->pergunta,
+            'perguntada_em' => $p->perguntada_em?->toIso8601String(),
+            'rascunho' => $p->resposta_rascunho,
+            'rascunho_em' => $p->rascunho_em?->toIso8601String(),
+            'precisa_humano' => $p->precisa_humano,
+            'assumida_por' => $p->humano_assumiu_por ? ($atendentes[$p->humano_assumiu_por] ?? 'Atendente') : null,
+            'aberta' => $p->aberta(),
+            'resposta' => $p->resposta_enviada,
+            'respondida_em' => $p->respondida_em?->toIso8601String(),
+            'respondida_por' => $p->respondida_por,
+            'respondida_por_nome' => $p->respondida_por_user_id ? ($atendentes[$p->respondida_por_user_id] ?? null) : null,
+            'erro_envio' => $p->erro_envio,
+        ];
+    }
+}

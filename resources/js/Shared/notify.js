@@ -26,13 +26,13 @@ export function notifyWarning(message) {
 
 export async function confirmDelete(options = {}) {
     const result = await Swal.fire({
-        icon: 'warning',
+        icon: options.icon ?? 'warning',
         title: options.title ?? 'Tem certeza?',
         text: options.text ?? 'Essa ação não pode ser desfeita.',
         showCancelButton: true,
         confirmButtonText: options.confirmButtonText ?? 'Sim, remover',
         cancelButtonText: options.cancelButtonText ?? 'Cancelar',
-        confirmButtonColor: '#dc2626',
+        confirmButtonColor: options.confirmButtonColor ?? '#dc2626',
         cancelButtonColor: '#94a3b8',
         reverseButtons: true,
         focusCancel: options.focusCancel ?? false,

@@ -118,6 +118,8 @@ class HandleInertiaRequests extends Middleware
                     'emailsSiteNaoLidos' => rescue(fn () => \App\Modules\Contato\Models\MensagemContato::query()->naoLidas()->count(), 0, false),
                     // Suporte: chamados abertos esperando a equipe (pedido 2026-10-11).
                     'suporteAbertos' => rescue(fn () => \App\Modules\Suporte\Models\Chamado::query()->whereIn('status', [\App\Modules\Suporte\Models\Chamado::ABERTO, \App\Modules\Suporte\Models\Chamado::EM_ATENDIMENTO])->count(), 0, false),
+                    // Perguntas do Mercado Livre esperando resposta (pedido 2026-10-20).
+                    'mlPerguntasPendentes' => rescue(fn () => \App\Modules\Marketplace\Models\MercadoLivrePergunta::query()->pendentes()->count(), 0, false),
                     'whatsappNaoLidas' => rescue(fn () => \App\Modules\WhatsApp\Models\WhatsAppConversation::query()->where('unread_count', '>', 0)->count(), 0, false),
                 ]
                 : [],

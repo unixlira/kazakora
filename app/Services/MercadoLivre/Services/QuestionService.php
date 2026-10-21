@@ -33,7 +33,7 @@ class QuestionService
         $dados = $this->client->get("questions/{$id}", ['api_version' => 4]);
 
         $pergunta = MercadoLivrePergunta::updateOrCreate(
-            ['question_id' => $id],
+            ['canal' => MercadoLivrePergunta::CANAL_MERCADO_LIVRE, 'question_id' => $id],
             [
                 'item_id' => (string) ($dados['item_id'] ?? ''),
                 'comprador_id' => $dados['from']['id'] ?? $dados['buyer_id'] ?? null,

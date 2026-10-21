@@ -175,4 +175,27 @@ class PerguntasTest extends TestCase
         $this->assertCount(1, $novas['perguntas']);
         $this->assertSame('Tem nota?', $novas['perguntas'][0]['pergunta']);
     }
+
+    public function test_lista_perguntas_de_varios_marketplaces_e_so_envia_onde_tem_api(): void
+    {
+        $admin = \App\Models\User::factory()->create(['role' => \App\Models\User::ROLE_ADMIN]);
+        MercadoLivrePergunta::create(['question_id' => 20, 'item_id' => 'MLB1', 'status' => 'UNANSWERED', 'pergunta' => 'Cor?', 'precisa_humano' => true]);
+        // Mesmo número em outro canal não colide.
+        $shopee = MercadoLivrePergunta::create(['canal' => MercadoLivrePergunta::CANAL_SHOPEE, 'question_id' => 20, 'item_id' => '123', 'status' => 'UNANSWERED', 'pergunta' => 'Tem azul?', 'precisa_humano' => true]);
+
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace')
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->component('Admin/PerguntasMarketplace/Index', false)
+                ->has('perguntas', 2)->where('canais', fn ($c) => collect($c)->sort()->values()->all() === ['mercado_livre', 'shopee']));
+
+        $this->actingAs($admin)->get('/admin/perguntas-marketplace?canal=shopee')
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('perguntas', 1)
+                ->where('perguntas.0.canal', 'shopee')->where('perguntas.0.pode_enviar', false));
+
+        $ml = Mockery::mock(MercadoLivreClient::class);
+        $ml->shouldNotReceive('postOnce');
+        $this->app->instance(MercadoLivreClient::class, $ml);
+
+        $this->actingAs($admin)->postJson("/admin/perguntas-marketplace/{$shopee->id}/enviar", ['texto' => 'Tem sim.'])->assertStatus(422);
+        $this->assertNull($shopee->fresh()->respondida_em);
+    }
 }

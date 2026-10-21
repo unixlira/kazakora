@@ -15,6 +15,21 @@ class MercadoLivrePergunta extends Model
 
     public const POR_ML = 'ml';
 
+    /**
+     * Canais da tela Perguntas MK Place. Hoje só o Mercado Livre tem perguntas
+     * públicas e resposta pela API; os outros entram quando houver integração.
+     */
+    public const CANAL_MERCADO_LIVRE = 'mercado_livre';
+
+    public const CANAL_SHOPEE = 'shopee';
+
+    public const CANAL_AMAZON = 'amazon';
+
+    public const CANAL_TIKTOK_SHOP = 'tiktok_shop';
+
+    /** Canais em que a resposta sai pela API (RespostaPerguntaService). */
+    public const CANAIS_COM_ENVIO = [self::CANAL_MERCADO_LIVRE];
+
     /** Liga/desliga o envio automático da Manuela (Perguntas MK Place). Desligado por padrão. */
     public const SETTING_AUTO = 'perguntas_ml.manuela_responde_sozinha';
 
@@ -53,6 +68,22 @@ class MercadoLivrePergunta extends Model
     public function aberta(): bool
     {
         return $this->respondida_em === null && $this->status === 'UNANSWERED';
+    }
+
+    public function podeEnviar(): bool
+    {
+        return in_array($this->canal ?? self::CANAL_MERCADO_LIVRE, self::CANAIS_COM_ENVIO, true);
+    }
+
+    /** Link do anúncio no marketplace de origem. */
+    public function link(): ?string
+    {
+        return match ($this->canal ?? self::CANAL_MERCADO_LIVRE) {
+            self::CANAL_MERCADO_LIVRE => $this->linkNoMercadoLivre(),
+            self::CANAL_SHOPEE => 'https://seller.shopee.com.br/portal/product/'.$this->item_id,
+            self::CANAL_AMAZON => 'https://www.amazon.com.br/dp/'.$this->item_id,
+            default => null,
+        };
     }
 
     public function linkNoMercadoLivre(): string

@@ -8,6 +8,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// Manuela pergunta se o cliente ainda tem dúvida depois de 30 min de silêncio (2026-10-20).
+Schedule::command('manuela:acompanhamento')->everyFiveMinutes()->withoutOverlapping(5);
 Schedule::command('mercadolivre:refresh-tokens')->everyThirtyMinutes();
 Schedule::command('orders:expire-abandoned')->everyFiveMinutes();
 // Boleto do Mercado Pago (2026-10-14): pago dias depois → pedido pago; vencido → cancela.

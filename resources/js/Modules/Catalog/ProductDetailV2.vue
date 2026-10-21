@@ -422,7 +422,14 @@ const carregarMaisAvaliacoes = () => { avaliacoesVisiveis.value += 12; };
 // Foto da avaliação ampliada dentro da loja (antes abria o site da Shopee).
 const ehVideo = (midia) => /\.(mp4|mov|webm|m4v)(\?|$)/i.test(midia?.image_url ?? '');
 const fotoAberta = ref(null);
-const abrirFoto = (imagens, indice) => { fotoAberta.value = { imagens, indice }; };
+// `largo`: imagem horizontal (quadro dos livros) abre maior que a foto da avaliação.
+const abrirFoto = (imagens, indice, largo = false) => { fotoAberta.value = { imagens, indice, largo }; };
+
+// Quadro dos livros: imagem do grupo (admin) ou a padrão das costas.
+const livrosQuadroSrc = computed(() => props.livrosQuadro || '/images/promocoes/livros-revista-cama.webp');
+const livrosQuadroAlt = computed(() => (props.livrosQuadro
+    ? `Guias digitais da KazaKora em tablets: ${props.livrosDigitais.map((l) => l.titulo).join(', ')}`
+    : 'Três guias digitais grátis da KazaKora em tablets, com capa de revista: Sentou, doeu? Dor nas costas de quem trabalha sentado; Travou a lombar? O que fazer nas primeiras 48 horas; Acordou com dor? O problema pode estar na sua noite'));
 const fecharFoto = () => { fotoAberta.value = null; };
 const passarFoto = (passo) => {
     if (!fotoAberta.value) return;
@@ -724,12 +731,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         <section v-if="livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
                                 <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
-                                <img v-if="livrosQuadro" class="livros-img" :src="livrosQuadro"
-                                     :alt="`Guias digitais da KazaKora em tablets: ${livrosDigitais.map((l) => l.titulo).join(', ')}`"
-                                     width="1200" height="600" loading="lazy">
-                                <img v-else class="livros-img" src="/images/promocoes/livros-revista-cama.webp"
-                                     alt="Três guias digitais grátis da KazaKora em tablets, com capa de revista: Sentou, doeu? Dor nas costas de quem trabalha sentado; Travou a lombar? O que fazer nas primeiras 48 horas; Acordou com dor? O problema pode estar na sua noite"
-                                     width="1200" height="600" loading="lazy">
+                                <!-- Clique amplia a imagem no mesmo lightbox das fotos de avaliação (pedido 2026-10-21). -->
+                                <button type="button" class="livros-zoom" aria-label="Ampliar imagem dos livros"
+                                        @click="abrirFoto([{ image_url: livrosQuadroSrc, alt: livrosQuadroAlt }], 0, true)">
+                                    <img class="livros-img" :src="livrosQuadroSrc" :alt="livrosQuadroAlt" width="1200" height="600" loading="lazy">
+                                </button>
                             </div>
                             <div class="livros-oferta">
                                 <!-- Texto das costas só com a imagem padrão; grupo com imagem própria (ferramentas, Natal) usa texto neutro. -->
@@ -825,11 +831,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                 <!-- Foto da avaliação ampliada -->
                 <Teleport to="body">
-                    <div v-if="fotoAberta" class="aval-lightbox" role="dialog" aria-modal="true" aria-label="Foto da avaliação" @click.self="fecharFoto">
+                    <div v-if="fotoAberta" class="aval-lightbox" :class="{ 'lb-largo': fotoAberta.largo }" role="dialog" aria-modal="true" :aria-label="fotoAberta.largo ? 'Imagem ampliada' : 'Foto da avaliação'" @click.self="fecharFoto">
                         <button type="button" class="lb-fechar" aria-label="Fechar" @click="fecharFoto"><i class="fas fa-xmark"></i></button>
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-esq" aria-label="Foto anterior" @click="passarFoto(-1)"><i class="fas fa-chevron-left"></i></button>
                         <video v-if="ehVideo(fotoAberta.imagens[fotoAberta.indice])" :key="fotoAberta.indice" :src="fotoAberta.imagens[fotoAberta.indice].image_url" autoplay controls playsinline></video>
-                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" alt="Foto da avaliação">
+                        <img v-else :src="fotoAberta.imagens[fotoAberta.indice].image_url" :alt="fotoAberta.imagens[fotoAberta.indice].alt ?? 'Foto da avaliação'" @click.self="fotoAberta.largo && fecharFoto()">
                         <button v-if="fotoAberta.imagens.length > 1" type="button" class="lb-seta lb-dir" aria-label="Próxima foto" @click="passarFoto(1)"><i class="fas fa-chevron-right"></i></button>
                         <span v-if="fotoAberta.imagens.length > 1" class="lb-contador">{{ fotoAberta.indice + 1 }} / {{ fotoAberta.imagens.length }}</span>
                     </div>
@@ -1121,6 +1127,8 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .pd2 .promo-livros { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; align-items: center; }
 .pd2 .promo-livros h2 { margin-bottom: 18px; }
 .pd2 .livros-img { display: block; width: 100%; height: auto; }
+.pd2 .livros-zoom { display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; line-height: 0; }
+.pd2 .livros-zoom:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
 .pd2 .livros-oferta p { margin: 0 0 14px; font-size: 17px; line-height: 1.5; }
 .pd2 .livros-lista { display: flex; flex-direction: column; gap: 6px; font-size: 14px !important; color: var(--ink); }
 .pd2 .livros-lista i { color: var(--green); }
@@ -1170,6 +1178,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 @media (max-width: 767px) { .pd2 .aval-mais .btn-sec { width: 100%; min-width: 0; } }
 .aval-lightbox { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.88); padding: 48px 12px; }
 .aval-lightbox img, .aval-lightbox video { max-width: min(92vw, 900px); max-height: 82vh; border-radius: 8px; object-fit: contain; }
+.aval-lightbox.lb-largo img { max-width: min(96vw, 1400px); max-height: 88vh; cursor: zoom-out; }
 .aval-lightbox button { position: absolute; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 18px; cursor: pointer; }
 .aval-lightbox button:hover { background: rgba(255,255,255,.28); }
 .aval-lightbox .lb-fechar { top: 14px; right: 14px; }

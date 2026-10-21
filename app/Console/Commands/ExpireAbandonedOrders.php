@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Modules\Checkout\Models\Order;
 use App\Modules\Checkout\Models\Payment;
 use App\Modules\Checkout\Support\OrderPaymentFinalizer;
+use App\Modules\Checkout\Support\SituacaoDoPagamento;
 use App\Services\MercadoPago\MercadoPagoPaymentService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -98,7 +99,15 @@ class ExpireAbandonedOrders extends Command
                 Log::error('orders.expire_abandoned.refund_failed', ['order_id' => $fresh->id, 'message' => $error]);
             }
 
-            $fresh->update(['status' => Order::STATUS_CANCELLED]);
+            // Motivo e hora ficam no pedido para a tela do admin mostrar
+            // "Pix gerado e não pago" (SituacaoDoPagamento, 2026-10-20).
+            $fresh->forceFill([
+                'status' => Order::STATUS_CANCELLED,
+                'cancelado_em' => now(),
+                'motivo_cancelamento' => $fresh->payments->contains('method_type', Payment::METHOD_PIX)
+                    ? SituacaoDoPagamento::MOTIVO_PIX_EXPIRADO
+                    : 'Pagamento não concluído em '.self::ABANDONED_AFTER_MINUTES.' min: cancelado automaticamente',
+            ])->save();
             $finalizer->restoreStockIfNeeded($fresh, 'Pedido abandonado (pagamento não concluído em '.self::ABANDONED_AFTER_MINUTES.' min)');
 
             $this->info("Pedido #{$fresh->id} cancelado e estoque restaurado.");

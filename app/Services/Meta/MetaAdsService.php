@@ -1098,6 +1098,7 @@ class MetaAdsService
                     'id' => (string) $c['id'],
                     'nome' => (string) $c['name'],
                     'status' => (string) ($c['effective_status'] ?? ''),
+                    'gerenciador' => $this->linkCampanhaGerenciador((string) $c['id']),
                     'objetivo' => MetaAdsCampanha::OBJETIVOS[$c['objective'] ?? ''] ?? (string) ($c['objective'] ?? ''),
                     'objetivo_codigo' => (string) ($c['objective'] ?? ''),
                     'orcamento_nivel' => $daCampanha !== null ? 'campanha' : 'conjunto',
@@ -1279,6 +1280,15 @@ class MetaAdsService
         return $campanha->meta_campaign_id
             ? $url.'&selected_campaign_ids='.urlencode($campanha->meta_campaign_id)
             : $url;
+    }
+
+    /** Campanha aberta no Gerenciador (linha da campanha no espelho). */
+    public function linkCampanhaGerenciador(string $campaignId): ?string
+    {
+        $conta = preg_replace('/^act_/', '', (string) config('services.meta_ads.ad_account_id'));
+
+        return $conta === '' ? null
+            : 'https://adsmanager.facebook.com/adsmanager/manage/campaigns?act='.urlencode($conta).'&selected_campaign_ids='.urlencode($campaignId);
     }
 
     /** Conjunto aberto no Gerenciador (cartões do "O que fazer agora"). */

@@ -190,6 +190,12 @@ const COLUNAS = [
                                     <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
                                 </button>
                             </span>
+                            <!-- Link do Gerenciador só na campanha, não nos anúncios (pedido do Lira 2026-10-21). -->
+                            <a v-if="c.gerenciador" :href="c.gerenciador" target="_blank" rel="noopener"
+                                class="ml-5 mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                                <i class="fab fa-meta text-[10px]" aria-hidden="true"></i> Abrir no Gerenciador
+                                <span class="sr-only">(abre em outra aba)</span>
+                            </a>
                         </td>
                         <td class="px-3 py-3"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status('campanhas', c)[1]">{{ status('campanhas', c)[0] }}</span></td>
                         <td class="px-3 py-3"></td>
@@ -289,10 +295,6 @@ const COLUNAS = [
                                                     <button type="button" :aria-label="`Excluir anúncio ${a.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoAnuncio(a))">
                                                         <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
                                                     </button>
-                                                    <a v-if="a.gerenciador" :href="a.gerenciador" target="_blank" rel="noopener"
-                                                        class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                                                        <i class="fab fa-meta text-[10px]" aria-hidden="true"></i> Abrir no Gerenciador
-                                                    </a>
                                                 </span>
                                             </span>
                                         </span>

@@ -146,6 +146,23 @@ const removerProduto = async (slug, produto) => {
     }
 };
 
+// Excluir promoção (2026-10-21): só as de "Outras promoções", com confirmação.
+const excluindo = ref(null);
+const excluir = async (promocao) => {
+    const confirmou = await confirmDelete({
+        title: `Excluir "${promocao.nome}"?`,
+        text: 'A promoção, o texto, as regras e a página pública somem de vez. Essa ação não pode ser desfeita.',
+        confirmButtonText: 'Sim, excluir',
+        focusCancel: true,
+    });
+    if (!confirmou) return;
+    router.delete(`/admin/promocoes/${promocao.slug}`, {
+        preserveScroll: true,
+        onStart: () => { excluindo.value = promocao.slug; },
+        onFinish: () => { excluindo.value = null; },
+    });
+};
+
 const criando = ref(false);
 const nova = useForm({ nome: '' });
 const campoNome = ref(null);
@@ -385,9 +402,16 @@ const etiqueta = 'absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px
                         <a :href="`/promocoes/${promocao.slug}`" target="_blank" rel="noopener" class="text-slate-500 hover:text-primary hover:underline">
                             <i class="fas fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Página
                         </a>
-                        <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-primary hover:underline">
-                            <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
-                        </Link>
+                        <div class="flex items-center gap-4">
+                            <Link :href="`/admin/promocoes/${promocao.slug}`" class="text-primary hover:underline">
+                                <i class="fas fa-pen-to-square mr-1" aria-hidden="true"></i>Texto e regras
+                            </Link>
+                            <button v-if="podeEditar" type="button" :disabled="excluindo === promocao.slug"
+                                class="text-slate-500 hover:text-red-600 hover:underline disabled:opacity-50"
+                                :aria-label="`Excluir ${promocao.nome}`" @click="excluir(promocao)">
+                                <i class="fas mr-1" :class="excluindo === promocao.slug ? 'fa-spinner animate-spin' : 'fa-trash-can'" aria-hidden="true"></i>Excluir
+                            </button>
+                        </div>
                     </footer>
                 </section>
             </div>

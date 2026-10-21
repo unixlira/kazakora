@@ -91,6 +91,28 @@ class PromocaoController extends Controller
         return redirect("/admin/promocoes/{$promocao->slug}")->with('success', "{$promocao->nome} criada. Preencha o texto e as regras e ative quando quiser.");
     }
 
+    /**
+     * Excluir promoção (2026-10-21): apaga do banco, com as ligações de
+     * produto (cascade) e a imagem enviada. Airfryer e PDFs não saem: sem a
+     * linha deles o quadro da página do produto volta a aparecer em todos os
+     * produtos, sem chave para desligar.
+     */
+    public function destroy(string $slug): RedirectResponse
+    {
+        $promocao = Promocao::query()->where('slug', $slug)->firstOrFail();
+
+        if (in_array($promocao->slug, [Promocao::AIRFRYER, Promocao::PDFS], true)) {
+            return back()->with('error', "{$promocao->nome} não pode ser excluída: ela controla o quadro da página do produto. Desligue em \"Mostrar na página do produto\".");
+        }
+
+        if ($promocao->imagem !== null && ! $promocao->imagemDoRepositorio()) {
+            Storage::disk('public')->delete($promocao->imagem);
+        }
+        $promocao->delete();
+
+        return redirect('/admin/promocoes')->with('success', "{$promocao->nome} excluída.");
+    }
+
     /** Chaves "mostrar na página do produto" e "todos os produtos". */
     public function paginaProduto(Request $request, string $slug): RedirectResponse
     {

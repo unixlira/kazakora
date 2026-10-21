@@ -336,11 +336,11 @@ const rotulo = 'block text-xs font-medium text-slate-500 dark:text-slate-400';
             {{ filtros.lixeira ? 'A lixeira está vazia.' : 'Nenhum criativo aqui. Use "Enviar criativos" para subir o primeiro.' }}
         </p>
 
-        <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div v-else class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
             <article v-for="c in props.criativos.data" :key="c.id" class="flex flex-col overflow-hidden rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-                <video :src="c.url" controls preload="metadata" playsinline class="aspect-[9/16] max-h-[28rem] w-full bg-black object-contain"></video>
+                <video :src="c.url" controls preload="metadata" playsinline class="aspect-[9/16] w-full bg-black object-contain"></video>
 
-                <div class="flex flex-1 flex-col gap-2 p-4">
+                <div class="flex flex-1 flex-col gap-2 p-3">
                     <div class="flex items-start justify-between gap-2">
                         <h3 class="font-semibold leading-snug">{{ c.titulo }}</h3>
                         <span :class="['shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', STATUS[c.status]?.[1]]">

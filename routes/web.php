@@ -99,9 +99,12 @@ Route::get('/busca/sugestoes', [CatalogController::class, 'sugestoes'])->middlew
 Route::get('/sitemap.xml', \App\Modules\Catalog\Http\Controllers\SitemapController::class)->name('sitemap');
 Route::get('/produtos/{product:slug}', [CatalogController::class, 'show'])
     ->name('produtos.ver')
-    // Link antigo da Nuvemshop (/produtos/<slug>-<id>/): 301 para o produto atual, se houver par.
+    // Slug que o produto já teve (renomeado no admin, 2026-10-20) ou link
+    // antigo da Nuvemshop (/produtos/<slug>-<id>/): 301 para o produto atual, se houver par.
     ->missing(function (\Illuminate\Http\Request $request) {
-        $produto = \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar((string) $request->route('product'));
+        $slug = (string) $request->route('product');
+        $produto = \App\Modules\Catalog\Models\ProductSlugAntigo::query()->where('slug', $slug)->first()?->product
+            ?? \App\Modules\Catalog\Support\ProdutoDaLojaAntiga::encontrar($slug);
         abort_unless($produto, 404);
 
         return redirect()->route('produtos.ver', $produto->slug, 301);

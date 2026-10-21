@@ -49,8 +49,15 @@ const alvoConjunto = (c, s) => ({
     ultimoAtivo: s.status === 'ACTIVE' && ativos(c.conjuntos) === 1,
 });
 const alvoAnuncio = (a) => ({ nivel: 'anuncio', id: a.id, nome: a.nome, status: a.status, gasto: a.metricas?.gasto ?? 0, orcamento_diario: null, ultimoAtivo: a.ultimo_ativo });
-const BOTAO_EDITAR = 'inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50';
-const BOTAO_EXCLUIR = 'inline-flex items-center gap-1 rounded-md border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-500/10';
+// Coluna Ações (pedido do Lira 2026-10-21): botões só com ícone; o nome vai no title e no aria-label.
+const BOTAO_ICONE = 'inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50';
+const BOTAO_EDITAR = `${BOTAO_ICONE} border-primary/40 text-primary hover:bg-primary/10 focus-visible:ring-primary/40`;
+const BOTAO_EXCLUIR = `${BOTAO_ICONE} border-red-300 text-red-700 hover:bg-red-50 focus-visible:ring-red-300 dark:text-red-300 dark:hover:bg-red-500/10`;
+const temAcoes = computed(() => props.acoes || props.editarAnuncios);
+const totalColunas = computed(() => 12 + (temAcoes.value ? 1 : 0));
+// Nome com largura fixa: nome comprido quebra em linhas em vez de esticar a tabela.
+const COL_NOME = 'sticky left-0 z-10 w-[320px] min-w-[280px] max-w-[340px] break-words bg-[var(--surface)]';
+const COL_ACOES = 'sticky right-0 z-10 whitespace-nowrap border-l border-[var(--surface-border)] bg-[var(--surface)] px-3';
 
 const BASE = '/admin/publicidade/meta-ads/campanhas';
 
@@ -150,22 +157,23 @@ const COLUNAS = [
 
 <template>
     <div class="overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface)] shadow-sm">
-        <table class="w-full min-w-[1260px] text-sm">
+        <table class="w-full min-w-[1380px] text-sm">
             <thead class="bg-slate-500/5 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                    <th scope="col" class="sticky left-0 z-10 bg-[var(--surface)] px-4 py-3">Nome</th>
+                    <th scope="col" :class="COL_NOME" class="px-4 py-3">Nome</th>
                     <th scope="col" class="px-3 py-3">Status</th>
                     <th scope="col" class="px-3 py-3" title="Botão de chamada do anúncio, igual ao do Gerenciador">Botão (CTA)</th>
                     <th scope="col" class="px-3 py-3 text-right">Orçamento</th>
                     <th v-for="[chave, rotulo] in COLUNAS" :key="chave" scope="col" class="px-3 py-3 text-right"
                         :title="chave === 'cpc' ? 'Custo por clique: gasto ÷ cliques (todos)' : (chave === 'roas' ? 'Valor das compras ÷ gasto' : undefined)">{{ rotulo }}</th>
                     <th scope="col" class="min-w-[280px] px-3 py-3" title="Sugestões automáticas a partir dos números do período">O que fazer</th>
+                    <th v-if="temAcoes" scope="col" :class="COL_ACOES" class="py-3 text-center">Ações</th>
                 </tr>
             </thead>
             <tbody>
                 <template v-for="c in campanhas" :key="c.id">
                     <tr class="border-t border-[var(--surface-border)] bg-slate-500/[0.03] font-semibold">
-                        <td class="sticky left-0 z-10 bg-[var(--surface)] px-4 py-3">
+                        <td :class="COL_NOME" class="px-4 py-3">
                             <button type="button" class="flex items-start gap-2 text-left" :aria-expanded="aberto(c, c.id)" @click="alternar(c, c.id)">
                                 <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-400 transition-transform" :class="{ 'rotate-90': aberto(c, c.id) }" aria-hidden="true"></i>
                                 <span>
@@ -177,18 +185,6 @@ const COLUNAS = [
                             </button>
                             <span v-if="c.local_id && !semLinkLocal" class="ml-5 flex flex-wrap items-center gap-x-3 gap-y-1">
                                 <Link :href="`${BASE}/${c.local_id}`" class="text-xs font-medium text-primary hover:underline">Ver no KazaKora</Link>
-                                <Link v-if="acoes && c.novo_conjunto" :href="`${BASE}/${c.local_id}/conjuntos/novo`"
-                                    class="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10">
-                                    <i class="fas fa-plus text-[10px]" aria-hidden="true"></i> Novo conjunto
-                                </Link>
-                            </span>
-                            <span v-if="editarAnuncios" class="ml-5 mt-1 flex flex-wrap gap-1.5">
-                                <button type="button" :aria-label="`Editar campanha ${c.nome}`" :class="BOTAO_EDITAR" @click="gerenciar.editar(alvoCampanha(c))">
-                                    <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar
-                                </button>
-                                <button type="button" :aria-label="`Excluir campanha ${c.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoCampanha(c))">
-                                    <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
-                                </button>
                             </span>
                             <!-- Link do Gerenciador só na campanha, não nos anúncios (pedido do Lira 2026-10-21). -->
                             <a v-if="c.gerenciador" :href="c.gerenciador" target="_blank" rel="noopener"
@@ -217,11 +213,27 @@ const COLUNAS = [
                             <span v-else-if="diagnostico && c.status === 'ACTIVE'" class="text-xs text-slate-400">Nada a ajustar agora</span>
                             <span v-else class="text-slate-400">-</span>
                         </td>
+                        <td v-if="temAcoes" :class="COL_ACOES" class="py-3 font-normal">
+                            <span class="flex items-center justify-end gap-1.5">
+                                <Link v-if="acoes && c.novo_conjunto && c.local_id && !semLinkLocal" :href="`${BASE}/${c.local_id}/conjuntos/novo`" title="Novo conjunto"
+                                    :aria-label="`Novo conjunto na campanha ${c.nome}`" :class="BOTAO_EDITAR">
+                                    <i class="fas fa-plus" aria-hidden="true"></i>
+                                </Link>
+                                <template v-if="editarAnuncios">
+                                    <button type="button" title="Editar" :aria-label="`Editar campanha ${c.nome}`" :class="BOTAO_EDITAR" @click="gerenciar.editar(alvoCampanha(c))">
+                                        <i class="fas fa-pen" aria-hidden="true"></i>
+                                    </button>
+                                    <button type="button" title="Excluir" :aria-label="`Excluir campanha ${c.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoCampanha(c))">
+                                        <i class="fas fa-trash" aria-hidden="true"></i>
+                                    </button>
+                                </template>
+                            </span>
+                        </td>
                     </tr>
                     <template v-if="aberto(c, c.id)">
                         <template v-for="s in c.conjuntos" :key="s.id">
                             <tr :id="`meta-linha-${s.id}`" tabindex="-1" class="border-t border-[var(--surface-border)] transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50" :class="classeDestaque(s.id)">
-                                <td class="sticky left-0 z-10 bg-[var(--surface)] py-2.5 pl-9 pr-4">
+                                <td :class="COL_NOME" class="py-2.5 pl-9 pr-4">
                                     <button type="button" class="flex items-start gap-2 text-left" :aria-expanded="aberto(c, s.id)" @click="alternar(c, s.id)">
                                         <i class="fas fa-chevron-right mt-1 text-[10px] text-slate-400 transition-transform" :class="{ 'rotate-90': aberto(c, s.id) }" aria-hidden="true"></i>
                                         <span>
@@ -229,18 +241,6 @@ const COLUNAS = [
                                             <span class="block text-xs text-slate-500">Conjunto · {{ plural(s.anuncios.length, 'anúncio', 'anúncios') }}</span>
                                         </span>
                                     </button>
-                                    <Link v-if="acoes && s.novo_anuncio" :href="`${BASE}/${c.local_id}/conjuntos/${s.local_id}/anuncios`"
-                                        class="ml-5 mt-1 inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10">
-                                        <i class="fas fa-plus text-[10px]" aria-hidden="true"></i> Novo anúncio
-                                    </Link>
-                                    <span v-if="editarAnuncios" class="ml-5 mt-1 flex flex-wrap gap-1.5">
-                                        <button type="button" :aria-label="`Editar conjunto ${s.nome}`" :class="BOTAO_EDITAR" @click="gerenciar.editar(alvoConjunto(c, s))">
-                                            <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar
-                                        </button>
-                                        <button type="button" :aria-label="`Excluir conjunto ${s.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoConjunto(c, s))">
-                                            <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
-                                        </button>
-                                    </span>
                                 </td>
                                 <td class="px-3 py-2.5"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold" :class="status('conjuntos', s)[1]">{{ status('conjuntos', s)[0] }}</span></td>
                                 <td class="px-3 py-2.5"></td>
@@ -263,39 +263,35 @@ const COLUNAS = [
                                     </ul>
                                     <span v-else class="text-slate-400">-</span>
                                 </td>
+                                <td v-if="temAcoes" :class="COL_ACOES" class="py-2.5">
+                                    <span class="flex items-center justify-end gap-1.5">
+                                        <Link v-if="acoes && s.novo_anuncio" :href="`${BASE}/${c.local_id}/conjuntos/${s.local_id}/anuncios`" title="Novo anúncio"
+                                            :aria-label="`Novo anúncio no conjunto ${s.nome}`" :class="BOTAO_EDITAR">
+                                            <i class="fas fa-plus" aria-hidden="true"></i>
+                                        </Link>
+                                        <template v-if="editarAnuncios">
+                                            <button type="button" title="Editar" :aria-label="`Editar conjunto ${s.nome}`" :class="BOTAO_EDITAR" @click="gerenciar.editar(alvoConjunto(c, s))">
+                                                <i class="fas fa-pen" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" title="Excluir" :aria-label="`Excluir conjunto ${s.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoConjunto(c, s))">
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
+                                            </button>
+                                        </template>
+                                    </span>
+                                </td>
                             </tr>
                             <template v-if="aberto(c, s.id)">
                                 <tr v-for="a in s.anuncios" :id="`meta-linha-${a.id}`" :key="a.id" tabindex="-1"
                                     class="border-t border-[var(--surface-border)] text-slate-700 transition-colors focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/50 dark:text-slate-300" :class="classeDestaque(a.id)">
-                                    <td class="sticky left-0 z-10 bg-[var(--surface)] py-2 pl-16 pr-4">
+                                    <td :class="COL_NOME" class="py-2 pl-16 pr-4">
                                         <span class="flex items-center gap-2.5">
                                             <img v-if="a.miniatura" :src="a.miniatura" alt="" class="h-9 w-9 shrink-0 rounded object-cover" loading="lazy" referrerpolicy="no-referrer">
                                             <span v-else class="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-slate-500/10 text-slate-400"><i class="fas fa-image text-xs" aria-hidden="true"></i></span>
-                                            <span>
+                                            <span class="min-w-0">
                                                 <span class="block">{{ a.nome }}</span>
                                                 <span class="block text-xs text-slate-500">Anúncio</span>
                                                 <LinkInline :id="a.id" :nome="a.nome" :link="a.link ?? null" :pode-editar="editarAnuncios && Boolean(a.link_editavel) && !a.local?.bloqueio"
                                                     @mudou="emit('mudou', $event)" />
-                                                <span v-if="editarAnuncios && a.local" class="mt-1 flex flex-wrap gap-1.5">
-                                                    <button type="button" :disabled="Boolean(a.local.bloqueio)" :title="tituloDesabilitado(a)" :aria-label="`Editar anúncio ${a.nome}`"
-                                                        class="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
-                                                        @click="modais.editar(alvo(a))">
-                                                        <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar
-                                                    </button>
-                                                    <button type="button" :disabled="Boolean(a.local.bloqueio)" :title="tituloDesabilitado(a)" :aria-label="`Excluir anúncio ${a.nome}`"
-                                                        class="inline-flex items-center gap-1 rounded-md border border-red-300 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-500/10"
-                                                        @click="modais.excluir(alvo(a))">
-                                                        <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
-                                                    </button>
-                                                </span>
-                                                <span v-else-if="editarAnuncios" class="mt-1 flex flex-wrap items-center gap-1.5">
-                                                    <button type="button" :aria-label="`Editar anúncio ${a.nome}`" :class="BOTAO_EDITAR" @click="gerenciar.editar(alvoAnuncio(a))">
-                                                        <i class="fas fa-pen text-[10px]" aria-hidden="true"></i> Editar nome
-                                                    </button>
-                                                    <button type="button" :aria-label="`Excluir anúncio ${a.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoAnuncio(a))">
-                                                        <i class="fas fa-trash text-[10px]" aria-hidden="true"></i> Excluir
-                                                    </button>
-                                                </span>
                                             </span>
                                         </span>
                                     </td>
@@ -327,19 +323,39 @@ const COLUNAS = [
                                         </ul>
                                         <span v-else class="text-slate-400">-</span>
                                     </td>
+                                    <td v-if="temAcoes" :class="COL_ACOES" class="py-2">
+                                        <span v-if="editarAnuncios && a.local" class="flex items-center justify-end gap-1.5">
+                                            <button type="button" :disabled="Boolean(a.local.bloqueio)" :title="tituloDesabilitado(a) ?? 'Editar'" :aria-label="`Editar anúncio ${a.nome}`"
+                                                :class="BOTAO_EDITAR" @click="modais.editar(alvo(a))">
+                                                <i class="fas fa-pen" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" :disabled="Boolean(a.local.bloqueio)" :title="tituloDesabilitado(a) ?? 'Excluir'" :aria-label="`Excluir anúncio ${a.nome}`"
+                                                :class="BOTAO_EXCLUIR" @click="modais.excluir(alvo(a))">
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
+                                            </button>
+                                        </span>
+                                        <span v-else-if="editarAnuncios" class="flex items-center justify-end gap-1.5">
+                                            <button type="button" title="Editar nome" :aria-label="`Editar nome do anúncio ${a.nome}`" :class="BOTAO_EDITAR" @click="gerenciar.editar(alvoAnuncio(a))">
+                                                <i class="fas fa-pen" aria-hidden="true"></i>
+                                            </button>
+                                            <button type="button" title="Excluir" :aria-label="`Excluir anúncio ${a.nome}`" :class="BOTAO_EXCLUIR" @click="gerenciar.excluir(alvoAnuncio(a))">
+                                                <i class="fas fa-trash" aria-hidden="true"></i>
+                                            </button>
+                                        </span>
+                                    </td>
                                 </tr>
                                 <tr v-if="!s.anuncios.length" class="border-t border-[var(--surface-border)]">
-                                    <td colspan="12" class="py-2 pl-16 text-xs text-amber-700">Conjunto sem anúncio.</td>
+                                    <td :colspan="totalColunas" class="py-2 pl-16 text-xs text-amber-700">Conjunto sem anúncio.</td>
                                 </tr>
                             </template>
                         </template>
                         <tr v-if="!c.conjuntos.length" class="border-t border-[var(--surface-border)]">
-                            <td colspan="12" class="py-2 pl-9 text-xs text-amber-700">Campanha sem conjunto.</td>
+                            <td :colspan="totalColunas" class="py-2 pl-9 text-xs text-amber-700">Campanha sem conjunto.</td>
                         </tr>
                     </template>
                 </template>
                 <tr v-if="!campanhas.length">
-                    <td colspan="12" class="px-4 py-6 text-center text-slate-500">Nenhuma campanha na conta da Meta.</td>
+                    <td :colspan="totalColunas" class="px-4 py-6 text-center text-slate-500">Nenhuma campanha na conta da Meta.</td>
                 </tr>
             </tbody>
         </table>

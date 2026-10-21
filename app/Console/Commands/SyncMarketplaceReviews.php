@@ -38,11 +38,12 @@ class SyncMarketplaceReviews extends Command
             );
 
         $this->info(sprintf(
-            'Avaliações: %d itens consultados, %d novas, %d atualizadas, %d ignoradas por ambiguidade de variação.%s%s',
+            'Avaliações: %d itens consultados, %d novas, %d atualizadas, %d ignoradas por ambiguidade de variação, %d ignoradas por nota 1 ou 2.%s%s',
             $summary['products_checked'],
             $summary['imported'],
             $summary['updated'],
             $summary['ambiguous_skipped'],
+            $summary['low_rating_skipped'],
             $summary['channels_skipped'] ? ' Canais sem suporte ainda: '.implode(', ', $summary['channels_skipped']).'.' : '',
             $suffix,
         ));

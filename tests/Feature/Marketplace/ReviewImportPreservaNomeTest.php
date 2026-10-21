@@ -20,7 +20,7 @@ class ReviewImportPreservaNomeTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function importar(Product $produto, string $nomeNoCanal): array
+    private function importar(Product $produto, string $nomeNoCanal, int $nota = 4): array
     {
         ProductChannelListing::query()->firstOrCreate(
             ['product_id' => $produto->id, 'channel' => 'shopee'],
@@ -30,7 +30,7 @@ class ReviewImportPreservaNomeTest extends TestCase
         $driver = Mockery::mock(MarketplaceChannelDriver::class);
         $driver->shouldReceive('fetchReviews')->with('999')->andReturn([[
             'external_id' => 'r-1',
-            'rating' => 4,
+            'rating' => $nota,
             'comment' => 'Chegou certinho',
             'reviewer_name' => $nomeNoCanal,
             'images' => [],
@@ -66,5 +66,20 @@ class ReviewImportPreservaNomeTest extends TestCase
         $this->importar($produto, 'Joana');
 
         $this->assertSame('Joana', Review::query()->where('external_id', 'r-1')->value('reviewer_name'));
+    }
+
+    public function test_nao_copia_avaliacao_de_1_ou_2_estrelas(): void
+    {
+        $produto = Product::factory()->create();
+
+        $resumo = $this->importar($produto, 'Joana', 2);
+
+        $this->assertSame(1, $resumo['low_rating_skipped']);
+        $this->assertSame(0, $resumo['imported']);
+        $this->assertFalse(Review::query()->where('external_id', 'r-1')->exists());
+
+        $resumo = $this->importar($produto, 'Joana', 3);
+
+        $this->assertSame(1, $resumo['imported']);
     }
 }

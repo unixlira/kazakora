@@ -730,7 +730,11 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 
                     <div v-if="reviews.length" class="aval-grade">
                         <div v-for="review in reviewsNaTela" :key="review.id" class="aval-item">
-                            <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}</div>
+                            <div class="autor"><i class="fas fa-user"></i> {{ review.reviewer_display_name }}
+                                <!-- Avaliação importada de outra loja (outra_loja): selo visível para não
+                                     parecer compra na KazaKora (pedido 2026-10-21). -->
+                                <span v-if="review.outra_loja" class="selo-outra-loja">Comprado em outra loja</span>
+                            </div>
                             <div class="nota-data">
                                 <span class="estrelas"><i v-for="n in 5" :key="n" :class="n <= review.rating ? 'fas fa-star' : 'far fa-star'"></i></span>
                                 <small>{{ formatDate(review.created_at) }}</small>
@@ -1069,6 +1073,7 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
 .dark .pd2 .aval-item { color: var(--text); box-shadow: none; }
 .pd2 .aval-item .autor { font-weight: 700; color: var(--ink); }
 .pd2 .aval-item .autor i { margin-right: 5px; font-size: 12px; }
+.pd2 .aval-item .selo-outra-loja { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #eef2f7; color: #475569; font-size: 11px; font-weight: 600; vertical-align: middle; }
 .pd2 .aval-item p { margin: 6px 0; font-weight: 300; line-height: 1.5; }
 .pd2 .aval-item .nota-data { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 10px; }
 .pd2 .aval-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }

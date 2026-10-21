@@ -717,13 +717,13 @@ const formatDate = (value) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'med
                         </section>
 
                         <!-- Quadro dos livros no formato da referência do Lira (2026-10-21): título e imagem pronta
-                             com os 3 tablets (feita pelo Jonathan, troca os tablets em CSS) à esquerda, oferta à
+                             com os 3 tablets e capas estilo revista (entregas/quadro-livros-tablets-2026-10-21 do Homer) à esquerda, oferta à
                              direita. Sem "preço vendido separadamente": os guias não são vendidos, seria preço inventado. -->
                         <section v-if="livrosDigitais.length" class="card promo-livros">
                             <div class="livros-vitrine">
                                 <h2>Compre Hoje E Receba {{ livrosDigitais.length === 1 ? '1 Livro Digital' : `${livrosDigitais.length} Livros Digitais` }} GRÁTIS!</h2>
-                                <img class="livros-img" src="/images/promocoes/livros-tablets.webp"
-                                     alt="Três guias digitais da KazaKora em tablets: Dor nas costas de quem trabalha sentado, Lombar travada: o que fazer nas primeiras 48 horas, e Acordei com dor nas costas: o problema pode estar na sua noite"
+                                <img class="livros-img" src="/images/promocoes/livros-revista.webp"
+                                     alt="Três guias digitais grátis da KazaKora em tablets, com capa de revista: Dor nas costas de quem trabalha sentado, Lombar travada: e agora?, e Acordei com dor nas costas"
                                      width="1200" height="600" loading="lazy">
                             </div>
                             <div class="livros-oferta">

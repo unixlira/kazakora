@@ -468,6 +468,8 @@ class CatalogController extends Controller
             ? (int) $request->query('v')
             : self::PRODUCT_PAGE_VERSION;
 
+        $livrosDigitais = LivroDigital::doProduto($product);
+
         return Inertia::render($version === 2 ? 'Catalog/ProductDetailV2' : 'Catalog/ProductDetail', [
             // Custo é dado interno: não vai no JSON da página pública.
             'product' => $product->makeHidden('cost_price'),
@@ -509,11 +511,14 @@ class CatalogController extends Controller
                 'paragrafo_2' => $sorteio->paragrafo_2,
                 'imagem_url' => $sorteio->imagem_url,
             ])->values(),
-            'livrosDigitais' => LivroDigital::doProduto($product)->map(fn (LivroDigital $livro) => [
+            'livrosDigitais' => $livrosDigitais->map(fn (LivroDigital $livro) => [
                 'id' => $livro->id,
                 'titulo' => $livro->titulo,
                 'capa_url' => $livro->capa_url,
             ])->values(),
+            // Imagem dos tablets do quadro: a do primeiro livro mostrado que
+            // tiver uma; null = a página usa a padrão (dor nas costas).
+            'livrosQuadro' => $livrosDigitais->first(fn (LivroDigital $livro) => $livro->imagem_quadro)?->imagem_quadro_url,
             'relatedProducts' => $relatedProducts->values(),
             'relatedFavoriteIds' => $user
                 ? Favorite::query()->where('user_id', $user->id)->whereIn('product_id', $relatedIds)->pluck('product_id')
